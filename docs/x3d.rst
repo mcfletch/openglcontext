@@ -245,6 +245,14 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   ``bound`` set is used before the first drawn. The next-viewpoint key
   binds the viewpoint after the bound one
   (``viewpointbinding.next_viewpoint``).
+- A viewpoint's ``fieldOfView`` spans the smaller of the window's width and
+  height, so in a portrait window it is the horizontal angle
+  (``ViewPlatform.setFrustum(..., across='smaller')``). A document that binds
+  no viewpoint is seen through X3D's default one, ``fieldOfView`` 0.7854,
+  from the context's starting position, which is X3D's default (0, 0, 10)
+  unless the application sets another
+  (``viewpointbinding.default_viewpoint``). A scene built in code keeps the
+  engine's camera, 60 degrees vertically.
 - A bound viewpoint's ``nearDistance`` and ``farDistance`` set the clip
   planes where positive. An ``OrthoViewpoint`` projects orthographically
   through its ``fieldOfView`` window (minimum x, minimum y, maximum x,
@@ -324,6 +332,44 @@ Kept and not drawn
 - ``CoordinateDouble`` is kept and not drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
+
+Comparing renders with Web3D's examples
+---------------------------------------
+
+``oglc-x3d-regression`` draws every ``.x3d`` document of Web3D's example
+archives (``vrml.x3d.corpus``) as its author wrote it -- from its bound
+viewpoint, against its own Background or black, once the textures and
+Inlines it names have arrived -- and compares each render with a blessed
+baseline in ``tests/reference_images/x3d_baseline``. The report shows Web3D's
+own render of the same viewpoint, published with each example, beside ours.
+
+.. code-block:: bash
+
+   oglc-x3d-regression --fetch          # the corpus with its images, once (about 550 MB)
+   oglc-x3d-regression --bless          # make the renders baselines, after review
+   oglc-x3d-regression                  # exit 1 if a render differs from its baseline
+   oglc-x3d-regression --only Geometry/Box --jobs 8
+
+- The archives are ConformanceNist and Vrml2Sourcebook unless ``--archive``
+  names others; the corpus is kept in pyvrml97's corpus directory
+  (``PYVRML97_X3D_CORPUS``, else the user's cache) unless ``--corpus``
+  names another.
+- Each document is drawn in a process of its own at 792x465, the size of
+  Web3D's renders; ``--jobs`` sets how many at a time.
+- Its frames are counted on the capture clock once its loads have arrived, so
+  an animated scene is drawn at the same moment in every run. A document's
+  loads are waited for 30 seconds at most, and its record says when that
+  was not enough.
+- The archive's examples folder is a content root
+  (:ref:`untrusted-content-roots`): the examples name images in folders
+  above their own.
+- What reading the document reported is in each row of the report.
+- A render differs where more than 2% of its pixels differ by more than 8 in
+  a channel (``--tolerance``, ``--diff-threshold``), as in
+  ``oglc-gltf-regression``.
+- Only the XML encoding is drawn; pyvrml97's corpus tests hold the other
+  encodings to the same scene graph. Scripts are not run, so a scene a
+  Script builds is drawn as the document leaves it.
 
 Writing
 -------

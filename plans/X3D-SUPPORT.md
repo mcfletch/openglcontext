@@ -58,6 +58,30 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   the maintainer's choice
   - 2026-10-07: the main checkout holds 57 re-blessed baselines, uncommitted;
     this branch's renders of 51 of the failing scripts match them exactly
+- [x] `oglc-x3d-regression` (2026-10-07): every .x3d of Web3D's ConformanceNist and
+  Vrml2Sourcebook archives (1181) drawn as authored in a plain Context, compared with
+  baselines in `tests/reference_images/x3d_baseline`, Web3D's own render of the bound
+  viewpoint beside each (1065 have one). Shared machinery with the glTF tool in
+  `OpenGLContext.testing.renderregression`; the corpus is `vrml.x3d.corpus`
+  - fixed on the way: a document with no viewpoint is seen through X3D's default
+    (fieldOfView 0.7854); a viewpoint's fieldOfView spans the smaller dimension;
+    MovieTexture is kept and draws nothing (it crashed 57 documents); Billboard has
+    identity matrices (it crashed 22); a prototype instance stands for its body's
+    first node (3); cube-map faces resampled to one square (5); a prototype body
+    holding another instance no longer recurses on copy; resolver content roots,
+    so the examples reach images above their folders
+  - [ ] baselines not yet blessed: review the report first
+    (`oglc-x3d-regression`, then `--bless`)
+  - [ ] found by comparing with Web3D's renders, still to fix: Background image
+    faces (`*Url` fields) draw nothing (test_wholepng and kin); a cut-out alpha
+    texture draws nothing (Figure17_10cTextureTransparencyTree); a grey plane drawn
+    that Web3D does not (SphereSensor/multisensor); Figure20_17a framed differently;
+    Billboard does not turn toward the viewer; Inlines naming another archive's
+    scenes fail (each archive is extracted to its own tree)
+  - [ ] X_ITE (MIT, the browser Web3D publishes an X_ITE.html for each example
+    with) as a second, current reference: render each example in headless
+    Chromium through a local copy of x_ite.min.js at 792x465, cached beside the
+    corpus, as an optional tool dependency (Playwright), never the engine's
 - [ ] Visual suite, this branch (2026-10-07, run with `PYTHONPATH` on the
   worktrees, compared with the main checkout's current baselines): four
   scripts render differently, each traced by bisecting the branch's commits;

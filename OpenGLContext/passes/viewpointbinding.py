@@ -126,6 +126,7 @@ def bind_scene_viewpoint(context: Any) -> None:
     _step_transition(context, sg)
     view_path = binding.current_path(list(getattr(sg, 'viewpointPaths', ())))
     if view_path is None:
+        _bind_default(context, sg)
         return
     view = view_path[-1]
     previous = getattr(sg, 'boundViewpoint', None)
@@ -135,7 +136,7 @@ def bind_scene_viewpoint(context: Any) -> None:
     platform = getattr(context, 'platform', None) or context.getViewPlatform()
     info = binding.bound(sg, nodetypes.NavigationInfo)
     kind, seconds = navigationinfo.transition_of(info)
-    if platform is None or not previous:
+    if platform is None or not previous or previous is _defaults.get(sg):
         view.moveTo(view_path, context)
         _remember(view, platform)
         return
@@ -160,6 +161,37 @@ def bind_scene_viewpoint(context: Any) -> None:
     _moving[context] = move
     platform.setPosition(position[:3])
     platform.setOrientation(orientation)
+
+
+#: The default Viewpoint each document without one is seen through.
+_defaults: 'weakref.WeakKeyDictionary[Any, Any]' = weakref.WeakKeyDictionary()
+
+
+def default_viewpoint(sg: Any) -> Any:
+    """The default Viewpoint `sg` is seen through, where it binds none of its own; else None"""
+    return _defaults.get(sg)
+
+
+def _bind_default(context: Any, sg: Any) -> None:
+    """See a document that binds no viewpoint through X3D's default one
+
+    X3D and VRML97 give such a world a Viewpoint with every field at its
+    default: from (0, 0, 10) looking down -z, ``fieldOfView`` pi/4. The
+    context's starting position is that one unless the application set
+    another, so only the projection is applied. A scene built in code keeps
+    the context's own camera.
+    """
+    from vrml.x3d.scene import X3DScene  # noqa: PLC0415 beside its one use
+    document = isinstance(sg, X3DScene)
+    if not document or sg in _defaults:
+        return
+    from OpenGLContext.scenegraph.viewpoint import Viewpoint  # noqa: PLC0415 the registry's class
+    platform = getattr(context, 'platform', None) or context.getViewPlatform()
+    if platform is None:
+        return
+    default = _defaults[sg] = Viewpoint()
+    default.project(platform)
+    sg.boundViewpoint = default
 
 
 def _remember(view: Any, platform: Any) -> None:

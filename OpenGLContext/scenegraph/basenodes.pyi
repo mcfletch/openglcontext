@@ -75,6 +75,7 @@ from OpenGLContext.scenegraph.meshgeometry import TriangleFanSet as TriangleFanS
 from OpenGLContext.scenegraph.meshgeometry import TriangleSet as TriangleSet
 from OpenGLContext.scenegraph.meshgeometry import TriangleStripSet as TriangleStripSet
 from OpenGLContext.scenegraph.mouseover import MouseOver as MouseOver
+from OpenGLContext.scenegraph.movietexture import MovieTexture as MovieTexture
 from OpenGLContext.scenegraph.nurbs import Contour2D as Contour2D
 from OpenGLContext.scenegraph.nurbs import NurbsCurve as NurbsCurve
 from OpenGLContext.scenegraph.nurbs import NurbsCurve2D as NurbsCurve2D
@@ -174,7 +175,6 @@ from vrml.route import IS as IS
 from vrml.route import ROUTE as ROUTE
 from vrml.vrml97.basenodes import AudioClip as AudioClip
 from vrml.vrml97.basenodes import Color as Color
-from vrml.vrml97.basenodes import MovieTexture as MovieTexture
 from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
 from vrml.vrml97.basenodes import NormalInterpolator as NormalInterpolator

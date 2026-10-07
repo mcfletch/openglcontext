@@ -47,6 +47,7 @@ than implementing containment again.
 
 __all__ = [
     'ContainedPath', 'CheckedURL', 'Located', 'contain', 'checked_url',
+    'add_content_root', 'remove_content_root', 'content_roots',
     'checked_source', 'contained_source', 'open_contained', 'read_contained',
     'Resolver', 'FetchCancelled', 'ResourceTooLarge', 'Progress', 'Cancel',
     'RedirectPolicy', 'SameOrigin', 'PublicHosts', 'AllowedHosts',
@@ -237,14 +238,60 @@ def checked_url(url: str) -> CheckedURL:
     return CheckedURL(url, _CHECKED)
 
 
+#: The directories an application has declared its own content, as realpaths.
+#: Replaced whole rather than changed, so a reader on another thread sees one
+#: set or the other.
+_content_roots: tuple[str, ...] = ()
+_content_roots_lock = threading.Lock()
+
+
+def add_content_root(directory: str) -> None:
+    """Declare `directory` a tree of this application's own content
+
+    A document read from a file inside it may then reference any file under
+    it, not only those under its own directory: levels beside a shared
+    textures folder. A document outside every root is held to its own
+    directory as before, and a URL-loaded document is unaffected.
+    """
+    global _content_roots
+    real = os.path.realpath(directory)
+    if not os.path.isdir(real):
+        raise ValueError('A content root is a directory, and %r is not one' % (directory,))
+    with _content_roots_lock:
+        if real not in _content_roots:
+            _content_roots = _content_roots + (real,)
+
+
+def remove_content_root(directory: str) -> None:
+    """Withdraw a root :func:`add_content_root` declared; nothing if it was not"""
+    global _content_roots
+    real = os.path.realpath(directory)
+    with _content_roots_lock:
+        _content_roots = tuple(root for root in _content_roots if root != real)
+
+
+def content_roots() -> tuple[str, ...]:
+    """The declared content roots, as real paths"""
+    return _content_roots
+
+
+def _bound_for(base_real: str) -> str:
+    """The directory a document in `base_real` may reference under: the outermost
+    content root holding it, else its own"""
+    holding = [root for root in _content_roots
+               if base_real == root or base_real.startswith(root + os.sep)]
+    return min(holding, key=len) if holding else base_real
+
+
 def contain(base_dir: str, name: str) -> ContainedPath:
     """``name``, a relative path, resolved under ``base_dir``; else ``IOError``.
 
     A ``name`` like ``../../../etc/passwd``, an absolute path, or one carrying
     a URL scheme would otherwise let a document read arbitrary files. The
-    realpath of the result must stay within the realpath of ``base_dir``, so
-    a symbolic link leading out is refused too. ``name`` is percent-decoded,
-    as a URI reference is.
+    realpath of the result must stay within the realpath of ``base_dir`` --
+    or of the content root holding it (:func:`add_content_root`) -- so a
+    symbolic link leading out is refused too. ``name`` is percent-decoded, as
+    a URI reference is.
     """
     parsed = urllib.parse.urlsplit(name)
     if parsed.scheme or parsed.netloc:
@@ -254,7 +301,8 @@ def contain(base_dir: str, name: str) -> ContainedPath:
         raise IOError("uri must be a relative path, not %r" % name)
     base_real = os.path.realpath(base_dir)
     full = os.path.realpath(os.path.join(base_real, rel))
-    if full != base_real and not full.startswith(base_real + os.sep):
+    bound = _bound_for(base_real)
+    if full != bound and not full.startswith(bound + os.sep):
         raise IOError("uri %r escapes the base directory" % name)
     return ContainedPath(full, _CHECKED)
 

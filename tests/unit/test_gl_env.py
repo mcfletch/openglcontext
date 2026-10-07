@@ -12,6 +12,8 @@ See :mod:`OpenGLContext.testing.gl_env`.
 
 import os
 
+import sys
+
 import pytest
 
 from OpenGLContext.testing import gl_env
@@ -177,6 +179,12 @@ class TestImportingAProgramWithoutTakingItsChoices:
     program. A test that imports one to call a function of it must not take
     that settling for the whole session."""
 
+    @pytest.fixture(autouse=True)
+    def a_fresh_import(self, monkeypatch):
+        """Each test imports the program itself, whichever ran before it"""
+        monkeypatch.delitem(sys.modules, 'tests.unit.fixtures_a_program_that_configures',
+                            raising=False)
+
     def test_what_it_settled_does_not_outlive_the_import(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
         gl_env.import_unconfigured(
@@ -189,7 +197,8 @@ class TestImportingAProgramWithoutTakingItsChoices:
             'tests.unit.fixtures_a_program_that_configures')
         assert os.environ['OPENGLCONTEXT_RENDERER'] == 'chosen-by-the-run'
 
-    def test_the_module_is_answered(self):
+    def test_the_module_is_answered(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
         module = gl_env.import_unconfigured(
             'tests.unit.fixtures_a_program_that_configures')
         assert module.WHAT_IT_ASKED_FOR == 'pbr'

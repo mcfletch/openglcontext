@@ -372,7 +372,7 @@ class TestACleanRenderingEnvironment:
             # locale's encoding: on a host whose locale is cp1252 the scan stops
             # at the first source file carrying a character cp1252 has no byte
             # for, and the variables declared after it go unchecked.
-            seen.update(re.findall(r'OPENGLCONTEXT_[A-Z_]+',
+            seen.update(re.findall(r'OPENGLCONTEXT_[A-Z0-9_]+',
                                    path.read_text(encoding='utf-8')))
         # The ones that are not about what a frame looks like or how it is
         # produced, and so are deliberately inherited.  Each says why, because

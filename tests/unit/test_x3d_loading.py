@@ -200,3 +200,18 @@ def test_a_documents_light_casts_shadows_only_where_it_says_so(attributes, expec
     assert bool(scene.children[0].shadows) is expected
     assert not scene.children[1].castShadow
     assert basenodes.PointLight().shadows
+
+
+def test_a_prototype_appearance_draws_with_its_bodys_material(gl_context):
+    """A prototype instance is used where its body's first node would be"""
+    scene = Loader.loads(b'''#X3D V3.3 utf8
+PROFILE Immersive
+PROTO Paint [ inputOutput SFColor tint 1 0 0 ] {
+  Appearance { material Material { diffuseColor IS tint emissiveColor IS tint } } }
+Viewpoint { position 0 0 6 }
+Shape { appearance Paint { tint 0 0 1 } geometry Box { size 3 3 3 } }
+''', 'paint.x3dv')
+    with scene_context(scene, size=(32, 32)) as context:
+        image = drawn_image(context)
+    red, _green, blue = (int(value) for value in image[16, 16, :3])
+    assert blue > 150 and red < 80, (red, blue)

@@ -313,7 +313,13 @@ class CubeTexture(Texture):
             self.fromPIL(images)
 
     def fromPIL(self, images: Any) -> int:
-        """Construct the texture from PIL/Numpy arrays"""
+        """Construct the texture from PIL/Numpy arrays
+
+        GL takes only square faces of one size, so each PIL image is resampled
+        to a square as wide as the largest side among the six. Faces given as
+        arrays are taken as they are, and must already be square and one size
+        (ValueError otherwise).
+        """
         if isinstance(images, dict):
             images = images.items()
         our_images = [
@@ -321,16 +327,23 @@ class CubeTexture(Texture):
         ]
         if not len(our_images) == 6:
             raise ValueError("Need six non-null images")
-        components = format = x = y = 0
-        final_images = []
+        prepared = []
         for key, image in our_images:
             if isinstance(image, ArrayType):
-                image = NumpyAdapter(image)
+                prepared.append((key, NumpyAdapter(image)))
             else:
-                image = self.ensureRGB(image)
-                image = self.ensurePow2(image)
-            # TODO: raise errors if you don't pass in the same
-            # component,format,x,y image sizes...
+                prepared.append((key, self.ensurePow2(self.ensureRGB(image))))
+        side = max(max(image.size[0], image.size[1]) for _key, image in prepared)
+        components = format = x = y = 0
+        final_images = []
+        for key, image in prepared:
+            if (image.size[0], image.size[1]) != (side, side):
+                if isinstance(image, NumpyAdapter):
+                    raise ValueError(
+                        "Cube map faces given as arrays must be square and one size; "
+                        "face %s is %sx%s where another is %sx%s"
+                        % (key, image.size[0], image.size[1], side, side))
+                image = image.resize((side, side), Image.Resampling.BICUBIC)
             components, format = getLengthFormat(image)
             (
                 x,

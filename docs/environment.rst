@@ -372,6 +372,10 @@ The window, capture and the interface
      - path
      - ``tests/reference_images/gltf_baseline``
      - Where ``oglc-gltf-regression`` finds the images it compares against.
+   * - ``OPENGLCONTEXT_X3D_BASELINE``
+     - path
+     - ``tests/reference_images/x3d_baseline``
+     - Where ``oglc-x3d-regression`` finds the images it compares against.
 
 Recording a session, and making one repeatable
 ----------------------------------------------

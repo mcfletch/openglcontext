@@ -535,6 +535,9 @@ compares against them, and ``--bless`` replaces them after review. A scene
 whose ``SceneSpec`` sets ``shadows`` is captured with shadow maps; every other
 scene is captured without them. Set
 ``OPENGLCONTEXT_GLTF_BASELINE`` to use a copy stored elsewhere.
+``x3d_baseline/`` holds the same for Web3D's X3D examples, one PNG and one
+JSON record per document, which ``oglc-x3d-regression`` compares against
+(``OPENGLCONTEXT_X3D_BASELINE`` for a copy elsewhere).
 
 Without the submodule the tests still run. A view with no reference image is
 reported as having none; it does not fail.

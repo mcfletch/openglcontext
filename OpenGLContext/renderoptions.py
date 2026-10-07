@@ -105,7 +105,7 @@ ENVIRONMENT: tuple[str, ...] = (
     # OpenGLContext.video.clock.capture_clock.
     'OPENGLCONTEXT_CAPTURE_FPS',
     'OPENGLCONTEXT_DISABLE_FPS_DISPLAY', 'OPENGLCONTEXT_HIDDEN',
-    'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE',
+    'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE', 'OPENGLCONTEXT_X3D_BASELINE',
     # Filling the screen changes the resolution and the aspect ratio a frame is
     # rendered at, so it is not merely presentation and a child capture must
     # not inherit it -- a comparison against a reference rendered in a window

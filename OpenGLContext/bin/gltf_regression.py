@@ -36,6 +36,7 @@ import urllib.parse
 from typing import Any, cast
 
 from OpenGLContext import atomicfiles, renderoptions
+from OpenGLContext.testing import renderregression
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders import gltf_demos
@@ -44,29 +45,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))          # this package's parent dir
 
 
-def _source_root() -> str | None:
-    """Locate the openglcontext source checkout (dir with OpenGLContext/ + tests/).
-
-    Searched from the current directory upward, then this file's location. When
-    the package is pip-installed into a virtualenv, ``__file__`` points at
-    ``site-packages`` -- deriving output paths from it drops the report inside the
-    venv. The working tree is what we want, so prefer it.
-    """
-    def markers(d: str) -> bool:
-        return (os.path.isdir(os.path.join(d, 'tests')) and
-                os.path.isfile(os.path.join(d, 'OpenGLContext', '__init__.py')))
-
-    for start in (os.getcwd(), REPO):
-        d = start
-        while True:
-            for cand in (d, os.path.join(d, 'openglcontext')):
-                if markers(cand):
-                    return cand
-            parent = os.path.dirname(d)
-            if parent == d:
-                break
-            d = parent
-    return None
+#: The source checkout, from the current directory or this package
+_source_root = renderregression.source_root
 
 
 def default_report_path() -> str:
@@ -85,8 +65,8 @@ DEFAULT_FRAMES = 8
 DEFAULT_DELAY = 0.5
 # Regression tolerance: percent of pixels allowed to differ by more than
 # DIFF_THRESHOLD per channel (the project's documented visual-regression default).
-DEFAULT_TOLERANCE = 2.0
-DIFF_THRESHOLD = 8
+DEFAULT_TOLERANCE = renderregression.DEFAULT_TOLERANCE
+DIFF_THRESHOLD = renderregression.DIFF_THRESHOLD
 
 
 def default_baseline_root() -> str:
@@ -299,38 +279,8 @@ def _parse_capture_stats(stdout: str | None) -> dict[str, Any]:
     return stats
 
 
-# --------------------------------------------------------------------------- #
-# Compare new render vs baseline.
-# --------------------------------------------------------------------------- #
-def compare(baseline_path: str, new_path: str, diff_out: str,
-            threshold: int) -> tuple[Any, dict[str, Any]]:
-    """Compare two PNGs. Returns (ComparisonResult, stats_dict) or (None, None)."""
-    import numpy as np
-    from PIL import Image
-    from OpenGLContext.testing.framebuffer_comparison import ComparisonResult
-
-    base = np.asarray(Image.open(baseline_path).convert('RGB'))
-    new = np.asarray(Image.open(new_path).convert('RGB'))
-    result = ComparisonResult(base, new, threshold)
-    if result.diff_image is not None:
-        Image.fromarray(result.diff_image, 'RGB').save(diff_out)
-    stats = {
-        'shapes_match': 'Yes' if result.shapes_match else 'No',
-        'max_diff': result.max_diff,
-        'mean_diff': result.mean_diff,
-        'percent_different': result.percent_different,
-        'pixels_different': result.pixels_different,
-        'total_pixels': result.total_pixels,
-    }
-    return result, stats
-
-
-def is_regression(result: Any, tolerance: float) -> bool:
-    """A regression is a shape change or more than ``tolerance`` percent of pixels
-    differing beyond the per-channel threshold."""
-    if not result.shapes_match:
-        return True
-    return bool(result.percent_different > tolerance)
+compare = renderregression.compare
+is_regression = renderregression.is_regression
 
 
 # --------------------------------------------------------------------------- #
@@ -344,57 +294,13 @@ def select_scenes(only: list[str] | None) -> list[gltf_demos.SceneSpec]:
     return [s for s in gltf_demos.iter_scenes() if s.name in wanted]
 
 
-#: Asked in a subprocess, because it opens a window and this command is about
-#: to open its own.
-_PROVENANCE_PROGRAM = """\
-from OpenGLContext.testing.glcontext import hidden_window
-from OpenGL.GL import glGetString, GL_RENDERER, GL_VERSION
-
-with hidden_window('provenance', size=(8, 8), profile='core'):
-    print((glGetString(GL_RENDERER) or b'').decode())
-    print((glGetString(GL_VERSION) or b'').decode())
-"""
-
-
-def _gl_renderer() -> dict[str, str]:
-    """The GPU's GL_RENDERER/GL_VERSION, queried in a throwaway hidden context.
-
-    The context asks for the same core profile ``render_view`` pins, because a
-    driver that names the profile in GL_VERSION would otherwise stamp every
-    baseline with one the renders were never made in.
-    """
-    try:
-        out = subprocess.run(
-            [sys.executable, '-c', _PROVENANCE_PROGRAM],
-            capture_output=True, text=True, timeout=30,
-            env=dict(renderoptions.environment(), OPENGLCONTEXT_HIDDEN='1',
-                     OPENGLCONTEXT_BACKEND='glfw'),
-        ).stdout.splitlines()
-        return {'gl_renderer': (out[0].strip() if out else '') or 'unknown',
-                'gl_version': out[1].strip() if len(out) > 1 else ''}
-    except Exception:
-        return {'gl_renderer': 'unknown', 'gl_version': ''}
+_gl_renderer = renderregression.gl_renderer
 
 
 def _provenance() -> dict[str, str]:
     """Git hash (+``-dirty``), timestamp and GPU identity, stamped into every
     render's metadata so a baseline records exactly how (and on what) it was made."""
-    import datetime
-    root = _source_root() or REPO
-    git = 'unknown'
-    try:
-        rev = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=root,
-                             capture_output=True, text=True)
-        dirty = subprocess.run(['git', 'status', '--porcelain'], cwd=root,
-                               capture_output=True, text=True)
-        if rev.returncode == 0 and rev.stdout.strip():
-            git = rev.stdout.strip() + ('-dirty' if dirty.stdout.strip() else '')
-    except Exception:
-        pass
-    prov = {'git': git,
-            'rendered_at': datetime.datetime.now().isoformat(timespec='seconds')}
-    prov.update(_gl_renderer())
-    return prov
+    return renderregression.provenance(lambda: _gl_renderer())
 
 
 def _view_metadata(spec: gltf_demos.SceneSpec, camera: int | None, url: str | None,
@@ -512,78 +418,15 @@ def render_scenes(scenes: list[gltf_demos.SceneSpec], out_dir: str, baseline_roo
 def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
                  diff_threshold: int) -> int:
     """Assemble the HTML report from whatever renders are present in ``out_dir``
-    (each ``<slug>.json`` + ``<slug>.png``), diffed against the baseline. Decoupled
-    from rendering, so re-rendering one scene then rebuilding keeps every other row.
+    (each ``<slug>.json`` + ``<slug>.png``), diffed against the baseline, with the
+    Khronos screenshot of each scene as the upstream reference. Decoupled from
+    rendering, so re-rendering one scene then rebuilding keeps every other row.
     Returns the regression count."""
-    from OpenGLContext.testing.report_generator import TestReportGenerator
-    gen = TestReportGenerator(title='glTF Demo Regression -- our reference vs new')
-    report_dir = os.path.dirname(os.path.abspath(report_path))
-
-    def stage(src: str | None, name: str) -> str | None:
-        """Return an image for the report to link, guaranteeing it lives under the
-        report directory. The result and diff already do; the baseline and Khronos
-        upstream live in other trees, so copy those in under ``name`` -- then the
-        report (which links images relative to itself) copies elsewhere as one
-        self-contained bundle. Missing sources return None."""
-        if not (src and os.path.exists(src)):
-            return None
-        if os.path.abspath(src).startswith(report_dir + os.sep):
-            return src
-        dst = os.path.join(out_dir, name)
-        try:
-            atomicfiles.copy_file(src, dst)
-            return dst
-        except OSError:
-            return src
-
-    regressions = 0
-    slugs = sorted(f[:-5] for f in os.listdir(out_dir) if f.endswith('.json'))
-    for slug in slugs:
-        try:
-            meta = json.load(open(os.path.join(out_dir, slug + '.json')))
-        except Exception:
-            meta = {}
-        scene = meta.get('scene', slug.split('__')[0])
-        new_path = os.path.join(out_dir, slug + '.png')
-        baseline_path = os.path.join(baseline_root, slug + '.png')
-        diff_path = os.path.join(out_dir, slug + '_diff.png')
-        upstream_path = None
-        try:
-            upstream_path = gltf.cache_reference_screenshot(scene)
-        except Exception:
-            pass
-        status, stats, stderr = 'pass', None, ''
-        if not os.path.exists(new_path):
-            status, stderr = 'error', 'no render on disk'
-        elif not os.path.exists(baseline_path):
-            status, stderr = 'skip', 'no baseline -- bless after reviewing'
-        else:
-            result, stats = compare(baseline_path, new_path, diff_path, diff_threshold)
-            if is_regression(result, tolerance):
-                status, regressions = 'fail', regressions + 1
-                stderr = 'REGRESSION: %s' % result
-            else:
-                stderr = str(result)
-        gen.add_test({
-            'test_name': '%s -- %s' % (slug, meta.get('description', '')),
-            'status': status,
-            'reference_image': stage(baseline_path, slug + '_baseline.png'),
-            'result_image': new_path if os.path.exists(new_path) else None,
-            'diff_image': diff_path if (stats and os.path.exists(diff_path)) else None,
-            'upstream_image': stage(upstream_path, slug + '_upstream.png'),
-            'comparison_stats': stats,
-            'metadata': meta,
-            'stderr': stderr,
-            'duration': 0.0,
-        })
-    os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
-    # Link the renders rather than base64-embedding them: a run covers dozens of
-    # views x four images, and embedding balloons the single HTML to hundreds of
-    # MB. save() links each image relative to the report; with every image staged
-    # under out_dir, the report plus its render directory copy elsewhere as one
-    # self-contained bundle (as tests/report.html links its images).
-    gen.save(report_path, embed_images=False)
-    return regressions
+    return renderregression.build_report(
+        out_dir, baseline_root, report_path, tolerance, diff_threshold,
+        title='glTF Demo Regression -- our reference vs new',
+        upstream=lambda meta, slug: gltf.cache_reference_screenshot(
+            meta.get('scene', slug.split('__')[0])))
 
 
 def run(args: argparse.Namespace) -> int:

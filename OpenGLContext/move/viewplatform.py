@@ -21,7 +21,7 @@ one through that window (an X3D ``OrthoViewpoint``), until the next
 :meth:`ViewPlatform.setFrustum`.
 """
 
-from math import atan2, pi
+from math import atan, atan2, degrees, pi, tan
 from collections.abc import Sequence
 from typing import Any, Optional, cast
 
@@ -89,9 +89,14 @@ class ViewPlatform(object):
             view-orientation for the viewing platform
     """
 
-    #: Field of view (degrees), aspect ratio, near and far clipping distances,
-    #: in the order ``gluPerspective`` takes them.
+    #: Vertical field of view (degrees), aspect ratio, near and far clipping
+    #: distances, in the order ``gluPerspective`` takes them.
     frustum: tuple[float, float, float, float]
+    #: The field of view :meth:`setFrustum` was given (radians), and the
+    #: dimension of the view it spans: ``'height'``, or ``'smaller'`` (the
+    #: narrower of width and height, as an X3D or VRML97 Viewpoint's does).
+    fieldOfView: float = pi / 3
+    across: str = 'height'
     #: Object-space position, four components.
     position: Any
     #: View orientation.
@@ -126,22 +131,37 @@ class ViewPlatform(object):
     def setFrustum(self, fieldOfView: float = pi / 2,
                    aspect: Optional[float] = None,
                    near: Optional[float] = None,
-                   far: Optional[float] = None) -> None:
+                   far: Optional[float] = None,
+                   across: str = 'height') -> None:
         """Set the current frustum values for the "camera"
 
         fieldOfView -- radian angle field of view
         aspect -- float aspect ratio of window, width/height
         near -- object-space distance to the near clipping plane
         far -- object-space distance to the far clipping plane
+        across -- the dimension `fieldOfView` spans: 'height', or 'smaller'
+            (the narrower of width and height); the frustum's own angle is
+            the vertical one either way
         """
+        if across not in ('height', 'smaller'):
+            raise ValueError('A field of view spans the height or the smaller dimension, not %r'
+                             % (across,))
         if aspect is None:
             aspect = self.frustum[1]
         if near is None:
             near = self.frustum[2]
         if far is None:
             far = self.frustum[3]
-        self.frustum = (fieldOfView * 180.0 / pi, aspect, near, far)
+        self.fieldOfView = float(fieldOfView)
+        self.across = across
+        self.frustum = (self._vertical(aspect), aspect, near, far)
         self.window = None
+
+    def _vertical(self, aspect: float) -> float:
+        """The vertical angle, degrees, that gives :attr:`fieldOfView` across its dimension"""
+        if self.across == 'smaller' and 0 < aspect < 1:
+            return degrees(2.0 * atan(tan(self.fieldOfView / 2.0) / aspect))
+        return degrees(self.fieldOfView)
 
     def setClipping(self, near: Optional[float] = None,
                     far: Optional[float] = None) -> None:
@@ -173,10 +193,12 @@ class ViewPlatform(object):
 
         x,y -- integer width and height (respectively) of the window
 
-        This method simply updates the frustum attribute to reflect
-        the new aspect ratio.
+        This method updates the frustum attribute to reflect the new aspect
+        ratio, and the vertical angle where the field of view spans the
+        smaller dimension.
         """
-        self.frustum = (self.frustum[0], float(x) / float(y)) + self.frustum[2:]
+        aspect = float(x) / float(y)
+        self.frustum = (self._vertical(aspect), aspect) + self.frustum[2:]
 
     def setPosition(self, position: Sequence[float]) -> None:
         """Set the current "camera position"

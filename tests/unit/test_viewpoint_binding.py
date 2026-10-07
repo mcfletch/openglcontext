@@ -24,7 +24,7 @@ class FakePlatform:
     def setOrientation(self, o):
         self.orientation = tuple(o)
 
-    def setFrustum(self, fov, aspect=None, near=None, far=None):
+    def setFrustum(self, fov, aspect=None, near=None, far=None, across="height"):
         self.frustum_calls.append((fov, aspect, near, far))
 
 

@@ -84,8 +84,9 @@ class Viewpoint(Placing, basenodes.Viewpoint):
     """
 
     def project( self, platform: Any ) -> None:
-        """Give `platform` this viewpoint's perspective, `fieldOfView` radians"""
-        platform.setFrustum( self.fieldOfView, None, *self.clipping() )
+        """Give `platform` this viewpoint's perspective: `fieldOfView` radians
+        across the view's smaller dimension"""
+        platform.setFrustum( self.fieldOfView, None, *self.clipping(), across='smaller' )
 
 
 class OrthoViewpoint(Placing, x3d.OrthoViewpoint):

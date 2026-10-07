@@ -56,6 +56,29 @@ importing the same names.
        not in a system temporary directory that every account can write to, so
        another account cannot plant a cache entry that this user then loads.
 
+.. _untrusted-content-roots:
+
+Content roots
+~~~~~~~~~~~~~
+
+An application whose own content is one tree -- levels beside a shared
+``textures`` folder -- declares the tree a content root, and a document read
+from a file inside it may then reference any file under the root, not only
+those under its own directory:
+
+.. code-block:: python
+
+   from OpenGLContext.loaders import resolver
+
+   resolver.add_content_root('/opt/mygame/content')
+   scene = Loader.load('/opt/mygame/content/levels/one.x3d')   # may name ../textures/brick.png
+
+A reference is held to the outermost declared root that holds the
+document's directory; a document outside every root is held to its own
+directory, and a URL-loaded document is unaffected. ``remove_content_root``
+withdraws one and ``content_roots()`` lists them. Declare only a tree any of
+whose files a document in it may read.
+
 .. _checked-types:
 
 The checked types
