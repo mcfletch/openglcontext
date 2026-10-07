@@ -91,7 +91,7 @@ VRMLContext( 'wgl', 'OpenGLContext.wglvrmlcontext.VRMLContext' )
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml','.wrl.gz'] )
 Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj'] )
-Loader( 'x3d', 'OpenGLContext.loaders.x3d.defaultHandler', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj'] )
+Loader( 'x3d', 'OpenGLContext.loaders.x3d.defaultHandler', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj','.x3db','.x3db.gz'] )
 
 # What `oglc-view` can open, keyed by file suffix and content type. One viewer
 # serves every format; the adapter is chosen from the source itself.
@@ -100,8 +100,10 @@ Adapter( 'vrml97', 'OpenGLContext.viewer.adapters.vrml.VRMLAdapter', ['.wrl','.w
 Adapter( 'obj', 'OpenGLContext.viewer.adapters.obj.OBJAdapter', ['.obj','.obj.gz','model/obj'] )
 # X3D JSON is usually named .json, so a document of that name is recognised by
 # its content (loaders.formats). model/x3d+vrml is how ClassicVRML names its
-# type; model/x3d-vrml is the registered name.
-Adapter( 'x3d', 'OpenGLContext.viewer.adapters.x3d.X3DAdapter', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj','model/x3d+xml','model/x3d+vrml','model/x3d-vrml'] )
+# type; model/x3d-vrml is the registered name. The compressed binary encoding
+# is model/x3d+fastinfoset by registration and model/x3d+binary by ISO/IEC
+# 19776-3.
+Adapter( 'x3d', 'OpenGLContext.viewer.adapters.x3d.X3DAdapter', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj','.x3db','.x3db.gz','model/x3d+xml','model/x3d+vrml','model/x3d-vrml','model/x3d+fastinfoset','model/x3d+binary'] )
 # A tileset is any .json, so the registry only claims the conventional name; a
 # document under another name is recognised by its content (loaders.formats).
 Adapter( 'tiles3d', 'OpenGLContext.viewer.adapters.tiles.TilesAdapter', ['tileset.json'] )

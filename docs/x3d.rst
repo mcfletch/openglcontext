@@ -59,6 +59,14 @@ and ``oglc-view`` all open these:
      - ``.x3dv``, ``.x3dvz`` (gzip), ``model/x3d+vrml``, ``model/x3d-vrml``
    * - JSON
      - ``.x3dj``, and ``.json`` whose top-level key is ``"X3D"``
+   * - Compressed binary (Fast Infoset)
+     - ``.x3db``, ``.x3db.gz`` (gzip), ``model/x3d+fastinfoset``,
+       ``model/x3d+binary``
+
+A compressed binary document is read with the X3D vocabulary Web3D's own
+``.x3db`` files are written with. A value given in an X3D encoder other than
+delta-zlib integers is reported and left unset; pyvrml97's ``docs/x3d.rst``
+gives the limits.
 
 The result is an ``X3DScene``: a ``sceneGraph`` that also holds the
 document's ``profile``, ``version``, ``components``, ``units``, ``meta`` and

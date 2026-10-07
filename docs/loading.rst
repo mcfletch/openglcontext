@@ -19,7 +19,7 @@ five.
    * - Format
      - Call
      - Returns
-   * - X3D (``.x3d``, ``.x3dz``, ``.x3dv``, ``.x3dvz``, ``.x3dj``)
+   * - X3D (``.x3d``, ``.x3dz``, ``.x3dv``, ``.x3dvz``, ``.x3dj``, ``.x3db``)
      - ``Loader.load(url)``
      - an ``X3DScene``, a ``sceneGraph``
    * - VRML97 (``.wrl``, ``.wrz``, ``.vrml``, ``.wrl.gz``)
@@ -199,9 +199,10 @@ X3D worlds
 ----------
 
 An X3D document loads through the same ``Loader``, in any of its encodings:
-XML (``.x3d``), ClassicVRML (``.x3dv``) and JSON (``.x3dj``, or ``.json`` when
-its top-level key is ``"X3D"``), each also gzip-compressed (``.x3dz``,
-``.x3dvz``):
+XML (``.x3d``), ClassicVRML (``.x3dv``), JSON (``.x3dj``, or ``.json`` when
+its top-level key is ``"X3D"``) and the compressed binary encoding
+(``.x3db``), each also gzip-compressed (``.x3dz``, ``.x3dvz``,
+``.x3db.gz``):
 
 .. code-block:: python
 

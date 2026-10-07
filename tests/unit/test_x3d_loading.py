@@ -1,13 +1,14 @@
 """X3D documents opened by the engine: every encoding, into the engine's nodes.
 
-`OpenGLContext.loaders.x3d` reads `.x3d`, `.x3dz`, `.x3dv`, `.x3dvz` and
-`.x3dj` (and `.json` whose top-level key is "X3D") through `vrml.x3d`,
+`OpenGLContext.loaders.x3d` reads `.x3d`, `.x3dz`, `.x3dv`, `.x3dvz`, `.x3dj`
+(and `.json` whose top-level key is "X3D") and `.x3db` through `vrml.x3d`,
 building the engine's implementation of each node it has one of. The scene is
 an `X3DScene` the render pass draws.
 """
 import gzip
 import json
 import logging
+import struct
 
 import numpy as np
 import pytest
@@ -43,12 +44,29 @@ def as_json():
     return vrml_x3d.dumps(vrml_x3d.loads(XML), encoding='json').encode('utf-8')
 
 
+def binary():
+    """The scene in the compressed binary encoding (Fast Infoset), set down
+    by hand: each element by its index in the X3D vocabulary"""
+    return (
+        b'\xe0\x00\x00\x01\x20\x10\x00\x1e' + b'urn:web3d:x3d:fi-vocabulary-3.2'
+        + b'\x60\x6a\x40\xfb\x42' + b'3.3' + b'\xf0'        # X3D version="3.3"
+        + b'\x20\x56'                                      # Scene
+        + b'\x20\x67\xf0'                                  # Viewpoint, ended
+        + b'\x00\x01'                                      # Shape, Appearance
+        + b'\x42\x1c\x30\x68\x03' + struct.pack('>fff', 1, 0, 0)  # Material diffuseColor
+        + b'\xff\xf0'                                      # Material, Appearance ended
+        + b'\x1d\xff\xff\xf0'                              # Box; Box to X3D ended
+    )
+
+
 ENCODED = {
     'scene.x3d': lambda: XML,
     'scene.x3dz': lambda: gzip.compress(XML),
     'scene.x3dv': classic,
     'scene.x3dvz': lambda: gzip.compress(classic()),
     'scene.x3dj': as_json,
+    'scene.x3db': binary,
+    'scene.x3db.gz': lambda: gzip.compress(binary()),
 }
 
 
@@ -92,8 +110,9 @@ def test_a_document_in_no_encoding_is_an_error():
 
 @pytest.mark.parametrize('name, content_type', [
     ('world.x3d', None), ('world.x3dz', None), ('world.x3dv', None),
-    ('world.x3dvz', None), ('world.x3dj', None),
+    ('world.x3dvz', None), ('world.x3dj', None), ('world.x3db', None),
     ('world', 'model/x3d+xml'), ('world', 'model/x3d+vrml'), ('world', 'model/x3d-vrml'),
+    ('world', 'model/x3d+fastinfoset'), ('world', 'model/x3d+binary'),
 ])
 def test_the_reader_is_chosen_by_name_and_type(name, content_type):
     assert formats.adapter_for(name, content_type).name == 'x3d'

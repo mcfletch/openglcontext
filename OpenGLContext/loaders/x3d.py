@@ -1,7 +1,7 @@
 """X3D documents read into the engine's scenegraph
 
-`.x3d` and `.x3dz` (XML), `.x3dv` and `.x3dvz` (ClassicVRML) and `.x3dj`
-(JSON) are read by `vrml.x3d`, which builds each node from the engine's class
+`.x3d` and `.x3dz` (XML), `.x3dv` and `.x3dvz` (ClassicVRML), `.x3dj`
+(JSON) and `.x3db` (the compressed binary encoding) are read by `vrml.x3d`, which builds each node from the engine's class
 for it where the engine implements the X3D node (:func:`prototypes`) and from
 the X3D declaration otherwise. The scene is an
 :class:`~OpenGLContext.scenegraph.scenegraph.X3DScene`, so a context draws it
@@ -53,7 +53,7 @@ def prototypes() -> "dict[str, type]":
 class X3DHandler(base.BaseHandler):
     """Reads an X3D document of any encoding into the engine's nodes"""
 
-    filename_extensions = ('.x3d', '.x3dz', '.x3dv', '.x3dvz', '.x3dj')
+    filename_extensions = ('.x3d', '.x3dz', '.x3dv', '.x3dvz', '.x3dj', '.x3db', '.x3db.gz')
 
     def parse(self, data: Any, baseURL: str, *args: Any, **named: Any) -> "tuple[bool, Any]":
         """The scene the document builds; raises ValueError for one that cannot be read"""

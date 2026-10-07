@@ -36,7 +36,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] `IMPORT`/`EXPORT`
   - [x] profiles and `validate()`
   - [x] `vrml.x3d.load()` and `loads()`; local `EXTERNPROTO` files
-  - [x] corpus fetch script, committed subset, cross-encoding test (XML, JSON and ClassicVRML; Fast Infoset with Phase 9)
+  - [x] corpus fetch script, committed subset, cross-encoding test (XML, JSON and ClassicVRML; Fast Infoset read over both archives, and held to the XML graph for the scenes whose .x3db is the same revision)
 - Phase 4, writers (§9.6)
   - [x] XML (with canonical form), ClassicVRML/VRML97, JSON writers; `dump()`/`dumps()`
   - [x] round trip and schema validation tests (1,181 corpus scenes in each encoding; written XML valid against the X3D 4.1 XSD; `.wrl` back to VRML97)
@@ -101,6 +101,12 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor (`SensorTimer`; its multiplier is the sensor's `rate`)
 - Phase 8, engine-mapped components (§9.17)
 - Phase 9, Fast Infoset reader
+  - [x] `vrml.x3d.fastinfoset`: X.891 decoder to XML events, iterative over element depth; values in an algorithm without a decoder arrive `Undecoded`
+  - [x] `vrml.x3d.fivocabulary`: tables A.2-A.5 as Web3D's files number them (attribute names one past A.3 from 57, a 1025-entry table, 54-56 unknown); delta-zlib integers in the files' layout at index 34
+  - [x] `vrml.x3d.readers.fastinfoset` over the XML reader's handlers (`ElementReader`); typed values through `codecs.from_values`
+  - [x] all 1071 non-empty `.x3db` files of the two archives read; facts in pyvrml97 `specs/x3d/fast-infoset.md`
+  - [x] the engine opens `.x3db`, `.x3db.gz`, `model/x3d+fastinfoset`, `model/x3d+binary`
+  - not read: the quantized, zlib float/double and range integer encoders, whose layouts the text leaves open and no sample uses
 - [ ] SimpleParse speed: the ClassicVRML reader runs at about 7 MB/s against
   16.5 MB/s for XML through expat. SimpleParse should be much faster than that;
   profile the grammar and the result-tree walk and find where the time goes
