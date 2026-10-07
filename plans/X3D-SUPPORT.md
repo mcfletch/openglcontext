@@ -78,21 +78,40 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     that Web3D does not (SphereSensor/multisensor); Figure20_17a framed differently;
     Billboard does not turn toward the viewer; Inlines naming another archive's
     scenes fail (each archive is extracted to its own tree)
-  - [x] X_ITE references (`OpenGLContext.testing.xite`, `--reference x_ite`): X_ITE
-    16.4.3 (MIT) from npm, digest-checked, served with the corpus from 127.0.0.1 to
-    Playwright's headless Chromium (SwiftShader); the `x3d-reference` extra. Needs
+  - [x] X_ITE references (`--reference x_ite`): drawn by
+    `scripts/x3d_xite_references.py`, a `uv run` tool with Playwright as inline
+    script metadata, not part of the installed engine; X_ITE 16.4.3 (MIT) from npm,
+    digest-checked, served with the corpus from 127.0.0.1 to Playwright's headless
+    Chromium (SwiftShader). The renders are committed to
+    `tests/reference_images/x3d_xite`, which the regression reads. Chromium needs
     libnss3, libnspr4, libatk1.0, libatk-bridge2.0, libxdamage1 and libatspi2.0 in
-    the container (installed by hand 2026-10-07; the devcontainer should install them)
+    the container (the workspace's `.devcontainer/Dockerfile` installs them)
   - [ ] found against X_ITE, still to fix: Background `*Url` image faces draw
     nothing; background binding picks another background (test_binding5); the sky
     below the last skyAngle where there is no ground (ours carries the last colour,
     X_ITE draws black: read the spec); ground colours and angles
     (verify_lastground); fog with a Background fades to white (Figure23_5); the
-    cut-out alpha tree; a textured Box's image upside down
+    cut-out alpha tree. X_ITE runs Scripts, so its render of a document whose
+    scene a Script builds shows what ours does not draw
+  - [x] every PIL-loaded 2D texture was uploaded top row first, which glTF wants
+    and VRML97/X3D do not: a texture node now says which row (0, 0) names
+    (`_Texture.TOP_FIRST`, true for `ImageDataTexture`), the texture cache keys on
+    it, and only cube map faces are always top row first
+    (`tests/unit/test_texture_row_order.py`); an `ImageDataTexture` is written to
+    X3D upside down to keep its coordinates' meaning
+  - [x] a Box's bottom face was turned 180 degrees from X3D's rule
+    (`tests/unit/test_box_texture_faces.py`). X_ITE 16.4.3 turns both its top and
+    bottom faces 180 degrees from the rule
+  - [ ] a `PBRMesh` is written to X3D as an empty `<PBRMesh/>`: its arrays are not
+    fields, so the mesh is lost
 - [ ] Visual suite, this branch (2026-10-07, run with `PYTHONPATH` on the
-  worktrees, compared with the main checkout's current baselines): four
-  scripts render differently, each traced by bisecting the branch's commits;
+  worktrees, compared with the main checkout's current baselines): these
+  scripts render differently, each traced to a change on the branch;
   re-bless them in the main checkout when this merges
+  - `simplerotate`, `nehe6_multi`, `nehe6_timer`, `multitexture_1`,
+    `saveimage`, `pbodemo`, `shader_instanced`, `shader_instanced_mapped`,
+    `transparentsorted`: an `ImageTexture` is drawn the right way up
+  - `node_modify`: as `timesensorobject`, below
   - `timesensorobject`: the TimeSensor's fraction is measured from
     `startTime` on the engine clock, one frame ahead of the old Timer's
   - `lightobject`: `cycleTime` is sent when the TimeSensor starts, as X3D

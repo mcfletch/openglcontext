@@ -326,7 +326,9 @@ channels (``clearcoatTexture``, ``sheenColorTexture``, ``transmissionTexture``,
 them by channel). A texture is an ``ImageTexture`` for an image file, or an
 ``ImageDataTexture`` for an image already decoded in memory, which holds a PIL
 image as its ``image`` attribute. Either takes a ``TextureProperties`` for its
-wrap modes and filters. The shader reads base colour, emissive, specular
+wrap modes and filters. Texture coordinate (0, 0) is an ``ImageTexture``'s
+lower left, as in VRML97 and X3D, and an ``ImageDataTexture``'s upper left, as
+in glTF, whose images the loader decodes into them. The shader reads base colour, emissive, specular
 colour, sheen colour and diffuse transmission colour as sRGB, and the other
 channels as linear. ``material.textures`` is a read-only view of the textures
 by channel name, and ``material.setTexture(channel, texture)`` sets one by
@@ -340,8 +342,9 @@ Written as X3D (``vrml.x3d.dump``), both materials write X3D's own fields as
 usual, and the fields X3D's nodes lack (the glTF extension factors and
 textures, the lightmap, the impostor views) in a ``MetadataSet`` named
 ``OpenGLContext`` on the material's ``metadata``. An ``ImageDataTexture`` is
-written as an ``ImageTexture`` whose URL is the image as a PNG ``data:`` URL;
-an ``EncodedImage`` keeps its own encoding. Read back with the engine's
+written as an ``ImageTexture`` whose URL is the image, upside down, as a PNG
+``data:`` URL, so the same coordinates name the same texels; an
+``EncodedImage`` is written in its own format. Read back with the engine's
 classes among the reader's ``prototypes``, the material has the fields it was
 written with:
 

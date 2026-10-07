@@ -117,13 +117,37 @@ def test_an_unlit_material_comes_back():
         assert np.allclose(material.emissiveColor, (0.2, 0.4, 0.6))
 
 
-def test_an_encoded_image_keeps_its_encoding():
+def top_and_bottom():
+    """Red over blue: which way up an image is written shows"""
+    picture = Image.new('RGB', (8, 8), (0, 0, 255))
+    picture.paste((255, 0, 0), (0, 0, 8, 4))
+    return picture
+
+
+def written_image(texture):
+    url = str(written_and_read(Appearance(material=PhysicalMaterial(baseTexture=texture)),
+                               'xml').material.baseTexture.url[0])
+    kind, data = url.split(';base64,', 1)
+    return kind, Image.open(io.BytesIO(base64.b64decode(data))).convert('RGB')
+
+
+def test_an_image_is_written_with_x3ds_origin():
+    """An ImageDataTexture's (0, 0) is its upper left; an X3D ImageTexture's is its
+    lower left, so the image is written upside down and the coordinates name the
+    same texels"""
+    _kind, written = written_image(ImageDataTexture(image=top_and_bottom()))
+    assert written.getpixel((0, 0)) == (0, 0, 255)
+    assert written.getpixel((0, 7)) == (255, 0, 0)
+
+
+def test_an_encoded_image_keeps_its_format_and_x3ds_origin():
     raw = io.BytesIO()
-    image((10, 20, 30)).save(raw, 'JPEG')
-    look = Appearance(material=PhysicalMaterial(
-        baseTexture=EncodedImage(raw.getvalue(), mime_type='image/jpeg')))
-    url = str(written_and_read(look, 'xml').material.baseTexture.url[0])
-    assert url == 'data:image/jpeg;base64,' + base64.b64encode(raw.getvalue()).decode('ascii')
+    top_and_bottom().save(raw, 'JPEG', quality=95)
+    kind, written = written_image(EncodedImage(raw.getvalue(), mime_type='image/jpeg'))
+    assert kind == 'data:image/jpeg'
+    top, bottom = written.getpixel((4, 1)), written.getpixel((4, 6))
+    assert top[2] > 200 and top[0] < 60, top
+    assert bottom[0] > 200 and bottom[2] < 60, bottom
 
 
 def test_a_shared_image_is_written_once():

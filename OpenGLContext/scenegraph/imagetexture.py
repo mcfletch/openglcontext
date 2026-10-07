@@ -2,7 +2,7 @@
 
 import contextlib
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -25,6 +25,10 @@ log = logging.getLogger(__name__)
 
 class _Texture(nodetypes.Texture, node.Node):
     """Mix-in for rendering static image textures"""
+
+    #: Whether texture coordinate (0, 0) is the image's upper left, as in glTF,
+    #: rather than its lower left, as in VRML97 and X3D.
+    TOP_FIRST: ClassVar[bool] = False
 
     minFilter = field.newField(" minFilter", "SFInt32", 0, GL_NEAREST)
     magFilter = field.newField(" magFilter", "SFInt32", 0, GL_NEAREST)
@@ -73,6 +77,7 @@ class _Texture(nodetypes.Texture, node.Node):
             mode=mode,
             repeating=(self.repeatS or self.repeatT),
             atlasable=not getattr(mode, "shader_mode", False),
+            topFirst=self.TOP_FIRST,
         )
 
     def render(

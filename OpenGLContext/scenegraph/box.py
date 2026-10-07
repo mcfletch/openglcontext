@@ -166,13 +166,14 @@ def yieldVertices(size: Any) -> Iterator[Any]:
     yield (1.0, 0.0)+ normal + (x,y,z)
     yield (1.0, 1.0)+ normal + (x,y,-z)
 
+    # seen from below with +Z as the view up
     normal = ( 0.0,-1.0, 0.0)
-    yield (1.0, 1.0)+ normal + (-x,-y,-z)
-    yield (0.0, 1.0)+ normal + (x,-y,-z)
-    yield (0.0, 0.0)+ normal + (x,-y,z)
-    yield (1.0, 1.0)+ normal + (-x,-y,-z)
-    yield (0.0, 0.0)+ normal + (x,-y,z)
-    yield (1.0, 0.0)+ normal + (-x,-y,z)
+    yield (0.0, 0.0)+ normal + (-x,-y,-z)
+    yield (1.0, 0.0)+ normal + (x,-y,-z)
+    yield (1.0, 1.0)+ normal + (x,-y,z)
+    yield (0.0, 0.0)+ normal + (-x,-y,-z)
+    yield (1.0, 1.0)+ normal + (x,-y,z)
+    yield (0.0, 1.0)+ normal + (-x,-y,z)
 
     normal = ( 1.0, 0.0, 0.0)
     yield (1.0, 0.0)+ normal + (x,-y,-z)

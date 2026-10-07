@@ -16,7 +16,8 @@ from vrml.x3d import nodes as x3d
 from OpenGLContext.scenegraph.imagetexture import PILImage, _Texture
 from OpenGLContext.scenegraph.sampler import sampler_of, texture_properties
 
-__all__ = ['ImageDataTexture', 'ROUGHNESS_KEY', 'green_mean', 'sampler_of', 'texture_properties']
+__all__ = ['ImageDataTexture', 'ROUGHNESS_KEY', 'green_mean', 'sampler_of', 'texture_properties',
+           'x3d_image']
 
 #: The key an image's mean roughness is kept under in vrml's cache.
 ROUGHNESS_KEY = 'mean-roughness'
@@ -26,14 +27,18 @@ class ImageDataTexture(_Texture, x3d.X3DTexture2DNode):
     """An X3D 2D texture whose image is a decoded PIL image"""
 
     PROTO = 'ImageDataTexture'
+    #: glTF's images, and the images the engine generates, put texture
+    #: coordinate (0, 0) at their upper left.
+    TOP_FIRST = True
     image = PILImage(' image', 1, None)
 
     def x3dEquivalent(self) -> Any:
-        """An X3D `ImageTexture` of the image as a PNG `data:` URL, for the X3D writers"""
-        import io  # noqa: PLC0415 only an X3D writer asks
-        stream = io.BytesIO()
-        self.image.save(stream, 'PNG')
-        return self.x3dTexture('image/png', stream.getvalue())
+        """An X3D `ImageTexture` of the image as a PNG `data:` URL, for the X3D writers
+
+        The image is written upside down: X3D puts texture coordinate (0, 0)
+        at an image's lower left, this node at its upper left.
+        """
+        return self.x3dTexture('image/png', x3d_image(self.image, 'PNG'))
 
     def x3dTexture(self, mime_type: str, data: bytes) -> Any:
         """An X3D `ImageTexture` of encoded image bytes, sampled as this texture is"""
@@ -58,6 +63,15 @@ class ImageDataTexture(_Texture, x3d.X3DTexture2DNode):
             found = green_mean(self.image)
             cache.CACHE.holder(self, found, ROUGHNESS_KEY).depend(self, type(self).image)
         return found
+
+
+def x3d_image(image: Any, format: str, **options: Any) -> bytes:
+    """`image` encoded in `format`, upside down, for an X3D `ImageTexture`"""
+    import io  # noqa: PLC0415 only an X3D writer asks
+    from PIL import ImageOps  # noqa: PLC0415 only an X3D writer asks
+    stream = io.BytesIO()
+    ImageOps.flip(image).save(stream, format, **options)
+    return stream.getvalue()
 
 
 def green_mean(image: Any) -> float:

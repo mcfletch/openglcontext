@@ -14,11 +14,11 @@ class TextureCache( object ):
         make per-context caches viable.
     """
     def __init__( self, atlasSize: Optional[int] = None ) -> None:
-        self.textures: 'weakref.WeakValueDictionary[tuple[Any, bool, bool], Any]' = weakref.WeakValueDictionary()
+        self.textures: 'weakref.WeakValueDictionary[tuple[Any, bool, bool, bool], Any]' = weakref.WeakValueDictionary()
         self.atlases = atlas.AtlasManager( max_size = atlasSize )
-    def getTexture( self, pil: Any, textureClass: Callable[[Any], Any],
+    def getTexture( self, pil: Any, textureClass: Callable[..., Any],
                     mode: Any = None, repeating: bool = False,
-                    atlasable: bool = True ) -> Any:
+                    atlasable: bool = True, topFirst: bool = False ) -> Any:
         """Get a texture for the given pil image and textureClass
 
         repeating -- a texture that tiles cannot share an atlas page with its
@@ -29,6 +29,9 @@ class TextureCache( object ):
             fixed-function pipeline carries on its texture matrix stack.  A
             shader has no such stack, so a caller drawing through one asks for
             a texture of its own.
+        topFirst -- the image's top row is stored first, at t=0
+            (:class:`OpenGLContext.texture.Texture`). An atlas page holds the
+            bottom row first, so such a texture has one of its own.
         """
         current = None
         if hasattr( pil, 'info' ):
@@ -36,12 +39,14 @@ class TextureCache( object ):
         else:
             ID = None
             # don't have a URL, can't cache...
-        key = (ID, repeating, atlasable)
+        key = (ID, repeating, atlasable, topFirst)
         if ID is not None:
             current = self.textures.get( key )
             if current:
                 return current
-        if repeating or not atlasable:
+        if topFirst:
+            current = textureClass(pil, topFirst=True)
+        elif repeating or not atlasable:
             current = textureClass(pil)
         else:
             try:

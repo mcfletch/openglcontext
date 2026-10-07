@@ -9,7 +9,7 @@ from OpenGL.GLU import *
 from OpenGL.GL.ARB import texture_non_power_of_two
 from OpenGL.extensions import available
 from OpenGLContext.arrays import ArrayType
-from PIL import ImageOps, Image
+from PIL import Image
 import weakref
 import logging
 
@@ -75,15 +75,21 @@ class Texture(object):
             uploaded: a core profile takes neither as a format, so the texture
             holds GL_R8/GL_RG8 and carries the swizzle that makes a sample of
             it (L, L, L, 1) or (L, L, L, A).  See :meth:`store`.
+        topFirst -- whether a PIL image's top row is stored first, at t=0.
+            VRML97 and X3D put texture coordinate (0, 0) at an image's lower
+            left, so their textures store the bottom row first; glTF puts it
+            at the upper left.
     """
 
-    def __init__(self, image: Any = None, format: Optional[int] = None) -> None:
+    def __init__(self, image: Any = None, format: Optional[int] = None,
+                 topFirst: bool = False) -> None:
         """Initialise the texture, if image is not None, store it
 
         image -- optional PIL image to store
         """
         self.components = 0
         self.format = format
+        self.topFirst = topFirst
         self.texture = glGenTextures(1)
         self.cleanup = _textureDeleter(self.texture)
         if image is not None:
@@ -227,7 +233,7 @@ class Texture(object):
             image = self.ensureRGB(image)
             image = self.ensurePow2(image)
         components, format = getLengthFormat(image)
-        x, y, image = image.size[0], image.size[1], self.pilAsString(image)
+        x, y, image = image.size[0], image.size[1], self.pilAsString(image, self.topFirst)
         self.store(
             components,
             format,
@@ -238,10 +244,12 @@ class Texture(object):
         return components
 
     @staticmethod
-    def pilAsString(image: Any) -> Any:
-        """Convert PIL image to string pointer"""
-        image = ImageOps.flip(image)
-        return image.tobytes("raw", image.mode, 0, -1)
+    def pilAsString(image: Any, topFirst: bool = False) -> Any:
+        """The image's pixels, its bottom row first, or its top row with `topFirst`
+
+        An array is taken as it is.
+        """
+        return image.tobytes("raw", image.mode, 0, 1 if topFirst else -1)
 
     def ensureRGB(self, image: Any) -> Any:
         """Ensure that the PIL image is in RGB mode
@@ -349,7 +357,8 @@ class CubeTexture(Texture):
                 x,
                 y,
             ) = image.size[0], image.size[1]
-            final_images.append((key, self.pilAsString(image)))
+            # GL lays out a cube map face from its top row
+            final_images.append((key, self.pilAsString(image, topFirst=True)))
         self.store(components, format, x, y, final_images)
         return components
 

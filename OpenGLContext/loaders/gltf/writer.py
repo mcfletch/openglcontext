@@ -46,7 +46,7 @@ from OpenGLContext.loaders.gltf import hooks as _hooks
 from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.loaders.gltf.materials import GLTF_TEXTURE_KEYS, khr_transform_params
 from OpenGLContext.loaders.gltf.textures import gl_sampler
-from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.physicalmaterial import (
     ChannelMaterial, appearance_alpha, pbr_material, source_of,
@@ -131,8 +131,16 @@ class EncodedImage(ImageDataTexture):
         return super().cached(mode)
 
     def x3dEquivalent(self) -> Any:
-        """An X3D `ImageTexture` of the encoded bytes as a `data:` URL"""
-        return self.x3dTexture(self.mime_type, self.data)
+        """An X3D `ImageTexture` of the image as a `data:` URL in its own format
+
+        The image is re-encoded upside down, as X3D puts texture coordinate
+        (0, 0) at an image's lower left and glTF at its upper left.
+        """
+        from PIL import Image  # noqa: PLC0415 decoded only when written
+        decoded = Image.open(io.BytesIO(self.data))
+        format = decoded.format or 'PNG'
+        options = {'quality': 95} if format == 'JPEG' else {}
+        return self.x3dTexture(self.mime_type, x3d_image(decoded, format, **options))
 
     @classmethod
     def from_path(cls, path: str, **named: Any) -> "EncodedImage":
