@@ -160,6 +160,13 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     bottom faces 180 degrees from the rule
   - [ ] a `PBRMesh` is written to X3D as an empty `<PBRMesh/>`: its arrays are not
     fields, so the mesh is lost
+- [ ] At merge: rebuild pyvrml97's accelerator in the main checkout
+  (`accelerate/`, `setup.py build_ext --inplace` or a reinstall); its
+  `fieldaccel2` announces sets through `vrml.event.announce` (pyvrml97
+  `8f34463`), and the build the venv loads predates it. The tests here ran
+  against the worktree's own build.
+- [ ] At merge: OpenGLContext's runs on this branch used the opengl_extrusions
+  `uv-seam` worktree, which merges with it.
 - [ ] Visual suite, this branch (2026-10-07, run with `PYTHONPATH` on the
   worktrees, compared with the main checkout's current baselines): these
   scripts render differently, each traced to a change on the branch;
