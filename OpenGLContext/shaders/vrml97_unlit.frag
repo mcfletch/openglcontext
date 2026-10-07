@@ -4,6 +4,7 @@
 // Supports solid color, textured, and text rendering modes
 
 #include "_objectid_inc.glsl"
+#include "_x3d_fog_inc.glsl"
 
 uniform vec4 solidColor;
 uniform sampler2D diffuseTexture;
@@ -20,6 +21,7 @@ uniform bool textSolidBg;        // When true, render solid background instead o
 uniform uint objectId;
 
 in vec2 vTexCoord;
+in float vEyeDistance;
 
 // Output color (attachment 0)
 layout(location = 0) out vec4 fragColor;
@@ -41,8 +43,11 @@ void main() {
         }
     } else if (useTexture) {
         // Standard textured mode (for general unlit textured objects)
+        // A textured shape of the scene, which the fog is over; text and the
+        // solid colours of the selection pass are not fogged
         vec4 texel = texture(diffuseTexture, vTexCoord);
         fragColor = texel * solidColor;
+        fragColor.rgb = x3dFogged(fragColor.rgb, vEyeDistance);
     } else {
         // Pure solid color mode (for selection rendering)
         fragColor = solidColor;

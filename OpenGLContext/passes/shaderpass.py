@@ -53,6 +53,7 @@ Matrix3 = npt.NDArray[np.float32]
 # Shader-text assembly (#include resolution, define injection, shadow budget)
 # lives in shadersource; SHADER_DIR / preprocess_shader are re-exported here
 # because tests and sibling passes import them from shaderpass.
+from OpenGLContext.passes import glstate
 from OpenGLContext.passes.shadersource import (
     SHADER_DIR,
     SHADOW_INCLUDE_MARKER,
@@ -849,6 +850,26 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
     def set_scene_ambient(self, ambient: Color3 = (0.2, 0.2, 0.2)) -> None:
         """Set scene ambient color."""
         self._set_uniform3f('sceneAmbient', ambient)
+
+    def set_fog(self, density: float = 0.0, color: Color3 = (0.6, 0.7, 0.85),
+                mode: int = 1) -> None:
+        """Set the frame's fog on each program that draws the scene's shapes
+
+        ``mode`` is one of :mod:`OpenGLContext.scenegraph.fog`'s codes and
+        ``density`` the reciprocal of the visible range; density 0 is no fog.
+        The shaders apply X3D's fog to the colour as it is displayed
+        (``_x3d_fog_inc.glsl``).
+        """
+        drawn: list[int] = []
+        for name in (self.program, self.unlit_program, self.vertex_color_program,
+                     self.point_program, self.line_program):
+            if name and not any(name == seen for seen in drawn):
+                drawn.append(name)
+        for name in drawn:
+            with glstate.program(name):
+                self._set_uniform1i('fogMode', int(mode), name)
+                self._set_uniform1f('fogDensity', float(density), name)
+                self._set_uniform3f('fogColor', color, name)
 
     def set_num_lights(self, count: int, program: Optional[int] = None) -> None:
         """Set the number of active lights."""

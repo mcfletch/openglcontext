@@ -11,9 +11,12 @@ uniform mat4 projectionMatrix;
 uniform float pointSize;
 
 out vec3 vColor;
+out float vEyeDistance;   // for the fog
 
 void main() {
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(aPosition, 1.0);
+    vec4 eyePosition = modelViewMatrix * vec4(aPosition, 1.0);
+    vEyeDistance = length(eyePosition.xyz);
+    gl_Position = projectionMatrix * eyePosition;
     vColor = aColor;
     // gl_PointSize is set per-vertex; can be used for size attenuation
     // For now, just use the uniform point size

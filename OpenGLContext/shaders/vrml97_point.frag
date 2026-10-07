@@ -4,8 +4,10 @@
 // Used for PointSet geometry (particles, point clouds, etc.)
 
 #include "_objectid_inc.glsl"
+#include "_x3d_fog_inc.glsl"
 
 in vec3 vColor;
+in float vEyeDistance;
 
 uniform bool hasTexture;
 uniform sampler2D pointTexture;
@@ -29,7 +31,7 @@ void main() {
         color = color * texColor;
     }
 
-    fragColor = color;
+    fragColor = vec4(x3dFogged(color.rgb, vEyeDistance), color.a);
 
     // Output object ID to selection buffer (encode as RGBA8)
     fragObjectId = encodeObjectId(objectId);

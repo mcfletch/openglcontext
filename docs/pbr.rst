@@ -726,7 +726,7 @@ the same way it finds the background. No other setup is needed:
 
    from OpenGLContext.scenegraph.basenodes import Fog
 
-   Fog(color=(0.06, 0.20, 0.32),     # linear RGB
+   Fog(color=(0.06, 0.20, 0.32),     # the colour as displayed
        visibilityRange=18.0,          # metres to total obscurity; 0 is off
        fogType='EXPONENTIAL')         # or 'LINEAR', the default
 
@@ -739,9 +739,13 @@ be three ``Fog`` nodes in one scene, with one in force at a time:
 ``fog.set_bind = True`` puts one in force, and ``set_bind = False`` returns to
 the one it covered (:ref:`X3D binding <x3d-binding>`).
 
-Fog is applied by the PBR shader, to unlit surfaces as to lit ones. The
-VRML97 core shader does not apply it. X3D's ``LocalFog`` fogs only its own
-group (:doc:`X3D <x3d>`).
+Both curves follow X3D's equation (ISO/IEC 19775-1, 17.2.2.3): the colour as
+displayed, after tone mapping, is mixed with the fog colour, so a ``LINEAR``
+fog leaves an object ``(visibilityRange - distance) / visibilityRange`` of its
+own colour. The PBR shader fogs unlit surfaces as it does lit ones. The VRML97
+pass fogs lit and vertex-coloured shapes, textured unlit shapes, points and
+lines; an untextured unlit shape and text are not fogged there. X3D's
+``LocalFog`` fogs only its own group (:doc:`X3D <x3d>`).
 
 Choosing a fog curve
 ~~~~~~~~~~~~~~~~~~~~

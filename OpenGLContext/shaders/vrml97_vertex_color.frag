@@ -48,6 +48,7 @@ layout(location = 1) out vec4 fragObjectId;
 
 // Shared calcAttenuation / calcSpotEffect / calcLight.
 #include "_vrml97_lighting_inc.glsl"
+#include "_x3d_fog_inc.glsl"
 
 void main() {
     vec3 normal = normalize(vNormal);
@@ -81,6 +82,6 @@ void main() {
     vec3 finalColor = emissive + ambient + lighting;
     finalColor = clamp(finalColor, 0.0, 1.0);
 
-    fragColor = vec4(finalColor, alpha);
+    fragColor = vec4(x3dFogged(finalColor, length(vPosition)), alpha);
     fragObjectId = encodeObjectId(objectId);
 }

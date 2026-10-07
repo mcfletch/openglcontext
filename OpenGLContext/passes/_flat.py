@@ -1994,6 +1994,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         if self.use_shadows:
             self.bindShadowUniforms(fitted=fitted)
         self.iblSetup(matrix, lighting)
+        self.fogSetup()
         shader_program.set_default_material()
         shader_program.set_scene_ambient(self.sceneAmbient())
         self.setupLightGrid()

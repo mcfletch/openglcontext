@@ -11,8 +11,11 @@ uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
 
 out vec2 vTexCoord;
+out float vEyeDistance;   // for the fog
 
 void main() {
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(aPosition, 1.0);
+    vec4 eyePosition = modelViewMatrix * vec4(aPosition, 1.0);
+    vEyeDistance = length(eyePosition.xyz);
+    gl_Position = projectionMatrix * eyePosition;
     vTexCoord = aTexCoord;
 }

@@ -106,7 +106,14 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     tree 55% -> 0.05%
   - [x] X3D's attenuation floor of 1 (`lightAttenuationFloor`): the dungeon's
     torch, 0.2 m from a wall with attenuation `0 0.6 0`, lit it eight times over
-  - [ ] whole corpus against X_ITE (2026-10-07): median 4.9% of pixels unlike;
+  - [x] the VRML97 pass fogs (`_x3d_fog_inc.glsl`, `VRML97ShaderProgram.set_fog`,
+    `FlatPass.fogSetup`); `oglc-x3d-regression --renderer vrml97`
+  - [x] a viewpoint, background, fog or navigation in an Inline's file is not
+    bound first (pyvrml97 `binding.current_path`; 19775-1 7.2.2 rule 4):
+    Figure20_09 opened on the vaulted ceiling's own viewpoint
+  - [ ] whole corpus against X_ITE (2026-10-07): median 4.9% of pixels unlike
+    with the PBR pass, 1.8% with the VRML97 pass, whose worst were the fog
+    documents it did not fog;
     to look at next: Background fogged (fogtype_linear: our frame is the fog
     colour), the Snake's background colour, Figure20_09's viewpoint, the
     SphereSensor tests' framing X_ITE runs Scripts, so its render

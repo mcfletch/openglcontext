@@ -58,6 +58,7 @@ layout(location = 1) out vec4 fragObjectId;
 // Shared VRML97 lighting math (calcAttenuation / calcSpotEffect / calcLight),
 // also used by vrml97_vertex_color.frag so the two stay in lock-step.
 #include "_vrml97_lighting_inc.glsl"
+#include "_x3d_fog_inc.glsl"
 
 void main() {
     // Normalize interpolated normal
@@ -106,7 +107,7 @@ void main() {
     // Clamp to valid range
     finalColor = clamp(finalColor, 0.0, 1.0);
 
-    fragColor = vec4(finalColor, alpha);
+    fragColor = vec4(x3dFogged(finalColor, length(vPosition)), alpha);
     // Per-instance id when instancing, else the per-draw uniform.
     fragObjectId = encodeObjectId(instancingEnabled ? vObjectId : objectId);
 }

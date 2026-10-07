@@ -157,12 +157,14 @@ def parse_render_report(stdout: Optional[str]) -> dict[str, Any]:
 
 
 def render_scene(scene: Scene, out: str, size: tuple[int, int], frames: int,
-                 timeout: float = RENDER_TIMEOUT) -> tuple[bool, dict[str, Any]]:
-    """Draw `scene` to the PNG `out` in a process of its own; whether it was
-    written, and what the process reported (with ``error`` where it failed)"""
+                 timeout: float = RENDER_TIMEOUT,
+                 renderer: str = 'pbr') -> tuple[bool, dict[str, Any]]:
+    """Draw `scene` to the PNG `out` in a process of its own, with `renderer`
+    (``pbr`` or ``vrml97``); whether it was written, and what the process
+    reported (with ``error`` where it failed)"""
     if os.path.exists(out):
         os.remove(out)
-    env = _render_environment(out, frames)
+    env = _render_environment(out, frames, renderer)
     command = [sys.executable, '-m', 'OpenGLContext.bin.x3d_regression', '--render', scene.path,
                '--root', scene.root, '--size', '%dx%d' % size]
     try:
@@ -177,9 +179,11 @@ def render_scene(scene: Scene, out: str, size: tuple[int, int], frames: int,
     return os.path.exists(out), report
 
 
-def _render_environment(out: str, frames: int) -> dict[str, str]:
-    """The drawing process's environment: a clean one, capturing `frames` frames to `out`"""
+def _render_environment(out: str, frames: int, renderer: str = 'pbr') -> dict[str, str]:
+    """The drawing process's environment: a clean one, drawing with `renderer`
+    and capturing `frames` frames to `out`"""
     return renderoptions.clean_environment(
+        OPENGLCONTEXT_RENDERER=renderer,
         OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_NO_VSYNC='1',
         OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND='glfw',
         OPENGLCONTEXT_SHADOW_CASCADES='3', OPENGLCONTEXT_BLOOM='0',
@@ -306,7 +310,8 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
 
     def one(scene: Scene) -> str:
         new_path = os.path.join(out_dir, scene.slug + '.png')
-        ok, report = render_scene(scene, new_path, args.size, args.frames)
+        ok, report = render_scene(scene, new_path, args.size, args.frames,
+                                  renderer=args.renderer)
         if not ok:
             return '  FAIL  %s (%s)' % (scene.name, report.get('error', 'no render'))
         record = _view_metadata(scene, report, args, provenance)
@@ -425,6 +430,9 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
                              "(default, where there is one), or Web3D's published one")
     parser.add_argument('--reference-root', metavar='DIR',
                         help="X_ITE's renders (default: tests/reference_images/x3d_xite)")
+    parser.add_argument('--renderer', choices=('pbr', 'vrml97'), default='pbr',
+                        help="the pass documents are drawn with: the PBR pass (default), "
+                             "or the VRML97 pass, which shades a Material by X3D's equation")
     parser.add_argument('--render', metavar='DOCUMENT', help=argparse.SUPPRESS)
     parser.add_argument('--root', metavar='DIR', help=argparse.SUPPRESS)
     return parser

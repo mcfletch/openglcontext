@@ -202,15 +202,19 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         if hasattr(shader, 'set_exposure'):
             shader.set_exposure(
                 float(getattr(getattr(self, 'context', None), 'gltf_exposure', 1.0)))
-        # Fog, from the bound Fog node the pass has already collected. A scene
-        # with none is left pixel-identical, which is nearly every scene.
-        if hasattr(shader, 'set_fog'):
-            self.applyFog(shader)
         # Bloom: the scene renders into a linear HDR target, so the PBR shader emits
         # linear HDR (tone-mapping moves to the bloom composite). Off by default.
         if hasattr(shader, 'set_hdr_output'):
             shader.set_hdr_output(bool(getattr(self, '_bloom_active', False)))
         return mode
+
+    def fogSetup(self) -> None:
+        """Hand this frame's fog to the program, whichever pass draws: the bound
+        Fog node the pass has already collected. A scene with none is left
+        pixel-identical, which is nearly every scene."""
+        shader = self.shader_program
+        if shader is not None and hasattr(shader, 'set_fog'):
+            self.applyFog(shader)
 
     def applyFog(self, shader: Any) -> None:
         """Hand the shader the fog the camera is standing in, or none.

@@ -133,7 +133,7 @@ def test_a_document_may_name_an_image_above_its_folder(tmp_path, where, url):
 def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
 
-    def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT):
+    def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
         Image.new('RGB', size, (200, 0, 0)).save(out)
         return True, {'problems': ['warning: something'], 'viewpoint': None}
 
@@ -155,7 +155,7 @@ def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
     assert record['gl_renderer'] == 'test'
     assert os.path.exists(report)
 
-    def different(scene, out, size, frames, timeout=R.RENDER_TIMEOUT):
+    def different(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
         Image.new('RGB', size, (0, 0, 200)).save(out)
         return True, {'problems': [], 'viewpoint': None}
 
@@ -169,7 +169,7 @@ def test_no_corpus_says_how_to_fetch_one(tmp_path, capsys):
     assert '--fetch' in capsys.readouterr().out
 
 
-def _fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT):
+def _fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
     Image.new('RGB', size, (200, 0, 0)).save(out)
     return True, {'problems': [], 'viewpoint': None}
 
@@ -216,3 +216,11 @@ def test_a_world_is_drawn_long_after_time_zero(tmp_path):
     env = R._render_environment(str(tmp_path / 'a.png'), 8)
     assert float(env['OPENGLCONTEXT_CAPTURE_START']) == R.WORLD_START
     assert R.WORLD_START > 365 * 24 * 3600
+
+
+@pytest.mark.parametrize('renderer', ['pbr', 'vrml97'])
+def test_the_renderer_a_document_is_drawn_with(tmp_path, renderer):
+    """The PBR pass by default, or X3D's own Phong equation in the VRML97 pass"""
+    env = R._render_environment(str(tmp_path / 'a.png'), 8, renderer)
+    assert env['OPENGLCONTEXT_RENDERER'] == renderer
+    assert R.build_parser().parse_args([]).renderer == 'pbr'

@@ -4,8 +4,10 @@
 // Used for IndexedLineSet geometry
 
 #include "_objectid_inc.glsl"
+#include "_x3d_fog_inc.glsl"
 
 in vec3 vColor;
+in float vEyeDistance;
 
 // Object ID for selection buffer (MRT)
 uniform uint objectId;
@@ -16,7 +18,7 @@ layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragObjectId;
 
 void main() {
-    fragColor = vec4(vColor, 1.0);
+    fragColor = vec4(x3dFogged(vColor, vEyeDistance), 1.0);
 
     // Output object ID to selection buffer (encode as RGBA8)
     fragObjectId = encodeObjectId(objectId);
