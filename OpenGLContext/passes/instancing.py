@@ -20,7 +20,7 @@ import numpy as np
 import ctypes
 
 from OpenGL.GL import (
-    GL_CCW, GL_CULL_FACE, glDisable, glEnable, glFrontFace,
+    GL_BACK, GL_CCW, GL_CULL_FACE, GL_FRONT, glCullFace, glDisable, glEnable, glFrontFace,
 )
 from OpenGLContext import renderoptions
 from OpenGLContext.scenegraph import vertexsemantics
@@ -333,9 +333,19 @@ def set_cull_state(mode: Any, enabled: bool, front_face: int) -> None:
     same-state shapes in a row -- and reset once per pass by
     :func:`reset_cull_state` rather than per draw.
     """
+    # A shape drawing one side of a two-sided surface at a time
+    # (``mode.drawnFaces``, GL_FRONT or GL_BACK) culls the other side.
+    drawn = getattr(mode, 'drawnFaces', None)
+    culled = GL_BACK
+    if drawn is not None:
+        enabled = True
+        culled = GL_FRONT if drawn == GL_BACK else GL_BACK
     if getattr(mode, '_cull_front_face', None) != front_face:
         glFrontFace(front_face)
         mode._cull_front_face = front_face
+    if getattr(mode, '_cull_face', GL_BACK) != culled:
+        glCullFace(culled)
+        mode._cull_face = culled
     if getattr(mode, '_cull_enabled', None) != enabled:
         (glEnable if enabled else glDisable)(GL_CULL_FACE)
         mode._cull_enabled = enabled
@@ -351,6 +361,7 @@ def forget_cull_state(mode: Any) -> None:
     """
     mode._cull_front_face = None
     mode._cull_enabled = None
+    mode._cull_face = None
 
 
 def reset_cull_state(mode: Any) -> None:
@@ -364,8 +375,11 @@ def reset_cull_state(mode: Any) -> None:
         glFrontFace(GL_CCW)
     if getattr(mode, '_cull_enabled', None) is False:
         glEnable(GL_CULL_FACE)
+    if getattr(mode, '_cull_face', None) not in (None, GL_BACK):
+        glCullFace(GL_BACK)
     mode._cull_front_face = None
     mode._cull_enabled = None
+    mode._cull_face = None
 
 
 def group_material_table(group: Any) -> tuple[list, list]:

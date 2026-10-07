@@ -43,6 +43,7 @@ from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.physicalmaterial import (
     AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha, source_of,
+    two_sided,
     material_to_pbr, pbr_material,
 )
 from OpenGLContext.scenegraph.texgen import TexGen
@@ -937,16 +938,18 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform('uvTransformRows', _transform_rows(mapping), self.program,
                           _upload_rows)
 
-    def configure_appearance(self, appearance: Any, mode: Any, geometry: Any = None) -> None:
+    def configure_appearance(self, appearance: Any, mode: Any, geometry: Any = None,
+                             back: bool = False) -> None:
         """Configure PBR material + textures from a Shape's appearance.
 
         Routes both PhysicalMaterial (directly) and a VRML97 appearance -- its
         Material up-converted, its texture as the base colour map -- through
         this single PBR program; :func:`pbr_material` says which. ``geometry``
         is what is drawn with it, whose coordinate sets the appearance's
-        mapping labels name.
+        mapping labels name. ``back`` configures the back faces' material
+        (:func:`~OpenGLContext.scenegraph.physicalmaterial.side_material`).
         """
-        material = pbr_material(appearance) if appearance else None
+        material = pbr_material(appearance, back) if appearance else None
         # The coordinates depend on the geometry as well as the appearance, so
         # they are set before the same-material early-out.
         self.set_texture_mapping(texture_mapping(appearance, geometry))
@@ -1138,6 +1141,9 @@ class PBRPass(flatcore.FlatPass):
                 return False
         # A mirror is drawn singly: each one reads a reflection of its own.
         if reflection.shape_reflector(shape) is not None:
+            return False
+        # So is a surface with a back material: it is drawn a side at a time.
+        if two_sided(getattr(shape, 'appearance', None)):
             return False
         return hasattr(geometry, 'instanceGPU')
 

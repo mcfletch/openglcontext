@@ -3,10 +3,11 @@
 from typing import Any
 
 from OpenGL.GL import *
-from OpenGL.GL import glUseProgram
+from OpenGL.GL import GL_BACK, GL_FRONT, glUseProgram
 from vrml.vrml97 import basenodes
 from vrml import field
 from OpenGLContext.scenegraph import boundingvolume, polygonsort
+from OpenGLContext.scenegraph.physicalmaterial import two_sided
 from OpenGLContext.arrays import array
 import traceback
 import logging
@@ -130,26 +131,18 @@ class Shape(basenodes.Shape):
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
         if getattr(mode, 'visible', True) and hasattr(shader_program, 'configure_appearance'):
-            shader_program.configure_appearance(self.appearance, mode, self.geometry)
-            # Whether the base colour is modulated by a per-vertex colour is one
-            # uniform for the whole pass, so it is answered for every shape
-            # rather than only by the geometry that has colours: a box drawn
-            # after a vertex-coloured terrain would otherwise be modulated by
-            # the colour attribute it does not supply, which reads as black.
-            if hasattr(shader_program, 'set_vertex_color'):
-                shader_program.set_vertex_color(
-                    getattr(self.geometry, 'colors', None) is not None)
-            # The same for texture coordinates a generator makes.
-            if hasattr(shader_program, 'set_texgen'):
-                shader_program.set_texgen(getattr(self.geometry, 'texGen', None))
-            # Water moves on the card: the mesh is uploaded once and the wave
-            # is a handful of uniforms. Answered for every shape rather than
-            # only by water, or the hillside after a lake would ripple too.
-            if hasattr(shader_program, 'set_wave'):
-                shader_program.set_wave(
-                    getattr(self.geometry, 'waveStyle', None) or None,
-                    float(getattr(self.geometry, 'wave_time', 0.0) or 0.0))
-            self.geometry.render(textured=True, mode=mode)
+            if two_sided(self.appearance) and not getattr(self.geometry, 'solid', True):
+                # The front faces with the material, then the back faces with
+                # the back material, each side culling the other.
+                try:
+                    mode.drawnFaces = GL_FRONT
+                    self._render_pbr(mode, shader_program, back=False)
+                    mode.drawnFaces = GL_BACK
+                    self._render_pbr(mode, shader_program, back=True)
+                finally:
+                    mode.drawnFaces = None
+                return
+            self._render_pbr(mode, shader_program, back=False)
             return
 
         if self.appearance and getattr(self.appearance, 'bringsProgram', False):
@@ -193,6 +186,32 @@ class Shape(basenodes.Shape):
         # Cleanup texture
         if textured:
             shader_program.unbind_texture()
+
+    def _render_pbr(self, mode: Any, shader_program: Any, back: bool) -> None:
+        """Draw through the PBR program with the front or back faces' material"""
+        if back:
+            shader_program.configure_appearance(self.appearance, mode, self.geometry, back=True)
+        else:
+            shader_program.configure_appearance(self.appearance, mode, self.geometry)
+        # Whether the base colour is modulated by a per-vertex colour is one
+        # uniform for the whole pass, so it is answered for every shape
+        # rather than only by the geometry that has colours: a box drawn
+        # after a vertex-coloured terrain would otherwise be modulated by
+        # the colour attribute it does not supply, which reads as black.
+        if hasattr(shader_program, 'set_vertex_color'):
+            shader_program.set_vertex_color(
+                getattr(self.geometry, 'colors', None) is not None)
+        # The same for texture coordinates a generator makes.
+        if hasattr(shader_program, 'set_texgen'):
+            shader_program.set_texgen(getattr(self.geometry, 'texGen', None))
+        # Water moves on the card: the mesh is uploaded once and the wave
+        # is a handful of uniforms. Answered for every shape rather than
+        # only by water, or the hillside after a lake would ripple too.
+        if hasattr(shader_program, 'set_wave'):
+            shader_program.set_wave(
+                getattr(self.geometry, 'waveStyle', None) or None,
+                float(getattr(self.geometry, 'wave_time', 0.0) or 0.0))
+        self.geometry.render(textured=True, mode=mode)
 
     def _render_shader_appearance(self, mode: Any) -> Any:
         """Draw the geometry through the GLSL program the appearance carries.

@@ -189,6 +189,7 @@ from vrml.x3d.nodes import MultiTextureTransform as MultiTextureTransform
 from vrml.x3d.nodes import Tangent as Tangent
 from vrml.x3d.nodes import TextureProperties as TextureProperties
 from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
+from vrml.x3d.nodes import TwoSidedMaterial as TwoSidedMaterial
 from vrml.x3d.runtime import BooleanFilter as BooleanFilter
 from vrml.x3d.runtime import BooleanSequencer as BooleanSequencer
 from vrml.x3d.runtime import BooleanToggle as BooleanToggle
@@ -377,6 +378,7 @@ __all__ = [
     'TriangleSet2D',
     'TriangleStripSet',
     'TrimmedSurface',
+    'TwoSidedMaterial',
     'UnlitMaterial',
     'Viewpoint',
     'ViewpointGroup',

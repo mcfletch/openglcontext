@@ -413,6 +413,48 @@ _VIEW_VERSION_KEY = 'pbr-view-version'
 VIEW_KEY = 'pbr-view'
 
 
+class BackFields(object):
+    """A TwoSidedMaterial's `back...` fields under the names a Material gives them"""
+
+    #: Each Material field name, to the TwoSidedMaterial field the back reads.
+    NAMES: "dict[str, str]" = {
+        'ambientIntensity': 'backAmbientIntensity', 'diffuseColor': 'backDiffuseColor',
+        'emissiveColor': 'backEmissiveColor', 'shininess': 'backShininess',
+        'specularColor': 'backSpecularColor', 'transparency': 'backTransparency',
+    }
+
+    def __init__(self, material: Any) -> None:
+        self.source = material
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return getattr(self.source, self.NAMES.get(name, name))
+
+
+def side_material(appearance: Any, back: bool = False) -> Any:
+    """The material `appearance`'s front or back faces are drawn with
+
+    The back is `backMaterial` where there is one, a TwoSidedMaterial's back
+    fields (:class:`BackFields`) where its `separateBackColor` is true, and
+    otherwise the front's material.
+    """
+    material = getattr(appearance, 'material', None)
+    if not back:
+        return material
+    found = getattr(appearance, 'backMaterial', None)
+    if found:
+        return found
+    if isinstance(material, x3d.TwoSidedMaterial) and material.separateBackColor:
+        return BackFields(material)
+    return material
+
+
+def two_sided(appearance: Any) -> bool:
+    """Whether `appearance`'s back faces are drawn with a material of their own"""
+    return side_material(appearance, back=True) is not side_material(appearance)
+
+
 class AppearanceMaterial(object):
     """The metallic/roughness material a VRML97-style `Appearance` is drawn as
 
@@ -425,11 +467,13 @@ class AppearanceMaterial(object):
 
     :attr:`factorVersion` moves when a field any of those is read from is
     set, as :attr:`PhysicalMaterial.factorVersion` does. :func:`pbr_material`
-    makes one per appearance, which it refers to weakly.
+    makes one per appearance and side, which it refers to weakly; the back's
+    reads the back material (:func:`side_material`).
     """
 
-    def __init__(self, appearance: Any) -> None:
+    def __init__(self, appearance: Any, back: bool = False) -> None:
         self._appearance = weakref.ref(appearance)
+        self._back = back
         self._version = 0
 
     @property
@@ -439,8 +483,8 @@ class AppearanceMaterial(object):
 
     @property
     def material(self) -> Any:
-        """The appearance's `Material`, or None"""
-        return getattr(self.appearance, 'material', None)
+        """The appearance's `Material` for this side, or None"""
+        return side_material(self.appearance, self._back)
 
     #: The channels an X3D 4 `Material` has maps for, and their fields.
     CHANNELS: "dict[str, str]" = {
@@ -484,20 +528,22 @@ class AppearanceMaterial(object):
     def factorVersion(self) -> int:
         """A count that moves whenever a field this view reads from is set"""
         appearance = self.appearance
-        if appearance is not None and cache.CACHE.getData(appearance, _VIEW_VERSION_KEY) is None:
+        key = _VIEW_VERSION_KEY + ('-back' if self._back else '')
+        if appearance is not None and cache.CACHE.getData(appearance, key) is None:
             self._version += 1
-            self._watch(appearance)
+            self._watch(appearance, key)
         return self._version
 
     @staticmethod
-    def _watch(appearance: Any) -> None:
+    def _watch(appearance: Any, key: str) -> None:
         """Hold a version against the fields of the nodes the view reads now"""
-        holder = cache.CACHE.holder(appearance, True, _VIEW_VERSION_KEY)
-        for name in ('material', 'texture'):
+        holder = cache.CACHE.holder(appearance, True, key)
+        for name in ('material', 'backMaterial', 'texture'):
             holder.depend(appearance, name)
-        if appearance.material:
-            for source_field in protofunctions.getFields(appearance.material):
-                holder.depend(appearance.material, source_field)
+        for material in (appearance.material, getattr(appearance, 'backMaterial', None)):
+            if material:
+                for source_field in protofunctions.getFields(material):
+                    holder.depend(material, source_field)
 
 
 #: Where :func:`pbr_material` keeps an appearance's :class:`AppearanceTextured`.
@@ -514,8 +560,9 @@ class AppearanceTextured(object):
     (:attr:`material`). :func:`pbr_material` makes one per appearance.
     """
 
-    def __init__(self, appearance: Any) -> None:
+    def __init__(self, appearance: Any, back: bool = False) -> None:
         self._appearance = weakref.ref(appearance)
+        self._back = back
         self._version = 0
         self._seen: Any = None
 
@@ -526,8 +573,8 @@ class AppearanceTextured(object):
 
     @property
     def material(self) -> Any:
-        """The appearance's PhysicalMaterial or UnlitMaterial"""
-        return getattr(self.appearance, 'material', None)
+        """The appearance's PhysicalMaterial or UnlitMaterial for this side"""
+        return side_material(self.appearance, self._back)
 
     @property
     def textures(self) -> "dict[str, Any]":
@@ -578,8 +625,11 @@ def source_of(material: Any) -> Any:
     return material
 
 
-def pbr_material(appearance: Any) -> Any:
-    """The material the PBR pass draws `appearance` with; None for no appearance
+def pbr_material(appearance: Any, back: bool = False) -> Any:
+    """The material the PBR pass draws `appearance`'s front or back faces with
+
+    None for no appearance. `back` asks for the back faces' material
+    (:func:`side_material`); each side has its own view.
 
     A :class:`PhysicalMaterial` or `UnlitMaterial` carries its own maps and
     is drawn as itself, or, where its base map is NULL and the appearance has
@@ -592,17 +642,18 @@ def pbr_material(appearance: Any) -> Any:
     """
     if appearance is None:
         return None
-    material = getattr(appearance, 'material', None)
+    material = side_material(appearance, back)
+    side = '-back' if back else ''
     if isinstance(material, ChannelMaterial):
         if material.texture('baseColor') is not None or not getattr(appearance, 'texture', None):
             return material
-        textured = cache.CACHE.getData(appearance, TEXTURED_VIEW_KEY)
+        textured = cache.CACHE.getData(appearance, TEXTURED_VIEW_KEY + side)
         if textured is None:
-            textured = AppearanceTextured(appearance)
-            cache.CACHE.holder(appearance, textured, TEXTURED_VIEW_KEY)
+            textured = AppearanceTextured(appearance, back)
+            cache.CACHE.holder(appearance, textured, TEXTURED_VIEW_KEY + side)
         return textured
-    view = cache.CACHE.getData(appearance, VIEW_KEY)
+    view = cache.CACHE.getData(appearance, VIEW_KEY + side)
     if view is None:
-        view = AppearanceMaterial(appearance)
-        cache.CACHE.holder(appearance, view, VIEW_KEY)
+        view = AppearanceMaterial(appearance, back)
+        cache.CACHE.holder(appearance, view, VIEW_KEY + side)
     return view

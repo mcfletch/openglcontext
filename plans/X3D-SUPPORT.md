@@ -74,7 +74,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] light scope: `global` false lights only its parent group's descendants (`passes.lightscope`, the per-draw `lightsOff` mask); the engine's DirectionalLight made in code is global; VRML97 dialect default `global FALSE`
   - [ ] the fixed-function pipeline's light scope and radius
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
-  - [ ] `TwoSidedMaterial` and `backMaterial`; environment (`EnvironmentLight`, `TextureBackground`, `LocalFog`; the cube-map nodes are Phase 8's CubeMapTexturing)
+  - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)
+  - [ ] environment (`EnvironmentLight`, `TextureBackground`, `LocalFog`; the cube-map nodes are Phase 8's CubeMapTexturing)
   - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture
 - Phase 7, runtime (§9.10, §9.15, §9.16)
   - [x] event utilities, sequencers and `KeySensor` with their behaviour (`vrml.x3d.runtime`); the engine's `TimeTrigger` clock and `KeySensor` keys (`scenegraph/x3druntime.py`, `observeEvents`)

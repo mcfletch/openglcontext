@@ -115,7 +115,7 @@ implements these X3D nodes, by component:
 - Rendering - Color, ColorRGBA, Coordinate, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
   Normal, PointSet, Tangent, TriangleFanSet, TriangleSet, TriangleStripSet
-- Shape - Appearance, Material, PhysicalMaterial, Shape, UnlitMaterial
+- Shape - Appearance, Material, PhysicalMaterial, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - AudioClip, Sound
 - Text - FontStyle, Text
 - Texturing - ImageTexture, MovieTexture, MultiTextureCoordinate,
@@ -155,7 +155,12 @@ appearance's ``texture`` is the base colour map. In the same way it is a
 ``UnlitMaterial``'s emissive map without an ``emissiveTexture``, in drawing
 and in a glTF written from the scene. ``ambientTexture``,
 ``shininessTexture`` and ``specularTexture`` are kept and not drawn.
-``TwoSidedMaterial`` and ``Appearance.backMaterial`` are kept and not drawn.
+A geometry that is not ``solid`` draws its back faces with
+``Appearance.backMaterial``, or with a ``TwoSidedMaterial``'s ``back...``
+fields where its ``separateBackColor`` is true, through the PBR program: the
+shape is drawn a side at a time and is not batched with others. The alpha
+mode is the front material's, and the fixed-function path draws both sides
+with the front material.
 
 A grouping node or shape whose ``visible`` is false is not drawn, picked or
 shadowed, nor is anything under it; setting it takes effect on the next frame.
