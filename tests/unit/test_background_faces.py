@@ -102,3 +102,34 @@ def test_the_engines_cube_background_names_its_layout():
     from OpenGLContext.scenegraph.cubebackground import CubeBackground  # noqa: PLC0415 kept with its use
     assert CubeBackground().faceLayout == 'X3D'
     assert CubeBackground(faceLayout='CUBEMAP').faceLayout == 'CUBEMAP'
+
+
+def test_the_sides_are_not_clipped_by_the_far_plane(gl_context):
+    """The cube's corners are further out than its faces' centres; the frame's
+    corners see them, and they are drawn whatever the far plane"""
+    image = drawn(b'<TextureBackground skyColor="0 0 1">'
+                  + side(b'front', b'1 1 3 0x00FF00') + b'</TextureBackground>')
+    for corner in (image[0, 0], image[0, -1], image[-1, 0], image[-1, -1]):
+        assert corner[1] > corner[2] + 100, corner
+
+
+def test_a_new_side_node_is_drawn(gl_context):
+    """Replacing a side's texture node is an input of the drawn sides"""
+    from PIL import Image  # noqa: PLC0415 kept with its use
+
+    from OpenGLContext.scenegraph.basenodes import CubeBackground, ImageTexture, Viewpoint, sceneGraph  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+
+    def side_of(colour):
+        texture = ImageTexture()
+        texture.setImage(Image.new('RGB', (2, 2), colour))
+        return texture
+    background = CubeBackground(front=side_of((0, 255, 0)))
+    scene = sceneGraph(children=[Viewpoint(position=(0, 0, 0)), background])
+    with scene_context(scene, size=(32, 32)) as context:
+        drawn_image(context)
+        assert drawn_image(context)[16, 16][1] > 200
+        background.front = side_of((255, 0, 0))
+        drawn_image(context)
+        centre = drawn_image(context)[16, 16]
+    assert centre[0] > 200 and centre[1] < 50, centre

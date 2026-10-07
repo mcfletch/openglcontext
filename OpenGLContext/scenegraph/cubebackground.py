@@ -59,18 +59,32 @@ CORNERS = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
 #: seen from inside the cube is X3D's mirrored left to right on the four sides
 #: and top to bottom on the top and bottom.
 LAYOUTS = ('X3D', 'CUBEMAP')
-#: Half the cube's side: inside any far plane a view has.
-CUBE_SIZE = 100.0
 SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
 
 #: The faces' program, per GL context that compiled one.
 _programs: dict[Optional[contextresources.ContextKey], Any] = {}
+#: The six faces' vertex buffer and vertex array, per GL context and face layout.
+_quads: dict[tuple[Optional[contextresources.ContextKey], str], tuple[Any, int]] = {}
 
 
 @contextresources.on_context_lost
 def _drop_context_resources() -> None:
-    """Forget the program of the context now being destroyed"""
-    _programs.pop(contextresources.context_key(), None)
+    """Forget the program and the faces of the context now being destroyed"""
+    key = contextresources.context_key()
+    _programs.pop(key, None)
+    for found in [found for found in _quads if found[0] == key]:
+        del _quads[found]
+
+
+def _faces(layout: str) -> tuple[Any, int]:
+    """The vertex buffer and vertex array of the six faces in `layout`, for the
+    current context"""
+    key = (contextresources.context_key(), layout)
+    found = _quads.get(key)
+    if found is None:
+        quads = [concatenate(face_quad(side, layout), axis=1) for side in FACES]
+        found = _quads[key] = (VBO(concatenate(quads).astype('f')), glGenVertexArrays(1))
+    return found
 
 
 def face_quad(side: str, layout: str = 'X3D') -> tuple[Any, Any]:
@@ -151,11 +165,14 @@ class _CubeBackground( object ):
             render_data = self.compile(mode)
         if clear:
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
-        textures, vertices, vao = render_data
+        textures, layout = render_data
         if not textures:
             return 0
+        vertices, vao = _faces(layout)
         program, mvp_location, image_location = _program()
         matrix = dot(mode.matrix, mode.projection).astype('f')
+        blending = (int(glGetIntegerv(GL_BLEND_SRC_RGB)), int(glGetIntegerv(GL_BLEND_DST_RGB)),
+                    int(glGetIntegerv(GL_BLEND_SRC_ALPHA)), int(glGetIntegerv(GL_BLEND_DST_ALPHA)))
         glActiveTexture(GL_TEXTURE0)
         with glstate.program(program), glstate.disabled(GL_DEPTH_TEST, GL_CULL_FACE), \
                 glstate.enabled(GL_BLEND):
@@ -177,17 +194,15 @@ class _CubeBackground( object ):
                 glBindTexture(GL_TEXTURE_2D, 0)
                 glBindVertexArray(0)
                 glDepthMask(GL_TRUE)
+                glBlendFuncSeparate(*blending)
         return 1
 
     def compile( self, mode: Any ) -> Any:
-        """(textures, vertex buffer, vertex array): a texture for each side with
-        an image, by its place in the buffer, kept until a side changes"""
+        """(textures, face layout): a texture for each side with an image, by its
+        place among the faces, kept until a side changes"""
         textures = []
-        quads = []
         layout = str(getattr(self, 'faceLayout', 'X3D'))
         for index, side in enumerate(FACES):
-            positions, texcoords = face_quad(side, layout)
-            quads.append(concatenate((positions * CUBE_SIZE, texcoords), axis=1))
             source = getattr(self, side)
             if has_image(source):
                 tex = texture.Texture(source.image)
@@ -201,7 +216,7 @@ class _CubeBackground( object ):
                     glTexParameteri(GL_TEXTURE_2D, parameter, value)
                 glBindTexture(GL_TEXTURE_2D, 0)
                 textures.append((index, tex))
-        render_data = (textures, VBO(concatenate(quads).astype('f')), glGenVertexArrays(1))
+        render_data = (textures, layout)
         holder = mode.cache.holder(self, render_data, CACHE_KEY)
         for node_, name in self.sideDependencies():
             holder.depend(node_, name)
@@ -214,6 +229,8 @@ class _CubeBackground( object ):
             found.append((self, 'faceLayout'))
         for side in FACES:
             found.append((self, side + 'Url'))
+            if isinstance(getattr(type(self), side, None), field.Field):
+                found.append((self, side))
             source = getattr(self, side)
             if source is not None and hasattr(type(source), 'image'):
                 found.append((source, 'image'))
