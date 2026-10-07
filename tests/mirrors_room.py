@@ -22,7 +22,7 @@ os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import basenodes, surfaces
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.scenegraph.water import STILL, water_surface
 from OpenGLContext.viewer.environment import sky_background
@@ -49,16 +49,16 @@ class TestContext(BaseContext):
         being drawn again, and `priority` weighs it against the other mirrors
         when the frame's budget is short.'''
         far = PlanarReflector(interval=2, priority=2.0)
-        silver = PBRMaterial(baseColor=surfaces.SILVER, metallic=1.0,
+        silver = PhysicalMaterial(baseColor=surfaces.SILVER, metallic=1.0,
                              roughness=0.02, reflector=far)
         '''One reflector held by several materials tunes those mirrors
         together, and mirrors in one plane that share a reflector are drawn as
         one reflection. `varied()` makes a copy with some fields changed, for
         one mirror of a set that is worth more than the others.'''
         side = PlanarReflector(interval=3, scale=0.35)
-        side_near = PBRMaterial(baseColor=surfaces.SILVER, metallic=1.0,
+        side_near = PhysicalMaterial(baseColor=surfaces.SILVER, metallic=1.0,
                                 roughness=0.03, reflector=side)
-        side_far = PBRMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.03,
+        side_far = PhysicalMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.03,
                                reflector=side.varied(interval=1, priority=3.0))
         '''A polished floor is a dielectric with a low roughness: it reflects
         faintly looking down and strongly at a glance. It covers much of the

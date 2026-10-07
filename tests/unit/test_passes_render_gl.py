@@ -18,7 +18,7 @@ glfw = pytest.importorskip("glfw")
 from OpenGLContext.scenegraph import basenodes
 from tests.unit.glrender import base_env, frames_of
 from OpenGLContext.passes import ibl
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 
@@ -117,7 +117,7 @@ class TestTransmissiveRender:
             positions=[(-.7, -.7, 0), (.7, -.7, 0), (.7, .7, 0), (-.7, .7, 0)],
             normals=[(0, 0, 1)] * 4,
             indices=[0, 1, 2, 0, 2, 3])
-        mat = PBRMaterial(baseColor=(0.6, 0.8, 1.0), transmission=0.7,
+        mat = PhysicalMaterial(baseColor=(0.6, 0.8, 1.0), transmission=0.7,
                           roughness=0.05, metallic=0.0)
         pane = basenodes.Transform(translation=(0, 0, 1.5), children=[
             basenodes.Shape(geometry=glass,
@@ -137,7 +137,7 @@ class TestTransmissiveRender:
             positions=[(-.7, -.7, 0), (.7, -.7, 0), (.7, .7, 0), (-.7, .7, 0)],
             normals=[(0, 0, 1)] * 4,
             indices=[0, 1, 2, 0, 2, 3])
-        mat = PBRMaterial(baseColor=(0.6, 0.8, 1.0), transmission=0.7, roughness=0.05)
+        mat = PhysicalMaterial(baseColor=(0.6, 0.8, 1.0), transmission=0.7, roughness=0.05)
         pane = basenodes.Transform(translation=(0, 0, 1.5), children=[
             basenodes.Shape(geometry=glass,
                             appearance=basenodes.Appearance(material=mat))])

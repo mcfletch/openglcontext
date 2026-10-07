@@ -135,9 +135,9 @@ class LODHall:
     def _from_file(self) -> Any:
         """The right-hand row, written as MSFT_lod chains and read back."""
         from OpenGLContext.loaders.gltf.writer import GLTFWriter, SceneNode
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+        from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
         from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-        copper = PBRMaterial(baseColor=surfaces.COPPER, metallic=1.0,
+        copper = PhysicalMaterial(baseColor=surfaces.COPPER, metallic=1.0,
                              roughness=0.3)
         writer = GLTFWriter()
         for row in range(ROWS):

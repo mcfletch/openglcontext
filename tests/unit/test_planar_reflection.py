@@ -12,7 +12,8 @@ from PIL import Image
 
 from OpenGLContext.multiview.strategy import ViewFrame, view_records
 from OpenGLContext.passes import reflection
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.scenegraph.shape import Shape
@@ -51,7 +52,7 @@ def _placement(rotation=None, translate=(0.0, 0.0, 0.0), scale=1.0):
 def _mirror_record(placement=None, reflector=None, positions=QUAD,
                    indices=QUAD_INDICES, roughness=0.0):
     mesh = PBRMesh(positions=np.asarray(positions, 'f'), indices=indices)
-    material = PBRMaterial(metallic=1.0, roughness=roughness,
+    material = PhysicalMaterial(metallic=1.0, roughness=roughness,
                            reflector=reflector or PlanarReflector())
     shape = Shape(geometry=mesh, appearance=Appearance(material=material))
     tmatrix = _placement() if placement is None else placement
@@ -69,7 +70,7 @@ def _water_record(level=0.0, translate=(0.0, 0.0, 0.0)):
 def _plain_record():
     mesh = PBRMesh(positions=QUAD, indices=QUAD_INDICES)
     shape = Shape(geometry=mesh, appearance=Appearance(
-        material=PBRMaterial(metallic=1.0, roughness=0.0)))
+        material=PhysicalMaterial(metallic=1.0, roughness=0.0)))
     return ((False,), None, np.identity(4, 'f'), None, (), shape)
 
 
@@ -321,12 +322,11 @@ def test_the_view_table_carries_a_mirror_view_exactly():
 def _textured(roughness_texel, factor=1.0):
     pixels = np.zeros((4, 4, 3), np.uint8)
     pixels[..., 1] = int(roughness_texel * 255)
-    return PBRMaterial(roughness=factor, textures={
-        'metallicRoughness': PBRTexture(Image.fromarray(pixels, 'RGB'))})
+    return PhysicalMaterial(roughness=factor, metallicRoughnessTexture=ImageDataTexture(image=Image.fromarray(pixels, 'RGB')))
 
 
 def test_a_mirrors_roughness_is_its_factor_where_it_has_no_map():
-    assert reflection.surface_roughness(PBRMaterial(roughness=0.2)) == pytest.approx(0.2)
+    assert reflection.surface_roughness(PhysicalMaterial(roughness=0.2)) == pytest.approx(0.2)
 
 
 def test_a_roughness_map_scales_the_factor():
@@ -354,7 +354,7 @@ def test_a_polished_textured_floor_is_a_mirror():
 def test_making_a_shape_a_mirror_moves_the_mirror_generation():
     """A pass remembers which of the scene's shapes are mirrors until one of
     the fields that decide it is set."""
-    material = PBRMaterial()
+    material = PhysicalMaterial()
     appearance = basenodes.Appearance(material=material)
     shape = basenodes.Shape(appearance=appearance)
     reflector = PlanarReflector()
@@ -363,7 +363,7 @@ def test_making_a_shape_a_mirror_moves_the_mirror_generation():
     seen.append(reflection.mirror_generation())
     reflector.enabled = False
     seen.append(reflection.mirror_generation())
-    appearance.material = PBRMaterial()
+    appearance.material = PhysicalMaterial()
     seen.append(reflection.mirror_generation())
     shape.appearance = basenodes.Appearance()
     seen.append(reflection.mirror_generation())
@@ -426,7 +426,7 @@ def test_a_mesh_made_water_reflects_at_its_level_not_its_fit():
     tilted = np.array([(-1, 0, -1), (1, 0, -1), (1, 1, 1)], 'f')
     mesh = PBRMesh(positions=tilted, indices=np.array([0, 2, 1], np.uint32))
     record = ((False,), None, np.identity(4, 'f'), None, (), Shape(
-        geometry=mesh, appearance=Appearance(material=PBRMaterial(
+        geometry=mesh, appearance=Appearance(material=PhysicalMaterial(
             reflector=PlanarReflector()))))
     assert reflection.local_plane(record).normal[1] != pytest.approx(1.0)
     mesh.waveStyle = STILL
@@ -442,7 +442,7 @@ def _face_set(points, coord_index, ccw=True):
 
 
 def _face_set_record(geometry):
-    material = PBRMaterial(metallic=1.0, roughness=0.0, reflector=PlanarReflector())
+    material = PhysicalMaterial(metallic=1.0, roughness=0.0, reflector=PlanarReflector())
     shape = Shape(geometry=geometry, appearance=Appearance(material=material))
     return ((False,), None, np.identity(4, 'f'), None, (), shape)
 
@@ -503,7 +503,7 @@ def test_a_large_roughness_maps_mean_is_its_greens_mean():
     pixels = np.zeros((3000, 2000, 4), np.uint8)
     pixels[..., 1] = rows[:, None]
     pixels[..., 0] = 255
-    texture = PBRTexture(Image.fromarray(pixels, 'RGBA'))
+    texture = ImageDataTexture(image=Image.fromarray(pixels, 'RGBA'))
     assert texture.mean_roughness() == pytest.approx(rows.mean() / 255.0, abs=0.01)
 
 
@@ -511,12 +511,12 @@ def test_a_large_roughness_maps_mean_is_its_greens_mean():
 def test_a_roughness_map_in_any_mode_has_a_mean(mode):
     image = Image.new('RGB', (8, 8), (0, 128, 0)).convert(mode)
     expected = np.asarray(image.convert('RGB'))[..., 1].mean() / 255.0
-    assert PBRTexture(image).mean_roughness() == pytest.approx(expected, abs=0.01)
+    assert ImageDataTexture(image=image).mean_roughness() == pytest.approx(expected, abs=0.01)
 
 
 def test_a_mesh_drawn_with_its_own_material_is_as_rough_as_that_material():
     """A mesh with no appearance material is drawn with the one it carries."""
-    rough = PBRMaterial(roughness=0.9, reflector=PlanarReflector())
+    rough = PhysicalMaterial(roughness=0.9, reflector=PlanarReflector())
     shape = Shape(geometry=PBRMesh(positions=QUAD, indices=QUAD_INDICES, material=rough))
     assert reflection.shape_material(shape) is rough
     record = ((False,), None, np.asarray(_placement(translate=(0.0, 1.5, -5.0)), 'f'),

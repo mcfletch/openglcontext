@@ -43,7 +43,7 @@ from typing import Any, Optional
 import numpy as np
 from vrml import field, node
 
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import WATER
 from OpenGLContext.scenegraph.varied import Varied
@@ -378,7 +378,7 @@ def _fine_ripple(x: np.ndarray, z: np.ndarray, steepness: float,
     return (slope_x, slope_z)
 
 
-def water_material() -> PBRMaterial:
+def water_material() -> PhysicalMaterial:
     """What open water is made of.
 
     Smooth, and a mirror of the scene around it
@@ -387,7 +387,7 @@ def water_material() -> PBRMaterial:
     where it is shallow; and two-sided, because a car that has gone in is
     looking up at it.
     """
-    return PBRMaterial(baseColor=WATER_ALBEDO, metallic=0.0,
+    return PhysicalMaterial(baseColor=WATER_ALBEDO, metallic=0.0,
                        roughness=WATER_ROUGHNESS,
                        transparency=WATER_TRANSPARENCY, alphaMode='BLEND',
                        ior=WATER_IOR, doubleSided=True, reflector=WATER)
@@ -396,7 +396,7 @@ def water_material() -> PBRMaterial:
 def water_surface(x0: float, x1: float, z0: float, z1: float,
                   level: float = 0.0, resolution: int = 9,
                   ripple: Optional[float] = None,
-                  material: Optional[PBRMaterial] = None,
+                  material: Optional[PhysicalMaterial] = None,
                   style: Optional[WaterStyle] = None,
                   when: float = 0.0, on_gpu: bool = False) -> PBRMesh:
     """A sheet of water over a footprint, at ``level``, moving as ``style`` says.
@@ -484,7 +484,7 @@ def bounds(x0: float, x1: float, z0: float, z1: float, level: float) -> Any:
 
 def water_ribbon(course: Any, width: Any, style: Optional[WaterStyle] = None,
                  when: float = 0.0, lift: float = 0.0,
-                 material: Optional[PBRMaterial] = None,
+                 material: Optional[PhysicalMaterial] = None,
                  on_gpu: bool = False) -> Optional[PBRMesh]:
     """Water swept along a course: a river.
 
@@ -573,7 +573,7 @@ GLINT_LENGTH = 1.2
 def water_glints(course: Any, width: Any, spacing: float,
                  style: Optional[WaterStyle] = None, when: float = 0.0,
                  lift: float = 0.0, size: float = GLINT_WIDTH,
-                 material: Optional[PBRMaterial] = None,
+                 material: Optional[PhysicalMaterial] = None,
                  on_gpu: bool = False) -> Optional[PBRMesh]:
     """Water seen from far off: the sun catching it here and there.
 

@@ -24,7 +24,7 @@ from OpenGLContext.scenegraph.gantry import (
     GANTRY_STEEL,
 )
 from OpenGLContext.scenegraph.atlasmesh import cell_centre, srgb_bytes
-from OpenGLContext.scenegraph.pbrmaterial import material_is_transparent
+from OpenGLContext.scenegraph.physicalmaterial import material_is_transparent
 
 SPAN = 9.0
 WIDTH = 7.4

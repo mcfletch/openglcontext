@@ -1,7 +1,7 @@
 """A glTF mesh drawn by the compatibility profile's fixed-function pass.
 
 ``PBRMesh`` is what a glTF primitive loads as. The fixed-function pass draws it
-from its arrays, lit through the ``glMaterial`` its ``PBRMaterial`` sets, so a
+from its arrays, lit through the ``glMaterial`` its ``PhysicalMaterial`` sets, so a
 glTF model is seen in either profile.
 """
 import types
@@ -14,7 +14,8 @@ from vrml import cache
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from tests.unit.glrender import base_env, frames_of
 from OpenGLContext.passes.instancing import set_cull_state
@@ -35,7 +36,7 @@ def _scene(mesh, base=(0.9, 0.1, 0.1)):
         basenodes.Background(skyColor=[(0.0, 0.0, 0.0)]),
         basenodes.DirectionalLight(direction=(0.0, 0.0, -1.0), intensity=1.0),
         basenodes.Shape(geometry=mesh, appearance=basenodes.Appearance(
-            material=PBRMaterial(baseColor=base, metallic=0.0, roughness=1.0))),
+            material=PhysicalMaterial(baseColor=base, metallic=0.0, roughness=1.0))),
     ]
 
 
@@ -89,8 +90,8 @@ def _chequer(first, second):
 @pytest.mark.usefixtures('compat')
 def test_the_base_colour_map_is_drawn(render_scene):
     blue = (20, 40, 230)
-    material = PBRMaterial(baseColor=(1, 1, 1), metallic=0.0, roughness=1.0,
-                           textures={'baseColor': PBRTexture(_chequer(blue, blue), srgb=True)})
+    material = PhysicalMaterial(baseColor=(1, 1, 1), metallic=0.0, roughness=1.0,
+                           baseTexture=ImageDataTexture(image=_chequer(blue, blue)))
     scene = _scene(_textured_square())
     scene[-1].appearance.material = material
     red, green, blue_ = _centre(render_scene, scene)
@@ -110,8 +111,8 @@ def test_the_map_is_not_left_bound_for_the_next_shape():
             self.cache = cache.Cache()
 
     blue = (20, 40, 230)
-    appearance = basenodes.Appearance(material=PBRMaterial(
-        textures={'baseColor': PBRTexture(_chequer(blue, blue))}))
+    appearance = basenodes.Appearance(material=PhysicalMaterial(
+        baseTexture=ImageDataTexture(image=_chequer(blue, blue))))
     mode = _Mode()
     lit, textured, alpha, token = appearance.render(mode=mode)
     assert textured and GL.glIsEnabled(GL.GL_TEXTURE_2D)

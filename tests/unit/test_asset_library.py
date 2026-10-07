@@ -26,7 +26,7 @@ from OpenGLContext.loaders.assets import (
     shapes,
 )
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
@@ -49,9 +49,9 @@ def _quad(material=None):
 @pytest.fixture
 def library(tmp_path):
     """A library holding one two-material model, ``car.glb``."""
-    paint = PBRMaterial(baseColor=(0.62, 0.09, 0.07), metallic=0.55, roughness=0.32)
+    paint = PhysicalMaterial(baseColor=(0.62, 0.09, 0.07), metallic=0.55, roughness=0.32)
     paint.DEF = "paint"
-    glass = PBRMaterial(baseColor=(0.1, 0.13, 0.16), transmission=1.0, ior=1.52)
+    glass = PhysicalMaterial(baseColor=(0.1, 0.13, 0.16), transmission=1.0, ior=1.52)
     glass.DEF = "glass"
     (tmp_path / "cars").mkdir()
     write_glb(
@@ -362,7 +362,7 @@ class TestMergingWhatIsDrawn:
         mesh = PBRMesh(positions=points,
                        normals=np.tile(normal / np.linalg.norm(normal), (3, 1)),
                        indices=np.array([0, 1, 2], np.uint32))
-        return Shape(geometry=mesh, appearance=Appearance(material=PBRMaterial()))
+        return Shape(geometry=mesh, appearance=Appearance(material=PhysicalMaterial()))
 
     @staticmethod
     def _facing(attributes, indices):
@@ -426,7 +426,7 @@ class TestMergingOneMeshPerMaterial:
     """
 
     def _two_materials(self):
-        red, blue = PBRMaterial(baseColor=(1, 0, 0)), PBRMaterial(baseColor=(0, 0, 1))
+        red, blue = PhysicalMaterial(baseColor=(1, 0, 0)), PhysicalMaterial(baseColor=(0, 0, 1))
         return (
             red,
             blue,
@@ -470,7 +470,7 @@ class TestMergingOneMeshPerMaterial:
 
     def test_a_group_where_only_some_pieces_have_uvs_still_merges(self):
         """The ones without get zeroes rather than the group losing them all."""
-        material = PBRMaterial()
+        material = PhysicalMaterial()
         textured, bare = _quad(), _quad()
         textured.texcoords = np.array([(0, 0), (1, 0), (1, 1), (0, 1)], "f")
         group = Transform(

@@ -136,10 +136,10 @@ class TestTheSameImageTwice:
 
 
 class TestWhatIsNotShared:
-    def test_the_same_image_in_two_colour_spaces_is_not_one_texture(
+    def test_the_same_image_in_two_channels_is_one_texture(
             self, tmp_path) -> None:
-        """A base colour is sRGB and a roughness map is linear; the same file
-        used as both is two textures, because they are read differently."""
+        """The shader decodes each channel's colour space itself, so one file
+        used as a base colour and as a roughness map is one texture."""
         png = _png()
         path = _write(tmp_path, 'a.gltf', png)
         document = json.loads(open(path).read())
@@ -156,7 +156,7 @@ class TestWhatIsNotShared:
                     found = maps
             stack.extend(getattr(node, 'children', None) or ())
         assert found is not None and len(found) == 2
-        assert found['baseColor'] is not found['metallicRoughness']
+        assert found['baseColor'] is found['metallicRoughness']
 
     def test_the_same_image_with_different_wrapping_is_not_one_texture(
             self, tmp_path) -> None:

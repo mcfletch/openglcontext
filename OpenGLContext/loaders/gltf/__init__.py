@@ -26,10 +26,10 @@ Secure fetching of external assets is delegated to the shared
 :mod:`OpenGLContext.loaders.resolver`, not owned here::
 
     accessors             buffers/bufferViews/accessors -> numpy arrays
-    textures              images + samplers -> PBRTexture holders
+    textures              images + samplers -> ImageDataTexture nodes
     specular_glossiness   the archived spec/gloss extension -> metallic/roughness
     transforms            matrix / quaternion / bounds / camera math
-    materials             glTF material + KHR extensions -> PBRMaterial
+    materials             glTF material + KHR extensions -> PhysicalMaterial
     hooks                 OGLC_hook: what a material or node is, and the registry
     draco                 KHR_draco_mesh_compression -> decoded attribute arrays
     meshes                primitive -> renderable Shape (normals/tangents/morph)
@@ -52,7 +52,7 @@ from OpenGLContext.loaders.gltf.loader import (
 from OpenGLContext.loaders.gltf.scene import GLTFScene
 from OpenGLContext.loaders.gltf.transforms import look_orientation
 from OpenGLContext.loaders.gltf.writer import (
-    EncodedImage, ExternalImage, GlobalSound, GLTFWriter, InstanceSet,
+    EncodedImage, GlobalSound, GLTFWriter, InstanceSet,
     SceneNode, ZoneNode, write_glb, zone_box,
 )
 from OpenGLContext.loaders.gltf.samples import (
@@ -80,7 +80,6 @@ __all__ = [
     "zone_box",
     "InstanceSet",
     "EncodedImage",
-    "ExternalImage",
     "GLTFScene",
     "look_orientation",
     "SAMPLE_MODELS_BASE",

@@ -42,7 +42,7 @@ from OpenGLContext.scenegraph.basenodes import (
     ZoneEnvironment, sceneGraph,
 )
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.testing.glcontext import gl_available
 
 try:
@@ -80,7 +80,7 @@ def main() -> None:
         def OnInit(self):
             children = [
                 Shape(geometry=Box(size=(400.0, 0.2, 400.0)),
-                      appearance=Appearance(material=PBRMaterial(
+                      appearance=Appearance(material=PhysicalMaterial(
                           baseColor=(0.7, 0.7, 0.7), metallic=0.3, roughness=0.4))),
                 DirectionalLight(direction=(-0.3, -1.0, -0.2), intensity=2.0,
                                  castShadows=True),

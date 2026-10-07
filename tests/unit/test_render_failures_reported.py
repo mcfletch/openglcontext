@@ -21,7 +21,7 @@ from tests.unit.glrender import base_env
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.passes import renderpass
 from OpenGLContext.scenegraph.frommesh import mesh_from_primitive
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 
 
@@ -112,7 +112,7 @@ def unlit_normals_scene():
     ], 'f')
     mesh = mesh_from_primitive(
         SimpleNamespace(attributes={'POSITION': positions}, indices=None),
-        material=PBRMaterial(baseColor=(0.8, 0.1, 0.1)))
+        material=PhysicalMaterial(baseColor=(0.8, 0.1, 0.1)))
     return [basenodes.Shape(geometry=mesh),
             basenodes.PointLight(location=(0, 5, 5), intensity=1.0)]
 

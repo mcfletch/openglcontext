@@ -41,7 +41,7 @@ from typing import Any, ClassVar
 
 from OpenGLContext.bin.mirrorhall import BAYS, Hall
 from OpenGLContext.scenegraph import basenodes, surfaces
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.scenegraph.water import BREEZE, RIPPLE, water_surface
 
@@ -97,14 +97,14 @@ class MirrorHall:
         hall = Hall()
         # A mirror is a material carrying a reflector: silvered metal, polished
         # marble, or glass that shows only what it reflects.
-        silver = PBRMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.02,
+        silver = PhysicalMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.02,
                              reflector=self.mirror)
-        corridor = PBRMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.03,
+        corridor = PhysicalMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.03,
                                reflector=self.corridor)
         # The floor's field and its black border share one reflector.
         field = surfaces.pbr_material(hall.finish.floor, reflector=self.floor)
         border = surfaces.pbr_material(hall.finish.border, reflector=self.floor)
-        window = PBRMaterial(baseColor=(0.6, 0.8, 0.9), metallic=0.0, roughness=0.05,
+        window = PhysicalMaterial(baseColor=(0.6, 0.8, 0.9), metallic=0.0, roughness=0.05,
                              reflector=self.window)
         scene = hall.room() + hall.floor(field, border)
         scene += hall.hang(surfaces.panel(6.0, 3.0), silver, 'far', along=0.0, height=2.3,

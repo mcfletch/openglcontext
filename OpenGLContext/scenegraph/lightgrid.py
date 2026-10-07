@@ -50,7 +50,7 @@ class LightGrid(nodetypes.Children, node.Node):
     every lookup would pay for the rotation once per object per frame.
 
     ``intensity`` scales every sample as it is read, which is the same knob
-    :attr:`PBRMaterial.lightmapStrength` is for the surfaces: a baked solution
+    :attr:`PhysicalMaterial.lightmapStrength` is for the surfaces: a baked solution
     is in whatever units its compiler wrote, and matching the two is the
     caller's business rather than the file's.
     """

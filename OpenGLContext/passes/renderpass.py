@@ -68,7 +68,7 @@ def _core_flatpass_class( context: Any = None ) -> type:
     ``OPENGLCONTEXT_RENDERER`` does.
 
     The dispatcher must not name ``pbrpass`` unconditionally: an import-time fault
-    anywhere in the PBR chain (pbrpass -> pbrmaterial/transmission/ibl/flatcore)
+    anywhere in the PBR chain (pbrpass -> physicalmaterial/transmission/ibl/flatcore)
     would otherwise break plain core rendering for every user, PBR or not. The PBR
     path is attempted defensively and falls back to the base core ``FlatPass``.
     """

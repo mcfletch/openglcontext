@@ -21,7 +21,7 @@ from OpenGLContext.scenegraph.roadsigns import (
     sign_meshes,
     sign_texture,
 )
-from OpenGLContext.loaders.gltf.writer import ExternalImage
+from vrml.x3d import nodes as x3d
 
 
 class TestTheObject:
@@ -117,9 +117,8 @@ class TestTheFace:
         assert sign_material('crest').texture('baseColor') is not None
 
     def test_a_caller_may_supply_the_image(self) -> None:
-        material = sign_material('crest', image=ExternalImage('signs/crest.png',
-                                                              srgb=True))
-        assert material.texture('baseColor').uri == 'signs/crest.png'
+        material = sign_material('crest', image=x3d.ImageTexture(url=['signs/crest.png']))
+        assert list(material.texture('baseColor').url) == ['signs/crest.png']
 
     def test_it_is_not_a_mirror(self) -> None:
         assert sign_material('dip').metallic == 0.0

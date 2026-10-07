@@ -1,9 +1,9 @@
-"""glTF image and texture decoding -> PBRTexture holders.
+"""glTF image and texture decoding into ImageDataTexture nodes
 
 Turns a glTF ``texture`` (its ``source`` image, resolved via bufferView, ``data:``
-URI or external URI, plus its ``sampler`` wrap/filter enums) into a
-:class:`~OpenGLContext.scenegraph.pbrmaterial.PBRTexture` the PBR pass can upload,
-memoising by texture index. Images are normalised to RGBA on decode so grayscale
+URI or external URI, plus its ``sampler`` wrap/filter enums) into an
+:class:`~OpenGLContext.scenegraph.imagedata.ImageDataTexture`, with the sampler
+as a ``TextureProperties``, memoising by texture index. Images are normalised to RGBA on decode so grayscale
 and luminance-alpha sources sample correctly. ``EXT_texture_webp`` is honoured
 (Pillow decodes WebP); ``KHR_texture_basisu`` (KTX2/Basis) is intentionally not,
 as it needs a GPU-block transcoder Pillow lacks.
@@ -28,9 +28,9 @@ import hashlib
 import io
 import logging
 import weakref
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture, sampler_of, texture_properties
 from OpenGLContext.loaders.gltf.accessors import _buffer_bytes
 from OpenGLContext.loaders.resolver import Resolver, decode_data_uri, resolver_max
 
@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 #: Textures already loaded, by what is in them and how it is read. Weak, so a
 #: world that streams tiles for an hour does not accumulate every image it has
 #: ever seen; see :func:`_shared_texture`.
-_SHARED: "weakref.WeakValueDictionary[tuple, PBRTexture]" = \
+_SHARED: "weakref.WeakValueDictionary[tuple, ImageDataTexture]" = \
     weakref.WeakValueDictionary()
 
 
@@ -131,8 +131,7 @@ def texture_image(g: "pygltflib.GLTF2", texture_index: Optional[int],
                   resolver: Resolver) -> "Optional[Image.Image]":
     """The decoded PIL image behind a ``textures`` index, or None.
 
-    For a consumer that wants the pixels rather than a
-    :class:`~OpenGLContext.scenegraph.pbrmaterial.PBRTexture` to upload -- the
+    For a consumer that wants the pixels rather than a texture node -- the
     ``OMI_environment_sky`` panorama, which becomes a skybox and an IBL
     environment rather than a material channel.  Returns None for anything that
     will not decode, since a missing sky is not a reason to lose the scene.
@@ -150,20 +149,17 @@ def texture_image(g: "pygltflib.GLTF2", texture_index: Optional[int],
 
 
 def _texture_holder(g: "pygltflib.GLTF2", texture_index: Optional[int], resolver: Resolver,
-                    srgb: bool, cache: "dict[tuple, Optional[PBRTexture]]"
-                    ) -> Optional[PBRTexture]:
-    """The texture at an index, read as sRGB or as linear.
+                    cache: "dict[int, Optional[ImageDataTexture]]"
+                    ) -> Optional[ImageDataTexture]:
+    """The texture node at an index, remembered per document by index
 
-    Remembered per document by index *and* colour space: one image serving as
-    both a base colour and a roughness map is two textures, because a base
-    colour is sRGB and a roughness map is not, and whichever was asked for
-    first would otherwise answer for both.
+    The shader decodes each channel's colour space itself, so one image used
+    as a base colour and as a roughness map is one texture.
     """
     if texture_index is None:
         return None
-    remembered = (texture_index, bool(srgb))
-    if remembered in cache:
-        return cache[remembered]
+    if texture_index in cache:
+        return cache[texture_index]
     tex = g.textures[texture_index]
     src = _texture_source(tex)
     if src is None:
@@ -172,8 +168,7 @@ def _texture_holder(g: "pygltflib.GLTF2", texture_index: Optional[int], resolver
     sampler = None
     if getattr(tex, 'sampler', None) is not None and g.samplers:
         sampler = g.samplers[tex.sampler]
-    settings = (srgb,
-                getattr(sampler, 'wrapS', None), getattr(sampler, 'wrapT', None),
+    settings = (getattr(sampler, 'wrapS', None), getattr(sampler, 'wrapT', None),
                 getattr(sampler, 'minFilter', None),
                 getattr(sampler, 'magFilter', None))
     try:
@@ -181,18 +176,16 @@ def _texture_holder(g: "pygltflib.GLTF2", texture_index: Optional[int], resolver
     except Exception as err:
         log.warning("glTF: failed to decode image %s: %s", src, err)
         return None
-    cache[remembered] = holder
+    cache[texture_index] = holder
     return holder
 
 
-def _shared_texture(raw: Optional[bytes], settings: tuple) -> Optional[PBRTexture]:
-    """The texture for these bytes read this way, decoding it only if new.
+def _shared_texture(raw: Optional[bytes], settings: tuple) -> Optional[ImageDataTexture]:
+    """The texture for these bytes with this sampler, decoding it only if new
 
     Two documents holding the same image get the same texture, which is what
     lets everything drawn with it collapse into one instanced draw. The key is
-    the image and *how it is read* -- the same file as a base colour and as a
-    roughness map is two textures, because one is sRGB and the other is not,
-    and one wrapped and one clamped are two for the same sort of reason.
+    the image and its sampler: one wrapped and one clamped are two textures.
     """
     if raw is None:
         return None
@@ -203,11 +196,49 @@ def _shared_texture(raw: Optional[bytes], settings: tuple) -> Optional[PBRTextur
     image = _decode(raw)
     if image is None:
         return None
-    srgb, wrap_s, wrap_t, min_filter, mag_filter = settings
-    holder = PBRTexture(image, srgb=srgb, wrap_s=wrap_s, wrap_t=wrap_t,
-                        min_filter=min_filter, mag_filter=mag_filter)
+    holder = ImageDataTexture(image=image)
+    if any(value is not None for value in settings):
+        holder.textureProperties = sampler_properties(*settings)
     _SHARED[key] = holder
     return holder
+
+
+#: glTF sampler wrap modes (GL enums) as X3D boundary modes.
+WRAP_MODES = {33071: 'CLAMP_TO_EDGE', 33648: 'MIRRORED_REPEAT', 10497: 'REPEAT'}
+#: glTF sampler filters (GL enums) as X3D texture filters.
+FILTERS = {
+    9728: 'NEAREST_PIXEL', 9729: 'AVG_PIXEL',
+    9984: 'NEAREST_PIXEL_NEAREST_MIPMAP', 9985: 'AVG_PIXEL_NEAREST_MIPMAP',
+    9986: 'NEAREST_PIXEL_AVG_MIPMAP', 9987: 'AVG_PIXEL_AVG_MIPMAP',
+}
+
+
+def gl_sampler(texture: Any) -> "dict[str, int]":
+    """A texture's sampler as a glTF sampler: GL enums, leaving out glTF's defaults"""
+    sampler = sampler_of(texture)
+    wraps = {mode: enum for enum, mode in WRAP_MODES.items()}
+    wraps['CLAMP'] = 33071
+    filters = {name: enum for enum, name in FILTERS.items()}
+    entry = {}
+    for key, value, table in (('wrapS', sampler['wrap_s'], wraps),
+                              ('wrapT', sampler['wrap_t'], wraps),
+                              ('minFilter', sampler['minification'], filters),
+                              ('magFilter', sampler['magnification'], filters)):
+        enum = table.get(value)
+        if enum is not None and not (key.startswith('wrap') and enum == 10497):
+            entry[key] = enum
+    return entry
+
+
+def sampler_properties(wrap_s: Optional[int], wrap_t: Optional[int],
+                       min_filter: Optional[int], mag_filter: Optional[int]) -> Any:
+    """A glTF sampler as a TextureProperties node; an absent value is glTF's default"""
+    return texture_properties(
+        wrap_s=WRAP_MODES.get(wrap_s or 10497, 'REPEAT'),
+        wrap_t=WRAP_MODES.get(wrap_t or 10497, 'REPEAT'),
+        minification=FILTERS.get(min_filter or 0, 'DEFAULT'),
+        magnification=FILTERS.get(mag_filter or 0, 'DEFAULT'),
+    )
 
 
 class _TexInfo(object):

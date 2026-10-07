@@ -61,7 +61,7 @@ Writing glTF from your own code
 -------------------------------
 
 ``OpenGLContext.loaders.gltf.writer`` is the counterpart of the :doc:`glTF
-loader <gltf>`. It takes the same ``PBRMesh`` geometry and ``PBRMaterial``
+loader <gltf>`. It takes the same ``PBRMesh`` geometry and ``PhysicalMaterial``
 materials the loader produces, and writes a binary ``.glb``. A written mesh
 loads back as the same mesh.
 

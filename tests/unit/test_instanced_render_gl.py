@@ -36,7 +36,7 @@ try:
     )
     from OpenGLContext.passes import instancing, selection
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
     STATE = {'instanced_calls': 0, 'instances': 0, 'scan': None}
     _orig_draw = instancing.draw_instanced_mesh
@@ -76,7 +76,7 @@ try:
         positions=[(-.35, -.35, 0), (.35, -.35, 0), (.35, .35, 0), (-.35, .35, 0)],
         normals=[(0, 0, 1)] * 4,
         indices=[0, 1, 2, 0, 2, 3])
-    material = PBRMaterial(unlit=True, baseColor=(0, 1, 1))
+    material = PhysicalMaterial(unlit=True, baseColor=(0, 1, 1))
 
     def instance(x):
         return basenodes.Transform(translation=(x, 0, 0), children=[

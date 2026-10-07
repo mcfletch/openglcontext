@@ -19,7 +19,7 @@ from OpenGLContext.scenegraph.roadworks import (
 from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.gltf.materials import _MATERIAL_EXT_HANDLERS
 from OpenGLContext.loaders.gltf.writer import write_glb
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 ROAD = RoadProfile()
 
@@ -890,7 +890,7 @@ class TestABoreIsLitOnce:
         """What concrete a bore is lined with is the caller's; whether the
         scene lights it a second time is not, because the shade baked along it
         only means anything if nothing else is added to it."""
-        wanted = PBRMaterial(baseColor=(0.5, 0.5, 0.5))
+        wanted = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
         found = self._bore(material=wanted)['bore'].material
         assert tuple(found.baseColor) == tuple(wanted.baseColor)
         assert found.bakedLight and not wanted.bakedLight

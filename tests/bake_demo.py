@@ -47,7 +47,7 @@ from OpenGLContext.loaders.gltf.writer import GLTFWriter, InstanceSet, SceneNode
 from OpenGLContext.loaders.tiles3d.procedural import terrain_patch
 from OpenGLContext.scenegraph.basenodes import DirectionalLight, Transform
 from OpenGLContext.scenegraph.instancedshape import InstancedShape
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.props import rock_mesh
 from OpenGLContext.scenegraph.shape import Shape
@@ -88,15 +88,15 @@ def authored_scene():
         height_fn=ground_height, water_level=None)
     ground = PBRMesh(
         positions=positions, normals=normals, colors=colors, indices=indices,
-        material=PBRMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
+        material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
                              roughness=1.0, DEF='ground'))
 
     # One material object shared by the boulders and the pebbles: a material
     # passed twice is written once and referenced twice, as a mesh is.
-    stone = PBRMaterial(baseColor=(0.52, 0.49, 0.45), metallic=0.0,
+    stone = PhysicalMaterial(baseColor=(0.52, 0.49, 0.45), metallic=0.0,
                         roughness=0.9, DEF='stone')
     boulder = rock_mesh(radius=1.3, seed=3, material=stone)
-    capstone = rock_mesh(radius=0.75, seed=9, material=PBRMaterial(
+    capstone = rock_mesh(radius=0.75, seed=9, material=PhysicalMaterial(
         baseColor=(0.78, 0.64, 0.32), metallic=0.9, roughness=0.3, DEF='capstone'))
     pebble = rock_mesh(radius=0.55, seed=5, material=stone)
 

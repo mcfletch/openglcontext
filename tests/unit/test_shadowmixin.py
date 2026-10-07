@@ -14,7 +14,7 @@ from OpenGLContext import frustum as frustum_module
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.boundingvolume import AABoundingBox, BoundingVolume, UnboundedVolume
 from OpenGLContext.scenegraph.box import Box
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
 
@@ -548,7 +548,7 @@ class TestWhereACallerSetsTheOptOut:
         """Its card faces the camera, which a light's depth pass does not."""
 
         solid = self.shape()
-        card = self.shape(appearance=Appearance(material=PBRMaterial(octahedralViews=8)))
+        card = self.shape(appearance=Appearance(material=PhysicalMaterial(octahedralViews=8)))
         mixin = flatcore.FlatPass.__new__(flatcore.FlatPass)
         _flat.SGObserver.__init__(mixin, None, [])
         mixin.paths = {nodetypes.Rendering: [

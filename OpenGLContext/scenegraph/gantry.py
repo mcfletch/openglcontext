@@ -38,7 +38,8 @@ from OpenGLContext.scenegraph.atlasmesh import (
     srgb_bytes,
     textured_mesh,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 __all__ = ['GantryProfile', 'Leg', 'chequer_texture', 'gantry_atlas',
@@ -154,19 +155,18 @@ def gantry_atlas(cell: int = 256) -> tuple[Any, dict[str, Box]]:
         'paint-dark': flat_patch(CHEQUER_DARK, cell)}, cell)
 
 
-def gantry_material(image: Any = None, cell: int = 256) -> PBRMaterial:
+def gantry_material(image: Any = None, cell: int = 256) -> PhysicalMaterial:
     """The one material a gantry and its line wear.
 
     ``image`` overrides the painted atlas -- an
-    :class:`~OpenGLContext.loaders.gltf.writer.ExternalImage` for a baked world,
+    ``ImageTexture`` naming a file beside the document for a baked world,
     which writes the picture once beside the tileset rather than into every tile
     that carries part of the gantry.
     """
-    face = image if image is not None else PBRTexture(gantry_atlas(cell)[0],
-                                                      srgb=True)
-    return PBRMaterial(baseColor=(1.0, 1.0, 1.0), metallic=GANTRY_METALLIC,
+    face = image if image is not None else ImageDataTexture(image=gantry_atlas(cell)[0])
+    return PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=GANTRY_METALLIC,
                        roughness=GANTRY_ROUGHNESS,
-                       textures={'baseColor': face}, doubleSided=False)
+                       baseTexture=face, doubleSided=False)
 
 
 def gantry_legs(span: float, profile: Optional[GantryProfile] = None,
@@ -186,7 +186,7 @@ def gantry_legs(span: float, profile: Optional[GantryProfile] = None,
 
 
 def gantry_mesh(span: float, profile: Optional[GantryProfile] = None,
-                material: Optional[PBRMaterial] = None,
+                material: Optional[PhysicalMaterial] = None,
                 cells: Optional[dict[str, Box]] = None,
                 drops: Sequence[float] = (0.0, 0.0)) -> PBRMesh:
     """One whole gantry at the origin, as a single mesh.
@@ -222,7 +222,7 @@ def gantry_mesh(span: float, profile: Optional[GantryProfile] = None,
 
 
 def start_line_mesh(width: float, profile: Optional[GantryProfile] = None,
-                    material: Optional[PBRMaterial] = None,
+                    material: Optional[PhysicalMaterial] = None,
                     cells: Optional[dict[str, Box]] = None,
                     crossfall: float = 0.0) -> PBRMesh:
     """The line painted across the carriageway, at the origin, road along Z.
@@ -268,8 +268,8 @@ def start_line_mesh(width: float, profile: Optional[GantryProfile] = None,
                          np.asarray(texcoords, dtype='f'))
 
 
-def _dressed(material: Optional[PBRMaterial], cells: Optional[dict[str, Box]]
-             ) -> tuple[PBRMaterial, dict[str, Box]]:
+def _dressed(material: Optional[PhysicalMaterial], cells: Optional[dict[str, Box]]
+             ) -> tuple[PhysicalMaterial, dict[str, Box]]:
     """The material and atlas boxes a piece is built against, painting its own
     if the caller has none."""
     if cells is None:
@@ -280,7 +280,7 @@ def _dressed(material: Optional[PBRMaterial], cells: Optional[dict[str, Box]]
 
 
 def _tube(offset: float, radius: float, sides: int, bottom: float, top: float,
-          material: PBRMaterial, uv: tuple[float, float]) -> PBRMesh:
+          material: PhysicalMaterial, uv: tuple[float, float]) -> PBRMesh:
     """One leg: a low-sided tube standing at ``offset`` along the beam.
 
     Open at both ends -- the foot is in the ground and the head is inside the
@@ -304,7 +304,7 @@ def _tube(offset: float, radius: float, sides: int, bottom: float, top: float,
 
 
 def _box(low: tuple[float, float, float], high: tuple[float, float, float],
-         material: PBRMaterial, uv: tuple[float, float],
+         material: PhysicalMaterial, uv: tuple[float, float],
          facing: Optional[Box] = None) -> PBRMesh:
     """An axis-aligned box, every face its own four corners so it reads flat.
 

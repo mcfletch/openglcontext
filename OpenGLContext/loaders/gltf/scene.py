@@ -155,7 +155,7 @@ class GLTFScene(object):
         # DEF-registered by camera name. Mount these in the rendered scenegraph to
         # switch cameras through OpenGLContext's standard bindable mechanism.
         self.viewpoints = viewpoints if viewpoints is not None else []
-        # materials: the document's name -> the PBRMaterial built for it, for the
+        # materials: the document's name -> the PhysicalMaterial built for it, for the
         # materials the scene's geometry actually uses. Repainting one of these
         # repaints the model, since the Shape, its mesh and this index all hold
         # the one material object.

@@ -44,7 +44,7 @@ SCRIPT = textwrap.dedent('''
 
     from OpenGLContext import testingcontext
     from OpenGLContext.scenegraph.basenodes import Shape, Transform, sceneGraph
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
     from OpenGLContext.scenegraph.quadrics import Sphere
     from OpenGLContext.scenegraph.appearance import Appearance
 
@@ -56,7 +56,7 @@ SCRIPT = textwrap.dedent('''
             Base.OnInit(self)
             ball = Shape(
                 geometry=Sphere(radius=1.4),
-                appearance=Appearance(material=PBRMaterial(
+                appearance=Appearance(material=PhysicalMaterial(
                     baseColor=(0.02, 0.05, 0.07), metallic=0.0, roughness=0.06)))
             self.sg = sceneGraph(children=[Transform(children=[ball])])
 

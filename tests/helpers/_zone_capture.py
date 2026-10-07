@@ -44,7 +44,7 @@ from OpenGLContext.scenegraph.basenodes import (
     ZoneLights,
 )
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 
 MODES = ('none', 'dim', 'capture', 'lights', 'nolights', 'imagelight')
@@ -72,7 +72,7 @@ def main() -> int:
     def grey():
         if renderer == 'flat':
             return Appearance(material=Material(diffuseColor=(0.8, 0.8, 0.8)))
-        return Appearance(material=PBRMaterial(
+        return Appearance(material=PhysicalMaterial(
             baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.7))
 
     def scene():

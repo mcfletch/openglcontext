@@ -13,13 +13,13 @@ from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 from tests.unit.glrender import base_env, frames_of
 from OpenGLContext.move.viewplatform import ViewPlatform
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 WIDTH, HEIGHT = 200, 100
 
 
 def _glowing_box(x):
-    material = PBRMaterial(baseColor=(0.0, 0.0, 0.0), emissiveColor=(1.0, 1.0, 1.0),
+    material = PhysicalMaterial(baseColor=(0.0, 0.0, 0.0), emissiveColor=(1.0, 1.0, 1.0),
                            emissiveStrength=40.0, roughness=1.0, metallic=0.0)
     return basenodes.Transform(translation=(x, 0, 0), children=[
         basenodes.Shape(geometry=basenodes.Box(size=(1, 2, 1)),

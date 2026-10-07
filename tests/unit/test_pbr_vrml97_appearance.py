@@ -2,7 +2,7 @@
 
 The PBR program reads a material's maps from ``textures`` and its factors,
 UV transform included, from the packed material block.
-:func:`~OpenGLContext.scenegraph.pbrmaterial.pbr_material` gives a VRML97
+:func:`~OpenGLContext.scenegraph.physicalmaterial.pbr_material` gives a VRML97
 ``Appearance`` that shape: its ``texture`` is the base colour map, its
 ``textureTransform`` the UV transform, and its ``Material`` the factors.
 """
@@ -18,8 +18,8 @@ from OpenGLContext.scenegraph.basenodes import (
     Appearance, Box, ImageTexture, Material, PixelTexture, Shape,
     TextureTransform,
 )
-from OpenGLContext.scenegraph.pbrmaterial import (
-    PBRMaterial, pbr_material, srgb_to_linear,
+from OpenGLContext.scenegraph.physicalmaterial import (
+    PhysicalMaterial, pbr_material, srgb_to_linear,
 )
 from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.memo import check_memo_inputs
@@ -49,7 +49,7 @@ class TestTheView:
         assert pbr_material(Appearance(material=Material())).textures == {}
 
     def test_a_pbr_material_is_its_own_view(self):
-        material = PBRMaterial()
+        material = PhysicalMaterial()
         assert pbr_material(Appearance(material=material)) is material
 
     def test_no_appearance_has_no_material(self):
@@ -165,7 +165,7 @@ class TestAnEditedMaterialsBlock:
             def edit(colour):
                 appearance.material.diffuseColor = colour
         else:
-            material = PBRMaterial(baseColor=(1, 0, 0))
+            material = PhysicalMaterial(baseColor=(1, 0, 0))
 
             def edit(colour):
                 material.baseColor = colour

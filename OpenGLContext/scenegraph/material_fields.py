@@ -3,7 +3,7 @@
 Three renderers consume a VRML97 ``Material``: the legacy fixed-function
 ``glMaterialfv`` path (``material.Material.compile``), the VRML97 shader path
 (``shaderpass.configure_material_from_node``) and the PBR up-conversion
-(``pbrmaterial.material_to_pbr``). Each legitimately derives *different* values
+(``physicalmaterial.material_to_pbr``). Each legitimately derives *different* values
 (a shader needs a shininess exponent, PBR needs a roughness), but they were each
 reaching into the node's fields independently, with no shared source of truth and
 nothing pinning them consistent. This module centralises the *read* -- the six

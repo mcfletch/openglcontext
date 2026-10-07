@@ -13,7 +13,7 @@ import pytest
 pygltflib = pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders import gltf
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
 
 
@@ -55,7 +55,7 @@ class TestIridescenceParse:
     def test_factor_and_ior(self):
         mat = _material_of(_tri_gltf_with_material({
             'iridescenceFactor': 0.8, 'iridescenceIor': 1.8}))
-        assert isinstance(mat, PBRMaterial)
+        assert isinstance(mat, PhysicalMaterial)
         assert abs(mat.iridescence - 0.8) < 1e-6
         assert abs(mat.iridescenceIor - 1.8) < 1e-6
 
@@ -92,7 +92,7 @@ class TestIridescenceParse:
 
 class TestIridescenceUBO:
     def test_packed_into_material_block(self):
-        mat = PBRMaterial(baseColor=(1, 1, 1))
+        mat = PhysicalMaterial(baseColor=(1, 1, 1))
         mat.iridescence = 0.5
         mat.iridescenceIor = 1.7
         mat.iridescenceThicknessMin = 150.0

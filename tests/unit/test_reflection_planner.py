@@ -16,7 +16,7 @@ from OpenGLContext.passes.reflectionplanner import (
 )
 from OpenGLContext.passes.reflectiontiles import Budget
 from OpenGLContext.scenegraph.appearance import Appearance
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.scenegraph.shape import Shape
@@ -62,7 +62,7 @@ def _look_at(eye, target=(0.0, 1.5, -5.0)):
 
 def _mirror(x=0.0, reflector=None, roughness=0.0, transparent=False):
     mesh = PBRMesh(positions=QUAD, indices=QUAD_INDICES)
-    material = PBRMaterial(metallic=1.0, roughness=roughness,
+    material = PhysicalMaterial(metallic=1.0, roughness=roughness,
                            reflector=reflector or PlanarReflector(interval=3))
     tmatrix = np.identity(4, 'f')
     tmatrix[3, :3] = (x, 1.5, -5.0)
@@ -337,7 +337,7 @@ def _behind(z=6.0):
     """A mirror behind the camera, facing the one in front of it: only that
     mirror's reflection sees it."""
     mesh = PBRMesh(positions=QUAD, indices=QUAD_INDICES)
-    material = PBRMaterial(metallic=1.0, roughness=0.0,
+    material = PhysicalMaterial(metallic=1.0, roughness=0.0,
                            reflector=PlanarReflector(interval=3))
     tmatrix = np.diag([-2.0, 2.0, -2.0, 1.0]).astype('f')
     tmatrix[3, :3] = (0.0, 1.5, z)

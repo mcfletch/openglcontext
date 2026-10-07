@@ -16,11 +16,11 @@ from OpenGLContext.scenegraph.atlasmesh import (
     srgb_bytes,
     textured_mesh,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 
 def _material():
-    return PBRMaterial(baseColor=(1.0, 1.0, 1.0))
+    return PhysicalMaterial(baseColor=(1.0, 1.0, 1.0))
 
 
 def _quad(material, offset=0.0, uv=(0.0, 0.0)):

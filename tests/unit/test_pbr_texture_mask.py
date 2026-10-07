@@ -18,7 +18,8 @@ from PIL import Image
 
 from OpenGLContext.passes import pbrpass
 from OpenGLContext.passes.shaderpass import SHADER_DIR
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 
 
 def _source():
@@ -122,10 +123,10 @@ class TestTheUnits:
         shader_program = pbrpass.PBRShaderProgram()
         assert shader_program.compile(), 'the PBR programs did not compile'
         channels = ('baseColor', 'metallicRoughness', 'normal', 'occlusion', 'emissive')
-        material = PBRMaterial()
-        material.textures = {
-            channel: PBRTexture(Image.new('RGB', (4, 4), (40 * index, 0, 0)))
-            for index, channel in enumerate(channels)}
+        material = PhysicalMaterial()
+        for index, channel in enumerate(channels):
+            material.setTexture(
+                channel, ImageDataTexture(image=Image.new('RGB', (4, 4), (40 * index, 0, 0))))
         # What a texture's cache keys on is the Context drawing; the window
         # handle makes the GL context current and stands for nothing else.
         mode = SimpleNamespace(context=_Drawing())

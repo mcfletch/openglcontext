@@ -65,7 +65,7 @@ from OpenGLContext.events import systemtime
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Box, DirectionalLight, Shape, Sphere, Transform, sceneGraph,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.water import (
     CHOPPY, FLOWING, LAKE, STILL, Volume, Volumes, medium_fog, submerge,
     mesh_across, water_ribbon, water_surface, wave_height,
@@ -115,12 +115,12 @@ SUN = (0.35, -0.45, -0.82)
 
 #: The dry ground, and the bed laid in each pool: sand where a body of water
 #: is shallow enough to see the bottom of, silt where it is not.
-SAND = PBRMaterial(baseColor=(0.42, 0.36, 0.25), metallic=0.0, roughness=0.9)
-BOTTOM = PBRMaterial(baseColor=(0.09, 0.21, 0.23), metallic=0.0, roughness=0.9)
+SAND = PhysicalMaterial(baseColor=(0.42, 0.36, 0.25), metallic=0.0, roughness=0.9)
+BOTTOM = PhysicalMaterial(baseColor=(0.09, 0.21, 0.23), metallic=0.0, roughness=0.9)
 
 #: What a float is made of: matt, so where it sits is read off its position
 #: rather than off a highlight that moves with the camera.
-CORK = PBRMaterial(baseColor=(0.86, 0.33, 0.12), metallic=0.0, roughness=0.8)
+CORK = PhysicalMaterial(baseColor=(0.86, 0.33, 0.12), metallic=0.0, roughness=0.8)
 
 #: How the floats are laid out in each pool, across and along, and how big one
 #: is. A grid rather than a line, so the surface is sampled as a field.

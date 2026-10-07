@@ -3,7 +3,7 @@
 Two shaders historically hard-coded object-id 0, making anything drawn unlit
 silently non-pickable:
 
-  pbr_unlit   a KHR_materials_unlit PBRMaterial (common in real glTF assets),
+  pbr_unlit   a KHR_materials_unlit PhysicalMaterial (common in real glTF assets),
               drawn by the PBR program's unlit branch.
   pointset    a PointSet with no per-vertex colour, drawn by the shared unlit
               program -- which also requires the object id to follow the
@@ -35,11 +35,11 @@ try:
 
     def build():
         if SCENARIO == 'pbr_unlit':
-            from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+            from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
             shape = basenodes.Shape(
                 geometry=basenodes.Box(size=(6, 6, 6)),
                 appearance=basenodes.Appearance(
-                    material=PBRMaterial(unlit=True, baseColor=(0, 1, 1))))
+                    material=PhysicalMaterial(unlit=True, baseColor=(0, 1, 1))))
         else:  # a big point at the origin (projects to, and covers, screen centre)
             # Coloured so it renders through point_program at a real point size;
             # this exercises the object-id following the program switch away from

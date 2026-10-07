@@ -37,7 +37,7 @@ try:
     from OpenGLContext.scenegraph.basenodes import (
         sceneGraph, DirectionalLight, Coordinate, IndexedLineSet)
     from OpenGLContext.scenegraph.appearance import Appearance
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from OpenGLContext.scenegraph.shape import Shape
     from OpenGLContext.scenegraph.transform import Transform
@@ -64,7 +64,7 @@ try:
     def _marker(x, z):
         return Transform(translation=(x, 1.0, z), children=[Shape(
             geometry=_quad(0.0),
-            appearance=Appearance(material=PBRMaterial(baseColor=(1, 0.7, 0.2),
+            appearance=Appearance(material=PhysicalMaterial(baseColor=(1, 0.7, 0.2),
                                                        unlit=True)))])
 
     Base = testingcontext.getInteractive()
@@ -74,7 +74,7 @@ try:
             self.sg = sceneGraph(children=[
                 DirectionalLight(direction=(-0.3, -0.8, -0.5), intensity=1.2),
                 Shape(geometry=_quad(0.0),
-                      appearance=Appearance(material=PBRMaterial(
+                      appearance=Appearance(material=PhysicalMaterial(
                           baseColor=(0.4, 0.6, 0.3)))),
                 Shape(geometry=IndexedLineSet(
                     coord=Coordinate(point=[(-3, 2, 0), (3, 2, 0), (3, 2, 3)]),

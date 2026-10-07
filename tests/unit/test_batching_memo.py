@@ -13,7 +13,8 @@ from PIL import Image
 
 from OpenGLContext.passes.pbrpass import PBRPass
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.scenegraph.water.surface import WaterStyle
@@ -30,7 +31,7 @@ def _mesh():
 def _shape(material=None, geometry=None):
     return basenodes.Shape(
         geometry=geometry if geometry is not None else _mesh(),
-        appearance=basenodes.Appearance(material=material or PBRMaterial()))
+        appearance=basenodes.Appearance(material=material or PhysicalMaterial()))
 
 
 @pytest.fixture
@@ -61,7 +62,7 @@ def test_a_shape_that_becomes_a_mirror_is_drawn_singly(ask):
 
 def test_a_mirror_switched_off_batches_again(ask):
     reflector = PlanarReflector()
-    shape = _shape(PBRMaterial(reflector=reflector))
+    shape = _shape(PhysicalMaterial(reflector=reflector))
     assert ask(shape)[1] is False
     reflector.enabled = False
     assert ask(shape)[1] is True
@@ -75,19 +76,18 @@ def test_geometry_that_becomes_water_is_drawn_singly(ask):
 
 
 def test_a_texture_set_in_place_changes_the_key(ask):
-    material = PBRMaterial()
+    material = PhysicalMaterial()
     shape = _shape(material)
     before = ask(shape)[0]
-    material.textures['baseColor'] = PBRTexture(Image.new('RGB', (2, 2)), srgb=True)
+    material.baseTexture = ImageDataTexture(image=Image.new('RGB', (2, 2)))
     assert ask(shape)[0] != before
 
 
 def test_a_texture_removed_in_place_changes_the_key(ask):
-    material = PBRMaterial(textures={
-        'baseColor': PBRTexture(Image.new('RGB', (2, 2)), srgb=True)})
+    material = PhysicalMaterial(baseTexture=ImageDataTexture(image=Image.new('RGB', (2, 2))))
     shape = _shape(material)
     before = ask(shape)[0]
-    del material.textures['baseColor']
+    material.baseTexture = None
     assert ask(shape)[0] != before
 
 
@@ -101,7 +101,7 @@ def test_an_impostor_does_not_batch_with_a_plain_material(ask):
 def test_a_new_appearance_is_seen(ask):
     shape = _shape()
     ask(shape)
-    shape.appearance = basenodes.Appearance(material=PBRMaterial(
+    shape.appearance = basenodes.Appearance(material=PhysicalMaterial(
         reflector=PlanarReflector()))
     assert ask(shape)[1] is False
 

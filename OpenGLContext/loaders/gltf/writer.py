@@ -2,7 +2,7 @@
 
 The counterpart to :mod:`OpenGLContext.loaders.gltf.loader`. It takes the same
 objects the loader produces -- :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh`
-geometry and :class:`~OpenGLContext.scenegraph.pbrmaterial.PBRMaterial` materials
+geometry and :class:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial` materials
 -- and writes a binary glTF document, so anything the engine can render it can
 also export, and a mesh written is the mesh that loads back.
 
@@ -44,7 +44,10 @@ from OpenGLContext import __version__ as _engine_version
 from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.loaders.gltf import hooks as _hooks
 from OpenGLContext.loaders.resolver import contained_source
+from OpenGLContext.loaders.gltf.textures import gl_sampler
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from vrml.x3d import nodes as x3d
 
 GENERATOR = "OpenGLContext %s glTF writer" % _engine_version
 
@@ -96,55 +99,42 @@ class InstanceSet:
         return counts.pop()
 
 
-@dataclass
-class EncodedImage:
-    """A texture that is already encoded, embedded without going through PIL.
+class EncodedImage(ImageDataTexture):
+    """A texture whose image stays encoded, embedded without going through PIL
 
-    Stands in for a :class:`~OpenGLContext.scenegraph.pbrmaterial.PBRTexture`
-    anywhere a material names one. A source JPEG stays a JPEG, at its authored
-    size: re-encoding a photographic map as PNG multiplies a tile's weight for
-    no gain in what it looks like. The sampler fields carry the GL enums glTF
-    uses, exactly as ``PBRTexture`` does.
+    A source JPEG stays a JPEG, at its authored size: re-encoding a
+    photographic map as PNG multiplies a tile's weight for no gain in what it
+    looks like. It is an :class:`ImageDataTexture`, so it goes in a material's
+    texture field; the image is decoded only if the texture is drawn.
     """
 
-    data: bytes
-    mime_type: str = 'image/png'
-    srgb: bool = False
-    wrap_s: Optional[int] = None
-    wrap_t: Optional[int] = None
-    min_filter: Optional[int] = None
-    mag_filter: Optional[int] = None
+    PROTO = 'EncodedImage'
+
+    def __init__(self, data: bytes = b'', mime_type: str = 'image/png', **named: Any) -> None:
+        super().__init__(**named)
+        self.data = bytes(data)
+        self.mime_type = mime_type
+
+    @property
+    def image(self) -> Any:
+        """The decoded PIL image"""
+        if self._image is None and self.data:
+            from PIL import Image  # noqa: PLC0415 decoded only when drawn
+            self._image = Image.open(io.BytesIO(self.data))
+        return self._image
+
+    @image.setter
+    def image(self, image: Any) -> None:
+        self._image = image
 
     @classmethod
-    def from_path(cls, path: str, **kwargs: Any) -> "EncodedImage":
-        """Read an image file, taking its MIME type from the extension."""
+    def from_path(cls, path: str, **named: Any) -> "EncodedImage":
+        """Read an image file, taking its MIME type from the extension"""
         suffix = path.lower().rsplit('.', 1)[-1]
         mime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
                 'png': 'image/png', 'webp': 'image/webp'}.get(suffix, 'image/png')
         with open(contained_source(path), 'rb') as handle:
-            return cls(handle.read(), mime_type=mime, **kwargs)
-
-
-@dataclass
-class ExternalImage:
-    """A texture stored beside the document rather than inside it.
-
-    Written as an image ``uri``, which the loader resolves relative to the
-    document. This is how a texture is shared: a tileset whose thousand tiles
-    all use one road surface embeds it a thousand times if each document
-    carries its own copy, and names it a thousand times if they point at one
-    file. ``uri`` is relative to the written document unless it is absolute.
-
-    Nothing here writes the file -- whatever produces the tiles is responsible
-    for putting the image where the ``uri`` says it is.
-    """
-
-    uri: str
-    srgb: bool = False
-    wrap_s: Optional[int] = None
-    wrap_t: Optional[int] = None
-    min_filter: Optional[int] = None
-    mag_filter: Optional[int] = None
+            return cls(handle.read(), mime_type=mime, **named)
 
 
 @dataclass
@@ -380,7 +370,7 @@ _MATERIAL_EXTENSIONS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
       'iridescenceThicknessMaximum': ('iridescenceThicknessMax', 400.0)}),
 )
 
-# attenuationDistance is +inf in glTF and 0.0 in PBRMaterial ("no absorption"),
+# attenuationDistance is +inf in glTF and 0.0 in PhysicalMaterial ("no absorption"),
 # so the sentinel must not be written as a literal distance of zero.
 _SENTINEL_INFINITY = ('attenuationDistance',)
 
@@ -417,7 +407,7 @@ _EXTENSION_TEXTURE_KEY = {
     'diffuseTransmissionColor': 'diffuseTransmissionColorTexture',
 }
 
-# Bit per channel in PBRMaterial.texCoordMask: set means "sample TEXCOORD_1".
+# Bit per channel in PhysicalMaterial.texCoordMask: set means "sample TEXCOORD_1".
 _TEXCOORD_BIT = {'baseColor': 1, 'metallicRoughness': 2, 'normal': 4,
                  'occlusion': 8, 'emissive': 16}
 
@@ -566,7 +556,7 @@ class GLTFWriter:
     # -- materials -------------------------------------------------------------
 
     def add_material(self, material: Any, name: Optional[str] = None) -> int:
-        """Write a :class:`~OpenGLContext.scenegraph.pbrmaterial.PBRMaterial`.
+        """Write a :class:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial`.
 
         Returns the index; the same material object passed again reuses it.
         Without a ``name``, the material's own ``DEF`` is written as the glTF
@@ -584,11 +574,11 @@ class GLTFWriter:
         textures = dict(getattr(material, 'textures', None) or {})
         mask = int(getattr(material, 'texCoordMask', 0) or 0)
 
-        def texture_info(channel: str, srgb: bool) -> Optional[dict]:
+        def texture_info(channel: str) -> Optional[dict]:
             holder = textures.get(channel)
             if holder is None:
                 return None
-            info: dict[str, Any] = {'index': self._add_texture(holder, srgb)}
+            info: dict[str, Any] = {'index': self._add_texture(holder)}
             if mask & _TEXCOORD_BIT.get(channel, 0):
                 info['texCoord'] = 1
             transform = self._texture_transform(material, channel, mask)
@@ -605,10 +595,10 @@ class GLTFWriter:
             'metallicFactor': float(material.metallic),
             'roughnessFactor': float(material.roughness),
         }
-        base_color = texture_info('baseColor', srgb=True)
+        base_color = texture_info('baseColor')
         if base_color is not None:
             pbr['baseColorTexture'] = base_color
-        metallic_roughness = texture_info('metallicRoughness', srgb=False)
+        metallic_roughness = texture_info('metallicRoughness')
         if metallic_roughness is not None:
             pbr['metallicRoughnessTexture'] = metallic_roughness
 
@@ -625,16 +615,16 @@ class GLTFWriter:
         if bool(getattr(material, 'doubleSided', False)):
             entry['doubleSided'] = True
 
-        normal = texture_info('normal', srgb=False)
+        normal = texture_info('normal')
         if normal is not None:
             scale = float(getattr(material, 'normalScale', 1.0))
             entry['normalTexture'] = dict(normal, scale=scale) if scale != 1.0 else normal
-        occlusion = texture_info('occlusion', srgb=False)
+        occlusion = texture_info('occlusion')
         if occlusion is not None:
             strength = float(getattr(material, 'occlusionStrength', 1.0))
             entry['occlusionTexture'] = (dict(occlusion, strength=strength)
                                          if strength != 1.0 else occlusion)
-        emissive_texture = texture_info('emissive', srgb=True)
+        emissive_texture = texture_info('emissive')
         if emissive_texture is not None:
             entry['emissiveTexture'] = emissive_texture
 
@@ -700,9 +690,7 @@ class GLTFWriter:
         for channel, key in _EXTENSION_TEXTURE_KEY.items():
             extension = _MATERIAL_TEXTURE_EXTENSION.get(channel)
             if extension in wanted and channel in textures:
-                srgb = channel in ('specularColor', 'sheenColor',
-                                   'diffuseTransmissionColor')
-                info = texture_info(channel, srgb)
+                info = texture_info(channel)
                 if info is not None:
                     wanted[extension][key] = info
         return wanted
@@ -727,7 +715,7 @@ class GLTFWriter:
 
     # -- textures --------------------------------------------------------------
 
-    def _add_texture(self, holder: Any, srgb: bool) -> int:
+    def _add_texture(self, holder: Any) -> int:
         sampler = self._add_sampler(holder)
         image = self._add_image(holder)
         key = (image, sampler)
@@ -743,12 +731,19 @@ class GLTFWriter:
         return index
 
     def _add_image(self, holder: Any) -> int:
-        """Embed a holder's pixels as a bufferView, PIL images encoded as PNG."""
-        if isinstance(holder, ExternalImage):
+        """A texture's image: an ImageTexture's first URL as a uri, else embedded
+
+        An ``EncodedImage`` is embedded as its bytes; any other image is
+        encoded as PNG.
+        """
+        if isinstance(holder, x3d.ImageTexture):
             cached = self._image_index.get(holder)
             if cached is not None:
                 return cached
-            self._images.append({'uri': holder.uri})
+            urls = list(holder.url)
+            if not urls:
+                raise ValueError('An ImageTexture with no url has no image to write')
+            self._images.append({'uri': urls[0]})
             return self._image_index.set(holder, len(self._images) - 1)
         if isinstance(holder, EncodedImage):
             cached = self._image_index.get(holder)
@@ -768,13 +763,8 @@ class GLTFWriter:
         return self._image_index.set(image, len(self._images) - 1)
 
     def _add_sampler(self, holder: Any) -> Optional[int]:
-        """The sampler for a holder's wrap/filter enums, or None for defaults."""
-        entry = {key: int(value) for key, value in (
-            ('wrapS', getattr(holder, 'wrap_s', None)),
-            ('wrapT', getattr(holder, 'wrap_t', None)),
-            ('minFilter', getattr(holder, 'min_filter', None)),
-            ('magFilter', getattr(holder, 'mag_filter', None)),
-        ) if value}
+        """The sampler for a texture's boundary modes and filters, or None for defaults"""
+        entry = gl_sampler(holder)
         if not entry:
             return None
         for index, existing in enumerate(self._samplers):

@@ -15,7 +15,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf.animation import Animation, Channel, Sampler
 from OpenGLContext.loaders.gltf.scene import GLTFScene
 from OpenGLContext.loaders.gltf.writer import GLTFWriter, SceneNode, write_glb
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
@@ -44,7 +44,7 @@ def _shapes(node, out=None):
 
 def test_material_name_round_trips():
     """The DEF an artist put on a material is the name it loads under."""
-    paint = PBRMaterial(baseColor=(0.62, 0.09, 0.07), metallic=0.55)
+    paint = PhysicalMaterial(baseColor=(0.62, 0.09, 0.07), metallic=0.55)
     paint.DEF = 'paint'
     scene = gltf.load_gltf(write_glb(_quad(paint)))
     loaded = _shapes(scene.group)[0].appearance.material
@@ -57,7 +57,7 @@ def test_named_material_indexes_the_object_the_shape_uses():
     Identity, not a copy: repainting what the index hands back is what repaints
     the model.
     """
-    paint = PBRMaterial(baseColor=(0.2, 0.4, 0.6))
+    paint = PhysicalMaterial(baseColor=(0.2, 0.4, 0.6))
     paint.DEF = 'paint'
     scene = gltf.load_gltf(write_glb(_quad(paint)))
     shape = _shapes(scene.group)[0]
@@ -67,14 +67,14 @@ def test_named_material_indexes_the_object_the_shape_uses():
 
 def test_unnamed_materials_are_not_indexed():
     """A material with no name is drawn, and is not in the index."""
-    scene = gltf.load_gltf(write_glb(_quad(PBRMaterial(baseColor=(1.0, 1.0, 1.0)))))
+    scene = gltf.load_gltf(write_glb(_quad(PhysicalMaterial(baseColor=(1.0, 1.0, 1.0)))))
     assert scene.materials == {}
     assert _shapes(scene.group)[0].appearance.material is not None
 
 
 def test_repeated_names_index_the_first_and_load_both():
     """glTF names need not be unique; the index keeps the first of a name."""
-    first, second = PBRMaterial(baseColor=(1.0, 0.0, 0.0)), PBRMaterial(baseColor=(0.0, 0.0, 1.0))
+    first, second = PhysicalMaterial(baseColor=(1.0, 0.0, 0.0)), PhysicalMaterial(baseColor=(0.0, 0.0, 1.0))
     first.DEF = second.DEF = 'paint'
     scene = gltf.load_gltf(write_glb([SceneNode(mesh=_quad(first)),
                                       SceneNode(mesh=_quad(second))]))
@@ -87,7 +87,7 @@ def test_repeated_names_index_the_first_and_load_both():
 
 def test_writer_name_argument_wins_over_the_def():
     """A caller naming a material explicitly gets that name in the document."""
-    material = PBRMaterial(baseColor=(0.5, 0.5, 0.5))
+    material = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
     material.DEF = 'ignored'
     writer = GLTFWriter()
     writer.add_material(material, name='trim')      # named before the mesh reuses it
@@ -104,7 +104,7 @@ def test_a_node_and_a_material_may_share_a_name():
     ``glass`` is ordinary authoring, and both have to stay addressable: the node
     through ``getDEF``, the material through ``materials``.
     """
-    glass = PBRMaterial(baseColor=(0.1, 0.2, 0.3), transmission=1.0)
+    glass = PhysicalMaterial(baseColor=(0.1, 0.2, 0.3), transmission=1.0)
     glass.DEF = 'glass'
     scene = gltf.load_gltf(write_glb([SceneNode(mesh=_quad(glass), name='glass')]))
     assert isinstance(scene.getDEF('glass'), Transform)

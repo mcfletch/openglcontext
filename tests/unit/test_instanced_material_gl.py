@@ -37,7 +37,7 @@ try:
     )
     from OpenGLContext.passes import instancing, selection
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
     STATE = {'calls': 0, 'byid': None}
     _od = instancing.draw_instanced_mesh
@@ -85,7 +85,7 @@ try:
         return basenodes.Transform(translation=(x, 0, 0), children=[
             basenodes.Shape(geometry=quad,   # shared geometry, DIFFERENT material
                 appearance=basenodes.Appearance(
-                    material=PBRMaterial(unlit=True, baseColor=color)))])
+                    material=PhysicalMaterial(unlit=True, baseColor=color)))])
 
     class C(Base):
         def OnInit(self):

@@ -15,7 +15,8 @@ from OpenGLContext.passes import reflection
 
 from OpenGLContext.passes.pbrpass import PBRPass, instance_collapse_is_enabled
 from OpenGLContext.scenegraph import basenodes, lod, zone as zonemodule
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.testing.memo import check_memo_inputs
@@ -33,7 +34,7 @@ def _mesh(offset=0.0):
 
 
 def _texture():
-    return PBRTexture(Image.new('RGB', (2, 2)), srgb=True)
+    return ImageDataTexture(image=Image.new('RGB', (2, 2)))
 
 
 # --- the PBR pass's batching memo -------------------------------------------
@@ -56,19 +57,19 @@ def batching(monkeypatch):
 
 def test_the_batching_memo_follows_a_pbr_shape(batching):
     ask, fresh = batching
-    material = PBRMaterial()
+    material = PhysicalMaterial()
     shape = basenodes.Shape(geometry=_mesh(),
                             appearance=basenodes.Appearance(material=material))
     mirror = PlanarReflector()
     # Made before the edits: making a node sets its fields, and a set field
     # would move the generations the memo compares, hiding a missed input.
     water, other_mesh = _water_style(), _mesh(offset=1.0)
-    appearance = basenodes.Appearance(material=PBRMaterial(
+    appearance = basenodes.Appearance(material=PhysicalMaterial(
         reflector=PlanarReflector()))
-    plain = PBRMaterial()
+    plain = PhysicalMaterial()
     check_memo_inputs(lambda: ask(shape), [
-        ('material.textures, set in place',
-         lambda: material.textures.__setitem__('baseColor', _texture())),
+        ('material.baseTexture', lambda: setattr(material, 'baseTexture', _texture())),
+        ('material.normalTexture', lambda: setattr(material, 'normalTexture', _texture())),
         ('material.alphaMode', lambda: setattr(material, 'alphaMode', 'BLEND')),
         ('material.transmission', lambda: setattr(material, 'transmission', 0.5)),
         ('material.octahedralViews',
@@ -106,7 +107,7 @@ def test_the_batching_memo_follows_a_mesh_with_its_own_material(batching):
     ask, fresh = batching
     mesh = _mesh()
     shape = basenodes.Shape(geometry=mesh)
-    mirrored = PBRMaterial(reflector=PlanarReflector())
+    mirrored = PhysicalMaterial(reflector=PlanarReflector())
     check_memo_inputs(lambda: ask(shape), [
         ('mesh.material', lambda: setattr(mesh, 'material', mirrored)),
     ], fresh=lambda: fresh(shape))
@@ -115,7 +116,7 @@ def test_the_batching_memo_follows_a_mesh_with_its_own_material(batching):
 # --- the scene's mirrors ------------------------------------------------------
 
 def test_a_mesh_under_an_appearance_with_no_material_is_drawn_with_its_own():
-    own = PBRMaterial(reflector=PlanarReflector())
+    own = PhysicalMaterial(reflector=PlanarReflector())
     shape = basenodes.Shape(geometry=PBRMesh(material=own),
                             appearance=basenodes.Appearance())
     assert reflection.shape_material(shape) is own
@@ -138,15 +139,15 @@ def test_the_mirror_generation_follows_every_field_deciding_a_mirror():
             held['answer'] = reflection.shape_reflector(shape) is not None
         return held['answer']
 
-    material = PBRMaterial()
+    material = PhysicalMaterial()
     mesh = _mesh()
     shape = basenodes.Shape(geometry=mesh,
                             appearance=basenodes.Appearance(material=material))
     mirror = PlanarReflector()
-    mirroring = PBRMaterial(reflector=PlanarReflector())
-    plain = basenodes.Appearance(material=PBRMaterial())
+    mirroring = PhysicalMaterial(reflector=PlanarReflector())
+    plain = basenodes.Appearance(material=PhysicalMaterial())
     water, other_mesh = _water_style(), _mesh()
-    own = PBRMaterial(reflector=PlanarReflector())
+    own = PhysicalMaterial(reflector=PlanarReflector())
     check_memo_inputs(ask, [
         ('material.reflector', lambda: setattr(material, 'reflector', mirror)),
         ('reflector.enabled', lambda: setattr(mirror, 'enabled', False)),

@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, srgb_to_linear
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial, srgb_to_linear
 from OpenGLContext.scenegraph import basenodes
 
 
@@ -23,7 +23,7 @@ def test_block_is_224_bytes():
 
 
 def test_iridescence_vec4_after_uv_transform():
-    m = PBRMaterial()
+    m = PhysicalMaterial()
     m.iridescence = 0.7
     m.iridescenceIor = 1.6
     m.iridescenceThicknessMin = 120.0
@@ -36,7 +36,7 @@ def test_iridescence_vec4_after_uv_transform():
 
 
 def test_pbr_material_factors_land_at_their_offsets():
-    m = PBRMaterial()
+    m = PhysicalMaterial()
     m.baseColor = (0.1, 0.2, 0.3)
     m.metallic = 0.4
     m.roughness = 0.55
@@ -63,7 +63,7 @@ def test_pbr_material_factors_land_at_their_offsets():
 
 
 def test_unlit_flag_is_int_at_word_28():
-    m = PBRMaterial()
+    m = PhysicalMaterial()
     m.unlit = 1
     iv = pack_material_block(m).view(np.int32)
     assert iv[28] == 1
@@ -72,7 +72,7 @@ def test_unlit_flag_is_int_at_word_28():
 
 
 def test_identity_uv_transform_when_absent():
-    buf = pack_material_block(PBRMaterial())
+    buf = pack_material_block(PhysicalMaterial())
     # mat3 columns at words 32.., each padded to 4; identity has 1s on the diagonal
     assert np.isclose(buf[32], 1.0)      # col0.x
     assert np.isclose(buf[37], 1.0)      # col1.y
@@ -81,7 +81,7 @@ def test_identity_uv_transform_when_absent():
 
 
 def test_uv_transform_columns_packed_column_major():
-    m = PBRMaterial()
+    m = PhysicalMaterial()
     M = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], 'f')
     m.uv_transform = M
     buf = pack_material_block(m)

@@ -18,7 +18,7 @@ from vrml import node
 from vrml.vrml97 import nodetypes
 
 from OpenGLContext.scenegraph.appearance import Appearance
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.shape import Shape
 
 
@@ -75,7 +75,7 @@ def _drawn():
 
 def _shape(coloured=False):
     return Shape(geometry=(Coloured() if coloured else Plain()),
-                 appearance=Appearance(material=PBRMaterial(
+                 appearance=Appearance(material=PhysicalMaterial(
                      baseColor=(0.9, 0.7, 0.2))))
 
 

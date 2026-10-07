@@ -53,7 +53,7 @@ from typing import Any, Optional
 from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.scenegraph.appearance import Appearance
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.reflector import LIMITS, PlanarReflector
 from OpenGLContext.scenegraph.shape import Shape
 
@@ -119,13 +119,13 @@ def hook_for(reflector: PlanarReflector) -> dict[str, Any]:
     return written
 
 
-def mirror_material(reflector: PlanarReflector) -> PBRMaterial:
+def mirror_material(reflector: PlanarReflector) -> PhysicalMaterial:
     """What an object that shows only its reflection is drawn with."""
-    return PBRMaterial(baseColor=(1.0, 1.0, 1.0), metallic=1.0, roughness=0.0,
+    return PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=1.0, roughness=0.0,
                        reflector=reflector)
 
 
-def mirrored(node: Any, material: PBRMaterial) -> Any:
+def mirrored(node: Any, material: PhysicalMaterial) -> Any:
     """``node`` with every shape under it drawn with ``material``, however deep.
 
     A shape is replaced by a copy that shares its geometry, with an appearance

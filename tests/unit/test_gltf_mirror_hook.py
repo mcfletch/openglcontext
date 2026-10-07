@@ -14,7 +14,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
 from OpenGLContext.scenegraph import water, basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import WATER, PlanarReflector
 from OpenGLContext.scenegraph.shape import Shape
@@ -24,7 +24,7 @@ from OpenGLContext.scenegraph.mirrorhooks import mirror_hook, reflector_for
 
 
 def _quad(tag=None, colour=(0.8, 0.8, 0.8), metallic=1.0, roughness=0.0):
-    material = PBRMaterial(baseColor=colour, metallic=metallic, roughness=roughness)
+    material = PhysicalMaterial(baseColor=colour, metallic=metallic, roughness=roughness)
     if tag is not None:
         material.extras = {'OGLC_hook': tag}
     return PBRMesh(
@@ -149,7 +149,7 @@ def _object_hook(children, params=None):
 def test_an_object_tag_reaches_the_shapes_under_its_levels_and_choices():
 
     def shape():
-        return Shape(geometry=_quad(), appearance=Appearance(material=PBRMaterial()))
+        return Shape(geometry=_quad(), appearance=Appearance(material=PhysicalMaterial()))
 
     near, far, shown, hidden = shape(), shape(), shape(), shape()
     lod = basenodes.LOD(level=[near, far])

@@ -17,14 +17,14 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
 from OpenGLContext.scenegraph import water
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 
 
 def _sheet(tag, level=0.0, side=10.0):
     """A horizontal quad tagged as water, as an exporter would write one."""
-    material = PBRMaterial(baseColor=(0.05, 0.1, 0.12))
+    material = PhysicalMaterial(baseColor=(0.05, 0.1, 0.12))
     material.extras = {'OGLC_hook': tag}
     return PBRMesh(
         positions=np.array([(0, level, 0), (side, level, 0),

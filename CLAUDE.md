@@ -210,7 +210,9 @@ OpenGLContext/
 │   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.rst
 │   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.rst
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
-│   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
+│   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material
+│   │                 # (X3D's PhysicalMaterial) and mesh
+│   ├── imagedata.py  # ImageDataTexture: a texture node for a decoded image
 │   ├── reflector.py  # PlanarReflector: a material's surfaces are mirrors
 │   ├── mirrorhooks.py    # The mirror OGLC_hook kind -- docs/reflections.rst
 │   ├── surfaces.py   # Procedural PBR maps (marble, tiles, brick, metals) and

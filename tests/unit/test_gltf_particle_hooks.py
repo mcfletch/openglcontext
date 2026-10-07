@@ -18,7 +18,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
 from OpenGLContext.scenegraph import particlehooks, particles
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 
@@ -29,7 +29,7 @@ def _box():
         positions=np.array([(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)], 'f'),
         normals=np.array([(0, 1, 0)] * 4, 'f'),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
-        material=PBRMaterial(baseColor=(0.2, 0.2, 0.2)),
+        material=PhysicalMaterial(baseColor=(0.2, 0.2, 0.2)),
     )
 
 
@@ -174,7 +174,7 @@ def test_a_value_the_field_will_not_take_is_passed_over(caplog):
 
 def test_on_a_material_it_does_nothing():
     """A flame stands somewhere; a surface is not a place."""
-    material = PBRMaterial(baseColor=(0.2, 0.2, 0.2))
+    material = PhysicalMaterial(baseColor=(0.2, 0.2, 0.2))
     material.hook = {'kind': 'fire'}
     mesh = _box()
     mesh.material = material

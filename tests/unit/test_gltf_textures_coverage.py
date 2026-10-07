@@ -81,12 +81,12 @@ class TestPilForTexInfo:
 
 class TestTextureHolder:
     def test_none_index_is_none(self):
-        assert gtx._texture_holder(GLTF2(), None, _R(), srgb=True, cache={}) is None
+        assert gtx._texture_holder(GLTF2(), None, _R(), cache={}) is None
 
     def test_texture_without_source_is_none(self):
         g = GLTF2()
         g.textures = [Texture()]
-        assert gtx._texture_holder(g, 0, _R(), srgb=True, cache={}) is None
+        assert gtx._texture_holder(g, 0, _R(), cache={}) is None
 
     def test_undecodable_image_logged_and_none(self, caplog):
         garbage = b'still not an image'
@@ -96,7 +96,7 @@ class TestTextureHolder:
         g.bufferViews = [BufferView(buffer=0, byteOffset=0, byteLength=len(garbage))]
         g.buffers = [Buffer(byteLength=len(garbage))]
         with caplog.at_level('WARNING'):
-            holder = gtx._texture_holder(g, 0, _R(garbage), srgb=True, cache={})
+            holder = gtx._texture_holder(g, 0, _R(garbage), cache={})
         assert holder is None
         assert any('failed to decode image' in r.getMessage() for r in caplog.records)
 
@@ -109,11 +109,15 @@ class TestTextureHolder:
         g.bufferViews = [BufferView(buffer=0, byteOffset=0, byteLength=len(png))]
         g.buffers = [Buffer(byteLength=len(png))]
         cache = {}
-        holder = gtx._texture_holder(g, 0, _R(png), srgb=True, cache=cache)
+        holder = gtx._texture_holder(g, 0, _R(png), cache=cache)
         assert holder is not None
-        assert holder.wrap_s == 10497 and holder.mag_filter == 9728
+        assert holder.sampler() == {'wrap_s': 'REPEAT', 'wrap_t': 'CLAMP_TO_EDGE',
+                                    'minification': 'AVG_PIXEL',
+                                    'magnification': 'NEAREST_PIXEL'}
+        assert gtx.gl_sampler(holder) == {'wrapT': 33071, 'minFilter': 9729,
+                                          'magFilter': 9728}
         # The holder is memoised by texture index.
-        assert gtx._texture_holder(g, 0, _R(png), srgb=True, cache=cache) is holder
+        assert gtx._texture_holder(g, 0, _R(png), cache=cache) is holder
 
 
 if __name__ == '__main__':

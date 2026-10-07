@@ -15,7 +15,7 @@ from OpenGL.GL import GL_POINTS
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from tests.unit.glrender import base_env, frames_of
@@ -45,7 +45,7 @@ def _mirror(x=0.0, z=-4.0, size=6.0, reflector=None, y=0.0, **material):
     settings = dict(baseColor=(1.0, 1.0, 1.0), metallic=1.0, roughness=0.0)
     settings.update(material)
     return basenodes.Transform(translation=(x, y, z), children=[basenodes.Shape(
-        geometry=mesh, appearance=basenodes.Appearance(material=PBRMaterial(
+        geometry=mesh, appearance=basenodes.Appearance(material=PhysicalMaterial(
             reflector=PlanarReflector() if reflector is None else reflector,
             **settings)))])
 
@@ -257,7 +257,7 @@ def _floor(**material):
     settings = dict(baseColor=(0.05, 0.05, 0.06), metallic=0.0, roughness=0.05)
     settings.update(material)
     return basenodes.Transform(translation=(0.0, -1.0, 0.0), children=[basenodes.Shape(
-        geometry=mesh, appearance=basenodes.Appearance(material=PBRMaterial(
+        geometry=mesh, appearance=basenodes.Appearance(material=PhysicalMaterial(
             reflector=PlanarReflector(), **settings)))])
 
 
@@ -397,7 +397,7 @@ def _behind_the_camera():
     back = basenodes.Transform(
         translation=(0.0, 0.0, 10.0), rotation=(0.0, 1.0, 0.0, np.pi),
         children=[basenodes.Shape(geometry=mesh, appearance=basenodes.Appearance(
-            material=PBRMaterial(reflector=PlanarReflector(), baseColor=(1.0, 1.0, 1.0),
+            material=PhysicalMaterial(reflector=PlanarReflector(), baseColor=(1.0, 1.0, 1.0),
                                  metallic=1.0, roughness=0.0)))])
     return [basenodes.Viewpoint(position=(0.0, 0.0, 6.0)),
             basenodes.NavigationInfo(headlight=False),
@@ -492,7 +492,7 @@ def _points_behind(z=9.0):
     mesh = PBRMesh(positions=grid, normals=np.tile((0, 0, 1), (len(grid), 1)),
                    draw_mode=GL_POINTS)
     return basenodes.Transform(translation=(0.0, 0.0, z), children=[basenodes.Shape(
-        geometry=mesh, appearance=basenodes.Appearance(material=PBRMaterial(
+        geometry=mesh, appearance=basenodes.Appearance(material=PhysicalMaterial(
             baseColor=(1.0, 1.0, 0.0))))])
 
 

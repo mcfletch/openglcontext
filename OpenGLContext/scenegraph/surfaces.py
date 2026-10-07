@@ -3,7 +3,7 @@
 A handful of the materials a room is built from -- checkered marble, veined
 marble, brick, plaster, sandstone, and brushed metals -- generated as plain
 arrays that repeat seamlessly both ways. :func:`pbr_material` makes one a
-:class:`~OpenGLContext.scenegraph.pbrmaterial.PBRMaterial`::
+:class:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial`::
 
     from OpenGLContext.scenegraph import surfaces
 
@@ -301,24 +301,24 @@ def images(maps: Maps, relief: float = 2.0) -> tuple[np.ndarray, np.ndarray, np.
 
 
 def pbr_material(maps: Maps, relief: float = 2.0, **factors: Any) -> Any:
-    """A :class:`~OpenGLContext.scenegraph.pbrmaterial.PBRMaterial` wearing ``maps``.
+    """A :class:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial` wearing ``maps``.
 
     ``factors`` are the material's own fields; a factor multiplies its map,
     so the maps say what the surface is and a factor below 1 scales it down.
     """
     from PIL import Image
 
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+    from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
     base, packed, normal = images(maps, relief)
-    textures = {
-        'baseColor': PBRTexture(Image.fromarray(base, 'RGB'), srgb=True),
-        'metallicRoughness': PBRTexture(Image.fromarray(packed, 'RGB')),
-        'normal': PBRTexture(Image.fromarray(normal, 'RGB')),
-    }
     settings = dict(baseColor=(1.0, 1.0, 1.0), metallic=1.0, roughness=1.0)
     settings.update(factors)
-    return PBRMaterial(textures=textures, **settings)
+    return PhysicalMaterial(
+        baseTexture=ImageDataTexture(image=Image.fromarray(base, 'RGB')),
+        metallicRoughnessTexture=ImageDataTexture(image=Image.fromarray(packed, 'RGB')),
+        normalTexture=ImageDataTexture(image=Image.fromarray(normal, 'RGB')),
+        **settings)
 
 
 # --- geometry that wears a surface at its size -----------------------------------

@@ -27,7 +27,7 @@ same seed gives the same surface.
 
 A surface is two steps: a function makes its maps, and
 :func:`~OpenGLContext.scenegraph.surfaces.pbr_material` turns them into a
-``PBRMaterial``. Geometry made here then wears the material by the metre.
+``PhysicalMaterial``. Geometry made here then wears the material by the metre.
 
 The surfaces
 ------------
@@ -86,7 +86,7 @@ Each returns ``Maps``: ``base`` (``size`` by ``size`` by 3, linear colour),
 and ``roughness``, ``metallic`` and ``height`` (``size`` by ``size``), all from
 0 to 1, row 0 at the top of the texture.
 
-``pbr_material(maps, relief=2.0, **factors)`` makes the ``PBRMaterial``: a
+``pbr_material(maps, relief=2.0, **factors)`` makes the ``PhysicalMaterial``: a
 base-colour texture, a metallic-roughness texture, and a normal map derived
 from the height, ``relief`` scaling how steep it reads. ``factors`` are the
 material's own fields. A factor multiplies its map, so ``roughness=0.5``

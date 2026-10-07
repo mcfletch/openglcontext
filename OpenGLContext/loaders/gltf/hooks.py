@@ -70,7 +70,7 @@ if TYPE_CHECKING:
     from vrml.node import Node
 
     from OpenGLContext.loaders.resolver import Resolver
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from OpenGLContext.scenegraph.shape import Shape
     from OpenGLContext.scenegraph.transform import Transform
@@ -299,7 +299,7 @@ class HookContext:
     #: The glTF primitive record (a ``pygltflib.Primitive``).
     primitive: Any = None
     mesh: Optional['PBRMesh'] = None
-    material: Optional['PBRMaterial'] = None
+    material: Optional['PhysicalMaterial'] = None
     shape: Optional['Shape'] = None
     bounds: Optional[tuple[np.ndarray, np.ndarray]] = None
 

@@ -154,7 +154,7 @@ def teapot_image(tmp_path_factory):
 
 
 def test_pbr_material_on_non_gltf_teapot_renders(teapot_image):
-    """A PBRMaterial on the non-glTF Teapot geometry renders under the PBR pass.
+    """A PhysicalMaterial on the non-glTF Teapot geometry renders under the PBR pass.
 
     This is the first PBR material applied to a hand-built (non-glTF) Shape: it
     proves the teapot's texcoords/tangents feed the PBR shader and that the PBR

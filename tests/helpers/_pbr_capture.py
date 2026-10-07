@@ -1,7 +1,7 @@
 """Capture runner for PBR render tests (invoked as a subprocess).
 
 Renders a small PBR scene (a metallic gold sphere + a rough red sphere, both
-PBRMaterial) under the PBR pass and saves the freshly-rendered back buffer.
+PhysicalMaterial) under the PBR pass and saves the freshly-rendered back buffer.
 Optionally loads a glTF/GLB instead (arg: 'gltf <path-or-url>').
 
 Usage:  python tests/_pbr_capture.py OUTPUT.png [gltf SOURCE]
@@ -27,7 +27,8 @@ from OpenGLContext.scenegraph.basenodes import (
     Transform,
 )
 from OpenGLContext.scenegraph.lightgrid import LightGrid
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,11 +62,11 @@ def main() -> int:
         return sceneGraph(children=[
             Shape(
                 geometry=Sphere(radius=1.1),
-                appearance=Appearance(material=PBRMaterial(
+                appearance=Appearance(material=PhysicalMaterial(
                     baseColor=(0.9, 0.1, 0.08), metallic=0.0, roughness=0.6))),
             Transform(translation=(-0.7, 0, 2.5), children=[Shape(
                 geometry=Box(size=(1.6, 3.0, 0.05)),
-                appearance=Appearance(material=PBRMaterial(
+                appearance=Appearance(material=PhysicalMaterial(
                     baseColor=(0.1, 0.2, 0.95), unlit=True,
                     transparency=0.45, alphaMode='BLEND')))]),
             DirectionalLight(direction=(-0.3, -0.4, -1.0), color=(1, 1, 1), intensity=1.4),
@@ -81,11 +82,11 @@ def main() -> int:
         return sceneGraph(children=[
             Shape(
                 geometry=Sphere(radius=1.1),
-                appearance=Appearance(material=PBRMaterial(
+                appearance=Appearance(material=PhysicalMaterial(
                     baseColor=(0.9, 0.1, 0.08), metallic=0.0, roughness=0.6))),
             Transform(translation=(-0.7, 0, 2.5), children=[Shape(
                 geometry=Box(size=(1.6, 3.0, 0.05)),
-                appearance=Appearance(material=PBRMaterial(
+                appearance=Appearance(material=PhysicalMaterial(
                     baseColor=(0.6, 1.0, 0.9), metallic=0.0, roughness=0.05,
                     transmission=1.0, thickness=0.05, ior=1.5, alphaMode='OPAQUE')))]),
             DirectionalLight(direction=(-0.3, -0.4, -1.0), color=(1, 1, 1), intensity=1.4),
@@ -97,11 +98,11 @@ def main() -> int:
         return sceneGraph(children=[
             Transform(translation=(-1.5, 0, 0), children=[Shape(
                 geometry=Sphere(radius=1.1),
-                appearance=Appearance(material=PBRMaterial(
+                appearance=Appearance(material=PhysicalMaterial(
                     baseColor=(1.0, 0.78, 0.34), metallic=1.0, roughness=0.25)))]),
             Transform(translation=(1.5, 0, 0), children=[Shape(
                 geometry=Sphere(radius=1.1),
-                appearance=Appearance(material=PBRMaterial(
+                appearance=Appearance(material=PhysicalMaterial(
                     baseColor=(0.85, 0.13, 0.1), metallic=0.0, roughness=0.7)))]),
             DirectionalLight(direction=(-0.3, -0.4, -1.0), color=(1, 1, 1), intensity=1.4),
             PointLight(location=(4, 4, 5), color=(1, 0.95, 0.9), intensity=1.0,
@@ -111,17 +112,13 @@ def main() -> int:
     state = {'pos': (0, 0, 6)}
 
     def teapot_scene():
-        # A ceramic PBRMaterial on the non-glTF Teapot geometry: exercises the
+        # A ceramic PhysicalMaterial on the non-glTF Teapot geometry: exercises the
         # full non-glTF PBR path (Shape -> PBRPass -> teapot VAO with texcoords +
         # tangents). Small texture size keeps the test fast.
         tex = ceramic_textures(256)
-        mat = PBRMaterial(
+        mat = PhysicalMaterial(
             baseColor=(1, 1, 1), metallic=0.0, roughness=1.0, normalScale=1.0,
-            textures={
-                'baseColor': PBRTexture(tex['baseColor'], srgb=True),
-                'metallicRoughness': PBRTexture(tex['metallicRoughness'], srgb=False),
-                'normal': PBRTexture(tex['normal'], srgb=False),
-            })
+            baseTexture=ImageDataTexture(image=tex['baseColor']), metallicRoughnessTexture=ImageDataTexture(image=tex['metallicRoughness']), normalTexture=ImageDataTexture(image=tex['normal']))
         state['pos'] = (0, 1.0, 5.0)
         return sceneGraph(children=[
             Shape(geometry=Teapot(size=1.0, lid=True),
@@ -138,7 +135,7 @@ def main() -> int:
         # level and gives the comparison baseline.
 
         ramp = np.tile(np.linspace(0, 255, 64, dtype='u1')[None, :, None], (64, 1, 3))
-        lightmap = PBRTexture(Image.fromarray(ramp, 'RGB'), srgb=True)
+        lightmap = ImageDataTexture(image=Image.fromarray(ramp, 'RGB'))
 
         def quad(x, material):
             p = np.array([[x - 1, -1, 0], [x + 1, -1, 0],
@@ -154,9 +151,9 @@ def main() -> int:
         base = dict(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.9)
         state['pos'] = (0, 0, 5.5)
         return sceneGraph(children=[
-            quad(-1.2, PBRMaterial(texCoordMask=32, textures={'lightmap': lightmap},
+            quad(-1.2, PhysicalMaterial(texCoordMask=32, lightmapTexture=lightmap,
                                    **base)),
-            quad(1.2, PBRMaterial(**base)),
+            quad(1.2, PhysicalMaterial(**base)),
             # A near-dark light rather than none: a scene with no lights at all
             # gets a default headlight, which would wash both quads out and hide
             # what the lightmap contributes.
@@ -175,7 +172,7 @@ def main() -> int:
         def ball(x):
             return Transform(translation=(x, 0, 0), children=[Shape(
                 geometry=Sphere(radius=1.1),
-                appearance=Appearance(material=PBRMaterial(**grey)))])
+                appearance=Appearance(material=PhysicalMaterial(**grey)))])
 
         ambient = np.zeros((8, 3), dtype='f')
         directional = np.zeros((8, 3), dtype='f')

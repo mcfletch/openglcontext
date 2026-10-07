@@ -12,13 +12,14 @@ import pytest
 from PIL import Image
 
 from OpenGLContext.loaders.documentvalues import DocumentError
-from OpenGLContext.loaders.gltf.writer import ExternalImage, write_glb
+from OpenGLContext.loaders.gltf.writer import write_glb
+from vrml.x3d import nodes as x3d
 from OpenGLContext.loaders.tiles3d.boundingvolume import (
     WGS84_A, WGS84_B, BoxBV, RegionBV, SphereBV, geodetic_to_ecef,
 )
 from OpenGLContext.loaders.tiles3d.gltf_uploader import file_tile_loader
 from OpenGLContext.loaders.tiles3d.tileset import Z_UP_TO_Y_UP, build_runtime_tileset
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 
@@ -529,8 +530,8 @@ def test_a_tile_finds_a_texture_named_beside_its_tileset(tmp_path):
 
 
     Image.new('RGBA', (4, 4), (7, 200, 9, 255)).save(str(tmp_path / 'shared.png'))
-    material = PBRMaterial()
-    material.textures = {'baseColor': ExternalImage('shared.png', srgb=True)}
+    material = PhysicalMaterial()
+    material.baseTexture = x3d.ImageTexture(url=['shared.png'])
     mesh = PBRMesh(positions=np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], 'f'),
                    material=material)
     write_glb(mesh, path=str(tmp_path / 'tile.glb'))

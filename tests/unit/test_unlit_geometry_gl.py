@@ -34,7 +34,7 @@ try:
     from OpenGLContext.scenegraph.basenodes import (
         sceneGraph, Coordinate, IndexedLineSet, PointSet, Viewpoint)
     from OpenGLContext.scenegraph.appearance import Appearance
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
     from OpenGLContext.scenegraph.shape import Shape
 
     COLOUR = (1.0, 0.2, 0.6)
@@ -52,7 +52,7 @@ try:
             self.sg = sceneGraph(children=[
                 Viewpoint(position=(0, 0, 12)),
                 Shape(geometry=geometry,
-                      appearance=Appearance(material=PBRMaterial(
+                      appearance=Appearance(material=PhysicalMaterial(
                           baseColor=COLOUR, emissiveColor=COLOUR, unlit=True))),
             ])
 

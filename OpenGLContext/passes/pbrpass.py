@@ -5,7 +5,7 @@
 inherits the shadow subsystem (shadows on by default) and the whole render flow;
 only the bound program and per-shape material configuration differ.
 
-Both ``PBRMaterial`` nodes and legacy VRML97 ``Material`` nodes render through the
+Both ``PhysicalMaterial`` nodes and legacy VRML97 ``Material`` nodes render through the
 single PBR program -- the latter via up-conversion -- so existing scenes draw
 under the PBR pass without per-shape program switches.
 """
@@ -40,8 +40,8 @@ from OpenGLContext.passes.shaderpass import (
 from OpenGLContext.passes.transmission import TransmissionBuffer
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
-from OpenGLContext.scenegraph.pbrmaterial import (
-    AppearanceMaterial, PBRMaterial, material_to_pbr, pbr_material,
+from OpenGLContext.scenegraph.physicalmaterial import (
+    AppearanceMaterial, PhysicalMaterial, material_to_pbr, pbr_material,
 )
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS, ZonePack
@@ -176,8 +176,8 @@ GLASS_MIN_OPACITY = 0.08
 
 
 def _material_factors(material: Any) -> dict:
-    """Uniform-ready factors for a PBRMaterial, a VRML97 Material, or None."""
-    if isinstance(material, PBRMaterial):
+    """Uniform-ready factors for a PhysicalMaterial, a VRML97 Material, or None."""
+    if isinstance(material, PhysicalMaterial):
         m = material
         return dict(
             base_color=tuple(m.baseColor)[:3], metallic=float(m.metallic),
@@ -884,13 +884,13 @@ class PBRShaderProgram(VRML97ShaderProgram):
     def configure_appearance(self, appearance: Any, mode: Any) -> None:
         """Configure PBR material + textures from a Shape's appearance.
 
-        Routes both PBRMaterial (directly) and a VRML97 appearance -- its
+        Routes both PhysicalMaterial (directly) and a VRML97 appearance -- its
         Material up-converted, its texture as the base colour map -- through
         this single PBR program; :func:`pbr_material` says which.
         """
         material = pbr_material(appearance) if appearance else None
         # Publish the material's double-sidedness to the geometry's cull decision
-        #: a hand-built PBRMaterial(doubleSided=True) must disable
+        #: a hand-built PhysicalMaterial(doubleSided=True) must disable
         # back-face culling even when the mesh itself is marked solid. Set before
         # the early-out so it stays correct for repeated same-material shapes.
         if mode is not None:
@@ -914,7 +914,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # volume) come from the material's cached UBO -- one bind, no per-shape re-box.
         self.bind_material_block(material)
         _ALPHA = {'OPAQUE': 0, 'MASK': 1, 'BLEND': 2}
-        if isinstance(material, PBRMaterial):
+        if isinstance(material, PhysicalMaterial):
             alpha = 1.0 - float(material.transparency)
             alpha_mode = _ALPHA.get(str(material.alphaMode), 0)
             tf = float(getattr(material, 'transmission', 0.0) or 0.0)
@@ -1093,7 +1093,7 @@ class PBRPass(flatcore.FlatPass):
         kept against what it was made from and asked again only when one of
         them differs: the identities of the geometry, appearance, material and
         texture, the material's
-        :meth:`~OpenGLContext.scenegraph.pbrmaterial.PBRMaterial.batchingVersion`,
+        :meth:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial.batchingVersion`,
         and :func:`~OpenGLContext.passes.reflection.mirror_generation`, which
         moves when any shape may have become a mirror or stopped being one. A
         geometry that computes its own content key from its fields is asked

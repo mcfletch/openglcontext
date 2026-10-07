@@ -115,7 +115,7 @@ try:
     from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
     quad = PBRMesh(
         positions=[(-.35, -.35, 0), (.35, -.35, 0), (.35, .35, 0), (-.35, .35, 0)],
@@ -126,7 +126,7 @@ try:
         return basenodes.Transform(translation=(x, 0, 0), children=[
             basenodes.Shape(geometry=quad,
                 appearance=basenodes.Appearance(
-                    material=PBRMaterial(unlit=True, baseColor=color)))])
+                    material=PhysicalMaterial(unlit=True, baseColor=color)))])
 
     class C(Base):
         def OnInit(self):

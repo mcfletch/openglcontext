@@ -39,7 +39,7 @@ from typing import Any, NamedTuple, Optional
 import numpy as np
 
 from OpenGLContext.scenegraph import basenodes, surfaces
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 __all__ = ['WIDTH', 'LENGTH', 'HEIGHT', 'TILE', 'BRICK', 'WALLS', 'BAYS', 'PILASTERS',
            'WINDOWS', 'WINDOW_WIDTH', 'STEPS', 'SUN', 'Finishes', 'Part', 'Hall']
@@ -124,7 +124,7 @@ class Finishes:
         self.columns = [surfaces.pbr_material(surfaces.brushed_metal(128, colour, rough))
                         for colour, rough in ((surfaces.GOLD, 0.25), (surfaces.COPPER, 0.3),
                                               (surfaces.STEEL, 0.2), (surfaces.BRONZE, 0.32))]
-        self.lamp = PBRMaterial(baseColor=(1.0, 0.95, 0.85), metallic=0.0, roughness=0.4,
+        self.lamp = PhysicalMaterial(baseColor=(1.0, 0.95, 0.85), metallic=0.0, roughness=0.4,
                                 emissiveColor=(1.0, 0.9, 0.7), emissiveStrength=3.0)
 
 

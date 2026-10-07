@@ -21,7 +21,7 @@ from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 from OpenGLContext.passes import renderpass
 from OpenGLContext.passes.transmission import TransmissionBackdrops, TransmissionBuffer
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.testing.stillframe import check_still_frame
 from tests.unit.glrender import base_env, frames_of
 
@@ -136,7 +136,7 @@ class TestBackdrops:
 
 def _glass_pane(x):
     """A clear pane filling most of a view that looks at it from six units."""
-    material = PBRMaterial(baseColor=(1.0, 1.0, 1.0), transmission=1.0,
+    material = PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), transmission=1.0,
                            roughness=0.0, metallic=0.0, ior=1.0)
     return basenodes.Transform(translation=(x, 0, 0), children=[
         basenodes.Shape(geometry=basenodes.Box(size=(8.0, 8.0, 0.1)),

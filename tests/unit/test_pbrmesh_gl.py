@@ -18,7 +18,7 @@ from OpenGL import GL
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh, _MeshGPU
 from OpenGLContext.passes import instancing
 from OpenGLContext.scenegraph.basenodes import Shape
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 
 @pytest.fixture
@@ -288,7 +288,7 @@ class TestBoundingAndMisc:
         opaque = PBRMesh(positions=np.zeros((3, 3), 'f'), material=None)
         assert opaque.sortKey(None, None)[0] is False
         clear = PBRMesh(positions=np.zeros((3, 3), 'f'),
-                        material=PBRMaterial(alphaMode='BLEND'))
+                        material=PhysicalMaterial(alphaMode='BLEND'))
         assert clear.sortKey(None, None)[0] is True
 
 

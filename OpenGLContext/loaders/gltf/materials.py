@@ -1,6 +1,6 @@
-"""glTF material -> PBRMaterial construction, including the KHR extension stack.
+"""glTF materials as PhysicalMaterial nodes, with the KHR extension stack
 
-Assembles a :class:`~OpenGLContext.scenegraph.pbrmaterial.PBRMaterial` from a glTF
+Assembles a :class:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial` from a glTF
 material: base metallic/roughness factors and textures, then every supported KHR
 material extension (specular, clearcoat, sheen, iridescence, transmission, volume,
 anisotropy, ior, emissive strength, unlit, dispersion). The extensions are
@@ -19,8 +19,9 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Optional
 
-from OpenGLContext.scenegraph.pbrmaterial import (
-    PBRMaterial, PBRTexture, uv_transform_matrix,
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.scenegraph.physicalmaterial import (
+    CHANNEL_FIELDS, PhysicalMaterial, uv_transform_matrix,
 )
 from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.resolver import Resolver
@@ -35,14 +36,14 @@ log = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import pygltflib
 
-# collector.add(channel, textureInfo, srgb) -> None; the extension handlers call it
+# collector.add(channel, textureInfo) -> None; the extension handlers call it
 # to register their textures.
 AddTexture = Callable[..., None]
 
 
 _ALPHA_MODE = {None: 'OPAQUE', 'OPAQUE': 'OPAQUE', 'MASK': 'MASK', 'BLEND': 'BLEND'}
 # Per-channel bit for the material's texCoord mask (which textures sample UV set 1).
-# Must match PBRMaterial.texCoordMask / the pbr.frag texCoordMask decode.
+# Must match PhysicalMaterial.texCoordMask / the pbr.frag texCoordMask decode.
 _TEXCOORD_BIT = {'baseColor': 1, 'metallicRoughness': 2, 'normal': 4,
                  'occlusion': 8, 'emissive': 16}
 
@@ -65,10 +66,10 @@ class _TextureCollector:
         self.uv_params: Optional[dict] = None
         self._values = DocumentValues(logger=log)
 
-    def add(self, channel: str, info: Any, srgb: bool) -> None:
+    def add(self, channel: str, info: Any) -> None:
         if info is None or getattr(info, 'index', None) is None:
             return
-        holder = _texture_holder(self._g, info.index, self._resolver, srgb, self._tex_cache)
+        holder = _texture_holder(self._g, info.index, self._resolver, self._tex_cache)
         if holder is None:
             return
         self.textures[channel] = holder
@@ -94,7 +95,7 @@ class _TextureCollector:
 
 
 # --- KHR material-extension handlers ----------------------------
-# Each handler reads one extension's factor block into PBRMaterial kwargs and adds
+# Each handler reads one extension's factor block into PhysicalMaterial kwargs and adds
 # its textures via the collector; the table below drives them so _build_material
 # no longer inlines ~15 near-identical blocks. Absent extensions fall back to
 # _MATERIAL_EXT_DEFAULTS.
@@ -128,30 +129,30 @@ def _ext_dispersion(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
 
 
 def _ext_specular(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
-    add('specular', _info(ext.get('specularTexture')), srgb=False)          # .a
-    add('specularColor', _info(ext.get('specularColorTexture')), srgb=True)  # .rgb
+    add('specular', _info(ext.get('specularTexture')))          # .a
+    add('specularColor', _info(ext.get('specularColorTexture')))  # .rgb
     return {'specular': _factor(values, ext, 'specularFactor', 1.0, minimum=0.0, maximum=1.0),
             'specularColor': tuple(ext.get('specularColorFactor', [1, 1, 1]))}
 
 
 def _ext_clearcoat(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
-    add('clearcoat', _info(ext.get('clearcoatTexture')), srgb=False)
-    add('clearcoatRoughness', _info(ext.get('clearcoatRoughnessTexture')), srgb=False)
-    add('clearcoatNormal', _info(ext.get('clearcoatNormalTexture')), srgb=False)
+    add('clearcoat', _info(ext.get('clearcoatTexture')))
+    add('clearcoatRoughness', _info(ext.get('clearcoatRoughnessTexture')))
+    add('clearcoatNormal', _info(ext.get('clearcoatNormalTexture')))
     return {'clearcoat': _factor(values, ext, 'clearcoatFactor', 0.0, minimum=0.0, maximum=1.0),
             'clearcoatRoughness': _factor(values, ext, 'clearcoatRoughnessFactor', 0.0, minimum=0.0, maximum=1.0)}
 
 
 def _ext_sheen(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
-    add('sheenColor', _info(ext.get('sheenColorTexture')), srgb=True)          # .rgb
-    add('sheenRoughness', _info(ext.get('sheenRoughnessTexture')), srgb=False)  # .a
+    add('sheenColor', _info(ext.get('sheenColorTexture')))          # .rgb
+    add('sheenRoughness', _info(ext.get('sheenRoughnessTexture')))  # .a
     return {'sheenColor': tuple(ext.get('sheenColorFactor', [0, 0, 0])),
             'sheenRoughness': _factor(values, ext, 'sheenRoughnessFactor', 0.0, minimum=0.0, maximum=1.0)}
 
 
 def _ext_iridescence(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
-    add('iridescence', _info(ext.get('iridescenceTexture')), srgb=False)
-    add('iridescenceThickness', _info(ext.get('iridescenceThicknessTexture')), srgb=False)
+    add('iridescence', _info(ext.get('iridescenceTexture')))
+    add('iridescenceThickness', _info(ext.get('iridescenceThicknessTexture')))
     return {'iridescence': _factor(values, ext, 'iridescenceFactor', 0.0, minimum=0.0, maximum=1.0),
             'iridescenceIor': _factor(values, ext, 'iridescenceIor', 1.3, minimum=1.0),
             'iridescenceThicknessMin': _factor(values, ext, 'iridescenceThicknessMinimum', 100.0, minimum=0.0),
@@ -159,7 +160,7 @@ def _ext_iridescence(ext: dict, add: AddTexture, values: DocumentValues) -> dict
 
 
 def _ext_transmission(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
-    add('transmission', _info(ext.get('transmissionTexture')), srgb=False)
+    add('transmission', _info(ext.get('transmissionTexture')))
     return {'transmission': _factor(values, ext, 'transmissionFactor', 0.0, minimum=0.0, maximum=1.0)}
 
 
@@ -167,16 +168,16 @@ def _ext_diffuse_transmission(ext: dict, add: AddTexture, values: DocumentValues
     # Colour texture (.rgb, sRGB) tints transmitted light; factor texture (.a)
     # modulates the factor.
     add('diffuseTransmissionColor',
-        _info(ext.get('diffuseTransmissionColorTexture')), srgb=True)
+        _info(ext.get('diffuseTransmissionColorTexture')))
     add('diffuseTransmission',
-        _info(ext.get('diffuseTransmissionTexture')), srgb=False)
+        _info(ext.get('diffuseTransmissionTexture')))
     return {'diffuseTransmission': _factor(values, ext, 'diffuseTransmissionFactor', 0.0, minimum=0.0, maximum=1.0),
             'diffuseTransmissionColor': tuple(
                 ext.get('diffuseTransmissionColorFactor', [1.0, 1.0, 1.0]))[:3]}
 
 
 def _ext_volume(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
-    add('thickness', _info(ext.get('thicknessTexture')), srgb=False)
+    add('thickness', _info(ext.get('thicknessTexture')))
     ad = ext.get('attenuationDistance')
     # attenuationDistance defaults to +inf (no absorption); 0.0 is our sentinel.
     return {'thickness': _factor(values, ext, 'thicknessFactor', 0.0, minimum=0.0),
@@ -186,7 +187,7 @@ def _ext_volume(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
 
 
 def _ext_anisotropy(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
-    add('anisotropy', _info(ext.get('anisotropyTexture')), srgb=False)
+    add('anisotropy', _info(ext.get('anisotropyTexture')))
     return {'anisotropyStrength': _factor(values, ext, 'anisotropyStrength', 0.0, minimum=0.0, maximum=1.0),
             'anisotropyRotation': _factor(values, ext, 'anisotropyRotation', 0.0)}
 
@@ -227,7 +228,7 @@ _MATERIAL_EXT_DEFAULTS = dict(
 
 
 def _read_material_extensions(exts: dict, add: AddTexture) -> dict:
-    """Merge every present KHR material extension into PBRMaterial kwargs (5d)."""
+    """Merge every present KHR material extension into PhysicalMaterial kwargs (5d)."""
     kwargs = dict(_MATERIAL_EXT_DEFAULTS)
     values = DocumentValues(logger=log)
     for name, handler in _MATERIAL_EXT_HANDLERS.items():
@@ -267,9 +268,9 @@ def _octahedral_impostor(mat: Any) -> dict:
 
 
 def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
-                    resolver: Resolver, tex_cache: dict) -> PBRMaterial:
+                    resolver: Resolver, tex_cache: dict) -> PhysicalMaterial:
     if material_index is None:
-        return PBRMaterial(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.7)
+        return PhysicalMaterial(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.7)
     mat = g.materials[material_index]
     pbr = mat.pbrMetallicRoughness
     base = list(pbr.baseColorFactor) if (pbr and pbr.baseColorFactor) else [1, 1, 1, 1]
@@ -307,22 +308,22 @@ def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
             if sg_pil is not None:
                 base_img, mr_img = _specgloss_textures_to_metalrough(
                     diffuse_pil, sg_pil, diffuse, spec_rgb + [1.0], gloss)
-                textures['baseColor'] = PBRTexture(base_img, srgb=True)
-                textures['metallicRoughness'] = PBRTexture(mr_img, srgb=False)
+                textures['baseColor'] = ImageDataTexture(image=base_img)
+                textures['metallicRoughness'] = ImageDataTexture(image=mr_img)
                 base = [1.0, 1.0, 1.0, diffuse[3] if len(diffuse) > 3 else 1.0]
                 metallic, roughness = 1.0, 1.0
                 converted = True
         if not converted and 'diffuseTexture' in sg:
-            add('baseColor', _info(sg['diffuseTexture']), srgb=True)
+            add('baseColor', _info(sg['diffuseTexture']))
 
     if pbr:
-        add('baseColor', pbr.baseColorTexture, srgb=True)
-        add('metallicRoughness', pbr.metallicRoughnessTexture, srgb=False)
-    add('normal', mat.normalTexture, srgb=False)
-    add('occlusion', mat.occlusionTexture, srgb=False)
-    add('emissive', mat.emissiveTexture, srgb=True)
+        add('baseColor', pbr.baseColorTexture)
+        add('metallicRoughness', pbr.metallicRoughnessTexture)
+    add('normal', mat.normalTexture)
+    add('occlusion', mat.occlusionTexture)
+    add('emissive', mat.emissiveTexture)
 
-    # KHR material extensions -> PBRMaterial kwargs, table-driven.
+    # KHR material extensions -> PhysicalMaterial kwargs, table-driven.
     ext_kwargs = _read_material_extensions(exts, add)
 
     # KHR_texture_transform is captured per texture by the collector (uv_transform
@@ -338,7 +339,7 @@ def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
     base_alpha = base[3] if len(base) > 3 else 1.0
     transparency = float(1.0 - base_alpha) if alpha_mode == 'BLEND' else 0.0
 
-    result = PBRMaterial(
+    result = PhysicalMaterial(
         baseColor=tuple(base[:3]),
         metallic=float(metallic),
         roughness=float(roughness),
@@ -351,10 +352,12 @@ def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
         if mat.normalTexture else 1.0,
         occlusionStrength=float(getattr(mat.occlusionTexture, 'strength', 1.0) or 1.0)
         if mat.occlusionTexture else 1.0,
-        textures=collector.textures, uv_transform=uv_transform,
+        uv_transform=uv_transform,
         texCoordMask=collector.tex_coord_mask,
         **ext_kwargs,   # KHR extension factors
         **_octahedral_impostor(mat),
+        **{CHANNEL_FIELDS[channel]: texture
+           for channel, texture in collector.textures.items()},
     )
     result._uv_params = collector.uv_params   # for live KHR_animation_pointer UV edits
     result._tex_coord_mask = collector.tex_coord_mask
@@ -362,7 +365,7 @@ def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
     return result
 
 
-def _carry_application_data(material: PBRMaterial, mat: Any, exts: dict) -> None:
+def _carry_application_data(material: PhysicalMaterial, mat: Any, exts: dict) -> None:
     """Keep what the document said that the engine's own fields have no room for.
 
     ``extras`` is the format's slot for what an application knows, and an

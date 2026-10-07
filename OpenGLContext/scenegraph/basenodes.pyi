@@ -37,6 +37,7 @@ from OpenGLContext.scenegraph.fog import Fog as Fog
 from OpenGLContext.scenegraph.gear import Gear as Gear
 from OpenGLContext.scenegraph.group import Group as Group
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight as ImageBasedLight
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture as ImageDataTexture
 from OpenGLContext.scenegraph.imagetexture import ImageTexture as ImageTexture
 from OpenGLContext.scenegraph.imagetexture import MMImageTexture as MMImageTexture
 from OpenGLContext.scenegraph.imagetexture import PixelTexture as PixelTexture
@@ -65,7 +66,7 @@ from OpenGLContext.scenegraph.nurbs import NurbsToleranceSample as NurbsToleranc
 from OpenGLContext.scenegraph.nurbs import Polyline2D as Polyline2D
 from OpenGLContext.scenegraph.nurbs import TrimmedSurface as TrimmedSurface
 from OpenGLContext.scenegraph.particles import ParticleEmitter as ParticleEmitter
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial as PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial as PhysicalMaterial
 from OpenGLContext.scenegraph.pointset import PointSet as PointSet
 from OpenGLContext.scenegraph.quadrics import Cone as Cone
 from OpenGLContext.scenegraph.quadrics import Cylinder as Cylinder
@@ -184,6 +185,7 @@ __all__ = [
     'Group',
     'IS',
     'ImageBasedLight',
+    'ImageDataTexture',
     'ImageTexture',
     'IndexedFaceSet',
     'IndexedLineSet',
@@ -207,8 +209,8 @@ __all__ = [
     'NurbsSurface',
     'NurbsToleranceSample',
     'OrientationInterpolator',
-    'PBRMaterial',
     'ParticleEmitter',
+    'PhysicalMaterial',
     'PixelTexture',
     'PlanarReflector',
     'PlaneSensor',

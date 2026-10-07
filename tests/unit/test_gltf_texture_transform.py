@@ -21,7 +21,7 @@ from pygltflib import (
 )
 
 from OpenGLContext.loaders import gltf
-from OpenGLContext.scenegraph.pbrmaterial import uv_transform_matrix
+from OpenGLContext.scenegraph.physicalmaterial import uv_transform_matrix
 
 # transform-applies bits are the channel bit << 8
 T_BASECOLOR = 1 << 8

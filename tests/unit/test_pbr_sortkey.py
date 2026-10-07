@@ -11,31 +11,31 @@ tests assert transmission alone does NOT flip a material to the blended pass.
 """
 import pytest
 
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, material_is_transparent
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial, material_is_transparent
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.appearance import Appearance
 
 
 class TestMaterialIsTransparent:
     def test_blend_is_transparent(self):
-        assert material_is_transparent(PBRMaterial(alphaMode='BLEND', transparency=0.5))
+        assert material_is_transparent(PhysicalMaterial(alphaMode='BLEND', transparency=0.5))
 
     def test_opaque_is_not_transparent(self):
         # OPAQUE ignores baseColor alpha per the glTF spec
         assert not material_is_transparent(
-            PBRMaterial(alphaMode='OPAQUE', transparency=0.5))
+            PhysicalMaterial(alphaMode='OPAQUE', transparency=0.5))
 
     def test_mask_is_not_transparent(self):
-        assert not material_is_transparent(PBRMaterial(alphaMode='MASK'))
+        assert not material_is_transparent(PhysicalMaterial(alphaMode='MASK'))
 
     def test_transmission_opaque_stays_opaque(self):
         # handled by the dedicated transmission pass, not the blended pass
         assert not material_is_transparent(
-            PBRMaterial(alphaMode='OPAQUE', transmission=0.7))
+            PhysicalMaterial(alphaMode='OPAQUE', transmission=0.7))
 
     def test_blend_with_transmission_is_transparent(self):
         assert material_is_transparent(
-            PBRMaterial(alphaMode='BLEND', transmission=0.7))
+            PhysicalMaterial(alphaMode='BLEND', transmission=0.7))
 
     def test_none_is_not_transparent(self):
         assert not material_is_transparent(None)
@@ -49,27 +49,27 @@ class TestMaterialIsTransparent:
 
 class TestAppearanceSortKey:
     def test_blend_material_sorts_transparent(self):
-        app = Appearance(material=PBRMaterial(alphaMode='BLEND', transparency=0.5))
+        app = Appearance(material=PhysicalMaterial(alphaMode='BLEND', transparency=0.5))
         assert app.sortKey(mode=None, matrix=None)[0] is True
 
     def test_transmissive_opaque_material_sorts_opaque(self):
-        app = Appearance(material=PBRMaterial(alphaMode='OPAQUE', transmission=0.6))
+        app = Appearance(material=PhysicalMaterial(alphaMode='OPAQUE', transmission=0.6))
         assert app.sortKey(mode=None, matrix=None)[0] is False
 
     def test_opaque_material_sorts_opaque(self):
-        app = Appearance(material=PBRMaterial(alphaMode='OPAQUE'))
+        app = Appearance(material=PhysicalMaterial(alphaMode='OPAQUE'))
         assert app.sortKey(mode=None, matrix=None)[0] is False
 
 
 class TestPBRMeshSortKey:
     def test_blend_mesh_sorts_transparent(self):
         mesh = PBRMesh(positions=[[0, 0, 0], [1, 0, 0], [0, 1, 0]])
-        mesh.material = PBRMaterial(alphaMode='BLEND', transparency=0.5)
+        mesh.material = PhysicalMaterial(alphaMode='BLEND', transparency=0.5)
         assert mesh.sortKey(mode=None, matrix=None)[0] is True
 
     def test_transmissive_opaque_mesh_sorts_opaque(self):
         mesh = PBRMesh(positions=[[0, 0, 0], [1, 0, 0], [0, 1, 0]])
-        mesh.material = PBRMaterial(alphaMode='OPAQUE', transmission=0.5)
+        mesh.material = PhysicalMaterial(alphaMode='OPAQUE', transmission=0.5)
         assert mesh.sortKey(mode=None, matrix=None)[0] is False
 
     def test_opaque_mesh_sorts_opaque(self):

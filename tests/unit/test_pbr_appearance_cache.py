@@ -9,7 +9,7 @@ handle left None the uniform setters short-circuit before any GL call.
 import pytest
 
 from OpenGLContext.passes.pbrpass import PBRShaderProgram
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 
 class _App:
@@ -35,7 +35,7 @@ def _prog():
 def test_same_material_configured_once_per_run():
     p = _prog()
     calls = _spy(p)
-    m = PBRMaterial()
+    m = PhysicalMaterial()
     ap = _App(m)
     p.reset_appearance_cache()
     for _ in range(50):
@@ -48,14 +48,14 @@ def test_distinct_materials_each_configured():
     calls = _spy(p)
     p.reset_appearance_cache()
     for _ in range(5):
-        p.configure_appearance(_App(PBRMaterial()), None)
+        p.configure_appearance(_App(PhysicalMaterial()), None)
     assert calls['material'] == 5
 
 
 def test_reset_forces_reconfigure_next_frame():
     p = _prog()
     calls = _spy(p)
-    m = PBRMaterial()
+    m = PhysicalMaterial()
     ap = _App(m)
     p.reset_appearance_cache()
     p.configure_appearance(ap, None)
@@ -69,7 +69,7 @@ def test_reset_forces_reconfigure_next_frame():
 def test_transmission_mode_change_forces_reconfigure():
     p = _prog()
     calls = _spy(p)
-    m = PBRMaterial()
+    m = PhysicalMaterial()
     ap = _App(m)
     p.reset_appearance_cache()
     p.configure_appearance(ap, None)

@@ -44,7 +44,7 @@ from OpenGLContext import testingcontext
 from OpenGLContext.passes import shadowmixin
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph import lod as lod_module
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.testing.glcontext import gl_available
 
@@ -114,7 +114,7 @@ def main():
 
     lod_module.uniform_scales = counted_scales
 
-    material = PBRMaterial(baseColor=(0.6, 0.55, 0.5), metallic=0.0,
+    material = PhysicalMaterial(baseColor=(0.6, 0.55, 0.5), metallic=0.0,
                            roughness=0.6)
     # One chain of levels, shared by every object: what is being measured is
     # what a frame costs per *object*, and geometry shared between them is how

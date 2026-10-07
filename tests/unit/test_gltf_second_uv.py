@@ -20,7 +20,7 @@ from pygltflib import (
 )
 
 from OpenGLContext.loaders import gltf
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
 from tests.unit.test_gltf_loader import _triangle_glb
 
@@ -108,7 +108,7 @@ class TestSecondUVSet:
     def test_material_records_texcoord1_for_basecolor(self):
         scene = gltf.load_gltf(_multi_uv_glb(base_tex_coord=1))
         mat = _find_shape(scene.group).appearance.material
-        assert isinstance(mat, PBRMaterial)
+        assert isinstance(mat, PhysicalMaterial)
         assert mat.texCoordMask & BIT_BASECOLOR   # base color uses UV set 1
 
     def test_texcoord0_leaves_mask_clear(self):
@@ -125,7 +125,7 @@ class TestSecondUVSet:
 
 class TestMaterialBlockPacking:
     def test_texcoordmask_packed_into_ubo(self):
-        mat = PBRMaterial(baseColor=(1, 1, 1))
+        mat = PhysicalMaterial(baseColor=(1, 1, 1))
         mat.texCoordMask = BIT_NORMAL | BIT_OCCLUSION
         buf = pack_material_block(mat)
         assert len(buf) == MATERIAL_BLOCK_WORDS      # layout size unchanged

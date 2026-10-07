@@ -19,7 +19,7 @@ import pytest
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb, GLTFWriter
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
@@ -38,7 +38,7 @@ def _quad(material=None):
 
 def _tagged_material(**named):
     """A material carrying whatever spelling of the tag the test wants."""
-    material = PBRMaterial(baseColor=(0.1, 0.2, 0.3))
+    material = PhysicalMaterial(baseColor=(0.1, 0.2, 0.3))
     for name, value in named.items():
         setattr(material, name, value)
     return material

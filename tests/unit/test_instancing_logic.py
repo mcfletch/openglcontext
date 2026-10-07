@@ -113,7 +113,7 @@ class TestMaterialTextureIds:
         assert key[1] == (('baseColorTexture', id(tex)),)
 
     def test_callable_texture_attribute_ignored(self):
-        # PBRMaterial.texture is a lookup METHOD; it must not be treated as a map.
+        # PhysicalMaterial.texture is a lookup METHOD; it must not be treated as a map.
         g = Geom(content_key=('g',))
         m = MatWithTextureAttrs()
         m.baseColorTexture = lambda: None      # callable -> skipped

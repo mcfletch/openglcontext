@@ -32,7 +32,7 @@ from OpenGLContext.scenegraph import pbrmesh as pbrmesh_mod
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, DirectionalLight, Shape, Transform, sceneGraph,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 
 def _cube(half=0.5):
@@ -126,7 +126,7 @@ def main() -> int:
             mesh = pbrmesh_mod.PBRMesh(
                 positions=cube[0], normals=cube[1],
                 texcoords=cube[2], indices=cube[3])
-            mat = PBRMaterial(
+            mat = PhysicalMaterial(
                 baseColor=(0.3 + 0.7 * (i % 5) / 4.0, 0.4, 0.7),
                 metallic=(i % 2), roughness=0.3 + 0.5 * (i % 3) / 2.0)
             kids.append(Transform(

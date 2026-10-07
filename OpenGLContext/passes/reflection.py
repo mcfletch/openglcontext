@@ -128,7 +128,7 @@ def surface_roughness(material: Any) -> float:
     A glTF material commonly carries a factor of 1 and the roughness itself in
     the green channel of its metallic-roughness map, so the factor alone says
     nothing about how sharp a reflection it gives. The map's mean is the
-    texture's :meth:`~OpenGLContext.scenegraph.pbrmaterial.PBRTexture.mean_roughness`.
+    texture's :meth:`~OpenGLContext.scenegraph.physicalmaterial.PBRTexture.mean_roughness`.
     """
     factor = float(getattr(material, 'roughness', 0.0) or 0.0)
     textures = getattr(material, 'textures', None) or {}
@@ -167,11 +167,11 @@ def _mirrors_changed(*_args: Any, **_named: Any) -> None:
 def _watch_mirror_fields() -> None:
     from pydispatch import dispatcher
     from OpenGLContext.scenegraph.appearance import Appearance
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
     from OpenGLContext.scenegraph.pbrmesh import MATERIAL_CHANGE_SIGNAL, PBRMesh
     from OpenGLContext.scenegraph.shape import Shape
     for owner, name in ((Shape, 'appearance'), (Shape, 'geometry'),
-                        (Appearance, 'material'), (PBRMaterial, 'reflector'),
+                        (Appearance, 'material'), (PhysicalMaterial, 'reflector'),
                         (PlanarReflector, 'enabled'), (PBRMesh, 'waveStyle')):
         dispatcher.connect(_mirrors_changed, signal=('set', getattr(owner, name)),
                            weak=False)

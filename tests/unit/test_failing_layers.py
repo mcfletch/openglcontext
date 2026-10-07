@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.passes.reflectionplanner import SETTLE_FRAMES
@@ -29,11 +29,11 @@ def _mirror_room():
     floor = basenodes.Shape(
         geometry=PBRMesh(positions=FLOOR, normals=np.array([(0, 1, 0)] * 4, 'f'),
                          indices=np.array([0, 2, 1, 0, 3, 2], np.uint32)),
-        appearance=basenodes.Appearance(material=PBRMaterial(
+        appearance=basenodes.Appearance(material=PhysicalMaterial(
             metallic=1.0, roughness=0.0, reflector=PlanarReflector())))
     box = basenodes.Transform(translation=(0, 1, 0), children=[basenodes.Shape(
         geometry=basenodes.Box(),
-        appearance=basenodes.Appearance(material=PBRMaterial(baseColor=(1, 0, 0))))])
+        appearance=basenodes.Appearance(material=PhysicalMaterial(baseColor=(1, 0, 0))))])
     return [basenodes.Transform(translation=(0, -1, -6), children=[floor, box])]
 
 

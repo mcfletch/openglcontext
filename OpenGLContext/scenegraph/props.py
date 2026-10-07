@@ -29,7 +29,7 @@ import numpy as np
 
 from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_text
 from OpenGLContext.loaders.gltf.meshes import estimate_normals
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 log = logging.getLogger(__name__)
@@ -79,15 +79,15 @@ class RockProfile:
     moss: float = 0.7
 
 
-def rock_material() -> PBRMaterial:
+def rock_material() -> PhysicalMaterial:
     """What a boulder is made of."""
-    return PBRMaterial(baseColor=ROCK_ALBEDO, metallic=0.0,
+    return PhysicalMaterial(baseColor=ROCK_ALBEDO, metallic=0.0,
                        roughness=ROCK_ROUGHNESS, doubleSided=False)
 
 
 def rock_mesh(radius: float = 1.0, seed: int = 0,
               profile: Optional[RockProfile] = None,
-              material: Optional[PBRMaterial] = None) -> PBRMesh:
+              material: Optional[PhysicalMaterial] = None) -> PBRMesh:
     """A boulder of about ``radius`` metres, with its base at y=0.
 
     A subdivided icosahedron with every vertex pushed in or out by a smooth
@@ -373,7 +373,7 @@ def _smoothstep(low: float, high: float, value: np.ndarray) -> np.ndarray:
 
 
 def _mesh(points: np.ndarray, faces: np.ndarray, seed: int,
-          profile: RockProfile, material: PBRMaterial) -> PBRMesh:
+          profile: RockProfile, material: PhysicalMaterial) -> PBRMesh:
     #: Flat-shaded: a boulder is facets, and smoothing them makes it a balloon.
     corners = np.ascontiguousarray(points[faces.ravel()], dtype='f')
     indices = np.arange(len(corners), dtype=np.uint32)

@@ -1,18 +1,19 @@
-"""Unit tests for the PBRMaterial node and VRML97->PBR up-conversion (no GL)."""
+"""PhysicalMaterial's fields, the VRML97 material conversion, and ImageDataTexture's GL texture."""
 import math
 
 import pytest
 
-from OpenGLContext.scenegraph.pbrmaterial import (
-    PBRMaterial, PBRTexture, material_is_transparent, material_to_pbr, srgb_to_linear,
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture, texture_properties
+from OpenGLContext.scenegraph.physicalmaterial import (
+    PhysicalMaterial, material_is_transparent, material_to_pbr, srgb_to_linear,
     uv_transform_matrix,
 )
 from OpenGLContext.scenegraph.basenodes import Appearance, Material
 
 
-class TestPBRMaterialDefaults:
+class TestPhysicalMaterialDefaults:
     def test_glTF_aligned_defaults(self):
-        m = PBRMaterial()
+        m = PhysicalMaterial()
         assert tuple(m.baseColor) == (1.0, 1.0, 1.0)
         assert m.metallic == 1.0
         assert m.roughness == 1.0
@@ -23,16 +24,16 @@ class TestPBRMaterialDefaults:
         assert m.textures == {}
 
     def test_fields_and_textures_set(self):
-        t = PBRTexture(image=None, srgb=True)
-        m = PBRMaterial(baseColor=(0.1, 0.2, 0.3), metallic=0.5, roughness=0.4,
-                        textures={'baseColor': t})
+        t = ImageDataTexture(image=None)
+        m = PhysicalMaterial(baseColor=(0.1, 0.2, 0.3), metallic=0.5, roughness=0.4,
+                        baseTexture=t)
         assert tuple(round(float(x), 2) for x in m.baseColor) == (0.1, 0.2, 0.3)
         assert m.metallic == 0.5 and m.roughness == 0.4
         assert m.texture('baseColor') is t
         assert m.texture('normal') is None
 
     def test_fits_in_appearance_slot(self):
-        m = PBRMaterial()
+        m = PhysicalMaterial()
         a = Appearance(material=m)
         assert a.material is m
 
@@ -72,11 +73,11 @@ class TestTransparency:
         assert material_is_transparent(None) is False
 
     def test_explicit_blend_is_transparent(self):
-        assert material_is_transparent(PBRMaterial(alphaMode='BLEND')) is True
+        assert material_is_transparent(PhysicalMaterial(alphaMode='BLEND')) is True
 
     def test_explicit_opaque_and_mask_stay_opaque(self):
-        assert material_is_transparent(PBRMaterial(alphaMode='OPAQUE')) is False
-        assert material_is_transparent(PBRMaterial(alphaMode='MASK')) is False
+        assert material_is_transparent(PhysicalMaterial(alphaMode='OPAQUE')) is False
+        assert material_is_transparent(PhysicalMaterial(alphaMode='MASK')) is False
 
     def test_legacy_transparency_without_alpha_mode(self):
         class Legacy:
@@ -111,8 +112,9 @@ class TestUVTransform:
 
 
 from PIL import Image
+from OpenGL.error import GLError
 from OpenGL.GL import (
-    GL_CLAMP_TO_EDGE, GL_LINEAR, GL_NEAREST, GL_NO_ERROR, GL_REPEAT, GL_TEXTURE_2D,
+    GL_INVALID_OPERATION, GL_LINEAR, GL_NEAREST, GL_NO_ERROR, GL_REPEAT, GL_TEXTURE_2D,
     GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S, glBindTexture, glGetError,
     glGetTexParameteriv,
 )
@@ -130,7 +132,7 @@ class _Context:
     """A render mode's context, as far as a texture's cache reads it."""
 
 
-class TestPBRTextureGL:
+class TestImageDataTextureGL:
     @pytest.mark.usefixtures('gl')
     def test_a_context_that_has_gone_is_forgotten(self):
         """The textures are kept by context, not by where it was allocated.
@@ -139,7 +141,7 @@ class TestPBRTextureGL:
         size, so a table keyed on it would answer a new context with textures
         whose names belong to the old one.
         """
-        tex = PBRTexture(Image.new("RGBA", (2, 2), (1, 2, 3, 255)))
+        tex = ImageDataTexture(image=Image.new("RGBA", (2, 2), (1, 2, 3, 255)))
         mode = types.SimpleNamespace(context=_Context())
         tex.cached(mode)
         assert len(tex._per_context) == 1  # noqa: SLF001 the per-context texture table, which must give up a dead context's entry
@@ -150,8 +152,8 @@ class TestPBRTextureGL:
     @pytest.mark.usefixtures('gl')
     def test_cached_builds_once_and_applies_sampler(self):
         img = Image.new("RGBA", (4, 4), (200, 100, 50, 255))
-        tex = PBRTexture(img, srgb=True, wrap_s=GL_REPEAT, wrap_t=GL_CLAMP_TO_EDGE,
-                         min_filter=GL_LINEAR, mag_filter=GL_NEAREST)
+        tex = ImageDataTexture(image=img, textureProperties=texture_properties(
+            'REPEAT', 'CLAMP_TO_EDGE', 'AVG_PIXEL', 'NEAREST_PIXEL'))
         mode = types.SimpleNamespace(context=_Context())
 
         built = tex.cached(mode)
@@ -171,7 +173,7 @@ class TestPBRTextureGL:
     @pytest.mark.usefixtures('gl')
     def test_cached_defaults_without_sampler_overrides(self):
         img = Image.new("RGBA", (2, 2), (10, 20, 30, 255))
-        tex = PBRTexture(img)                      # no wrap/filter overrides
+        tex = ImageDataTexture(image=img)                      # no wrap/filter overrides
         mode = types.SimpleNamespace(context=_Context())
         built = tex.cached(mode)
         assert built is not None
@@ -187,11 +189,11 @@ class TestPBRTextureGL:
         # an incomplete mip chain renders black).
 
         def _boom(_target):
-            raise RuntimeError("no mipmaps on this driver")
+            raise GLError(GL_INVALID_OPERATION, None)
 
         monkeypatch.setattr(GLmod, 'glGenerateMipmap', _boom)
         img = Image.new("RGBA", (4, 4), (1, 2, 3, 255))
-        tex = PBRTexture(img)
+        tex = ImageDataTexture(image=img)
         mode = types.SimpleNamespace(context=_Context())
         built = tex.cached(mode)
         glBindTexture(GL_TEXTURE_2D, built.texture)

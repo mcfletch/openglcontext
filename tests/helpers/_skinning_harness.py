@@ -53,7 +53,7 @@ from OpenGLContext.loaders.gltf.animation import quat_xyzw_to_vrml_rows
 from OpenGLContext.scenegraph import pbrmesh, skinning
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.basenodes import DirectionalLight, sceneGraph, Transform
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.skinning import MATRIX_FLOATS, palette_for
@@ -234,7 +234,7 @@ def _ground(size=9.0):
         geometry=PBRMesh(positions=positions,
                          normals=np.array([(0, 1, 0)] * 4, 'f'),
                          indices=np.array([0, 1, 2, 0, 2, 3], np.uint32)),
-        appearance=Appearance(material=PBRMaterial(baseColor=(0.55, 0.57, 0.6),
+        appearance=Appearance(material=PhysicalMaterial(baseColor=(0.55, 0.57, 0.6),
                                                    roughness=1.0)))
     shape.castsShadow = False
     return shape

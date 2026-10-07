@@ -8,7 +8,7 @@ varied, and that it survives the VRML97 writer.
 import pytest
 
 from OpenGLContext.loaders.vrml97 import VRML97Handler, defaultHandler
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 
 
@@ -24,18 +24,18 @@ def test_a_reflector_defaults_to_half_scale_every_third_frame():
 
 
 def test_a_material_reflects_the_probe_until_it_is_given_one():
-    assert not PBRMaterial().reflector
+    assert not PhysicalMaterial().reflector
 
 
 def test_a_material_carries_its_reflector():
     reflector = PlanarReflector(interval=2)
-    material = PBRMaterial(reflector=reflector)
+    material = PhysicalMaterial(reflector=reflector)
     assert material.reflector is reflector
 
 
 def test_one_reflector_serves_a_set_of_mirrors():
     shared = PlanarReflector(priority=2.0)
-    first, second = PBRMaterial(reflector=shared), PBRMaterial(reflector=shared)
+    first, second = PhysicalMaterial(reflector=shared), PhysicalMaterial(reflector=shared)
     shared.priority = 3.0
     assert first.reflector.priority == second.reflector.priority == pytest.approx(3.0)
 

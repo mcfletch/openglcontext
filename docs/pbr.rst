@@ -251,23 +251,23 @@ Where Materials Come From
 
 Most PBR materials come inside a :doc:`glTF model <gltf>` authored in a tool
 such as Blender: load the file and its materials come with it. You can also
-build a material in Python with a ``PBRMaterial`` node and attach it to a
+build a material in Python with a ``PhysicalMaterial`` node and attach it to a
 ``Shape`` through an ``Appearance``:
 
 .. code-block:: python
 
-   from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+   from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
    from OpenGLContext.scenegraph.basenodes import Shape, Appearance
 
    # brushed gold
-   gold = PBRMaterial(
+   gold = PhysicalMaterial(
        baseColor = (1.0, 0.78, 0.34),
        metallic  = 1.0,
        roughness = 0.35,
    )
 
    # glowing green sign
-   sign = PBRMaterial(
+   sign = PhysicalMaterial(
        baseColor     = (0.1, 0.1, 0.1),
        metallic      = 0.0,
        roughness     = 0.6,
@@ -275,7 +275,7 @@ build a material in Python with a ``PBRMaterial`` node and attach it to a
    )
 
    # clear glass
-   glass = PBRMaterial(
+   glass = PhysicalMaterial(
        baseColor    = (1.0, 1.0, 1.0),
        metallic     = 0.0,
        roughness    = 0.05,
@@ -297,31 +297,51 @@ and the PBR renderer reads them from there: the appearance's ``texture``
 (``ImageTexture`` or ``PixelTexture``) is the base colour map, multiplying the
 ``Material``'s ``diffuseColor`` as it does under the VRML97 renderer, and its
 ``textureTransform`` is that map's UV transform.
-``pbrmaterial.pbr_material(appearance)`` returns the material the renderer
-draws an appearance with: a ``PBRMaterial`` as itself, and any other
+``physicalmaterial.pbr_material(appearance)`` returns the material the renderer
+draws an appearance with: a ``PhysicalMaterial`` as itself, and any other
 appearance as an ``AppearanceMaterial`` holding its texture, transform and
 converted factors. A change to any of those fields is drawn from the next
 frame.
 
 .. rst-class:: technical
 
-Textures go in a ``textures`` dictionary keyed by channel (``baseColor``,
-``metallicRoughness``, ``normal``, ``occlusion``, ``emissive``, ``lightmap``).
-Each value is a ``PBRTexture`` wrapping a PIL image. Base colour and emissive
-images are sRGB; the others are linear. The glTF loader builds these when it
-imports a model.
+``PhysicalMaterial`` is X3D 4's ``PhysicalMaterial``. Each texture is a field
+holding an X3D texture node: X3D's own ``baseTexture``,
+``metallicRoughnessTexture``, ``normalTexture``, ``occlusionTexture`` and
+``emissiveTexture``, and the same pattern for the extension and engine
+channels (``clearcoatTexture``, ``sheenColorTexture``, ``transmissionTexture``,
+``lightmapTexture`` and the rest; ``physicalmaterial.CHANNEL_FIELDS`` lists
+them by channel). A texture is an ``ImageTexture`` for an image file, or an
+``ImageDataTexture`` for an image already decoded in memory, which holds a PIL
+image as its ``image`` attribute. Either takes a ``TextureProperties`` for its
+wrap modes and filters. The shader reads base colour, emissive, specular
+colour, sheen colour and diffuse transmission colour as sRGB, and the other
+channels as linear. ``material.textures`` is a read-only view of the textures
+by channel name, and ``material.setTexture(channel, texture)`` sets one by
+channel name. The glTF loader builds these when it imports a model.
+
+.. code-block:: python
+
+    from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+
+    stone = PhysicalMaterial(
+        metallic=0.0, roughness=1.0,
+        baseTexture=ImageDataTexture(image=colour_image),
+        normalTexture=basenodes.ImageTexture(url=['stone-normal.png']),
+    )
 
 Material Properties
 -------------------
 
-A ``PBRMaterial`` supplies the surface properties and the scene supplies the
+A ``PhysicalMaterial`` supplies the surface properties and the scene supplies the
 lighting. The shader combines them into the colour of each pixel:
 
 .. image:: images/diagrams/pbr-1.svg
    :alt: Diagram: material properties and scene lighting feed the PBR shader, which produces the shaded pixel
    :class: diagram
 
-The tables below list the ``PBRMaterial`` fields and their defaults.
+The tables below list the ``PhysicalMaterial`` fields and their defaults.
 
 Surface basics:
 
@@ -737,7 +757,7 @@ the cheapest one that does the job.
 1. The UV transform: one uniform
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``PBRMaterial.uv_transform`` is a 3×3 ``KHR_texture_transform`` matrix.
+``PhysicalMaterial.uv_transform`` is a 3×3 ``KHR_texture_transform`` matrix.
 Assigning it moves the material's ``factorVersion``, so the pass uploads its
 uniform block again and does nothing else. An edit made in place, such as a
 component written into the matrix's array, is announced with

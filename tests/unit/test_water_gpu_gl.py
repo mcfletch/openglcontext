@@ -26,7 +26,7 @@ try:
     from OpenGLContext import testingcontext
     from OpenGLContext.scenegraph.basenodes import sceneGraph, Viewpoint
     from OpenGLContext.scenegraph.appearance import Appearance
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
     from OpenGLContext.scenegraph.shape import Shape
     from OpenGLContext.scenegraph.water import CHOPPY, water_surface
 
@@ -49,7 +49,7 @@ try:
             self.sg = sceneGraph(children=[
                 Viewpoint(position=(0, 6, 16), orientation=(1, 0, 0, -0.32)),
                 Shape(geometry=sheet, appearance=Appearance(
-                    material=PBRMaterial(baseColor=(0.9, 0.9, 0.9),
+                    material=PhysicalMaterial(baseColor=(0.9, 0.9, 0.9),
                                          emissiveColor=(0.6, 0.7, 0.9),
                                          metallic=0.0, roughness=0.3))),
             ])

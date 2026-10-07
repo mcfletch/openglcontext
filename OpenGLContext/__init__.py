@@ -209,4 +209,5 @@ Node( 'Shader','OpenGLContext.scenegraph.shaders.Shader' )
 Node( 'ROUTE','vrml.route.ROUTE' )
 Node( 'IS','vrml.route.IS' )
 
-Node( 'PBRMaterial','OpenGLContext.scenegraph.pbrmaterial.PBRMaterial')
+Node( 'PhysicalMaterial', 'OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial' )
+Node( 'ImageDataTexture', 'OpenGLContext.scenegraph.imagedata.ImageDataTexture' )

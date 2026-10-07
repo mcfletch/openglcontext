@@ -10,7 +10,7 @@ import pytest
 from OpenGLContext.bin.mirrorhall import HEIGHT, LENGTH, WIDTH, Hall
 from OpenGLContext.passes import reflection
 from OpenGLContext.scenegraph import surfaces
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from tests.unit.test_mirrors_demo import _placed
 
 INSIDE = np.array([0.0, HEIGHT / 2.0, 0.0])
@@ -55,7 +55,7 @@ def test_every_textured_surface_in_the_room_is_textured_by_the_metre(hall):
     ('left', 2.0, (0, -WIDTH / 2)), ('right', -2.0, (0, WIDTH / 2)),
 ])
 def test_a_surface_hung_on_a_wall_faces_into_the_room_just_off_it(hall, wall, along, plane):
-    material = PBRMaterial()
+    material = PhysicalMaterial()
     [record] = _records(hall.hang(surfaces.panel(1.0, 1.0), material, wall, along, 1.5))
     centre, normal = _facing(record)
     axis, at = plane
@@ -66,7 +66,7 @@ def test_a_surface_hung_on_a_wall_faces_into_the_room_just_off_it(hall, wall, al
 
 
 def test_a_frame_borders_the_surface_behind_it(hall):
-    material, gilt = PBRMaterial(), PBRMaterial()
+    material, gilt = PhysicalMaterial(), PhysicalMaterial()
     hung, frame = _records(hall.hang(surfaces.panel(2.0, 1.0), material, 'far', 0.0, 2.0,
                                      frame=gilt, border=0.2))
     assert frame[5].appearance.material is gilt
@@ -90,7 +90,7 @@ def test_a_basin_rims_the_pool_it_is_given_and_tiles_its_bottom(hall):
 
 def test_a_wall_the_hall_does_not_have_is_refused(hall):
     with pytest.raises(ValueError):
-        hall.hang(surfaces.panel(1.0, 1.0), PBRMaterial(), 'ceiling', 0.0, 1.0)
+        hall.hang(surfaces.panel(1.0, 1.0), PhysicalMaterial(), 'ceiling', 0.0, 1.0)
 
 
 # --- what breaks the room up -------------------------------------------------------

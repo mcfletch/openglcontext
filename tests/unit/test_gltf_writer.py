@@ -20,12 +20,14 @@ from OpenGLContext.loaders.gltf import writer as gltf_writer
 from OpenGLContext.loaders.gltf.writer import (
     GLTFWriter, InstanceSet, SceneNode, write_glb,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture, texture_properties
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
 from OpenGLContext import __version__
 from OpenGLContext.scenegraph.instancedshape import InstancedShape
+from vrml.x3d import nodes as x3d
 
 
 # --- fixtures -----------------------------------------------------------------
@@ -44,7 +46,7 @@ def _quad(with_all_attributes=True):
         tangents=np.array([(1, 0, 0, 1)] * 4, 'f'),
         colors=np.array([(1, 0, 0, 1), (0, 1, 0, 1), (0, 0, 1, 1), (1, 1, 0, 0.5)], 'f'),
         indices=indices,
-        material=PBRMaterial(baseColor=(0.25, 0.5, 0.75), metallic=0.3, roughness=0.7),
+        material=PhysicalMaterial(baseColor=(0.25, 0.5, 0.75), metallic=0.3, roughness=0.7),
     )
 
 
@@ -201,7 +203,7 @@ class TestAMaterialRoundTrips:
     def _written(self, **kwargs):
         base = dict(baseColor=(0.2, 0.4, 0.6), metallic=0.25, roughness=0.75)
         base.update(kwargs)
-        material = PBRMaterial(**base)
+        material = PhysicalMaterial(**base)
         mesh = _quad()
         mesh.material = material
         return material, _only_shape(mesh).appearance.material
@@ -262,7 +264,7 @@ class TestAMaterialRoundTrips:
         assert 'extensions' not in doc['materials'][0]
 
     def test_meshes_sharing_a_material_share_its_index(self):
-        material = PBRMaterial(baseColor=(1, 0, 0))
+        material = PhysicalMaterial(baseColor=(1, 0, 0))
         a, b = _quad(), _quad()
         a.material = b.material = material
         doc = json.loads(_json_chunk(write_glb([a, b])))
@@ -284,60 +286,59 @@ def _image(color=(255, 0, 0, 255), size=(4, 4)):
 
 class TestTexturesRoundTrip:
     def test_a_base_colour_map_survives(self):
-        material = PBRMaterial(baseColor=(1, 1, 1))
-        material.textures = {'baseColor': PBRTexture(_image((10, 200, 30, 255)), srgb=True)}
+        material = PhysicalMaterial(baseColor=(1, 1, 1))
+        material.baseTexture = ImageDataTexture(image=_image((10, 200, 30, 255)))
         got = _only_shape(_quad_with(material)).appearance.material
         assert 'baseColor' in got.textures
         assert got.textures['baseColor'].image.size == (4, 4)
         assert got.textures['baseColor'].image.getpixel((0, 0)) == (10, 200, 30, 255)
 
     def test_every_core_channel_survives(self):
-        material = PBRMaterial(baseColor=(1, 1, 1))
-        material.textures = {
-            channel: PBRTexture(_image(), srgb=channel in ('baseColor', 'emissive'))
-            for channel in ('baseColor', 'metallicRoughness', 'normal',
-                            'occlusion', 'emissive')}
+        material = PhysicalMaterial(baseColor=(1, 1, 1))
+        for channel in ('baseColor', 'metallicRoughness', 'normal', 'occlusion', 'emissive'):
+            material.setTexture(channel, ImageDataTexture(image=_image()))
         got = _only_shape(_quad_with(material)).appearance.material
         assert set(got.textures) == set(material.textures)
 
     def test_normal_scale_and_occlusion_strength_survive(self):
-        material = PBRMaterial(normalScale=0.5, occlusionStrength=0.25)
-        material.textures = {'normal': PBRTexture(_image()),
-                             'occlusion': PBRTexture(_image())}
+        material = PhysicalMaterial(normalScale=0.5, occlusionStrength=0.25)
+        material.normalTexture = ImageDataTexture(image=_image())
+        material.occlusionTexture = ImageDataTexture(image=_image())
         got = _only_shape(_quad_with(material)).appearance.material
         assert round(float(got.normalScale), 4) == 0.5
         assert round(float(got.occlusionStrength), 4) == 0.25
 
     def test_the_second_uv_set_selection_survives(self):
-        material = PBRMaterial(texCoordMask=1)      # baseColor samples TEXCOORD_1
-        material.textures = {'baseColor': PBRTexture(_image(), srgb=True)}
+        material = PhysicalMaterial(texCoordMask=1)      # baseColor samples TEXCOORD_1
+        material.baseTexture = ImageDataTexture(image=_image())
         got = _only_shape(_quad_with(material)).appearance.material
         assert int(got.texCoordMask) & 1
 
     def test_sampler_wrap_modes_survive(self):
-        material = PBRMaterial()
-        material.textures = {'baseColor': PBRTexture(
-            _image(), srgb=True, wrap_s=33071, wrap_t=33648)}   # CLAMP, MIRROR
+        material = PhysicalMaterial()
+        material.baseTexture = ImageDataTexture(
+            image=_image(), textureProperties=texture_properties('CLAMP_TO_EDGE', 'MIRRORED_REPEAT'))
         got = _only_shape(_quad_with(material)).appearance.material
-        holder = got.textures['baseColor']
-        assert int(holder.wrap_s) == 33071 and int(holder.wrap_t) == 33648
+        sampler = got.textures['baseColor'].sampler()
+        assert (sampler['wrap_s'], sampler['wrap_t']) == ('CLAMP_TO_EDGE', 'MIRRORED_REPEAT')
 
     def test_an_already_encoded_image_is_embedded_as_it_is(self, tmp_path):
         """A source JPEG stays a JPEG rather than being inflated to PNG."""
         source = tmp_path / 'bark.jpg'
         _image((120, 90, 60, 255), size=(8, 8)).convert('RGB').save(str(source))
-        encoded = gltf_writer.EncodedImage.from_path(str(source), srgb=True)
-        material = PBRMaterial()
-        material.textures = {'baseColor': encoded}
+        encoded = gltf_writer.EncodedImage.from_path(str(source))
+        material = PhysicalMaterial()
+        material.baseTexture = encoded
         doc = json.loads(_json_chunk(write_glb(_quad_with(material))))
         assert doc['images'][0]['mimeType'] == 'image/jpeg'
         got = _only_shape(_quad_with(material)).appearance.material
         assert got.textures['baseColor'].image.size == (8, 8)
 
     def test_one_image_is_written_once_however_many_channels_use_it(self):
-        shared = PBRTexture(_image(), srgb=False)
-        material = PBRMaterial()
-        material.textures = {'metallicRoughness': shared, 'occlusion': shared}
+        shared = ImageDataTexture(image=_image())
+        material = PhysicalMaterial()
+        material.metallicRoughnessTexture = shared
+        material.occlusionTexture = shared
         doc = json.loads(_json_chunk(write_glb(_quad_with(material))))
         assert len(doc['images']) == 1
 
@@ -469,47 +470,46 @@ class TestTheWriterObject:
 class TestSharedTextures:
     """A texture used by many documents is named, not copied into each."""
 
-    def test_an_external_image_is_written_as_a_uri(self):
-        material = PBRMaterial()
-        material.textures = {'baseColor': gltf_writer.ExternalImage(
-            'road-surface.png', srgb=True)}
+    def test_an_image_texture_is_written_as_a_uri(self):
+        material = PhysicalMaterial()
+        material.baseTexture = x3d.ImageTexture(url=['road-surface.png'])
         doc = json.loads(_json_chunk(write_glb(_quad_with(material))))
         assert doc['images'] == [{'uri': 'road-surface.png'}]
         assert 'bufferView' not in doc['images'][0]
 
     def test_it_costs_the_document_nothing(self):
-        material = PBRMaterial()
-        material.textures = {'baseColor': gltf_writer.ExternalImage('t.png')}
+        material = PhysicalMaterial()
+        material.baseTexture = x3d.ImageTexture(url=['t.png'])
         plain = len(write_glb(_quad()))
         assert len(write_glb(_quad_with(material))) < plain + 512
 
     def test_the_loader_reads_it_back_from_beside_the_document(self, tmp_path):
         _image((12, 34, 56, 255), size=(4, 4)).save(str(tmp_path / 'surface.png'))
-        material = PBRMaterial()
-        material.textures = {'baseColor': gltf_writer.ExternalImage(
-            'surface.png', srgb=True)}
+        material = PhysicalMaterial()
+        material.baseTexture = x3d.ImageTexture(url=['surface.png'])
         write_glb(_quad_with(material), path=str(tmp_path / 'tile.glb'))
         loaded = gltf.load_gltf(str(tmp_path / 'tile.glb'))
         shape = _find_shapes(loaded.group)[0]
         assert shape.appearance.material.textures['baseColor'].image.getpixel(
             (0, 0)) == (12, 34, 56, 255)
 
-    def test_one_external_image_is_named_once_however_many_channels_use_it(self):
-        shared = gltf_writer.ExternalImage('maps.png')
-        material = PBRMaterial()
-        material.textures = {'metallicRoughness': shared, 'occlusion': shared}
+    def test_one_image_texture_is_named_once_however_many_channels_use_it(self):
+        shared = x3d.ImageTexture(url=['maps.png'])
+        material = PhysicalMaterial()
+        material.metallicRoughnessTexture = shared
+        material.occlusionTexture = shared
         doc = json.loads(_json_chunk(write_glb(_quad_with(material))))
         assert len(doc['images']) == 1
 
     def test_its_sampler_survives(self, tmp_path):
         _image().save(str(tmp_path / 's.png'))
-        material = PBRMaterial()
-        material.textures = {'baseColor': gltf_writer.ExternalImage(
-            's.png', srgb=True, wrap_s=33071, wrap_t=33071)}
+        material = PhysicalMaterial()
+        material.baseTexture = x3d.ImageTexture(
+            url=['s.png'], textureProperties=texture_properties('CLAMP_TO_EDGE', 'CLAMP_TO_EDGE'))
         write_glb(_quad_with(material), path=str(tmp_path / 'tile.glb'))
         holder = _find_shapes(gltf.load_gltf(str(tmp_path / 'tile.glb')).group)[0] \
             .appearance.material.textures['baseColor']
-        assert int(holder.wrap_s) == 33071
+        assert holder.sampler()['wrap_s'] == 'CLAMP_TO_EDGE'
 
 
 class TestABytesDocumentCanSayWhereItCameFrom:
@@ -518,9 +518,8 @@ class TestABytesDocumentCanSayWhereItCameFrom:
 
     def test_bytes_with_a_base_directory_resolve_their_images(self, tmp_path):
         _image((200, 30, 40, 255), size=(4, 4)).save(str(tmp_path / 'shared.png'))
-        material = PBRMaterial()
-        material.textures = {'baseColor': gltf_writer.ExternalImage(
-            'shared.png', srgb=True)}
+        material = PhysicalMaterial()
+        material.baseTexture = x3d.ImageTexture(url=['shared.png'])
         data = write_glb(_quad_with(material))
         scene = gltf.load_gltf(data, base_dir=str(tmp_path))
         holder = _find_shapes(scene.group)[0].appearance.material.textures['baseColor']
@@ -529,7 +528,7 @@ class TestABytesDocumentCanSayWhereItCameFrom:
     def test_without_one_the_reference_is_simply_not_found(self):
         """No base, no directory to look in -- the material loads untextured
         rather than reaching somewhere it was not pointed."""
-        material = PBRMaterial()
-        material.textures = {'baseColor': gltf_writer.ExternalImage('shared.png')}
+        material = PhysicalMaterial()
+        material.baseTexture = x3d.ImageTexture(url=['shared.png'])
         scene = gltf.load_gltf(write_glb(_quad_with(material)))
         assert 'baseColor' not in _find_shapes(scene.group)[0].appearance.material.textures

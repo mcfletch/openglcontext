@@ -27,7 +27,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.group import Group
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 
@@ -120,7 +120,7 @@ class TestGroundThatArrivedInATile:
 
     def _tile(self, normals=True, indices=True):
         """A loaded tile: its subtree, and the material the document named."""
-        material = PBRMaterial(baseColor=(1.0, 1.0, 1.0))
+        material = PhysicalMaterial(baseColor=(1.0, 1.0, 1.0))
         mesh = PBRMesh(
             positions=np.array([[0, 0, 0], [4, 0, 0], [0, 0, 4]], 'f'),
             normals=(np.tile([0, 1, 0], (3, 1)).astype('f') if normals else None),
@@ -159,7 +159,7 @@ class TestGroundThatArrivedInATile:
         """A tile carries a road, a sign and a tree as well, and those are
         drawn as what they are."""
         tile, _named = self._tile()
-        assert mount_ground(tile, _shading(), PBRMaterial()) == 0
+        assert mount_ground(tile, _shading(), PhysicalMaterial()) == 0
         assert not isinstance(tile.children[0].geometry, GroundPatch)
 
     def test_a_tile_that_carries_no_ground_mounts_none(self) -> None:
@@ -189,7 +189,7 @@ class TestTheNameSurvivesTheFile:
             positions=np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1]], 'f'),
             normals=np.tile([0, 1, 0], (3, 1)).astype('f'),
             indices=np.array([0, 1, 2], np.uint32),
-            material=PBRMaterial(baseColor=(1.0, 1.0, 1.0),
+            material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0),
                                  DEF=GROUND_MATERIAL))
         scene = gltf.load_gltf(write_glb([SceneNode(mesh=mesh, name='terrain')]))
         assert GROUND_MATERIAL in scene.materials
@@ -199,7 +199,7 @@ class TestTheNameSurvivesTheFile:
             positions=np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1]], 'f'),
             normals=np.tile([0, 1, 0], (3, 1)).astype('f'),
             indices=np.array([0, 1, 2], np.uint32),
-            material=PBRMaterial(baseColor=(1.0, 1.0, 1.0),
+            material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0),
                                  DEF=GROUND_MATERIAL))
         scene = gltf.load_gltf(write_glb([SceneNode(mesh=mesh, name='terrain')]))
         assert mount_ground(scene.group, _shading(),

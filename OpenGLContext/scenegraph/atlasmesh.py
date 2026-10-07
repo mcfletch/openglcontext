@@ -25,7 +25,7 @@ from typing import Any, Optional
 import numpy as np
 
 from OpenGLContext.loaders.gltf.meshes import estimate_normals
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 __all__ = ['Box', 'pack_cells', 'cell_centre', 'srgb_bytes', 'flat_patch',
@@ -87,7 +87,7 @@ def flat_patch(colour: Sequence[float], cell: int = 256) -> Any:
     return Image.new('RGBA', (cell, cell), srgb_bytes(colour))
 
 
-def merged_mesh(meshes: Sequence[PBRMesh], material: PBRMaterial) -> PBRMesh:
+def merged_mesh(meshes: Sequence[PBRMesh], material: PhysicalMaterial) -> PBRMesh:
     """Several meshes of one material as a single mesh.
 
     Every one of them has to carry texture coordinates, since the whole reason
@@ -107,7 +107,7 @@ def merged_mesh(meshes: Sequence[PBRMesh], material: PBRMaterial) -> PBRMesh:
 
 
 def textured_mesh(positions: np.ndarray, indices: np.ndarray,
-                  material: PBRMaterial,
+                  material: PhysicalMaterial,
                   texcoords: Optional[np.ndarray] = None) -> PBRMesh:
     """A mesh from points, triangles and where in an atlas each point reads.
 

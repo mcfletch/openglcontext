@@ -26,7 +26,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Zone,
     ZoneEnvironment,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 
 def main() -> int:
@@ -34,7 +34,7 @@ def main() -> int:
         os.environ.pop(name, None)
 
     def grey():
-        return Appearance(material=PBRMaterial(
+        return Appearance(material=PhysicalMaterial(
             baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.7))
 
     wall, side = Box(size=(0.2, 3.0, 4.0)), Box(size=(4.0, 3.0, 0.2))

@@ -24,7 +24,8 @@ from OpenGLContext.passes._flat import FlatPass
 from OpenGLContext.passes.pbrpass import PBRShaderProgram
 from OpenGLContext.scenegraph.basenodes import Appearance, Shape
 from OpenGLContext.scenegraph.lightgrid import LightGrid
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 TESTS_DIR = str(tests_root(__file__))
 CAPTURE = os.path.join(TESTS_DIR, "helpers", "_pbr_capture.py")
@@ -110,9 +111,10 @@ class TestWhichObjectsAreLookedUp:
         return pass_, Shader(), np.identity(4, dtype='d')
 
     def _shape(self, lightmap=False):
-        textures = {'lightmap': object()} if lightmap else {}
-        return Shape(appearance=Appearance(
-            material=PBRMaterial(textures=textures)))
+        material = PhysicalMaterial()
+        if lightmap:
+            material.lightmapTexture = ImageDataTexture()
+        return Shape(appearance=Appearance(material=material))
 
     def _grid(self):
         return LightGrid(counts=[2, 2, 2], ambient=np.ones((8, 3), dtype='f'),

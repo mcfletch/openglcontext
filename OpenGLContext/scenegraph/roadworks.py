@@ -32,7 +32,7 @@ from typing import Any, Optional
 import numpy as np
 
 from OpenGLContext.loaders.gltf.meshes import estimate_normals
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 
@@ -235,20 +235,20 @@ LAMP_EMISSION = (1.0, 0.72, 0.36)
 LAMP_STRENGTH = 4.0
 
 
-def lamp_material() -> PBRMaterial:
+def lamp_material() -> PhysicalMaterial:
     """What a tunnel luminaire is made of: a warm light, not a lit surface."""
-    return PBRMaterial(baseColor=(0.05, 0.05, 0.05), metallic=0.0,
+    return PhysicalMaterial(baseColor=(0.05, 0.05, 0.05), metallic=0.0,
                        roughness=0.4, emissiveColor=LAMP_EMISSION,
                        emissiveStrength=LAMP_STRENGTH)
 
 
-def concrete_material() -> PBRMaterial:
+def concrete_material() -> PhysicalMaterial:
     """The material bridges and tunnels are built from."""
-    return PBRMaterial(baseColor=CONCRETE_ALBEDO, metallic=0.0,
+    return PhysicalMaterial(baseColor=CONCRETE_ALBEDO, metallic=0.0,
                        roughness=CONCRETE_ROUGHNESS, doubleSided=False)
 
 
-def lining_material(concrete: PBRMaterial) -> PBRMaterial:
+def lining_material(concrete: PhysicalMaterial) -> PhysicalMaterial:
     """The same concrete, with the lamps that light it already on it.
 
     The pool each luminaire throws is worked out when the bore is built and
@@ -268,17 +268,17 @@ def lining_material(concrete: PBRMaterial) -> PBRMaterial:
     return found
 
 
-def barrier_material() -> PBRMaterial:
+def barrier_material() -> PhysicalMaterial:
     """What a parapet is made of: darker than the deck it stands on."""
-    return PBRMaterial(baseColor=BARRIER_ALBEDO, metallic=0.0,
+    return PhysicalMaterial(baseColor=BARRIER_ALBEDO, metallic=0.0,
                        roughness=BARRIER_ROUGHNESS, doubleSided=False)
 
 
 def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   ground: Optional[HeightFn] = None,
                   bridge: Optional[BridgeProfile] = None,
-                  material: Optional[PBRMaterial] = None,
-                  barrier: Optional[PBRMaterial] = None,
+                  material: Optional[PhysicalMaterial] = None,
+                  barrier: Optional[PhysicalMaterial] = None,
                   bank: Any = None,
                   ) -> dict[str, PBRMesh]:
     """A deck, its parapets and its piers, along a stretch of centreline.
@@ -336,7 +336,7 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
 def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
                     ground: Optional[HeightFn] = None,
                     causeway: Optional[CausewayProfile] = None,
-                    material: Optional[PBRMaterial] = None,
+                    material: Optional[PhysicalMaterial] = None,
                     bank: Any = None,
                     ) -> dict[str, PBRMesh]:
     """The fill under a causeway and the low wall along each edge.
@@ -386,7 +386,7 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
 
 def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   tunnel: Optional[TunnelProfile] = None,
-                  material: Optional[PBRMaterial] = None,
+                  material: Optional[PhysicalMaterial] = None,
                   bank: Any = None,
                   ) -> dict[str, PBRMesh]:
     """A bore and its two portals, along a stretch of centreline.
@@ -438,7 +438,7 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
 
 def barrier_wall(points: Any, profile: Optional[RoadProfile] = None,
                  barrier: Optional[BarrierProfile] = None,
-                 material: Optional[PBRMaterial] = None,
+                 material: Optional[PhysicalMaterial] = None,
                  bank: Any = None) -> PBRMesh:
     """The wall a car meets at the edge of a deck: **what to collide with**.
 
@@ -840,7 +840,7 @@ def _fittings(line: np.ndarray, right: np.ndarray, up: np.ndarray,
 
 
 def _parapet(line: np.ndarray, right: np.ndarray, up: np.ndarray,
-             material: PBRMaterial, half: float, edge: float,
+             material: PhysicalMaterial, half: float, edge: float,
              height: float, width: float) -> PBRMesh:
     """A wall standing on each edge of the road, along its whole length."""
     inner = half - width
@@ -853,7 +853,7 @@ def _parapet(line: np.ndarray, right: np.ndarray, up: np.ndarray,
 
 
 def _barrier(line: np.ndarray, right: np.ndarray, up: np.ndarray,
-             material: PBRMaterial, half: float, edge: float,
+             material: PhysicalMaterial, half: float, edge: float,
              barrier: BarrierProfile) -> PBRMesh:
     """A kerb along each edge, and the railing standing on it.
 
@@ -882,7 +882,7 @@ def _rail_heights(barrier: BarrierProfile) -> list:
 
 
 def _rails(line: np.ndarray, right: np.ndarray, up: np.ndarray,
-           material: PBRMaterial, half: float, edge: float,
+           material: PhysicalMaterial, half: float, edge: float,
            barrier: BarrierProfile) -> PBRMesh:
     """The horizontal bars, swept along the line the way the kerb is."""
     thick = float(barrier.rail_depth)
@@ -899,7 +899,7 @@ def _rails(line: np.ndarray, right: np.ndarray, up: np.ndarray,
 
 
 def _posts(line: np.ndarray, right: np.ndarray, up: np.ndarray,
-           material: PBRMaterial, half: float, edge: float,
+           material: PhysicalMaterial, half: float, edge: float,
            barrier: BarrierProfile) -> Optional[PBRMesh]:
     """The uprights the bars are carried on, every ``post_spacing`` along."""
     spacing = float(barrier.post_spacing)
@@ -925,7 +925,7 @@ def _posts(line: np.ndarray, right: np.ndarray, up: np.ndarray,
 
 def _upright(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
              lateral: float, width: float, low: float, high: float,
-             material: PBRMaterial, along: Optional[float] = None) -> PBRMesh:
+             material: PhysicalMaterial, along: Optional[float] = None) -> PBRMesh:
     """A small box in the road's own frame, ``lateral`` out and ``low`` to
     ``high`` up.
 
@@ -955,7 +955,7 @@ def _upright(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
 
 def _fill(line: np.ndarray, right: np.ndarray, up: np.ndarray,
           ground: HeightFn, causeway: CausewayProfile, half: float,
-          edge: float, material: PBRMaterial) -> PBRMesh:
+          edge: float, material: PhysicalMaterial) -> PBRMesh:
     """The body of a causeway: down one face, under the road, up the other.
 
     The section is not constant, because the depth is not: each point is taken
@@ -994,7 +994,7 @@ def _line(points: Any, what: str) -> np.ndarray:
 
 
 def _swept(line: np.ndarray, right: np.ndarray, up: np.ndarray,
-           material: PBRMaterial, section: Any,
+           material: PhysicalMaterial, section: Any,
            closed_ends: bool = False,
            shade: Optional[np.ndarray] = None,
            sky: Optional[np.ndarray] = None,
@@ -1176,7 +1176,7 @@ def _corner_between(before: "tuple[float, float]",
 
 
 def _ring(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
-          inner: list, outer: list, material: PBRMaterial,
+          inner: list, outer: list, material: PhysicalMaterial,
           outwards: float) -> PBRMesh:
     """A flat band between two sections, standing square across the road.
 
@@ -1210,7 +1210,7 @@ def _ring(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
 
 def _piers(line: np.ndarray, right: np.ndarray, up: np.ndarray,
            ground: HeightFn, bridge: BridgeProfile, half: float,
-           soffit: float, material: PBRMaterial) -> Optional[PBRMesh]:
+           soffit: float, material: PhysicalMaterial) -> Optional[PBRMesh]:
     """A blade of concrete every ``pier_spacing`` from the soffit to the ground.
 
     The two ends are abutments -- wider, because that is where the deck is
@@ -1250,7 +1250,7 @@ def _piers(line: np.ndarray, right: np.ndarray, up: np.ndarray,
 
 def _blade(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
            width: float, length: float, top: float, floor: float,
-           material: PBRMaterial) -> PBRMesh:
+           material: PhysicalMaterial) -> PBRMesh:
     """One pier: a box across the road, from the soffit down to the ground."""
     along = np.cross(right, (0.0, 1.0, 0.0))
     norm = float(np.linalg.norm(along))
@@ -1273,7 +1273,7 @@ def _blade(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
     return _mesh(positions, np.asarray(sides, dtype=np.uint32), material)
 
 
-def _merge(meshes: list, material: PBRMaterial) -> PBRMesh:
+def _merge(meshes: list, material: PhysicalMaterial) -> PBRMesh:
     """Several parts of one structure as a single mesh."""
     positions, indices, offset = [], [], 0
     for mesh in meshes:
@@ -1300,7 +1300,7 @@ def _gloom(line: np.ndarray, tunnel: TunnelProfile, ring: int) -> np.ndarray:
 
 
 def _mesh(positions: np.ndarray, indices: np.ndarray,
-          material: PBRMaterial, colors: Optional[np.ndarray] = None) -> PBRMesh:
+          material: PhysicalMaterial, colors: Optional[np.ndarray] = None) -> PBRMesh:
     points = np.ascontiguousarray(positions, dtype='f')
     return PBRMesh(positions=points, normals=estimate_normals(points, indices),
                    indices=indices, material=material, colors=colors)

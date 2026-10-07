@@ -6,7 +6,7 @@ from OpenGLContext.passes.instancing import (
     geometry_texture_key, build_instance_groups, group_material_table,
 )
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 
 class FakeGeometry:
@@ -25,7 +25,7 @@ def real_material(baseColor):
     The table groups by what a material *says*, so telling two of them apart
     means giving them different factors rather than different names.
     """
-    return PBRMaterial(baseColor=baseColor)
+    return PhysicalMaterial(baseColor=baseColor)
 
 
 class FakeShape:

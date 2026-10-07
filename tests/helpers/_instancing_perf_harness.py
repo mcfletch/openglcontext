@@ -35,7 +35,7 @@ from OpenGL.GL import glFinish
 
 from OpenGLContext import testingcontext
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.testing.glcontext import gl_available
 
@@ -67,7 +67,7 @@ def main():
 
     cube = _cube()
     geom = PBRMesh(positions=cube[0], normals=cube[1], indices=cube[2])
-    mat = PBRMaterial(baseColor=(0.4, 0.5, 0.8), metallic=0.0, roughness=0.5)
+    mat = PhysicalMaterial(baseColor=(0.4, 0.5, 0.8), metallic=0.0, roughness=0.5)
     cols = int(np.ceil(np.sqrt(SHAPES)))
     timings = []
     drawn = []

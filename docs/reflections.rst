@@ -25,7 +25,7 @@ mirror says how much it is worth, so a level can hold a dozen of them.
 Making a surface a mirror
 -------------------------
 
-A ``PlanarReflector`` on a ``PBRMaterial``'s ``reflector`` field makes every
+A ``PlanarReflector`` on a ``PhysicalMaterial``'s ``reflector`` field makes every
 surface drawn with that material a mirror, each in the plane of its own mesh.
 The node's fields are read every frame, so a change takes effect on the next.
 

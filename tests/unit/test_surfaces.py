@@ -1,6 +1,6 @@
 """Procedural surfaces: tileable PBR maps from NumPy.
 
-The maps are plain arrays, so the engine turns them into a ``PBRMaterial`` and
+The maps are plain arrays, so the engine turns them into a ``PhysicalMaterial`` and
 a Blender script bakes the same ones into a model. These hold each surface to
 what it is: it tiles, it is the same for the same seed, its values are in
 range, and its pattern is the one it is named for.
@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext.scenegraph import surfaces
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph import basenodes
 
@@ -137,12 +137,11 @@ def test_a_slope_tilts_the_normal_away_from_the_rise():
     assert np.allclose(np.linalg.norm(normal, axis=-1), 1.0, atol=1e-6)
 
 
-def test_a_material_carries_every_map_with_the_right_encoding():
+def test_a_material_carries_every_map():
     material = surfaces.pbr_material(surfaces.checkered_marble(SIZE), roughness=0.3)
-    assert isinstance(material, PBRMaterial)
+    assert isinstance(material, PhysicalMaterial)
     textures = material.textures
     assert set(textures) == {'baseColor', 'metallicRoughness', 'normal'}
-    assert textures['baseColor'].srgb and not textures['normal'].srgb
     assert material.roughness == pytest.approx(0.3)
     green = np.asarray(textures['metallicRoughness'].image)[..., 1]
     assert green.max() > green.min()

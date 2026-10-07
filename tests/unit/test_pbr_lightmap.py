@@ -17,7 +17,7 @@ import numpy as np
 
 from OpenGLContext.passes.pbrpass import PBR_UNITS, _PBR_HAS, _PBR_SAMPLER
 from OpenGLContext.passes.shaderpass import SHADER_DIR
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 # texCoordMask bit selecting TEXCOORD_1 for the lightmap channel.
 LIGHTMAP_UV_BIT = 32
@@ -41,8 +41,8 @@ class TestChannelRegistration:
         assert PBR_UNITS['lightmap'] == 0
 
     def test_material_carries_a_lightmap_strength(self):
-        assert float(PBRMaterial().lightmapStrength) == 1.0
-        assert float(PBRMaterial(lightmapStrength=2.0).lightmapStrength) == 2.0
+        assert float(PhysicalMaterial().lightmapStrength) == 1.0
+        assert float(PhysicalMaterial(lightmapStrength=2.0).lightmapStrength) == 2.0
 
 
 class TestShaderSource:

@@ -9,7 +9,7 @@ the bump map.
 
 This is the first PBR material applied to a hand-built (non-glTF) scenegraph
 Shape.  PBR rendering is selected by the two environment variables set below;
-the teapot's ``Appearance.material`` simply holds a ``PBRMaterial``, exactly as
+the teapot's ``Appearance.material`` simply holds a ``PhysicalMaterial``, exactly as
 a glTF-loaded Shape would.
 
 Rotate/zoom with the mouse; the teapot also spins slowly so the glaze specular
@@ -21,7 +21,8 @@ import os
 
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from _ceramic_textures import ceramic_textures
 
 # Whether to render the lid (set TEAPOT_LID=0 to open the pot and see inside).
@@ -29,15 +30,11 @@ SHOW_LID = os.environ.get('TEAPOT_LID', '1') not in ('0', 'false', 'no')
 
 
 def ceramic_material(size=1024):
-    """Build a celadon-glaze PBRMaterial from the procedural texture set."""
+    """Build a celadon-glaze PhysicalMaterial from the procedural texture set."""
     tex = ceramic_textures(size)
-    return PBRMaterial(
+    return PhysicalMaterial(
         baseColor=(1, 1, 1), metallic=0.0, roughness=1.0, normalScale=1.0,
-        textures={
-            'baseColor': PBRTexture(tex['baseColor'], srgb=True),
-            'metallicRoughness': PBRTexture(tex['metallicRoughness'], srgb=False),
-            'normal': PBRTexture(tex['normal'], srgb=False),
-        },
+        baseTexture=ImageDataTexture(image=tex['baseColor']), metallicRoughnessTexture=ImageDataTexture(image=tex['metallicRoughness']), normalTexture=ImageDataTexture(image=tex['normal']),
     )
 
 

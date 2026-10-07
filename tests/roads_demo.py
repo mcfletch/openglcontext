@@ -43,7 +43,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Appearance, Background, DirectionalLight, Fog, Shape, Transform,
     sceneGraph,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.road import (
     RoadProfile, estimate_normals, resample_polyline, road_mesh,
@@ -130,7 +130,7 @@ def ground_mesh():
     return PBRMesh(positions=positions,
                    normals=estimate_normals(positions, indices),
                    indices=indices, colors=colors,
-                   material=PBRMaterial(baseColor=(0.20, 0.24, 0.11),
+                   material=PhysicalMaterial(baseColor=(0.20, 0.24, 0.11),
                                         metallic=0.0, roughness=0.95))
 
 

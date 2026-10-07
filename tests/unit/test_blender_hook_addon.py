@@ -23,7 +23,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
 from OpenGLContext.scenegraph import mirrorhooks, particlehooks, particles, water
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.water import gltf as watergltf
@@ -196,7 +196,7 @@ def test_the_mirror_defaults_are_the_engines():
 
 def test_a_mirror_tagged_in_the_panel_loads_reflecting():
     block = tag.hook_block(settings(kind='mirror', interval=2))
-    material = PBRMaterial(metallic=1.0, roughness=0.0)
+    material = PhysicalMaterial(metallic=1.0, roughness=0.0)
     material.hook = block
     mesh = PBRMesh(
         positions=np.array([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], 'f'),
@@ -268,7 +268,7 @@ def test_the_block_reads_back_as_the_tag_it_meant():
 
 def test_a_tagged_material_loads_as_moving_water():
     """The whole path: panel -> extension block -> written file -> a wave."""
-    material = PBRMaterial(baseColor=(0.05, 0.1, 0.12))
+    material = PhysicalMaterial(baseColor=(0.05, 0.1, 0.12))
     material.hook = tag.hook_block(settings(style='choppy', depth=4.0))
     mesh = PBRMesh(
         positions=np.array([(0, 0, 0), (8, 0, 0), (8, 0, 8), (0, 0, 8)], 'f'),

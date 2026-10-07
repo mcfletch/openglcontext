@@ -42,7 +42,8 @@ from OpenGLContext.scenegraph.atlasmesh import (
     pack_cells,
     textured_mesh,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 __all__ = ['WARNINGS', 'ADVISORY', 'LIMIT', 'SignFace', 'SignProfile',
@@ -176,9 +177,9 @@ def plate_shape(name: str) -> tuple[float, float]:
     raise ValueError('there is no plate called %r' % (name,))
 
 
-def post_material() -> PBRMaterial:
+def post_material() -> PhysicalMaterial:
     """What a sign's post is made of."""
-    return PBRMaterial(baseColor=POST_ALBEDO, metallic=POST_METALLIC,
+    return PhysicalMaterial(baseColor=POST_ALBEDO, metallic=POST_METALLIC,
                        roughness=POST_ROUGHNESS, doubleSided=False)
 
 
@@ -210,23 +211,22 @@ def sign_texture(name: str, size: int = 256) -> Any:
     return image
 
 
-def sign_material(name: str, size: int = 256, image: Any = None) -> PBRMaterial:
+def sign_material(name: str, size: int = 256, image: Any = None) -> PhysicalMaterial:
     """The material for one plate.
 
     ``image`` overrides the painted face -- an
-    :class:`~OpenGLContext.loaders.gltf.writer.ExternalImage` for a baked world,
+    ``ImageTexture`` naming a file beside the document for a baked world,
     which writes the picture once beside the tileset rather than into every tile
     that carries a sign.
     """
-    face = image if image is not None else PBRTexture(sign_texture(name, size),
-                                                      srgb=True)
+    face = image if image is not None else ImageDataTexture(image=sign_texture(name, size))
     # Opaque, and one-sided. A plate is a prism cut to its own outline with a
     # back of its own, so the picture's transparent corners fall outside the
     # geometry and never reach a fragment. Declared as a cutout instead, every
     # sign in a world joins the sorted alpha pass, which is what a sheet of
     # painted metal is not.
-    return PBRMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0, roughness=0.55,
-                       textures={'baseColor': face}, doubleSided=False)
+    return PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0, roughness=0.55,
+                       baseTexture=face, doubleSided=False)
 
 
 def plates_of(faces: "Iterable[str | SignFace]") -> tuple[str, ...]:
@@ -257,23 +257,22 @@ def sign_atlas(faces: "Sequence[str | SignFace]" = WARNINGS, cell: int = 256
 
 def atlas_material(image: Any = None,
                    faces: "Sequence[str | SignFace]" = WARNINGS,
-                   cell: int = 256) -> PBRMaterial:
+                   cell: int = 256) -> PhysicalMaterial:
     """The one material a sign built against :func:`sign_atlas` wears.
 
     ``image`` overrides the painted atlas -- an
-    :class:`~OpenGLContext.loaders.gltf.writer.ExternalImage` for a baked world,
+    ``ImageTexture`` naming a file beside the document for a baked world,
     which writes the picture once beside the tileset rather than into every tile
     that carries a sign.
     """
-    face = image if image is not None else PBRTexture(
-        sign_atlas(faces, cell)[0], srgb=True)
-    return PBRMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
-                       roughness=POST_ROUGHNESS, textures={'baseColor': face},
+    face = image if image is not None else ImageDataTexture(image=sign_atlas(faces, cell)[0])
+    return PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
+                       roughness=POST_ROUGHNESS, baseTexture=face,
                        doubleSided=False)
 
 
 def sign_mesh(face: "str | SignFace", profile: Optional[SignProfile] = None,
-              material: Optional[PBRMaterial] = None,
+              material: Optional[PhysicalMaterial] = None,
               cells: Optional[dict[str, Any]] = None) -> PBRMesh:
     """One whole sign at the origin, facing -Z, as a single mesh.
 
@@ -297,8 +296,8 @@ def sign_mesh(face: "str | SignFace", profile: Optional[SignProfile] = None,
 
 
 def sign_meshes(face: "str | SignFace", profile: Optional[SignProfile] = None,
-                material: Optional[PBRMaterial] = None,
-                post: Optional[PBRMaterial] = None) -> dict[str, PBRMesh]:
+                material: Optional[PhysicalMaterial] = None,
+                post: Optional[PhysicalMaterial] = None) -> dict[str, PBRMesh]:
     """One sign at the origin, facing -Z, as ``{'post': …, 'plate': …}``.
 
     The prototype's frame: the foot is at y=0, the plates look down -Z, and the
@@ -515,7 +514,7 @@ def _arrow(draw: Any, tail: tuple, head: tuple, size: int,
                  fill=LEGEND)
 
 
-def _post(profile: SignProfile, material: PBRMaterial,
+def _post(profile: SignProfile, material: PhysicalMaterial,
           uv: "Optional[tuple[float, float]]" = None,
           top: Optional[float] = None) -> PBRMesh:
     """The post: a low-sided tube from the ground to the top of the sign.
@@ -545,7 +544,7 @@ def _post(profile: SignProfile, material: PBRMaterial,
                          material, texcoords)
 
 
-def _plate(profile: SignProfile, material: PBRMaterial, name: str,
+def _plate(profile: SignProfile, material: PhysicalMaterial, name: str,
            foot: float,
            box: "Optional[tuple[float, float, float, float]]" = None) -> PBRMesh:
     """One plate: a thin prism cut to that plate's own outline, facing -Z.

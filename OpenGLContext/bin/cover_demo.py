@@ -189,7 +189,8 @@ def _blade_texture() -> Image.Image:
 
 def _blades(count: int, rings: int, seed: int = 31) -> Any:
     """A clump of ``count`` blade ribbons, each ``rings`` cross-sections tall."""
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+    from OpenGLContext.scenegraph.imagedata import ImageDataTexture
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     rng = np.random.default_rng(seed)
     positions: list[tuple[float, float, float]] = []
@@ -216,8 +217,7 @@ def _blades(count: int, rings: int, seed: int = 31) -> Any:
         for ring in range(rings - 1):
             a = base + 2 * ring
             indices.extend((a, a + 1, a + 3, a, a + 3, a + 2))
-    material = PBRMaterial(textures={'baseColor': PBRTexture(_blade_texture(),
-                                                             srgb=True)})
+    material = PhysicalMaterial(baseTexture=ImageDataTexture(image=_blade_texture()))
     return PBRMesh(positions=np.asarray(positions, 'f'),
                    normals=np.asarray(normals, 'f'),
                    texcoords=np.asarray(texcoords, 'f'),

@@ -352,7 +352,7 @@ Registering a kind of your own
 
 The factory is called at both hook points — once per primitive of a tagged
 material, once per tagged node — and ``ctx.at`` says which. At the material
-point it is handed the finished ``PBRMesh``, ``PBRMaterial`` and ``Shape``, the
+point it is handed the finished ``PBRMesh``, ``PhysicalMaterial`` and ``Shape``, the
 primitive's local ``bounds`` (writable, so a hook that changes the extent
 changes the framing) and, for a kind registered ``shareable=False``, the world
 matrix this copy stands at (``ctx.world_matrix``, and ``ctx.world_bounds()``
@@ -715,7 +715,7 @@ re-exported. The scene has four lookups by name:
    scene.sounds[ "horn" ].play()                             # a sound, by its emitter's name
 
 ``scene.materials`` maps each material name in the document to the
-``PBRMaterial`` built for it. It lists only the materials that the scene's
+``PhysicalMaterial`` built for it. It lists only the materials that the scene's
 geometry uses. The ``Shape``, its mesh and this mapping all hold the same
 material object, so changing the material this mapping returns changes the
 model. glTF names need not be unique. A repeated name maps to the first

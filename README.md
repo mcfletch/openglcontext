@@ -205,7 +205,7 @@ needs changing. Everything else here is additive.
   See `docs/gltf.rst`.
 
 - Physically-based rendering - a metallic/roughness uber-shader and PBR
-  render pass, `PBRMaterial`, image-based lighting (analytic or a runtime probe,
+  render pass, `PhysicalMaterial`, image-based lighting (analytic or a runtime probe,
   with Radiance `.hdr` panoramas), screen-space transmission and emissive bloom.
   `docs/pbr.rst`, `docs/ubershader.rst`.
 

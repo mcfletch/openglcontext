@@ -109,7 +109,7 @@ class Appearance(basenodes.Appearance):
             # fall back to the transparency field. Transmissive OPAQUE glass stays
             # opaque here -- the dedicated transmission pass handles it (see
             # material_is_transparent).
-            from OpenGLContext.scenegraph.pbrmaterial import material_is_transparent
+            from OpenGLContext.scenegraph.physicalmaterial import material_is_transparent
             transparent = material_is_transparent(self.material)
         else:
             transparent = False

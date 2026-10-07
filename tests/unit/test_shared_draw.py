@@ -13,7 +13,7 @@ from OpenGLContext.multiview.strategy import ViewFrame
 from OpenGLContext.multiview.views import View, ViewStyle
 from OpenGLContext.passes._flat import FlatPass
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.scenegraph.text.text import Text
 
@@ -21,7 +21,7 @@ from OpenGLContext.scenegraph.text.text import Text
 def _shape(appearance=None, geometry=None):
     return basenodes.Shape(geometry=geometry or basenodes.Sphere(radius=1.0),
                            appearance=appearance or basenodes.Appearance(
-                               material=PBRMaterial()))
+                               material=PhysicalMaterial()))
 
 
 #: One path per shape, as a frame's walk hands every view the same one.
@@ -51,7 +51,7 @@ class TestOneDrawForEveryView:
         assert not passing.sharesDraw(_record(_shape(geometry=Text(string=['a']))))
 
     def test_a_mirror_reads_a_reflection_per_view(self, passing):
-        material = PBRMaterial(reflector=PlanarReflector())
+        material = PhysicalMaterial(reflector=PlanarReflector())
         assert not passing.sharesDraw(_record(_shape(basenodes.Appearance(material=material))))
 
     def test_an_appearance_with_its_own_program_is_drawn_per_view(self, passing):
@@ -62,7 +62,7 @@ class TestOneDrawForEveryView:
     @pytest.mark.parametrize('field, value', [('transmission', 0.5),
                                               ('octahedralViews', 8)])
     def test_glass_and_impostors_are_drawn_per_view(self, passing, field, value):
-        material = PBRMaterial(**{field: value})
+        material = PhysicalMaterial(**{field: value})
         assert not passing.sharesDraw(_record(_shape(basenodes.Appearance(material=material))))
 
     def test_a_set_that_culls_its_own_copies_is_drawn_per_view(self, passing):

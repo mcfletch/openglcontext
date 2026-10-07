@@ -8,7 +8,7 @@ from OpenGLContext.scenegraph.material_fields import (
     read_material_fields, DEFAULT_MATERIAL_FIELDS,
 )
 from OpenGLContext.scenegraph.material import Material
-from OpenGLContext.scenegraph.pbrmaterial import material_to_pbr, srgb_to_linear
+from OpenGLContext.scenegraph.physicalmaterial import material_to_pbr, srgb_to_linear
 
 
 class TestReadMaterialFields:

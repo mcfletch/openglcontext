@@ -24,7 +24,7 @@ from PIL import Image as PILImage
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders import resolver
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext import userpaths
 from OpenGLContext.loaders.gltf import look_orientation
 
@@ -82,7 +82,7 @@ class TestSyntheticGLB:
     def test_maps_material_fields(self):
         scene = gltf.load_gltf(_triangle_glb())
         mat = _find_shape(scene.group).appearance.material
-        assert isinstance(mat, PBRMaterial)
+        assert isinstance(mat, PhysicalMaterial)
         assert tuple(round(float(x), 2) for x in mat.baseColor) == (0.2, 0.8, 0.3)
         assert mat.metallic == 0.25 and mat.roughness == 0.6
         assert round(float(mat.transparency), 2) == 0.5     # 1 - baseColor alpha
@@ -1107,11 +1107,14 @@ class TestAnimationPointerLive:
         scene = self._build()
         player = scene.player(0, loop=False)
         mat = self._material(scene)
+        before = mat.factorVersion
         player.evaluate(0.0)      # red
         assert mat.baseColor[0] > 0.9 and mat.baseColor[1] < 0.1
+        red = mat.factorVersion
+        assert red != before      # an edit since the last read moves the UBO's version
         player.evaluate(1.0)      # green
         assert mat.baseColor[1] > 0.9 and mat.baseColor[0] < 0.1
-        assert mat.factorVersion >= 2   # each edit moves the UBO's version
+        assert mat.factorVersion != red
 
 
 class TestNodeVisibilityChildPropagation:

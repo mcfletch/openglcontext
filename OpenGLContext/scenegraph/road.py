@@ -35,7 +35,8 @@ from typing import Any, Optional
 import numpy as np
 
 from OpenGLContext.loaders.gltf.meshes import estimate_normals, estimate_tangents
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 __all__ = [
@@ -954,7 +955,7 @@ def _strip_indices(rows: int, ring: int) -> np.ndarray:
 
 
 def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
-              material: Optional[PBRMaterial] = None,
+              material: Optional[PhysicalMaterial] = None,
               spacing: Optional[float] = None,
               sections: Any = None, shade: Any = None,
               bank: Any = None) -> PBRMesh:
@@ -1084,7 +1085,7 @@ def _texture_u(profile: RoadProfile, across: float) -> float:
 
 def tarmac_material(wetness: float = 0.0, seed: int = 0,
                     texture_size: int = 512, image: Any = None,
-                    profile: Optional[RoadProfile] = None) -> PBRMaterial:
+                    profile: Optional[RoadProfile] = None) -> PhysicalMaterial:
     """The road surface as a PBR material.
 
     The colour is the texture's, because one image spans tarmac, gravel and the
@@ -1096,12 +1097,11 @@ def tarmac_material(wetness: float = 0.0, seed: int = 0,
     """
     wetness = float(np.clip(wetness, 0.0, 1.0))
     tint = 1.0 - WET_DARKENING * wetness
-    return PBRMaterial(
+    return PhysicalMaterial(
         baseColor=(tint, tint, tint),
         metallic=0.0,
         roughness=DRY_ROUGHNESS + (WET_ROUGHNESS - DRY_ROUGHNESS) * wetness,
         doubleSided=False,
-        textures={'baseColor': image if image is not None
-                  else PBRTexture(road_texture(texture_size, seed, profile),
-                                  srgb=True)},
+        baseTexture=image if image is not None
+                  else ImageDataTexture(image=road_texture(texture_size, seed, profile)),
     )

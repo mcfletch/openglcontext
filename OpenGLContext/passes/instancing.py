@@ -14,7 +14,7 @@ nodes, and ``EXT_mesh_gpu_instancing`` all feed the same batcher.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Optional
 import numpy as np
 import ctypes
@@ -130,15 +130,15 @@ def _material_texture_ids(material: Any) -> tuple:
     """
     if material is None:
         return ()
-    # PBRMaterial keeps its texture references in a ``textures`` dict (channel ->
-    # texture); an empty dict means untextured, which is the common instanceable
-    # case. Sorted so the key is order-independent.
+    # A PhysicalMaterial's ``textures`` maps each channel to its texture node;
+    # empty means untextured, which is the common instanceable case. Sorted so
+    # the key is order-independent.
     textures = getattr(material, 'textures', None)
-    if isinstance(textures, dict):
+    if isinstance(textures, Mapping):
         return tuple((channel, id(tex)) for channel, tex in sorted(textures.items())
                      if tex is not None)
     # Fallback for other material types: scan common single-texture attributes,
-    # skipping methods (e.g. PBRMaterial.texture is a lookup method, not a node)
+    # skipping methods (e.g. PhysicalMaterial.texture is a lookup method, not a node)
     # and unset channels, which are None or the NULL node.
     ids: list = []
     for attr in ('baseColorTexture', 'metallicRoughnessTexture', 'normalTexture',
@@ -371,7 +371,7 @@ def group_material_table(group: Any) -> tuple[list, list]:
 
     Returns (materials, indices): ``materials`` lists the group's distinct
     materials, each member's being what
-    :func:`~OpenGLContext.scenegraph.pbrmaterial.pbr_material` answers for its
+    :func:`~OpenGLContext.scenegraph.physicalmaterial.pbr_material` answers for its
     appearance, in first-seen order; ``indices[i]`` is member i's slot in that
     list. This is what the material-array UBO is packed from and what the
     per-instance material-index attribute carries.
@@ -384,7 +384,7 @@ def group_material_table(group: Any) -> tuple[list, list]:
     are one slot -- and the group key has already settled that a group's
     textures agree.
     """
-    from OpenGLContext.scenegraph.pbrmaterial import pbr_material
+    from OpenGLContext.scenegraph.physicalmaterial import pbr_material
     materials: list = []
     slot: dict = {}
     indices: list = []

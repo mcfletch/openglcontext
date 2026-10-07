@@ -981,5 +981,5 @@ class PBRMesh(x3d.X3DGeometryNode):
         # Report transparency from the attached material so a mesh placed without a
         # Shape still sorts into the transparent pass. The common
         # path renders through a Shape, where Appearance.sortKey decides instead.
-        from OpenGLContext.scenegraph.pbrmaterial import material_is_transparent
+        from OpenGLContext.scenegraph.physicalmaterial import material_is_transparent
         return (material_is_transparent(self.material), [], None)

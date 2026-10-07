@@ -29,7 +29,7 @@ import numpy as np
 
 from vrml.vrml97 import transformmatrix
 
-from OpenGLContext.scenegraph.pbrmaterial import uv_transform_matrix
+from OpenGLContext.scenegraph.physicalmaterial import uv_transform_matrix
 from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf.accessors import _read_floats, _read_normalized
 

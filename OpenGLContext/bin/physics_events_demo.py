@@ -44,7 +44,7 @@ from OpenGLContext.events.framestep import FrameStep
 from OpenGLContext.physics.events import Collision
 from OpenGLContext.physics.manager import PhysicsManager
 from OpenGLContext.scenegraph import basenodes, surfaces
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.physicsbody import PhysicsBody
 
 __all__ = ['CollisionYard', 'main']
@@ -107,7 +107,7 @@ class Finishes:
             surfaces.pbr_material(surfaces.brick(256)),
             surfaces.pbr_material(surfaces.brushed_metal(128, surfaces.BRONZE, 0.35)),
         ]
-        self.glass = PBRMaterial(baseColor=(0.75, 0.88, 0.95), metallic=0.0,
+        self.glass = PhysicalMaterial(baseColor=(0.75, 0.88, 0.95), metallic=0.0,
                                  roughness=0.04, transparency=0.6,
                                  alphaMode='BLEND', doubleSided=True)
         self.ball = surfaces.pbr_material(surfaces.brushed_metal(128, surfaces.STEEL, 0.15))
