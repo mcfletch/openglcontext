@@ -130,8 +130,22 @@ from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMaterial
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
+from OpenGLContext.scenegraph.x3druntime import ColorChaser as ColorChaser
+from OpenGLContext.scenegraph.x3druntime import ColorDamper as ColorDamper
+from OpenGLContext.scenegraph.x3druntime import CoordinateChaser as CoordinateChaser
+from OpenGLContext.scenegraph.x3druntime import CoordinateDamper as CoordinateDamper
 from OpenGLContext.scenegraph.x3druntime import KeySensor as KeySensor
+from OpenGLContext.scenegraph.x3druntime import OrientationChaser as OrientationChaser
+from OpenGLContext.scenegraph.x3druntime import OrientationDamper as OrientationDamper
+from OpenGLContext.scenegraph.x3druntime import PositionChaser as PositionChaser
+from OpenGLContext.scenegraph.x3druntime import PositionChaser2D as PositionChaser2D
+from OpenGLContext.scenegraph.x3druntime import PositionDamper as PositionDamper
+from OpenGLContext.scenegraph.x3druntime import PositionDamper2D as PositionDamper2D
+from OpenGLContext.scenegraph.x3druntime import ScalarChaser as ScalarChaser
+from OpenGLContext.scenegraph.x3druntime import ScalarDamper as ScalarDamper
 from OpenGLContext.scenegraph.x3druntime import StringSensor as StringSensor
+from OpenGLContext.scenegraph.x3druntime import TexCoordChaser2D as TexCoordChaser2D
+from OpenGLContext.scenegraph.x3druntime import TexCoordDamper2D as TexCoordDamper2D
 from OpenGLContext.scenegraph.x3druntime import TimeTrigger as TimeTrigger
 from OpenGLContext.scenegraph.zone import Zone as Zone
 from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
@@ -202,11 +216,15 @@ __all__ = [
     'Circle2D',
     'Collision',
     'Color',
+    'ColorChaser',
+    'ColorDamper',
     'ColorInterpolator',
     'ColorRGBA',
     'Cone',
     'Contour2D',
     'Coordinate',
+    'CoordinateChaser',
+    'CoordinateDamper',
     'CoordinateInterpolator',
     'CoordinateInterpolator2D',
     'CubeBackground',
@@ -278,6 +296,8 @@ __all__ = [
     'NurbsDomainDistanceSample',
     'NurbsSurface',
     'NurbsToleranceSample',
+    'OrientationChaser',
+    'OrientationDamper',
     'OrientationInterpolator',
     'ParticleEmitter',
     'PhysicalMaterial',
@@ -290,11 +310,17 @@ __all__ = [
     'PolyCylinder',
     'Polyline2D',
     'Polypoint2D',
+    'PositionChaser',
+    'PositionChaser2D',
+    'PositionDamper',
+    'PositionDamper2D',
     'PositionInterpolator',
     'PositionInterpolator2D',
     'ProximitySensor',
     'ROUTE',
     'Rectangle2D',
+    'ScalarChaser',
+    'ScalarDamper',
     'ScalarInterpolator',
     'ScreenCoverageLOD',
     'Shader',
@@ -318,6 +344,8 @@ __all__ = [
     'Switch',
     'Tangent',
     'Teapot',
+    'TexCoordChaser2D',
+    'TexCoordDamper2D',
     'Text',
     'TextureBufferUniform',
     'TextureCoordinate',

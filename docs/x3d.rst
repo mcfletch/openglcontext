@@ -95,6 +95,10 @@ implements these X3D nodes, by component:
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
 - Grouping - Group, Switch, Transform
+- Followers - ColorChaser, ColorDamper, CoordinateChaser, CoordinateDamper,
+  OrientationChaser, OrientationDamper, PositionChaser, PositionChaser2D,
+  PositionDamper, PositionDamper2D, ScalarChaser, ScalarDamper,
+  TexCoordChaser2D, TexCoordDamper2D
 - KeyDeviceSensor - KeySensor, StringSensor
 - Interpolation - ColorInterpolator, CoordinateInterpolator,
   CoordinateInterpolator2D, EaseInEaseOut, NormalInterpolator,
@@ -157,13 +161,20 @@ true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
 The engine's lights made in code are global and cast shadows by default.
 
-The event utilities, sequencers and the interpolators X3D adds to VRML97's are
-pyvrml97's behaviours (``vrml.x3d.runtime``); a ``TimeTrigger`` sends the engine's time, and a
-``KeySensor`` hears every key its window receives, including keys a program has
-bound itself, as ``keyPress`` for a character, ``actionKeyPress`` for the
-function, arrow and page keys, and ``shiftKey``, ``controlKey`` and ``altKey``
-while those are held; a ``StringSensor`` hears every character typed into its
-window. ``Context.observeEvents`` is how they listen.
+The event utilities, sequencers, followers and the interpolators X3D adds to
+VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
+``vrml.x3d.followers``). In the engine:
+
+- A ``TimeTrigger`` sends the engine's time.
+- A follower moves a step each frame on the engine's clock while it is
+  moving, queued on its window's render queue.
+- A ``KeySensor`` hears every key its window receives, including keys a
+  program has bound itself: ``keyPress`` for a character, ``actionKeyPress``
+  for the function, arrow and page keys, and ``shiftKey``, ``controlKey`` and
+  ``altKey`` while those are held.
+- A ``StringSensor`` hears every character typed into its window.
+
+``Context.observeEvents`` is how the sensors listen.
 
 An ``Inline`` reads any format a registered reader opens: another X3D or
 VRML97 world, an OBJ model or a glTF model. Its scene is read on the loader

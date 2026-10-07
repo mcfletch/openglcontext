@@ -90,3 +90,84 @@ def test_a_string_sensor_observes_its_contexts_typing():
     for name in ('H', 'i', 'x', '<backspace>', '<numlock>', '<return>'):
         function(keypress(name))
     assert sensor.finalText == 'Hi'
+
+
+class QueueContext:
+    """A context's render queue and redraw requests, with no window"""
+
+    def __init__(self):
+        from OpenGLContext.events.renderqueue import RenderQueue  # noqa: PLC0415 kept with its use
+        self.renderQueue = RenderQueue()
+        self.redraws = 0
+
+    def triggerRedraw(self, force=0):
+        self.redraws += 1
+
+
+@pytest.mark.parametrize('name', sorted(x3druntime.followers.FOLLOWERS))
+def test_each_follower_is_the_engines(name):
+    assert prototypes()[name].__module__ == x3druntime.__name__
+
+
+def test_a_follower_ticks_through_its_contexts_queue_until_it_rests(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
+    monkeypatch.setattr(x3druntime.followers, 'clock', lambda: now[0])
+    chaser = x3druntime.ScalarChaser(duration=1.0)
+    context = QueueContext()
+    chaser.bind(context)
+    chaser.set_destination = 4.0
+    assert len(context.renderQueue) == 1
+    for _ in range(5):
+        now[0] += 0.3
+        context.renderQueue.run()
+    assert chaser.value_changed == pytest.approx(4.0)
+    assert len(context.renderQueue) == 0
+    assert context.redraws >= 4
+
+
+def test_a_follower_moving_before_it_is_bound_starts_when_bound(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
+    monkeypatch.setattr(x3druntime.followers, 'clock', lambda: now[0])
+    chaser = x3druntime.ScalarChaser(duration=1.0, initialValue=0.0, initialDestination=2.0)
+    context = QueueContext()
+    chaser.bind(context)
+    assert len(context.renderQueue) == 1
+
+
+def test_a_documents_chaser_moves_a_transform(gl_context, monkeypatch):
+    from OpenGLContext.testing.scenes import scene_context  # noqa: PLC0415 GL
+    now = [50.0]
+    monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
+    monkeypatch.setattr(x3druntime.followers, 'clock', lambda: now[0])
+    scene = Loader.loads(b'''<X3D version="4.0"><Scene>
+      <PositionChaser DEF="C" duration="1" initialDestination="0 0 0"/>
+      <Transform DEF="T"><Shape><Box/></Shape></Transform>
+      <ROUTE fromNode="C" fromField="value_changed" toNode="T" toField="set_translation"/>
+    </Scene></X3D>''', 'scene.x3d')
+    with scene_context(scene) as context:
+        context.OnDraw(force=1)
+        scene.getDEF('C').set_destination = (3.0, 0.0, 0.0)
+        for _ in range(4):
+            now[0] += 0.4
+            context.renderQueue.run()
+            context.OnDraw(force=1)
+        assert tuple(scene.getDEF('T').translation) == pytest.approx((3.0, 0.0, 0.0))
+
+
+def test_a_follower_bound_to_a_context_that_draws_nothing_still_moves(monkeypatch):
+    """A window that has stopped drawing does not hold up the follower for the others."""
+    now = [10.0]
+    monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
+    monkeypatch.setattr(x3druntime.followers, 'clock', lambda: now[0])
+    chaser = x3druntime.ScalarChaser(duration=1.0)
+    idle, drawing = QueueContext(), QueueContext()
+    chaser.bind(idle)
+    chaser.bind(drawing)
+    chaser.set_destination = 2.0
+    for _ in range(5):
+        now[0] += 0.3
+        drawing.renderQueue.run()
+    assert chaser.value_changed == pytest.approx(2.0)
+    assert len(drawing.renderQueue) == 0
