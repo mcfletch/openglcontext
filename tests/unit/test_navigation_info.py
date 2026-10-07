@@ -70,6 +70,9 @@ class Manager:
         self.selected.append(name)
         return True
 
+    def modes(self):
+        return []
+
 
 class Navigating:
     def __init__(self, names=('walk', 'fly', 'examine')):
@@ -134,3 +137,62 @@ def test_the_fixed_function_headlight(gl_context_compat):
     compat = {'profile': 'compatibility'}
     dark = brightness(b'<NavigationInfo headlight="false"/>', **compat)
     assert dark < brightness(b'', **compat) - 30
+
+
+# -- speed, avatarSize and the transitions --------------------------------------
+
+@pytest.mark.parametrize('speed, factor', [(1.0, 1.0), (2.5, 2.5), (0.0, 0.0)])
+def test_speed_scales_the_modes_relative_to_x3ds_default(speed, factor):
+    assert navigationinfo.speed_factor(NavigationInfo(speed=speed)) == factor
+
+
+class SpeedMode:
+    def __init__(self, name):
+        self.name = name
+        self.walkSpeed, self.runSpeed, self.flySpeed = 3.0, 6.0, 8.0
+
+
+class SpeedManager(Manager):
+    def __init__(self):
+        super().__init__(['walk'])
+        self.declared = [SpeedMode('walk'), SpeedMode('fly')]
+
+    def modes(self):
+        return self.declared
+
+
+def test_binding_scales_the_modes_without_compounding():
+    context = Navigating()
+    context.manager = SpeedManager()
+    fast, slow = NavigationInfo(speed=2.0), NavigationInfo(speed=0.5)
+    _scene = sceneGraph(children=[fast, slow])
+    navigationinfo.apply(context, fast)
+    walk = context.manager.declared[0]
+    assert (walk.walkSpeed, walk.flySpeed) == (6.0, 16.0)
+    navigationinfo.apply(context, slow)
+    assert (walk.walkSpeed, walk.flySpeed) == (1.5, 4.0)
+
+
+def test_the_avatar_size_is_radius_eye_height_and_step():
+    assert navigationinfo.avatar_of(NavigationInfo()) == (0.25, 1.6, 0.75)
+    assert navigationinfo.avatar_of(NavigationInfo(avatarSize=[0.5])) == (0.5, 1.6, 0.75)
+
+
+def test_binding_gives_the_context_the_avatar_size():
+    context = Navigating()
+    info = NavigationInfo(avatarSize=[0.4, 1.7, 0.3])
+    _scene = sceneGraph(children=[info])
+    navigationinfo.apply(context, info)
+    assert context.navigationAvatar == (0.4, 1.7, 0.3)
+
+
+@pytest.mark.parametrize('fields, expected', [
+    ({}, ('LINEAR', 1.0)),
+    ({'transitionType': ['ANIMATE'], 'transitionTime': 2.0}, ('ANIMATE', 2.0)),
+    ({'transitionType': ['TELEPORT']}, ('TELEPORT', 0.0)),
+    ({'transitionTime': 0.0}, ('TELEPORT', 0.0)),
+    ({'transitionType': ['"LINEAR"', 'ANIMATE']}, ('LINEAR', 1.0)),
+])
+def test_the_transition(fields, expected):
+    assert navigationinfo.transition_of(NavigationInfo(**fields)) == expected
+    assert navigationinfo.transition_of(None) == ('LINEAR', 1.0)

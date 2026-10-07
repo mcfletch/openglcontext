@@ -15,9 +15,14 @@ the view platform only; :func:`next_viewpoint` binds the next.
 from collections.abc import Sequence
 from typing import Any
 
+import weakref
+
 import numpy as np
 from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
+
+from OpenGLContext.events import systemtime
+from OpenGLContext.move import navigationinfo
 import logging
 
 log = logging.getLogger(__name__)
@@ -45,6 +50,38 @@ def publish_viewpoints(context: Any, pass_: Any) -> None:
         changed(paths)
 
 
+class ViewpointTransition:
+    """The camera's move from one pose to a newly bound viewpoint's -- no GL
+
+    ``kind`` is LINEAR, straight at a steady pace, or ANIMATE, easing in and
+    out; positions are interpolated straight and orientations along the
+    shorter arc.
+    """
+
+    def __init__(self, position: Any, orientation: Any, target: Any,
+                 target_orientation: Any, start: float, duration: float,
+                 kind: str = 'LINEAR') -> None:
+        self.position = np.asarray(position, dtype='d')[:3]
+        self.orientation = orientation
+        self.target = np.asarray(target, dtype='d')[:3]
+        self.target_orientation = target_orientation
+        self.start = float(start)
+        self.duration = max(float(duration), 1e-9)
+        self.kind = kind
+
+    def at(self, now: float) -> tuple[np.ndarray, Any, bool]:
+        """(position, orientation, arrived) at time `now`"""
+        fraction = min(max((float(now) - self.start) / self.duration, 0.0), 1.0)
+        eased = fraction * fraction * (3.0 - 2.0 * fraction) if self.kind == 'ANIMATE' else fraction
+        position = self.position + (self.target - self.position) * eased
+        orientation = self.orientation.slerp(self.target_orientation, eased)
+        return position, orientation, fraction >= 1.0
+
+
+#: Each context's transition in progress.
+_moving: 'weakref.WeakKeyDictionary[Any, ViewpointTransition]' = weakref.WeakKeyDictionary()
+
+
 def bind_scene_viewpoint(context: Any) -> None:
     """Move ``context``'s platform to the scene's bound Viewpoint.
 
@@ -52,6 +89,10 @@ def bind_scene_viewpoint(context: Any) -> None:
     This moves the platform to the viewpoint X3D's bind stack has on top
     (:func:`vrml.x3d.binding.current_path`, which binds the first where none
     is), and only when that changes, so it never fights ordinary navigation.
+    The first viewpoint is jumped to; one bound after it is moved to as the
+    bound NavigationInfo's transition says
+    (:func:`~OpenGLContext.move.navigationinfo.transition_of`), a frame at a
+    time, and the NavigationInfo sends ``transitionComplete`` on arrival.
     ``SceneGraph.boundViewpoint`` is the viewpoint the platform was last moved
     to.
 
@@ -62,13 +103,47 @@ def bind_scene_viewpoint(context: Any) -> None:
     sg = context.getSceneGraph()
     if sg is None:
         return
+    _step_transition(context, sg)
     view_path = binding.current_path(list(getattr(sg, 'viewpointPaths', ())))
     if view_path is None:
         return
     view = view_path[-1]
-    if getattr(sg, 'boundViewpoint', None) is not view:
+    previous = getattr(sg, 'boundViewpoint', None)
+    if previous is view:
+        return
+    sg.boundViewpoint = view
+    platform = getattr(context, 'platform', None) or context.getViewPlatform()
+    info = binding.bound(sg, nodetypes.NavigationInfo)
+    kind, seconds = navigationinfo.transition_of(info)
+    if not previous or kind == 'TELEPORT' or platform is None:
         view.moveTo(view_path, context)
-        sg.boundViewpoint = view
+        return
+    position, orientation = np.array(platform.position, 'd'), platform.quaternion
+    view.moveTo(view_path, context)
+    move = ViewpointTransition(position, orientation, platform.position,
+                               platform.quaternion, systemtime.systemTime(), seconds, kind)
+    _moving[context] = move
+    platform.setPosition(position[:3])
+    platform.setOrientation(orientation)
+
+
+def _step_transition(context: Any, sg: Any) -> None:
+    """Move the platform on along the transition in progress, if there is one"""
+    move = _moving.get(context)
+    if move is None:
+        return
+    position, orientation, arrived = move.at(systemtime.systemTime())
+    platform = getattr(context, 'platform', None) or context.getViewPlatform()
+    platform.setPosition(position)
+    platform.setOrientation(orientation)
+    redraw = getattr(context, 'triggerRedraw', None)
+    if redraw is not None:
+        redraw(1)
+    if arrived:
+        del _moving[context]
+        info = binding.bound(sg, nodetypes.NavigationInfo)
+        if info is not None:
+            info.transitionComplete = True
 
 
 def listed(path: Any, viewer: Any) -> bool:

@@ -267,8 +267,15 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   or ``fps``, ``FLY`` is ``fly``, and ``EXAMINE``, ``LOOKAT`` and
   ``EXPLORE`` are ``examine``. A context with no declared modes keeps its
   own navigation. A positive ``visibilityLimit`` is the far clipping
-  distance from the time it is bound. ``speed``, ``avatarSize`` and the
-  transition fields are not read.
+  distance from the time it is bound. ``speed`` scales the declared modes'
+  speeds relative to X3D's default of 1 (2 doubles them), and ``avatarSize``
+  (radius, eye height, step height) sizes the walking avatar in the world's
+  own units.
+- A viewpoint bound after the first is moved to as the bound NavigationInfo's
+  ``transitionType`` and ``transitionTime`` say: ``LINEAR`` straight at a
+  steady pace, ``ANIMATE`` easing in and out, ``TELEPORT`` at once; with no
+  NavigationInfo, ``LINEAR`` over a second. ``transitionComplete`` is sent on
+  arrival (``viewpointbinding.ViewpointTransition``).
 - A ``ViewpointGroup``'s viewpoints are the scene's; the next-viewpoint key
   passes over those of a group that is not ``displayed``, or that has a
   ``size`` and the viewer is outside the box of that size about its

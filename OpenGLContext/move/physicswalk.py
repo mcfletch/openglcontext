@@ -195,9 +195,20 @@ class PhysicsWalkMixin(object):
         """The avatar's dimensions and speeds at ``scale``.
 
         Roughly a person: 1.8 units tall, eyes at 1.6, stepping 0.4 without
-        jumping.  Override to make the avatar something else.
+        jumping.  A bound NavigationInfo's avatarSize (``navigationAvatar``:
+        radius, eye height, step height) sizes it instead, in the world's own
+        units.  Override to make the avatar something else.
         """
         from omi_physics.character import CharacterCapabilities
+        avatar = self.navigationAvatar
+        if avatar is not None:
+            radius, eye, step = (float(value) for value in avatar)
+            return CharacterCapabilities(
+                walkSpeed=WALK_SPEED * scale, runSpeed=RUN_SPEED * scale,
+                flySpeed=FLY_SPEED * scale,
+                jumpHeight=eye * 0.75, stepHeight=step,
+                standHeight=eye * 1.125, crouchHeight=eye * 0.625,
+                radius=radius, eyeHeight=eye)
         return CharacterCapabilities(
             walkSpeed=WALK_SPEED * scale, runSpeed=RUN_SPEED * scale,
             flySpeed=FLY_SPEED * scale,
@@ -249,6 +260,9 @@ class PhysicsWalkMixin(object):
         self.physicsPlatform.apply(self)
         return True
 
+    #: The bound NavigationInfo's avatarSize (radius, eye height, step height),
+    #: set by :func:`OpenGLContext.move.navigationinfo.apply`; None for none.
+    navigationAvatar: Optional[tuple[float, float, float]] = None
     #: Sends the X3D Collision groups' events from the avatar's touches, or None.
     physicsCollisionReporter: Optional['CollisionReporter'] = None
 

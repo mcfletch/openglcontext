@@ -12,7 +12,7 @@ from OpenGLContext.context import Context
 from OpenGLContext.passes import viewpointbinding
 from OpenGLContext.passes._flat import FlatPass
 from OpenGLContext.scenegraph.background import Background
-from OpenGLContext.scenegraph.basenodes import Fog, Viewpoint, sceneGraph
+from OpenGLContext.scenegraph.basenodes import Fog, NavigationInfo, Viewpoint, sceneGraph
 from OpenGLContext.scenegraph.cubebackground import CubeBackground
 from OpenGLContext.scenegraph.fog import bound_fog
 from OpenGLContext.scenegraph.hdrbackground import HDRBackground
@@ -110,7 +110,10 @@ class _Path(tuple):
 
 def viewing(count=3):
     views = [Viewpoint(position=(index, 0, 0)) for index in range(count)]
-    scene = sceneGraph(children=views)
+    # Jumping between viewpoints, so each binding moves the platform at once.
+    jump = NavigationInfo(transitionType=['TELEPORT'])
+    scene = sceneGraph(children=[jump] + views)
+    jump.set_bind = True
     scene.viewpointPaths = tuple(_Path((scene, view)) for view in views)
     return Viewing(scene), views
 

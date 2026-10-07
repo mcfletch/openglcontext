@@ -612,3 +612,19 @@ class TestCollisionGroups:
         host.enablePhysics(True)
         assert host.physicsPlatform.character.body is None
         assert host.physicsCollisionReporter is None
+
+
+class TestNavigationAvatar:
+    """A bound NavigationInfo's avatarSize sizes the walking avatar"""
+
+    def test_the_avatar_takes_the_documents_size(self):
+        host = _Host(_floor_scene())
+        host.navigationAvatar = (0.4, 1.5, 0.3)
+        found = host.characterCapabilities(scale=10.0)
+        assert (found.radius, found.eyeHeight, found.stepHeight) == pytest.approx((0.4, 1.5, 0.3))
+        assert found.standHeight > found.eyeHeight
+
+    def test_without_one_the_avatar_is_sized_to_the_world(self):
+        host = _Host(_floor_scene())
+        found = host.characterCapabilities(scale=10.0)
+        assert found.radius == pytest.approx(3.0)

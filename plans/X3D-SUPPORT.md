@@ -88,7 +88,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] `OrthoViewpoint` (`ViewPlatform.setOrthographic`), `nearDistance`/`farDistance`
   - [x] NavigationInfo `headlight` and `type` (`move.navigationinfo`); `speed`, `avatarSize`, `visibilityLimit` and the transitions not read
   - [x] `ViewpointGroup` (displayed, proximity); NavigationInfo `visibilityLimit`
-  - [ ] `centerOfRotation`, `retainUserOffsets`, `viewAll`; NavigationInfo `speed`, `avatarSize`, transitions
+  - [x] NavigationInfo `speed` (relative to X3D's 1), `avatarSize` for the walking avatar, the viewpoint transitions and `transitionComplete`
+  - [ ] `centerOfRotation`, `retainUserOffsets`, `viewAll`
   - [x] environmental sensors (`vrml.x3d.sensors`, sensed once a frame by `scenegraph.x3dsensors`)
   - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit has no normal or texture coordinate)
   - [x] `TimeSensor` (`vrml.x3d.timesensor`): start, stop, pause, resume, and the engine's `rate`; polled by the context's time manager

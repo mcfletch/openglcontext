@@ -6,7 +6,7 @@ logic is exercised directly without a render context.
 import pytest
 import numpy as np
 
-from OpenGLContext.scenegraph.basenodes import sceneGraph, Transform, Viewpoint
+from OpenGLContext.scenegraph.basenodes import NavigationInfo, sceneGraph, Transform, Viewpoint
 from OpenGLContext.passes import viewpointbinding
 from OpenGLContext import quaternion
 from OpenGLContext.passes.flatcore import FlatPass
@@ -77,7 +77,10 @@ class TestViewpointMoveTo:
 class TestCoreViewpointBridge:
     def _scene(self, n=3):
         vps = [Viewpoint(position=(i, 0, 0), description='cam%d' % i) for i in range(n)]
-        sg = sceneGraph(children=list(vps))
+        # Jumping between viewpoints, so each binding moves the platform at once.
+        jump = NavigationInfo(transitionType=['TELEPORT'])
+        sg = sceneGraph(children=[jump] + list(vps))
+        jump.set_bind = True
         return sg, vps
 
     def test_binds_first_by_default(self):
