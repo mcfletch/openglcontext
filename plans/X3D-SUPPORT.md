@@ -75,7 +75,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture
 - Phase 7, runtime (§9.10, §9.15, §9.16)
   - [x] event utilities, sequencers and `KeySensor` with their behaviour (`vrml.x3d.runtime`); the engine's `TimeTrigger` clock and `KeySensor` keys (`scenegraph/x3druntime.py`, `observeEvents`)
-  - [ ] the cascade replacing immediate route forwarding; followers; the spline, 2D and ease interpolators; `StringSensor`
+  - [x] the 2D, spline, squad and ease interpolators (`vrml.x3d.interpolation`); `StringSensor`
+  - [ ] the cascade replacing immediate route forwarding; followers
   - [ ] bindable stacks and navigation
   - [ ] sensors
 - Phase 8, engine-mapped components (§9.17)

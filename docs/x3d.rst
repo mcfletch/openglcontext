@@ -97,8 +97,10 @@ implements these X3D nodes, by component:
 - Grouping - Group, Switch, Transform
 - KeyDeviceSensor - KeySensor, StringSensor
 - Interpolation - ColorInterpolator, CoordinateInterpolator,
-  NormalInterpolator, OrientationInterpolator, PositionInterpolator,
-  ScalarInterpolator
+  CoordinateInterpolator2D, EaseInEaseOut, NormalInterpolator,
+  OrientationInterpolator, PositionInterpolator, PositionInterpolator2D,
+  ScalarInterpolator, SplinePositionInterpolator, SplinePositionInterpolator2D,
+  SplineScalarInterpolator, SquadOrientationInterpolator
 - Lighting - DirectionalLight, PointLight, SpotLight
 - Navigation - Billboard, Collision, LOD, NavigationInfo, Viewpoint
 - Networking - Anchor, Inline
@@ -155,8 +157,8 @@ true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
 The engine's lights made in code are global and cast shadows by default.
 
-The event utilities and sequencers are pyvrml97's behaviours
-(``vrml.x3d.runtime``); a ``TimeTrigger`` sends the engine's time, and a
+The event utilities, sequencers and the interpolators X3D adds to VRML97's are
+pyvrml97's behaviours (``vrml.x3d.runtime``); a ``TimeTrigger`` sends the engine's time, and a
 ``KeySensor`` hears every key its window receives, including keys a program has
 bound itself, as ``keyPress`` for a character, ``actionKeyPress`` for the
 function, arrow and page keys, and ``shiftKey``, ``controlKey`` and ``altKey``

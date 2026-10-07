@@ -174,8 +174,15 @@ from vrml.x3d.runtime import BooleanFilter as BooleanFilter
 from vrml.x3d.runtime import BooleanSequencer as BooleanSequencer
 from vrml.x3d.runtime import BooleanToggle as BooleanToggle
 from vrml.x3d.runtime import BooleanTrigger as BooleanTrigger
+from vrml.x3d.runtime import CoordinateInterpolator2D as CoordinateInterpolator2D
+from vrml.x3d.runtime import EaseInEaseOut as EaseInEaseOut
 from vrml.x3d.runtime import IntegerSequencer as IntegerSequencer
 from vrml.x3d.runtime import IntegerTrigger as IntegerTrigger
+from vrml.x3d.runtime import PositionInterpolator2D as PositionInterpolator2D
+from vrml.x3d.runtime import SplinePositionInterpolator as SplinePositionInterpolator
+from vrml.x3d.runtime import SplinePositionInterpolator2D as SplinePositionInterpolator2D
+from vrml.x3d.runtime import SplineScalarInterpolator as SplineScalarInterpolator
+from vrml.x3d.runtime import SquadOrientationInterpolator as SquadOrientationInterpolator
 
 __all__ = [
     'Anchor',
@@ -201,11 +208,13 @@ __all__ = [
     'Contour2D',
     'Coordinate',
     'CoordinateInterpolator',
+    'CoordinateInterpolator2D',
     'CubeBackground',
     'Cylinder',
     'CylinderSensor',
     'DirectionalLight',
     'Disk2D',
+    'EaseInEaseOut',
     'ElevationGrid',
     'Extrusion',
     'FloatUniform1f',
@@ -282,6 +291,7 @@ __all__ = [
     'Polyline2D',
     'Polypoint2D',
     'PositionInterpolator',
+    'PositionInterpolator2D',
     'ProximitySensor',
     'ROUTE',
     'Rectangle2D',
@@ -299,7 +309,11 @@ __all__ = [
     'Sphere',
     'SphereBackground',
     'SphereSensor',
+    'SplinePositionInterpolator',
+    'SplinePositionInterpolator2D',
+    'SplineScalarInterpolator',
     'SpotLight',
+    'SquadOrientationInterpolator',
     'StringSensor',
     'Switch',
     'Tangent',
