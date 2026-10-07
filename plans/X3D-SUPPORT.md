@@ -1528,6 +1528,10 @@ LOOKAT, NONE; [MOVEMENT-MODES.md](MOVEMENT-MODES.md),
 `avatarSize`, `visibilityLimit` and `transitionType` are applied. `ViewpointGroup`
 adds a viewpoint menu entry hierarchy to the viewer.
 
+- [ ] Open: a stack per `Layer` (7.2.2). pyvrml97's stacks are per scene, so
+  a `LayerSet`'s layers share them; this waits on the engine drawing layers,
+  and on a node knowing the layer it is in.
+
 ### 9.16 Sensors
 
 - Pointing-device sensors (`TouchSensor`, `PlaneSensor`, `CylinderSensor`,
