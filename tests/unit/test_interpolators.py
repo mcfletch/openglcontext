@@ -113,3 +113,17 @@ class TestSetsOfValuesPerKey:
 
     def test_an_interpolator_with_no_values_produces_none(self):
         assert interpolators.CoordinateInterpolator().on_set_fraction(0.5) is None
+
+
+class TestRegistered:
+    @pytest.mark.parametrize('name', ['PositionInterpolator', 'ScalarInterpolator',
+                                      'CoordinateInterpolator', 'OrientationInterpolator',
+                                      'ColorInterpolator', 'NormalInterpolator'])
+    def test_each_interpolator_is_the_runtimes(self, name):
+        from vrml.x3d import runtime  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph import basenodes  # noqa: PLC0415 the registry fills at first import
+        assert getattr(basenodes, name) is runtime.PROTOTYPES[name]
+
+    def test_a_colour_runs_in_hsv(self):
+        node = interpolators.ColorInterpolator(key=[0.0, 1.0], keyValue=[[1, 0, 0], [0, 1, 0]])
+        assert np.allclose(node.on_set_fraction(0.5), (1, 1, 0))

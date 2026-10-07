@@ -250,9 +250,8 @@ The fixed-function path has no such cut-off.
 
 .. _x3d-binding:
 
-The event utilities, sequencers, followers and the interpolators X3D adds to
-VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
-``vrml.x3d.followers``). In the engine:
+The event utilities, sequencers, followers and interpolators are pyvrml97's
+behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
 
 - A scene's time is the engine's (``systemtime.systemTime``, which a capture
   steps a frame at a time): ``SceneGraph.clock`` is what pyvrml97's timed

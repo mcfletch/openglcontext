@@ -116,7 +116,11 @@ part:
   `PositionInterpolator
   <http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#PositionInterpolator>`__,
   `CoordinateInterpolator
-  <http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#CoordinateInterpolator>`__
+  <http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#CoordinateInterpolator>`__,
+  `NormalInterpolator
+  <http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#NormalInterpolator>`__
+  (pyvrml97's ``vrml.x3d.runtime``: a colour interpolated in HSV, a normal
+  along its great circle)
 
 - `TimeSensor
   <http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#TimeSensor>`__

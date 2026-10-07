@@ -57,6 +57,7 @@ from OpenGLContext.scenegraph.indexedpolygons import IndexedPolygons as IndexedP
 from OpenGLContext.scenegraph.inline import Inline as Inline
 from OpenGLContext.scenegraph.interpolators import ColorInterpolator as ColorInterpolator
 from OpenGLContext.scenegraph.interpolators import CoordinateInterpolator as CoordinateInterpolator
+from OpenGLContext.scenegraph.interpolators import NormalInterpolator as NormalInterpolator
 from OpenGLContext.scenegraph.interpolators import OrientationInterpolator as OrientationInterpolator
 from OpenGLContext.scenegraph.interpolators import PositionInterpolator as PositionInterpolator
 from OpenGLContext.scenegraph.interpolators import ScalarInterpolator as ScalarInterpolator
@@ -177,7 +178,6 @@ from vrml.vrml97.basenodes import AudioClip as AudioClip
 from vrml.vrml97.basenodes import Color as Color
 from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
-from vrml.vrml97.basenodes import NormalInterpolator as NormalInterpolator
 from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
