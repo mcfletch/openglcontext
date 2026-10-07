@@ -159,19 +159,20 @@ def _dispose_mesh_gpu(cache: Any, geometry: Any) -> None:
         holder()               # de-register so the freed GPU handle is never reused
 
 
-def _dispose_material_textures(material: Any, context: Any) -> None:
-    """Delete this context's GL textures for a material's PBR texture maps.
+def _dispose_material_textures(material: Any, cache: Any) -> None:
+    """Delete the GL textures of a material's texture maps from the context's cache.
 
-    A tile's `PBRTexture` maps are built from its own images and cached per context;
-    they are not shared with other tiles, so deleting them on eviction frees texture
-    VRAM without disturbing anything still resident.
+    A tile's maps are built from its own images; they are not shared with
+    other tiles, so deleting them on eviction frees texture memory without
+    disturbing anything still resident.
     """
     from OpenGL.GL import glDeleteTextures
-    for pbr_tex in (getattr(material, 'textures', None) or {}).values():
-        per_context = getattr(pbr_tex, '_per_context', None)
-        if not per_context:
+    for texture_node in (getattr(material, 'textures', None) or {}).values():
+        holder = cache.getHolder(texture_node)
+        if holder is None:
             continue
-        tex = per_context.pop(context, None)
+        tex = holder.data
+        holder.clear()
         tid = getattr(tex, 'texture', None)
         if not tid:
             continue
@@ -215,12 +216,12 @@ def _make_dispose(drawable: Any) -> Callable[[], None]:
         for shape in _drawable_shapes(drawable):
             geometry = shape.geometry
             _dispose_mesh_gpu(cache, geometry)
-            for material in (getattr(geometry, 'material', None),
-                             getattr(getattr(shape, 'appearance', None),
-                                     'material', None)):
+            for appearance in (getattr(geometry, 'appearance', None),
+                               getattr(shape, 'appearance', None)):
+                material = getattr(appearance, 'material', None)
                 if material is not None and id(material) not in seen_materials:
                     seen_materials.add(id(material))
-                    _dispose_material_textures(material, context)
+                    _dispose_material_textures(material, cache)
 
     return dispose
 

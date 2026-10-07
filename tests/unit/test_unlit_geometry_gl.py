@@ -18,6 +18,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 _DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -34,7 +36,7 @@ try:
     from OpenGLContext.scenegraph.basenodes import (
         sceneGraph, Coordinate, IndexedLineSet, PointSet, Viewpoint)
     from OpenGLContext.scenegraph.appearance import Appearance
-    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+    from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
     from OpenGLContext.scenegraph.shape import Shape
 
     COLOUR = (1.0, 0.2, 0.6)
@@ -52,8 +54,7 @@ try:
             self.sg = sceneGraph(children=[
                 Viewpoint(position=(0, 0, 12)),
                 Shape(geometry=geometry,
-                      appearance=Appearance(material=PhysicalMaterial(
-                          baseColor=COLOUR, emissiveColor=COLOUR, unlit=True))),
+                      appearance=Appearance(material=UnlitMaterial(emissiveColor=COLOUR))),
             ])
 
     v = V(size=(240, 240))
@@ -107,9 +108,7 @@ def _run(geometry):
 @pytest.mark.parametrize('geometry', ['lines', 'points'])
 def test_colourless_geometry_is_drawn(geometry):
     proc = _run(geometry)
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode != 2, (
         '%s with no per-vertex colours did not draw where it was put\n%s'
         % (geometry, proc.stderr))
@@ -118,9 +117,7 @@ def test_colourless_geometry_is_drawn(geometry):
 @pytest.mark.parametrize('geometry', ['lines', 'points'])
 def test_colourless_geometry_takes_its_material_colour(geometry):
     proc = _run(geometry)
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         '%s was not drawn in its material colour\n%s'
         % (geometry, proc.stderr))

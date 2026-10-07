@@ -13,7 +13,6 @@ from __future__ import annotations
 import os
 import re
 import logging
-from math import cos, sin
 from collections.abc import Callable, Iterable
 from typing import Any, Optional, TYPE_CHECKING
 
@@ -70,6 +69,7 @@ from OpenGLContext.passes.shadersource import (
     vertex_routing_source,
 )
 from OpenGLContext.passes.shaderpass_shadow import _ShadowUniformMixin
+from OpenGLContext.scenegraph.texturemapping import texture_transform_matrix
 
 
 def _upload_view_list(location: int, indices: tuple[int, ...]) -> None:
@@ -167,56 +167,6 @@ def _vec_uploader(gl_fn: Callable[..., Any]) -> Upload:
 _UPLOAD_2FV = _vec_uploader(glUniform2fv)
 _UPLOAD_3FV = _vec_uploader(glUniform3fv)
 _UPLOAD_4FV = _vec_uploader(glUniform4fv)
-
-
-def _affine2d_translate(tx: float, ty: float) -> Matrix3:
-    m = np.eye(3, dtype='f')
-    m[0, 2] = tx
-    m[1, 2] = ty
-    return m
-
-
-def _affine2d_scale(sx: float, sy: float) -> Matrix3:
-    m = np.eye(3, dtype='f')
-    m[0, 0] = sx
-    m[1, 1] = sy
-    return m
-
-
-def _affine2d_rotate(angle: float) -> Matrix3:
-    c, s = cos(angle), sin(angle)
-    m = np.eye(3, dtype='f')
-    m[0, 0], m[0, 1] = c, -s
-    m[1, 0], m[1, 1] = s, c
-    return m
-
-
-def texture_transform_matrix(transform_node: Optional[Any]) -> Matrix3:
-    """3x3 homogeneous UV transform for a VRML97 TextureTransform node.
-
-    ``None`` yields identity. Composition order matches the VRML97 spec:
-    translate(center) -> rotate -> scale -> translate(-center) -> translate.
-    The three translation matrices share one builder so the five
-    hand-written matrices this replaced can't drift apart.
-    """
-    if transform_node is None:
-        return np.eye(3, dtype='f')
-    tx, ty = transform_node.translation
-    cx, cy = transform_node.center
-    angle = transform_node.rotation
-    sx, sy = transform_node.scale
-    m = np.eye(3, dtype='f')
-    if cx != 0 or cy != 0:
-        m = m @ _affine2d_translate(cx, cy)
-    if angle != 0:
-        m = m @ _affine2d_rotate(angle)
-    if sx != 1 or sy != 1:
-        m = m @ _affine2d_scale(sx, sy)
-    if cx != 0 or cy != 0:
-        m = m @ _affine2d_translate(-cx, -cy)
-    if tx != 0 or ty != 0:
-        m = m @ _affine2d_translate(tx, ty)
-    return m
 
 
 def _ignore(*args: Any, **named: Any) -> None:

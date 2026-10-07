@@ -11,6 +11,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -125,18 +127,14 @@ def _run():
 
 def test_a_wave_moves_between_two_moments():
     proc = _run()
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode != 2, (
         'the surface did not move when its wave time changed\n%s' % proc.stderr)
 
 
 def test_the_same_moment_draws_the_same_water():
     proc = _run()
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode != 5, (
         'the picture never stopped changing at a fixed wave time\n%s'
         % proc.stderr)

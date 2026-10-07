@@ -21,6 +21,7 @@ from OpenGLContext.loaders.tiles3d.gltf_uploader import file_tile_loader
 from OpenGLContext.loaders.tiles3d.tileset import Z_UP_TO_Y_UP, build_runtime_tileset
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.appearance import Appearance
 
 
 def _tileset(root):
@@ -533,7 +534,7 @@ def test_a_tile_finds_a_texture_named_beside_its_tileset(tmp_path):
     material = PhysicalMaterial()
     material.baseTexture = x3d.ImageTexture(url=['shared.png'])
     mesh = PBRMesh(positions=np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], 'f'),
-                   material=material)
+                   appearance=Appearance(material=material))
     write_glb(mesh, path=str(tmp_path / 'tile.glb'))
 
     class _Tile:

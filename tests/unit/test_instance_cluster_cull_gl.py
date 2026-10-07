@@ -17,6 +17,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -101,9 +103,7 @@ def _run(flag):
 
 def test_cluster_cull_matches_per_object_cull():
     off = _run('0')
-    if off.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % off.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(off.returncode, off.stderr)
     on = _run('1')
     assert off.returncode == 0 and on.returncode == 0, (
         'driver failed\noff:\n%s\non:\n%s' % (off.stderr, on.stderr))

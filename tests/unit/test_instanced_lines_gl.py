@@ -14,6 +14,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -64,9 +66,7 @@ def test_shared_line_sets_are_drawn(instancing):
     proc = subprocess.run([sys.executable, '-c', DRIVER, instancing],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'shared line sets were not drawn (instancing=%s)\n'
         'stdout:\n%s\nstderr:\n%s' % (instancing, proc.stdout, proc.stderr))

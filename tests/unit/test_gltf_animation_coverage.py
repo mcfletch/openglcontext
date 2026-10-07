@@ -154,7 +154,7 @@ class TestPointerSetter:
         m = types.SimpleNamespace()
         setter = ga._pointer_setter(
             self._g(), '/materials/0/pbrMetallicRoughness/metallicFactor',
-            {}, {}, {0: m})
+            {}, {}, {0: types.SimpleNamespace(material=m)})
         setter([0.3])
         assert abs(m.metallic - 0.3) < 1e-6
 
@@ -163,7 +163,7 @@ class TestPointerSetter:
         setter = ga._pointer_setter(
             self._g(),
             '/materials/0/extensions/KHR_materials_emissive_strength/emissiveStrength',
-            {}, {}, {0: m})
+            {}, {}, {0: types.SimpleNamespace(material=m)})
         setter([4.0])
         assert abs(m.emissiveStrength - 4.0) < 1e-6
 
@@ -172,27 +172,50 @@ class TestPointerSetter:
         m = types.SimpleNamespace()
         assert ga._pointer_setter(
             self._g(), '/materials/0/pbrMetallicRoughness/unknownFactor',
-            {}, {}, {0: m}) is None
+            {}, {}, {0: types.SimpleNamespace(material=m)}) is None
 
     def test_malformed_material_pointer_is_swallowed(self):
         # A non-integer material index raises inside and resolves to no setter.
         m = types.SimpleNamespace()
         assert ga._pointer_setter(
             self._g(), '/materials/notanindex/metallicFactor',
-            {}, {}, {0: m}) is None
+            {}, {}, {0: types.SimpleNamespace(material=m)}) is None
+
+    def _transformed(self):
+        """An appearance whose base colour map is moved by a matrix transform."""
+        from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+        from OpenGLContext.loaders.gltf.materials import khr_transform_matrix  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.appearance import Appearance  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.imagedata import ImageDataTexture  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial  # noqa: PLC0415 kept with its use
+        transform = x3d.TextureTransformMatrix3D(
+            mapping='TEXCOORD_0:0', matrix=khr_transform_matrix(scale=(2.0, 2.0)))
+        material = PhysicalMaterial(baseTexture=ImageDataTexture(),
+                                    baseTextureMapping='TEXCOORD_0:0')
+        appearance = Appearance(material=material, textureTransform=x3d.MultiTextureTransform(
+            textureTransform=[transform]))
+        return appearance, transform
 
     def test_texture_transform_offset_rotation_scale(self):
+        from OpenGLContext.loaders.gltf.materials import khr_transform_params  # noqa: PLC0415 kept with its use
         for comp, value, check in (
-            ('offset', [0.5, 0.25], lambda m: m._uv_params['offset'] == [0.5, 0.25]),
-            ('rotation', [1.2], lambda m: abs(m._uv_params['rotation'] - 1.2) < 1e-6),
-            ('scale', [2.0, 3.0], lambda m: m._uv_params['scale'] == [2.0, 3.0]),
+            ('offset', [0.5, 0.25], lambda p: p['offset'] == pytest.approx([0.5, 0.25])
+             and p['scale'] == pytest.approx([2.0, 2.0])),
+            ('rotation', [1.2], lambda p: p['rotation'] == pytest.approx(1.2)
+             and p['scale'] == pytest.approx([2.0, 2.0])),
+            ('scale', [2.0, 3.0], lambda p: p['scale'] == pytest.approx([2.0, 3.0])),
         ):
-            m = types.SimpleNamespace()
-            ptr = '/materials/0/extensions/KHR_texture_transform/%s' % comp
-            setter = ga._pointer_setter(self._g(), ptr, {}, {}, {0: m})
+            appearance, transform = self._transformed()
+            ptr = ('/materials/0/pbrMetallicRoughness/baseColorTexture/extensions/'
+                   'KHR_texture_transform/%s' % comp)
+            setter = ga._pointer_setter(self._g(), ptr, {}, {}, {0: appearance})
             setter(value)
-            assert check(m)
-            assert m.uv_transform is not None
+            assert check(khr_transform_params(transform.matrix)), comp
+
+    def test_a_texture_without_a_transform_cannot_be_animated(self):
+        appearance, _transform = self._transformed()
+        ptr = '/materials/0/normalTexture/extensions/KHR_texture_transform/offset'
+        assert ga._pointer_setter(self._g(), ptr, {}, {}, {0: appearance}) is None
 
 
 class TestResolveJsonPointer:

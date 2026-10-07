@@ -130,7 +130,7 @@ class Shape(basenodes.Shape):
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
         if getattr(mode, 'visible', True) and hasattr(shader_program, 'configure_appearance'):
-            shader_program.configure_appearance(self.appearance, mode)
+            shader_program.configure_appearance(self.appearance, mode, self.geometry)
             # Whether the base colour is modulated by a per-vertex colour is one
             # uniform for the whole pass, so it is answered for every shape
             # rather than only by the geometry that has colours: a box drawn

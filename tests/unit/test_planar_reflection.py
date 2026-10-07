@@ -517,7 +517,7 @@ def test_a_roughness_map_in_any_mode_has_a_mean(mode):
 def test_a_mesh_drawn_with_its_own_material_is_as_rough_as_that_material():
     """A mesh with no appearance material is drawn with the one it carries."""
     rough = PhysicalMaterial(roughness=0.9, reflector=PlanarReflector())
-    shape = Shape(geometry=PBRMesh(positions=QUAD, indices=QUAD_INDICES, material=rough))
+    shape = Shape(geometry=PBRMesh(positions=QUAD, indices=QUAD_INDICES, appearance=Appearance(material=rough)))
     assert reflection.shape_material(shape) is rough
     record = ((False,), None, np.asarray(_placement(translate=(0.0, 1.5, -5.0)), 'f'),
               None, (), shape)

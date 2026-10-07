@@ -31,6 +31,7 @@ from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, req
 from OpenGLContext.loaders.gltf.meshes import estimate_normals
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.appearance import Appearance
 
 log = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class RockProfile:
 def rock_material() -> PhysicalMaterial:
     """What a boulder is made of."""
     return PhysicalMaterial(baseColor=ROCK_ALBEDO, metallic=0.0,
-                       roughness=ROCK_ROUGHNESS, doubleSided=False)
+                       roughness=ROCK_ROUGHNESS)
 
 
 def rock_mesh(radius: float = 1.0, seed: int = 0,
@@ -380,5 +381,5 @@ def _mesh(points: np.ndarray, faces: np.ndarray, seed: int,
     normals = estimate_normals(corners, indices)
     return PBRMesh(positions=corners, normals=normals, indices=indices,
                    colors=_weathering(corners, normals, seed, profile),
-                   material=material)
+                   appearance=Appearance(material=material))
 

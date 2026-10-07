@@ -16,6 +16,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 from OpenGLContext.testing.paths import tests_root
 HERE = str(tests_root(__file__))
 WRL = os.path.join(HERE, 'wrls', 'instanced_lattice.wrl')
@@ -92,9 +94,7 @@ def test_demo_world_instances_on_load(kind, path):
     proc = subprocess.run([sys.executable, '-c', DRIVER, kind, path],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         '%s world did not instance on load (expected 0 per-shape draws, >=1 '
         'instanced draw)\nstdout:\n%s\nstderr:\n%s' % (kind, proc.stdout, proc.stderr))

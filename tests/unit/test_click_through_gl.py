@@ -21,6 +21,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -124,9 +126,7 @@ def test_pickable_flag_click_through(scenario):
     env = dict(os.environ)
     proc = subprocess.run([sys.executable, '-c', DRIVER, scenario],
                           capture_output=True, text=True, timeout=120, env=env)
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'click-through scenario %r resolved the wrong object\n'
         'stdout:\n%s\nstderr:\n%s' % (scenario, proc.stdout, proc.stderr))

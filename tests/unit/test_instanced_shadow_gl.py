@@ -12,6 +12,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 from OpenGLContext.testing.paths import tests_root
 GLTF = os.path.join(str(tests_root(__file__)), 'wrls', 'instanced_lattice.gltf')
 
@@ -79,9 +81,7 @@ def test_shadow_pass_is_instanced():
     proc = subprocess.run([sys.executable, '-c', DRIVER, GLTF],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'shadow pass did not instance (expected 0 per-shape draws with shadows on)\n'
         'stdout:\n%s\nstderr:\n%s' % (proc.stdout, proc.stderr))

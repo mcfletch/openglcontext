@@ -10,6 +10,7 @@ import pytest
 
 from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial, srgb_to_linear
+from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext.scenegraph import basenodes
 
 
@@ -22,7 +23,7 @@ def test_block_is_224_bytes():
     assert buf.nbytes == 224            # must match the driver block data size
 
 
-def test_iridescence_vec4_after_uv_transform():
+def test_iridescence_vec4_after_the_reserved_transform():
     m = PhysicalMaterial()
     m.iridescence = 0.7
     m.iridescenceIor = 1.6
@@ -43,7 +44,6 @@ def test_pbr_material_factors_land_at_their_offsets():
     m.emissiveColor = (0.6, 0.7, 0.8)
     m.occlusionStrength = 0.9
     m.normalScale = 1.25
-    m.alphaCutoff = 0.33
     m.ior = 1.7
     m.thickness = 2.0
     m.attenuationColor = (0.11, 0.22, 0.33)
@@ -56,38 +56,19 @@ def test_pbr_material_factors_land_at_their_offsets():
     assert np.isclose(buf[11], 0.9)      # occlusionStrength (packed after specularColor)
     assert np.isclose(buf[15], 1.25)     # normalScale
     assert np.allclose(buf[16:19], (0.11, 0.22, 0.33))  # attenuationColor
-    assert np.isclose(buf[19], 0.33)     # alphaCutoff
     assert np.isclose(buf[25], 1.7)      # ior
     assert np.isclose(buf[26], 2.0)      # thicknessFactor
     assert np.isclose(buf[27], 5.0)      # attenuationDistance
 
 
 def test_unlit_flag_is_int_at_word_28():
-    m = PhysicalMaterial()
-    m.unlit = 1
-    iv = pack_material_block(m).view(np.int32)
-    assert iv[28] == 1
-    m.unlit = 0
-    assert pack_material_block(m).view(np.int32)[28] == 0
+    assert pack_material_block(UnlitMaterial()).view(np.int32)[28] == 1
+    assert pack_material_block(PhysicalMaterial()).view(np.int32)[28] == 0
 
 
-def test_identity_uv_transform_when_absent():
+def test_the_reserved_transform_words_are_zero():
     buf = pack_material_block(PhysicalMaterial())
-    # mat3 columns at words 32.., each padded to 4; identity has 1s on the diagonal
-    assert np.isclose(buf[32], 1.0)      # col0.x
-    assert np.isclose(buf[37], 1.0)      # col1.y
-    assert np.isclose(buf[42], 1.0)      # col2.z
-    assert np.isclose(buf[33], 0.0) and np.isclose(buf[34], 0.0)
-
-
-def test_uv_transform_columns_packed_column_major():
-    m = PhysicalMaterial()
-    M = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], 'f')
-    m.uv_transform = M
-    buf = pack_material_block(m)
-    assert np.allclose(buf[32:35], M[:, 0])   # column 0
-    assert np.allclose(buf[36:39], M[:, 1])   # column 1
-    assert np.allclose(buf[40:43], M[:, 2])   # column 2
+    assert np.allclose(buf[32:44], 0.0)
 
 
 def test_none_material_is_neutral_grey():

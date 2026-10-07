@@ -149,16 +149,16 @@ refused by the writer.
 Textures
 ~~~~~~~~
 
-A material's ``textures`` dictionary is written one channel at a time, with
-its PIL images embedded as PNG. To keep a JPEG as a JPEG, wrap it in an
-``EncodedImage``. Re-encoding a photographic texture as PNG makes a tile much
-larger with no visible gain:
+A material's textures are written one channel at a time, with their PIL
+images embedded as PNG. To keep a JPEG as a JPEG, use an ``EncodedImage``
+texture. Re-encoding a photographic texture as PNG makes a tile much larger
+with no visible gain:
 
 .. code-block:: python
 
    from OpenGLContext.loaders.gltf.writer import EncodedImage
 
-   material.textures['baseColor'] = EncodedImage.from_path('bark.jpg', srgb=True)
+   material.baseTexture = EncodedImage.from_path('bark.jpg')
 
 .. _roundtrip:
 

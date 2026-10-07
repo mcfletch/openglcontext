@@ -20,6 +20,7 @@ from OpenGLContext.scenegraph import water
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.scenegraph.appearance import Appearance
 
 
 def _sheet(tag, level=0.0, side=10.0):
@@ -31,7 +32,7 @@ def _sheet(tag, level=0.0, side=10.0):
                             (side, level, side), (0, level, side)], 'f'),
         normals=np.array([(0, 1, 0)] * 4, 'f'),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
-        material=material,
+        appearance=Appearance(material=material),
     )
 
 
@@ -137,7 +138,7 @@ def test_the_engine_material_may_be_asked_for():
     material = shape.appearance.material
     assert tuple(material.baseColor) == pytest.approx(water.WATER_ALBEDO)
     assert material.roughness == pytest.approx(water.WATER_ROUGHNESS)
-    assert material is shape.geometry.material
+    assert material is shape.geometry.appearance.material
 
 
 # --- where the water is -------------------------------------------------------

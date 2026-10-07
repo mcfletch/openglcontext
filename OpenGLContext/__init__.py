@@ -211,3 +211,4 @@ Node( 'IS','vrml.route.IS' )
 
 Node( 'PhysicalMaterial', 'OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial' )
 Node( 'ImageDataTexture', 'OpenGLContext.scenegraph.imagedata.ImageDataTexture' )
+Node( 'UnlitMaterial', 'OpenGLContext.scenegraph.unlitmaterial.UnlitMaterial' )

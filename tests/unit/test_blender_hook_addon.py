@@ -29,6 +29,7 @@ from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.water import gltf as watergltf
 from OpenGLContext.scenegraph.water.medium import MEDIA
 from OpenGLContext.scenegraph.reflector import PlanarReflector
+from OpenGLContext.scenegraph.appearance import Appearance
 
 ADDON = Path(__file__).resolve().parents[2] / 'tools' / 'blender' / 'oglc_hook'
 
@@ -201,7 +202,7 @@ def test_a_mirror_tagged_in_the_panel_loads_reflecting():
     mesh = PBRMesh(
         positions=np.array([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], 'f'),
         normals=np.array([(0, 0, 1)] * 4, 'f'),
-        indices=np.array([0, 1, 2, 0, 2, 3], np.uint32), material=material)
+        indices=np.array([0, 1, 2, 0, 2, 3], np.uint32), appearance=Appearance(material=material))
     scene = gltf.load_gltf(write_glb(SceneNode(mesh=mesh)))
     shape = next(node for node in _walk(scene.group) if isinstance(node, Shape))
     assert shape.appearance.material.reflector.interval == 2
@@ -274,7 +275,7 @@ def test_a_tagged_material_loads_as_moving_water():
         positions=np.array([(0, 0, 0), (8, 0, 0), (8, 0, 8), (0, 0, 8)], 'f'),
         normals=np.array([(0, 1, 0)] * 4, 'f'),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
-        material=material,
+        appearance=Appearance(material=material),
     )
     scene = gltf.load_gltf(write_glb(SceneNode(mesh=mesh)))
     shapes = [node for node in _walk(scene.group) if isinstance(node, Shape)]

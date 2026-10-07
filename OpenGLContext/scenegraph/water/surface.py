@@ -47,6 +47,7 @@ from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import WATER
 from OpenGLContext.scenegraph.varied import Varied
+from OpenGLContext.scenegraph.appearance import Appearance
 
 __all__ = ['WATER_ALBEDO', 'WATER_ROUGHNESS', 'WATER_TRANSPARENCY', 'WATER_IOR',
            'LAKE', 'BREEZE', 'MESH_FLOOR', 'MESH_LIMIT', 'MESH_PER_WAVE', 'mesh_across',
@@ -385,12 +386,12 @@ def water_material() -> PhysicalMaterial:
     (:data:`~OpenGLContext.scenegraph.reflector.WATER`); barely coloured, so
     what it reflects is what is seen; transparent, so the bed shows through
     where it is shallow; and two-sided, because a car that has gone in is
-    looking up at it.
+    looking up at it, which the water meshes say by not being ``solid``.
+    The transparency makes an appearance's ``AUTO`` alpha mode blend it.
     """
     return PhysicalMaterial(baseColor=WATER_ALBEDO, metallic=0.0,
-                       roughness=WATER_ROUGHNESS,
-                       transparency=WATER_TRANSPARENCY, alphaMode='BLEND',
-                       ior=WATER_IOR, doubleSided=True, reflector=WATER)
+                            roughness=WATER_ROUGHNESS, transparency=WATER_TRANSPARENCY,
+                            ior=WATER_IOR, reflector=WATER)
 
 
 def water_surface(x0: float, x1: float, z0: float, z1: float,
@@ -436,7 +437,9 @@ def water_surface(x0: float, x1: float, z0: float, z1: float,
     mesh = PBRMesh(positions=positions.astype('f'),
                    normals=normals.reshape(-1, 3).astype('f'),
                    indices=_grid(len(xs), len(zs)),
-                   material=material if material is not None else water_material())
+                   solid=False,
+                   appearance=Appearance(
+                       material=material if material is not None else water_material()))
     return _driven(mesh, style, when, on_gpu)
 
 
@@ -522,7 +525,9 @@ def water_ribbon(course: Any, width: Any, style: Optional[WaterStyle] = None,
         normals = wave_normal(style, edges[:, 0], edges[:, 2], when)
     mesh = PBRMesh(positions=edges.astype('f'), normals=normals.astype('f'),
                    indices=_ladder(len(line)),
-                   material=material if material is not None else water_material())
+                   solid=False,
+                   appearance=Appearance(
+                       material=material if material is not None else water_material()))
     return _driven(mesh, style, when, on_gpu)
 
 
@@ -642,5 +647,7 @@ def water_glints(course: Any, width: Any, spacing: float,
                       first, first + 3, first + 2], axis=-1)
     mesh = PBRMesh(positions=points.astype('f'), normals=normals.astype('f'),
                    indices=quads.reshape(-1).astype(np.uint32),
-                   material=material if material is not None else water_material())
+                   solid=False,
+                   appearance=Appearance(
+                       material=material if material is not None else water_material()))
     return _driven(mesh, style, when, on_gpu)

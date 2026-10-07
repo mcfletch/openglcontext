@@ -36,7 +36,7 @@ import os
 import struct
 from dataclasses import dataclass, field as dataclass_field
 from collections.abc import Iterable, Sequence
-from typing import Any, Optional, Union
+from typing import Any, Generic, Optional, TypeVar, Union
 
 import numpy as np
 
@@ -44,9 +44,15 @@ from OpenGLContext import __version__ as _engine_version
 from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.loaders.gltf import hooks as _hooks
 from OpenGLContext.loaders.resolver import contained_source
+from OpenGLContext.loaders.gltf.materials import GLTF_TEXTURE_KEYS, khr_transform_params
 from OpenGLContext.loaders.gltf.textures import gl_sampler
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
+from OpenGLContext.scenegraph.texturemapping import (
+    channel_labels, coordinate_set, transform_for, transform_matrix,
+)
+from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from vrml.x3d import nodes as x3d
 
 GENERATOR = "OpenGLContext %s glTF writer" % _engine_version
@@ -105,7 +111,7 @@ class EncodedImage(ImageDataTexture):
     A source JPEG stays a JPEG, at its authored size: re-encoding a
     photographic map as PNG multiplies a tile's weight for no gain in what it
     looks like. It is an :class:`ImageDataTexture`, so it goes in a material's
-    texture field; the image is decoded only if the texture is drawn.
+    texture field; the image is decoded the first time the texture is drawn.
     """
 
     PROTO = 'EncodedImage'
@@ -115,17 +121,12 @@ class EncodedImage(ImageDataTexture):
         self.data = bytes(data)
         self.mime_type = mime_type
 
-    @property
-    def image(self) -> Any:
-        """The decoded PIL image"""
-        if self._image is None and self.data:
+    def cached(self, mode: Any = None) -> Any:
+        """The GL texture, decoding the image the first time it is drawn"""
+        if self.image is None and self.data:
             from PIL import Image  # noqa: PLC0415 decoded only when drawn
-            self._image = Image.open(io.BytesIO(self.data))
-        return self._image
-
-    @image.setter
-    def image(self, image: Any) -> None:
-        self._image = image
+            self.image = Image.open(io.BytesIO(self.data))
+        return super().cached(mode)
 
     @classmethod
     def from_path(cls, path: str, **named: Any) -> "EncodedImage":
@@ -299,8 +300,12 @@ class _BufferBuilder:
                                  buffer=buffer)
 
 
-class _IdentityCache:
-    """Indices already assigned to objects, keyed by identity.
+#: What an :class:`_IdentityCache` holds for each object.
+_Value = TypeVar('_Value')
+
+
+class _IdentityCache(Generic[_Value]):
+    """Values (indices, mostly) already assigned to objects, keyed by identity.
 
     The cache holds a reference to each object it has seen. ``id()`` on its own
     is not a safe key: a mesh that is collected frees its address for the next
@@ -309,15 +314,15 @@ class _IdentityCache:
     """
 
     def __init__(self) -> None:
-        self._entries: dict[int, tuple[Any, int]] = {}
+        self._entries: dict[int, tuple[Any, _Value]] = {}
 
-    def get(self, obj: Any) -> Optional[int]:
+    def get(self, obj: Any) -> Optional[_Value]:
         found = self._entries.get(id(obj))
         return found[1] if found is not None and found[0] is obj else None
 
-    def set(self, obj: Any, index: int) -> int:
-        self._entries[id(obj)] = (obj, index)
-        return index
+    def set(self, obj: Any, value: _Value) -> _Value:
+        self._entries[id(obj)] = (obj, value)
+        return value
 
 
 _VECTOR_KIND = {1: 'SCALAR', 2: 'VEC2', 3: 'VEC3', 4: 'VEC4'}
@@ -339,7 +344,6 @@ def _kind_for(array: np.ndarray, name: str, allowed: Sequence[int]) -> str:
 # (extension, {json key: (material field, default)}); the reader's handler table
 # in materials.py is the other half of the pair.
 _MATERIAL_EXTENSIONS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
-    ('KHR_materials_unlit', {}),
     # Ours: the vertex colours on this material are light worked out when the
     # world was built rather than a tint on the surface, so a reader adds them
     # as emission and lets its own lights shade the surface underneath.
@@ -394,26 +398,49 @@ _MATERIAL_TEXTURE_EXTENSION = {
 }
 
 # The textureInfo key each extension gives its channel.
-_EXTENSION_TEXTURE_KEY = {
-    'specular': 'specularTexture', 'specularColor': 'specularColorTexture',
-    'clearcoat': 'clearcoatTexture', 'clearcoatRoughness': 'clearcoatRoughnessTexture',
-    'clearcoatNormal': 'clearcoatNormalTexture',
-    'sheenColor': 'sheenColorTexture', 'sheenRoughness': 'sheenRoughnessTexture',
-    'transmission': 'transmissionTexture', 'thickness': 'thicknessTexture',
-    'iridescence': 'iridescenceTexture',
-    'iridescenceThickness': 'iridescenceThicknessTexture',
-    'anisotropy': 'anisotropyTexture',
-    'diffuseTransmission': 'diffuseTransmissionTexture',
-    'diffuseTransmissionColor': 'diffuseTransmissionColorTexture',
-}
-
-# Bit per channel in PhysicalMaterial.texCoordMask: set means "sample TEXCOORD_1".
-_TEXCOORD_BIT = {'baseColor': 1, 'metallicRoughness': 2, 'normal': 4,
-                 'occlusion': 8, 'emissive': 16}
+_EXTENSION_TEXTURE_KEY = {channel: key for channel, key in GLTF_TEXTURE_KEYS.items()
+                          if channel in _MATERIAL_TEXTURE_EXTENSION}
 
 # Ours: what a material or a node is, for the engine to make something of on
 # load. The reader's half of the pair is in hooks, and so is the name.
 _HOOK_EXTENSION = _hooks.EXTENSION
+
+
+def texture_coordinates(appearance: Any, geometry: Any) -> "dict[str, tuple[int, Optional[dict]]]":
+    """Each textured channel's coordinate set and KHR_texture_transform parameters
+
+    Read from the material's mapping labels, the geometry's coordinate sets
+    and the appearance's texture transforms, as the renderer reads them.
+    """
+    found: "dict[str, tuple[int, Optional[dict]]]" = {}
+    material = getattr(appearance, 'material', None)
+    for channel, label in channel_labels(material).items():
+        transform = transform_for(appearance, label)
+        params = None
+        if transform is not None:
+            affine = transform_matrix(transform)
+            matrix = np.identity(4)
+            matrix[0, [0, 1, 3]] = affine[0]
+            matrix[1, [0, 1, 3]] = affine[1]
+            params = khr_transform_params(matrix)
+        found[channel] = (coordinate_set(geometry, label), params)
+    return found
+
+
+def _with_impostor(material: Any) -> "Optional[dict]":
+    """A material's ``extras``, with its octahedral impostor's views where it is one
+
+    ``extras`` is where the glTF loader reads ``octahedralViews`` and
+    ``octahedralHemi`` from (:mod:`OpenGLContext.loaders.gltf.materials`).
+    """
+    extras = getattr(material, 'extras', None)
+    views = int(getattr(material, 'octahedralViews', 0) or 0)
+    if views < 2:
+        return extras
+    found = dict(extras) if isinstance(extras, dict) else {}
+    found.update(octahedralViews=views,
+                 octahedralHemi=bool(getattr(material, 'octahedralHemi', True)))
+    return found
 
 
 def _reflector_hook(material: Any) -> Any:
@@ -472,9 +499,10 @@ class GLTFWriter:
         self._nodes: list[dict] = []
         self._roots: list[int] = []
         self._extensions_used: set[str] = set()
-        self._mesh_index = _IdentityCache()
-        self._material_index = _IdentityCache()
-        self._image_index = _IdentityCache()
+        self._mesh_index: _IdentityCache[int] = _IdentityCache()
+        #: Each material's glTF indices, one per alpha mode, cutoff and sidedness.
+        self._material_index: _IdentityCache[dict[tuple, int]] = _IdentityCache()
+        self._image_index: _IdentityCache[int] = _IdentityCache()
         self._texture_index: dict[tuple, int] = {}
         #: Written as the document's ``extras`` when it holds anything.
         self.extras: dict = {}
@@ -548,49 +576,92 @@ class GLTFWriter:
         mode = int(getattr(mesh, 'draw_mode', 4) or 0)
         if mode != 4:                                    # TRIANGLES is the default
             primitive['mode'] = mode
-        material = getattr(mesh, 'material', None)
-        if material is not None:
-            primitive['material'] = self.add_material(material)
+        appearance = getattr(mesh, 'appearance', None)
+        material = getattr(appearance, 'material', None)
+        if material:
+            primitive['material'] = self.add_material(
+                material, alpha=appearance_alpha(appearance),
+                double_sided=not bool(getattr(mesh, 'solid', True)),
+                coordinates=texture_coordinates(appearance, mesh))
         return primitive
 
     # -- materials -------------------------------------------------------------
 
-    def add_material(self, material: Any, name: Optional[str] = None) -> int:
-        """Write a :class:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial`.
+    def add_material(self, material: Any, name: Optional[str] = None,
+                     alpha: "tuple[str, float]" = ('OPAQUE', 0.5),
+                     double_sided: bool = False,
+                     coordinates: "Optional[dict[str, tuple[int, Optional[dict]]]]" = None,
+                     ) -> int:
+        """Write a `PhysicalMaterial` or `UnlitMaterial` as a glTF material
 
-        Returns the index; the same material object passed again reuses it.
-        Without a ``name``, the material's own ``DEF`` is written as the glTF
-        material name, so a material a caller can address by name in one
-        document is addressable by that name in the document written from it.
+        alpha -- the alpha mode and cutoff, which X3D puts on the Appearance
+        double_sided -- True for geometry that is not `solid`
+        coordinates -- each channel's texture coordinate set and
+            KHR_texture_transform parameters (or None), which X3D gives with
+            mapping labels on the material, geometry and appearance
+            (:func:`texture_coordinates`)
+
+        glTF puts all of these on the material, so one material drawn two
+        ways is two glTF materials. Returns the index; the same material, alpha and
+        sidedness again reuse it. Without a ``name``, the material's own
+        ``DEF`` is written as the glTF material name, so a material a caller
+        can address by name in one document is addressable by that name in the
+        document written from it.
         """
-        cached = self._material_index.get(material)
+        variants = self._material_index.get(material)
+        if variants is None:
+            variants = self._material_index.set(material, {})
+        coordinates = coordinates or {}
+        key = (alpha[0], round(float(alpha[1]), 6), bool(double_sided),
+               json.dumps(coordinates, sort_keys=True))
+        cached = variants.get(key)
         if cached is not None:
             return cached
-        entry = self._material_json(material, name or getattr(material, 'DEF', '') or None)
+        entry = self._material_json(material, name or getattr(material, 'DEF', '') or None,
+                                    coordinates)
+        if alpha[0] != 'OPAQUE':
+            entry['alphaMode'] = alpha[0]
+        if alpha[0] == 'MASK':
+            entry['alphaCutoff'] = float(alpha[1])
+        if double_sided:
+            entry['doubleSided'] = True
         self._materials.append(entry)
-        return self._material_index.set(material, len(self._materials) - 1)
+        index = variants[key] = len(self._materials) - 1
+        return index
 
-    def _material_json(self, material: Any, name: Optional[str]) -> dict:
+    def _material_json(self, material: Any, name: Optional[str],
+                       coordinates: "dict[str, tuple[int, Optional[dict]]]") -> dict:
         textures = dict(getattr(material, 'textures', None) or {})
-        mask = int(getattr(material, 'texCoordMask', 0) or 0)
 
         def texture_info(channel: str) -> Optional[dict]:
             holder = textures.get(channel)
             if holder is None:
                 return None
             info: dict[str, Any] = {'index': self._add_texture(holder)}
-            if mask & _TEXCOORD_BIT.get(channel, 0):
-                info['texCoord'] = 1
-            transform = self._texture_transform(material, channel, mask)
+            chosen, transform = coordinates.get(channel, (0, None))
+            if chosen:
+                info['texCoord'] = chosen
             if transform is not None:
                 info['extensions'] = {'KHR_texture_transform': transform}
                 self._extensions_used.add('KHR_texture_transform')
             return info
 
-        alpha_mode = str(getattr(material, 'alphaMode', 'OPAQUE') or 'OPAQUE')
-        alpha = (1.0 - float(getattr(material, 'transparency', 0.0))
-                 if alpha_mode == 'BLEND' else 1.0)
-        pbr: dict[str, Any] = {
+        alpha = 1.0 - float(getattr(material, 'transparency', 0.0))
+        if isinstance(material, UnlitMaterial):
+            pbr: dict[str, Any] = {
+                'baseColorFactor': [float(c) for c in material.emissiveColor] + [alpha],
+                'metallicFactor': 0.0, 'roughnessFactor': 1.0}
+            base_color = texture_info('baseColor')
+            if base_color is not None:
+                pbr['baseColorTexture'] = base_color
+            entry: dict[str, Any] = {'pbrMetallicRoughness': pbr,
+                                     'extensions': {'KHR_materials_unlit': {}}}
+            self._extensions_used.add('KHR_materials_unlit')
+            if name:
+                entry['name'] = name
+            self._carry_extras(entry, _with_impostor(material))
+            return entry
+        pbr = {
             'baseColorFactor': [float(c) for c in material.baseColor] + [alpha],
             'metallicFactor': float(material.metallic),
             'roughnessFactor': float(material.roughness),
@@ -602,18 +673,12 @@ class GLTFWriter:
         if metallic_roughness is not None:
             pbr['metallicRoughnessTexture'] = metallic_roughness
 
-        entry: dict[str, Any] = {'pbrMetallicRoughness': pbr}
+        entry = {'pbrMetallicRoughness': pbr}
         if name:
             entry['name'] = name
         emissive = [float(c) for c in getattr(material, 'emissiveColor', (0, 0, 0))]
         if any(abs(c) > 1e-6 for c in emissive):
             entry['emissiveFactor'] = emissive
-        if alpha_mode != 'OPAQUE':
-            entry['alphaMode'] = alpha_mode
-        if alpha_mode == 'MASK':
-            entry['alphaCutoff'] = float(getattr(material, 'alphaCutoff', 0.5))
-        if bool(getattr(material, 'doubleSided', False)):
-            entry['doubleSided'] = True
 
         normal = texture_info('normal')
         if normal is not None:
@@ -634,7 +699,7 @@ class GLTFWriter:
         if extensions:
             entry['extensions'] = extensions
             self._extensions_used.update(extensions)
-        self._carry_extras(entry, getattr(material, 'extras', None))
+        self._carry_extras(entry, _with_impostor(material))
         return entry
 
     def _hook_extension(self, hook: Any) -> dict:
@@ -677,10 +742,6 @@ class GLTFWriter:
                     continue
                 if not _close(value, default):
                     block[key] = _factor(value)
-            if extension == 'KHR_materials_unlit':
-                if bool(getattr(material, 'unlit', False)):
-                    wanted[extension] = {}
-                continue
             if extension == 'OGLC_materials_baked_light':
                 if bool(getattr(material, 'bakedLight', False)):
                     wanted[extension] = {}
@@ -694,24 +755,6 @@ class GLTFWriter:
                 if info is not None:
                     wanted[extension][key] = info
         return wanted
-
-    @staticmethod
-    def _texture_transform(material: Any, channel: str, mask: int) -> Optional[dict]:
-        """``KHR_texture_transform`` for a channel the material transforms.
-
-        The loader records the parsed offset/rotation/scale on the material and
-        marks the channels it applies to in the high bits of ``texCoordMask``, so
-        a document that transformed one map round-trips as one transformed map.
-        """
-        params = getattr(material, '_uv_params', None)
-        if not params or not (mask & (_TEXCOORD_BIT.get(channel, 0) << 8)):
-            return None
-        transform = {'offset': [float(v) for v in params.get('offset', (0, 0))],
-                     'rotation': bounded(params.get('rotation'), 0.0),
-                     'scale': [float(v) for v in params.get('scale', (1, 1))]}
-        if mask & _TEXCOORD_BIT.get(channel, 0):
-            transform['texCoord'] = 1
-        return transform
 
     # -- textures --------------------------------------------------------------
 

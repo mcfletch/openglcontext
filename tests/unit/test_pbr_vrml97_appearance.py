@@ -13,7 +13,8 @@ from PIL import Image
 from OpenGLContext.passes.pbrpass import (
     PBRShaderProgram, _pack_material_block, pack_material_block,
 )
-from OpenGLContext.passes.shaderpass import texture_transform_matrix
+from OpenGLContext.scenegraph import texturemapping
+from OpenGLContext.scenegraph.texturemapping import texture_mapping, texture_transform_matrix
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Box, ImageTexture, Material, PixelTexture, Shape,
     TextureTransform,
@@ -25,14 +26,10 @@ from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.memo import check_memo_inputs
 from OpenGLContext.testing.scenes import drawn_image, scene_context
 
-#: The block's words for the UV transform's three columns, and the mask.
-UV_COLUMNS = (slice(32, 35), slice(36, 39), slice(40, 43))
-TEX_COORD_MASK = 29
-BASE_COLOR_TRANSFORMED = 1 << 8
-
-
-def _uv_matrix(block):
-    return np.stack([block[c] for c in UV_COLUMNS], axis=1)
+def _base_colour(mapping):
+    """(coordinate set, transform slot) of the base colour channel."""
+    code = mapping.codes[0] & 31
+    return code & 3, code >> 2
 
 
 def _red():
@@ -70,27 +67,23 @@ class TestTheView:
         block = pack_material_block(pbr_material(appearance))
         assert np.allclose(block[0:3], srgb_to_linear((0.2, 0.4, 0.6)))
 
-    def test_the_texture_transform_is_the_uv_transform(self):
+    def test_the_texture_transform_transforms_the_base_colour(self):
         transform = TextureTransform(scale=(2.0, 3.0), translation=(0.5, 0.25),
                                      rotation=0.3, center=(0.5, 0.5))
         appearance = Appearance(material=Material(), texture=_red(),
                                 textureTransform=transform)
-        block = pack_material_block(pbr_material(appearance))
-        assert np.allclose(_uv_matrix(block),
-                           texture_transform_matrix(transform), atol=1e-6)
-        mask = int(block.view(np.int32)[TEX_COORD_MASK])
-        assert mask & BASE_COLOR_TRANSFORMED
+        mapping = texture_mapping(appearance, None)
+        assert _base_colour(mapping) == (0, 1)
+        assert np.allclose(mapping.transforms[0],
+                           texture_transform_matrix(transform)[:2], atol=1e-6)
 
     def test_no_texture_transform_is_untransformed(self):
         appearance = Appearance(material=Material(), texture=_red())
-        block = pack_material_block(pbr_material(appearance))
-        assert np.allclose(_uv_matrix(block), np.identity(3))
-        assert not int(block.view(np.int32)[TEX_COORD_MASK]) & BASE_COLOR_TRANSFORMED
+        assert _base_colour(texture_mapping(appearance, None)) == (0, 0)
 
 
 def test_the_packed_block_follows_every_input():
     material = Material(diffuseColor=(1.0, 1.0, 1.0))
-    transform = TextureTransform()
     appearance = Appearance(material=material, texture=_red())
 
     def ask():
@@ -106,6 +99,17 @@ def test_the_packed_block_follows_every_input():
         ('material.emissiveColor',
          lambda: setattr(material, 'emissiveColor', (0.1, 0.2, 0.3))),
         ('material.shininess', lambda: setattr(material, 'shininess', 0.9)),
+        ('appearance.material', lambda: setattr(appearance, 'material', replacement)),
+        ('replacement.diffuseColor',
+         lambda: setattr(replacement, 'diffuseColor', (0.3, 0.3, 0.9))),
+    ], fresh=fresh)
+
+
+def test_the_texture_mapping_follows_every_transform_field():
+    transform = TextureTransform(scale=(2.0, 2.0))
+    appearance = Appearance(material=Material(), texture=_red())
+
+    check_memo_inputs(lambda: texture_mapping(appearance, None), [
         ('appearance.textureTransform',
          lambda: setattr(appearance, 'textureTransform', transform)),
         ('textureTransform.scale', lambda: setattr(transform, 'scale', (4.0, 4.0))),
@@ -113,10 +117,8 @@ def test_the_packed_block_follows_every_input():
          lambda: setattr(transform, 'translation', (0.5, 0.0))),
         ('textureTransform.rotation', lambda: setattr(transform, 'rotation', 0.5)),
         ('textureTransform.center', lambda: setattr(transform, 'center', (0.5, 0.5))),
-        ('appearance.material', lambda: setattr(appearance, 'material', replacement)),
-        ('replacement.diffuseColor',
-         lambda: setattr(replacement, 'diffuseColor', (0.3, 0.3, 0.9))),
-    ], fresh=fresh)
+    ], fresh=lambda: texturemapping._compute(appearance, None),  # noqa: SLF001 the computation the cache stands in front of
+       same=lambda a, b: a.key == b.key)
 
 
 class TestConfiguringTheProgram:

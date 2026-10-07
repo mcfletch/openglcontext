@@ -30,7 +30,8 @@ import logging
 import weakref
 from typing import TYPE_CHECKING, Any, Optional
 
-from OpenGLContext.scenegraph.imagedata import ImageDataTexture, sampler_of, texture_properties
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.scenegraph.sampler import sampler_of, texture_properties
 from OpenGLContext.loaders.gltf.accessors import _buffer_bytes
 from OpenGLContext.loaders.resolver import Resolver, decode_data_uri, resolver_max
 

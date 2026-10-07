@@ -130,13 +130,13 @@ def ground_mesh():
     return PBRMesh(positions=positions,
                    normals=estimate_normals(positions, indices),
                    indices=indices, colors=colors,
-                   material=PhysicalMaterial(baseColor=(0.20, 0.24, 0.11),
-                                        metallic=0.0, roughness=0.95))
+                   appearance=Appearance(material=PhysicalMaterial(baseColor=(0.20, 0.24, 0.11),
+                                        metallic=0.0, roughness=0.95)))
 
 
 def shape(mesh):
-    """A mesh under a Shape, wearing the material it was built with."""
-    return Shape(geometry=mesh, appearance=Appearance(material=mesh.material))
+    """A mesh under a Shape, wearing the appearance it was built with."""
+    return Shape(geometry=mesh, appearance=mesh.appearance)
 
 
 #: Over the start of the road and high enough to see it dip and rise again.
@@ -184,7 +184,7 @@ class TestContext(BaseContext):
         """Swap in a road built to the settings as they now stand."""
         mesh = self.build()
         self.road.geometry = mesh
-        self.road.appearance.material = mesh.material
+        self.road.appearance = mesh.appearance
         self.triggerRedraw(1)
 
     def OnWetness(self, event):

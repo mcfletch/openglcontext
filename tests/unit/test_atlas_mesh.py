@@ -113,7 +113,7 @@ class TestMergingGeometry:
     def test_it_wears_the_one_material(self) -> None:
         material = _material()
         merged = merged_mesh([_quad(material), _quad(material)], material)
-        assert merged.material is material
+        assert merged.appearance.material is material
 
     def test_merging_nothing_is_an_error_rather_than_an_empty_mesh(self) -> None:
         with pytest.raises(ValueError):

@@ -333,13 +333,15 @@ def _glb(
     from outside it.
     """
     from OpenGLContext.loaders.gltf.writer import write_glb
+    from OpenGLContext.scenegraph.appearance import Appearance
     from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     mesh = PBRMesh(
         positions=np.asarray(pos, "f"), normals=np.asarray(nrm, "f"),
         colors=np.asarray(col, "f"), indices=np.asarray(idx, np.uint32),
-        material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
-                             roughness=1.0, doubleSided=True))
+        solid=False,
+        appearance=Appearance(material=PhysicalMaterial(
+            baseColor=(1.0, 1.0, 1.0), metallic=0.0, roughness=1.0)))
     return write_glb(mesh)
 
 

@@ -180,7 +180,7 @@ def plate_shape(name: str) -> tuple[float, float]:
 def post_material() -> PhysicalMaterial:
     """What a sign's post is made of."""
     return PhysicalMaterial(baseColor=POST_ALBEDO, metallic=POST_METALLIC,
-                       roughness=POST_ROUGHNESS, doubleSided=False)
+                       roughness=POST_ROUGHNESS)
 
 
 def sign_texture(name: str, size: int = 256) -> Any:
@@ -226,7 +226,7 @@ def sign_material(name: str, size: int = 256, image: Any = None) -> PhysicalMate
     # sign in a world joins the sorted alpha pass, which is what a sheet of
     # painted metal is not.
     return PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0, roughness=0.55,
-                       baseTexture=face, doubleSided=False)
+                       baseTexture=face)
 
 
 def plates_of(faces: "Iterable[str | SignFace]") -> tuple[str, ...]:
@@ -267,8 +267,7 @@ def atlas_material(image: Any = None,
     """
     face = image if image is not None else ImageDataTexture(image=sign_atlas(faces, cell)[0])
     return PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
-                       roughness=POST_ROUGHNESS, baseTexture=face,
-                       doubleSided=False)
+                       roughness=POST_ROUGHNESS, baseTexture=face)
 
 
 def sign_mesh(face: "str | SignFace", profile: Optional[SignProfile] = None,

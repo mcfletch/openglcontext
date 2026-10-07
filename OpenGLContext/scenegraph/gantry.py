@@ -166,7 +166,7 @@ def gantry_material(image: Any = None, cell: int = 256) -> PhysicalMaterial:
     face = image if image is not None else ImageDataTexture(image=gantry_atlas(cell)[0])
     return PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=GANTRY_METALLIC,
                        roughness=GANTRY_ROUGHNESS,
-                       baseTexture=face, doubleSided=False)
+                       baseTexture=face)
 
 
 def gantry_legs(span: float, profile: Optional[GantryProfile] = None,

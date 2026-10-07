@@ -112,6 +112,7 @@ from OpenGLContext.scenegraph.text.text import Text as Text
 from OpenGLContext.scenegraph.texturetransform import TextureTransform as TextureTransform
 from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import Transform as Transform
+from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMaterial
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
 from OpenGLContext.scenegraph.zone import Zone as Zone
 from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
@@ -248,6 +249,7 @@ __all__ = [
     'TouchSensor',
     'Transform',
     'TrimmedSurface',
+    'UnlitMaterial',
     'Viewpoint',
     'VisibilitySensor',
     'WorldInfo',

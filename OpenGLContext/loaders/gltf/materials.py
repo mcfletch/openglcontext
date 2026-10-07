@@ -16,13 +16,20 @@ spec/gloss workflow is converted to metallic/roughness in the sibling
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Optional
 
+import numpy as np
+from vrml.node import NULL
+from vrml.x3d import nodes as x3d
+
+from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.physicalmaterial import (
     CHANNEL_FIELDS, PhysicalMaterial, uv_transform_matrix,
 )
+from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf import hooks
@@ -42,18 +49,33 @@ AddTexture = Callable[..., None]
 
 
 _ALPHA_MODE = {None: 'OPAQUE', 'OPAQUE': 'OPAQUE', 'MASK': 'MASK', 'BLEND': 'BLEND'}
-# Per-channel bit for the material's texCoord mask (which textures sample UV set 1).
-# Must match PhysicalMaterial.texCoordMask / the pbr.frag texCoordMask decode.
-_TEXCOORD_BIT = {'baseColor': 1, 'metallicRoughness': 2, 'normal': 4,
-                 'occlusion': 8, 'emissive': 16}
+#: Each channel's textureInfo key in a glTF material: the core ones in the
+#: material and its pbrMetallicRoughness, the rest in their extensions.
+GLTF_TEXTURE_KEYS = {
+    'baseColor': 'baseColorTexture', 'metallicRoughness': 'metallicRoughnessTexture',
+    'normal': 'normalTexture', 'occlusion': 'occlusionTexture',
+    'emissive': 'emissiveTexture',
+    'specular': 'specularTexture', 'specularColor': 'specularColorTexture',
+    'clearcoat': 'clearcoatTexture', 'clearcoatRoughness': 'clearcoatRoughnessTexture',
+    'clearcoatNormal': 'clearcoatNormalTexture',
+    'sheenColor': 'sheenColorTexture', 'sheenRoughness': 'sheenRoughnessTexture',
+    'transmission': 'transmissionTexture', 'thickness': 'thicknessTexture',
+    'iridescence': 'iridescenceTexture',
+    'iridescenceThickness': 'iridescenceThicknessTexture',
+    'anisotropy': 'anisotropyTexture',
+    'diffuseTransmission': 'diffuseTransmissionTexture',
+    'diffuseTransmissionColor': 'diffuseTransmissionColorTexture',
+}
 
 
 class _TextureCollector:
-    """Accumulates a material's texture holders and KHR_texture_transform state.
+    """Accumulates a material's textures, their mapping labels and transforms
 
-    ``add()`` records a channel's texture holder, its UV set bit, and -- when the
-    textureInfo carries KHR_texture_transform -- the shared transform matrix/params
-    and the high ``texCoordMask`` bits that mark which channels it applies to.
+    ``add()`` records a channel's texture node and its mapping label: empty
+    for the first coordinate set untransformed, ``TEXCOORD_n`` for set n, and
+    ``TEXCOORD_n:k`` for set n through the material's k-th distinct
+    KHR_texture_transform, which becomes a ``TextureTransformMatrix3D`` with
+    that label for the material's Appearance.
     """
 
     def __init__(self, g: "pygltflib.GLTF2", resolver: Resolver, tex_cache: dict) -> None:
@@ -61,9 +83,10 @@ class _TextureCollector:
         self._resolver = resolver
         self._tex_cache = tex_cache
         self.textures: dict = {}
-        self.tex_coord_mask = 0
-        self.uv_transform: Optional[list[list[float]]] = None
-        self.uv_params: Optional[dict] = None
+        #: Each channel's mapping label.
+        self.labels: "dict[str, str]" = {}
+        #: The transforms, one per distinct (set, transform) pair, by label.
+        self.transforms: "dict[str, Any]" = {}
         self._values = DocumentValues(logger=log)
 
     def add(self, channel: str, info: Any) -> None:
@@ -79,19 +102,46 @@ class _TextureCollector:
         if tt and tt.get('texCoord') is not None:
             tex_coord = self._values.integer(tt.get('texCoord'), tex_coord,
                                              'KHR_texture_transform texCoord', minimum=0)
-        if tex_coord == 1:
-            self.tex_coord_mask |= _TEXCOORD_BIT.get(channel, 0)
-        if tt:
-            self.uv_params = {
-                'offset': list(tt.get('offset', [0, 0])),
-                'rotation': self._values.number(tt.get('rotation'), 0.0,
-                                                'KHR_texture_transform rotation'),
-                'scale': list(tt.get('scale', [1, 1]))}
-            self.uv_transform = uv_transform_matrix(
-                offset=tuple(self.uv_params['offset']),
-                rotation=self.uv_params['rotation'],
-                scale=tuple(self.uv_params['scale']))
-            self.tex_coord_mask |= (_TEXCOORD_BIT.get(channel, 0) << 8)
+        if not tt:
+            self.labels[channel] = 'TEXCOORD_%d' % tex_coord if tex_coord else ''
+            return
+        matrix = khr_transform_matrix(
+            offset=tuple(tt.get('offset', [0, 0])),
+            rotation=self._values.number(tt.get('rotation'), 0.0,
+                                         'KHR_texture_transform rotation'),
+            scale=tuple(tt.get('scale', [1, 1])))
+        for label, existing in self.transforms.items():
+            if label.startswith('TEXCOORD_%d:' % tex_coord) and np.allclose(
+                    existing.matrix, matrix):
+                self.labels[channel] = label
+                return
+        label = 'TEXCOORD_%d:%d' % (tex_coord, len(self.transforms))
+        self.transforms[label] = x3d.TextureTransformMatrix3D(mapping=label, matrix=matrix)
+        self.labels[channel] = label
+
+
+def khr_transform_matrix(offset: "tuple[float, float]" = (0.0, 0.0), rotation: float = 0.0,
+                         scale: "tuple[float, float]" = (1.0, 1.0)) -> np.ndarray:
+    """A KHR_texture_transform as a TextureTransformMatrix3D's 4x4 matrix
+
+    The rows for s and t are :func:`uv_transform_matrix`'s, with the
+    translation in the last column.
+    """
+    affine = np.asarray(uv_transform_matrix(offset, rotation, scale), 'f')
+    matrix = np.identity(4, 'f')
+    matrix[0, [0, 1, 3]] = affine[0]
+    matrix[1, [0, 1, 3]] = affine[1]
+    return matrix
+
+
+def khr_transform_params(matrix: Any) -> dict:
+    """A TextureTransformMatrix3D's matrix as KHR_texture_transform's offset, rotation, scale"""
+    m = np.asarray(matrix, 'd').reshape(4, 4)
+    return {'offset': [float(m[0, 3]), float(m[1, 3])],
+            # uv_transform_matrix negates the angle; see its docstring.
+            'rotation': float(-math.atan2(m[1, 0], m[0, 0])),
+            'scale': [float(math.hypot(m[0, 0], m[1, 0])),
+                      float(math.hypot(m[0, 1], m[1, 1]))]}
 
 
 # --- KHR material-extension handlers ----------------------------
@@ -99,10 +149,6 @@ class _TextureCollector:
 # its textures via the collector; the table below drives them so _build_material
 # no longer inlines ~15 near-identical blocks. Absent extensions fall back to
 # _MATERIAL_EXT_DEFAULTS.
-
-def _ext_unlit(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
-    return {'unlit': True}
-
 
 def _ext_baked_light(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     """Ours: ``COLOR_0`` on this material is light, not a tint.
@@ -200,7 +246,6 @@ def _factor(values: DocumentValues, ext: dict, key: str, default: float,
 
 
 _MATERIAL_EXT_HANDLERS = {
-    'KHR_materials_unlit': _ext_unlit,
     'OGLC_materials_baked_light': _ext_baked_light,
     'KHR_materials_emissive_strength': _ext_emissive_strength,
     'KHR_materials_specular': _ext_specular,
@@ -216,7 +261,7 @@ _MATERIAL_EXT_HANDLERS = {
 }
 
 _MATERIAL_EXT_DEFAULTS = dict(
-    unlit=False, bakedLight=False, emissiveStrength=1.0, specular=1.0,
+    bakedLight=False, emissiveStrength=1.0, specular=1.0,
     specularColor=(1.0, 1.0, 1.0),
     ior=1.5, clearcoat=0.0, clearcoatRoughness=0.0, sheenColor=(0.0, 0.0, 0.0),
     sheenRoughness=0.0, iridescence=0.0, iridescenceIor=1.3,
@@ -268,9 +313,16 @@ def _octahedral_impostor(mat: Any) -> dict:
 
 
 def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
-                    resolver: Resolver, tex_cache: dict) -> PhysicalMaterial:
+                    resolver: Resolver, tex_cache: dict) -> Any:
+    """The material of a glTF material index"""
+    return _material_and_transforms(g, material_index, resolver, tex_cache)[0]
+
+
+def _material_and_transforms(g: "pygltflib.GLTF2", material_index: Optional[int],
+                             resolver: Resolver, tex_cache: dict) -> "tuple[Any, list]":
+    """A glTF material as a material node and the texture transforms its Appearance holds"""
     if material_index is None:
-        return PhysicalMaterial(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.7)
+        return PhysicalMaterial(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.7), []
     mat = g.materials[material_index]
     pbr = mat.pbrMetallicRoughness
     base = list(pbr.baseColorFactor) if (pbr and pbr.baseColorFactor) else [1, 1, 1, 1]
@@ -278,8 +330,8 @@ def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
     roughness = pbr.roughnessFactor if (pbr and pbr.roughnessFactor is not None) else 1.0
     emissive = list(mat.emissiveFactor) if mat.emissiveFactor else [0, 0, 0]
 
-    # Per-texture UV-set bit + KHR_texture_transform state accumulate on the
-    # collector; ``add`` records a channel's holder.
+    # Each texture's node, mapping label and transform accumulate on the
+    # collector; ``add`` records a channel.
     collector = _TextureCollector(g, resolver, tex_cache)
     add = collector.add
     textures = collector.textures
@@ -326,46 +378,71 @@ def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
     # KHR material extensions -> PhysicalMaterial kwargs, table-driven.
     ext_kwargs = _read_material_extensions(exts, add)
 
-    # KHR_texture_transform is captured per texture by the collector (uv_transform
-    # + the high texCoordMask bits mark which channels it applies to), so a
-    # material that transforms only one map transforms just that channel.
-    uv_transform = collector.uv_transform
-
-    # Per the glTF spec, baseColor alpha only produces transparency in BLEND mode;
-    # for OPAQUE/MASK the alpha is ignored (MASK is a shader-side cutoff, not a
-    # blended-transparency pass), so an OPAQUE material must not be routed through
-    # the transparent pass just because its baseColor alpha is < 1.
+    # glTF ignores the base colour's alpha for an OPAQUE material; MASK compares
+    # it with the cutoff and BLEND blends by it. The Appearance carries the mode.
     alpha_mode = _ALPHA_MODE.get(mat.alphaMode, 'OPAQUE')
     base_alpha = base[3] if len(base) > 3 else 1.0
-    transparency = float(1.0 - base_alpha) if alpha_mode == 'BLEND' else 0.0
+    transparency = float(1.0 - base_alpha) if alpha_mode != 'OPAQUE' else 0.0
 
+    if 'KHR_materials_unlit' in exts:
+        unlit = UnlitMaterial(emissiveColor=tuple(base[:3]), transparency=transparency,
+                              emissiveTexture=collector.textures.get('baseColor', NULL),
+                              emissiveTextureMapping=collector.labels.get('baseColor', ''),
+                              **_octahedral_impostor(mat))
+        _carry_application_data(unlit, mat, exts)
+        return unlit, list(collector.transforms.values())
+
+    channels: dict[str, Any] = {CHANNEL_FIELDS[channel]: texture
+                                for channel, texture in collector.textures.items()}
+    channels.update((CHANNEL_FIELDS[channel] + 'Mapping', label)
+                    for channel, label in collector.labels.items() if label)
     result = PhysicalMaterial(
         baseColor=tuple(base[:3]),
         metallic=float(metallic),
         roughness=float(roughness),
         emissiveColor=tuple(emissive[:3]),
         transparency=transparency,
-        alphaMode=alpha_mode,
-        alphaCutoff=float(mat.alphaCutoff if mat.alphaCutoff is not None else 0.5),
-        doubleSided=bool(mat.doubleSided),
         normalScale=float(getattr(mat.normalTexture, 'scale', 1.0) or 1.0)
         if mat.normalTexture else 1.0,
         occlusionStrength=float(getattr(mat.occlusionTexture, 'strength', 1.0) or 1.0)
         if mat.occlusionTexture else 1.0,
-        uv_transform=uv_transform,
-        texCoordMask=collector.tex_coord_mask,
         **ext_kwargs,   # KHR extension factors
         **_octahedral_impostor(mat),
-        **{CHANNEL_FIELDS[channel]: texture
-           for channel, texture in collector.textures.items()},
+        **channels,
     )
-    result._uv_params = collector.uv_params   # for live KHR_animation_pointer UV edits
-    result._tex_coord_mask = collector.tex_coord_mask
     _carry_application_data(result, mat, exts)
-    return result
+    return result, list(collector.transforms.values())
 
 
-def _carry_application_data(material: PhysicalMaterial, mat: Any, exts: dict) -> None:
+def _build_appearance(g: "pygltflib.GLTF2", material_index: Optional[int],
+                      resolver: Resolver, tex_cache: dict) -> Any:
+    """The Appearance a glTF material is drawn with
+
+    Its material, alpha mode and cutoff, and a ``MultiTextureTransform`` of
+    the material's texture transforms.
+    """
+    material, transforms = _material_and_transforms(g, material_index, resolver, tex_cache)
+    if material_index is None:
+        return Appearance(material=material, alphaMode='OPAQUE')
+    mat = g.materials[material_index]
+    appearance = Appearance(
+        material=material,
+        alphaMode=_ALPHA_MODE.get(mat.alphaMode, 'OPAQUE'),
+        alphaCutoff=float(mat.alphaCutoff if mat.alphaCutoff is not None else 0.5),
+    )
+    if transforms:
+        appearance.textureTransform = x3d.MultiTextureTransform(textureTransform=transforms)
+    return appearance
+
+
+def _double_sided(g: "pygltflib.GLTF2", material_index: Optional[int]) -> bool:
+    """Whether a glTF material is double-sided: its geometry is not solid"""
+    if material_index is None or not 0 <= material_index < len(g.materials or []):
+        return False
+    return bool(g.materials[material_index].doubleSided)
+
+
+def _carry_application_data(material: Any, mat: Any, exts: dict) -> None:
     """Keep what the document said that the engine's own fields have no room for.
 
     ``extras`` is the format's slot for what an application knows, and an

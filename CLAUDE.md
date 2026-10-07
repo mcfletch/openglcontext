@@ -212,7 +212,12 @@ OpenGLContext/
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material
 │   │                 # (X3D's PhysicalMaterial) and mesh
+│   ├── unlitmaterial.py  # UnlitMaterial (X3D's): a colour drawn without
+│   │                 # lighting; KHR_materials_unlit loads as one
 │   ├── imagedata.py  # ImageDataTexture: a texture node for a decoded image
+│   ├── sampler.py    # A texture's wrap modes and filters (TextureProperties)
+│   ├── texturemapping.py  # Which coordinate set and transform each material
+│   │                 # channel reads, from mapping labels -- no GL -- docs/pbr.rst
 │   ├── reflector.py  # PlanarReflector: a material's surfaces are mirrors
 │   ├── mirrorhooks.py    # The mirror OGLC_hook kind -- docs/reflections.rst
 │   ├── surfaces.py   # Procedural PBR maps (marble, tiles, brick, metals) and

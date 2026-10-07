@@ -19,6 +19,7 @@ from OpenGLContext.scenegraph.pbrmesh import PBRMesh, _MeshGPU
 from OpenGLContext.passes import instancing
 from OpenGLContext.scenegraph.basenodes import Shape
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.appearance import Appearance
 
 
 @pytest.fixture
@@ -285,10 +286,10 @@ class TestBoundingAndMisc:
         assert mesh.positions.shape == (2, 3)
 
     def test_sort_key_reports_material_transparency(self):
-        opaque = PBRMesh(positions=np.zeros((3, 3), 'f'), material=None)
+        opaque = PBRMesh(positions=np.zeros((3, 3), 'f'), appearance=None)
         assert opaque.sortKey(None, None)[0] is False
         clear = PBRMesh(positions=np.zeros((3, 3), 'f'),
-                        material=PhysicalMaterial(alphaMode='BLEND'))
+                        appearance=Appearance(material=PhysicalMaterial(), alphaMode='BLEND'))
         assert clear.sortKey(None, None)[0] is True
 
 

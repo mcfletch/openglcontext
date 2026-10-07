@@ -28,7 +28,7 @@ class RecordingProgram:
     def __init__(self):
         self.vertex_colors = []
 
-    def configure_appearance(self, appearance: Any, mode: Any) -> None:
+    def configure_appearance(self, appearance: Any, mode: Any, geometry: Any = None) -> None:
         pass
 
     def set_vertex_color(self, enabled: bool) -> None:
@@ -116,7 +116,7 @@ class TestWhatAShapeSays:
         """The VRML97 program has no vertex-colour flag of this kind."""
 
         class Plain:
-            def configure_appearance(self, appearance, mode):
+            def configure_appearance(self, appearance, mode, geometry=None):
                 pass
 
         shape = _shape()

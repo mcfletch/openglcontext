@@ -12,6 +12,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -43,7 +45,7 @@ try:
         def OnInit(self):
             self.sg = sceneGraph(children=[
                 Viewpoint(position=(0.0, 1.5, 8.0), orientation=(1, 0, 0, -0.12)),
-                Shape(geometry=water, appearance=Appearance(material=water.material)),
+                Shape(geometry=water, appearance=water.appearance),
                 box,
             ])
 
@@ -81,9 +83,7 @@ def _reflected_red(on):
     proc = subprocess.run([sys.executable, '-c', DRIVER, '1' if on else '0'],
                           capture_output=True, text=True, timeout=180,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, proc.stderr
     return int(proc.stdout.strip().splitlines()[-1])
 

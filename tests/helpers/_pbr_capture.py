@@ -30,6 +30,7 @@ from OpenGLContext.scenegraph.lightgrid import LightGrid
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _ceramic_textures import ceramic_textures
@@ -66,9 +67,8 @@ def main() -> int:
                     baseColor=(0.9, 0.1, 0.08), metallic=0.0, roughness=0.6))),
             Transform(translation=(-0.7, 0, 2.5), children=[Shape(
                 geometry=Box(size=(1.6, 3.0, 0.05)),
-                appearance=Appearance(material=PhysicalMaterial(
-                    baseColor=(0.1, 0.2, 0.95), unlit=True,
-                    transparency=0.45, alphaMode='BLEND')))]),
+                appearance=Appearance(alphaMode='BLEND', material=UnlitMaterial(
+                    emissiveColor=(0.1, 0.2, 0.95), transparency=0.45)))]),
             DirectionalLight(direction=(-0.3, -0.4, -1.0), color=(1, 1, 1), intensity=1.4),
             PointLight(location=(4, 4, 5), color=(1, 0.95, 0.9), intensity=1.0,
                        attenuation=(1, 0, 0)),
@@ -86,9 +86,9 @@ def main() -> int:
                     baseColor=(0.9, 0.1, 0.08), metallic=0.0, roughness=0.6))),
             Transform(translation=(-0.7, 0, 2.5), children=[Shape(
                 geometry=Box(size=(1.6, 3.0, 0.05)),
-                appearance=Appearance(material=PhysicalMaterial(
+                appearance=Appearance(alphaMode='OPAQUE', material=PhysicalMaterial(
                     baseColor=(0.6, 1.0, 0.9), metallic=0.0, roughness=0.05,
-                    transmission=1.0, thickness=0.05, ior=1.5, alphaMode='OPAQUE')))]),
+                    transmission=1.0, thickness=0.05, ior=1.5)))]),
             DirectionalLight(direction=(-0.3, -0.4, -1.0), color=(1, 1, 1), intensity=1.4),
             PointLight(location=(4, 4, 5), color=(1, 0.95, 0.9), intensity=1.0,
                        attenuation=(1, 0, 0)),
@@ -151,8 +151,8 @@ def main() -> int:
         base = dict(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.9)
         state['pos'] = (0, 0, 5.5)
         return sceneGraph(children=[
-            quad(-1.2, PhysicalMaterial(texCoordMask=32, lightmapTexture=lightmap,
-                                   **base)),
+            quad(-1.2, PhysicalMaterial(lightmapTexture=lightmap,
+                                        lightmapTextureMapping='TEXCOORD_1', **base)),
             quad(1.2, PhysicalMaterial(**base)),
             # A near-dark light rather than none: a scene with no lights at all
             # gets a default headlight, which would wash both quads out and hide

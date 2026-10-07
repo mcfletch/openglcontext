@@ -38,6 +38,7 @@ from OpenGLContext.loaders.gltf.meshes import estimate_normals, estimate_tangent
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.appearance import Appearance
 
 __all__ = [
     'RoadProfile', 'resample_polyline', 'sweep_frames', 'morphed_sections',
@@ -990,8 +991,8 @@ def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
     return PBRMesh(positions=positions, normals=normals, texcoords=texcoords,
                    tangents=tangents, indices=indices,
                    colors=_road_colors(points, positions, shade),
-                   material=(material if material is not None
-                             else tarmac_material(profile=profile)))
+                   appearance=Appearance(material=(material if material is not None
+                                                   else tarmac_material(profile=profile))))
 
 
 def _road_colors(points: Any, positions: Any, shade: Any) -> Any:
@@ -1101,7 +1102,6 @@ def tarmac_material(wetness: float = 0.0, seed: int = 0,
         baseColor=(tint, tint, tint),
         metallic=0.0,
         roughness=DRY_ROUGHNESS + (WET_ROUGHNESS - DRY_ROUGHNESS) * wetness,
-        doubleSided=False,
         baseTexture=image if image is not None
                   else ImageDataTexture(image=road_texture(texture_size, seed, profile)),
     )

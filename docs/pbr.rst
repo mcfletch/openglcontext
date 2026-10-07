@@ -182,23 +182,35 @@ map with a red base-colour factor gives a red surface.
 
 .. rst-class:: technical
 
-Each map can use its own UV set. glTF gives every texture reference a
-``texCoord`` of 0 or 1. The loader records the channels that use the second
-set in the material's ``texCoordMask``, and the shader samples each channel
-from the set it names. A wall can then tile its brick pattern many times while
-its baked lighting is stretched once across the whole surface. The mesh must
-supply the second set (``TEXCOORD_1``) for the channels that use it. Where it
-does not, those channels sample the origin of their map and the surface is one
-flat colour.
+Each map can use its own UV set. Beside each texture field the material has a
+mapping label, X3D's ``...TextureMapping`` field (``baseTextureMapping``,
+``normalTextureMapping``, ``lightmapTextureMapping`` and so on), which names
+the coordinates that texture reads. An empty label is the first set,
+``TEXCOORD_0``. ``TEXCOORD_1`` is the second set, and a suffix after a colon
+(``TEXCOORD_1:0``) tells apart two labels that read one set through different
+transforms. A geometry with a ``textureCoordinateSet(label)`` method chooses
+the set for a label itself. The renderer reads two sets; a label naming a
+third is reported once and read as the first. A wall can then tile its brick
+pattern many times while its baked lighting is stretched once across the
+whole surface. The mesh must supply the second set (``TEXCOORD_1``) for the
+channels that use it. Where it does not, those channels sample the origin of
+their map and the surface is one flat colour.
 
 .. rst-class:: technical
 
-``KHR_texture_transform`` (offset, scale and rotation of the coordinates) is
-supported, including its own ``texCoord`` override. A material stores one
-transform and applies it to the channels that carry the extension; see
-:ref:`Surfaces that move <animated-surfaces>` for how to choose them. If a
-material gives two of its textures *different* transforms, both use the last
-one.
+A texture's coordinates are transformed by the appearance's
+``textureTransform``. A ``MultiTextureTransform`` holds one transform per
+label, matched by each transform's ``mapping``; a single transform whose
+``mapping`` is empty applies to every channel, as in VRML97.
+``TextureTransform`` (centre, rotation, scale, translation) and
+``TextureTransformMatrix3D`` (a 4×4 matrix of which the s and t rows are
+used, translation in the last column) are both read. One draw can use four
+distinct transforms; channels sharing a transform share one. The glTF loader
+turns each ``KHR_texture_transform``, including its ``texCoord`` override,
+into a ``TextureTransformMatrix3D`` under the label of the texture that
+carries it. ``scenegraph/texturemapping.py`` works out which set and transform
+each channel reads; see :ref:`Surfaces that move <animated-surfaces>` for
+animating a transform.
 
 .. _procedural-surfaces:
 
@@ -288,8 +300,8 @@ build a material in Python with a ``PhysicalMaterial`` node and attach it to a
 The most used fields are ``baseColor``, ``metallic``, ``roughness``,
 ``emissiveColor``, ``emissiveStrength``, ``clearcoat`` /
 ``clearcoatRoughness``, ``sheenColor`` / ``sheenRoughness``, ``transmission``,
-``ior``, and the transparency controls ``alphaMode`` (``OPAQUE``, ``MASK`` or
-``BLEND``) and ``alphaCutoff``. VRML97 ``Material`` nodes are converted to
+and ``ior``. How transparency is drawn is the appearance's, not the
+material's (see below). VRML97 ``Material`` nodes are converted to
 metallic/roughness automatically, so a scene can mix the two without changes.
 
 A VRML97 ``Appearance`` keeps its maps beside the material rather than in it,
@@ -298,9 +310,9 @@ and the PBR renderer reads them from there: the appearance's ``texture``
 ``Material``'s ``diffuseColor`` as it does under the VRML97 renderer, and its
 ``textureTransform`` is that map's UV transform.
 ``physicalmaterial.pbr_material(appearance)`` returns the material the renderer
-draws an appearance with: a ``PhysicalMaterial`` as itself, and any other
-appearance as an ``AppearanceMaterial`` holding its texture, transform and
-converted factors. A change to any of those fields is drawn from the next
+draws an appearance with: a ``PhysicalMaterial`` or ``UnlitMaterial`` as
+itself, and any other appearance as an ``AppearanceMaterial`` holding its
+texture and converted factors. A change to any of those fields is drawn from the next
 frame.
 
 .. rst-class:: technical
@@ -319,6 +331,10 @@ colour, sheen colour and diffuse transmission colour as sRGB, and the other
 channels as linear. ``material.textures`` is a read-only view of the textures
 by channel name, and ``material.setTexture(channel, texture)`` sets one by
 channel name. The glTF loader builds these when it imports a model.
+
+``UnlitMaterial`` (X3D 4) draws its ``emissiveColor``, multiplied by its
+``emissiveTexture``, with no lighting; the glTF loader makes one for
+``KHR_materials_unlit``.
 
 .. code-block:: python
 
@@ -413,7 +429,8 @@ Optional lobes, each off at 0:
      - colour that light picks up passing through the volume, and over what
        distance; 0 means no absorption
 
-Transparency and rendering:
+Transparency and sidedness belong to the appearance and the geometry, as in
+X3D 4:
 
 .. list-table::
    :widths: auto
@@ -422,21 +439,23 @@ Transparency and rendering:
    * - Property
      - Default
      - What it controls
-   * - ``alphaMode``
-     - ``OPAQUE``
-     - ``OPAQUE``, ``MASK`` (hard cutout) or ``BLEND`` (see-through)
-   * - ``alphaCutoff``
+   * - ``Appearance.alphaMode``
+     - ``AUTO``
+     - ``OPAQUE``, ``MASK`` (hard cutout), ``BLEND`` (see-through), or
+       ``AUTO``: ``BLEND`` where the material's ``transparency`` is above 0
+       or its base colour texture has an alpha channel, otherwise ``OPAQUE``
+   * - ``Appearance.alphaCutoff``
      - 0.5
      - threshold used in ``MASK`` mode
-   * - ``transparency``
+   * - ``transparency`` (material)
      - 0.0
-     - VRML97-style opacity control (1 = fully transparent)
-   * - ``doubleSided``
-     - false
-     - draw back faces as well as front faces
-   * - ``unlit``
-     - false
-     - show the base colour flat, without lighting
+     - opacity control (1 = fully transparent)
+   * - ``solid`` (geometry)
+     - true
+     - false draws back faces as well as front faces
+
+``physicalmaterial.appearance_alpha(appearance)`` returns the resolved mode and
+cutoff.
 
 Further glTF material extensions, each off at its default:
 
@@ -464,12 +483,11 @@ Further glTF material extensions, each off at its default:
      - thin-film colour shift, as on a soap bubble; thickness in nanometres
        (``KHR_materials_iridescence``)
 
-Texture maps go in the ``textures`` dictionary, keyed by channel:
-``baseColor``, ``metallicRoughness``, ``normal``, ``occlusion``, ``emissive``
-and ``lightmap``. Each map varies its property across the surface (see
-:ref:`Texture Maps <maps>` above). Where a map and a factor both exist, they
-are multiplied. ``texCoordMask`` and ``lightmapStrength`` are described under
-:ref:`bakedlight` and :ref:`animated-surfaces`.
+Texture maps are the ``...Texture`` fields described above. Each map varies
+its property across the surface (see :ref:`Texture Maps <maps>` above). Where
+a map and a factor both exist, they are multiplied. The mapping labels and
+``lightmapStrength`` are described under :ref:`bakedlight` and
+:ref:`animated-surfaces`.
 
 .. rst-class:: technical
 
@@ -608,8 +626,8 @@ result instead of computing it every frame. The renderer reads two forms of
 that stored lighting, and a scene can use either or both.
 
 A **lightmap** stores the light painted onto the surfaces, addressed by a
-second UV set. Give the material a ``lightmap`` texture, set bit 32 of
-``texCoordMask`` so it samples ``TEXCOORD_1``, and set its exposure with
+second UV set. Give the material a ``lightmapTexture``, set its
+``lightmapTextureMapping`` to ``'TEXCOORD_1'``, and set its exposure with
 ``lightmapStrength`` (default 1.0). The lightmap is read as linear light, not
 as an sRGB colour, because baked lighting is written directly to eight bits.
 Decoding it as sRGB would make the level look unlit.
@@ -754,41 +772,35 @@ Surfaces that move
 Three things can move a PBR surface at run time, at very different costs. Use
 the cheapest one that does the job.
 
-1. The UV transform: one uniform
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. The texture transform: a few uniforms
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``PhysicalMaterial.uv_transform`` is a 3×3 ``KHR_texture_transform`` matrix.
-Assigning it moves the material's ``factorVersion``, so the pass uploads its
-uniform block again and does nothing else. An edit made in place, such as a
-component written into the matrix's array, is announced with
-``material.factorsChanged()``. A scrolling conveyor belt, a
-rotating fan or a stretching liquid costs only this, however large the surface
-is.
+The appearance's ``textureTransform`` is read for each draw as a handful of
+uniforms. Assigning a field of the transform node is drawn from the next frame
+and does nothing else. A scrolling conveyor belt, a rotating fan or a
+stretching liquid costs only this, however large the surface is.
 
 .. code-block:: python
 
-   material.uv_transform = [[1, 0, u_offset],
-                            [0, 1, v_offset],
-                            [0, 0, 1]]        # translation in the last COLUMN
+   belt = TextureTransform(mapping='TEXCOORD_0:belt')
+   material.baseTextureMapping = 'TEXCOORD_0:belt'
+   appearance = Appearance(material=material, textureTransform=belt)
+   ...
+   belt.translation = (u_offset, 0.0)
 
-The high half of ``texCoordMask`` selects the channels the transform applies
-to: the channel's low bit, shifted left by 8. Set it for the base colour and
-leave it clear for the lightmap. Otherwise a scrolling texture moves the baked
-lighting with it, and the shadows slide off the walls.
-
-.. code-block:: python
-
-   material.texCoordMask |= (1 << 8)     # baseColor transformed, lightmap not
+The transform applies to the channels whose mapping label is its ``mapping``.
+Give the lightmap a different label (``'TEXCOORD_1'``) so a scrolling texture
+does not move the baked lighting with it. A single transform with an empty
+``mapping`` applies to every channel.
 
 2. Colour, opacity and texture: one uniform or one bind
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``baseColor``, ``emissiveColor`` and ``transparency`` are ordinary material
-fields. Assigning any of them uploads the block again. To swap a map, set its
-channel, ``material.textures['baseColor'] = texture``, or assign a new dict to
-``material.textures``. The textures are held in a ``TextureChannels`` dict that
-counts its own edits, so a shape wearing the material is grouped for
-:doc:`instancing <instancing>` by the maps it has now.
+fields. Assigning any of them uploads the block again. To swap a map, assign
+its field (``material.baseTexture = texture``) or call
+``material.setTexture('baseColor', texture)``. A shape wearing the material is
+grouped for :doc:`instancing <instancing>` by the maps it has now.
 
 3. The vertices: a CPU pass and a buffer upload each frame
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

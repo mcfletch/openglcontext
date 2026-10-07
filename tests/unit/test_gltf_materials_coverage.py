@@ -56,7 +56,6 @@ class TestExtensionHandlers:
     def test_factor_only_extension_handlers_run(self):
         g = GLTF2()
         g.materials = [Material(extensions={
-            'KHR_materials_unlit': {},
             'KHR_materials_emissive_strength': {'emissiveStrength': 3.0},
             'KHR_materials_specular': {'specularFactor': 0.4,
                                        'specularColorFactor': [0.1, 0.2, 0.3]},
@@ -67,7 +66,6 @@ class TestExtensionHandlers:
                 'diffuseTransmissionColorFactor': [0.2, 0.4, 0.6]},
         })]
         mat = gmat._build_material(g, 0, _R(), {})
-        assert bool(mat.unlit) is True
         assert abs(mat.emissiveStrength - 3.0) < 1e-6
         assert abs(mat.specular - 0.4) < 1e-6
         assert tuple(round(float(x), 2) for x in mat.specularColor) == (0.1, 0.2, 0.3)
@@ -94,11 +92,11 @@ class TestTextureCollector:
                                                      'scale': [2, 2]}}
         g.materials = [Material(pbrMetallicRoughness=PbrMetallicRoughness(
             baseColorTexture=info))]
-        mat = gmat._build_material(g, 0, r, {})
+        mat, transforms = gmat._material_and_transforms(g, 0, r, {})
         assert 'baseColor' in mat.textures
-        assert mat.uv_transform is not None
-        # UV set 1 for baseColor sets the low bit of the texCoord mask.
-        assert mat._tex_coord_mask & 1
+        # UV set 1, through the material's first transform.
+        assert mat.baseTextureMapping == 'TEXCOORD_1:0'
+        assert [t.mapping for t in transforms] == ['TEXCOORD_1:0']
 
 
 class TestSpecularGlossiness:
@@ -176,6 +174,6 @@ class TestAMalformedMaterialExtension:
                                                      'rotation': 'quarter'}}
         g.materials = [Material(pbrMetallicRoughness=PbrMetallicRoughness(
             baseColorTexture=info))]
-        mat = gmat._build_material(g, 0, r, {})
-        assert not mat._tex_coord_mask & 1
-        assert mat.uv_transform is not None
+        mat, transforms = gmat._material_and_transforms(g, 0, r, {})
+        assert mat.baseTextureMapping == 'TEXCOORD_0:0'
+        assert len(transforms) == 1

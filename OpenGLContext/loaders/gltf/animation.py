@@ -29,7 +29,12 @@ import numpy as np
 
 from vrml.vrml97 import transformmatrix
 
-from OpenGLContext.scenegraph.physicalmaterial import uv_transform_matrix
+from vrml.x3d import nodes as x3d
+
+from OpenGLContext.loaders.gltf.materials import (
+    GLTF_TEXTURE_KEYS, khr_transform_matrix, khr_transform_params,
+)
+from OpenGLContext.scenegraph.texturemapping import channel_labels, transform_for
 from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf.accessors import _read_floats, _read_normalized
 
@@ -545,8 +550,40 @@ def _sampler_values(g: "pygltflib.GLTF2", samp: "pygltflib.AnimationSampler",
     return np.ascontiguousarray(raw, dtype='d').reshape(divisor, total // divisor)
 
 
+#: Each glTF textureInfo key's channel.
+_TEXTURE_KEY_CHANNEL = {key: channel for channel, key in GLTF_TEXTURE_KEYS.items()}
+
+
+def _texture_transform_setter(appearance: Any, texture_key: str,
+                              component: str) -> "Optional[Callable[..., None]]":
+    """A setter for one component of a texture's KHR_texture_transform, or None
+
+    The transform is the ``TextureTransformMatrix3D`` the loader made for the
+    channel's mapping label. Setting one component keeps the others, which
+    are read back from the matrix.
+    """
+    channel = _TEXTURE_KEY_CHANNEL.get(texture_key)
+    material = getattr(appearance, 'material', None)
+    label = channel_labels(material).get(channel) if channel else None
+    if label is None or component not in ('offset', 'rotation', 'scale'):
+        return None
+    transform = transform_for(appearance, label)
+    if not isinstance(transform, x3d.TextureTransformMatrix3D):
+        return None
+
+    def set_transform(value: Any) -> None:
+        params = khr_transform_params(transform.matrix)
+        given = np.ravel(np.asarray(value, dtype='d'))
+        params[component] = float(given[0]) if component == 'rotation' else [
+            float(given[0]), float(given[1])]
+        transform.matrix = khr_transform_matrix(
+            offset=tuple(params['offset']), rotation=params['rotation'],
+            scale=tuple(params['scale']))
+    return set_transform
+
+
 def _pointer_setter(g: "pygltflib.GLTF2", pointer: str, node_transforms: dict,
-                    node_light: dict, mat_cache: dict) -> Optional[Callable[..., None]]:
+                    node_light: dict, appearances: dict) -> Optional[Callable[..., None]]:
     """Resolve a KHR_animation_pointer JSON-pointer to a ``setter(value)`` that
     mutates the live scenegraph, or None if the target is unsupported. Covers node
     visibility (of a light), material factors, emissive strength and per-texture
@@ -569,28 +606,13 @@ def _pointer_setter(g: "pygltflib.GLTF2", pointer: str, node_transforms: dict,
                     return set_light_vis
             return None
         if toks[0] == 'materials':
-            m = mat_cache.get(int(toks[1]))
-            if m is None:
+            appearance = appearances.get(int(toks[1]))
+            if appearance is None:
                 return None
+            m = appearance.material
             rest = toks[2:]
-            if len(rest) >= 2 and rest[-2] == 'KHR_texture_transform':
-                comp = rest[-1]                     # rotation | offset | scale
-                def set_uvt(value: Any, m: Any = m, comp: str = comp) -> None:
-                    p = getattr(m, '_uv_params', None)
-                    if p is None:
-                        p = {'offset': [0, 0], 'rotation': 0.0, 'scale': [1, 1]}
-                        m._uv_params = p
-                    val = _v(value)
-                    if comp == 'rotation':
-                        p['rotation'] = float(val[0])
-                    elif comp == 'offset':
-                        p['offset'] = [float(val[0]), float(val[1])]
-                    elif comp == 'scale':
-                        p['scale'] = [float(val[0]), float(val[1])]
-                    m.uv_transform = uv_transform_matrix(
-                        offset=tuple(p['offset']), rotation=p['rotation'],
-                        scale=tuple(p['scale']))
-                return set_uvt
+            if len(rest) >= 4 and rest[-2] == 'KHR_texture_transform':
+                return _texture_transform_setter(appearance, rest[-4], rest[-1])
             _SCALAR = {
                 ('pbrMetallicRoughness', 'metallicFactor'): 'metallic',
                 ('pbrMetallicRoughness', 'roughnessFactor'): 'roughness',
@@ -622,11 +644,11 @@ def _pointer_setter(g: "pygltflib.GLTF2", pointer: str, node_transforms: dict,
 
 def _build_animations(g: "pygltflib.GLTF2", resolver: Resolver,
                       node_transforms: Optional[dict] = None, node_light: Optional[dict] = None,
-                      mat_cache: Optional[dict] = None) -> list:
+                      appearances: Optional[dict] = None) -> list:
     """Parse ``g.animations`` into :class:`Animation` objects (TRS/weights
     channels plus resolved KHR_animation_pointer channels)."""
     node_light = node_light or {}
-    mat_cache = mat_cache or {}
+    appearances = appearances or {}
     out: list = []
     for anim in (getattr(g, 'animations', None) or []):
         channels: list = []
@@ -652,7 +674,7 @@ def _build_animations(g: "pygltflib.GLTF2", resolver: Resolver,
                 ptr = ((getattr(tgt, 'extensions', None) or {})
                        .get('KHR_animation_pointer', {}) or {}).get('pointer')
                 setter = _pointer_setter(g, ptr, node_transforms or {},
-                                         node_light, mat_cache) if ptr else None
+                                         node_light, appearances) if ptr else None
                 if setter is not None:
                     pointer_channels.append(PointerChannel(
                         Sampler(times, values, interp), setter, ptr))

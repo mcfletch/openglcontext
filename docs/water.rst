@@ -461,7 +461,7 @@ camera is in it:
 
    import time
 
-   from OpenGLContext.scenegraph.basenodes import Appearance, Shape, sceneGraph
+   from OpenGLContext.scenegraph.basenodes import Shape, sceneGraph
    from OpenGLContext.scenegraph.water import (
        CHOPPY, Volume, Volumes, medium_fog, submerge, water_surface,
    )
@@ -469,7 +469,7 @@ camera is in it:
    # Built once: 80 m square at sea level, meshed 65 x 65, moved by the card.
    sheet = water_surface(-40, 40, -40, 40, level=0.0, resolution=65,
                          style=CHOPPY, on_gpu=True)
-   lake = Shape(geometry=sheet, appearance=Appearance(material=sheet.material))
+   lake = Shape(geometry=sheet, appearance=sheet.appearance)
    scene = sceneGraph(children=[lake, medium_fog()])
 
    # Where the water is, for a body that may end up inside it.

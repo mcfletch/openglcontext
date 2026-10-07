@@ -41,8 +41,11 @@ from OpenGLContext.passes.transmission import TransmissionBuffer
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.physicalmaterial import (
-    AppearanceMaterial, PhysicalMaterial, material_to_pbr, pbr_material,
+    AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha,
+    material_to_pbr, pbr_material,
 )
+from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
+from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS, ZonePack
 from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT, palette_supported
@@ -165,25 +168,58 @@ def ext_textures_supported(budget: int) -> bool:
 # instead of ~20 glUniform calls. The word layout below MUST match the block
 # declaration in shaders/pbr.frag (validated against the driver in tests).
 # 4-byte words; vec3+float pairs share a 16-byte slot in std140. The base factors
-# + uvTransform mat3 + the iridescence vec4 and later KHR extension factors total
+# + a reserved mat3 + the iridescence vec4 and later KHR extension factors total
 # 56 words / 224 bytes.
 MATERIAL_BLOCK_WORDS = 56   # 224 B; must match the Material struct in pbr.frag
 MATERIAL_UBO_BINDING = 1        # glUniformBlockBinding / glBindBufferBase point
+
+def _upload_codes(location: int, codes: "tuple[int, ...]") -> None:
+    glUniform1iv(location, len(codes), np.asarray(codes, np.int32))
+
+
+def _upload_rows(location: int, rows: "tuple[float, ...]") -> None:
+    glUniform4fv(location, len(rows) // 4, np.asarray(rows, np.float32))
+
+
+def _transform_rows(mapping: TextureMapping) -> "tuple[float, ...]":
+    """A mapping's transforms as the shader's vec4 rows: (a, b, c, 0) each"""
+    rows = np.zeros((len(mapping.transforms) * 2, 4), np.float32)
+    rows[:, :3] = mapping.transforms.reshape(-1, 3)
+    return tuple(float(value) for value in rows.ravel())
+
+
+#: The shader's code for each alpha mode.
+_ALPHA_MODES = {'OPAQUE': 0, 'MASK': 1, 'BLEND': 2}
 
 # Opacity floor for the cheap (no-backdrop) transmission fallback, so fully
 # transmissive glass still shows specular highlights instead of vanishing.
 GLASS_MIN_OPACITY = 0.08
 
 
+#: The factors of a material that sets none of the extensions' fields.
+_DEFAULT_FACTORS: "dict[str, Any]" = dict(
+    base_color=(1.0, 1.0, 1.0), metallic=0.0, roughness=1.0, emissive=(0.0, 0.0, 0.0),
+    occlusion=1.0, normal_scale=1.0, unlit=0, emissive_strength=1.0, specular=1.0,
+    specular_color=(1.0, 1.0, 1.0), clearcoat=0.0, clearcoat_roughness=0.0,
+    sheen_color=(0.0, 0.0, 0.0), sheen_roughness=0.0, ior=1.5, thickness=0.0,
+    attenuation_color=(1.0, 1.0, 1.0), attenuation_distance=0.0,
+    flags=0,
+    iridescence=0.0, iridescence_ior=1.3,
+    iridescence_thick_min=100.0, iridescence_thick_max=400.0,
+    anisotropy_strength=0.0, anisotropy_rotation=0.0, dispersion=0.0,
+    diffuse_transmission=0.0, diffuse_transmission_color=(1.0, 1.0, 1.0),
+)
+
+
 def _material_factors(material: Any) -> dict:
-    """Uniform-ready factors for a PhysicalMaterial, a VRML97 Material, or None."""
+    """Uniform-ready factors for a PhysicalMaterial, an UnlitMaterial, a VRML97 Material, or None"""
     if isinstance(material, PhysicalMaterial):
         m = material
         return dict(
+            _DEFAULT_FACTORS,
             base_color=tuple(m.baseColor)[:3], metallic=float(m.metallic),
             roughness=float(m.roughness), emissive=tuple(m.emissiveColor)[:3],
             occlusion=float(m.occlusionStrength), normal_scale=float(m.normalScale),
-            alpha_cutoff=float(m.alphaCutoff), unlit=1 if m.unlit else 0,
             emissive_strength=float(m.emissiveStrength), specular=float(m.specular),
             specular_color=tuple(m.specularColor)[:3], clearcoat=float(m.clearcoat),
             clearcoat_roughness=float(m.clearcoatRoughness),
@@ -191,39 +227,27 @@ def _material_factors(material: Any) -> dict:
             ior=float(m.ior), thickness=float(m.thickness),
             attenuation_color=tuple(m.attenuationColor)[:3],
             attenuation_distance=float(m.attenuationDistance),
-            uv_transform=getattr(m, 'uv_transform', None),
-            tex_coord_mask=(int(getattr(m, 'texCoordMask', 0) or 0)
-                            | (BAKED_LIGHT_BIT
-                               if getattr(m, 'bakedLight', False) else 0)),
-            iridescence=float(getattr(m, 'iridescence', 0.0)),
-            iridescence_ior=float(getattr(m, 'iridescenceIor', 1.3)),
-            iridescence_thick_min=float(getattr(m, 'iridescenceThicknessMin', 100.0)),
-            iridescence_thick_max=float(getattr(m, 'iridescenceThicknessMax', 400.0)),
-            anisotropy_strength=float(getattr(m, 'anisotropyStrength', 0.0) or 0.0),
-            anisotropy_rotation=float(getattr(m, 'anisotropyRotation', 0.0) or 0.0),
-            dispersion=float(getattr(m, 'dispersion', 0.0) or 0.0),
-            diffuse_transmission=float(getattr(m, 'diffuseTransmission', 0.0) or 0.0),
-            diffuse_transmission_color=tuple(
-                getattr(m, 'diffuseTransmissionColor', (1.0, 1.0, 1.0)))[:3],
+            flags=BAKED_LIGHT_BIT if m.bakedLight else 0,
+            iridescence=float(m.iridescence), iridescence_ior=float(m.iridescenceIor),
+            iridescence_thick_min=float(m.iridescenceThicknessMin),
+            iridescence_thick_max=float(m.iridescenceThicknessMax),
+            anisotropy_strength=float(m.anisotropyStrength),
+            anisotropy_rotation=float(m.anisotropyRotation),
+            dispersion=float(m.dispersion),
+            diffuse_transmission=float(m.diffuseTransmission),
+            diffuse_transmission_color=tuple(m.diffuseTransmissionColor)[:3],
         )
-    uv_transform = None
+    if isinstance(material, UnlitMaterial):
+        # The unlit path draws the base colour; X3D calls it the emissive colour.
+        return dict(_DEFAULT_FACTORS, base_color=tuple(material.emissiveColor)[:3],
+                    normal_scale=float(material.normalScale), unlit=1)
     if isinstance(material, AppearanceMaterial):
-        uv_transform = material.uv_transform
         material = material.material
     f = material_to_pbr(material)      # None / VRML97 Material -> plausible defaults
     return dict(
+        _DEFAULT_FACTORS,
         base_color=f['base_color'], metallic=f['metallic'], roughness=f['roughness'],
-        emissive=f['emissive'], occlusion=f['occlusion'], normal_scale=1.0,
-        alpha_cutoff=0.5, unlit=0, emissive_strength=1.0, specular=1.0,
-        specular_color=(1.0, 1.0, 1.0), clearcoat=0.0, clearcoat_roughness=0.0,
-        sheen_color=(0.0, 0.0, 0.0), sheen_roughness=0.0, ior=1.5, thickness=0.0,
-        attenuation_color=(1.0, 1.0, 1.0), attenuation_distance=0.0,
-        uv_transform=uv_transform,
-        tex_coord_mask=BASE_COLOR_TRANSFORM_BIT if uv_transform is not None else 0,
-        iridescence=0.0, iridescence_ior=1.3,
-        iridescence_thick_min=100.0, iridescence_thick_max=400.0,
-        anisotropy_strength=0.0, anisotropy_rotation=0.0, dispersion=0.0,
-        diffuse_transmission=0.0, diffuse_transmission_color=(1.0, 1.0, 1.0),
+        emissive=f['emissive'], occlusion=f['occlusion'],
     )
 
 
@@ -257,15 +281,10 @@ def pbr_feature_defines(enabled: Optional[Any] = None) -> list:
             for f in PBR_OPTIONAL_FEATURES]
 
 
-#: Which bit of the texture-coordinate mask says the vertex colours are
-#: baked light rather than a tint. Above the per-channel UV-set bits (1 to
-#: 32), and read by the fragment shader as ``bakedLightMode``.
+#: The bit of the block's flags word saying the vertex colours are baked light
+#: rather than a tint; the fragment shader reads it as ``bakedLightMode``.
 BAKED_LIGHT_BIT = 64
 
-#: Which bit of the texture-coordinate mask says the base colour map's
-#: coordinates go through the block's UV transform: the map's UV-set bit,
-#: shifted into the byte of transform bits.
-BASE_COLOR_TRANSFORM_BIT = 1 << 8
 
 
 def pack_material_block(material: Any) -> np.ndarray:
@@ -301,7 +320,7 @@ def _pack_material_block(material: Any) -> np.ndarray:
     buf[12:15] = d['sheen_color']
     buf[15] = d['normal_scale']
     buf[16:19] = d['attenuation_color']
-    buf[19] = d['alpha_cutoff']
+    # word 19 is reserved: the alpha cutoff is the appearance's, set per draw.
     buf[20] = d['emissive_strength']
     buf[21] = d['specular']
     buf[22] = d['clearcoat']
@@ -311,16 +330,12 @@ def _pack_material_block(material: Any) -> np.ndarray:
     buf[26] = d['thickness']
     buf[27] = d['attenuation_distance']
     iv[28] = 1 if d['unlit'] else 0
-    iv[29] = int(d.get('tex_coord_mask', 0))
+    iv[29] = int(d.get('flags', 0))
     # words 30, 31 are the std140 padding before the 16-byte-aligned mat3 -- reuse
     # them for two per-instance scalars (anisotropy strength + dispersion) for free.
     buf[30] = d.get('anisotropy_strength', 0.0)
     buf[31] = d.get('dispersion', 0.0)
-    uvt = d['uv_transform']
-    M = np.identity(3, np.float32) if uvt is None else np.asarray(uvt, np.float32).reshape(3, 3)
-    for c in range(3):                 # mat3: each column padded to a 16-byte slot
-        base = 32 + 4 * c
-        buf[base:base + 3] = M[:, c]
+    # words 32..43 are a reserved mat3: texture transforms are set per draw.
     # iridescence vec4 (factor, ior, thicknessMin, thicknessMax) at words 44..47
     buf[44] = d.get('iridescence', 0.0)
     buf[45] = d.get('iridescence_ior', 1.3)
@@ -419,6 +434,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # Set when the program is compiled, from the driver's texture units.
         self.planar_reflection_supported = False
         self._appearance_material = _APPEARANCE_UNSET
+        self._appearance_seen: Any = _APPEARANCE_UNSET
         self._appearance_tmode = None
 
     def release(self) -> None:
@@ -556,6 +572,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
     # skip the whole re-box-and-upload. Reset each frame by reset_appearance_cache
     # so per-frame material edits are still picked up.
     _appearance_material: Any = _APPEARANCE_UNSET
+    #: The appearance that was configured, whose alpha mode and cutoff are set.
+    _appearance_seen: Any = _APPEARANCE_UNSET
     _appearance_tmode: Optional[str] = None
 
     def reset_appearance_cache(self) -> None:
@@ -829,10 +847,11 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1i('waveEnabled', 1, target)
 
     # -- material / appearance --------------------------------------------
-    def set_alpha(self, alpha: float, alpha_mode: int) -> None:
-        """Opacity + alpha mode (frame/pass-dependent; the rest is in the UBO)."""
+    def set_alpha(self, alpha: float, alpha_mode: int, cutoff: float = 0.5) -> None:
+        """Opacity, alpha mode and cutoff: the appearance's, set per draw"""
         self._set_uniform1f('alphaValue', float(alpha), self.program)
         self._set_uniform1i('alphaMode', int(alpha_mode), self.program)
+        self._set_uniform1f('alphaCutoff', float(cutoff), self.program)
 
     def bind_pbr_textures(self, material: Any, mode: Any) -> None:
         """Put ``material``'s images on the texture units the shaders read.
@@ -881,20 +900,25 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1i('materialTextures', sampled, self.program)
         glActiveTexture(GL_TEXTURE0)
 
-    def configure_appearance(self, appearance: Any, mode: Any) -> None:
+    def set_texture_mapping(self, mapping: TextureMapping) -> None:
+        """Each material channel's texture coordinates and transform, for the next draw"""
+        self._set_uniform('channelCodes', mapping.codes, self.program, _upload_codes)
+        self._set_uniform('uvTransformRows', _transform_rows(mapping), self.program,
+                          _upload_rows)
+
+    def configure_appearance(self, appearance: Any, mode: Any, geometry: Any = None) -> None:
         """Configure PBR material + textures from a Shape's appearance.
 
         Routes both PhysicalMaterial (directly) and a VRML97 appearance -- its
         Material up-converted, its texture as the base colour map -- through
-        this single PBR program; :func:`pbr_material` says which.
+        this single PBR program; :func:`pbr_material` says which. ``geometry``
+        is what is drawn with it, whose coordinate sets the appearance's
+        mapping labels name.
         """
         material = pbr_material(appearance) if appearance else None
-        # Publish the material's double-sidedness to the geometry's cull decision
-        #: a hand-built PhysicalMaterial(doubleSided=True) must disable
-        # back-face culling even when the mesh itself is marked solid. Set before
-        # the early-out so it stays correct for repeated same-material shapes.
-        if mode is not None:
-            mode._appearance_double_sided = bool(getattr(material, 'doubleSided', False))
+        # The coordinates depend on the geometry as well as the appearance, so
+        # they are set before the same-material early-out.
+        self.set_texture_mapping(texture_mapping(appearance, geometry))
         # An octahedral impostor is a property of the material rather than of
         # the draw, so it is set here beside the rest of it. Before the
         # same-material early-out: the previous shape may have been an ordinary
@@ -905,37 +929,38 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # textures are already live; skip the re-box entirely. Identity compare is
         # safe within a frame (materials aren't mutated mid-frame) and the cache is
         # cleared each frame, so per-frame edits still take effect.
+        alpha_mode, cutoff = appearance_alpha(appearance)
         if (material is self._appearance_material
+                and appearance is self._appearance_seen
                 and self.transmission_mode == self._appearance_tmode):
             return
         self._appearance_material = material
+        self._appearance_seen = appearance
         self._appearance_tmode = self.transmission_mode
-        # Static factors (base color, metallic/roughness, KHR extensions, uvTransform,
-        # volume) come from the material's cached UBO -- one bind, no per-shape re-box.
+        # Static factors (base color, metallic/roughness, KHR extensions, volume)
+        # come from the material's cached UBO -- one bind, no per-shape re-box.
         self.bind_material_block(material)
-        _ALPHA = {'OPAQUE': 0, 'MASK': 1, 'BLEND': 2}
-        if isinstance(material, PhysicalMaterial):
-            alpha = 1.0 - float(material.transparency)
-            alpha_mode = _ALPHA.get(str(material.alphaMode), 0)
+        code = _ALPHA_MODES[alpha_mode]
+        alpha = 1.0 - float(getattr(material, 'transparency', 0.0) or 0.0)
+        if isinstance(material, ChannelMaterial):
             tf = float(getattr(material, 'transmission', 0.0) or 0.0)
             if tf > 0.0 and self.transmission_mode == 'blend':
                 # Cheap fallback: no backdrop refraction -- approximate the glass
                 # as an alpha-blended surface with opacity (1 - transmission). Keep
                 # a small floor so fully-transmissive glass still shows highlights.
-                alpha, alpha_mode, tf = max(1.0 - tf, GLASS_MIN_OPACITY), 2, 0.0
+                alpha, code, tf = max(1.0 - tf, GLASS_MIN_OPACITY), 2, 0.0
             elif self.transmission_mode != 'full':
                 tf = 0.0                        # off, or not a transmissive frame
-            self.set_alpha(alpha, alpha_mode)
+            self.set_alpha(alpha, code, cutoff)
             self.set_transmission(tf)
             self.set_lightmap_strength(
                 float(getattr(material, 'lightmapStrength', 1.0) or 0.0))
             # anisotropy / dispersion / diffuse-transmission are per-instance UBO
             # fields (see pack_material_block), so they need no loose-uniform set.
-            self.bind_pbr_textures(material, mode)
         else:
-            self.set_alpha(1.0 - float(getattr(material, 'transparency', 0.0)), 0)
+            self.set_alpha(alpha, code, cutoff)
             self.set_transmission(0.0)
-            self.bind_pbr_textures(material, mode)
+        self.bind_pbr_textures(material, mode)
 
     def set_ibl_mode(self, mode_code: int, intensity: float = 1.0,
                      fill_scale: float = 1.0) -> None:
@@ -1094,8 +1119,9 @@ class PBRPass(flatcore.FlatPass):
         them differs: the identities of the geometry, appearance, material and
         texture, the material's
         :meth:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial.batchingVersion`,
-        and :func:`~OpenGLContext.passes.reflection.mirror_generation`, which
-        moves when any shape may have become a mirror or stopped being one. A
+        :func:`~OpenGLContext.passes.reflection.mirror_generation`, which
+        moves when any shape may have become a mirror or stopped being one,
+        and the appearance's alpha mode and cutoff. A
         geometry that computes its own content key from its fields is asked
         every time. Whether content collapse is on is read once for the
         grouping.
@@ -1117,7 +1143,8 @@ class PBRPass(flatcore.FlatPass):
             made_from = (geometry, appearance, material,
                          getattr(appearance, 'texture', None))
             stamps = (version() if version is not None
-                      else getattr(drawn_as, 'factorVersion', 0), collapse, mirrors)
+                      else getattr(drawn_as, 'factorVersion', 0), collapse, mirrors,
+                      appearance_alpha(appearance))
             held = memo.get(shape)
             if held is not None and held[1] == stamps and all(
                     was is now for was, now in zip(held[0], made_from, strict=True)):
@@ -1222,7 +1249,7 @@ class PBRPass(flatcore.FlatPass):
 
         # Textures + pass uniforms from the representative appearance; the material
         # array (bound below) overrides the single-material factor UBO.
-        shader.configure_appearance(group.appearance, self)
+        shader.configure_appearance(group.appearance, self, group.geometry)
         self.renderPath = group.members[0][4]
         self.matrix = group.members[0][1]
         shader.set_matrices(self.matrix, self.projection, program=prog)

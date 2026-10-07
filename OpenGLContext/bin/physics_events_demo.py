@@ -108,8 +108,7 @@ class Finishes:
             surfaces.pbr_material(surfaces.brushed_metal(128, surfaces.BRONZE, 0.35)),
         ]
         self.glass = PhysicalMaterial(baseColor=(0.75, 0.88, 0.95), metallic=0.0,
-                                 roughness=0.04, transparency=0.6,
-                                 alphaMode='BLEND', doubleSided=True)
+                                      roughness=0.04, transparency=0.6)
         self.ball = surfaces.pbr_material(surfaces.brushed_metal(128, surfaces.STEEL, 0.15))
         self.plate = surfaces.pbr_material(surfaces.brushed_metal(128, surfaces.BRONZE, 0.4))
         self.door = surfaces.pbr_material(surfaces.plaster(256), relief=0.5)
@@ -202,10 +201,10 @@ class CollisionYard:
     # -- building ------------------------------------------------------------
     def _box(self, size: Sequence[float], position: Sequence[float], finish: Any,
              motion_type: str, mass: float = 1.0, material: str = 'stone',
-             collision_filter: int = -1) -> PhysicsBody:
+             collision_filter: int = -1, solid: bool = True) -> PhysicsBody:
         shape = self.world.add_shape(model.Shape.box(tuple(size)))
         transform = basenodes.Transform(translation=tuple(position), children=[
-            _shape(basenodes.Box(size=tuple(size)), finish)])
+            _shape(basenodes.Box(size=tuple(size), solid=solid), finish)])
         return self._add(transform, model.Motion(type=motion_type, mass=mass),
                          model.Collider(shape=shape,
                                         physicsMaterial=self._materials[material],
@@ -308,7 +307,7 @@ class CollisionYard:
                 centre = (x0 - width / 2 + piece[0] * (column + 0.5),
                           piece[1] * (row + 0.5), z0)
                 fragment = self._box(piece, centre, self.finish.glass, model.DYNAMIC,
-                                     mass=0.5, material='glass',
+                                     mass=0.5, material='glass', solid=False,
                                      collision_filter=self._filters['shard'])
                 self.world.linear_velocity[fragment.index] = 1.5 * np.asarray(push)
                 self.fragments.append(fragment)
@@ -322,7 +321,7 @@ class CollisionYard:
             if name in self.panes:
                 continue
             pane = self._box(PANE_SIZE, (x, PANE_SIZE[1] / 2, PANE_Z), self.finish.glass,
-                             model.STATIC, material='glass')
+                             model.STATIC, material='glass', solid=False)
             self.events.subscribe(partial(self._pane_struck, name), body=pane)
             self.panes[name] = pane
         self.broken = set()

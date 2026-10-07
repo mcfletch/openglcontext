@@ -16,6 +16,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 from OpenGLContext.testing.gl_env import gl_subprocess_env
 
 DRIVER = r'''
@@ -96,9 +98,7 @@ def test_compatibility_profile_pick_does_not_crash():
     proc = subprocess.run([sys.executable, '-c', DRIVER],
                           capture_output=True, text=True, timeout=120,
                           env=gl_subprocess_env())
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr, profile='compatibility')
     assert proc.returncode == 0, (
         'compatibility-profile pick crashed the render loop\n'
         'stdout:\n%s\nstderr:\n%s' % (proc.stdout, proc.stderr))

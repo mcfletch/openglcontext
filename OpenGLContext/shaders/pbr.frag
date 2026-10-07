@@ -94,16 +94,16 @@ struct Material {
     vec3  emissiveFactor;       float roughnessFactor;
     vec3  specularColorFactor;  float occlusionStrength;   // KHR_materials_specular color
     vec3  sheenColorFactor;     float normalScale;         // KHR_materials_sheen color
-    vec3  attenuationColor;     float alphaCutoff;         // KHR_materials_volume color
+    vec3  attenuationColor;     float reserved19;          // KHR_materials_volume color; a reserved word
     float emissiveStrength;     float specularFactor;      // KHR_materials_emissive_strength / _specular
     float clearcoatFactor;      float clearcoatRoughness;  // KHR_materials_clearcoat
     float sheenRoughnessFactor; float ior;                 // KHR_materials_sheen / _ior
     float thicknessFactor;      float attenuationDistance; // KHR_materials_volume
     bool  unlitMode;                                       // KHR_materials_unlit
-    int   texCoordMask;    // per-channel UV-set bit (1=base 2=MR 4=normal 8=occ 16=emis)
+    int   materialFlags;   // 64: the vertex colours are baked light
     float anisotropyStrengthM; // KHR_materials_anisotropy (fill the pre-mat3 pad slots)
     float dispersionM;         // KHR_materials_dispersion
-    mat3  uvTransform;                                     // KHR_texture_transform
+    mat3  reservedTransform;                               // reserved
     vec4  iridescence;     // KHR_materials_iridescence: factor, ior, thicknessMin, thicknessMax
     vec4  diffuseTransmissionM; // KHR_materials_diffuse_transmission: rgb colour, a factor
     vec4  anisotropyDirM;       // KHR_materials_anisotropy direction: xy = (cos, sin)
@@ -141,7 +141,6 @@ Material _M;
 #define sheenColorFactor     _M.sheenColorFactor
 #define normalScale          _M.normalScale
 #define attenuationColor     _M.attenuationColor
-#define alphaCutoff          _M.alphaCutoff
 #define emissiveStrength     _M.emissiveStrength
 #define specularFactor       _M.specularFactor
 #define clearcoatFactor      _M.clearcoatFactor
@@ -151,11 +150,10 @@ Material _M;
 #define thicknessFactor      _M.thicknessFactor
 #define attenuationDistance  _M.attenuationDistance
 #define unlitMode            _M.unlitMode
-#define texCoordMask         _M.texCoordMask
+#define materialFlags        _M.materialFlags
 // Bit 64 of that mask: the vertex colours are light worked out when the world
 // was built rather than a tint on the surface.
-#define bakedLightMode       ((texCoordMask & 64) != 0)
-#define uvTransform          _M.uvTransform
+#define bakedLightMode       ((materialFlags & 64) != 0)
 #define iridescenceFactor    _M.iridescence.x
 #define iridescenceIor       _M.iridescence.y
 #define iridescenceThickMin  _M.iridescence.z
@@ -166,15 +164,43 @@ Material _M;
 #define diffuseTransmissionColor   _M.diffuseTransmissionM.rgb
 #define diffuseTransmissionFactor  _M.diffuseTransmissionM.a
 
-// Per-channel UV: pick TEXCOORD_1 when this channel's low mask bit is set, then
-// apply the KHR_texture_transform matrix only if this channel's *transform* bit
-// (the same bit << 8) is set -- KHR_texture_transform is per-texture, so a material
-// may transform e.g. only its emissive map. `bit`: 1=baseColor 2=metallicRoughness
-// 4=normal 8=occlusion 16=emissive 32=lightmap.
-vec2 uvFor(int bit) {
-    vec2 base = ((texCoordMask & bit) != 0) ? vTexCoord1 : vTexCoord;
-    if ((texCoordMask & (bit << 8)) != 0)
-        base = (uvTransform * vec3(base, 1.0)).xy;
+// Each material channel's texture coordinates, set per draw from the
+// appearance's mapping labels and transforms (scenegraph/texturemapping.py).
+// channelCodes holds five bits a channel, six channels a word: bits 0-1 the
+// coordinate set, bits 2-4 the transform slot (0 for none). uvTransformRows
+// holds four 2x3 transforms, two rows each, applied to (s, t, 1).
+#define CH_BASE_COLOR                  0
+#define CH_METALLIC_ROUGHNESS          1
+#define CH_NORMAL                      2
+#define CH_OCCLUSION                   3
+#define CH_EMISSIVE                    4
+#define CH_LIGHTMAP                    5
+#define CH_TRANSMISSION                6
+#define CH_IRIDESCENCE_THICKNESS       7
+#define CH_CLEARCOAT                   8
+#define CH_CLEARCOAT_ROUGHNESS         9
+#define CH_THICKNESS                   10
+#define CH_ANISOTROPY                  11
+#define CH_SPECULAR                    12
+#define CH_SPECULAR_COLOR              13
+#define CH_SHEEN_COLOR                 14
+#define CH_SHEEN_ROUGHNESS             15
+#define CH_IRIDESCENCE                 16
+#define CH_CLEARCOAT_NORMAL            17
+#define CH_DIFFUSE_TRANSMISSION_COLOR  18
+#define CH_DIFFUSE_TRANSMISSION        19
+uniform int  channelCodes[4];
+uniform vec4 uvTransformRows[8];
+
+vec2 uvFor(int channel) {
+    int code = (channelCodes[channel / 6] >> (5 * (channel - 6 * (channel / 6)))) & 31;
+    vec2 base = ((code & 3) == 1) ? vTexCoord1 : vTexCoord;
+    int slot = code >> 2;
+    if (slot > 0) {
+        vec3 st = vec3(base, 1.0);
+        base = vec2(dot(uvTransformRows[2 * slot - 2].xyz, st),
+                    dot(uvTransformRows[2 * slot - 1].xyz, st));
+    }
     return base;
 }
 
@@ -259,6 +285,7 @@ vec3 evalIridescence(float outsideIor, float eta2, float cosTheta1, float thickn
 // mode rather than the material): opacity and the transmission gate.
 uniform float alphaValue;          // 1 - transparency (blend/transmission adjusts)
 uniform int alphaMode;             // 0=OPAQUE 1=MASK 2=BLEND
+uniform float alphaCutoff;         // the appearance's, for MASK
 // When true (bloom pass), emit LINEAR HDR: the tone map + sRGB encode move to the
 // bloom composite, so >1 emissive survives to bloom. Default false = tone-map here.
 uniform bool hdrOutput;
@@ -611,7 +638,7 @@ void main() {
     _M = materials[instancingEnabled ? vMaterialIndex : 0u];
 
     // --- material inputs (each texture samples its own UV set + transform) ---
-    vec4 baseTex = hasBaseColor ? texture(baseColorTexture, uvFor(1)) : vec4(1.0);
+    vec4 baseTex = hasBaseColor ? texture(baseColorTexture, uvFor(CH_BASE_COLOR)) : vec4(1.0);
     vec3 albedo = baseColorFactor * (hasBaseColor ? toLinear(baseTex.rgb) : vec3(1.0));
     float alpha = alphaValue * (hasBaseColor ? baseTex.a : 1.0);
     // glTF COLOR_0 multiplies base color (linear) -- unless the material
@@ -634,7 +661,7 @@ void main() {
     float metallic = metallicFactor;
     float roughness = roughnessFactor;
     if (hasMetallicRoughness) {
-        vec4 mr = texture(metallicRoughnessTexture, uvFor(2));
+        vec4 mr = texture(metallicRoughnessTexture, uvFor(CH_METALLIC_ROUGHNESS));
         roughness *= mr.g;
         metallic *= mr.b;
     }
@@ -646,7 +673,7 @@ void main() {
 
     float ao = 1.0;
     if (hasOcclusion) {
-        float o = texture(occlusionTexture, uvFor(8)).r;
+        float o = texture(occlusionTexture, uvFor(CH_OCCLUSION)).r;
         ao = 1.0 + occlusionStrength * (o - 1.0);
     }
     // Where the vertex colours are baked light, their fourth channel is how
@@ -657,7 +684,7 @@ void main() {
     if (hasVertexColor && bakedLightMode) ao *= vColor.a;
 
     vec3 emissive = emissiveFactor * emissiveStrength;   // KHR_materials_emissive_strength
-    if (hasEmissive) emissive *= toLinear(texture(emissiveTexture, uvFor(16)).rgb);
+    if (hasEmissive) emissive *= toLinear(texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb);
     // Light worked out when the world was built: added rather than
     // multiplied, so it is on the surface whatever the scene is doing, and
     // whatever the scene does do is shading on top of it.
@@ -670,7 +697,7 @@ void main() {
     // about a tenth of its intended irradiance and the level would look unlit.
     vec3 lightmap = vec3(0.0);
     if (hasLightmap)
-        lightmap = texture(lightmapTexture, uvFor(32)).rgb * lightmapStrength;
+        lightmap = texture(lightmapTexture, uvFor(CH_LIGHTMAP)).rgb * lightmapStrength;
 
     // --- normal (with optional tangent-space normal map) ---
     vec3 Ngeom = normalize(vNormal);
@@ -693,7 +720,7 @@ void main() {
     if (hasNormal && length(vTangent) > 0.0) {
         vec3 T = normalize(vTangent - N * dot(N, vTangent));
         vec3 B = cross(N, T) * (vTangentW == 0.0 ? 1.0 : vTangentW);
-        vec3 nTex = texture(normalTexture, uvFor(4)).xyz * 2.0 - 1.0;
+        vec3 nTex = texture(normalTexture, uvFor(CH_NORMAL)).xyz * 2.0 - 1.0;
         nTex.xy *= normalScale;
         N = normalize(mat3(T, B, N) * nTex);
     }
@@ -705,7 +732,7 @@ void main() {
     if (hasClearcoatNormalMap && length(vTangent) > 0.0) {
         vec3 Tc = normalize(vTangent - Ngeom * dot(Ngeom, vTangent));
         vec3 Bc = cross(Ngeom, Tc) * (vTangentW == 0.0 ? 1.0 : vTangentW);
-        vec3 cTex = texture(clearcoatNormalMap, uvFor(1)).xyz * 2.0 - 1.0;
+        vec3 cTex = texture(clearcoatNormalMap, uvFor(CH_CLEARCOAT_NORMAL)).xyz * 2.0 - 1.0;
         Nc = normalize(mat3(Tc, Bc, Ngeom) * cTex);
     }
 #endif
@@ -741,7 +768,7 @@ void main() {
         vec2 dir = anisotropyDirection;
 #if PBR_EXT_TEXTURES
         if (hasAnisotropyMap) {
-            vec3 aTex = texture(anisotropyMap, uvFor(1)).rgb;
+            vec3 aTex = texture(anisotropyMap, uvFor(CH_ANISOTROPY)).rgb;
             vec2 tdir = aTex.rg * 2.0 - 1.0;                 // texel direction
             dir = vec2(dir.x * tdir.x - dir.y * tdir.y,      // rotate base by texel
                        dir.y * tdir.x + dir.x * tdir.y);
@@ -764,19 +791,19 @@ void main() {
 
     // F0 from index of refraction (KHR_materials_ior) tinted/weighted by
     // KHR_materials_specular, then blended to albedo for metals.
-    // Per-texel KHR extension factors (texture * factor). uvFor(1) reuses the base
-    // UV set / transform, matching how the other extension textures are sampled.
+    // Per-texel KHR extension factors (texture * factor); each map reads its
+    // own coordinate set and transform.
     float specularWeight = specularFactor;
     vec3 specularColorEff = specularColorFactor;
     vec3 sheenColorEff = sheenColorFactor;
     float sheenRoughEff = sheenRoughnessFactor;
     float iridescenceEff = iridescenceFactor;
 #if PBR_EXT_TEXTURES
-    if (hasSpecularMap)       specularWeight  *= texture(specularMap, uvFor(1)).a;
-    if (hasSpecularColorMap)  specularColorEff *= toLinear(texture(specularColorMap, uvFor(1)).rgb);
-    if (hasSheenColorMap)     sheenColorEff   *= toLinear(texture(sheenColorMap, uvFor(1)).rgb);
-    if (hasSheenRoughnessMap) sheenRoughEff   *= texture(sheenRoughnessMap, uvFor(1)).a;
-    if (hasIridescenceMap)    iridescenceEff  *= texture(iridescenceMap, uvFor(1)).r;
+    if (hasSpecularMap)       specularWeight  *= texture(specularMap, uvFor(CH_SPECULAR)).a;
+    if (hasSpecularColorMap)  specularColorEff *= toLinear(texture(specularColorMap, uvFor(CH_SPECULAR_COLOR)).rgb);
+    if (hasSheenColorMap)     sheenColorEff   *= toLinear(texture(sheenColorMap, uvFor(CH_SHEEN_COLOR)).rgb);
+    if (hasSheenRoughnessMap) sheenRoughEff   *= texture(sheenRoughnessMap, uvFor(CH_SHEEN_ROUGHNESS)).a;
+    if (hasIridescenceMap)    iridescenceEff  *= texture(iridescenceMap, uvFor(CH_IRIDESCENCE)).r;
 #endif
 
     float iorF0 = pow((ior - 1.0) / (ior + 1.0), 2.0);
@@ -799,7 +826,7 @@ void main() {
         // a thickness texture (.g) lerps min..max, giving the per-texel gradient
         if (hasIridescenceThicknessMap)
             irThickness = mix(iridescenceThickMin, iridescenceThickMax,
-                              texture(iridescenceThicknessMap, uvFor(1)).g);
+                              texture(iridescenceThicknessMap, uvFor(CH_IRIDESCENCE_THICKNESS)).g);
 #endif
         vec3 irFresnel = evalIridescence(1.0, iridescenceIor, NdotV, irThickness, F0);
         // Thin-film destructive interference can push the reflectance BELOW a low
@@ -814,8 +841,8 @@ void main() {
     float ccFactorEff = clearcoatFactor;
     float ccRoughEff = clearcoatRoughness;
 #if PBR_EXT_TEXTURES
-    if (hasClearcoatMap) ccFactorEff *= texture(clearcoatMap, uvFor(1)).r;
-    if (hasClearcoatRoughnessMap) ccRoughEff *= texture(clearcoatRoughnessMap, uvFor(1)).g;
+    if (hasClearcoatMap) ccFactorEff *= texture(clearcoatMap, uvFor(CH_CLEARCOAT)).r;
+    if (hasClearcoatRoughnessMap) ccRoughEff *= texture(clearcoatRoughnessMap, uvFor(CH_CLEARCOAT_ROUGHNESS)).g;
 #endif
 
     // KHR_materials_volume Beer-Lambert absorption. Per the spec the volume tints
@@ -824,7 +851,7 @@ void main() {
     // full diffuse-transmitter whose teal comes ONLY from the attenuation colour.
     float volumeThickness = thicknessFactor;
 #if PBR_EXT_TEXTURES
-    if (hasThicknessMap) volumeThickness *= texture(thicknessMap, uvFor(0)).g;
+    if (hasThicknessMap) volumeThickness *= texture(thicknessMap, uvFor(CH_THICKNESS)).g;
 #endif
     volumeThickness *= vModelScale;               // local -> world units (model scale)
     vec3 volumeAttenuation = vec3(1.0);
@@ -846,9 +873,9 @@ void main() {
     float diffuseTransFactorEff = diffuseTransmissionFactor;
 #if PBR_EXT_TEXTURES
     if (hasDiffuseTransmissionColorMap)
-        diffuseTransColor *= toLinear(texture(diffuseTransmissionColorMap, uvFor(1)).rgb);
+        diffuseTransColor *= toLinear(texture(diffuseTransmissionColorMap, uvFor(CH_DIFFUSE_TRANSMISSION_COLOR)).rgb);
     if (hasDiffuseTransmissionMap)
-        diffuseTransFactorEff *= texture(diffuseTransmissionMap, uvFor(1)).a;
+        diffuseTransFactorEff *= texture(diffuseTransmissionMap, uvFor(CH_DIFFUSE_TRANSMISSION)).a;
 #endif
     vec3 diffuseTransmit = diffuseTransColor;
     if (attenuationDistance > 0.0) diffuseTransmit *= attenuationColor;
@@ -1090,7 +1117,7 @@ void main() {
 #if PBR_EXT_TEXTURES
     // KHR_materials_transmission transmissionTexture (.r) varies transmission per
     // fragment, so a surface can be transmissive in some regions and opaque in others.
-    if (hasTransmissionMap) transmission *= texture(transmissionMap, uvFor(1)).r;
+    if (hasTransmissionMap) transmission *= texture(transmissionMap, uvFor(CH_TRANSMISSION)).r;
 #endif
     if (transmission > 0.0 && hasTransmissionBackdrop) {
         // KHR_materials_volume thickness (world units) drives the refraction offset

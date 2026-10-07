@@ -23,6 +23,7 @@ from OpenGLContext.testing.memo import check_memo_inputs
 from OpenGLContext.passes.flatcore import FlatPass
 from OpenGLContext.scenegraph.water.surface import WaterStyle
 from OpenGLContext.scenegraph.zone import Zone, ZoneSetting
+from OpenGLContext.scenegraph.appearance import Appearance
 
 
 def _mesh(offset=0.0):
@@ -70,7 +71,7 @@ def test_the_batching_memo_follows_a_pbr_shape(batching):
     check_memo_inputs(lambda: ask(shape), [
         ('material.baseTexture', lambda: setattr(material, 'baseTexture', _texture())),
         ('material.normalTexture', lambda: setattr(material, 'normalTexture', _texture())),
-        ('material.alphaMode', lambda: setattr(material, 'alphaMode', 'BLEND')),
+        ('appearance.alphaMode', lambda: setattr(shape.appearance, 'alphaMode', 'BLEND')),
         ('material.transmission', lambda: setattr(material, 'transmission', 0.5)),
         ('material.octahedralViews',
          lambda: setattr(material, 'octahedralViews', 8)),
@@ -103,13 +104,13 @@ def test_the_batching_memo_follows_a_vrml97_shape(batching):
 
 
 def test_the_batching_memo_follows_a_mesh_with_its_own_material(batching):
-    """A mesh placed with no appearance material is drawn with its own."""
+    """A mesh placed with no shape appearance is drawn with its own."""
     ask, fresh = batching
     mesh = _mesh()
     shape = basenodes.Shape(geometry=mesh)
     mirrored = PhysicalMaterial(reflector=PlanarReflector())
     check_memo_inputs(lambda: ask(shape), [
-        ('mesh.material', lambda: setattr(mesh, 'material', mirrored)),
+        ('mesh.appearance', lambda: setattr(mesh, 'appearance', Appearance(material=mirrored))),
     ], fresh=lambda: fresh(shape))
 
 
@@ -117,7 +118,7 @@ def test_the_batching_memo_follows_a_mesh_with_its_own_material(batching):
 
 def test_a_mesh_under_an_appearance_with_no_material_is_drawn_with_its_own():
     own = PhysicalMaterial(reflector=PlanarReflector())
-    shape = basenodes.Shape(geometry=PBRMesh(material=own),
+    shape = basenodes.Shape(geometry=PBRMesh(appearance=Appearance(material=own)),
                             appearance=basenodes.Appearance())
     assert reflection.shape_material(shape) is own
     assert reflection.shape_reflector(shape) is own.reflector
@@ -157,9 +158,9 @@ def test_the_mirror_generation_follows_every_field_deciding_a_mirror():
         ('mesh.waveStyle', lambda: setattr(mesh, 'waveStyle', water)),
         ('shape.geometry', lambda: setattr(shape, 'geometry', other_mesh)),
         ('shape.appearance, to none, and the mesh its own mirror', lambda: (
-            setattr(other_mesh, 'material', own),
+            setattr(other_mesh, 'appearance', Appearance(material=own)),
             setattr(shape, 'appearance', None))),
-        ('mesh.material', lambda: setattr(other_mesh, 'material', None)),
+        ('mesh.appearance', lambda: setattr(other_mesh, 'appearance', None)),
     ], fresh=lambda: reflection.shape_reflector(shape) is not None)
 
 

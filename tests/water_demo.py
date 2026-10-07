@@ -207,8 +207,7 @@ class TestContext(BaseContext):
             self.meshes.append(sheet)
             # The bed of this pool, silt rather than the sand around it.
             children.append(_slab(x0, x1, Z0, Z1, BED, 0.3, BOTTOM))
-            children.append(Shape(geometry=sheet, appearance=Appearance(
-                material=sheet.material)))
+            children.append(Shape(geometry=sheet, appearance=sheet.appearance))
             children.extend(self._floats(style, x0, x1, ball))
             print('%-8s amplitude %.2f m  wavelength %.1f m  speed %.1f m/s'
                   % (label, style.amplitude, style.wavelength, style.speed))
@@ -224,8 +223,7 @@ class TestContext(BaseContext):
 
         ribbon = water_ribbon(_river_course(), 9.0, style=FLOWING, on_gpu=True)
         self.meshes.append(ribbon)
-        children.append(Shape(geometry=ribbon, appearance=Appearance(
-            material=ribbon.material)))
+        children.append(Shape(geometry=ribbon, appearance=ribbon.appearance))
 
         # One fog node, bound into the scene once; submerge writes its fields
         # as the camera goes in and out of the water.
@@ -280,7 +278,7 @@ class TestContext(BaseContext):
         old = self._lakeShape.geometry
         self.meshes = [m for m in self.meshes if m is not old]
         self._lakeShape.geometry = sheet
-        self._lakeShape.appearance = Appearance(material=sheet.material)
+        self._lakeShape.appearance = sheet.appearance
         self.meshes.append(sheet)
         self.triggerRedraw(1)
 

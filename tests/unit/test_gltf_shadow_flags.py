@@ -18,6 +18,7 @@ from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.loaders.gltf.scene import _light_node
+from OpenGLContext.scenegraph.appearance import Appearance
 
 FLAG = 'OGLC_castsShadow'
 
@@ -27,7 +28,7 @@ def _slab(colour=(0.8, 0.8, 0.8), size=1.0):
         positions=np.array([(0, 0, 0), (size, 0, 0), (size, 0, size), (0, 0, size)], 'f'),
         normals=np.array([(0, 1, 0)] * 4, 'f'),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
-        material=PhysicalMaterial(baseColor=colour),
+        appearance=Appearance(material=PhysicalMaterial(baseColor=colour)),
     )
 
 

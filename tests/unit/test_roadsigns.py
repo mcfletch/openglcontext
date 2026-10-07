@@ -21,6 +21,7 @@ from OpenGLContext.scenegraph.roadsigns import (
     sign_meshes,
     sign_texture,
 )
+from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
 from vrml.x3d import nodes as x3d
 
 
@@ -183,11 +184,11 @@ class TestThePlateCostsWhatAPlateCosts:
     warning sign is not: a few hundred triangles of opaque painted metal."""
 
     def test_it_is_opaque(self) -> None:
-        assert sign_material('dip').alphaMode == 'OPAQUE'
+        assert appearance_alpha(sign_mesh('dip').appearance)[0] == 'OPAQUE'
 
     def test_it_is_not_double_sided(self) -> None:
         """It has a back of its own; drawing both faces of both is waste."""
-        assert not sign_material('dip').doubleSided
+        assert sign_mesh('dip').solid is True
 
     def test_the_geometry_is_the_shape_the_picture_is(self) -> None:
         """A diamond of four corners, not a quad with the corners painted out."""

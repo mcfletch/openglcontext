@@ -9,6 +9,7 @@ import os
 import numpy as np
 import OpenGL.GL as gl
 import pytest
+from vrml.cache import Cache
 
 from OpenGLContext.loaders.tiles3d import gltf_uploader as U
 from OpenGLContext.loaders.tiles3d.gltf_uploader import (
@@ -135,26 +136,30 @@ def test_dispose_mesh_gpu_swallows_release_and_delete_errors():
 
 
 def test_dispose_material_textures_skips_missing_and_swallows_gl_errors(monkeypatch):
-    # One map with no per-context entry (skipped), one whose texture id is 0
+    # One map with no cached texture (skipped), one whose texture id is 0
     # (skipped), one that raises in glDeleteTextures (swallowed, then zeroed).
     class _Tex:
         def __init__(self, tid):
             self.texture = tid
 
-    ctx = object()
-    no_ctx = types.SimpleNamespace(_per_context={})
-    zero_tid = types.SimpleNamespace(_per_context={ctx: _Tex(0)})
-    boom_tex = _Tex(9)
-    boom = types.SimpleNamespace(_per_context={ctx: boom_tex})
-    material = types.SimpleNamespace(
-        textures={"a": no_ctx, "b": zero_tid, "c": boom})
+    class _Node:
+        """A texture node, which the cache holds a GL texture against."""
 
-    def bad_delete(_ids):
+    cache = Cache()
+    no_texture, zero_tid, boom = _Node(), _Node(), _Node()
+    cache.holder(zero_tid, _Tex(0))
+    boom_tex = _Tex(9)
+    cache.holder(boom, boom_tex)
+    material = types.SimpleNamespace(
+        textures={"a": no_texture, "b": zero_tid, "c": boom})
+
+    def bad_delete(_count, _ids):
         raise RuntimeError("no context")
 
     monkeypatch.setattr(gl, "glDeleteTextures", bad_delete)
-    _dispose_material_textures(material, ctx)   # must not raise
-    assert boom_tex.texture == 0                # zeroed after the failed delete
+    _dispose_material_textures(material, cache)   # must not raise
+    assert boom_tex.texture == 0                  # zeroed after the failed delete
+    assert cache.getData(boom) is None            # and no longer cached
 
 
 def test_upload_applies_non_identity_transform():

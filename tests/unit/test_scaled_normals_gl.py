@@ -21,6 +21,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 from OpenGLContext import renderoptions
 
 DRIVER = r'''
@@ -94,9 +96,7 @@ def luminance(scale, profile):
     proc = subprocess.run([sys.executable, '-c', DRIVER, str(scale), profile],
                           capture_output=True, text=True, timeout=120,
                           env=renderoptions.clean_environment())
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr, profile=profile)
     assert proc.returncode == 0, (
         'render failed at scale %r in %s\nstdout:\n%s\nstderr:\n%s'
         % (scale, profile, proc.stdout, proc.stderr))

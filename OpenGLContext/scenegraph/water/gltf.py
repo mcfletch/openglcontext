@@ -182,9 +182,8 @@ def water_hook(ctx: "hooks.HookContext") -> None:
     mesh.wave_time = 0.0
     if values.choice(ctx.params.get('material'), 'keep', 'the water material',
                      ('keep', 'engine')) == 'engine':
-        engine = water_material()
-        mesh.material = engine
-        shape.appearance.material = engine
+        shape.appearance.material = water_material()
+        mesh.solid = False
     elif not getattr(material, 'reflector', None):
         # Water mirrors the shore, whatever material the artist gave it.
         material.reflector = WATER_REFLECTOR

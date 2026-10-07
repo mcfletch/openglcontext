@@ -292,6 +292,7 @@ def test_a_polished_floor_reflects_the_lamp_standing_on_it(render_scene, env):
 def _twelve(render_scene, env, strategy):
     env.setenv('OPENGLCONTEXT_MULTIVIEW', strategy)
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '16')
+    renderoptions.reset_env_cache()
     mirrors = [_mirror(x=x, z=-4.0 - 0.01 * index, size=1.6)
                for index, x in enumerate(np.linspace(-5.0, 5.0, 12))]
     frame = frames_of(render_scene, [

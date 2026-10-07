@@ -27,6 +27,7 @@ import numpy as np
 from OpenGLContext.loaders.gltf.meshes import estimate_normals
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.appearance import Appearance
 
 __all__ = ['Box', 'pack_cells', 'cell_centre', 'srgb_bytes', 'flat_patch',
            'merged_mesh', 'textured_mesh']
@@ -113,8 +114,10 @@ def textured_mesh(positions: np.ndarray, indices: np.ndarray,
 
     The normals are estimated from the triangles, which is what the flat-faced
     geometry built on this wants: a post, a beam and a plate have no curvature
-    to preserve.
+    to preserve. The appearance is opaque: the atlas is clear between its
+    cells, and no part reads there.
     """
     points = np.ascontiguousarray(positions, dtype='f')
     return PBRMesh(positions=points, normals=estimate_normals(points, indices),
-                   indices=indices, material=material, texcoords=texcoords)
+                   indices=indices, texcoords=texcoords,
+                   appearance=Appearance(material=material, alphaMode='OPAQUE'))

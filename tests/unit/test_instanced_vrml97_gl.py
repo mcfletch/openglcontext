@@ -13,6 +13,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -113,9 +115,7 @@ def test_stage5_vrml97_shader_instancing():
     proc = subprocess.run([sys.executable, '-c', DRIVER],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'Stage 5 VRML97 instancing failed (expected one instanced draw of 5 shapes '
         'with 5 distinct, left-to-right object ids)\nstdout:\n%s\nstderr:\n%s'

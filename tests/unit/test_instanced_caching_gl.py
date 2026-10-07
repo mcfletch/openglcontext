@@ -16,6 +16,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -80,9 +82,7 @@ def test_instanced_draw_caches_vao_across_frames():
     proc = subprocess.run([sys.executable, '-c', DRIVER],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'instanced draw path still churns a VAO every frame\n'
         'stdout:\n%s\nstderr:\n%s' % (proc.stdout, proc.stderr))
@@ -116,6 +116,7 @@ try:
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+    from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 
     quad = PBRMesh(
         positions=[(-.35, -.35, 0), (.35, -.35, 0), (.35, .35, 0), (-.35, .35, 0)],
@@ -126,7 +127,7 @@ try:
         return basenodes.Transform(translation=(x, 0, 0), children=[
             basenodes.Shape(geometry=quad,
                 appearance=basenodes.Appearance(
-                    material=PhysicalMaterial(unlit=True, baseColor=color)))])
+                    material=UnlitMaterial(emissiveColor=color)))])
 
     class C(Base):
         def OnInit(self):
@@ -161,9 +162,7 @@ def test_instanced_material_ubo_reused_across_frames():
     proc = subprocess.run([sys.executable, '-c', DRIVER_UBO],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'PBR instanced material-array UBO still gen/deleted every frame\n'
         'stdout:\n%s\nstderr:\n%s' % (proc.stdout, proc.stderr))

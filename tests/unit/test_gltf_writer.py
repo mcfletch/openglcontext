@@ -21,13 +21,15 @@ from OpenGLContext.loaders.gltf.writer import (
     GLTFWriter, InstanceSet, SceneNode, write_glb,
 )
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
-from OpenGLContext.scenegraph.imagedata import ImageDataTexture, texture_properties
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.scenegraph.sampler import texture_properties
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
 from OpenGLContext import __version__
 from OpenGLContext.scenegraph.instancedshape import InstancedShape
 from vrml.x3d import nodes as x3d
+from OpenGLContext.scenegraph.appearance import Appearance
 
 
 # --- fixtures -----------------------------------------------------------------
@@ -46,7 +48,7 @@ def _quad(with_all_attributes=True):
         tangents=np.array([(1, 0, 0, 1)] * 4, 'f'),
         colors=np.array([(1, 0, 0, 1), (0, 1, 0, 1), (0, 0, 1, 1), (1, 1, 0, 0.5)], 'f'),
         indices=indices,
-        material=PhysicalMaterial(baseColor=(0.25, 0.5, 0.75), metallic=0.3, roughness=0.7),
+        appearance=Appearance(material=PhysicalMaterial(baseColor=(0.25, 0.5, 0.75), metallic=0.3, roughness=0.7)),
     )
 
 
@@ -205,7 +207,7 @@ class TestAMaterialRoundTrips:
         base.update(kwargs)
         material = PhysicalMaterial(**base)
         mesh = _quad()
-        mesh.material = material
+        mesh.appearance = Appearance(material=material)
         return material, _only_shape(mesh).appearance.material
 
     def test_metallic_roughness_factors_survive(self):
@@ -218,19 +220,27 @@ class TestAMaterialRoundTrips:
         _, got = self._written(emissiveColor=(0.9, 0.1, 0.0))
         assert np.allclose(got.emissiveColor, (0.9, 0.1, 0.0), atol=1e-6)
 
+    def _drawn(self, mesh_named=None, **appearance_named):
+        mesh = _quad()
+        mesh.appearance = Appearance(material=PhysicalMaterial(transparency=0.25),
+                                     **appearance_named)
+        for name, value in (mesh_named or {}).items():
+            setattr(mesh, name, value)
+        return _only_shape(mesh)
+
     def test_blend_transparency_survives(self):
-        _, got = self._written(alphaMode='BLEND', transparency=0.25)
-        assert got.alphaMode == 'BLEND'
-        assert round(float(got.transparency), 4) == 0.25
+        shape = self._drawn(alphaMode='BLEND')
+        assert shape.appearance.alphaMode == 'BLEND'
+        assert round(float(shape.appearance.material.transparency), 4) == 0.25
 
     def test_masked_cutoff_survives(self):
-        _, got = self._written(alphaMode='MASK', alphaCutoff=0.25)
-        assert got.alphaMode == 'MASK'
-        assert round(float(got.alphaCutoff), 4) == 0.25
+        shape = self._drawn(alphaMode='MASK', alphaCutoff=0.25)
+        assert shape.appearance.alphaMode == 'MASK'
+        assert round(float(shape.appearance.alphaCutoff), 4) == 0.25
 
     def test_double_sidedness_survives(self):
-        _, got = self._written(doubleSided=True)
-        assert bool(got.doubleSided) is True
+        shape = self._drawn({'solid': False})
+        assert shape.geometry.solid is False
 
     def test_an_opaque_material_writes_no_alpha_mode(self):
         """OPAQUE is the glTF default; writing it is noise in every tile."""
@@ -248,7 +258,6 @@ class TestAMaterialRoundTrips:
         ('anisotropyStrength', 0.5, 'KHR_materials_anisotropy'),
         ('dispersion', 0.2, 'KHR_materials_dispersion'),
         ('iridescence', 0.7, 'KHR_materials_iridescence'),
-        ('unlit', True, 'KHR_materials_unlit'),
     ])
     def test_khr_extension_factors_survive(self, field, value, extension):
         material, got = self._written(**{field: value})
@@ -266,14 +275,14 @@ class TestAMaterialRoundTrips:
     def test_meshes_sharing_a_material_share_its_index(self):
         material = PhysicalMaterial(baseColor=(1, 0, 0))
         a, b = _quad(), _quad()
-        a.material = b.material = material
+        a.appearance = b.appearance = Appearance(material=material)
         doc = json.loads(_json_chunk(write_glb([a, b])))
         assert len(doc['materials']) == 1
 
 
 def _quad_with(material):
     mesh = _quad()
-    mesh.material = material
+    mesh.appearance = Appearance(material=material)
     return mesh
 
 
@@ -309,10 +318,10 @@ class TestTexturesRoundTrip:
         assert round(float(got.occlusionStrength), 4) == 0.25
 
     def test_the_second_uv_set_selection_survives(self):
-        material = PhysicalMaterial(texCoordMask=1)      # baseColor samples TEXCOORD_1
+        material = PhysicalMaterial(baseTextureMapping='TEXCOORD_1')
         material.baseTexture = ImageDataTexture(image=_image())
         got = _only_shape(_quad_with(material)).appearance.material
-        assert int(got.texCoordMask) & 1
+        assert got.baseTextureMapping == 'TEXCOORD_1'
 
     def test_sampler_wrap_modes_survive(self):
         material = PhysicalMaterial()

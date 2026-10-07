@@ -8,6 +8,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.error import GLError
 from OpenGLContext import texture, context
+from OpenGLContext.scenegraph.sampler import apply_sampler, sampler_of
 from OpenGLContext.loaders import background
 
 from PIL import Image
@@ -38,13 +39,23 @@ class _Texture(nodetypes.Texture, node.Node):
         repeatT: Any
 
     def compile(self, mode: Any = None) -> Any:
-        """Compile (store our image in an OpenGL texture)"""
+        """Compile (store our image in an OpenGL texture)
+
+        Under a shader the texture's wrap modes and filters are set here, from
+        `repeatS`/`repeatT` or the node's `TextureProperties`: the PBR pass
+        binds the texture object and does not call :meth:`render`.
+        """
         tex = self.createTexture(self.image, mode=mode)
         # cache this for later use...
         holder = mode.cache.holder(self, tex)
         holder.depend(self, "image")
+        for name in ("repeatS", "repeatT", "textureProperties"):
+            if isinstance(getattr(type(self), name, None), field.Field):
+                holder.depend(self, name)
         if tex is not None:
             self.components = tex.components
+            if getattr(mode, "shader_mode", False):
+                apply_sampler(tex, sampler_of(self))
         else:
             self.components = 0
         return tex
@@ -148,6 +159,20 @@ class _Texture(nodetypes.Texture, node.Node):
         if not tex:
             tex = self.compile(mode=mode)
         return tex
+
+    def hasAlpha(self) -> bool:
+        """Whether the image this node holds has an alpha channel, read without GL
+
+        A PIL image with an alpha band or a transparent palette entry, or an
+        SFImage of two or four components. False until an image is loaded.
+        """
+        image = self.image
+        if isinstance(image, Image.Image):
+            return 'A' in image.getbands() or 'transparency' in image.info
+        try:
+            return len(image) > 2 and int(image[2]) in (2, 4)
+        except TypeError:
+            return False
 
     def transparent(self, mode: Any = None) -> int:
         """Does this texture have an alpha component?"""

@@ -10,6 +10,7 @@ import pytest
 from OpenGL import GL
 
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 
 
 def _state(parameter):
@@ -60,7 +61,7 @@ def test_the_emission_is_the_emissive_colour_at_its_strength():
 
 @pytest.mark.usefixtures('gl_context_compat')
 def test_an_unlit_material_shows_its_base_colour_whatever_the_light():
-    PhysicalMaterial(baseColor=(0.2, 0.7, 0.3), unlit=True).render(mode=_Mode())
+    UnlitMaterial(emissiveColor=(0.2, 0.7, 0.3)).render(mode=_Mode())
     assert np.allclose(_state(GL.GL_EMISSION)[:3], (0.2, 0.7, 0.3))
     assert np.allclose(_state(GL.GL_DIFFUSE)[:3], 0.0)
 

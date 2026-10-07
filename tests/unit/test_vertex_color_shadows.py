@@ -20,6 +20,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 from OpenGLContext.testing.paths import tests_root
 from OpenGLContext.testing.gl_env import gl_subprocess_env
 SHADER_DIR = os.path.join(str(tests_root(__file__).parent),
@@ -154,9 +156,7 @@ def test_vertex_color_wall_is_shadowed_by_a_caster():
     lit = _run()
     shd = _run('caster')
     for proc in (lit, shd):
-        if proc.returncode == 3:
-            pytest.skip('no usable GL context: %s'
-                        % proc.stderr.strip().splitlines()[-1:])
+        skip_if_child_had_no_context(proc.returncode, proc.stderr)
         assert proc.returncode == 0, proc.stderr
     lit_n, lit_mean = lit.stdout.split()
     shd_n, shd_mean = shd.stdout.split()

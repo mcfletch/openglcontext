@@ -22,10 +22,9 @@ from pygltflib import (
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.scenegraph.physicalmaterial import uv_transform_matrix
+from OpenGLContext.scenegraph.texturemapping import channel_labels, transform_for
 
 # transform-applies bits are the channel bit << 8
-T_BASECOLOR = 1 << 8
-T_EMISSIVE = 16 << 8
 
 
 def _png():
@@ -91,37 +90,38 @@ def _glb(transform_channel):
     return b"".join(g.save_to_bytes())
 
 
-def _material(transform_channel):
+def _appearance(transform_channel):
     scene = gltf.load_gltf(_glb(transform_channel))
     out = []
 
     def find(n):
         if getattr(n, 'appearance', None) is not None and \
                 getattr(n.appearance, 'material', None) is not None:
-            out.append(n.appearance.material)
+            out.append(n.appearance)
         for c in getattr(n, 'children', []) or []:
             find(c)
     find(scene.group)
     return out[0]
 
 
+def _transformed(appearance):
+    """The channels the appearance's texture transforms reach"""
+    labels = channel_labels(appearance.material)
+    return {channel for channel, label in labels.items()
+            if transform_for(appearance, label) is not None}
+
+
 class TestPerTextureTransform:
-    def test_transform_on_emissive_only_marks_emissive(self):
-        m = _material('emissive')
-        assert m.uv_transform is not None
-        assert m.texCoordMask & T_EMISSIVE          # emissive transform applies
-        assert not (m.texCoordMask & T_BASECOLOR)   # base color is NOT transformed
+    def test_transform_on_emissive_only_transforms_emissive(self):
+        assert _transformed(_appearance('emissive')) == {'emissive'}
 
-    def test_transform_on_basecolor_only_marks_basecolor(self):
-        m = _material('baseColor')
-        assert m.uv_transform is not None
-        assert m.texCoordMask & T_BASECOLOR
-        assert not (m.texCoordMask & T_EMISSIVE)
+    def test_transform_on_basecolor_only_transforms_basecolor(self):
+        assert _transformed(_appearance('baseColor')) == {'baseColor'}
 
-    def test_no_transform_marks_nothing(self):
-        m = _material(None)
-        assert m.uv_transform is None
-        assert not (m.texCoordMask & (T_BASECOLOR | T_EMISSIVE))
+    def test_no_transform_transforms_nothing(self):
+        appearance = _appearance(None)
+        assert _transformed(appearance) == set()
+        assert not appearance.textureTransform
 
 
 class TestUVTransformMatrix:

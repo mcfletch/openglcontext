@@ -24,7 +24,7 @@ from OpenGLContext.scenegraph.gantry import (
     GANTRY_STEEL,
 )
 from OpenGLContext.scenegraph.atlasmesh import cell_centre, srgb_bytes
-from OpenGLContext.scenegraph.physicalmaterial import material_is_transparent
+from OpenGLContext.scenegraph.physicalmaterial import appearance_is_transparent
 
 SPAN = 9.0
 WIDTH = 7.4
@@ -70,11 +70,11 @@ class TestTheAtlas:
                            cells=gantry_atlas(cell=32)[1])
         line = start_line_mesh(WIDTH, material=material,
                                cells=gantry_atlas(cell=32)[1])
-        assert beam.material is line.material is material
+        assert beam.appearance.material is line.appearance.material is material
 
     def test_the_material_is_opaque(self) -> None:
         """Nothing here is glass; a sorted pass for a steel beam is waste."""
-        assert not material_is_transparent(gantry_material())
+        assert not appearance_is_transparent(start_line_mesh(WIDTH).appearance)
 
 
 class TestTheGantry:

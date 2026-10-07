@@ -19,6 +19,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -37,6 +39,7 @@ try:
     from OpenGLContext.passes import instancing, selection
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+    from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 
     STATE = {'instanced_calls': 0, 'instances': 0, 'scan': None}
     _orig_draw = instancing.draw_instanced_mesh
@@ -76,7 +79,7 @@ try:
         positions=[(-.35, -.35, 0), (.35, -.35, 0), (.35, .35, 0), (-.35, .35, 0)],
         normals=[(0, 0, 1)] * 4,
         indices=[0, 1, 2, 0, 2, 3])
-    material = PhysicalMaterial(unlit=True, baseColor=(0, 1, 1))
+    material = UnlitMaterial(emissiveColor=(0, 1, 1))
 
     def instance(x):
         return basenodes.Transform(translation=(x, 0, 0), children=[
@@ -129,9 +132,7 @@ def test_stage1_instanced_render_and_per_instance_picking():
     env = dict(os.environ)
     proc = subprocess.run([sys.executable, '-c', DRIVER],
                           capture_output=True, text=True, timeout=120, env=env)
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'Stage 1 instancing failed (expected one instanced draw of 6 shapes with '
         '6 distinct, left-to-right object ids)\nstdout:\n%s\nstderr:\n%s'

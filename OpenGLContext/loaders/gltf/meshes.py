@@ -42,7 +42,7 @@ from OpenGLContext.loaders.gltf.accessors import (
     _read_floats, _read_accessor, _read_texcoords, _read_normalized, _read_colors,
     declared_bounds,
 )
-from OpenGLContext.loaders.gltf.materials import _build_material
+from OpenGLContext.loaders.gltf.materials import _build_appearance, _double_sided
 from OpenGLContext.loaders.gltf.transforms import _bounds_from_points
 from OpenGLContext.loaders.gltf import draco as _draco
 
@@ -95,7 +95,7 @@ def _triangulate_indices(mode: Optional[int], indices: Optional[np.ndarray],
 
 
 def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
-                     resolver: Resolver, mat_cache: dict, tex_cache: dict,
+                     resolver: Resolver, appearances: dict, tex_cache: dict,
                      hooks: "Optional[HookRunner]" = None,
                      world: Optional[np.ndarray] = None
                      ) -> tuple[Optional["Shape"], Optional[tuple[np.ndarray, np.ndarray]]]:
@@ -169,10 +169,10 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
                    else np.tile(np.array([0, 0, 1], 'f'), (nverts, 1)))
 
     key = primitive.material
-    material = mat_cache.get(key)
-    if material is None:
-        material = _build_material(g, key, resolver, tex_cache)
-        mat_cache[key] = material
+    appearance = appearances.get(key)
+    if appearance is None:
+        appearance = appearances[key] = _build_appearance(g, key, resolver, tex_cache)
+    material = appearance.material
 
     # A normal-mapped primitive that ships no tangents renders flat (the shader
     # disables normal mapping when the tangent is zero). The glTF spec says the
@@ -185,11 +185,10 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
     morph_targets = _read_morph_targets(g, primitive, resolver, nverts)
     mesh = PBRMesh(positions=positions, normals=normals, texcoords=texcoords,
                    texcoords1=texcoords1, tangents=tangents, colors=colors,
-                   indices=indices, material=material, morph_targets=morph_targets,
+                   indices=indices, appearance=appearance, morph_targets=morph_targets,
                    skin_joints=skin_joints, skin_weights=skin_weights,
-                   draw_mode=int(draw_mode),
-                   solid=not bool(getattr(material, 'doubleSided', False)))
-    shape = Shape(geometry=mesh, appearance=Appearance(material=material))
+                   draw_mode=int(draw_mode), solid=not _double_sided(g, key))
+    shape = Shape(geometry=mesh, appearance=appearance)
     bounds = declared_bounds(g.accessors[attrs.POSITION]) \
         or _bounds_from_points(positions)
     if hooks is not None and key is not None:

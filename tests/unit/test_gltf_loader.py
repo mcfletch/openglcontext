@@ -86,8 +86,9 @@ class TestSyntheticGLB:
         assert tuple(round(float(x), 2) for x in mat.baseColor) == (0.2, 0.8, 0.3)
         assert mat.metallic == 0.25 and mat.roughness == 0.6
         assert round(float(mat.transparency), 2) == 0.5     # 1 - baseColor alpha
-        assert mat.alphaMode == 'BLEND'
-        assert bool(mat.doubleSided) is True
+        shape = _find_shape(scene.group)
+        assert shape.appearance.alphaMode == 'BLEND'
+        assert shape.geometry.solid is False                # doubleSided
         assert tuple(round(float(x), 2) for x in mat.emissiveColor) == (0.1, 0.0, 0.0)
 
     def test_estimates_normals_when_absent(self):
@@ -515,9 +516,9 @@ class TestAlphaMode:
         mat = _find_shape(gltf.load_gltf(self._material_glb('OPAQUE', 0.3)).group).appearance.material
         assert float(mat.transparency) == 0.0
 
-    def test_mask_ignores_base_alpha(self):
+    def test_mask_compares_base_alpha_with_the_cutoff(self):
         mat = _find_shape(gltf.load_gltf(self._material_glb('MASK', 0.3)).group).appearance.material
-        assert float(mat.transparency) == 0.0
+        assert float(mat.transparency) == pytest.approx(0.7)
 
     def test_blend_derives_transparency(self):
         mat = _find_shape(gltf.load_gltf(self._material_glb('BLEND', 0.3)).group).appearance.material

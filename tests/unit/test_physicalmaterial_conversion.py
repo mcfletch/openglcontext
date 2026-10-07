@@ -3,9 +3,10 @@ import math
 
 import pytest
 
-from OpenGLContext.scenegraph.imagedata import ImageDataTexture, texture_properties
+from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.scenegraph.sampler import texture_properties
 from OpenGLContext.scenegraph.physicalmaterial import (
-    PhysicalMaterial, material_is_transparent, material_to_pbr, srgb_to_linear,
+    PhysicalMaterial, material_to_pbr, srgb_to_linear,
     uv_transform_matrix,
 )
 from OpenGLContext.scenegraph.basenodes import Appearance, Material
@@ -18,9 +19,6 @@ class TestPhysicalMaterialDefaults:
         assert m.metallic == 1.0
         assert m.roughness == 1.0
         assert tuple(m.emissiveColor) == (0.0, 0.0, 0.0)
-        assert m.alphaMode == 'OPAQUE'
-        assert m.alphaCutoff == 0.5
-        assert bool(m.doubleSided) is False
         assert m.textures == {}
 
     def test_fields_and_textures_set(self):
@@ -68,27 +66,6 @@ class TestUpConversion:
         assert 0.0 < f['roughness'] <= 1.0
 
 
-class TestTransparency:
-    def test_none_material_is_opaque(self):
-        assert material_is_transparent(None) is False
-
-    def test_explicit_blend_is_transparent(self):
-        assert material_is_transparent(PhysicalMaterial(alphaMode='BLEND')) is True
-
-    def test_explicit_opaque_and_mask_stay_opaque(self):
-        assert material_is_transparent(PhysicalMaterial(alphaMode='OPAQUE')) is False
-        assert material_is_transparent(PhysicalMaterial(alphaMode='MASK')) is False
-
-    def test_legacy_transparency_without_alpha_mode(self):
-        class Legacy:
-            transparency = 0.4
-        assert material_is_transparent(Legacy()) is True
-
-        class Opaque:
-            transparency = 0.0
-        assert material_is_transparent(Opaque()) is False
-
-
 class TestUVTransform:
     def test_identity_transform(self):
         m = uv_transform_matrix()
@@ -114,13 +91,16 @@ class TestUVTransform:
 from PIL import Image
 from OpenGL.error import GLError
 from OpenGL.GL import (
-    GL_INVALID_OPERATION, GL_LINEAR, GL_NEAREST, GL_NO_ERROR, GL_REPEAT, GL_TEXTURE_2D,
+    GL_CLAMP_TO_EDGE, GL_INVALID_OPERATION, GL_LINEAR, GL_NEAREST, GL_NO_ERROR, GL_REPEAT,
+    GL_TEXTURE_2D,
     GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S, glBindTexture, glGetError,
     glGetTexParameteriv,
 )
 import OpenGL.GL as GLmod
-import gc
 import types
+
+from vrml.cache import Cache
+from OpenGLContext.texturecache import TextureCache
 
 
 @pytest.fixture
@@ -128,33 +108,23 @@ def gl(gl_window):
     return gl_window('pbrtex', size=(32, 32), profile='any')
 
 
-class _Context:
-    """A render mode's context, as far as a texture's cache reads it."""
+class _Mode:
+    """A shader-mode render pass, as far as a texture's compile reads it."""
+
+    shader_mode = True
+
+    def __init__(self):
+        self.cache = Cache()
+        self.context = types.SimpleNamespace(textureCache=TextureCache())
 
 
 class TestImageDataTextureGL:
-    @pytest.mark.usefixtures('gl')
-    def test_a_context_that_has_gone_is_forgotten(self):
-        """The textures are kept by context, not by where it was allocated.
-
-        A collected context's address is handed to the next object of its
-        size, so a table keyed on it would answer a new context with textures
-        whose names belong to the old one.
-        """
-        tex = ImageDataTexture(image=Image.new("RGBA", (2, 2), (1, 2, 3, 255)))
-        mode = types.SimpleNamespace(context=_Context())
-        tex.cached(mode)
-        assert len(tex._per_context) == 1  # noqa: SLF001 the per-context texture table, which must give up a dead context's entry
-        mode.context = None
-        gc.collect()
-        assert len(tex._per_context) == 0  # noqa: SLF001 the per-context texture table, which must give up a dead context's entry
-
     @pytest.mark.usefixtures('gl')
     def test_cached_builds_once_and_applies_sampler(self):
         img = Image.new("RGBA", (4, 4), (200, 100, 50, 255))
         tex = ImageDataTexture(image=img, textureProperties=texture_properties(
             'REPEAT', 'CLAMP_TO_EDGE', 'AVG_PIXEL', 'NEAREST_PIXEL'))
-        mode = types.SimpleNamespace(context=_Context())
+        mode = _Mode()
 
         built = tex.cached(mode)
         assert built is not None
@@ -167,15 +137,33 @@ class TestImageDataTextureGL:
         assert wrap == GL_REPEAT
         assert mag == GL_NEAREST
 
-        # A second lookup with the same context returns the cached object.
+        # A second lookup in the same mode returns the cached object.
         assert tex.cached(mode) is built
+
+    @pytest.mark.usefixtures('gl')
+    def test_a_new_image_is_compiled_again(self):
+        tex = ImageDataTexture(image=Image.new("RGBA", (2, 2), (1, 2, 3, 255)))
+        mode = _Mode()
+        first = tex.cached(mode)
+        tex.image = Image.new("RGBA", (4, 4), (4, 5, 6, 255))
+        assert tex.cached(mode) is not first
+
+    @pytest.mark.usefixtures('gl')
+    def test_a_new_sampler_is_compiled_again(self):
+        tex = ImageDataTexture(image=Image.new("RGBA", (2, 2), (1, 2, 3, 255)))
+        mode = _Mode()
+        first = tex.cached(mode)
+        tex.textureProperties = texture_properties('CLAMP_TO_EDGE', 'CLAMP_TO_EDGE')
+        built = tex.cached(mode)
+        assert built is not first
+        glBindTexture(GL_TEXTURE_2D, built.texture)
+        assert int(glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S)) == GL_CLAMP_TO_EDGE
 
     @pytest.mark.usefixtures('gl')
     def test_cached_defaults_without_sampler_overrides(self):
         img = Image.new("RGBA", (2, 2), (10, 20, 30, 255))
-        tex = ImageDataTexture(image=img)                      # no wrap/filter overrides
-        mode = types.SimpleNamespace(context=_Context())
-        built = tex.cached(mode)
+        tex = ImageDataTexture(image=img)
+        built = tex.cached(_Mode())
         assert built is not None
         glBindTexture(GL_TEXTURE_2D, built.texture)
         mag = int(glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER))
@@ -184,18 +172,16 @@ class TestImageDataTextureGL:
 
     @pytest.mark.usefixtures('gl')
     def test_mipmap_failure_falls_back_to_linear_min_filter(self, monkeypatch):
-        # A driver that cannot generate mipmaps -> _apply_sampler must degrade the
-        # min filter to plain GL_LINEAR rather than a mipmap filter (else sampling
-        # an incomplete mip chain renders black).
+        # A driver that cannot generate mipmaps: the min filter is plain
+        # GL_LINEAR rather than a mipmap filter, which would sample an
+        # incomplete mip chain as black.
 
         def _boom(_target):
             raise GLError(GL_INVALID_OPERATION, None)
 
         monkeypatch.setattr(GLmod, 'glGenerateMipmap', _boom)
         img = Image.new("RGBA", (4, 4), (1, 2, 3, 255))
-        tex = ImageDataTexture(image=img)
-        mode = types.SimpleNamespace(context=_Context())
-        built = tex.cached(mode)
+        built = ImageDataTexture(image=img).cached(_Mode())
         glBindTexture(GL_TEXTURE_2D, built.texture)
         min_f = int(glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER))
         assert min_f == GL_LINEAR

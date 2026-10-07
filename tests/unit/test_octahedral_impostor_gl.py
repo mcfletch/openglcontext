@@ -25,8 +25,8 @@ import numpy as np
 from PIL import Image
 
 from OpenGLContext.scenegraph import basenodes, octahedral
-from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 GRID = 8
@@ -85,8 +85,8 @@ try:
     from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
     from OpenGLContext import testingcontext
     from OpenGLContext.scenegraph import basenodes
-    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
     from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+    from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
     GRID, ATLAS = %(grid)d, %(atlas)d
@@ -118,11 +118,10 @@ try:
 
     class Probe(Base):
         def OnInit(self):
-            material = PhysicalMaterial(
-                baseColor=(1, 1, 1), metallic=0.0, roughness=1.0,
-                unlit=True, alphaMode='OPAQUE',
+            material = UnlitMaterial(
+                emissiveColor=(1, 1, 1),
                 octahedralViews=GRID, octahedralHemi=True,
-                textures={'baseColor': PBRTexture(atlas)},
+                emissiveTexture=ImageDataTexture(image=atlas),
             )
             mesh = PBRMesh(positions=positions, normals=normals,
                            texcoords=texcoords, indices=indices, solid=False)
@@ -227,8 +226,8 @@ def test_a_small_atlas_reads_nothing_of_the_neighbouring_views(render_scene, mon
     pixels[..., 0] = 255
     pixels[..., 3] = 255
     pixels[row * tile:(row + 1) * tile, column * tile:(column + 1) * tile] = (0, 255, 0, 255)
-    material = PhysicalMaterial(baseColor=(1, 1, 1), unlit=True, octahedralViews=GRID,
-                           baseTexture=ImageDataTexture(image=Image.fromarray(pixels, 'RGBA')))
+    material = UnlitMaterial(emissiveColor=(1, 1, 1), octahedralViews=GRID,
+                             emissiveTexture=ImageDataTexture(image=Image.fromarray(pixels, 'RGBA')))
     quad = PBRMesh(
         positions=np.array([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], 'f'),
         normals=np.tile(np.array([0, 0, 1], 'f'), (4, 1)),

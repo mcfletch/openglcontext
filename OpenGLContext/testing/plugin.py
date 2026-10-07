@@ -96,6 +96,28 @@ _FALSE = ('0', 'false', 'no', 'off')
 #: What this session settled on for GLFW teardown, so a run can say which.
 _TEARDOWN: dict[str, str] = {}
 
+#: The exit status a test's child process gives when it could not draw.
+NO_CONTEXT_STATUS = 3
+
+
+def skip_if_child_had_no_context(returncode: int, stderr: str,
+                                 profile: str = 'core') -> None:
+    """Skip a test whose child could not draw, where this machine has no context
+
+    A child exiting with :data:`NO_CONTEXT_STATUS` is a skip when
+    :func:`~OpenGLContext.testing.glcontext.profile_unavailable` gives a
+    reason this machine has no ``profile`` context. Where it has one, the
+    child could have drawn, and the test fails with the child's error output.
+    Any other status is the test's own to judge.
+    """
+    if returncode != NO_CONTEXT_STATUS:
+        return
+    refusal = glcontext.profile_unavailable(profile)
+    if refusal:
+        pytest.skip(refusal)
+    pytest.fail('the child process could not draw, though a %s context is '
+                'available here:\n%s' % (profile, stderr), pytrace=False)
+
 
 def performance_skip_reason(description: GLDescription | None,
                             env: Mapping[str, str] | None = None) -> str | None:

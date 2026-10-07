@@ -11,6 +11,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -81,8 +83,7 @@ os._exit(0 if STATE['nonblack'] > 3000 else 2)
 def test_all_vrml97_programs_compile_and_render():
     proc = subprocess.run([sys.executable, '-c', DRIVER],
                           capture_output=True, text=True, timeout=120, env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s' % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode != 4, ('a VRML97 shader program failed to compile\n%s'
                                   % proc.stderr)
     assert proc.returncode == 0, ('shader-cleanup broke rendering\nstdout:\n%s\nstderr:\n%s'

@@ -15,6 +15,8 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
+
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
 from PIL import Image
 from omi_physics import model
 from omi_physics.gravity import GravityVolume, InfiniteRegion
@@ -484,8 +486,7 @@ def _cost(mode, frames=120):
     """The harness's median frame time in ``mode``, in milliseconds."""
     done = subprocess.run([sys.executable, COST, str(frames), mode], capture_output=True,
                           text=True, timeout=600)
-    if done.returncode == 3:
-        pytest.skip('the harness could make no context: %s' % done.stderr[-500:])
+    skip_if_child_had_no_context(done.returncode, done.stderr)
     assert done.returncode == 0, done.stderr[-3000:]
     line = [text for text in done.stdout.splitlines() if text.startswith('{')][-1]
     return json.loads(line)['median_ms']

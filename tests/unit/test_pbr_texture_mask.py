@@ -20,6 +20,8 @@ from OpenGLContext.passes import pbrpass
 from OpenGLContext.passes.shaderpass import SHADER_DIR
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.texturecache import TextureCache
+from vrml.cache import Cache
 
 
 def _source():
@@ -106,7 +108,13 @@ class TestTheDraw:
 
 
 class _Drawing:
-    """The Context drawing the material, as far as a texture's cache reads it."""
+    """A shader-mode draw, as far as a texture's compile reads it."""
+
+    shader_mode = True
+
+    def __init__(self):
+        self.cache = Cache()
+        self.context = SimpleNamespace(textureCache=TextureCache())
 
 
 class TestTheUnits:
@@ -127,9 +135,7 @@ class TestTheUnits:
         for index, channel in enumerate(channels):
             material.setTexture(
                 channel, ImageDataTexture(image=Image.new('RGB', (4, 4), (40 * index, 0, 0))))
-        # What a texture's cache keys on is the Context drawing; the window
-        # handle makes the GL context current and stands for nothing else.
-        mode = SimpleNamespace(context=_Drawing())
+        mode = _Drawing()
         shader_program.use(lit=True)
         shader_program.bind_pbr_textures(material, mode)
         for channel in channels:

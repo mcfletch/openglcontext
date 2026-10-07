@@ -125,7 +125,7 @@ class TestGroundThatArrivedInATile:
             positions=np.array([[0, 0, 0], [4, 0, 0], [0, 0, 4]], 'f'),
             normals=(np.tile([0, 1, 0], (3, 1)).astype('f') if normals else None),
             indices=(np.array([0, 1, 2], np.uint32) if indices else None),
-            material=material)
+            appearance=Appearance(material=material))
         tile = Group(children=[Shape(geometry=mesh,
                                      appearance=Appearance(material=material))])
         return tile, {GROUND_MATERIAL: material}
@@ -189,8 +189,8 @@ class TestTheNameSurvivesTheFile:
             positions=np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1]], 'f'),
             normals=np.tile([0, 1, 0], (3, 1)).astype('f'),
             indices=np.array([0, 1, 2], np.uint32),
-            material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0),
-                                 DEF=GROUND_MATERIAL))
+            appearance=Appearance(material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0),
+                                 DEF=GROUND_MATERIAL)))
         scene = gltf.load_gltf(write_glb([SceneNode(mesh=mesh, name='terrain')]))
         assert GROUND_MATERIAL in scene.materials
 
@@ -199,8 +199,8 @@ class TestTheNameSurvivesTheFile:
             positions=np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1]], 'f'),
             normals=np.tile([0, 1, 0], (3, 1)).astype('f'),
             indices=np.array([0, 1, 2], np.uint32),
-            material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0),
-                                 DEF=GROUND_MATERIAL))
+            appearance=Appearance(material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0),
+                                 DEF=GROUND_MATERIAL)))
         scene = gltf.load_gltf(write_glb([SceneNode(mesh=mesh, name='terrain')]))
         assert mount_ground(scene.group, _shading(),
                             scene.materials[GROUND_MATERIAL]) == 1

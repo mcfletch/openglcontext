@@ -18,6 +18,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -38,6 +40,7 @@ try:
     from OpenGLContext.passes import instancing, selection
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+    from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 
     STATE = {'calls': 0, 'byid': None}
     _od = instancing.draw_instanced_mesh
@@ -85,7 +88,7 @@ try:
         return basenodes.Transform(translation=(x, 0, 0), children=[
             basenodes.Shape(geometry=quad,   # shared geometry, DIFFERENT material
                 appearance=basenodes.Appearance(
-                    material=PhysicalMaterial(unlit=True, baseColor=color)))])
+                    material=UnlitMaterial(emissiveColor=color)))])
 
     class C(Base):
         def OnInit(self):
@@ -135,9 +138,7 @@ def test_stage2_per_instance_material_factors():
     proc = subprocess.run([sys.executable, '-c', DRIVER],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'Stage 2 per-instance materials failed (expected one instanced draw with '
         'four distinctly-coloured, individually-pickable instances)\n'

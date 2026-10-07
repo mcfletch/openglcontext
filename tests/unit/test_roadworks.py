@@ -141,12 +141,12 @@ class TestABridge:
 
     def test_it_carries_a_material(self) -> None:
         for mesh in bridge_meshes(_straight(), ROAD, _valley).values():
-            assert mesh.material is not None
+            assert mesh.appearance.material is not None
 
     def test_a_given_material_is_the_one_used(self) -> None:
         mine = concrete_material()
         for mesh in bridge_meshes(_straight(), ROAD, _valley, material=mine).values():
-            assert mesh.material is mine
+            assert mesh.appearance.material is mine
 
 
 class TestATunnel:
@@ -257,7 +257,7 @@ class TestATunnel:
 
     def test_it_carries_a_material(self) -> None:
         for mesh in tunnel_meshes(_straight(height=0.0), ROAD).values():
-            assert mesh.material is not None
+            assert mesh.appearance.material is not None
 
 
 class TestTheseSurfacesFaceOutwards:
@@ -345,17 +345,17 @@ class TestWhatACausewayIsBuiltOf:
         concrete = concrete_material()
         parts = causeway_meshes(_straight(height=4.0), ROAD, _valley,
                                 material=concrete)
-        assert parts['wall'].material is concrete
+        assert parts['wall'].appearance.material is concrete
 
     def test_and_the_same_stuff_as_the_fill_under_it(self) -> None:
         parts = causeway_meshes(_straight(height=4.0), ROAD, _valley)
-        assert np.allclose(parts['wall'].material.baseColor,
-                           parts['body'].material.baseColor)
+        assert np.allclose(parts['wall'].appearance.material.baseColor,
+                           parts['body'].appearance.material.baseColor)
 
     def test_a_deck_s_parapet_is_still_a_barrier(self) -> None:
         parts = bridge_meshes(_straight(), ROAD, _valley)
-        assert not np.allclose(parts['parapet'].material.baseColor,
-                               parts['deck'].material.baseColor)
+        assert not np.allclose(parts['parapet'].appearance.material.baseColor,
+                               parts['deck'].appearance.material.baseColor)
 
 
 class TestTheMaterial:
@@ -369,7 +369,8 @@ class TestTheMaterial:
         """A tunnel lining is a single surface with a driver on one side of it,
         so nothing is gained by drawing its back -- and a bridge soffit is
         closed. Neither wants two-sided lighting."""
-        assert not concrete_material().doubleSided
+        meshes = bridge_meshes(_straight(height=40.0), ROAD, _valley)
+        assert all(mesh.solid for mesh in meshes.values())
 
 
 class TestTheyShareTheRoadsFrame:
@@ -552,7 +553,7 @@ class TestItIsDarkInThere:
         of the hillside shows through it: a material whose vertex colours are
         baked light reads it as occlusion and leaves the surface solid."""
         meshes = tunnel_meshes(_straight(length=400.0, height=0.0), ROAD)
-        material = meshes['bore'].material
+        material = meshes['bore'].appearance.material
         assert material.bakedLight
         assert float(material.baseColor[3] if len(material.baseColor) > 3
                      else 1.0) == 1.0
@@ -638,20 +639,20 @@ class TestTheBarrierIsNotTheStructure:
 
     def test_the_parapets_wear_it(self) -> None:
         meshes = bridge_meshes(_straight(), ROAD, _valley)
-        assert meshes['parapet'].material is not meshes['deck'].material
-        assert tuple(meshes['parapet'].material.baseColor) \
+        assert meshes['parapet'].appearance.material is not meshes['deck'].appearance.material
+        assert tuple(meshes['parapet'].appearance.material.baseColor) \
             == pytest.approx(tuple(barrier_material().baseColor))
 
     def test_a_given_material_is_still_the_one_used(self) -> None:
         mine = concrete_material()
         meshes = bridge_meshes(_straight(), ROAD, _valley, material=mine)
-        assert all(mesh.material is mine for mesh in meshes.values())
+        assert all(mesh.appearance.material is mine for mesh in meshes.values())
 
     def test_a_barrier_of_your_own_can_be_given(self) -> None:
         mine = concrete_material()
         meshes = bridge_meshes(_straight(), ROAD, _valley, barrier=mine)
-        assert meshes['parapet'].material is mine
-        assert meshes['deck'].material is not mine
+        assert meshes['parapet'].appearance.material is mine
+        assert meshes['deck'].appearance.material is not mine
 
 
 class TestWhatADriverCanSeePastTheBarrier:
@@ -853,7 +854,7 @@ class TestTheFittingsThemselves:
     def test_a_fitting_burns_rather_than_being_lit(self):
         """It is the light in there; nothing else is going to light it."""
         meshes = tunnel_meshes(_straight(length=300.0, height=0.0), ROAD)
-        assert max(meshes['lamps'].material.emissiveColor) > 0.5
+        assert max(meshes['lamps'].appearance.material.emissiveColor) > 0.5
 
     def test_they_are_up_at_the_crown_rather_than_on_the_road(self):
         tunnel = TunnelProfile()
@@ -878,8 +879,8 @@ class TestABoreIsLitOnce:
 
     def test_the_lining_carries_the_lamps_rather_than_being_tinted_by_them(
             self) -> None:
-        found = self._bore()['bore'].material
-        assert found.bakedLight and not found.unlit
+        found = self._bore()['bore'].appearance.material
+        assert found.bakedLight
 
     def test_because_it_carries_its_own(self) -> None:
         found = self._bore()['bore']
@@ -891,14 +892,14 @@ class TestABoreIsLitOnce:
         scene lights it a second time is not, because the shade baked along it
         only means anything if nothing else is added to it."""
         wanted = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
-        found = self._bore(material=wanted)['bore'].material
+        found = self._bore(material=wanted)['bore'].appearance.material
         assert tuple(found.baseColor) == tuple(wanted.baseColor)
         assert found.bakedLight and not wanted.bakedLight
 
     def test_the_portals_are_lit_like_anything_else_outside(self) -> None:
         """A portal is seen from the daylight, and what it looks like is what
         the sun is doing to it."""
-        assert not self._bore()['portals'].material.bakedLight
+        assert not self._bore()['portals'].appearance.material.bakedLight
 
 
 class TestBakedLightSurvivesABake:

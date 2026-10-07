@@ -35,6 +35,7 @@ from OpenGLContext.loaders.gltf.meshes import estimate_normals
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
+from OpenGLContext.scenegraph.appearance import Appearance
 
 __all__ = [
     'BarrierProfile', 'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
@@ -245,7 +246,7 @@ def lamp_material() -> PhysicalMaterial:
 def concrete_material() -> PhysicalMaterial:
     """The material bridges and tunnels are built from."""
     return PhysicalMaterial(baseColor=CONCRETE_ALBEDO, metallic=0.0,
-                       roughness=CONCRETE_ROUGHNESS, doubleSided=False)
+                       roughness=CONCRETE_ROUGHNESS)
 
 
 def lining_material(concrete: PhysicalMaterial) -> PhysicalMaterial:
@@ -271,7 +272,7 @@ def lining_material(concrete: PhysicalMaterial) -> PhysicalMaterial:
 def barrier_material() -> PhysicalMaterial:
     """What a parapet is made of: darker than the deck it stands on."""
     return PhysicalMaterial(baseColor=BARRIER_ALBEDO, metallic=0.0,
-                       roughness=BARRIER_ROUGHNESS, doubleSided=False)
+                       roughness=BARRIER_ROUGHNESS)
 
 
 def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
@@ -1303,4 +1304,4 @@ def _mesh(positions: np.ndarray, indices: np.ndarray,
           material: PhysicalMaterial, colors: Optional[np.ndarray] = None) -> PBRMesh:
     points = np.ascontiguousarray(positions, dtype='f')
     return PBRMesh(positions=points, normals=estimate_normals(points, indices),
-                   indices=indices, material=material, colors=colors)
+                   indices=indices, appearance=Appearance(material=material), colors=colors)

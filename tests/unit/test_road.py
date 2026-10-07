@@ -182,12 +182,12 @@ class TestTheMeshItGenerates:
     def test_it_is_a_pbr_mesh_with_a_material(self) -> None:
         mesh = road_mesh(_straight(), RoadProfile())
         assert mesh.positions is not None and mesh.indices is not None
-        assert mesh.material is not None
+        assert mesh.appearance.material is not None
         assert mesh.texcoords is not None
 
     def test_the_material_can_be_supplied(self) -> None:
         material = tarmac_material()
-        assert road_mesh(_straight(), RoadProfile(), material=material).material is material
+        assert road_mesh(_straight(), RoadProfile(), material=material).appearance.material is material
 
     def test_tangents_come_with_it_for_the_normal_map(self) -> None:
         mesh = road_mesh(_straight(), RoadProfile())
@@ -229,7 +229,7 @@ class TestTheRoadMaterial:
 
     def test_the_road_is_not_double_sided(self) -> None:
         """Nothing drives under it, and back faces cost fill."""
-        assert bool(tarmac_material().doubleSided) is False
+        assert road_mesh(_straight(), RoadProfile()).solid is True
 
 
 class TestTheRoadTexture:

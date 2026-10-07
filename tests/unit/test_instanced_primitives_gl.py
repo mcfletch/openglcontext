@@ -12,6 +12,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 GEOM = sys.argv[1]
@@ -129,9 +131,7 @@ def test_native_primitive_instancing(geom):
     proc = subprocess.run([sys.executable, '-c', DRIVER, geom],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         '%s field did not instance into one draw with 5 distinct pickable ids\n'
         'stdout:\n%s\nstderr:\n%s' % (geom, proc.stdout, proc.stderr))

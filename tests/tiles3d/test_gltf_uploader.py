@@ -10,6 +10,7 @@ import os
 import types
 
 import numpy as np
+from vrml.cache import Cache
 import OpenGL.GL as gl
 import pytest
 
@@ -87,33 +88,9 @@ class _FakeGPU:
         self.released = True
 
 
-class _FakeHolder:
-    def __init__(self, cache, client, key):
-        self._cache, self._client, self._key = cache, client, key
-
-    def __call__(self, *_args, **_named):
-        self._cache.data.pop((self._client, self._key), None)
-
-
-class _FakeCache:
-    def __init__(self):
-        self.data = {}
-
-    def put(self, client, key, data):
-        self.data[(client, key)] = data
-
-    def getData(self, client, key="", default=None):
-        return self.data.get((client, key), default)
-
-    def getHolder(self, client, key=""):
-        if (client, key) in self.data:
-            return _FakeHolder(self, client, key)
-        return None
-
-
 class _FakeContext:
     def __init__(self):
-        self.cache = _FakeCache()
+        self.cache = Cache()
 
 
 class _FakeTexture:
@@ -121,9 +98,8 @@ class _FakeTexture:
         self.texture = tid
 
 
-class _FakePBRTexture:
-    def __init__(self, tex, context):
-        self._per_context = {context: tex}
+class _FakeTextureNode:
+    """A texture node: what the context cache holds a GL texture against."""
 
 
 class _FakeMaterial:
@@ -133,7 +109,7 @@ class _FakeMaterial:
 
 class _FakeGeometry:
     def __init__(self, material=None):
-        self.material = material
+        self.appearance = types.SimpleNamespace(material=material)
 
 
 class _FakeShape:
@@ -162,9 +138,10 @@ def test_release_deletes_gl_buffers_and_textures(monkeypatch):
 
     ctx = _FakeContext()
     gpu = _FakeGPU()
-    geo = _FakeGeometry(
-        material=_FakeMaterial({'baseColor': _FakePBRTexture(_FakeTexture(11), ctx)}))
-    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
+    texture = _FakeTextureNode()
+    ctx.cache.holder(texture, _FakeTexture(11))
+    geo = _FakeGeometry(material=_FakeMaterial({'baseColor': texture}))
+    ctx.cache.holder(geo, gpu, PBRMesh._GPU_CACHE_KEY)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
     group = _FakeGroup([_FakeShape(geo)])
 
     deleted_textures = []
@@ -191,7 +168,7 @@ def test_dispose_is_idempotent(monkeypatch):
     ctx = _FakeContext()
     gpu = _FakeGPU()
     geo = _FakeGeometry()
-    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
+    ctx.cache.holder(geo, gpu, PBRMesh._GPU_CACHE_KEY)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
     group = _FakeGroup([_FakeShape(geo)])
 
     calls = []
@@ -213,7 +190,7 @@ def test_release_without_context_is_safe_and_deletes_nothing(monkeypatch):
     ctx = _FakeContext()
     gpu = _FakeGPU()
     geo = _FakeGeometry()
-    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
+    ctx.cache.holder(geo, gpu, PBRMesh._GPU_CACHE_KEY)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
     group = _FakeGroup([_FakeShape(geo)])
 
     monkeypatch.setattr(ctxmod, 'getCurrentContext', lambda: None)

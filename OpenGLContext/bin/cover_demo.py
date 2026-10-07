@@ -32,6 +32,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from OpenGLContext.scenegraph import basenodes, surfaces
+from OpenGLContext.scenegraph.appearance import Appearance
 
 __all__ = ['Meadow', 'main']
 
@@ -221,7 +222,7 @@ def _blades(count: int, rings: int, seed: int = 31) -> Any:
     return PBRMesh(positions=np.asarray(positions, 'f'),
                    normals=np.asarray(normals, 'f'),
                    texcoords=np.asarray(texcoords, 'f'),
-                   indices=np.asarray(indices, np.uint32), material=material)
+                   indices=np.asarray(indices, np.uint32), appearance=Appearance(material=material))
 
 
 def _clump_glb() -> bytes:

@@ -42,11 +42,18 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] round trip and schema validation tests (1,181 corpus scenes in each encoding; written XML valid against the X3D 4.1 XSD; `.wrl` back to VRML97)
   - [x] dialects record each version's absent fields; reading warns on one, writing refuses a non-default one
 - Phase 5, `PhysicalMaterial` (§9.13)
-  - [ ] `PBRMaterial` reworked into `PhysicalMaterial`; extension and engine fields
-  - [ ] texture fields and mapping labels; per-channel texture transforms
-  - [ ] alpha on `Appearance`, sidedness on `solid`; `UnlitMaterial`
-  - [ ] every caller in the workspace migrated
+  - [x] `PBRMaterial` reworked into `PhysicalMaterial`; extension and engine fields
+  - [x] texture fields and mapping labels; per-channel texture transforms
+  - [x] alpha on `Appearance` (AUTO reads the base texture's alpha), sidedness on `solid`; `UnlitMaterial`
+  - [x] OpenGLContext callers migrated
+  - [ ] callers in the other projects migrated (openglcontext-editor, twig-bb, glisteel, glisteel-editor, marble-demo, marble-editor)
   - [ ] glTF material round trip through X3D
+  - [ ] one texture cache: the glTF loader's `_SHARED` content table and the pass's `_packed_block` attribute folded into `vrml.cache`/`textureCache`
+- [ ] Visual suite (not this plan's, found during Phase 5): `8a81ad99` made
+  `ContextDefinition.renderer` default to `pbr`, so 53 VRML97 demo scripts
+  draw through the PBR pass against baselines captured from the VRML97 pass.
+  Each demo either declares `renderer='vrml97'` or has its baseline re-blessed;
+  the maintainer's choice
 - Phase 6, OpenGLContext Interchange (§9.11, §9.12, §9.14)
   - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered
   - [ ] the render pass skips nodes whose X3D `visible` is false
@@ -1268,6 +1275,21 @@ Implementation detail (2026-10-07, before Phase 5 starts):
   words, so `MAX_INSTANCE_MATERIALS` becomes 51. A material whose channels
   use more than four distinct transforms is reported and the rest read as
   untransformed.
+
+As landed: the codes and transforms are per-draw uniforms
+(`channelCodes[4]`, `uvTransformRows[8]`), not material-block words. The
+transforms belong to the appearance and the coordinate sets to the geometry,
+so two shapes sharing a material can read it differently; in the block they
+would have split the instancing material table on state that is not the
+material's. `scenegraph/texturemapping.py` computes a `TextureMapping` per
+(appearance, geometry), kept in a `vrml.cache` holder on the appearance that
+depends on the material's, the appearance's and the transforms' fields; the
+instancing key includes it, so members differing in a transform draw apart.
+The block keeps its 224-byte layout: word 29 (`texCoordMask`) is
+`materialFlags`, the `uvTransform` mat3 is reserved, and so is word 19
+(`alphaCutoff`, now a uniform from the appearance). `PBRMesh` has no
+`textureMappings` field; `coordinate_set` reads `TEXCOORD_n` labels and asks a
+geometry with a `textureCoordinateSet(label)` method.
 
 `ImageTexture`, `PixelTexture`, `ImageCubeMapTexture`, `ComposedCubeMapTexture`,
 `ImageTexture3D` load through the existing texture cache; `TextureProperties`

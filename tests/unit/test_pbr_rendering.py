@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS, skip_if_child_had_no_context
 from OpenGLContext.loaders import gltf
 TESTS_DIR = str(tests_root(__file__))
 CAPTURE = os.path.join(TESTS_DIR, "helpers", "_pbr_capture.py")
@@ -25,26 +26,26 @@ def _have_internet(host="raw.githubusercontent.com"):
 
 
 def capture_scene(out_path, mode="spheres", source=None, env=None):
-    """Render ``mode`` in a subprocess to ``out_path``; False if it wrote nothing."""
+    """Render ``mode`` in a subprocess to ``out_path``
+
+    Skips where this machine has no core context, and fails with the child's
+    error output where it has one and the child wrote no image.
+    """
     args = [sys.executable, CAPTURE, out_path, mode]
     if source:
         args.append(source)
     run_env = dict(os.environ)
     if env:
         run_env.update(env)
-    try:
-        subprocess.run(args, timeout=180, stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, env=run_env)
-    except subprocess.TimeoutExpired:
-        return False
-    return os.path.exists(out_path)
+    proc = subprocess.run(args, timeout=180, capture_output=True, text=True, env=run_env)
+    if not os.path.exists(out_path):
+        skip_if_child_had_no_context(NO_CONTEXT_STATUS, proc.stderr)
 
 
 @pytest.fixture(scope="module")
 def spheres_image(tmp_path_factory):
     out = str(tmp_path_factory.mktemp("pbr") / "spheres.png")
-    if not capture_scene(out):
-        pytest.skip("OpenGL context unavailable for PBR render test")
+    capture_scene(out)
     return np.asarray(Image.open(out).convert("RGB")).astype(int)
 
 
@@ -70,8 +71,7 @@ def test_metal_sphere_is_gold(spheres_image):
 @pytest.fixture(scope="module")
 def blend_image(tmp_path_factory):
     out = str(tmp_path_factory.mktemp("pbr") / "blend.png")
-    if not capture_scene(out, mode="blend"):
-        pytest.skip("OpenGL context unavailable for PBR blend test")
+    capture_scene(out, mode="blend")
     return np.asarray(Image.open(out).convert("RGB")).astype(int)
 
 
@@ -103,9 +103,8 @@ def test_blend_panel_is_translucent(blend_image):
 
 def _transmission_image(tmp_path, transmission_mode):
     out = str(tmp_path / ("trans_%s.png" % transmission_mode))
-    if not capture_scene(out, mode="transmission",
-                    env={"OPENGLCONTEXT_TRANSMISSION": transmission_mode}):
-        pytest.skip("OpenGL context unavailable for transmission test")
+    capture_scene(out, mode="transmission",
+                    env={"OPENGLCONTEXT_TRANSMISSION": transmission_mode})
     return np.asarray(Image.open(out).convert("RGB")).astype(int)
 
 
@@ -148,8 +147,7 @@ def test_transmission_off_hides_backdrop(tmp_path):
 @pytest.fixture(scope="module")
 def teapot_image(tmp_path_factory):
     out = str(tmp_path_factory.mktemp("pbr") / "teapot.png")
-    if not capture_scene(out, mode="teapot", env={"OPENGLCONTEXT_LOD": "off"}):
-        pytest.skip("OpenGL context unavailable for PBR teapot test")
+    capture_scene(out, mode="teapot", env={"OPENGLCONTEXT_LOD": "off"})
     return np.asarray(Image.open(out).convert("RGB")).astype(int)
 
 
@@ -183,8 +181,7 @@ def test_pbr_teapot_reads_as_celadon(teapot_image):
 def test_gltf_box_renders(tmp_path):
     """A Khronos sample glTF (Box) loads from the network and renders under PBR."""
     out = str(tmp_path / "box.png")
-    if not capture_scene(out, mode="gltf", source=gltf.sample_model_url("BoxTextured")):
-        pytest.skip("OpenGL/network unavailable")
+    capture_scene(out, mode="gltf", source=gltf.sample_model_url("BoxTextured"))
     img = np.asarray(Image.open(out).convert("RGB")).astype(int)
     assert (img.sum(2) > 30).mean() > 0.01
 

@@ -431,6 +431,20 @@ whole process tree and not the runner. A context exits by itself after
 ``OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME`` are set, it writes a screenshot
 there before exiting.
 
+A child that could not draw exits with ``plugin.NO_CONTEXT_STATUS`` (3).
+``skip_if_child_had_no_context(returncode, stderr, profile='core')`` makes
+that a skip where this machine has no context of that profile, and a failure
+showing the child's error output where it has one:
+
+.. code-block:: python
+
+   from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
+   proc = subprocess.run([sys.executable, '-c', DRIVER], capture_output=True,
+                         text=True, env=gl_subprocess_env())
+   skip_if_child_had_no_context(proc.returncode, proc.stderr)
+   assert proc.returncode == 0, proc.stderr
+
 Build the child's environment rather than copying the parent's. The
 parent's environment can hold ``OPENGLCONTEXT_*`` variables set by tests or
 by imported programs. A child started with ``dict(os.environ)`` renders with

@@ -18,6 +18,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 SCENARIO = sys.argv[1]
@@ -104,9 +106,7 @@ def test_twosided_lighting(scenario):
     env = dict(os.environ)
     proc = subprocess.run([sys.executable, '-c', DRIVER, scenario],
                           capture_output=True, text=True, timeout=120, env=env)
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'two-sided lighting failed for %r (back face rendered dark)\n'
         'stdout:\n%s\nstderr:\n%s' % (scenario, proc.stdout, proc.stderr))

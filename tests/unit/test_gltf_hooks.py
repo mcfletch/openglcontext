@@ -24,6 +24,7 @@ from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
 from OpenGLContext.scenegraph.basenodes import Group
+from OpenGLContext.scenegraph.appearance import Appearance
 
 
 def _quad(material=None):
@@ -32,7 +33,7 @@ def _quad(material=None):
         positions=np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)], 'f'),
         normals=np.array([(0, 0, 1)] * 4, 'f'),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
-        material=material,
+        appearance=Appearance(material=material),
     )
 
 

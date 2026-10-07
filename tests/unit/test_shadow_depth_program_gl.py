@@ -19,6 +19,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -38,6 +40,7 @@ try:
         sceneGraph, DirectionalLight, Coordinate, IndexedLineSet)
     from OpenGLContext.scenegraph.appearance import Appearance
     from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+    from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from OpenGLContext.scenegraph.shape import Shape
     from OpenGLContext.scenegraph.transform import Transform
@@ -64,8 +67,7 @@ try:
     def _marker(x, z):
         return Transform(translation=(x, 1.0, z), children=[Shape(
             geometry=_quad(0.0),
-            appearance=Appearance(material=PhysicalMaterial(baseColor=(1, 0.7, 0.2),
-                                                       unlit=True)))])
+            appearance=Appearance(material=UnlitMaterial(emissiveColor=(1, 0.7, 0.2))))])
 
     Base = testingcontext.getInteractive()
 
@@ -117,9 +119,7 @@ def test_depth_pass_uploads_into_the_program_it_names():
     proc = subprocess.run([sys.executable, '-c', DRIVER],
                           capture_output=True, text=True, timeout=120,
                           env=dict(os.environ))
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'the shadow depth pass uploaded a uniform into whichever program a '
         'caster left bound\nstdout:\n%s\nstderr:\n%s'

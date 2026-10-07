@@ -24,6 +24,8 @@ from OpenGL.GL import (
 )
 from OpenGLContext import renderoptions
 from OpenGLContext.scenegraph import vertexsemantics
+from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
+from OpenGLContext.scenegraph.texturemapping import texture_mapping
 
 __all__ = (
     'Batchers',
@@ -149,25 +151,25 @@ def _material_texture_ids(material: Any) -> tuple:
     return tuple(ids)
 
 
-def _material_pass_signature(material: Any) -> tuple:
+def _pass_signature(appearance: Any, geometry: Any = None) -> tuple:
     """Properties that are pass-level uniforms, not per-instance UBO factors.
 
-    ``alphaMode``, transmission and transparency drive shared uniforms / which
-    pass a shape draws in, and an octahedral impostor's views are a uniform of
-    the draw, so none of them can vary within one instanced draw -- two
-    materials must agree on them to batch. Null-safe: a material lacking these
-    (a plain fake, or a VRML97 Material) yields a constant signature so such
-    materials still group together.
+    The appearance's alpha mode and cutoff, its texture coordinates and
+    transforms on this geometry, the material's transmission and
+    transparency (which decide the pass a shape draws in), and an octahedral
+    impostor's views are uniforms of the draw, so none of them can vary
+    within one instanced draw: two shapes must agree on them to batch. A
+    missing appearance or material gives a constant signature, so such shapes
+    still group together.
     """
-    if material is None:
-        return (None, False, False, 0, True)
-    am = getattr(material, 'alphaMode', None)
+    material = getattr(appearance, 'material', None) if appearance is not None else None
+    alpha_mode, cutoff = appearance_alpha(appearance)
     transmission = float(getattr(material, 'transmission', 0.0) or 0.0) > 0.0
     transparency = float(getattr(material, 'transparency', 0.0) or 0.0) > 0.0
     views = int(getattr(material, 'octahedralViews', 0) or 0)
     hemi = bool(getattr(material, 'octahedralHemi', True)) if views else True
-    return (str(am) if am is not None else None, transmission, transparency,
-            views, hemi)
+    return (alpha_mode, round(cutoff, 6), transmission, transparency, views, hemi,
+            texture_mapping(appearance, geometry).key)
 
 
 def geometry_texture_key(shape: Any) -> Optional[tuple]:
@@ -188,7 +190,7 @@ def geometry_texture_key(shape: Any) -> Optional[tuple]:
     tex_key = _material_texture_ids(material)
     if not tex_key and texture is not None:
         tex_key = (('appearance_texture', id(texture)),)
-    return (id(geometry), tex_key, _material_pass_signature(material))
+    return (id(geometry), tex_key, _pass_signature(appearance, geometry))
 
 
 def _geometry_content_id(geometry: Any) -> Any:
@@ -251,7 +253,7 @@ def geometry_content_key(shape: Any) -> Optional[tuple]:
     tex_key = _material_texture_ids(material)
     if not tex_key and texture is not None:
         tex_key = (('appearance_texture', id(texture)),)
-    return (content, tex_key, _material_pass_signature(material))
+    return (content, tex_key, _pass_signature(appearance, geometry))
 
 
 def geometry_content_instance_key(shape: Any) -> Optional[tuple]:

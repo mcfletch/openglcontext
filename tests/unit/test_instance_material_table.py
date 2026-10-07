@@ -90,8 +90,12 @@ class TestMaterialTable:
         assert [entry.material for entry in materials] == [m]
         assert indices == [0, 0, 0, 0]
 
-    def test_a_texture_transform_is_the_members_own(self):
-        """One texture, one Material, two transforms: one draw, two slots."""
+    def test_a_texture_transform_draws_apart(self):
+        """One texture, one Material, two transforms: the transformed member draws alone.
+
+        A transform is per-draw state (the texture mapping), not part of the
+        material table, so members differing in it cannot share a draw.
+        """
         g, m, texture = FakeGeometry('g'), basenodes.Material(), object()
         shifted = basenodes.TextureTransform(translation=(0.5, 0.0))
         shapes = [FakeShape(g, m, texture=texture),
@@ -101,9 +105,10 @@ class TestMaterialTable:
             [rec(shape) for shape in shapes], min_instances=2,
             key=geometry_texture_key, instanceable=instanceable)
         assert len(groups) == 1
+        assert [record[-1] for record in groups[0].members] == [shapes[0], shapes[2]]
         materials, indices = group_material_table(groups[0])
-        assert len(materials) == 2
-        assert indices == [0, 1, 0]
+        assert len(materials) == 1
+        assert indices == [0, 0]
 
 
 class TestOneMaterialManyObjects:

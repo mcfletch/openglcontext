@@ -18,6 +18,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 SCENARIO = sys.argv[1]
@@ -36,10 +38,11 @@ try:
     def build():
         if SCENARIO == 'pbr_unlit':
             from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+            from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
             shape = basenodes.Shape(
                 geometry=basenodes.Box(size=(6, 6, 6)),
                 appearance=basenodes.Appearance(
-                    material=PhysicalMaterial(unlit=True, baseColor=(0, 1, 1))))
+                    material=UnlitMaterial(emissiveColor=(0, 1, 1))))
         else:  # a big point at the origin (projects to, and covers, screen centre)
             # Coloured so it renders through point_program at a real point size;
             # this exercises the object-id following the program switch away from
@@ -96,9 +99,7 @@ def test_unlit_geometry_is_pickable(scenario):
     env = dict(os.environ)
     proc = subprocess.run([sys.executable, '-c', DRIVER, scenario],
                           capture_output=True, text=True, timeout=120, env=env)
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode == 0, (
         'unlit %r geometry was not pickable\n'
         'stdout:\n%s\nstderr:\n%s' % (scenario, proc.stdout, proc.stderr))

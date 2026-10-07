@@ -435,7 +435,8 @@ def mount_ground(root: Any, shading: GroundShading, material: Any,
     swapped = 0
     for shape in _shapes(root):
         mesh = shape.geometry
-        if getattr(mesh, 'material', None) is not material:
+        own = getattr(getattr(mesh, 'appearance', None), 'material', None)
+        if own is not material and getattr(shape.appearance, 'material', None) is not material:
             continue
         positions = getattr(mesh, 'positions', None)
         normals = getattr(mesh, 'normals', None)

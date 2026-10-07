@@ -16,6 +16,7 @@ glfw = pytest.importorskip("glfw")
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+from OpenGLContext.texturecache import TextureCache
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from tests.unit.glrender import base_env, frames_of
 from OpenGLContext.passes.instancing import set_cull_state
@@ -103,7 +104,9 @@ def test_the_map_is_not_left_bound_for_the_next_shape():
     """``Appearance.renderPost`` takes back what its ``render`` bound."""
 
     class _Context:
-        """What the texture's cache keys on: the context drawing."""
+        """The context drawing, as far as a texture's compile reads it."""
+
+        textureCache = TextureCache()
 
     class _Mode:
         def __init__(self):

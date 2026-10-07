@@ -312,7 +312,7 @@ def pbr_material(maps: Maps, relief: float = 2.0, **factors: Any) -> Any:
     from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
     base, packed, normal = images(maps, relief)
-    settings = dict(baseColor=(1.0, 1.0, 1.0), metallic=1.0, roughness=1.0)
+    settings: dict[str, Any] = dict(baseColor=(1.0, 1.0, 1.0), metallic=1.0, roughness=1.0)
     settings.update(factors)
     return PhysicalMaterial(
         baseTexture=ImageDataTexture(image=Image.fromarray(base, 'RGB')),
@@ -618,10 +618,10 @@ def shape(geometry: Geometry, material: Any,
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
+    look = basenodes.Appearance(material=material)
     mesh = PBRMesh(positions=geometry.positions, normals=geometry.normals,
                    texcoords=geometry.texcoords, tangents=geometry.tangents,
-                   indices=geometry.indices, material=material)
+                   indices=geometry.indices, appearance=look)
     return basenodes.Transform(
         translation=tuple(translation), rotation=tuple(rotation),
-        children=[basenodes.Shape(geometry=mesh,
-                                  appearance=basenodes.Appearance(material=material))])
+        children=[basenodes.Shape(geometry=mesh, appearance=look)])

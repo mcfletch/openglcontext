@@ -60,13 +60,13 @@ An application builds the road and puts it in a node:
 
 .. code-block:: python
 
-   from OpenGLContext.scenegraph.basenodes import Appearance, Shape
+   from OpenGLContext.scenegraph.basenodes import Shape
    from OpenGLContext.scenegraph.road import RoadProfile, road_mesh
 
    centreline = [(0, 1.3, 55), (0, 1.3, 10), (-9, 1.5, -55), (-41, 6.1, -150),
                  (-56, 12.7, -250), (-33, 9.4, -345), (-8, 5.2, -405)]
    mesh = road_mesh(centreline, RoadProfile(), spacing=4.0)
-   road = Shape(geometry=mesh, appearance=Appearance(material=mesh.material))
+   road = Shape(geometry=mesh, appearance=mesh.appearance)
    print(len(mesh.positions), 'vertices,', len(mesh.indices) // 3, 'triangles')
    # 840 vertices, 1428 triangles
 

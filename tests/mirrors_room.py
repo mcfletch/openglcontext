@@ -112,8 +112,7 @@ class TestContext(BaseContext):
         in front of the far mirror.'''
         pool = water_surface(-1.0, 3.0, -3.5, -1.5, level=0.01, resolution=17,
                              style=STILL)
-        children.append(basenodes.Shape(geometry=pool, appearance=basenodes.Appearance(
-            material=pool.material)))
+        children.append(basenodes.Shape(geometry=pool, appearance=pool.appearance))
         self.sg = basenodes.sceneGraph(children=children)
         '''=The budget=
 

@@ -224,9 +224,9 @@ class _MeshGPU(object):
                         pass
 
 
-#: Sent from a :class:`PBRMesh` when its own :attr:`~PBRMesh.material` is set,
-#: with the new material as ``value``.
-MATERIAL_CHANGE_SIGNAL = 'PBRMesh.material'
+#: Sent from a :class:`PBRMesh` when its own :attr:`~PBRMesh.appearance` is
+#: set, with the new appearance as ``value``.
+APPEARANCE_CHANGE_SIGNAL = 'PBRMesh.appearance'
 
 
 class PBRMesh(x3d.X3DGeometryNode):
@@ -272,20 +272,33 @@ class PBRMesh(x3d.X3DGeometryNode):
     wave_time: float = 0.0
 
     @property
-    def material(self) -> Any:
-        """The mesh's own material, drawn with where its shape's appearance has none.
+    def appearance(self) -> Any:
+        """The mesh's own appearance, drawn with where its shape has none
 
-        A mesh placed without an appearance material (water, a mesh drawn on
-        its own) carries it here, and ``sortKey`` classifies transparency from
-        it. Setting it sends :data:`MATERIAL_CHANGE_SIGNAL` from the mesh, so
-        a memo of which shapes are mirrors sees the change.
+        A mesh placed without a shape's appearance (water, a mesh drawn on its
+        own, a mesh written to glTF) carries its material and alpha here, and
+        ``sortKey`` classifies transparency from it. Setting it sends
+        :data:`APPEARANCE_CHANGE_SIGNAL` from the mesh, so a memo of which
+        shapes are mirrors sees the change.
         """
-        return self._material
+        return self._appearance
+
+    @appearance.setter
+    def appearance(self, value: Any) -> None:
+        self._appearance = value
+        dispatcher.send(signal=APPEARANCE_CHANGE_SIGNAL, sender=self, value=value)
+
+    @property
+    def material(self) -> Any:
+        """Not an attribute of a mesh: its material is its appearance's"""
+        raise AttributeError(
+            'A PBRMesh has no material of its own; it is mesh.appearance.material')
 
     @material.setter
     def material(self, value: Any) -> None:
-        self._material = value
-        dispatcher.send(signal=MATERIAL_CHANGE_SIGNAL, sender=self, value=value)
+        raise AttributeError(
+            'A PBRMesh has no material of its own; set mesh.appearance = '
+            'Appearance(material=...)')
 
     @property
     def multiviewShared(self) -> bool:
@@ -300,7 +313,7 @@ class PBRMesh(x3d.X3DGeometryNode):
     def __init__(self, positions: Any = None, normals: Any = None, texcoords: Any = None,
                  tangents: Any = None, colors: Any = None, indices: Any = None,
                  solid: bool = True,
-                 material: Any = None, morph_targets: Any = None,
+                 appearance: Any = None, morph_targets: Any = None,
                  skin_joints: Any = None, skin_weights: Any = None, texcoords1: Any = None,
                  draw_mode: int = GL_TRIANGLES, **named: Any) -> None:
         super(PBRMesh, self).__init__(solid=solid, **named)
@@ -308,7 +321,7 @@ class PBRMesh(x3d.X3DGeometryNode):
         # common case, or GL_POINTS/GL_LINES/GL_LINE_LOOP/GL_LINE_STRIP.
         self.draw_mode = int(draw_mode)
         # Set without the signal: nothing has remembered a mesh being made.
-        self._material = material
+        self._appearance = appearance
         self.positions = self._farray(positions, 3)
         self.normals = self._farray(normals, 3)
         self.texcoords = self._farray(texcoords, 2)
@@ -932,16 +945,12 @@ class PBRMesh(x3d.X3DGeometryNode):
     def _wants_cull(self, mode: Any) -> bool:
         """Whether back-face culling should be on for this mesh in this pass.
 
-        Off during the shadow depth pass (all casters write depth),
-        for a non-solid mesh, or for a double-sided material.
+        Off during the shadow depth pass (all casters write depth), and for a
+        mesh that is not ``solid``.
         """
         if getattr(mode, 'shadow_pass', False):
             return False
-        if not self.solid:
-            return False
-        if getattr(mode, '_appearance_double_sided', False):
-            return False
-        return True
+        return bool(self.solid)
 
     def _apply_draw_state(self, mode: Any) -> None:
         """Set winding + cull state, skipping redundant GL calls.
@@ -978,8 +987,8 @@ class PBRMesh(x3d.X3DGeometryNode):
         return int(front_face(True, mv, mirrored))
 
     def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
-        # Report transparency from the attached material so a mesh placed without a
-        # Shape still sorts into the transparent pass. The common
-        # path renders through a Shape, where Appearance.sortKey decides instead.
-        from OpenGLContext.scenegraph.physicalmaterial import material_is_transparent
-        return (material_is_transparent(self.material), [], None)
+        # Report transparency from the mesh's own appearance so a mesh placed
+        # without a Shape still sorts into the transparent pass. The common path
+        # renders through a Shape, where Appearance.sortKey decides instead.
+        from OpenGLContext.scenegraph.physicalmaterial import appearance_is_transparent
+        return (appearance_is_transparent(self.appearance), [], None)

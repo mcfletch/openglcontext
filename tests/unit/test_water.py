@@ -9,6 +9,8 @@ the shore emerges from the geometry.
 import numpy as np
 import pytest
 
+from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
+
 from OpenGLContext.scenegraph.water import (
     WATER_ROUGHNESS,
     water_material,
@@ -39,7 +41,8 @@ class TestWhatWaterIsMadeOf:
         assert water_material().transparency > 0.0
 
     def test_and_it_is_drawn_as_a_transparent_thing(self):
-        assert water_material().alphaMode == 'BLEND'
+        sheet = water_surface(-1.0, 1.0, -1.0, 1.0)
+        assert appearance_alpha(sheet.appearance)[0] == 'BLEND'
 
     def test_it_bends_light_the_way_water_does(self):
         """1.33, which is water's own refractive index."""
@@ -47,7 +50,7 @@ class TestWhatWaterIsMadeOf:
 
     def test_it_is_seen_from_underneath_as_well(self):
         """A car that has gone in is looking up at it."""
-        assert water_material().doubleSided
+        assert water_surface(-1.0, 1.0, -1.0, 1.0).solid is False
 
     def test_it_is_a_dark_colour_rather_than_a_bright_one(self):
         """Water is dark and gets its brightness from what it reflects."""
@@ -113,11 +116,11 @@ class TestTheSurface:
             sorted(map(tuple, np.round(seam_right, 5)))
 
     def test_it_is_made_of_the_water_material_unless_told_otherwise(self):
-        assert self._sheet().material.roughness == pytest.approx(WATER_ROUGHNESS)
+        assert self._sheet().appearance.material.roughness == pytest.approx(WATER_ROUGHNESS)
 
     def test_a_caller_may_give_it_its_own(self):
         mine = PhysicalMaterial(baseColor=(1.0, 0.0, 0.0))
-        assert self._sheet(material=mine).material is mine
+        assert self._sheet(material=mine).appearance.material is mine
 
 
 if __name__ == '__main__':

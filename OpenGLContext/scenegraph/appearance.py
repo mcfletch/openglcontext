@@ -101,28 +101,18 @@ class Appearance(basenodes.Appearance):
             )
         """
         # TODO: this is now pretty expensive, should cache it...
-        if self.material:
-            materialParams = None
-            # glTF/PBR materials carry an explicit alphaMode which is authoritative:
-            # only BLEND blends. OPAQUE ignores any baseColor/texture alpha, and MASK
-            # is opaque with a shader discard. Legacy VRML97 materials (no alphaMode)
-            # fall back to the transparency field. Transmissive OPAQUE glass stays
-            # opaque here -- the dedicated transmission pass handles it (see
-            # material_is_transparent).
-            from OpenGLContext.scenegraph.physicalmaterial import material_is_transparent
-            transparent = material_is_transparent(self.material)
-        else:
-            transparent = False
-            materialParams = None
+        # The alpha mode decides: only BLEND blends. OPAQUE ignores any alpha,
+        # MASK is opaque with a shader discard, and AUTO blends a transparent
+        # material or a texture with alpha. Transmissive glass stays opaque
+        # here; the transmission pass draws it (see appearance_alpha).
+        from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
+        transparent = appearance_alpha(self)[0] == 'BLEND'
+        materialParams = None
         textureToken = []
-        # correctness of rendering requires the back-to-front 
-        # rendering for transparent textures...
-        if not transparent:
-            if self.texture:
-                transparent = transparent or self.texture.transparent( mode )
-                tex = self.texture.cached( mode )
-                if tex:
-                    textureToken = [tex.texture]
+        if not transparent and self.texture:
+            tex = self.texture.cached( mode )
+            if tex:
+                textureToken = [tex.texture]
         return (
             transparent, textureToken,
             materialParams

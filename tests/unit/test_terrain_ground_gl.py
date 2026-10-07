@@ -114,7 +114,7 @@ def test_a_tile_placed_by_its_transform_reads_the_ground_there(tmp_path):
     vertices, indices = _quad()
     material = PhysicalMaterial(baseColor=(1.0, 1.0, 1.0))
     mesh = PBRMesh(positions=vertices[:, :3], normals=vertices[:, 3:],
-                   indices=indices, material=material)
+                   indices=indices, appearance=Appearance(material=material))
     group = Group(children=[Shape(geometry=mesh,
                                   appearance=Appearance(material=material))])
     placed = np.eye(4)

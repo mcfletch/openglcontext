@@ -32,11 +32,6 @@ class TestWantsCull:
         m = PBRMesh(positions=np.zeros((3, 3), 'f'), solid=False)
         assert m._wants_cull(FakeMode()) is False
 
-    def test_double_sided_material_disables_cull(self):
-        mode = FakeMode()
-        mode._appearance_double_sided = True     # published by configure_appearance
-        assert _mesh()._wants_cull(mode) is False
-
     def test_shadow_pass_disables_cull(self):
         mode = FakeMode()
         mode.shadow_pass = True

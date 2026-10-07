@@ -31,7 +31,7 @@ def _quad(tag=None, colour=(0.8, 0.8, 0.8), metallic=1.0, roughness=0.0):
         positions=np.array([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], 'f'),
         normals=np.array([(0, 0, 1)] * 4, 'f'),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
-        material=material)
+        appearance=Appearance(material=material))
 
 
 def _shapes(node, out=None):
@@ -181,7 +181,7 @@ def test_a_flag_where_a_number_belongs_is_reported_and_left_at_its_default(caplo
 
 def test_a_material_reflector_round_trips_through_the_writer():
     mesh = _quad()
-    mesh.material.reflector = PlanarReflector(scale=0.75, interval=5, priority=2.0,
+    mesh.appearance.material.reflector = PlanarReflector(scale=0.75, interval=5, priority=2.0,
                                               reflectance=0.85)
     material = _material_of(_load(SceneNode(mesh=mesh)))
     reflector = material.reflector
@@ -191,7 +191,7 @@ def test_a_material_reflector_round_trips_through_the_writer():
 
 def test_a_disabled_reflector_is_not_written():
     mesh = _quad()
-    mesh.material.reflector = PlanarReflector(enabled=False)
+    mesh.appearance.material.reflector = PlanarReflector(enabled=False)
     assert not _material_of(_load(SceneNode(mesh=mesh))).reflector
 
 

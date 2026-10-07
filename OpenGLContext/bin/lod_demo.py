@@ -25,6 +25,7 @@ from typing import Any, ClassVar, Optional
 
 from OpenGLContext.loaders.sceneloader import SceneLoader
 from OpenGLContext.scenegraph import basenodes, surfaces
+from OpenGLContext.scenegraph.appearance import Appearance
 
 __all__ = ['LODHall', 'main']
 
@@ -148,7 +149,7 @@ class LODHall:
                 levels.append(SceneNode(
                     mesh=PBRMesh(positions=ball.positions, normals=ball.normals,
                                  texcoords=ball.texcoords, indices=ball.indices,
-                                 material=copper),
+                                 appearance=Appearance(material=copper)),
                     translation=at))
             writer.add_lod(levels, coverage=COVERAGE)
         data = writer.to_glb()

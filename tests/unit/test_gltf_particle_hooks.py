@@ -21,6 +21,7 @@ from OpenGLContext.scenegraph import particlehooks, particles
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.scenegraph.appearance import Appearance
 
 
 def _box():
@@ -29,7 +30,7 @@ def _box():
         positions=np.array([(0, 0, 0), (1, 0, 0), (1, 0, 1), (0, 0, 1)], 'f'),
         normals=np.array([(0, 1, 0)] * 4, 'f'),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
-        material=PhysicalMaterial(baseColor=(0.2, 0.2, 0.2)),
+        appearance=Appearance(material=PhysicalMaterial(baseColor=(0.2, 0.2, 0.2))),
     )
 
 
@@ -177,7 +178,7 @@ def test_on_a_material_it_does_nothing():
     material = PhysicalMaterial(baseColor=(0.2, 0.2, 0.2))
     material.hook = {'kind': 'fire'}
     mesh = _box()
-    mesh.material = material
+    mesh.appearance = Appearance(material=material)
     scene = gltf.load_gltf(write_glb(SceneNode(mesh=mesh)))
     assert _emitters(scene) == []
     assert 'fire' not in scene.hook_data

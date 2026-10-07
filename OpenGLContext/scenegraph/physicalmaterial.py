@@ -52,6 +52,28 @@ _FIELDS_KEY = 'physicalmaterial-fields'
 _TEXTURES_KEY = 'physicalmaterial-textures'
 
 
+class _Moved:
+    """A name a material does not have, saying where X3D puts it
+
+    Reading or setting it raises AttributeError with the place to use, so code
+    written for glTF's material layout fails where it is wrong rather than
+    setting an attribute nothing reads.
+    """
+
+    def __init__(self, where: str) -> None:
+        self.where = where
+        self.name = ''
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self.name = name
+
+    def __get__(self, client: Any, cls: Any = None) -> Any:
+        raise AttributeError('%s is not a material field; %s' % (self.name, self.where))
+
+    def __set__(self, client: Any, value: Any) -> None:
+        raise AttributeError('%s is not a material field; %s' % (self.name, self.where))
+
+
 def _texture_field(name: str) -> Any:
     return field.newField(name, 'SFNode', 1, node.NULL,
                           requiredTypes=(x3d.X3DSingleTextureNode,))
@@ -61,7 +83,78 @@ def _mapping_field(name: str) -> Any:
     return field.newField(name + 'Mapping', 'SFString', 1, '')
 
 
-class PhysicalMaterial(x3d.PhysicalMaterial):
+class ChannelMaterial:
+    """What the PBR pass reads from the engine's material nodes
+
+    A view of the texture fields by channel name, and a version that moves
+    whenever a field is set. `CHANNELS` maps each channel the material has to
+    its texture field.
+    """
+
+    CHANNELS: "dict[str, str]" = {}
+
+    @property
+    def textures(self) -> "types.MappingProxyType[str, Any]":
+        """The texture nodes by channel name, read from the texture fields"""
+        found: "Optional[types.MappingProxyType[str, Any]]" = cache.CACHE.getData(
+            self, _TEXTURES_KEY)
+        if found is None:
+            channels = {}
+            holder = cache.CACHE.holder(self, None, _TEXTURES_KEY)
+            for channel, name in self.CHANNELS.items():
+                declared = protofunctions.getField(self, name)
+                holder.depend(self, declared)
+                value = declared.fget(self)
+                if value:
+                    channels[channel] = value
+            found = holder.data = types.MappingProxyType(channels)
+        return found
+
+    def texture(self, channel: str) -> Any:
+        """The texture node of `channel`, or None"""
+        return self.textures.get(channel)
+
+    def setTexture(self, channel: str, texture: Any) -> None:
+        """Set the texture field of `channel` (a key of `CHANNELS`)
+
+        NULL or None clears it. Raises KeyError for an unknown channel.
+        """
+        setattr(self, self.CHANNELS[channel], texture if texture is not None else node.NULL)
+
+    @property
+    def factorVersion(self) -> int:
+        """A count that moves whenever a field of the material is set
+
+        Setting a field moves it, and so does :meth:`factorsChanged`. The
+        pass repacks the material's uniform block when it has moved since the
+        last pack.
+        """
+        if cache.CACHE.getData(self, _FIELDS_KEY) is None:
+            self.factorsChanged()
+            holder = cache.CACHE.holder(self, True, _FIELDS_KEY)
+            for declared in protofunctions.getFields(self):
+                if not declared.name.startswith(' '):
+                    holder.depend(self, declared)
+        return int(self.__dict__.get('_version', 0))
+
+    def factorsChanged(self) -> None:
+        """Move the version, for an edit made in place rather than by a set
+
+        A component written into a colour field's array, say.
+        """
+        self.__dict__['_version'] = int(self.__dict__.get('_version', 0)) + 1
+
+    def batchingVersion(self) -> int:
+        """A value that changes whenever something deciding how this batches does"""
+        return self.factorVersion
+
+    def legacyTexture(self, mode: Any) -> Any:
+        """The base colour map's GL texture, or None: what the fixed-function pass draws"""
+        base = self.texture('baseColor')
+        return base.cached(mode) if base is not None else None
+
+
+class PhysicalMaterial(ChannelMaterial, x3d.PhysicalMaterial):
     """X3D's PhysicalMaterial, with the glTF extensions and the engine's fields"""
 
     PROTO = 'PhysicalMaterial'
@@ -97,16 +190,15 @@ class PhysicalMaterial(x3d.PhysicalMaterial):
     iridescenceThicknessMin = field.newField('iridescenceThicknessMin', 'SFFloat', 1, 100.0)
     iridescenceThicknessMax = field.newField('iridescenceThicknessMax', 'SFFloat', 1, 400.0)
 
-    # Alpha, sidedness and unlit shading as glTF states them.
-    alphaMode = field.newField('alphaMode', 'SFString', 1, 'OPAQUE')
-    alphaCutoff = field.newField('alphaCutoff', 'SFFloat', 1, 0.5)
-    doubleSided = field.newField('doubleSided', 'SFBool', 1, False)
-    unlit = field.newField('unlit', 'SFBool', 1, False)
-    #: A bit per channel (1 base colour, 2 metallic-roughness, 4 normal,
-    #: 8 occlusion, 16 emissive, 32 lightmap): set, the channel reads
-    #: TEXCOORD_1. The same bits shifted left by 8: the channel's coordinates
-    #: go through `uv_transform`.
-    texCoordMask = field.newField('texCoordMask', 'SFInt32', 1, 0)
+    CHANNELS = CHANNEL_FIELDS
+
+    alphaMode = _Moved("it is the Appearance's alphaMode")
+    alphaCutoff = _Moved("it is the Appearance's alphaCutoff")
+    doubleSided = _Moved("a geometry that is not solid is drawn from both sides")
+    unlit = _Moved('an unlit surface is an UnlitMaterial')
+
+    texCoordMask = _Moved("a channel's coordinates are named by its ...TextureMapping field")
+    uv_transform = _Moved("a texture transform is the Appearance's textureTransform")
 
     #: Multiplier on the baked-irradiance `lightmapTexture`. Baked lighting
     #: comes from level formats whose lightmaps are authored against an
@@ -165,87 +257,6 @@ class PhysicalMaterial(x3d.PhysicalMaterial):
     extras: "dict[str, Any]"
     #: An `OGLC_hook` block: what an application was told to make of the surface.
     hook: "dict[str, Any]"
-    #: The KHR_texture_transform offset, rotation and scale the glTF loader read,
-    #: which an animation pointer edits.
-    _uv_params: "Optional[dict[str, Any]]"
-    #: The texture coordinate mask the glTF loader read.
-    _tex_coord_mask: int
-
-    def __init__(self, **named: Any) -> None:
-        uv_transform = named.pop('uv_transform', None)
-        super().__init__(**named)
-        self.uv_transform = uv_transform
-
-    @property
-    def uv_transform(self) -> Any:
-        """A row-major 3x3 texture coordinate transform (KHR_texture_transform), or None"""
-        return self.__dict__.get('_uv_transform')
-
-    @uv_transform.setter
-    def uv_transform(self, matrix: Any) -> None:
-        self.__dict__['_uv_transform'] = matrix
-        self.factorsChanged()
-
-    @property
-    def textures(self) -> "types.MappingProxyType[str, Any]":
-        """The texture nodes by channel name, read from the texture fields"""
-        found: "Optional[types.MappingProxyType[str, Any]]" = cache.CACHE.getData(
-            self, _TEXTURES_KEY)
-        if found is None:
-            channels = {}
-            holder = cache.CACHE.holder(self, None, _TEXTURES_KEY)
-            for channel, name in CHANNEL_FIELDS.items():
-                declared = protofunctions.getField(self, name)
-                holder.depend(self, declared)
-                value = declared.fget(self)
-                if value:
-                    channels[channel] = value
-            found = holder.data = types.MappingProxyType(channels)
-        return found
-
-    def texture(self, channel: str) -> Any:
-        """The texture node of `channel`, or None"""
-        return self.textures.get(channel)
-
-    def setTexture(self, channel: str, texture: Any) -> None:
-        """Set the texture field of `channel` (a key of `CHANNEL_FIELDS`)
-
-        NULL or None clears it. Raises KeyError for an unknown channel.
-        """
-        setattr(self, CHANNEL_FIELDS[channel], texture if texture is not None else node.NULL)
-
-    @property
-    def factorVersion(self) -> int:
-        """A count that moves whenever a field of the material is set
-
-        Setting a field moves it, and so does :meth:`factorsChanged`. The
-        pass repacks the material's uniform block when it has moved since the
-        last pack.
-        """
-        if cache.CACHE.getData(self, _FIELDS_KEY) is None:
-            self.factorsChanged()
-            holder = cache.CACHE.holder(self, True, _FIELDS_KEY)
-            for declared in protofunctions.getFields(self):
-                if not declared.name.startswith(' '):
-                    holder.depend(self, declared)
-        return int(self.__dict__.get('_version', 0))
-
-    def factorsChanged(self) -> None:
-        """Move the version, for an edit made in place rather than by a set
-
-        A component written into `uv_transform`'s array, as a
-        texture-transform animation does, or into a colour field's array.
-        """
-        self.__dict__['_version'] = int(self.__dict__.get('_version', 0)) + 1
-
-    def batchingVersion(self) -> int:
-        """A value that changes whenever something deciding how this batches does"""
-        return self.factorVersion
-
-    def legacyTexture(self, mode: Any) -> Any:
-        """The base colour map's GL texture, or None: what the fixed-function pass draws"""
-        base = self.texture('baseColor')
-        return base.cached(mode) if base is not None else None
 
     def render(self, mode: Any = None) -> float:
         """Set the fixed-function material from the factors; the alpha it draws with
@@ -254,8 +265,8 @@ class PhysicalMaterial(x3d.PhysicalMaterial):
         it calls `Material.render`. The base colour is the diffuse and
         ambient colour, a metal's highlight takes the base colour and a
         dielectric's is a dim grey, roughness widens the highlight, and the
-        emissive colour at its strength is the emission. An unlit material
-        emits its base colour. Of the texture maps, only the base colour map
+        emissive colour at its strength is the emission. Of the texture maps,
+        only the base colour map
         is drawn by this pipeline, bound by `Appearance` through
         :meth:`legacyTexture`.
         """
@@ -265,19 +276,14 @@ class PhysicalMaterial(x3d.PhysicalMaterial):
             return 0.0
         base = np.asarray(self.baseColor, 'f')[:3]
         emission = np.asarray(self.emissiveColor, 'f')[:3] * float(self.emissiveStrength)
-        if self.unlit:
-            diffuse = specular = np.zeros(3, 'f')
-            emission = base
-            shininess = 0.0
-        else:
-            metallic = min(max(float(self.metallic), 0.0), 1.0)
-            roughness = min(max(float(self.roughness), 0.0), 1.0)
-            # A metal has almost no diffuse term; a quarter is kept so that a
-            # metal lit without an environment to reflect is still seen.
-            diffuse = base * (1.0 - 0.75 * metallic)
-            dielectric = np.full(3, DIELECTRIC_SPECULAR, 'f')
-            specular = (dielectric + (base - dielectric) * metallic) * (1.0 - 0.5 * roughness)
-            shininess = 128.0 * (1.0 - roughness) ** 2
+        metallic = min(max(float(self.metallic), 0.0), 1.0)
+        roughness = min(max(float(self.roughness), 0.0), 1.0)
+        # A metal has almost no diffuse term; a quarter is kept so that a
+        # metal lit without an environment to reflect is still seen.
+        diffuse = base * (1.0 - 0.75 * metallic)
+        dielectric = np.full(3, DIELECTRIC_SPECULAR, 'f')
+        specular = (dielectric + (base - dielectric) * metallic) * (1.0 - 0.5 * roughness)
+        shininess = 128.0 * (1.0 - roughness) ** 2
         face = GL.GL_FRONT_AND_BACK
         GL.glMaterialfv(face, GL.GL_DIFFUSE, np.append(diffuse, alpha).astype('f'))
         GL.glMaterialfv(face, GL.GL_AMBIENT,
@@ -297,24 +303,37 @@ DIELECTRIC_SPECULAR = 0.04
 AMBIENT_SHARE = 0.2
 
 
-def material_is_transparent(material: Any) -> bool:
-    """Whether a material sorts into the back-to-front blended transparent pass
+def appearance_alpha(appearance: Any) -> "tuple[str, float]":
+    """The alpha mode ('OPAQUE', 'MASK' or 'BLEND') and cutoff an appearance draws with
 
-    True for an explicit `BLEND` alphaMode or, for a material with no
-    alphaMode, any non-zero `transparency`. `OPAQUE`/`MASK` stay opaque:
-    base colour alpha is ignored in those modes, as glTF states.
+    An appearance's `alphaMode` says; `AUTO`, the default, blends a material
+    with a `transparency` above 0 or a base colour texture with an alpha
+    channel (X3D 4, 12.4.2). An appearance without the field (or none at all)
+    is treated as `AUTO`.
 
-    A transmission factor does not make a material transparent: a
-    transmissive `OPAQUE` surface is drawn by the transmission pass
-    (`FlatPass.shaderRenderTransmissive`), which takes it from the opaque
-    bucket, captures the opaque backdrop, and draws it back to front.
+    A transmission factor does not make a material blend: a transmissive
+    surface is drawn by the transmission pass
+    (`FlatPass.shaderRenderTransmissive`), which captures the opaque backdrop
+    and draws it back to front.
     """
-    if material is None:
-        return False
-    alpha_mode = getattr(material, 'alphaMode', None)
-    if alpha_mode is not None:
-        return bool(alpha_mode == 'BLEND')
-    return bool(getattr(material, 'transparency', 0.0))
+    mode = str(getattr(appearance, 'alphaMode', 'AUTO') or 'AUTO')
+    cutoff = float(getattr(appearance, 'alphaCutoff', 0.5))
+    if mode == 'AUTO':
+        material = getattr(appearance, 'material', None)
+        if isinstance(material, ChannelMaterial):
+            base = material.texture('baseColor')
+        else:
+            base = getattr(appearance, 'texture', None)
+        has_alpha = getattr(base, 'hasAlpha', None)
+        blends = (float(getattr(material, 'transparency', 0.0) or 0.0) > 0.0
+                  or (callable(has_alpha) and has_alpha()))
+        mode = 'BLEND' if blends else 'OPAQUE'
+    return mode, cutoff
+
+
+def appearance_is_transparent(appearance: Any) -> bool:
+    """Whether an appearance sorts into the back-to-front blended pass"""
+    return appearance_alpha(appearance)[0] == 'BLEND'
 
 
 def uv_transform_matrix(offset: "tuple[float, float]" = (0.0, 0.0), rotation: float = 0.0,
@@ -388,8 +407,9 @@ class AppearanceMaterial(object):
     The PBR program reads a material's maps from `textures` and its factors
     from a packed block. A VRML97 appearance keeps the same information in
     three nodes, and this reads it from them: `texture` is the base colour
-    map, `textureTransform` is that map's transform, and `material` gives
-    the factors, converted by :func:`material_to_pbr`.
+    map and `material` gives the factors, converted by :func:`material_to_pbr`.
+    The appearance's `textureTransform` is read by
+    :mod:`~OpenGLContext.scenegraph.texturemapping` as for any appearance.
 
     :attr:`factorVersion` moves when a field any of those is read from is
     set, as :attr:`PhysicalMaterial.factorVersion` does. :func:`pbr_material`
@@ -417,19 +437,6 @@ class AppearanceMaterial(object):
         return {'baseColor': texture} if texture else {}
 
     @property
-    def uv_transform(self) -> Optional[np.ndarray]:
-        """The base colour map's 3x3 transform, or None for none
-
-        Row-major, multiplying a column `(u, v, 1)`: the matrix the flat pass
-        draws the same node with.
-        """
-        transform = getattr(self.appearance, 'textureTransform', None)
-        if not transform:
-            return None
-        from OpenGLContext.passes.shaderpass import texture_transform_matrix  # noqa: PLC0415 the pass imports this module
-        return texture_transform_matrix(transform)
-
-    @property
     def transparency(self) -> float:
         """The material's transparency: which pass the appearance sorts into"""
         return float(getattr(self.material, 'transparency', 0.0) or 0.0)
@@ -447,12 +454,11 @@ class AppearanceMaterial(object):
     def _watch(appearance: Any) -> None:
         """Hold a version against the fields of the nodes the view reads now"""
         holder = cache.CACHE.holder(appearance, True, _VIEW_KEY)
-        for name in ('material', 'texture', 'textureTransform'):
+        for name in ('material', 'texture'):
             holder.depend(appearance, name)
-        for source in (appearance.material, appearance.textureTransform):
-            if source:
-                for source_field in protofunctions.getFields(source):
-                    holder.depend(source, source_field)
+        if appearance.material:
+            for source_field in protofunctions.getFields(appearance.material):
+                holder.depend(appearance.material, source_field)
 
 
 _appearance_views: 'weakref.WeakKeyDictionary[Any, AppearanceMaterial]' = \
@@ -462,7 +468,8 @@ _appearance_views: 'weakref.WeakKeyDictionary[Any, AppearanceMaterial]' = \
 def pbr_material(appearance: Any) -> Any:
     """The material the PBR pass draws `appearance` with; None for no appearance
 
-    A :class:`PhysicalMaterial` carries its own maps and is drawn as itself.
+    A :class:`PhysicalMaterial` or `UnlitMaterial` carries its own maps and
+    is drawn as itself.
     Any other appearance (a VRML97 `Material` with its `texture` and
     `textureTransform` beside it, or no material) is drawn as its
     :class:`AppearanceMaterial`, one per appearance.
@@ -470,7 +477,7 @@ def pbr_material(appearance: Any) -> Any:
     if appearance is None:
         return None
     material = getattr(appearance, 'material', None)
-    if isinstance(material, PhysicalMaterial):
+    if isinstance(material, ChannelMaterial):
         return material
     view = _appearance_views.get(appearance)
     if view is None:

@@ -16,6 +16,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -87,9 +89,7 @@ def test_pointset_reaches_steady_state():
     env = dict(os.environ)
     proc = subprocess.run([sys.executable, '-c', DRIVER],
                           capture_output=True, text=True, timeout=120, env=env)
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode != 5, (
         'PointSet rendered nothing; test premise broken\n%s' % proc.stderr)
     assert proc.returncode == 0, (

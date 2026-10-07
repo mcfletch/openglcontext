@@ -552,7 +552,8 @@ class _SceneBuilder:
                  pointer_time: Optional[float] = None) -> None:
         self.g = g
         self.resolver = resolver
-        self.mat_cache: dict = {}
+        #: One Appearance per glTF material index, shared by its primitives.
+        self.appearances: dict = {}
         self.tex_cache: dict = {}
         # decoded mesh shapes + local bounds, per mesh index and whether the
         # node referencing it casts a shadow (that is a property of the Shape)
@@ -629,7 +630,7 @@ class _SceneBuilder:
         dynamic = False
         for prim in self.g.meshes[mesh_index].primitives:
             shape, bounds = _primitive_shape(
-                self.g, prim, self.resolver, self.mat_cache, self.tex_cache,
+                self.g, prim, self.resolver, self.appearances, self.tex_cache,
                 self.hooks, world)
             if shape is not None:
                 shapes.append((shape, bounds))
@@ -1064,13 +1065,13 @@ class _SceneBuilder:
         """
         found: dict = {}
         declared = getattr(self.g, 'materials', None) or []
-        for index in sorted(key for key in self.mat_cache if key is not None):
+        for index in sorted(key for key in self.appearances if key is not None):
             if not 0 <= index < len(declared):      # pragma: no cover - malformed
                 continue
             name = getattr(declared[index], 'name', None)
             if not name:
                 continue
-            material = self.mat_cache[index]
+            material = self.appearances[index].material
             material.DEF = _unique_def(_def_name(name, index), self.used_defs)
             found.setdefault(name, material)
         return found
@@ -1125,7 +1126,7 @@ class _SceneBuilder:
         poses = _camera_poses(self.cameras)
         viewpoints = _viewpoints_for_poses(poses, self.scene_graph, self.used_defs)
         animations = _build_animations(
-            g, self.resolver, self.node_transforms, self.node_light, self.mat_cache)
+            g, self.resolver, self.node_transforms, self.node_light, self.appearances)
         scene = GLTFScene(root, center, radius,
                           camera=(poses[0] if poses else None), cameras=poses,
                           viewpoints=viewpoints, sceneGraph=self.scene_graph,

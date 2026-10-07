@@ -24,12 +24,6 @@ from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
 from tests.unit.test_gltf_loader import _triangle_glb
 
-# texCoord-mask bit per channel (must match the loader + shader).
-BIT_BASECOLOR = 1
-BIT_METALLICROUGHNESS = 2
-BIT_NORMAL = 4
-BIT_OCCLUSION = 8
-BIT_EMISSIVE = 16
 
 
 def _png_bytes(color=(200, 40, 40)):
@@ -109,12 +103,12 @@ class TestSecondUVSet:
         scene = gltf.load_gltf(_multi_uv_glb(base_tex_coord=1))
         mat = _find_shape(scene.group).appearance.material
         assert isinstance(mat, PhysicalMaterial)
-        assert mat.texCoordMask & BIT_BASECOLOR   # base color uses UV set 1
+        assert mat.baseTextureMapping == 'TEXCOORD_1'
 
     def test_texcoord0_leaves_mask_clear(self):
         scene = gltf.load_gltf(_multi_uv_glb(base_tex_coord=0))
         mat = _find_shape(scene.group).appearance.material
-        assert not (mat.texCoordMask & BIT_BASECOLOR)   # base color uses UV set 0
+        assert mat.baseTextureMapping == ''        # the first set
 
     def test_no_second_uv_when_absent(self):
         # a plain single-UV model must not sprout a texcoords1 array
@@ -124,10 +118,7 @@ class TestSecondUVSet:
 
 
 class TestMaterialBlockPacking:
-    def test_texcoordmask_packed_into_ubo(self):
-        mat = PhysicalMaterial(baseColor=(1, 1, 1))
-        mat.texCoordMask = BIT_NORMAL | BIT_OCCLUSION
-        buf = pack_material_block(mat)
+    def test_baked_light_is_the_flags_word(self):
+        buf = pack_material_block(PhysicalMaterial(bakedLight=True))
         assert len(buf) == MATERIAL_BLOCK_WORDS      # layout size unchanged
-        iv = buf.view(np.int32)
-        assert iv[29] == (BIT_NORMAL | BIT_OCCLUSION)
+        assert buf.view(np.int32)[29] == 64

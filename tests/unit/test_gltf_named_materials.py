@@ -19,6 +19,7 @@ from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.scenegraph.appearance import Appearance
 
 
 def _quad(material=None):
@@ -27,7 +28,7 @@ def _quad(material=None):
         positions=np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)], 'f'),
         normals=np.array([(0, 0, 1)] * 4, 'f'),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
-        material=material,
+        appearance=Appearance(material=material),
     )
 
 
@@ -62,7 +63,7 @@ def test_named_material_indexes_the_object_the_shape_uses():
     scene = gltf.load_gltf(write_glb(_quad(paint)))
     shape = _shapes(scene.group)[0]
     assert scene.materials['paint'] is shape.appearance.material
-    assert scene.materials['paint'] is shape.geometry.material
+    assert scene.materials['paint'] is shape.geometry.appearance.material
 
 
 def test_unnamed_materials_are_not_indexed():

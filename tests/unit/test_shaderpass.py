@@ -191,16 +191,6 @@ class TestTextureTransformMatrix(unittest.TestCase):
         fixed = m @ np.array([0.5, 0.5, 1.0], dtype='f')
         np.testing.assert_array_almost_equal(fixed[:2], [0.5, 0.5])
 
-    def test_affine_helpers_build_expected_matrices(self) -> None:
-        np.testing.assert_array_almost_equal(
-            shaderpass._affine2d_translate(0.5, 0.25),  # noqa: SLF001 a program made with __new__, or a private helper under test
-            [[1, 0, 0.5], [0, 1, 0.25], [0, 0, 1]])
-        np.testing.assert_array_almost_equal(
-            shaderpass._affine2d_scale(2.0, 0.5), [[2, 0, 0], [0, 0.5, 0], [0, 0, 1]])  # noqa: SLF001 a program made with __new__, or a private helper under test
-        c, s = cos(0.7), sin(0.7)
-        np.testing.assert_array_almost_equal(
-            shaderpass._affine2d_rotate(0.7), [[c, -s, 0], [s, c, 0], [0, 0, 1]])  # noqa: SLF001 a program made with __new__, or a private helper under test
-
 
 class TestSetUniformCollapse(unittest.TestCase):
     """3m: the five near-identical _set_uniform* methods now normalize their value

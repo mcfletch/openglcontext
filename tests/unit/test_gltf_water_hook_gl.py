@@ -15,6 +15,8 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+
 DRIVER = r'''
 import os, sys
 os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -43,13 +45,13 @@ try:
                               resolution=65, on_gpu=False)
         # Bright and unlit, so the picture shows the shape of the surface
         # rather than what a dark material reflects.
-        sheet.material.baseColor = (0.9, 0.9, 0.9)
-        sheet.material.emissiveColor = (0.6, 0.7, 0.9)
-        sheet.material.roughness = 0.3
-        sheet.material.transparency = 0.0
-        sheet.material.alphaMode = 'OPAQUE'
-        sheet.material.extras = {'OGLC_hook': {'kind': 'water',
-                                               'style': 'choppy'}}
+        material = sheet.appearance.material
+        material.baseColor = (0.9, 0.9, 0.9)
+        material.emissiveColor = (0.6, 0.7, 0.9)
+        material.roughness = 0.3
+        material.transparency = 0.0
+        sheet.appearance.alphaMode = 'OPAQUE'
+        material.extras = {'OGLC_hook': {'kind': 'water', 'style': 'choppy'}}
         return write_glb(sheet)
 
     scene = gltf.load_gltf(tagged_document())
@@ -136,9 +138,7 @@ def _run():
 
 
 def _checked(proc):
-    if proc.returncode == 3:
-        pytest.skip('no usable GL context: %s'
-                    % proc.stderr.strip().splitlines()[-1:])
+    skip_if_child_had_no_context(proc.returncode, proc.stderr)
     assert proc.returncode != 6, (
         'the OGLC_hook tag in the document never reached the water hook\n%s'
         % proc.stderr)

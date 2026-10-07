@@ -39,11 +39,10 @@ class TestUboVersionBump:
         assert m.factorVersion == v
 
     def test_an_edit_made_in_place_is_announced(self):
-        """A texture transform's component written into its array is not a set."""
-        m = PhysicalMaterial(uv_transform=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0],
-                                      [0.0, 0.0, 1.0]])
+        """A colour component written into its array is not a set."""
+        m = PhysicalMaterial()
         v = m.factorVersion
-        m.uv_transform[0][2] = 0.5
+        m.baseColor[0] = 0.5
         assert m.factorVersion == v
         m.factorsChanged()
         assert m.factorVersion > v

@@ -118,8 +118,7 @@ class MirrorHall:
         # vertex every 10 cm or so.
         self.pool = water_surface(1.5, 5.5, -6.0, -2.0, level=0.25, resolution=41,
                                   style=POOL, on_gpu=True)
-        scene.append(basenodes.Shape(geometry=self.pool, appearance=basenodes.Appearance(
-            material=self.pool.material)))
+        scene.append(basenodes.Shape(geometry=self.pool, appearance=self.pool.appearance))
         scene += hall.basin(1.5, 5.5, -6.0, -2.0)
         return scene
 

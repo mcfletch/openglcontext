@@ -52,6 +52,7 @@ from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.props import rock_mesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.viewer.environment import horizon_background
+from OpenGLContext.scenegraph.appearance import Appearance
 
 BaseContext = testingcontext.getInteractive('glfw')
 
@@ -88,8 +89,8 @@ def authored_scene():
         height_fn=ground_height, water_level=None)
     ground = PBRMesh(
         positions=positions, normals=normals, colors=colors, indices=indices,
-        material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
-                             roughness=1.0, DEF='ground'))
+        appearance=Appearance(material=PhysicalMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
+                             roughness=1.0, DEF='ground')))
 
     # One material object shared by the boulders and the pebbles: a material
     # passed twice is written once and referenced twice, as a mesh is.

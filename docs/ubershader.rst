@@ -79,16 +79,16 @@ the shader reads each factor by name:
        vec3  emissiveFactor;       float roughnessFactor;
        vec3  specularColorFactor;  float occlusionStrength;
        vec3  sheenColorFactor;     float normalScale;
-       vec3  attenuationColor;     float alphaCutoff;
+       vec3  attenuationColor;     float reserved19;
        float emissiveStrength;     float specularFactor;
        float clearcoatFactor;      float clearcoatRoughness;
        float sheenRoughnessFactor; float ior;
        float thicknessFactor;      float attenuationDistance;
        bool  unlitMode;
-       int   texCoordMask;
+       int   materialFlags;        // 64: the vertex colours are baked light
        float anisotropyStrengthM;
        float dispersionM;
-       mat3  uvTransform;
+       mat3  reservedTransform;
        vec4  iridescence;          // factor, ior, thicknessMin, thicknessMax
        vec4  diffuseTransmissionM; // rgb colour, a factor
        vec4  anisotropyDirM;       // xy = (cos, sin) of the rotation
@@ -171,8 +171,10 @@ a :ref:`light grid <bakedlight>` also sets ``lightGridAmbient``,
 - ``eyeToWorld`` rotates eye-space vectors into the world orientation of the
   probe cubes.
 - ``projectionMatrix`` is reused for the transmission projection.
-- ``alphaMode``, ``alphaValue`` and the ``transmission…`` uniforms come from
-  the render mode, not the material.
+- ``alphaMode``, ``alphaCutoff`` and ``alphaValue`` come from the shape's
+  appearance, and the ``transmission…`` uniforms from the render mode.
+- ``channelCodes`` and ``uvTransformRows`` say which coordinates each texture
+  reads (see below), set for each draw from the appearance and the geometry.
 - ``exposure`` is the camera exposure multiplier (default 1.0).
 - ``fogMode``, ``fogDensity`` and ``fogColor`` describe the :ref:`fog <fog>`.
 - ``hdrOutput`` is set while :ref:`bloom <frame-sequence>` is on.
@@ -187,11 +189,14 @@ produces.
 Sampling the material
 ~~~~~~~~~~~~~~~~~~~~~
 
-Each texture is sampled through ``uvFor(bit)``, where ``bit`` is the
-channel's bit in ``texCoordMask`` (1 base colour, 2 metallic-roughness, 4
-normal, 8 occlusion, 16 emissive, 32 lightmap). If the channel's bit is set,
-it samples ``TEXCOORD_1``. If the same bit shifted left by 8 is set, it also
-applies ``uvTransform`` (``KHR_texture_transform``).
+Each texture is sampled at ``uvFor(CH_…)``, where ``CH_…`` numbers the
+channel as ``texturemapping.CHANNELS`` does. ``channelCodes`` holds five bits
+per channel, six channels to a word: the low two bits choose ``TEXCOORD_0`` or
+``TEXCOORD_1``, and the upper three a transform slot, 0 for none. Slot *n* is
+the 2×3 matrix in rows ``2n-2`` and ``2n-1`` of ``uvTransformRows``, applied to
+``(s, t, 1)``. ``texturemapping.texture_mapping`` works the codes and matrices
+out from the material's mapping labels and the appearance's
+``textureTransform``.
 
 The base colour texel is decoded from sRGB to linear and multiplied by
 ``baseColorFactor`` and by the per-vertex colour. Alpha is ``alphaValue``

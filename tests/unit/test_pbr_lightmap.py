@@ -19,8 +19,6 @@ from OpenGLContext.passes.pbrpass import PBR_UNITS, _PBR_HAS, _PBR_SAMPLER
 from OpenGLContext.passes.shaderpass import SHADER_DIR
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
-# texCoordMask bit selecting TEXCOORD_1 for the lightmap channel.
-LIGHTMAP_UV_BIT = 32
 
 
 def _frag():
@@ -53,10 +51,10 @@ class TestShaderSource:
         assert 'uniform float lightmapStrength' in src
 
     def test_samples_on_the_lightmap_uv_set(self):
-        # uvFor(32) routes through texCoordMask so a material can put the
-        # lightmap on either UV set; BSP geometry uses TEXCOORD_1.
-        assert re.search(r'texture\s*\(\s*lightmapTexture\s*,\s*uvFor\(%d\)\s*\)'
-                         % LIGHTMAP_UV_BIT, _frag())
+        # The lightmap reads its own channel's coordinate set, so a material
+        # can put it on either; BSP geometry uses TEXCOORD_1.
+        assert re.search(r'texture\s*\(\s*lightmapTexture\s*,\s*uvFor\(CH_LIGHTMAP\)\s*\)',
+                         _frag())
 
     def test_reads_the_lightmap_as_linear_light(self):
         # A lightmap is a radiosity solution written straight to 8 bits, not an
@@ -97,8 +95,7 @@ def lightmap_image(tmp_path_factory):
     np = pytest.importorskip("numpy")
     image_mod = pytest.importorskip("PIL.Image")
     out = str(tmp_path_factory.mktemp("lm") / "lightmap.png")
-    if not rendering.capture_scene(out, mode="lightmap", env={'OPENGLCONTEXT_IBL': 'off'}):
-        pytest.skip("OpenGL context unavailable for lightmap render test")
+    rendering.capture_scene(out, mode="lightmap", env={'OPENGLCONTEXT_IBL': 'off'})
     return np.asarray(image_mod.open(out).convert("RGB")).astype(int)
 
 
