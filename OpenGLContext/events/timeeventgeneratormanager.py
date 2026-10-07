@@ -23,6 +23,9 @@ class TimeEventGeneratorManager(object):
         """
         if generator not in self.__generators:
             self.__generators.append( generator )
+    def generators( self ) -> list[Any]:
+        """The generators polled, in the order they were added"""
+        return list( self.__generators )
     def removeEventGenerator( self, generator: Any ) -> None:
         """Remove a generator from the list of generators"""
         while generator in self.__generators:
@@ -36,7 +39,8 @@ class TimeEventGeneratorManager(object):
         """
         realTime = systemtime.systemTime()
         total = 0
-        for generator in self.__generators:
+        # A copy, since a generator may remove itself as it is polled.
+        for generator in list( self.__generators ):
             total = total + generator.poll( realTime )
         return total
         

@@ -193,15 +193,15 @@ class TestContext( BaseContext ):
             ),
         ]
     '''The "s" key pauses and restarts the orbit, which is how you get a
-    still shadow to look at. The TimeSensor's Timer for this context is
-    what runs it, so that is what we pause.'''
+    still shadow to look at. The TimeSensor runs it, so that is what we
+    pause.'''
     def OnToggleTimer( self, event ):
         """Allow the user to pause/restart the animation"""
-        timer = self.sg.getDEF( 'Timer' ).getTimer( self )
-        if timer.active:
-            timer.pause()
+        sensor = self.sg.getDEF( 'Timer' )
+        if sensor.paused():
+            sensor.resume()
         else:
-            timer.resume()
+            sensor.pause()
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop(

@@ -171,6 +171,11 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   steps a frame at a time): ``SceneGraph.clock`` is what pyvrml97's timed
   nodes read, and the engine's own timed classes read it in no scene too.
 - A ``TimeTrigger`` sends the engine's time.
+- A ``TimeSensor`` (``vrml.x3d.timesensor``) is polled by each context it is
+  bound to on every pass of the event cascade, at the engine's time, and runs
+  as X3D says from ``startTime`` to ``stopTime``, pausing at ``pauseTime``
+  and resuming at ``resumeTime``. ``pause()`` and ``resume()`` set those two
+  to the engine's time.
 - The background, fog and viewpoint the pass uses are the bound ones, on
   X3D's bind stacks (``vrml.x3d.binding``): of the nodes the scene draws, the
   topmost on its stack, and with none bound the first. ``set_bind``, sent by

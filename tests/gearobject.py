@@ -194,15 +194,6 @@ class TestContext( BaseContext ):
             'lights','set_rotation',
         )
             
-    multiplier = 1.0
-    def OnIdle(self, *arguments):
-        self.multiplier = (self.multiplier * 1.00001)
-        for name in ('t1','t2','t3'):
-            t1 = self.sg.getDEF( name )
-            timer = t1.getTimer(self)
-            timer.internal.multiplier = self.multiplier
-        self.triggerRedraw(1)
-    
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
