@@ -989,7 +989,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
             material = _DOCUMENT_UNLIT if lighting.x3d_lit(geometry) else None
         # The coordinates depend on the geometry as well as the appearance, so
         # they are set before the same-material early-out.
-        self.set_texture_mapping(texture_mapping(appearance, geometry))
+        self.set_texture_mapping(texture_mapping(appearance, geometry, back))
         # An octahedral impostor is a property of the material rather than of
         # the draw, so it is set here beside the rest of it. Before the
         # same-material early-out: the previous shape may have been an ordinary

@@ -169,6 +169,49 @@ class TestTheMapping:
         ], fresh=lambda: texturemapping._compute(appearance, geometry),  # noqa: SLF001 the computation the memo stands in front of
            same=lambda a, b: a.key == b.key)
 
+    def test_the_back_faces_read_the_back_materials_mapping(self):
+        back = textured(baseTextureMapping='TEXCOORD_1')
+        appearance = Appearance(material=textured(), backMaterial=back)
+        geometry = mesh()
+        assert unpack(texture_mapping(appearance, geometry), 'baseColor')[0] == 0
+        assert unpack(texture_mapping(appearance, geometry, back=True), 'baseColor')[0] == 1
+
+        def ask():
+            return texture_mapping(appearance, geometry, back=True)
+
+        check_memo_inputs(ask, [
+            ('backMaterial.baseTextureMapping', lambda: setattr(back, 'baseTextureMapping', '')),
+            ('appearance.backMaterial', lambda: setattr(
+                appearance, 'backMaterial', textured(baseTextureMapping='TEXCOORD_1'))),
+        ], fresh=lambda: texturemapping._compute(appearance, geometry, back=True),  # noqa: SLF001 the computation the memo stands in front of
+           same=lambda a, b: a.key == b.key)
+
+    def test_the_mapping_follows_the_geometrys_coordinate_nodes(self):
+        from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleSet  # noqa: PLC0415 kept with its use
+        material = textured(baseTextureMapping='detail')
+        appearance = Appearance(material=material)
+        first = x3d.TextureCoordinate(point=[(0, 0), (1, 0), (1, 1)])
+        second = x3d.TextureCoordinate(point=[(0, 0), (2, 0), (2, 2)], mapping='detail')
+        multiple = x3d.MultiTextureCoordinate(texCoord=[first, second])
+        geometry = IndexedTriangleSet(
+            index=[0, 1, 2], coord=x3d.Coordinate(point=[(0, 0, 0), (1, 0, 0), (1, 1, 0)]),
+            texCoord=multiple)
+
+        def ask():
+            return texture_mapping(appearance, geometry)
+
+        third = x3d.TextureCoordinate(mapping='detail')
+        assert unpack(ask(), 'baseColor')[0] == 1
+        check_memo_inputs(ask, [
+            ('a coordinate node\'s mapping', lambda: setattr(first, 'mapping', 'detail')),
+            ('the coordinate nodes', lambda: setattr(
+                multiple, 'texCoord', [x3d.TextureCoordinate(), third])),
+            ('a later coordinate node\'s mapping', lambda: setattr(third, 'mapping', 'other')),
+            ('geometry.texCoord', lambda: setattr(geometry, 'texCoord', x3d.MultiTextureCoordinate(
+                texCoord=[x3d.TextureCoordinate(), x3d.TextureCoordinate(mapping='detail')]))),
+        ], fresh=lambda: texturemapping._compute(appearance, geometry),  # noqa: SLF001 the computation the memo stands in front of
+           same=lambda a, b: a.key == b.key)
+
 
 class TestGLTF:
     def test_a_transform_is_a_matrix_transform_named_by_the_channels_mapping(self):

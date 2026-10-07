@@ -206,38 +206,43 @@ def channel_labels(material: Any) -> "dict[str, str]":
     return {channel: str(labelled(channel)) for channel in textures}
 
 
-def texture_mapping(appearance: Any, geometry: Any) -> TextureMapping:
-    """The texture coordinates and transforms a draw of `appearance` on `geometry` reads
+def texture_mapping(appearance: Any, geometry: Any, back: bool = False) -> TextureMapping:
+    """The texture coordinates and transforms a draw of `appearance` on `geometry`
+    reads, for its front faces or with `back` its back faces' material
 
     Kept in vrml's cache against the appearance until a field it was read
     from is set: the appearance's material, texture and transform, the
-    material's fields, and the transform nodes' fields. An appearance that is
+    materials' fields, the transform nodes' fields, and the geometry's
+    texture coordinate nodes and their mapping labels. An appearance that is
     not a node has no fields to watch, and is read afresh each time.
     """
     if not appearance:
         return IDENTITY
     if not isinstance(appearance, node.Node):
-        return _compute(appearance, geometry)
-    holder = cache.CACHE.getHolder(appearance, _KEY)
+        return _compute(appearance, geometry, back)
+    key = _KEY + ('-back' if back else '')
+    holder = cache.CACHE.getHolder(appearance, key)
     if holder is None or holder.data is None:
-        holder = cache.CACHE.holder(appearance, weakref.WeakKeyDictionary(), _KEY)
+        holder = cache.CACHE.holder(appearance, weakref.WeakKeyDictionary(), key)
         _depend(holder, appearance)
     by_geometry = holder.data
     found = by_geometry.get(geometry) if geometry is not None else None
     if found is None:
-        found = _compute(appearance, geometry)
+        found = _compute(appearance, geometry, back)
         if geometry is not None:
+            _depend_geometry(holder, geometry)
             by_geometry[geometry] = found
     return found
 
 
 def _depend(holder: Any, appearance: Any) -> None:
     """Make `holder` clear when any field the mapping is read from is set"""
-    for name in ('material', 'texture', 'textureTransform'):
-        holder.depend(appearance, name)
-    material = getattr(appearance, 'material', None)
+    for name in ('material', 'backMaterial', 'texture', 'textureTransform'):
+        if hasattr(appearance, name):
+            holder.depend(appearance, name)
     transform = getattr(appearance, 'textureTransform', None)
-    sources = [material, transform]
+    sources = [getattr(appearance, 'material', None),
+               getattr(appearance, 'backMaterial', None), transform]
     if isinstance(transform, x3d.MultiTextureTransform):
         sources.extend(transform.textureTransform)
     for source in sources:
@@ -247,9 +252,25 @@ def _depend(holder: Any, appearance: Any) -> None:
                     holder.depend(source, declared)
 
 
-def _compute(appearance: Any, geometry: Any) -> TextureMapping:
+def _depend_geometry(holder: Any, geometry: Any) -> None:
+    """Make `holder` clear when the coordinate nodes `geometry` names a label's
+    set by, or their mapping labels, change"""
+    if not isinstance(geometry, node.Node) or not hasattr(geometry, 'texCoord'):
+        return
+    holder.depend(geometry, 'texCoord')
+    coordinates = geometry.texCoord
+    entries = [coordinates]
+    if isinstance(coordinates, x3d.MultiTextureCoordinate):
+        holder.depend(coordinates, 'texCoord')
+        entries = list(coordinates.texCoord)
+    for entry in entries:
+        if entry and hasattr(entry, 'mapping'):
+            holder.depend(entry, 'mapping')
+
+
+def _compute(appearance: Any, geometry: Any, back: bool = False) -> TextureMapping:
     """The mapping, worked out from the nodes as they stand"""
-    material = pbr_material(appearance)
+    material = pbr_material(appearance, back)
     codes = [0] * WORDS
     transforms = [_IDENTITY]
     slots: "dict[bytes, int]" = {}

@@ -213,8 +213,9 @@ used, translation in the last column) are both read. One draw can use four
 distinct transforms; channels sharing a transform share one. The glTF loader
 turns each ``KHR_texture_transform``, including its ``texCoord`` override,
 into a ``TextureTransformMatrix3D`` under the label of the texture that
-carries it. ``scenegraph/texturemapping.py`` works out which set and transform
-each channel reads; see :ref:`Surfaces that move <animated-surfaces>` for
+carries it. A ``backMaterial`` reads its maps through its own labels, against
+the same geometry and transforms. ``scenegraph/texturemapping.py`` works out
+which set and transform each channel reads; see :ref:`Surfaces that move <animated-surfaces>` for
 animating a transform.
 
 .. _procedural-surfaces:
