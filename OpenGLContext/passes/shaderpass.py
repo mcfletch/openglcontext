@@ -866,6 +866,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         beam_width: float = 1.57,
         cutoff_angle: float = 0.785,
         light_range: float = 0.0,
+        light_radius: float = 0.0,
         program: Optional[int] = None
     ) -> None:
         """Set parameters for a single light.
@@ -880,6 +881,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             intensity: Light intensity multiplier
             beam_width: Spot inner cone angle (radians)
             cutoff_angle: Spot outer cone angle (radians)
+            light_range: glTF's range, the distance its falloff window ends at; 0 for none
+            light_radius: VRML97's and X3D's radius, the distance past which
+                nothing is lit, in eye space; 0 for none
             program: Shader program to set uniforms on (defaults to main lit program)
         """
         if index >= self.MAX_LIGHTS:
@@ -894,6 +898,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self._set_uniform3f(f'lightDirection[{index}]', direction, program)
         self._set_uniform3f(f'lightAttenuation[{index}]', attenuation, program)
         self._set_uniform1f(f'lightRange[{index}]', light_range, program)
+        self._set_uniform1f(f'lightRadius[{index}]', light_radius, program)
         self._set_uniform1f(f'lightIntensity[{index}]', intensity, program)
         self._set_uniform1f(f'lightBeamWidth[{index}]', beam_width, program)
         self._set_uniform1f(f'lightCutOffAngle[{index}]', cutoff_angle, program)
@@ -1175,6 +1180,27 @@ def drop_shader_programs() -> None:
     _shader_programs.pop(gl_context_key(), None)
 
 
+#: The radius a light of radius 0 is given, so the shader, for which 0 is
+#: unbounded, lights nothing with it.
+_NO_REACH = 1e-6
+
+
+def _eye_radius(light_node: Any, modelview_matrix: Optional[Matrix4]) -> float:
+    """A light's radius carried into eye space by its modelview's largest scale
+
+    0, which the shader reads as unbounded, for a light with an infinite
+    radius or none.
+    """
+    radius = float(getattr(light_node, 'radius', float('inf')))
+    if not np.isfinite(radius):
+        return 0.0
+    radius = max(radius, _NO_REACH)
+    if modelview_matrix is None:
+        return radius
+    rows = np.asarray(modelview_matrix, dtype='d')[:3, :3]
+    return radius * float(max(np.linalg.norm(row) for row in rows))
+
+
 def configure_light_from_node(
     shader_program: VRML97ShaderProgram,
     index: int,
@@ -1268,6 +1294,7 @@ def configure_light_from_node(
             beam_width=beam_width,
             cutoff_angle=cutoff_angle,
             light_range=float(getattr(light_node, '_gltf_range', 0.0)),
+            light_radius=_eye_radius(light_node, modelview_matrix),
             program=program,
         )
 
@@ -1284,6 +1311,7 @@ def configure_light_from_node(
             attenuation=attenuation,
             intensity=intensity,
             light_range=float(getattr(light_node, '_gltf_range', 0.0)),
+            light_radius=_eye_radius(light_node, modelview_matrix),
             program=program,
         )
 

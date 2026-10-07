@@ -177,6 +177,10 @@ class PointLight(basenodes.PointLight, Light):
     #: unless told not to. A light an X3D document builds has X3D's false
     #: unless the document says otherwise.
     shadows = field.newField('shadows', 'SFBool', 1, True)
+    #: How far the light reaches, in its own coordinates; nothing past it is
+    #: lit. Unbounded for a light made in code; a light a VRML97 or X3D
+    #: document builds has their 100 unless the document says otherwise.
+    radius = field.newField('radius', 'SFFloat', 1, float('inf'))
     # Shadow-mapping controls (OpenGLContext extension fields)
     shadowBias = field.newField('shadowBias', 'SFFloat', 1, SHADOW_DEPTH_BIAS)
     shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
@@ -221,6 +225,9 @@ class SpotLight(basenodes.SpotLight, PointLight):
         (+ Light attributes)
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#SpotLight
     """
+    #: As :attr:`PointLight.radius`.
+    radius = field.newField('radius', 'SFFloat', 1, float('inf'))
+
     def Light( self, lightID: int, mode: Any = None) -> int:
         """Render the light (i.e. cause it to alter the scene"""
         if super(SpotLight,self).Light( lightID, mode ):

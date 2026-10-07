@@ -13,6 +13,9 @@ uniform int lightsOff;
 // Attenuation for point/spot lights. Clamp the denominator (as pbr.frag does) so
 // a zero-constant light near a fragment can't divide by zero into Inf/NaN.
 float calcAttenuation(int lightIndex, float distance) {
+    if (lightRadius[lightIndex] > 0.0 && distance > lightRadius[lightIndex]) {
+        return 0.0;
+    }
     vec3 atten = lightAttenuation[lightIndex];
     return 1.0 / max(atten.x + atten.y * distance + atten.z * distance * distance, 1e-4);
 }

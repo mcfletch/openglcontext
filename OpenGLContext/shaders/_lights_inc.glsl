@@ -23,6 +23,7 @@ uniform vec4  lightPosition[MAX_LIGHTS];
 uniform vec3  lightDirection[MAX_LIGHTS];
 uniform vec3  lightAttenuation[MAX_LIGHTS];   // constant, linear, quadratic
 uniform float lightRange[MAX_LIGHTS];         // KHR_lights_punctual range; 0 = unbounded
+uniform float lightRadius[MAX_LIGHTS];        // VRML97/X3D radius: no light past it; 0 = unbounded
 uniform float lightBeamWidth[MAX_LIGHTS];     // spot inner cone (radians)
 uniform float lightCutOffAngle[MAX_LIGHTS];   // spot outer cone (radians)
 uniform float lightIntensity[MAX_LIGHTS];

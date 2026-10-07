@@ -908,6 +908,8 @@ void main() {
             if (lightRange[i] > 0.0) {
                 atten *= clamp(1.0 - pow(dist / lightRange[i], 4.0), 0.0, 1.0);
             }
+            // VRML97/X3D radius: nothing past it is lit.
+            if (lightRadius[i] > 0.0 && dist > lightRadius[i]) atten = 0.0;
             if (lightType[i] == LIGHT_SPOT) atten *= spotAttenuation(i, L);
         }
         float NdotL = max(dot(N, L), 0.0);

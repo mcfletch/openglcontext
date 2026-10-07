@@ -510,10 +510,12 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
     # KHR_lights_punctual point/spot intensity is luminous intensity (candela) and
     # falls off inverse-square, windowed by an optional `range`. VRML attenuation
     # (constant, linear, quadratic) expresses that as pure quadratic (0,0,1); the
-    # `range` is stashed for the shader's range-window (`_gltf_range` -> lightRange).
+    # `range` is stashed for the shader's range-window (`_gltf_range` -> lightRange)
+    # and is the light's radius; a light with no range reaches everywhere.
     # An explicit `attenuation` (non-standard bake field) still overrides.
     atten = values.vector(light_def.get('attenuation'), (0.0, 0.0, 1.0), 'light attenuation')
     rng = values.number(light_def.get('range'), 0.0, 'light range', minimum=0.0)
+    reach = rng if rng > 0 else float('inf')
     if kind == 'spot':
         # KHR spot.*ConeAngle are half-angles measured from the axis, which is
         # exactly the VRML SpotLight.cutOffAngle/beamWidth convention (the outer
@@ -528,10 +530,10 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
         light: PointLight | SpotLight = SpotLight(
             location=pos, direction=direction, color=color,
             intensity=intensity, shadows=shadows, attenuation=atten,
-            cutOffAngle=outer, beamWidth=inner)
+            cutOffAngle=outer, beamWidth=inner, radius=reach)
     else:
         light = PointLight(location=pos, color=color, intensity=intensity,
-                           shadows=shadows, attenuation=atten)
+                           shadows=shadows, attenuation=atten, radius=reach)
     _beside_fields(light, _gltf_range=rng)
     return light
 
