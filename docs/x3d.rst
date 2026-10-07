@@ -344,15 +344,26 @@ baseline in ``tests/reference_images/x3d_baseline``. The report shows a
 reference render beside ours, and how much ours differs from it:
 
 - ``--reference x_ite`` (the default): the document drawn by X_ITE, the MIT
-  JavaScript X3D browser Web3D publishes its examples with, in a headless
-  Chromium with software WebGL (``OpenGLContext.testing.xite``). It needs the
-  ``x3d-reference`` extra (``pip install OpenGLContext[x3d-reference]``, then
-  ``playwright install chromium-headless-shell``). X_ITE is downloaded from
-  npm once, at a pinned version checked by its SHA-256, and served with the
-  documents from 127.0.0.1. Each reference is kept beside the corpus and
-  drawn again only with ``--refresh-references``. Without the extra, Web3D's
-  renders are shown instead.
+  JavaScript X3D browser Web3D publishes its examples with, read from
+  ``tests/reference_images/x3d_xite`` (``--reference-root`` names another
+  folder). A document with no X_ITE render there is shown beside Web3D's.
 - ``--reference web3d``: the render Web3D publishes of the same viewpoint.
+
+The X_ITE renders are drawn by ``scripts/x3d_xite_references.py`` in a source
+checkout, not by the installed engine:
+
+.. code-block:: bash
+
+   uv run scripts/x3d_xite_references.py                  # each document with no render yet
+   uv run scripts/x3d_xite_references.py --only Background --refresh
+
+``uv run`` gives the script Playwright for that run. The script installs
+Playwright's headless Chromium where it is missing, and draws with WebGL in
+software (SwiftShader), so a render does not depend on the machine's GPU.
+X_ITE is downloaded from npm once, at a pinned version checked by its
+SHA-256, and served with the documents from 127.0.0.1. Each document is
+captured half a second after X_ITE reports it loaded; its ``<slug>.json``
+records the X_ITE and Chromium versions and the errors the page reported.
 
 The difference counts pixels more than 32 apart in a channel; two renderers
 never agree pixel for pixel, so it says where to look and never fails a run.

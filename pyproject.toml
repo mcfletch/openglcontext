@@ -83,10 +83,6 @@ exr = ["OpenEXR>=3.3"]
 # (omi_audio.device). Re-check when a wheel appears; this is a response to a
 # packaging gap and should not outlive it.
 audio = ["omi_audio[playback]"]
-# Reference renders for oglc-x3d-regression: X3D documents drawn by X_ITE in a
-# headless Chromium. A tool for comparing renders, never imported by the engine;
-# `playwright install chromium-headless-shell` fetches the browser.
-x3d-reference = ["playwright>=1.40"]
 # accelerate is now part of the core install; kept as an empty set so external
 # setups that still request OpenGLContext[accelerate] don't break.
 accelerate = []

@@ -7,11 +7,11 @@ its bound viewpoint or X3D's default one, against its own Background or
 black, and after the textures and Inlines it names have arrived. Each render
 is compared with **our reference** -- the blessed baseline in the
 ``tests/reference_images`` submodule -- and the report shows a reference render
-beside them: X_ITE's (``--reference x_ite``, the default where the
-``x3d-reference`` extra is installed; :mod:`OpenGLContext.testing.xite`), else
-Web3D's own render of the same viewpoint, published with each example. Each row
-says how much ours differs from the reference: a guide to what to look at,
-since two renderers never agree pixel for pixel, and never a failure.
+beside them: X_ITE's, from the ``x3d_xite`` folder of the same submodule
+(``scripts/x3d_xite_references.py`` draws them), else Web3D's own render of the
+same viewpoint, published with each example. Each row says how much ours
+differs from the reference: a guide to what to look at, since two renderers
+never agree pixel for pixel, and never a failure.
 
     oglc-x3d-regression --fetch          # download the corpus with its images, once
     oglc-x3d-regression --bless          # establish or refresh baselines, after review
@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from OpenGLContext import atomicfiles, renderoptions
-from OpenGLContext.testing import renderregression, xite
+from OpenGLContext.testing import renderregression
 
 __all__ = [
     'Scene', 'find_scenes', 'upstream_render', 'render_scene', 'parse_render_report',
@@ -87,6 +87,13 @@ def default_baseline_root() -> str:
         return named
     root = renderregression.source_root() or renderregression.PACKAGE_PARENT
     return os.path.join(root, 'tests', 'reference_images', 'x3d_baseline')
+
+
+def default_reference_root() -> str:
+    """Where X_ITE's renders are kept: the ``x3d_xite`` folder of the
+    ``tests/reference_images`` submodule"""
+    root = renderregression.source_root() or renderregression.PACKAGE_PARENT
+    return os.path.join(root, 'tests', 'reference_images', 'x3d_xite')
 
 
 def default_report_path() -> str:
@@ -235,50 +242,6 @@ def draw_document(path: str, root: str, size: tuple[int, int]) -> None:
     Document.ContextMainLoop(definition=ContextDefinition(size=size))
 
 
-def references_available() -> bool:
-    """Whether X_ITE's references can be drawn here: Playwright and its Chromium"""
-    try:
-        import playwright  # noqa: F401, PLC0415 only asking whether the extra is installed
-    except ImportError:
-        return False
-    return xite.browser_available()
-
-
-def _reference_record(path: str) -> str:
-    return os.path.splitext(path)[0] + '.json'
-
-
-def render_references(scenes: Sequence[Scene], jobs: int, size: tuple[int, int],
-                      refresh: bool = False) -> None:
-    """Draw X_ITE's reference of each scene that has none (each, with `refresh`),
-    `jobs` browsers at a time, keeping what X_ITE reported beside each"""
-    wanted = [scene for scene in scenes
-              if refresh or not os.path.exists(xite.reference_path(scene.root, scene.slug))]
-    if not wanted:
-        return
-    dist = xite.distribution()
-    by_root: dict[str, list[Scene]] = {}
-    for scene in wanted:
-        by_root.setdefault(scene.root, []).append(scene)
-    print('X_ITE %s references: %d to draw' % (xite.VERSION, len(wanted)), flush=True)
-
-    def draw(root: str, share: Sequence[Scene]) -> None:
-        with xite.ReferenceRenderer(root, dist, size) as renderer:
-            for scene in share:
-                out = xite.reference_path(root, scene.slug)
-                report = renderer.render(os.path.relpath(scene.path, root), out)
-                atomicfiles.write_text(_reference_record(out), json.dumps(report, indent=2))
-                print('  %-5s %s' % ('X_ITE' if report['ok'] else 'NONE', scene.name), flush=True)
-
-    workers = max(1, jobs)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(draw, root, share[index::workers])
-                   for root, share in by_root.items() for index in range(workers)
-                   if share[index::workers]]
-        for future in futures:
-            future.result()
-
-
 def _difference(reference: str, ours: str) -> Optional[float]:
     """Percent of pixels differing from the reference beyond REFERENCE_THRESHOLD"""
     import numpy as np  # noqa: PLC0415 only when comparing
@@ -298,14 +261,17 @@ def _reference(scene: Scene, report: dict[str, Any], args: argparse.Namespace,
     """The reference a render is shown beside, and how much it differs from it"""
     found: dict[str, Any] = {'reference': 'Web3D', 'reference_errors': [],
                              'upstream': upstream_render(scene.path, report.get('viewpoint'))}
-    x_ite = xite.reference_path(scene.root, scene.slug)
+    x_ite = os.path.join(args.reference_root or default_reference_root(), scene.slug + '.png')
     if args.reference == 'x_ite' and os.path.exists(x_ite):
-        found.update(reference='X_ITE %s' % xite.VERSION, upstream=x_ite)
+        found.update(reference='X_ITE', upstream=x_ite)
         try:
-            with open(_reference_record(x_ite)) as stream:
-                found['reference_errors'] = list(json.load(stream).get('errors', ()))
+            with open(os.path.splitext(x_ite)[0] + '.json') as stream:
+                record = json.load(stream)
         except (OSError, ValueError):
-            pass
+            record = {}
+        if record.get('x_ite'):
+            found['reference'] = 'X_ITE %s' % record['x_ite']
+        found['reference_errors'] = list(record.get('errors', ()))
     found['reference_difference'] = (_difference(found['upstream'], rendered)
                                      if found['upstream'] else None)
     return found
@@ -392,12 +358,6 @@ def run(args: argparse.Namespace) -> int:
         if not scenes:
             print('No X3D documents in %s; --fetch downloads the corpus' % root)
             return 2
-        if args.reference == 'x_ite':
-            if references_available():
-                render_references(scenes, args.jobs, args.size, args.refresh_references)
-            else:
-                print("X_ITE references need the x3d-reference extra and Playwright's "
-                      "Chromium; Web3D's renders are shown instead")
         provenance = renderregression.provenance(lambda: renderregression.gl_renderer())
         print('Corpus:     %s (%d documents)' % (root, len(scenes)))
         print('Baselines:  %s' % baseline_root)
@@ -461,10 +421,9 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
                         '(default %d)' % renderregression.DIFF_THRESHOLD)
     parser.add_argument('--reference', choices=('x_ite', 'web3d'), default='x_ite',
                         help="what each render is shown beside: X_ITE's render of it "
-                             "(default, where the x3d-reference extra is installed), or "
-                             "Web3D's published one")
-    parser.add_argument('--refresh-references', action='store_true',
-                        help="draw X_ITE's references again rather than keep them")
+                             "(default, where there is one), or Web3D's published one")
+    parser.add_argument('--reference-root', metavar='DIR',
+                        help="X_ITE's renders (default: tests/reference_images/x3d_xite)")
     parser.add_argument('--render', metavar='DOCUMENT', help=argparse.SUPPRESS)
     parser.add_argument('--root', metavar='DIR', help=argparse.SUPPRESS)
     return parser

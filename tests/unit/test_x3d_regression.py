@@ -162,73 +162,42 @@ def test_no_corpus_says_how_to_fetch_one(tmp_path, capsys):
     assert '--fetch' in capsys.readouterr().out
 
 
-class FakeReferences:
-    """Stands in for xite.ReferenceRenderer: a blue frame for every document"""
+def _fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT):
+    Image.new('RGB', size, (200, 0, 0)).save(out)
+    return True, {'problems': [], 'viewpoint': None}
 
-    made = []
 
-    def __init__(self, documents, dist, size):
-        self.size = size
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-    def render(self, relative, out):
-        FakeReferences.made.append(relative)
-        os.makedirs(os.path.dirname(out), exist_ok=True)
-        Image.new('RGB', self.size, (0, 0, 200)).save(out)
-        return {'ok': True, 'errors': ['x_ite said something'], 'seconds': 0.1}
+def _run_with_references(monkeypatch, tmp_path, references):
+    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': ''})
+    monkeypatch.setattr(R, 'render_scene', _fake_render)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+    out_dir = str(tmp_path / 'renders')
+    R.main(['--corpus', root, '--baseline-root', str(tmp_path / 'b'), '--out-dir', out_dir,
+            '--report', str(tmp_path / 'r.html'), '--size', '32x24',
+            '--reference-root', references])
+    with open(os.path.join(out_dir, 'ConformanceNist.Geometry.Box.a.json')) as stream:
+        return json.load(stream)
 
 
 def test_x_ites_render_is_the_reference(monkeypatch, tmp_path):
-    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': ''})
-
-    def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT):
-        Image.new('RGB', size, (200, 0, 0)).save(out)
-        return True, {'problems': [], 'viewpoint': None}
-
-    monkeypatch.setattr(R, 'render_scene', fake_render)
-    monkeypatch.setattr(R.renderregression, 'gl_renderer',
-                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
-    monkeypatch.setattr(R.xite, 'ReferenceRenderer', FakeReferences)
-    monkeypatch.setattr(R.xite, 'distribution', lambda: str(tmp_path))
-    monkeypatch.setattr(R, 'references_available', lambda: True)
-    FakeReferences.made = []
-    out_dir = str(tmp_path / 'renders')
-    arguments = ['--corpus', root, '--baseline-root', str(tmp_path / 'b'), '--out-dir', out_dir,
-                 '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--reference', 'x_ite']
-    R.main(arguments)
-    with open(os.path.join(out_dir, 'ConformanceNist.Geometry.Box.a.json')) as stream:
-        record = json.load(stream)
-    assert record['reference'] == 'X_ITE %s' % R.xite.VERSION
-    assert record['upstream'].endswith(os.path.join('_x_ite', R.xite.VERSION,
-                                                    'ConformanceNist.Geometry.Box.a.png'))
+    references = tmp_path / 'x3d_xite'
+    references.mkdir()
+    Image.new('RGB', (32, 24), (0, 0, 200)).save(references / 'ConformanceNist.Geometry.Box.a.png')
+    (references / 'ConformanceNist.Geometry.Box.a.json').write_text(
+        json.dumps({'ok': True, 'errors': ['x_ite said something'], 'x_ite': '16.4.3'}))
+    record = _run_with_references(monkeypatch, tmp_path, str(references))
+    assert record['reference'] == 'X_ITE 16.4.3'
+    assert record['upstream'] == str(references / 'ConformanceNist.Geometry.Box.a.png')
     assert record['reference_errors'] == ['x_ite said something']
     assert record['reference_difference'] == pytest.approx(100.0)
-    assert FakeReferences.made == ['Geometry/Box/a.x3d']
-    R.main(arguments)
-    assert FakeReferences.made == ['Geometry/Box/a.x3d'], 'kept, not drawn again'
-    R.main(arguments + ['--refresh-references'])
-    assert len(FakeReferences.made) == 2
 
 
-def test_without_x_ite_web3ds_render_is_the_reference(monkeypatch, tmp_path, capsys):
-    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': ''})
+def test_without_x_ite_web3ds_render_is_the_reference(monkeypatch, tmp_path):
+    record = _run_with_references(monkeypatch, tmp_path, str(tmp_path / 'none'))
+    assert record['reference'] == 'Web3D'
 
-    def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT):
-        Image.new('RGB', size, (200, 0, 0)).save(out)
-        return True, {'problems': [], 'viewpoint': None}
 
-    monkeypatch.setattr(R, 'render_scene', fake_render)
-    monkeypatch.setattr(R.renderregression, 'gl_renderer',
-                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
-    monkeypatch.setattr(R, 'references_available', lambda: False)
-    out_dir = str(tmp_path / 'renders')
-    R.main(['--corpus', root, '--baseline-root', str(tmp_path / 'b'), '--out-dir', out_dir,
-            '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--reference', 'x_ite'])
-    with open(os.path.join(out_dir, 'ConformanceNist.Geometry.Box.a.json')) as stream:
-        assert json.load(stream)['reference'] == 'Web3D'
-    assert 'x3d-reference' in capsys.readouterr().out
+def test_the_references_are_in_the_reference_images():
+    assert R.default_reference_root().endswith(
+        os.path.join('tests', 'reference_images', 'x3d_xite'))
