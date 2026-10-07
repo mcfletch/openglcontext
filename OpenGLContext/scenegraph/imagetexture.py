@@ -15,6 +15,7 @@ from PIL import Image
 
 # from vrml import cache
 from vrml.vrml97 import basenodes, nodetypes
+from vrml.x3d import loadsensor
 from vrml import node, field, protofunctions, fieldtypes
 from io import BytesIO
 import logging
@@ -223,6 +224,7 @@ class ImageURLField(fieldtypes.MFString):
     def __set__(self, client: Any, value: Any, notify: bool = True) -> Any:
         """Set the client's URL, then try to load the image"""
         value = super(ImageURLField, self).fset(client, value, notify=True)
+        loadsensor.set_load_state(client, loadsensor.LOADING)
         background.load_in_background(
             value,
             client.loadBackground,
@@ -297,8 +299,7 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
             image.info["filename"] = filename
             return self.setImage(image, contexts)
 
-        # should set client.image to something here to indicate
-        # failure to the user.
+        loadsensor.set_load_state(self, loadsensor.FAILED)
         log.warning(
             """Unable to load any image from the url %s for the node %s""",
             url,
@@ -313,6 +314,7 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
         """
         self.image = image
         self.components = -1
+        loadsensor.set_load_state(self, loadsensor.LOADED)
         for c_reference in contexts:
             c = c_reference()
             if c:
@@ -336,6 +338,7 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
         self.image.info["url"] = str(url)
         self.image.info["file"] = "memory"
         self.components = -1
+        loadsensor.set_load_state(self, loadsensor.LOADED)
         return self.image
 
 

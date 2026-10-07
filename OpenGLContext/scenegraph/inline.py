@@ -19,6 +19,7 @@ from typing import Any
 
 from pydispatch import dispatcher
 from vrml.vrml97 import basenodes, nodetypes
+from vrml.x3d import loadsensor
 from vrml import protofunctions, fieldtypes
 from OpenGLContext import context
 from OpenGLContext.loaders import background
@@ -102,6 +103,7 @@ class Inline(basenodes.Inline):
         url = list(self.__dict__.get('url', ()))
         if not url or not self.__dict__.get('load', True):
             return
+        loadsensor.set_load_state(self, loadsensor.LOADING)
         background.load_in_background(
             ' '.join(url), self.loadBackground, url, context.Context.allContexts, generation,
             prepare=prepare_scene_loading,
@@ -133,12 +135,15 @@ class Inline(basenodes.Inline):
                 return
             log.info("loaded %s", u)
             self.inlined = tuple(nodes)
+            loadsensor.set_load_state(self, loadsensor.LOADED)
             dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)
             for reference in contexts:
                 found = reference()
                 if found is not None:
                     found.triggerRedraw(1)
             return
+        if generation is None or generation == self.__dict__.get('_generation'):
+            loadsensor.set_load_state(self, loadsensor.FAILED)
         log.warning(
             """Unable to load any scene from the url %s for the node %s""",
             url,

@@ -9,7 +9,8 @@ moving (:class:`Ticked`); a `TimeTrigger` sends the engine's time; a `KeySensor`
 observes every keyboard event of each context it is bound to
 (:meth:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin.observeEvents`),
 under X3D's names for the keys (:func:`x3d_key`), and a `StringSensor` every
-character typed (`keypress` events).
+character typed (`keypress` events). A `LoadSensor` is polled by each
+context's time manager (:class:`Polled`), as the engine's `TimeSensor` is.
 """
 from __future__ import annotations
 
@@ -17,14 +18,14 @@ from typing import Any, Optional
 
 import weakref
 
-from vrml.x3d import followers, runtime, timing
+from vrml.x3d import followers, loadsensor, runtime, timing
 
 from OpenGLContext.events import systemtime
 from OpenGLContext.events.renderqueue import DEFER
 
 __all__ = ['ColorChaser', 'ColorDamper', 'CoordinateChaser', 'CoordinateDamper', 'ENGINE_KEYS',
-           'EngineTimed', 'KeySensor', 'OrientationChaser', 'OrientationDamper', 'PositionChaser',
-           'PositionChaser2D', 'PositionDamper', 'PositionDamper2D', 'ScalarChaser',
+           'EngineTimed', 'KeySensor', 'LoadSensor', 'OrientationChaser', 'OrientationDamper', 'PositionChaser',
+           'Polled', 'Polling', 'PositionChaser2D', 'PositionDamper', 'PositionDamper2D', 'ScalarChaser',
            'ScalarDamper', 'StringSensor', 'TexCoordChaser2D', 'TexCoordDamper2D', 'Ticked',
            'TimeTrigger', 'x3d_key']
 
@@ -45,6 +46,41 @@ def x3d_key(name: str) -> Optional[str]:
     if found is not None:
         return found
     return name if len(name) == 1 else None
+
+
+class Polling:
+    """A node as one of a time manager's generators, holding neither
+
+    Each poll calls the node's ``advance`` with the engine's time; a node
+    that has been collected is removed from the manager.
+    """
+
+    def __init__(self, node: Any, manager: Any) -> None:
+        self.node = weakref.ref(node)
+        self.manager = weakref.ref(manager)
+
+    def poll(self, realTime: float) -> int:
+        """Advance the node to `realTime`; how many events it sent (0 or 1)"""
+        node = self.node()
+        if node is None:
+            manager = self.manager()
+            if manager is not None:
+                manager.removeEventGenerator(self)
+            return 0
+        return int(node.advance(realTime))
+
+
+class Polled:
+    """A node polled by the time manager of each context it is bound to"""
+
+    def bind(self, context: Any) -> bool:
+        """Be polled by `context`'s time manager"""
+        manager = context.getTimeManager()
+        polled = self.__dict__.setdefault('_polledBy', weakref.WeakSet())
+        if manager not in polled:
+            polled.add(manager)
+            manager.addEventGenerator(Polling(self, manager))
+        return True
 
 
 class EngineTimed(timing.Timed):
@@ -192,3 +228,11 @@ class TexCoordChaser2D(Ticked, followers.TexCoordChaser2D):
 
 class TexCoordDamper2D(Ticked, followers.TexCoordDamper2D):
     """Texture coordinates damped on the engine's clock"""
+
+
+class LoadSensor(Polled, EngineTimed, loadsensor.LoadSensor):
+    """A LoadSensor polled by each context it is bound to"""
+
+    def advance(self, now: float) -> bool:
+        """Report the children's loading at `now`; whether anything was sent"""
+        return self.observe(now)

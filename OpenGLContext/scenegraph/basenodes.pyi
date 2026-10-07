@@ -140,6 +140,7 @@ from OpenGLContext.scenegraph.x3druntime import ColorDamper as ColorDamper
 from OpenGLContext.scenegraph.x3druntime import CoordinateChaser as CoordinateChaser
 from OpenGLContext.scenegraph.x3druntime import CoordinateDamper as CoordinateDamper
 from OpenGLContext.scenegraph.x3druntime import KeySensor as KeySensor
+from OpenGLContext.scenegraph.x3druntime import LoadSensor as LoadSensor
 from OpenGLContext.scenegraph.x3druntime import OrientationChaser as OrientationChaser
 from OpenGLContext.scenegraph.x3druntime import OrientationDamper as OrientationDamper
 from OpenGLContext.scenegraph.x3druntime import PositionChaser as PositionChaser
@@ -278,6 +279,7 @@ __all__ = [
     'KeySensor',
     'LOD',
     'LineSet',
+    'LoadSensor',
     'MMImageTexture',
     'Material',
     'MetadataBoolean',

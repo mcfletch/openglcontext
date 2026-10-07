@@ -107,7 +107,7 @@ implements these X3D nodes, by component:
   SplineScalarInterpolator, SquadOrientationInterpolator
 - Lighting - DirectionalLight, PointLight, SpotLight
 - Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint
-- Networking - Anchor, Inline
+- Networking - Anchor, Inline, LoadSensor
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
 - Rendering - Color, ColorRGBA, Coordinate, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
@@ -176,6 +176,9 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   as X3D says from ``startTime`` to ``stopTime``, pausing at ``pauseTime``
   and resuming at ``resumeTime``. ``pause()`` and ``resume()`` set those two
   to the engine's time.
+- A ``LoadSensor`` is polled in the same way. ``Inline`` and ``ImageTexture``
+  record their load state as they read (``vrml.x3d.loadsensor``); other url
+  nodes record none and are not waited for.
 - The background, fog and viewpoint the pass uses are the bound ones, on
   X3D's bind stacks (``vrml.x3d.binding``): of the nodes the scene draws, the
   topmost on its stack, and with none bound the first. ``set_bind``, sent by
