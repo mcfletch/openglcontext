@@ -20,8 +20,8 @@ of its viewpoints it:
    side, click-to-zoom, and an expand-all control. The report links the on-disk
    renders by path (it is not self-contained), keeping it small.
 
-    oglc-gltf-regression --bless        # establish/refresh baselines (after review)
     oglc-gltf-regression                # exit non-zero if a render regressed or failed
+    oglc-gltf-regression --bless        # the renders reviewed in the report become baselines
     oglc-gltf-regression --only MetalRoughSpheres --only Duck
 
 Downloaded ``.glb`` files and reference screenshots are cached under the shared
@@ -33,6 +33,7 @@ import os
 import subprocess
 import sys
 import urllib.parse
+from collections.abc import Sequence
 from typing import Any, cast
 
 from OpenGLContext import atomicfiles, renderoptions
@@ -383,48 +384,62 @@ def resolve_model_url(spec: gltf_demos.SceneSpec,
 def render_scenes(scenes: list[gltf_demos.SceneSpec], out_dir: str, baseline_root: str,
                   parthenon: str | None, args: argparse.Namespace,
                   provenance: dict[str, str]) -> list[str]:
-    """Render each selected view to ``out_dir`` (``<slug>.png`` + ``<slug>.json``),
-    blessing to ``baseline_root`` when asked; the slugs drawn. Overwrites only the
-    rendered views, so prior renders of other scenes survive for the report. A view
-    that failed has a record with its ``error`` and is not blessed."""
-    bless_names = None if args.bless in (None, []) else set(args.bless)
-    bless_all = args.bless == []
+    """Render each selected view to ``out_dir`` (``<slug>.png`` + ``<slug>.json``);
+    the slugs drawn. Overwrites only the rendered views, so prior renders of other
+    scenes survive for the report. A view that failed has a record with its
+    ``error``."""
     os.makedirs(out_dir, exist_ok=True)
-    if args.bless is not None:
-        os.makedirs(baseline_root, exist_ok=True)
     drawn = []
     for spec in scenes:
         url, _is_url = resolve_model_url(spec, parthenon)
         for camera in spec.camera_ids():
             slug = spec.slug(camera)
             drawn.append(slug)
-            new_path = os.path.join(out_dir, slug + '.png')
-            if url is None:
-                renderregression.write_failure(out_dir, slug, {
-                    'scene': spec.name, 'error': 'model unavailable'})
-                print('  ERROR %s (model unavailable)' % slug)
-                continue
-            ok, stats = render_view(spec, camera, url, new_path, args.size,
-                                    args.frames, args.delay, None)
-            metadata = _view_metadata(spec, camera, url, args, provenance, stats)
-            if not ok:
-                metadata['error'] = stats.get('error', 'no render')
-                renderregression.write_failure(out_dir, slug, metadata)
-                print('  FAIL  %s (%s)' % (slug, metadata['error']))
-                continue
-            do_bless = bless_all or (bless_names and spec.name in bless_names)
             try:
-                atomicfiles.write_text(os.path.join(out_dir, slug + '.json'),
-                                       json.dumps(metadata, indent=2))
-                if do_bless:
-                    atomicfiles.copy_file(new_path,
-                                          os.path.join(baseline_root, slug + '.png'))
-                    atomicfiles.write_text(os.path.join(baseline_root, slug + '.json'),
-                                           json.dumps(metadata, indent=2))
-            except OSError:
-                pass
-            print('  %-5s %s' % ('BLESS' if do_bless else 'OK', slug))
+                print(_render_one(spec, camera, url, slug, out_dir, args, provenance))
+            except Exception as error:  # noqa: BLE001 one view's failure is its row, not the run's end
+                record = {'scene': spec.name, 'error': '%s: %s' % (type(error).__name__, error)}
+                try:
+                    renderregression.write_failure(out_dir, slug, record)
+                except OSError:
+                    pass  # noqa: S110 the printed line reports it; there is nowhere to record it
+                print('  FAIL  %s (%s)' % (slug, record['error']))
     return drawn
+
+
+def _render_one(spec: gltf_demos.SceneSpec, camera: int | None, url: str | None, slug: str,
+                out_dir: str, args: argparse.Namespace, provenance: dict[str, str]) -> str:
+    """Draw one view and write its record; the line printed for it"""
+    new_path = os.path.join(out_dir, slug + '.png')
+    if url is None:
+        renderregression.write_failure(out_dir, slug, {
+            'scene': spec.name, 'error': 'model unavailable'})
+        return '  ERROR %s (model unavailable)' % slug
+    ok, stats = render_view(spec, camera, url, new_path, args.size,
+                            args.frames, args.delay, None)
+    metadata = _view_metadata(spec, camera, url, args, provenance, stats)
+    if not ok:
+        metadata['error'] = stats.get('error', 'no render')
+        renderregression.write_failure(out_dir, slug, metadata)
+        return '  FAIL  %s (%s)' % (slug, metadata['error'])
+    atomicfiles.write_text(os.path.join(out_dir, slug + '.json'), json.dumps(metadata, indent=2))
+    return '  OK    %s' % slug
+
+
+def bless(out_dir: str, baseline_root: str, names: Sequence[str]) -> int:
+    """Make the renders in `out_dir` baselines: every one, or those of the
+    scenes `names` names; 1 where there were none"""
+    wanted = set(names)
+    promoted = renderregression.promote(
+        out_dir, baseline_root,
+        lambda slug, record: not wanted or record.get('scene', slug.split('__')[0]) in wanted)
+    for slug in promoted:
+        print('  BLESS %s' % slug)
+    if not promoted:
+        print('Nothing to bless in %s: render the scenes first' % out_dir)
+        return 1
+    print('%d baseline(s) in %s' % (len(promoted), baseline_root))
+    return 0
 
 
 def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
@@ -449,6 +464,8 @@ def run(args: argparse.Namespace) -> int:
     os.makedirs(out_dir, exist_ok=True)
     parthenon = args.parthenon or gltf_demos.find_parthenon()
     report = args.report or default_report_path()
+    if getattr(args, 'bless', None) is not None:
+        return bless(out_dir, baseline_root, args.bless)
 
     drawn = None
     if not getattr(args, 'report_only', False):
@@ -474,9 +491,9 @@ def build_parser(prog: str = 'oglc-gltf-regression') -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog=prog, description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--bless', nargs='*', metavar='NAME', default=None,
-                   help='promote the new renders to baselines (after review). With '
-                        'no NAME, blesses every scene run this pass; otherwise only '
-                        'the named scenes.')
+                   help='make the renders already drawn, as the report shows them, the '
+                        'baselines: every one, or those of the named scenes; nothing is '
+                        'rendered')
     p.add_argument('--only', action='append', metavar='NAME',
                    help='render only this scene (repeatable)')
     p.add_argument('--baseline-root', metavar='DIR',

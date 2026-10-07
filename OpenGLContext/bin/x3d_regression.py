@@ -14,7 +14,7 @@ differs from the reference: a guide to what to look at, since two renderers
 never agree pixel for pixel, and never a failure.
 
     oglc-x3d-regression --fetch          # download the corpus with its images, once
-    oglc-x3d-regression --bless          # establish or refresh baselines, after review
+    oglc-x3d-regression --bless          # the renders reviewed in the report become baselines
     oglc-x3d-regression                  # exit non-zero if a render regressed or failed
     oglc-x3d-regression --only Geometry/Box --jobs 8
 
@@ -315,12 +315,9 @@ def _view_metadata(scene: Scene, report: dict[str, Any], args: argparse.Namespac
 def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
                   args: argparse.Namespace, provenance: dict[str, str]) -> list[str]:
     """Draw each scene to ``<slug>.png`` in `out_dir` with its ``<slug>.json``
-    record, `args.jobs` at a time, blessing into `baseline_root` where asked;
-    the slugs drawn. A render that failed has a record with its ``error``
-    and is not blessed."""
+    record, `args.jobs` at a time; the slugs drawn. A render that failed has a
+    record with its ``error``."""
     os.makedirs(out_dir, exist_ok=True)
-    if args.bless is not None:
-        os.makedirs(baseline_root, exist_ok=True)
 
     def one(scene: Scene) -> str:
         try:
@@ -345,13 +342,9 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
             renderregression.write_failure(out_dir, scene.slug, record)
             return '  FAIL  %s (%s)' % (scene.name, record['error'])
         record.update(_reference(scene, report, args, new_path))
-        metadata = json.dumps(record, indent=2)
-        atomicfiles.write_text(os.path.join(out_dir, scene.slug + '.json'), metadata)
-        blessed = args.bless == [] or (args.bless and any(part in scene.name for part in args.bless))
-        if blessed:
-            atomicfiles.copy_file(new_path, os.path.join(baseline_root, scene.slug + '.png'))
-            atomicfiles.write_text(os.path.join(baseline_root, scene.slug + '.json'), metadata)
-        return '  %-5s %s' % ('BLESS' if blessed else 'OK', scene.name)
+        atomicfiles.write_text(os.path.join(out_dir, scene.slug + '.json'),
+                               json.dumps(record, indent=2))
+        return '  OK    %s' % scene.name
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         for line in pool.map(one, scenes):
@@ -390,6 +383,8 @@ def run(args: argparse.Namespace) -> int:
     baseline_root = args.baseline_root or default_baseline_root()
     out_dir = args.out_dir or default_out_dir()
     report = args.report or default_report_path()
+    if args.bless is not None:
+        return bless(out_dir, baseline_root, args.bless)
     drawn = None
     if not args.report_only:
         scenes = find_scenes(root, args.archive or DEFAULT_ARCHIVES, args.only)
@@ -407,6 +402,21 @@ def run(args: argparse.Namespace) -> int:
     counts = build_report(out_dir, baseline_root, report, args.tolerance,
                           args.diff_threshold, drawn)
     return renderregression.exit_status(counts, report)
+
+
+def bless(out_dir: str, baseline_root: str, parts: Sequence[str]) -> int:
+    """Make the renders in `out_dir` baselines: every one, or those whose
+    document's name contains one of `parts`; 1 where there were none"""
+    promoted = renderregression.promote(
+        out_dir, baseline_root,
+        lambda _slug, record: not parts or any(part in record.get('scene', '') for part in parts))
+    for slug in promoted:
+        print('  BLESS %s' % slug)
+    if not promoted:
+        print('Nothing to bless in %s: draw the documents first' % out_dir)
+        return 1
+    print('%d baseline(s) in %s' % (len(promoted), baseline_root))
+    return 0
 
 
 def _parse_size(text: str) -> tuple[int, int]:
@@ -429,8 +439,9 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
     parser.add_argument('--only', action='append', metavar='PART',
                         help='draw only the documents whose name contains PART (repeatable)')
     parser.add_argument('--bless', nargs='*', metavar='PART', default=None,
-                        help='make the new renders baselines, after review: every one drawn, '
-                             'or those whose name contains a PART')
+                        help='make the renders already drawn, as the report shows them, the '
+                             'baselines: every one, or those whose name contains a PART; '
+                             'nothing is drawn')
     parser.add_argument('--jobs', type=int, default=os.cpu_count() or 1,
                         help='documents drawn at a time (default: the processor count)')
     parser.add_argument('--baseline-root', metavar='DIR',

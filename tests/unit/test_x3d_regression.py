@@ -168,6 +168,8 @@ def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
     report = str(tmp_path / 'report.html')
     arguments = ['--corpus', root, '--baseline-root', baselines, '--out-dir', out_dir,
                  '--report', report, '--size', '32x24', '--jobs', '2', '--reference', 'web3d']
+    assert R.main(arguments) == 0
+    assert not os.path.exists(baselines)
     assert R.main(arguments + ['--bless']) == 0
     assert sorted(os.listdir(baselines)) == [
         'ConformanceNist.Geometry.Box.a.json', 'ConformanceNist.Geometry.Box.a.png',
@@ -236,11 +238,38 @@ def test_only_the_documents_drawn_are_counted(monkeypatch, tmp_path):
     arguments = ['--corpus', root, '--baseline-root', baselines,
                  '--out-dir', str(tmp_path / 'renders'), '--report', str(tmp_path / 'r.html'),
                  '--size', '32x24', '--reference', 'web3d']
+    assert R.main(arguments) == 0
     assert R.main(arguments + ['--bless']) == 0
     Image.new('RGB', (32, 24), (0, 0, 200)).save(
         os.path.join(baselines, 'ConformanceNist.Geometry.Box.b.png'))
     assert R.main(arguments + ['--only', 'Box/a']) == 0
     assert R.main(arguments + ['--report-only']) == 1
+
+
+def test_bless_promotes_what_was_drawn_and_reviewed(monkeypatch, tmp_path, capsys):
+    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
+    drawn = []
+
+    def counting(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
+        drawn.append(scene.name)
+        return _fake_render(scene, out, size, frames)
+    monkeypatch.setattr(R, 'render_scene', counting)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+    baselines, out_dir = str(tmp_path / 'b'), str(tmp_path / 'renders')
+    arguments = ['--corpus', root, '--baseline-root', baselines, '--out-dir', out_dir,
+                 '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--reference', 'web3d']
+    assert R.main(arguments + ['--bless']) == 1
+    assert 'Nothing to bless' in capsys.readouterr().out
+    R.main(arguments)
+    reviewed = Image.open(os.path.join(out_dir, 'ConformanceNist.Geometry.Box.a.png')).tobytes()
+    count = len(drawn)
+    assert R.main(arguments + ['--bless', 'Box/a']) == 0
+    assert len(drawn) == count, 'blessing draws nothing'
+    assert sorted(os.listdir(baselines)) == ['ConformanceNist.Geometry.Box.a.json',
+                                             'ConformanceNist.Geometry.Box.a.png']
+    with Image.open(os.path.join(baselines, 'ConformanceNist.Geometry.Box.a.png')) as image:
+        assert image.tobytes() == reviewed
 
 
 def test_no_corpus_says_how_to_fetch_one(tmp_path, capsys):

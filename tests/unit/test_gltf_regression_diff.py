@@ -346,7 +346,7 @@ class TestRenderScenes:
     def _prov(self):
         return {'git': 'g', 'rendered_at': 't', 'gl_renderer': 'r', 'gl_version': 'v'}
 
-    def test_writes_metadata_and_blesses_the_baseline(self, monkeypatch, tmp_path):
+    def test_writes_metadata_and_bless_makes_it_the_baseline(self, monkeypatch, tmp_path):
         out_dir = tmp_path / 'out'
         base_dir = tmp_path / 'base'
         monkeypatch.setattr(R, 'resolve_model_url',
@@ -357,12 +357,14 @@ class TestRenderScenes:
             return True, {'load_seconds': 1.0}
         monkeypatch.setattr(R, 'render_view', fake_render)
         spec = SceneSpec('Duck', source=None)
-        R.render_scenes([spec], str(out_dir), str(base_dir), None,
-                        self._args(bless=[]), self._prov())        # bless all
+        R.render_scenes([spec], str(out_dir), str(base_dir), None, self._args(), self._prov())
         assert (out_dir / 'Duck.png').exists() and (out_dir / 'Duck.json').exists()
-        assert (base_dir / 'Duck.png').exists() and (base_dir / 'Duck.json').exists()
+        assert not base_dir.exists()
         meta = json.loads((out_dir / 'Duck.json').read_text())
         assert meta['scene'] == 'Duck'
+        assert R.bless(str(out_dir), str(base_dir), []) == 0
+        assert (base_dir / 'Duck.png').exists() and (base_dir / 'Duck.json').exists()
+        assert R.bless(str(out_dir), str(tmp_path / 'other'), ['Sponza']) == 1
 
     def test_failed_render_is_reported_and_recorded(
             self, monkeypatch, tmp_path, capsys):

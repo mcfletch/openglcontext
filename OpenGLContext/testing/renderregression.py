@@ -10,6 +10,7 @@ directory of the same layout. This module holds the parts they share:
   rule a render fails by;
 - :func:`render_failure`, why a drawing process failed, and
   :func:`write_failure`, the record of a render that failed;
+- :func:`promote`, the renders a run drew made baselines, after review;
 - :func:`build_report`, the HTML report of whatever renders the directory
   holds, with the baseline, the render, the difference and, where the format
   publishes one, an upstream reference side by side, and :func:`exit_status`,
@@ -31,7 +32,7 @@ from OpenGLContext import atomicfiles, renderoptions
 __all__ = [
     'DEFAULT_TOLERANCE', 'DIFF_THRESHOLD', 'source_root', 'gl_renderer', 'provenance',
     'compare', 'is_regression', 'ReportCounts', 'render_failure', 'write_failure',
-    'build_report',
+    'promote', 'build_report',
     'exit_status',
 ]
 
@@ -185,6 +186,34 @@ def render_failure(returncode: int, stderr: Optional[str], written: bool) -> Opt
 def write_failure(out_dir: str, slug: str, record: dict[str, Any]) -> None:
     """Write the ``<slug>.json`` of a render that failed; `record` carries ``error``"""
     atomicfiles.write_text(os.path.join(out_dir, slug + '.json'), json.dumps(record, indent=2))
+
+
+def promote(out_dir: str, baseline_root: str,
+            chosen: Callable[[str, dict[str, Any]], bool]) -> list[str]:
+    """Make the renders in `out_dir` that `chosen(slug, record)` picks the
+    baselines in `baseline_root`, with their records; the slugs promoted
+
+    These are the renders the report shows, so what is blessed is what was
+    reviewed. A row whose render failed, or that has no image, is left.
+    """
+    promoted: list[str] = []
+    if not os.path.isdir(out_dir):
+        return promoted
+    for slug in sorted(name[:-5] for name in os.listdir(out_dir) if name.endswith('.json')):
+        record_path = os.path.join(out_dir, slug + '.json')
+        image = os.path.join(out_dir, slug + '.png')
+        try:
+            with open(record_path) as stream:
+                record = json.load(stream)
+        except (OSError, ValueError):
+            continue
+        if record.get('error') or not os.path.exists(image) or not chosen(slug, record):
+            continue
+        os.makedirs(baseline_root, exist_ok=True)
+        atomicfiles.copy_file(image, os.path.join(baseline_root, slug + '.png'))
+        atomicfiles.copy_file(record_path, os.path.join(baseline_root, slug + '.json'))
+        promoted.append(slug)
+    return promoted
 
 
 def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
