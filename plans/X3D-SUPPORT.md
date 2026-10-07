@@ -61,7 +61,9 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [ ] lights: X3D `shadows` and the engine's `castShadows`; `InstancedShape` the X3D node
   - [x] X3D loader (`loaders/x3d.py`, `prototypes()`), viewer adapter with the `head` as a notice, `.json` sniffing, archive members
   - [x] `Inline` reads any registered format (`SceneReader.nodes()`), X3D's `load` field; the builder roots nodes before their fields are set
-  - [ ] geometry as `Primitive`s; Interchange geometry nodes
+  - [x] Interchange geometry: the six triangle sets, `ElevationGrid` (with `creaseAngle`), `LineSet`; `ColorRGBA`, `Tangent`, `MultiTextureCoordinate` mapping labels (`composedgeometry`, `meshgeometry`); data nodes registered as their declarations
+  - [ ] `IndexedFaceSet`, `Extrusion` and the primitives onto the same arrays; `TextureCoordinateGenerator`; `CoordinateDouble` rebased to a float32 origin
+  - [x] docs/x3d.rst with the implemented-node list, held to `prototypes()` by a test
   - [ ] other X3D materials; light scope and attenuation; environment
   - [ ] showcase command and reference captures
 - Phase 7, runtime (§9.10, §9.15, §9.16)

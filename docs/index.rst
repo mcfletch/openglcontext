@@ -337,6 +337,7 @@ Documentation
 
    loading
    gltf
+   x3d
    vrml97
    tiles3d
    terrain

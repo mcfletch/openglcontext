@@ -292,6 +292,9 @@ Worlds and content
   it from your own code, :ref:`driving a model by its authored names <names>`,
   and :ref:`loading a package's own art <assets>`.
 
+- :doc:`Loading X3D <x3d>` -- X3D 3.0 to 4.1 in its XML, ClassicVRML and
+  JSON encodings: the nodes the engine draws, and what is kept and not drawn.
+
 - :doc:`Loading VRML97 <vrml97>` -- the VRML97 loader, which covers part of
   the specification, and the nodes it creates.
 

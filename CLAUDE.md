@@ -212,6 +212,10 @@ OpenGLContext/
 │   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.rst
 │   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.rst
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
+│   ├── composedgeometry.py  # X3D triangle/line sets and ElevationGrid as
+│   │                 # glTF-shaped arrays -- NumPy only, no GL
+│   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
+│   │                 # drawn as the PBRMesh their fields build -- docs/x3d.rst
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material
 │   │                 # (X3D's PhysicalMaterial) and mesh
 │   ├── unlitmaterial.py  # UnlitMaterial (X3D's): a colour drawn without

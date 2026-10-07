@@ -56,6 +56,14 @@ from OpenGLContext.scenegraph.light import SpotLight as SpotLight
 from OpenGLContext.scenegraph.lod import LOD as LOD
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD as ScreenCoverageLOD
 from OpenGLContext.scenegraph.material import Material as Material
+from OpenGLContext.scenegraph.meshgeometry import ElevationGrid as ElevationGrid
+from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleFanSet as IndexedTriangleFanSet
+from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleSet as IndexedTriangleSet
+from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleStripSet as IndexedTriangleStripSet
+from OpenGLContext.scenegraph.meshgeometry import LineSet as LineSet
+from OpenGLContext.scenegraph.meshgeometry import TriangleFanSet as TriangleFanSet
+from OpenGLContext.scenegraph.meshgeometry import TriangleSet as TriangleSet
+from OpenGLContext.scenegraph.meshgeometry import TriangleStripSet as TriangleStripSet
 from OpenGLContext.scenegraph.mouseover import MouseOver as MouseOver
 from OpenGLContext.scenegraph.nurbs import Contour2D as Contour2D
 from OpenGLContext.scenegraph.nurbs import NurbsCurve as NurbsCurve
@@ -129,7 +137,6 @@ from vrml.vrml97.basenodes import Anchor as Anchor
 from vrml.vrml97.basenodes import AudioClip as AudioClip
 from vrml.vrml97.basenodes import Color as Color
 from vrml.vrml97.basenodes import CylinderSensor as CylinderSensor
-from vrml.vrml97.basenodes import ElevationGrid as ElevationGrid
 from vrml.vrml97.basenodes import MovieTexture as MovieTexture
 from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
@@ -141,6 +148,18 @@ from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
 from vrml.vrml97.basenodes import TouchSensor as TouchSensor
 from vrml.vrml97.basenodes import VisibilitySensor as VisibilitySensor
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
+from vrml.x3d.nodes import ColorRGBA as ColorRGBA
+from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean
+from vrml.x3d.nodes import MetadataDouble as MetadataDouble
+from vrml.x3d.nodes import MetadataFloat as MetadataFloat
+from vrml.x3d.nodes import MetadataInteger as MetadataInteger
+from vrml.x3d.nodes import MetadataSet as MetadataSet
+from vrml.x3d.nodes import MetadataString as MetadataString
+from vrml.x3d.nodes import MultiTextureCoordinate as MultiTextureCoordinate
+from vrml.x3d.nodes import MultiTextureTransform as MultiTextureTransform
+from vrml.x3d.nodes import Tangent as Tangent
+from vrml.x3d.nodes import TextureProperties as TextureProperties
+from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
 
 __all__ = [
     'Anchor',
@@ -154,6 +173,7 @@ __all__ = [
     'Collision',
     'Color',
     'ColorInterpolator',
+    'ColorRGBA',
     'Cone',
     'Contour2D',
     'Coordinate',
@@ -192,16 +212,28 @@ __all__ = [
     'IndexedFaceSet',
     'IndexedLineSet',
     'IndexedPolygons',
+    'IndexedTriangleFanSet',
+    'IndexedTriangleSet',
+    'IndexedTriangleStripSet',
     'Inline',
     'IntUniform1i',
     'IntUniform2i',
     'IntUniform3i',
     'IntUniform4i',
     'LOD',
+    'LineSet',
     'MMImageTexture',
     'Material',
+    'MetadataBoolean',
+    'MetadataDouble',
+    'MetadataFloat',
+    'MetadataInteger',
+    'MetadataSet',
+    'MetadataString',
     'MouseOver',
     'MovieTexture',
+    'MultiTextureCoordinate',
+    'MultiTextureTransform',
     'NavigationInfo',
     'Normal',
     'NormalInterpolator',
@@ -240,15 +272,21 @@ __all__ = [
     'SphereSensor',
     'SpotLight',
     'Switch',
+    'Tangent',
     'Teapot',
     'Text',
     'TextureBufferUniform',
     'TextureCoordinate',
+    'TextureProperties',
     'TextureTransform',
+    'TextureTransformMatrix3D',
     'TextureUniform',
     'TimeSensor',
     'TouchSensor',
     'Transform',
+    'TriangleFanSet',
+    'TriangleSet',
+    'TriangleStripSet',
     'TrimmedSurface',
     'UnlitMaterial',
     'Viewpoint',

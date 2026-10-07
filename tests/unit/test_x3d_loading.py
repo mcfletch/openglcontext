@@ -152,3 +152,22 @@ def test_a_loaded_scene_draws(gl_context):
                    image.shape[1] // 2 - 4:image.shape[1] // 2 + 4].reshape(-1, 3).mean(axis=0)
     assert centre[0] > 100 and centre[0] > 3 * max(centre[1], centre[2], 1)
     assert np.isfinite(centre).all()
+
+
+def test_the_documented_node_list_is_the_engines():
+    """docs/x3d.rst lists, by component, every X3D node the engine implements."""
+    import os  # noqa: PLC0415 kept with its one use
+    import re  # noqa: PLC0415 kept with its one use
+    from OpenGLContext.testing.paths import tests_root  # noqa: PLC0415 kept with its one use
+    root = os.path.dirname(str(tests_root(__file__)))
+    with open(os.path.join(root, 'docs', 'x3d.rst'), encoding='utf-8') as stream:
+        text = stream.read()
+    listed = text.split('.. x3d-implemented-start')[1].split('.. x3d-implemented-end')[0]
+    documented = {}
+    for item in re.split(r'\n- ', listed.strip().lstrip('- ')):
+        component, names = item.split(' - ', 1)
+        for name in re.split(r'[,\s]+', names.strip()):
+            documented[name] = component.strip()
+    found = {name: x3d.CONCRETE_NODES[name].COMPONENT[0]
+             for name in prototypes() if name != 'X3DScene'}
+    assert documented == found

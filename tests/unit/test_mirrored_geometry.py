@@ -54,6 +54,20 @@ CASES = {
                                                   radius=0.4),
     'NurbsSurface': _nurbs_surface,
     'TrimmedSurface': _trimmed_surface,
+    'TriangleSet': lambda: basenodes.TriangleSet(coord=basenodes.Coordinate(point=TRIANGLE)),
+    'IndexedTriangleSet': lambda: basenodes.IndexedTriangleSet(
+        coord=basenodes.Coordinate(point=TRIANGLE), index=[0, 1, 2]),
+    'TriangleFanSet': lambda: basenodes.TriangleFanSet(
+        coord=basenodes.Coordinate(point=TRIANGLE), fanCount=[3]),
+    'IndexedTriangleFanSet': lambda: basenodes.IndexedTriangleFanSet(
+        coord=basenodes.Coordinate(point=TRIANGLE), index=[0, 1, 2]),
+    'TriangleStripSet': lambda: basenodes.TriangleStripSet(
+        coord=basenodes.Coordinate(point=TRIANGLE), stripCount=[3]),
+    'IndexedTriangleStripSet': lambda: basenodes.IndexedTriangleStripSet(
+        coord=basenodes.Coordinate(point=TRIANGLE), index=[0, 1, 2]),
+    'ElevationGrid': lambda: basenodes.ElevationGrid(
+        xDimension=3, zDimension=3, xSpacing=0.5, zSpacing=0.5,
+        height=[0, 0.2, 0, 0.1, 0.5, 0.1, 0, 0.3, 0], solid=False),
     'PBRMesh': lambda: PBRMesh(
         positions=np.array(TRIANGLE, 'f'), normals=np.array([(0, 0, 1)] * 3, 'f'),
         indices=np.array([0, 1, 2], np.uint32)),
@@ -62,9 +76,9 @@ CASES = {
 #: The geometry drawn with no faces to turn over, or not drawn at all.
 NO_FACES = {
     'IndexedLineSet': 'lines have no winding to turn over',
+    'LineSet': 'lines have no winding to turn over',
     'PointSet': 'points have no winding to turn over',
     'NurbsCurve': 'a curve is drawn as a line',
-    'ElevationGrid': 'pyvrml97 declares it and the engine registers no drawing of it',
     'Text': ('its glyphs are screen-aligned bitmaps, which a mirror does not turn '
              'over, as glBitmap does not; test_bitmap_text_is_anchored_where_its_'
              'origin_is holds its anchor to the transform'),

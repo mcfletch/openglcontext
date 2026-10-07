@@ -84,13 +84,20 @@ def coordinate_set(geometry: Any, label: str) -> int:
     """The coordinate set of `geometry` that a mapping label names
 
     A geometry with a `textureCoordinateSet(label)` method answers for
-    itself. Otherwise an empty label is set 0, and `TEXCOORD_n`, with or
-    without a `:suffix`, is set n. Any other label is reported once and read
-    as set 0.
+    itself; any other is read by :func:`label_set`.
     """
     named = getattr(geometry, 'textureCoordinateSet', None)
     if callable(named):
         return int(named(label))
+    return label_set(label)
+
+
+def label_set(label: str) -> int:
+    """The coordinate set a mapping label names by itself
+
+    An empty label is set 0, and `TEXCOORD_n`, with or without a `:suffix`,
+    is set n. Any other label is reported once and read as set 0.
+    """
     if not label:
         return 0
     match = _TEXCOORD.match(label)

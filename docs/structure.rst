@@ -232,16 +232,16 @@ simulation packages update.
      - Every node type: shapes, materials, lights, text, NURBS, extrusions,
        terrain, water, roads, vegetation, procedural surfaces, zones,
        particles and the PBR mesh.
-     - :doc:`VRML97 nodes <vrml97>`, :doc:`PBR materials <pbr>`,
+     - :doc:`X3D nodes <x3d>`, :doc:`VRML97 nodes <vrml97>`, :doc:`PBR materials <pbr>`,
        :doc:`Text <text>`, :doc:`NURBS <nurbs>`, :doc:`Extrusions <extrusions>`,
        :doc:`Terrain <terrain>`, :doc:`Water <water>`, :doc:`Roads <roads>`,
        :doc:`Vegetation <vegetation>`, :doc:`Surfaces <surfaces>`,
        :doc:`Zones <zones>`, :doc:`Particles <particles>`
    * - ``loaders``
-     - File formats into the scenegraph: glTF and GLB, VRML97, OBJ and
+     - File formats into the scenegraph: glTF and GLB, X3D, VRML97, OBJ and
        streamed 3D Tiles, and the ``SceneLoader`` every context holds to read
        any of them in the background.
-     - :doc:`Loading Content <loading>`
+     - :doc:`Loading Content <loading>`, :doc:`Loading X3D <x3d>`
    * - ``shaders``, ``resources``
      - The GLSL sources the passes compile, and the icons, font atlases and
        shader text stored as generated modules.

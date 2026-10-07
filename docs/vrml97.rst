@@ -14,6 +14,11 @@ still loads; those nodes are kept in the scenegraph but are not drawn.
 
 To open a VRML97 file and look at it, use :doc:`oglc-view <viewer>`.
 
+The scenegraph's node classes are X3D's (:doc:`Loading X3D <x3d>`), and VRML97
+is read as a dialect of that vocabulary: a field X3D renamed is reachable
+under both names (``Switch.choice`` and ``Switch.children``, say), and a field
+whose VRML97 default differs from X3D's has VRML97's in a VRML97 world.
+
 Supported nodes
 ---------------
 
