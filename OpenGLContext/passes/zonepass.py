@@ -28,6 +28,7 @@ import numpy as np
 from OpenGLContext import renderoptions
 from OpenGLContext.passes import zonelayers
 from OpenGLContext.passes.disposal import PassResources, let_go
+from OpenGLContext.passes import lightscope
 from OpenGLContext.passes.zonelayers import (
     NO_ENVIRONMENT, SCENE_PROBE, ObjectBoxes, ZonePack,
 )
@@ -558,10 +559,18 @@ class ZonesMixin(PassResources):
             return ()
         return tuple(int(v) for v in np.floor(np.asarray(camera) / self.CAMERA_CELL))
 
+    #: The scoped lights bound this frame (``lightscope.scoped_lights``).
+    scopedLights: Any = ()
+
     def applyZones(self, shader: Any, path: Any, tmatrix: Any, bvolume: Any,
                    program: Any = None) -> None:
-        """Hand the program the zones reaching the object about to be drawn."""
+        """Hand the program the zones reaching the object about to be drawn
+
+        and switch off the bound lights whose scope it is outside.
+        """
+        scope = lightscope.scope_mask(self.scopedLights, path) if self.scopedLights else 0
         if not self._zones:
+            self._applyLightsOff(shader, scope, program)
             return
         objects = self._zoneObjects
         held = None
@@ -579,7 +588,7 @@ class ZonesMixin(PassResources):
             pack, mask = held.pack, held.mask
         else:
             pack, mask = self.zoneState(path, tmatrix, bvolume)
-        self._applyZoneState(shader, pack, mask, program)
+        self._applyZoneState(shader, pack, mask | scope, program)
 
     def applyZonesToGroup(self, shader: Any, members: Sequence[Any],
                           program: Any = None, *, key: Hashable) -> None:
@@ -593,9 +602,14 @@ class ZonesMixin(PassResources):
         is made again when the members drawn, or their matrices or bounds,
         are other objects than it was made from.
         """
-        if not self._zones:
-            return
         if not members:
+            return
+        if not self._zones:
+            scope = 0
+            if self.scopedLights:
+                for record in members:
+                    scope |= lightscope.scope_mask(self.scopedLights, record[4])
+            self._applyLightsOff(shader, scope, program)
             return
         if len(members) == 1:
             record = members[0]
@@ -630,6 +644,9 @@ class ZonesMixin(PassResources):
             if setter is not None:
                 setter(pack, program=program)
             self._zoneApplied = key
+        self._applyLightsOff(shader, mask, program)
+
+    def _applyLightsOff(self, shader: Any, mask: int, program: Any) -> None:
         if mask != self._lightsOffApplied:
             setter = getattr(shader, 'set_lights_off', None)
             if setter is not None:

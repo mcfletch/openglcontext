@@ -38,6 +38,7 @@ from OpenGLContext.arrays import (
 import numpy
 
 from OpenGLContext import frustum
+from OpenGLContext.passes import lightscope
 from OpenGLContext.passes.disposal import let_go
 from OpenGLContext.passes.framestate import FrameState
 from OpenGLContext.debug.logs import getTraceback
@@ -785,6 +786,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         ceiling = self.maxLights(shader.MAX_LIGHTS)
         # Which light went into which slot, for the zones' per-draw light mask.
         bound = []
+        bound_paths = []
 
         for path in light_paths:
             if light_count >= ceiling:
@@ -798,8 +800,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                 light_matrix = dot(tmatrix, matrix)
                 configure_light_from_node(shader, light_count, light_node, light_matrix)
                 bound.append(light_node)
+                bound_paths.append(path)
                 light_count += 1
         self.boundLights = bound
+        self.scopedLights = lightscope.scoped_lights(bound_paths)
 
         if light_count == 0:
             # Set default VRML97 headlight (direction already in eye space)

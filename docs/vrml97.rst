@@ -18,6 +18,9 @@ The scenegraph's node classes are X3D's (:doc:`Loading X3D <x3d>`), and VRML97
 is read as a dialect of that vocabulary: a field X3D renamed is reachable
 under both names (``Switch.choice`` and ``Switch.children``, say), and a field
 whose VRML97 default differs from X3D's has VRML97's in a VRML97 world.
+A ``DirectionalLight`` in a world lights only the descendants of its parent
+grouping node, as VRML97 specifies; one made in code lights the whole scene
+(its X3D ``global`` field).
 
 Supported nodes
 ---------------

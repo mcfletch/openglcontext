@@ -107,6 +107,13 @@ fields and mapping labels, ``Appearance.alphaMode`` and ``alphaCutoff``, and
 A grouping node or shape whose ``visible`` is false is not drawn, picked or
 shadowed, nor is anything under it; setting it takes effect on the next frame.
 
+A ``DirectionalLight`` whose ``global`` is false (X3D's default) lights only
+the descendants of its parent grouping node; point and spot lights, global by
+default, light everything. A light casts shadows where its ``shadows`` is
+true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
+false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
+The engine's lights made in code are global and cast shadows by default.
+
 An ``Inline`` reads any format a registered reader opens: another X3D or
 VRML97 world, an OBJ model or a glTF model. Its scene is read on the loader
 pool and drawn from the frame after it arrives. See :ref:`x3d-worlds`.

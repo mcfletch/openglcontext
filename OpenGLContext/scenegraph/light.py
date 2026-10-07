@@ -236,8 +236,12 @@ class SpotLight(basenodes.SpotLight, PointLight):
 
 class DirectionalLight (basenodes.DirectionalLight, Light):
     '''A Directional Light node
-    Note: this is not scoped according to vrml standard,
-    instead it affects the entire scene
+
+    With `global` true it lights the whole scene; with it false, only the
+    descendants of its parent grouping node (:mod:`OpenGLContext.passes.lightscope`).
+    True for one made in code, false for one a VRML97 world or an X3D
+    document builds unless the document says otherwise. The fixed-function
+    pipeline lights the whole scene either way.
 
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#DirectionalLight
     '''
@@ -253,3 +257,9 @@ class DirectionalLight (basenodes.DirectionalLight, Light):
     def effectiveRange(self, threshold: float = 1.0 / 255.0) -> float | None:
         """Directional lights have no attenuation; range is unbounded."""
         return None
+
+# X3D's `global`, true for a DirectionalLight made in code: it lights the whole
+# scene. One an X3D document or a VRML97 world builds lights only its siblings'
+# subtrees unless the document says otherwise (passes.lightscope). 'global' is
+# a Python keyword, so the field is set on the class.
+setattr(DirectionalLight, 'global', field.newField('global', 'SFBool', 1, True))

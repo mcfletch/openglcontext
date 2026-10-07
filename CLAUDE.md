@@ -172,6 +172,8 @@ OpenGLContext/
 │   │                 # and the baseline a frame starts from -- docs/renderpasses.rst
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
+│   ├── lightscope.py # Which lights light a draw: X3D/VRML97 light scope as
+│   │                 # a per-draw lightsOff mask -- no GL -- docs/x3d.rst
 │   ├── reflection.py # Planar reflections' arithmetic: which surfaces are
 │   │                 # mirrors, their planes, a mirror's camera -- docs/reflections.rst
 │   ├── multiviewpass.py      # The pass's side of several views: layout, a
