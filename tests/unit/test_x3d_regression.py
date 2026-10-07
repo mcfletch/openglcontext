@@ -206,6 +206,27 @@ def test_a_failed_render_fails_the_run(monkeypatch, tmp_path, capsys):
     assert '1 render(s) failed' in capsys.readouterr().out
 
 
+def test_one_documents_failure_leaves_the_others_drawn(monkeypatch, tmp_path):
+    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
+    monkeypatch.setattr(R, 'render_scene', _fake_render)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+    real = R._reference
+
+    def failing(scene, report, args, rendered):
+        if scene.name.endswith('/a'):
+            raise OSError('disk full')
+        return real(scene, report, args, rendered)
+    monkeypatch.setattr(R, '_reference', failing)
+    out_dir = str(tmp_path / 'renders')
+    assert R.main(['--corpus', root, '--baseline-root', str(tmp_path / 'b'), '--out-dir', out_dir,
+                   '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--jobs', '1',
+                   '--reference', 'web3d']) == 1
+    with open(os.path.join(out_dir, 'ConformanceNist.Geometry.Box.a.json')) as stream:
+        assert 'disk full' in json.load(stream)['error']
+    assert os.path.exists(os.path.join(out_dir, 'ConformanceNist.Geometry.Box.b.json'))
+
+
 def test_only_the_documents_drawn_are_counted(monkeypatch, tmp_path):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
     monkeypatch.setattr(R, 'render_scene', _fake_render)

@@ -323,6 +323,18 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
         os.makedirs(baseline_root, exist_ok=True)
 
     def one(scene: Scene) -> str:
+        try:
+            return drawn(scene)
+        except Exception as error:  # noqa: BLE001 one document's failure is its row, not the run's end
+            record = {'scene': scene.name, 'slug': scene.slug, 'document': scene.path,
+                      'error': '%s: %s' % (type(error).__name__, error)}
+            try:
+                renderregression.write_failure(out_dir, scene.slug, record)
+            except OSError:
+                pass  # noqa: S110 the run reports the failure; a record that cannot be written adds nothing
+            return '  FAIL  %s (%s)' % (scene.name, record['error'])
+
+    def drawn(scene: Scene) -> str:
         new_path = os.path.join(out_dir, scene.slug + '.png')
         ok, report = render_scene(scene, new_path, args.size, args.frames,
                                   renderer=args.renderer)
