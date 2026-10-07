@@ -216,6 +216,15 @@ def promote(out_dir: str, baseline_root: str,
     return promoted
 
 
+def _current_copy(src: str, dst: str) -> bool:
+    """Whether `dst` is a copy of `src` as it is now: its size, and no older"""
+    try:
+        source, copy = os.stat(src), os.stat(dst)
+    except OSError:
+        return False
+    return copy.st_size == source.st_size and copy.st_mtime_ns >= source.st_mtime_ns
+
+
 def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
                  diff_threshold: int, title: str,
                  upstream: Callable[[dict[str, Any], str], Optional[str]] = lambda _meta, _slug: None,
@@ -243,6 +252,8 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
         if os.path.abspath(src).startswith(report_dir + os.sep):
             return src
         dst = os.path.join(out_dir, name)
+        if _current_copy(src, dst):
+            return dst
         try:
             atomicfiles.copy_file(src, dst)
             return dst

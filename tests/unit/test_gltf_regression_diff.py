@@ -465,6 +465,26 @@ class TestBuildReportAndRun:
         assert os.path.exists(os.path.join(out_dir, 'Duck_baseline.png'))
         assert os.path.exists(os.path.join(out_dir, 'Duck_upstream.png'))
 
+    def test_a_second_report_copies_no_image_again(self, monkeypatch, tmp_path):
+        upstream = tmp_path / 'up.png'
+        _png(str(upstream), (5, 6, 7))
+        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: str(upstream))
+        out_dir, base_dir = str(tmp_path / 'out'), str(tmp_path / 'base')
+        self._stage(out_dir, 'Duck', (40, 40, 40))
+        os.makedirs(base_dir)
+        _png(os.path.join(base_dir, 'Duck.png'), (40, 40, 40))
+        report = str(tmp_path / 'reportdir' / 'r.html')
+        R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+        copied = []
+        real = R.renderregression.atomicfiles.copy_file
+        monkeypatch.setattr(R.renderregression.atomicfiles, 'copy_file',
+                            lambda src, dst: copied.append(dst) or real(src, dst))
+        R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+        assert copied == []
+        _png(os.path.join(base_dir, 'Duck.png'), (41, 40, 40), size=(32, 32))   # replaced
+        R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+        assert copied == [os.path.join(out_dir, 'Duck_baseline.png')]
+
     def test_unreadable_metadata_and_a_missing_render_are_reported_as_errors(
             self, monkeypatch, tmp_path):
         monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
