@@ -456,6 +456,11 @@ def two_sided(appearance: Any) -> bool:
     return side_material(appearance, back=True) is not side_material(appearance)
 
 
+def in_document(node: Any) -> bool:
+    """Whether `node` belongs to a scene read from a VRML97 or X3D document"""
+    return node is not None and isinstance(protofunctions.root(node), X3DScene)
+
+
 class AppearanceMaterial(object):
     """The metallic/roughness material a VRML97-style `Appearance` is drawn as
 
@@ -545,8 +550,7 @@ class AppearanceMaterial(object):
     def inDocument(self) -> bool:
         """Whether the appearance belongs to a scene read from a VRML97 or X3D
         document, where an appearance with no material is unlit"""
-        appearance = self.appearance
-        return appearance is not None and isinstance(protofunctions.root(appearance), X3DScene)
+        return in_document(self.appearance)
 
     @staticmethod
     def _watch(appearance: Any, key: str) -> None:

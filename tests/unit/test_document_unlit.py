@@ -53,3 +53,19 @@ def test_the_packed_block_follows_the_appearance_into_a_document():
     document = X3DScene()                   # a node holds its root weakly
     protofunctions.root(appearance, document)
     assert pack_material_block(view).view('int32')[unlit_word] == 1
+
+
+BARE = (b"<X3D version='3.3'><Scene><Viewpoint position='0 0 0'/><Shape>"
+        b"<IndexedFaceSet coordIndex='0 1 2 3'>"
+        b"<Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/></IndexedFaceSet>"
+        b"</Shape></Scene></X3D>")
+
+
+def test_a_shape_with_no_appearance_in_a_document_is_unlit_white(gl_context):
+    """X3D: a Shape with no Appearance is drawn as an unlit white"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    with scene_context(Loader.loads(BARE, 'a.x3d'), size=(32, 32)) as context:
+        drawn_image(context)
+        centre = drawn_image(context)[16, 16].astype(int)
+    assert tuple(centre) == pytest.approx((255, 255, 255), abs=3)

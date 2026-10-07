@@ -43,7 +43,7 @@ from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.physicalmaterial import (
     AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha, source_of,
-    two_sided,
+    two_sided, in_document,
     material_to_pbr, pbr_material,
 )
 from OpenGLContext.scenegraph.texgen import TexGen
@@ -69,6 +69,9 @@ class _NoMaterial:
 
 
 _NO_MATERIAL = _NoMaterial()
+
+#: What a document's shape with no appearance is drawn with: X3D's unlit white.
+_DOCUMENT_UNLIT = UnlitMaterial(emissiveColor=(1.0, 1.0, 1.0))
 
 #: Each material's factor block in each context, as ``{'block': (buffer,
 #: version)}``: deleted when the material is collected or the context is lost.
@@ -948,8 +951,13 @@ class PBRShaderProgram(VRML97ShaderProgram):
         is what is drawn with it, whose coordinate sets the appearance's
         mapping labels name. ``back`` configures the back faces' material
         (:func:`~OpenGLContext.scenegraph.physicalmaterial.side_material`).
+        A shape with no appearance is drawn unlit white in a document, as X3D
+        says, and in the engine's lit neutral grey otherwise.
         """
-        material = pbr_material(appearance, back) if appearance else None
+        if appearance:
+            material = pbr_material(appearance, back)
+        else:
+            material = _DOCUMENT_UNLIT if in_document(geometry) else None
         # The coordinates depend on the geometry as well as the appearance, so
         # they are set before the same-material early-out.
         self.set_texture_mapping(texture_mapping(appearance, geometry))

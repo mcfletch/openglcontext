@@ -89,8 +89,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     tree's ground). The vrml97 pass draws X3D's equation (within 0.5% of X_ITE on
     the tree, the Box, the cafe sign) but has no fog. Which a document's Material
     is drawn by in the PBR pass is a decision for the maintainer
-  - [ ] a Shape with no Appearance in a document is drawn lit grey; X3D draws it
-    unlit white
+  - [x] a Shape with no Appearance in a document is drawn unlit white
   - [x] X3D's fog curves fade the displayed colour, after tone mapping
     (`tests/unit/test_fog_render_gl.py`); the aerial-perspective curve stays in
     linear light

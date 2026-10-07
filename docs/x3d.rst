@@ -203,8 +203,8 @@ mapping, by X3D's equation: a ``LINEAR`` fog leaves an object
 ``(visibilityRange - distance) / visibilityRange`` of its own colour.
 
 In a document, an ``Appearance`` with no ``material`` is unlit: the shape is
-its texture's colour, or white. A scene built in code draws such an
-appearance in a lit neutral grey. A ``Material`` is drawn by the PBR pass
+its texture's colour, or white; a ``Shape`` with no ``appearance`` is unlit
+white. A scene built in code draws either in a lit neutral grey. A ``Material`` is drawn by the PBR pass
 as metallic-roughness factors converted from it, so its shading differs from
 X3D's Phong equation; ``OPENGLCONTEXT_RENDERER=vrml97`` draws it by that
 equation, without fog.
