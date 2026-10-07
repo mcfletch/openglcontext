@@ -60,7 +60,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] the render pass skips nodes whose X3D `visible` is false (`FlatPass.onVisibleChange`)
   - [x] an Inline's scene arriving after the world was walked is drawn (`CHILDREN_CHANGE_SIGNAL`, delivered through the render queue)
   - [x] lights: X3D's `shadows` replaces `castShadows` (true for a light made in code, X3D's false in a document: the builder's `declared_defaults`); `shadowIntensity` per shadow slot; `Shape.castShadow` replaces `castsShadow`
-  - [ ] `InstancedShape` the X3D node
+  - [x] `InstancedShape`: not in the X3DUOM 4.1 vocabulary the declarations are generated from, so there is no X3D node to implement; the engine's own instancing (`passes/instancing.py`) collapses repeated shapes
   - [x] X3D loader (`loaders/x3d.py`, `prototypes()`), viewer adapter with the `head` as a notice, `.json` sniffing, archive members
   - [x] `Inline` reads any registered format (`SceneReader.nodes()`), X3D's `load` field; the builder roots nodes before their fields are set
   - [x] Interchange geometry: the six triangle sets, `ElevationGrid` (with `creaseAngle`), `LineSet`; `ColorRGBA`, `Tangent`, `MultiTextureCoordinate` mapping labels (`composedgeometry`, `meshgeometry`); data nodes registered as their declarations
@@ -77,9 +77,15 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] event utilities, sequencers and `KeySensor` with their behaviour (`vrml.x3d.runtime`); the engine's `TimeTrigger` clock and `KeySensor` keys (`scenegraph/x3druntime.py`, `observeEvents`)
   - [x] the 2D, spline, squad and ease interpolators (`vrml.x3d.interpolation`); `StringSensor`
   - [x] followers (`vrml.x3d.followers`; ticked through the render queue in the engine, `x3druntime.Ticked`)
+  - [x] time is the scene's clock (`vrml.x3d.timing`, `Timed.now`; the engine's `SceneGraph.clock` is `systemtime`, so followers and `TimeTrigger` follow a capture's fixed step)
+  - [x] bind stacks (`vrml.x3d.binding`): backgrounds (the engine's own too), fogs, viewpoints and NavigationInfo bound by `set_bind`; `next_viewpoint`
+  - [x] `OrthoViewpoint` (`ViewPlatform.setOrthographic`), `nearDistance`/`farDistance`
+  - [x] NavigationInfo `headlight` and `type` (`move.navigationinfo`); `speed`, `avatarSize`, `visibilityLimit` and the transitions not read
+  - [ ] `ViewpointGroup`; `centerOfRotation`, `retainUserOffsets`, `viewAll`
+  - [x] environmental sensors (`vrml.x3d.sensors`, sensed once a frame by `scenegraph.x3dsensors`)
+  - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit has no normal or texture coordinate)
+  - [ ] `TimeSensor`'s start, stop, pause and resume; `LoadSensor`; `Anchor`; `Collision`'s outputs
   - [ ] the cascade replacing immediate route forwarding
-  - [ ] bindable stacks and navigation
-  - [ ] sensors
 - Phase 8, engine-mapped components (§9.17)
 - Phase 9, Fast Infoset reader
 - [ ] SimpleParse speed: the ClassicVRML reader runs at about 7 MB/s against
