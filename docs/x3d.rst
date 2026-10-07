@@ -58,7 +58,8 @@ and ``oglc-view`` all open these:
    * - ClassicVRML
      - ``.x3dv``, ``.x3dvz`` (gzip), ``model/x3d+vrml``, ``model/x3d-vrml``
    * - JSON
-     - ``.x3dj``, and ``.json`` whose top-level key is ``"X3D"``
+     - ``.x3dj``, ``model/x3d+json``, and ``.json`` whose top-level key is
+       ``"X3D"``
    * - Compressed binary (Fast Infoset)
      - ``.x3db``, ``.x3db.gz`` (gzip), ``model/x3d+fastinfoset``,
        ``model/x3d+binary``

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from OpenGLContext.loaders.readers import SceneReader
 
 __all__ = ['SNIFF_BYTES', 'UnknownSourceType', 'adapter_for', 'adapter_named',
-           'known_sources']
+           'known_sources', 'scene_names']
 
 #: How much of an unrecognised file to read when sniffing its content.  A
 #: tileset's ``asset`` and ``root`` keys are at the top of the document, and a
@@ -71,6 +71,13 @@ def _adapter(entry: Any) -> SceneReader:
 def known_sources() -> tuple[str, ...]:
     """Every suffix and content type a registered reader opens, sorted to be read."""
     return tuple(sorted(_keys()))
+
+
+def scene_names() -> tuple[str, ...]:
+    """Every file-name ending a registered reader opens (``.x3d``,
+    ``.wrl.gz``, ``tileset.json``), longest first; content types left out"""
+    return tuple(sorted((key for key in _keys() if '/' not in key),
+                        key=lambda key: (-len(key), key)))
 
 
 def adapter_named(name: str) -> SceneReader:

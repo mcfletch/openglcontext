@@ -53,9 +53,6 @@ def prototypes() -> "dict[str, type]":
 class X3DHandler(base.BaseHandler):
     """Reads an X3D document of any encoding into the engine's nodes"""
 
-    filename_extensions: ClassVar[tuple[str, ...]] = (
-        '.x3d', '.x3dz', '.x3dv', '.x3dvz', '.x3dj', '.x3db', '.x3db.gz')
-
     def vocabulary(self) -> "dict[str, type]":
         """The node classes the document is built from, by name"""
         return prototypes()

@@ -113,6 +113,7 @@ def test_a_document_in_no_encoding_is_an_error():
     ('world.x3dvz', None), ('world.x3dj', None), ('world.x3db', None),
     ('world', 'model/x3d+xml'), ('world', 'model/x3d+vrml'), ('world', 'model/x3d-vrml'),
     ('world', 'model/x3d+fastinfoset'), ('world', 'model/x3d+binary'),
+    ('world', 'model/x3d+json'),
 ])
 def test_the_reader_is_chosen_by_name_and_type(name, content_type):
     assert formats.adapter_for(name, content_type).name == 'x3d'

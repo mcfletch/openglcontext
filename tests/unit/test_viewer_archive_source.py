@@ -127,6 +127,23 @@ class TestOpeningAMemberOfALocalArchive:
         got = viewersource.open_archive(path, cache_dir=cache)
         assert os.path.basename(got) == name
 
+    @pytest.mark.parametrize('name', ['world.x3db.gz', 'world.wrl.gz', 'model.obj.gz',
+                                      'tileset.json'])
+    def test_every_name_a_reader_registers_is_a_scene_file(self, tmp_path, cache, name):
+        path = _tar(tmp_path / 'world.tar', [name, 'textures/wall.png'])
+        got = viewersource.open_archive(path, cache_dir=cache)
+        assert os.path.basename(got) == name
+
+    def test_a_reader_registered_later_is_followed(self, tmp_path, cache):
+        from OpenGLContext import plugins
+        path = _tar(tmp_path / 'world.tar', ['level.bsp', 'textures/wall.png'])
+        entry = plugins.Adapter('test-bsp', 'nowhere.BSPAdapter', ['.bsp', 'model/x-bsp'])
+        try:
+            got = viewersource.open_archive(path, cache_dir=cache)
+        finally:
+            plugins.Adapter.registry.remove(entry)
+        assert os.path.basename(got) == 'level.bsp'
+
     def test_a_choice_of_scenes_asks_for_one(self, tmp_path, cache):
         path = _tar(tmp_path / 'w.tar.gz', ['a.glb', 'b.glb'])
 

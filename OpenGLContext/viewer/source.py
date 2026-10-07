@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Optional
 from OpenGLContext import atomicfiles, userpaths
 from OpenGLContext.contentpacks import ContentPack, ContentStore
 from OpenGLContext.contentpacks import archive, catalog, fetch
-from OpenGLContext.loaders import resolver
+from OpenGLContext.loaders import formats, resolver
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.resolver import is_url
 from OpenGLContext.viewer.commentary import say
@@ -32,7 +32,7 @@ from OpenGLContext.viewer.commentary import say
 if TYPE_CHECKING:
     from OpenGLContext.loaders.gltf.scene import GLTFScene
 
-__all__ = ['ARCHIVE_SUFFIXES', 'ENGINE_REGISTRY', 'SCENE_SUFFIXES',
+__all__ = ['ARCHIVE_SUFFIXES', 'ENGINE_REGISTRY',
            'UnknownMember', 'is_archive', 'is_url', 'load_gltf_source',
            'open_archive', 'open_pack', 'pack_named', 'resolve_source',
            'split_member']
@@ -43,10 +43,6 @@ ARCHIVE_SUFFIXES = {
     '.tar': 'tar', '.tar.gz': 'tar', '.tgz': 'tar',
     '.tar.bz2': 'tar', '.tbz2': 'tar', '.tar.xz': 'tar', '.txz': 'tar',
 }
-
-#: What counts as a scene to open, when an archive is not told which member.
-SCENE_SUFFIXES = ('.glb', '.gltf', '.wrl', '.wrz', '.vrml', '.x3d', '.x3dz', '.x3dv', '.x3dvz',
-                  '.x3dj', '.x3db', '.obj')
 
 #: Ceiling on an archive fetched from a URL. A world is tens of megabytes; this
 #: is the same order as a content pack and far below what would exhaust memory.
@@ -193,11 +189,13 @@ def _member_in(where: str, member: Optional[str], named: str) -> str:
 
 
 def _scenes(where: str) -> list[str]:
-    """Every file under ``where`` this viewer would open, shallowest first."""
+    """Every file under ``where`` a registered reader opens, by its name,
+    shallowest first."""
+    names = formats.scene_names()
     found: list[str] = []
     for root, _directories, files in os.walk(where):
         for leaf in files:
-            if leaf.lower().endswith(SCENE_SUFFIXES):
+            if leaf.lower().endswith(names):
                 found.append(os.path.join(root, leaf))
     return sorted(found, key=lambda path: (path.count(os.sep), path))
 

@@ -104,9 +104,10 @@ as a path or a URL. ``#member`` after it names the scene to open inside:
    oglc-view https://example.com/world.tar.gz#scenes/gallery.gltf
    oglc-view world.zip                 # holds exactly one scene file
 
-An archive holding exactly one scene file (``.glb``, ``.gltf``, ``.wrl``,
-``.wrz``, ``.vrml``, ``.x3d``, ``.x3dz``, ``.x3dv``, ``.x3dvz``, ``.x3dj``,
-``.x3db`` or ``.obj``) needs no ``#``. One holding several
+An archive holding exactly one scene file needs no ``#``: a file whose name
+ends as a registered reader's does (``.glb``, ``.wrl.gz``, ``.x3d``,
+``tileset.json`` and the rest, :func:`OpenGLContext.loaders.formats.scene_names`).
+One holding several
 is refused with a list of what it holds, and one that holds no such file says
 so. The whole archive is unpacked, not only the member, so a ``.gltf``'s
 buffers and textures and a level-of-detail chain's sidecars resolve against
