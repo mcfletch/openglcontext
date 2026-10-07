@@ -7,6 +7,7 @@ from OpenGLContext.arrays import array
 from vrml import field, protofunctions, fieldtypes, node
 from vrml.vrml97 import basenodes, nodetypes
 from vrml.x3d import binding
+from OpenGLContext.scenegraph import bindable
 
 from OpenGL.GL import *
 from OpenGL.GL import shaders
@@ -44,6 +45,7 @@ class _CubeBackground( object ):
     left = field.newField('left', 'SFNode', default=imagetexture.ImageTexture)
     front = field.newField('front', 'SFNode', default=imagetexture.ImageTexture)
     bottom = field.newField('bottom', 'SFNode', default=imagetexture.ImageTexture)
+    bound = bindable.bound_field()
     
     rightUrl = URLField( 'rightUrl')
     topUrl = URLField( 'topUrl')

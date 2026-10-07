@@ -9,7 +9,7 @@ as it draws a VRML97 world. What the read found wrong is in the scene's
 `problems` and in the log, once per problem, at its severity.
 """
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from vrml import x3d as vrml_x3d
 from vrml.x3d import nodes as x3d
@@ -53,12 +53,17 @@ def prototypes() -> "dict[str, type]":
 class X3DHandler(base.BaseHandler):
     """Reads an X3D document of any encoding into the engine's nodes"""
 
-    filename_extensions = ('.x3d', '.x3dz', '.x3dv', '.x3dvz', '.x3dj', '.x3db', '.x3db.gz')
+    filename_extensions: ClassVar[tuple[str, ...]] = (
+        '.x3d', '.x3dz', '.x3dv', '.x3dvz', '.x3dj', '.x3db', '.x3db.gz')
+
+    def vocabulary(self) -> "dict[str, type]":
+        """The node classes the document is built from, by name"""
+        return prototypes()
 
     def parse(self, data: Any, baseURL: str, *args: Any, **named: Any) -> "tuple[bool, Any]":
         """The scene the document builds; raises ValueError for one that cannot be read"""
         try:
-            scene = vrml_x3d.loads(data, name=baseURL or '', prototypes=prototypes())
+            scene = vrml_x3d.loads(data, name=baseURL or '', prototypes=self.vocabulary())
         except (ValueError, SyntaxError) as err:
             raise ValueError('%s is not a readable X3D document: %s' % (baseURL, err)) from err
         for problem in scene.problems:

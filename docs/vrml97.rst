@@ -5,10 +5,12 @@ Loading VRML97
 
 OpenGLContext loads `VRML97
 <http://www.web3d.org/resources/vrml_ref_manual/Book.html>`__ files into its
-scenegraph, renders them, and saves a scenegraph back to VRML97. The parser
+scenegraph, renders them, and saves a scenegraph back to VRML97. The reader
 and the scenegraph model come from the `PyVRML97
 <https://github.com/mcfletch/pyvrml97>`__ package (``vrml``), which reads the
-whole VRML97 specification. OpenGLContext renders the subset of nodes that
+whole VRML97 specification. A world is read by ``vrml.x3d``'s ClassicVRML
+reader, which reads VRML97 as a dialect; a world with errors in it loads as
+far as it reads, with what was wrong in the scene's ``problems``. OpenGLContext renders the subset of nodes that
 3D modelling tools commonly write, listed below. A file that uses other nodes
 still loads; those nodes are kept in the scenegraph but are not drawn.
 
@@ -323,6 +325,8 @@ VRML97 files can then use the node as if it were built in, without a
 ``vrml.protofunctions.name(prototype)`` returns it. The second argument is
 the name you expect; the loader logs a warning if the two differ. Registering
 a name that already exists replaces the built-in prototype.
+``vrml97.vrml97_prototypes()`` returns the node classes a world is built
+from: the engine's X3D nodes with these registrations in their place.
 
 The ``OpenGLContext.scenegraph`` package has many more node classes to use as
 examples. Questions can go to `Mike <mailto:mcfletch@vrplumber.com>`__ or to

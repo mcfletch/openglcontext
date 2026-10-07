@@ -1,8 +1,9 @@
 """The engine's backgrounds, fogs and viewpoints are on X3D's bind stacks.
 
 ``set_bind`` decides which of a scene's bindable nodes the pass uses
-(``vrml.x3d.binding``); with none bound, the first the scene draws is bound.
-The engine's own backgrounds are bindable as X3D's are.
+(``vrml.x3d.binding``); with none bound, the first the scene draws whose
+``bound`` field is set, else the first it draws, is bound. The engine's own
+backgrounds are bindable as X3D's are.
 """
 import pytest
 from vrml.vrml97 import nodetypes
@@ -28,10 +29,13 @@ def test_each_is_bindable(kind):
     assert binding.kind_of(kind()) in (nodetypes.Background, nodetypes.Fog)
 
 
-@pytest.mark.parametrize('kind', BACKGROUNDS + [Fog])
-def test_binding_is_the_stacks_alone(kind):
-    """No field of the node's own says it is bound"""
-    assert not hasattr(kind, 'bound')
+#: The engine's nodes with a ``bound`` field of their own.
+WITH_BOUND = [CubeBackground, HDRBackground, SimpleBackground, SphereBackground, Fog]
+
+
+@pytest.mark.parametrize('kind', WITH_BOUND)
+def test_a_node_may_be_made_bound(kind):
+    assert kind(bound=True).bound is True
 
 
 class Paths:
@@ -47,6 +51,28 @@ def test_the_first_background_is_bound_where_none_is():
     path = FlatPass.currentBackground(Paths(scene, nodetypes.Background))
     assert path[-1] is first
     assert first.isBound is True
+
+
+def test_a_bound_background_is_preferred_where_none_is_bound():
+    first, second = SphereBackground(), SphereBackground(bound=True)
+    scene = sceneGraph(children=[first, second])
+    assert FlatPass.currentBackground(Paths(scene, nodetypes.Background))[-1] is second
+    assert second.isBound is True
+
+
+def test_the_stack_outranks_the_bound_field():
+    first, second = SphereBackground(), SphereBackground(bound=True)
+    scene = sceneGraph(children=[first, second])
+    holder = Paths(scene, nodetypes.Background)
+    FlatPass.currentBackground(holder)
+    first.set_bind = True
+    assert FlatPass.currentBackground(holder)[-1] is first
+
+
+def test_a_bound_fog_is_preferred_where_none_is_bound():
+    first, second = Fog(), Fog(bound=True)
+    scene = sceneGraph(children=[first, second])
+    assert bound_fog([(scene, first), (scene, second)])[-1] is second
 
 
 def test_set_bind_chooses_the_background():

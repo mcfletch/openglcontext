@@ -16,6 +16,7 @@ from vrml import field, protofunctions, node
 from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
 from OpenGLContext import contextresources, displaylist
+from OpenGLContext.scenegraph import bindable
 import bisect
 
 # Shader directory path
@@ -54,6 +55,7 @@ class _SphereBackground( object ):
     groundColor = field.newField( 'groundColor', 'MFColor', 1, [])
     skyColor = field.newField( 'skyColor', 'MFColor', 1, [[0.0, 0.0, 0.0]])
     skyAngle = field.newField( 'skyAngle', 'MFFloat', 1, [])
+    bound = bindable.bound_field()
 
     def compile(self, mode: Any) -> Any:
         """Build the cached display list for this background object
@@ -112,8 +114,9 @@ class _SphereBackground( object ):
                 
                 holder = mode.cache.holder(self, (first, second), LEGACY_CACHE_KEY)
                 for field in protofunctions.getFields( self ):
-                    # change to any field requires a recompile
-                    holder.depend( self, field )
+                    # change to any field but bound requires a recompile
+                    if field.name != 'bound':
+                        holder.depend( self, field )
                 return second
             finally:
                 second.end()
@@ -386,7 +389,8 @@ class _SphereBackground( object ):
             if shader_data is not None:
                 holder = mode.cache.holder(self, shader_data, 'shader_bg')
                 for fld in protofunctions.getFields(self):
-                    holder.depend(self, fld)
+                    if fld.name != 'bound':
+                        holder.depend(self, fld)
 
         if clear:
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)

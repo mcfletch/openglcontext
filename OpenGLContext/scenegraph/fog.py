@@ -30,6 +30,8 @@ from vrml.vrml97 import basenodes
 from vrml.x3d import nodes as x3d
 from vrml.x3d import binding
 
+from OpenGLContext.scenegraph import bindable
+
 #: No fog: what a node with no ``visibilityRange`` produces, and the value the
 #: shader is left at for a scene that has none.
 FOG_NONE = 0
@@ -92,6 +94,7 @@ class Fog(FogCurve, basenodes.Fog):
     """
 
     PROTO = 'Fog'
+    bound = bindable.bound_field()
 
     UI_HINTS = {
         'color': {'label': 'Colour'},
@@ -123,6 +126,7 @@ def bound_fog(paths: Any) -> Optional[Any]:
     """The bound ``Fog`` path among ``paths``, or None.
 
     The fog on top of the scene's stack that a path reaches; with none, the
-    first path's fog is bound (:func:`vrml.x3d.binding.current_path`).
+    first whose ``bound`` is set, else the first path's
+    (:func:`OpenGLContext.scenegraph.bindable.current_path`).
     """
-    return binding.current_path(list(paths or ()))
+    return bindable.current_path(list(paths or ()))

@@ -1,34 +1,28 @@
-"""VRML97 loader module for OpenGLContext
+"""VRML97 worlds read into the engine's scenegraph
 
-This module implements VRML97-parser handler for the
-loader module.  The parser is provided by the
-vrml.vrml97 module.  Of particular interest to the
-end-developer is the standardPrototype function, which
-allows you to register prototypes as standard features
-for your VRML97 files.
-
-By default, the standard prototype namespace is the
-union of:
-    vrml.vrml97.basenodes and
-    OpenGLContext.scenegraph.basenodes
-
-with prototypes from the second replacing those in the
-first.
+`.wrl`, `.wrz` and `.vrml` files are read by `vrml.x3d`'s ClassicVRML reader,
+which reads VRML97 with its own dialect: VRML97's field names and defaults,
+held as X3D 4.1's. Each node is built from the engine's class for it
+(:func:`vrml97_prototypes`): the X3D nodes it implements, and the nodes of its
+own that a VRML97 world may name, such as the VRML97 NURBS extension and
+`SimpleBackground`. An application adds a node of its own with
+:func:`standardPrototype`. The scene is an
+:class:`~OpenGLContext.scenegraph.scenegraph.X3DScene`, holding what the read
+found wrong in its `problems`.
 """
 
-from vrml.vrml97 import basenamespaces, parser, linearise
+from vrml.vrml97 import basenamespaces, linearise
 from vrml import protofunctions
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.loaders import base
+from OpenGLContext.loaders import x3d
 from OpenGLContext import atomicfiles
-from vrml.vrml97 import parseprocessor
-from OpenGL._bytes import as_str
-import threading
 import logging
-from typing import Any, IO
+from typing import IO, Any, ClassVar
 
 log = logging.getLogger(__name__)
 
+#: The node classes a VRML97 world may name without declaring them, by name:
+#: the engine's registry over pyvrml97's VRML97 nodes.
 STANDARD_PROTOTYPES = basenamespaces.basePrototypes.copy()
 
 
@@ -61,46 +55,39 @@ for key, value in basenodes.PROTOTYPES.items():
     except TypeError:
         pass
 
-_parser = parser.Parser(parser.grammar, "vrmlFile")
+
+def vrml97_prototypes(standard: "dict[str, Any] | None" = None) -> "dict[str, type]":
+    """The node classes a VRML97 world is built from, by name
+
+    The engine's X3D nodes (:func:`OpenGLContext.loaders.x3d.prototypes`),
+    with each node of `standard` (:data:`STANDARD_PROTOTYPES`) in its place:
+    the engine's registry, such as the VRML97 NURBS extension, and what an
+    application has registered. pyvrml97's own VRML97 nodes are left out, as
+    X3D's declarations stand in for them.
+    """
+    found: "dict[str, type]" = dict(x3d.prototypes())
+    for name, cls in (STANDARD_PROTOTYPES if standard is None else standard).items():
+        if cls is not basenamespaces.basePrototypes.get(name):
+            found[name] = cls
+    return found
 
 
-class VRML97Handler(base.BaseHandler):
-    """Handler for loading VRML97-encoded scenegraphs
+class VRML97Handler(x3d.X3DHandler):
+    """Reads a VRML97 world into the engine's nodes
 
-    This is a load handler for the loader module which
-    will be instantiated by the load or loads function
-    in order to handle the result of downloading/opening
-    a VRML97-encoded file.
-
-    The prototypes argument is normally a pointer to
-    the STANDARD_PROTOTYPES namespace, so that prototype
-    registration during downloading will be available
-    during parsing.
+    prototypes -- the standard prototypes the world may name, normally
+        :data:`STANDARD_PROTOTYPES`, read at each parse so a registration made
+        meanwhile is seen
     """
 
-    filename_extensions = (".wrl", ".wrl.gz", ".wrz", ".vrml", ".vrml.gz")
-    LOCK = threading.RLock()
+    filename_extensions: ClassVar[tuple[str, ...]] = (
+        ".wrl", ".wrl.gz", ".wrz", ".vrml", ".vrml.gz")
 
-    def __init__(self, prototypes: dict[str, Any]) -> None:
-        """Initialise the file-handler
-
-        prototypes -- prototype namespace provided by the
-            vrml.protonamespace package
-        """
+    def __init__(self, prototypes: "dict[str, Any] | None" = None) -> None:
         self.prototypes = prototypes
 
-    def parse(self, data: Any, baseURL: str, *args: Any,
-              **named: Any) -> tuple[bool, Any]:
-        """Parse the loaded data (with the provided meta-information)"""
-        with self.LOCK:
-            success, results, next = _parser.parse(
-                as_str(data),
-                processor=parseprocessor.ParseProcessor(
-                    basePrototypes=self.prototypes,
-                    baseURI=baseURL,
-                ),
-            )
-            return success, results[1] if success else None
+    def vocabulary(self) -> "dict[str, type]":
+        return vrml97_prototypes(self.prototypes)
 
     @classmethod
     def dumps(cls, node: Any) -> str:

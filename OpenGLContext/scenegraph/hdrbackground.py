@@ -40,6 +40,7 @@ from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
 
 from OpenGLContext import context, contextresources
+from OpenGLContext.scenegraph import bindable
 from OpenGLContext.loaders import background
 
 
@@ -167,6 +168,7 @@ class _HDRBackground(object):
 
     url = HDRURLField('url')
     exposure = field.newField('exposure', 'SFFloat', 1, 1.0)
+    bound = bindable.bound_field()
 
     # Load-thread / render-thread contract for _equirect and _render_data:
     # the daemon loader thread (HDRURLField) decodes off the render thread and

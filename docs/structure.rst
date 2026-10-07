@@ -74,7 +74,7 @@ The packages it is built on
        array handling, platform abstractions
    * - `PyVRML97 <https://github.com/mcfletch/pyvrml97>`__
      - The node, field, route and prototype model the scenegraph is built
-       from, and the VRML97 parser that fills it.
+       from, and the readers that fill it: X3D's encodings and VRML97.
    * - `pyopengl-video <https://github.com/mcfletch/pyopengl-video>`__
      - Encodes the colour buffer to H.264 on the GPU's own encoder, without
        copying the frame off the card. An extra: ``OpenGLContext[video]``.

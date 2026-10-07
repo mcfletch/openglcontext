@@ -23,6 +23,7 @@ from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid
 from OpenGLContext.scenegraph import zone as zonenodes
+from OpenGLContext.scenegraph import bindable
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGL.GL import *
 from OpenGL.GL import (
@@ -1133,9 +1134,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         """The bound Background's path, or None.
 
         The background on top of the scene's stack that a drawn path reaches;
-        with none, the first drawn is bound (:func:`vrml.x3d.binding.current_path`).
+        with none, the first drawn whose ``bound`` is set, else the first drawn
+        (:func:`OpenGLContext.scenegraph.bindable.current_path`).
         """
-        return binding.current_path( list( self.paths.get( nodetypes.Background, () ) ) )
+        return bindable.current_path( list( self.paths.get( nodetypes.Background, () ) ) )
 
     def currentFog( self ) -> Any:
         """The bound Fog node's path, or None.

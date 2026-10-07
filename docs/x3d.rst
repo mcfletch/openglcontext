@@ -240,7 +240,9 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   a route or set from Python, chooses another, and ``isBound`` and
   ``bindTime`` are sent as X3D says. The engine's own backgrounds
   (``SimpleBackground``, ``SphereBackground``, ``CubeBackground``,
-  ``HDRBackground``) are bindable in the same way. The next-viewpoint key
+  ``HDRBackground``) are bindable in the same way, and they and ``Fog`` also
+  have a ``bound`` field: with none of a kind bound, the first drawn with
+  ``bound`` set is used before the first drawn. The next-viewpoint key
   binds the viewpoint after the bound one
   (``viewpointbinding.next_viewpoint``).
 - A bound viewpoint's ``nearDistance`` and ``farDistance`` set the clip

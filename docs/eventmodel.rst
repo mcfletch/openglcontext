@@ -36,8 +36,8 @@ the dispatcher, and sends each event through the dispatcher when it arrives.
 Field watching
 --------------
 
-A field sends a signal when its value is set or deleted. Fields set while the
-VRML97 parser builds a scene send no signal, except on prototyped nodes.
+A field sends a signal when its value is set or deleted. Fields set while a
+reader builds a scene send no signal, except on prototyped nodes.
 Application code rarely watches fields directly; cache invalidation and
 routing are built on it.
 

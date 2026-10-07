@@ -253,10 +253,12 @@ returns the root of the scenegraph:
 ``baseURL=`` given, relative URLs are resolved against it.
 ``Loader.loads( data, baseURL )`` parses bytes already in memory.
 
-The parser is built on `SimpleParse <https://github.com/mcfletch/simpleparse>`__,
-which is installed with OpenGLContext. A file that is not well formed raises
-``SyntaxError``, and a file that cannot be read raises ``IOError``; catch both
-around the call. The resources a world names (image textures, ``Inline``
+A VRML97 world is read by the same reader as an X3D document in the
+ClassicVRML encoding (``vrml.x3d``, whose grammar is built on `SimpleParse
+<https://github.com/mcfletch/simpleparse>`__), with VRML97's field names and
+defaults. A world that is not well formed loads as far as it reads: what was
+wrong, with its line and column, is in the scene's ``problems`` and in the
+log. A file that cannot be read raises ``IOError``. The resources a world names (image textures, ``Inline``
 scenes, shader sources and HDR panoramas) are fetched afterwards, on the
 background pool described :ref:`below <background-loading>`, and a failure
 there is logged rather than raised.

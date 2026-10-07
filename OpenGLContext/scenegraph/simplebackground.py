@@ -4,6 +4,7 @@ from typing import Any
 from vrml import field, node
 from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
+from OpenGLContext.scenegraph import bindable
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
@@ -28,6 +29,7 @@ class SimpleBackground(binding.Bindable, nodetypes.Background, nodetypes.Childre
         glClearColor, glClear
     """
     color = field.newField( 'color', 'SFColor', 1, [0.0, 0.0, 0.0])
+    bound = bindable.bound_field()
     def Render (self, mode: Any = None, clear: bool = True) -> None:
         # should only do this on visible passes...
         if mode.passCount == 0:

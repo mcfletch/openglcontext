@@ -56,6 +56,23 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   draw through the PBR pass against baselines captured from the VRML97 pass.
   Each demo either declares `renderer='vrml97'` or has its baseline re-blessed;
   the maintainer's choice
+  - 2026-10-07: the main checkout holds 57 re-blessed baselines, uncommitted;
+    this branch's renders of 51 of the failing scripts match them exactly
+- [ ] Visual suite, this branch (2026-10-07, run with `PYTHONPATH` on the
+  worktrees, compared with the main checkout's current baselines): four
+  scripts render differently, each traced by bisecting the branch's commits;
+  re-bless them in the main checkout when this merges
+  - `timesensorobject`: the TimeSensor's fraction is measured from
+    `startTime` on the engine clock, one frame ahead of the old Timer's
+  - `lightobject`: `cycleTime` is sent when the TimeSensor starts, as X3D
+    says, so the demo's random light switch runs at start-up
+  - `zones_demo`: its lamps' `radius = 8` is honoured (`f10f71ca`)
+  - `glelathe`: minified rings are mipmapped, and with opengl_extrusions'
+    `uv-seam` branch the spiral and screw no longer squeeze the texture back
+    across the contour's seam
+  - [x] `spherebackgroundobject` crashed: `bound` restored on the engine's
+    backgrounds and Fog (`scenegraph.bindable`), the tutorial's own text
+    restored
 - Phase 6, OpenGLContext Interchange (§9.11, §9.12, §9.14)
   - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered (done: CADAssembly, CADLayer, CADPart, PickableGroup, Anchor; left: LayoutGroup, ScreenGroup, Viewport)
   - [x] the render pass skips nodes whose X3D `visible` is false (`FlatPass.onVisibleChange`)
@@ -107,9 +124,27 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] all 1071 non-empty `.x3db` files of the two archives read; facts in pyvrml97 `specs/x3d/fast-infoset.md`
   - [x] the engine opens `.x3db`, `.x3db.gz`, `model/x3d+fastinfoset`, `model/x3d+binary`
   - not read: the quantized, zlib float/double and range integer encoders, whose layouts the text leaves open and no sample uses
-- [ ] SimpleParse speed: the ClassicVRML reader runs at about 7 MB/s against
+- [x] SimpleParse speed: the ClassicVRML reader runs at about 7 MB/s against
   16.5 MB/s for XML through expat. SimpleParse should be much faster than that;
   profile the grammar and the result-tree walk and find where the time goes
+  - found: the builder work is the same for both readers (about 0.3 s for a
+    4.7 MB STEP scene); the difference was `mxTextTools.tag`, about 370 ns per
+    number whatever its length, the cost of the nested group calls per value.
+    Whitespace runs and a flatter number rule gave 1.45x
+  - landed: `numberRun`, a bracketed run of number characters matched as one
+    span that the field's codec decodes; parse 22 -> 81 MB/s on that scene,
+    whole read 0.52 s -> 0.23 s (XML: 0.17 s). A `serial` test holds the parse
+    of a 200 000-number list under 0.75x its NumPy decode
+  - [x] the engine's `.wrl` loader reads through `vrml.x3d` (VRML97 dialect)
+    rather than `vrml.vrml97.parser`: `vrml97_prototypes()` is the X3D
+    vocabulary with the engine's registry and `standardPrototype`
+    registrations in place; the 41 `.wrl` files in the repository build the
+    same node types, about 3x faster; a prototype instance's `children` no
+    longer refers to itself (`proto_is_simple.wrl`); a broken world loads with
+    `problems` instead of raising
+  - open for the maintainer: `vrml.vrml97.parser`/`parseprocessor` remain in
+    pyvrml97, used by its own tests and by any program importing them; the
+    engine no longer does
 - Phase 10, Geospatial, VolumeRendering, GaussianSplats, `MovieTexture`
 - Documentation (§12)
 
