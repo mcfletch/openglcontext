@@ -321,17 +321,18 @@ behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
   application that overrides ``OnAnchor``.
 - The bound ``NavigationInfo`` (``OpenGLContext.move.navigationinfo``):
   ``headlight`` true adds a headlight to the scene's lights and false leaves
-  it off. A document with no NavigationInfo has X3D's default one, and so
-  the headlight; a scene built in code with none has the headlight only
-  where it has no lights. When one is bound, the first of its ``type`` values the
-  context's declared movement modes offer is selected: ``WALK`` is ``walk``
-  or ``fps``, ``FLY`` is ``fly``, and ``EXAMINE``, ``LOOKAT`` and
-  ``EXPLORE`` are ``examine``. A context with no declared modes keeps its
-  own navigation. A positive ``visibilityLimit`` is the far clipping
-  distance from the time it is bound. ``speed`` scales the declared modes'
-  speeds relative to X3D's default of 1 (2 doubles them), and ``avatarSize``
-  (radius, eye height, step height) sizes the walking avatar in the world's
-  own units.
+  it off. A document with no NavigationInfo has X3D's default one: the
+  headlight, and ``EXAMINE`` as its type. A scene built in code with none
+  has the headlight only where it has no lights. When one is bound, or its
+  ``type`` changes, the first of its ``type`` values the context's declared
+  movement modes offer is selected: ``WALK`` is ``walk`` or ``fps``, ``FLY``
+  is ``fly``, and ``EXAMINE``, ``LOOKAT`` and ``EXPLORE`` are ``examine``. A
+  context with no declared modes keeps its own navigation. A positive
+  ``visibilityLimit`` is the far clipping distance. ``speed`` scales the
+  declared modes' speeds relative to X3D's default of 1 (2 doubles them),
+  and ``avatarSize`` (radius, eye height, step height) sizes the walking
+  avatar in the world's own units. These are applied again whenever they
+  change.
 - A viewpoint bound after the first is moved to as the bound NavigationInfo's
   ``transitionType`` and ``transitionTime`` say: ``LINEAR`` straight at a
   steady pace, ``ANIMATE`` easing in and out, ``TELEPORT`` at once; with no

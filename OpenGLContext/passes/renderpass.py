@@ -14,6 +14,7 @@ from typing import Any, Optional
 from OpenGLContext import contextresources, renderoptions
 from OpenGLContext.move import navigationinfo
 from OpenGLContext.passes import viewpointbinding
+from vrml.x3d.scene import X3DScene
 import logging
 log = logging.getLogger( __name__ )
 
@@ -160,7 +161,8 @@ class _defaultRenderPasses( object ):
             # bind the scene's active Viewpoint into the platform here (the legacy
             # path does this inside its scenegraph traversal instead).
             viewpointbinding.bind_scene_viewpoint( context )
-        navigationinfo.apply( context, pass_.currentNavigation() )
+        navigationinfo.apply( context, pass_.currentNavigation(),
+                              document=isinstance( getattr( pass_, 'scene', None ), X3DScene ) )
         return pass_( context )
 defaultRenderPasses = _defaultRenderPasses()
 

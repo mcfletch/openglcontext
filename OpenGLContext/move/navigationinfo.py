@@ -3,21 +3,26 @@
 X3D's ``NavigationInfo`` (ISO/IEC 19775-1, 23.4.4) is bound as viewpoints are
 (:mod:`vrml.x3d.binding`). The engine reads these of its fields:
 
+A document with no NavigationInfo has X3D's default one
+(:func:`document_default`): the headlight, and ``EXAMINE`` as its type. A
+scene built in code with none has the headlight only where it has no lights,
+and keeps the context's own navigation. Each field below is applied when the
+NavigationInfo is bound and again when it changes.
+
 - ``headlight``: true adds a headlight to the scene's own lights, false leaves
-  it off (:func:`headlight`). A document with no NavigationInfo has X3D's
-  default one, so the headlight; a scene built in code with none has the
-  headlight only where it has no lights.
+  it off (:func:`headlight`).
 - ``type``: the navigation types the document asks for, in order of
   preference, as the engine's movement modes (:data:`MODES`). When a
-  NavigationInfo is bound, the first of them the context's declared
-  navigation offers is selected (:func:`apply`); ``ANY`` and the types with
-  no engine mode leave the choice with the player. A context with no
-  declared movement modes keeps its own navigation.
-- ``visibilityLimit``, where positive, is the far clipping distance from the
-  time the NavigationInfo is bound (:func:`clip`).
+  NavigationInfo is bound, or its ``type`` changes, the first of them the
+  context's declared navigation offers is selected (:func:`apply`); ``ANY``
+  and the types with no engine mode leave the choice with the player. A
+  context with no declared movement modes keeps its own navigation.
+- ``visibilityLimit``, where positive, is the far clipping distance
+  (:func:`clip`).
 - ``speed`` scales the declared modes' speeds relative to X3D's default of 1,
   so 1 leaves the engine's own speeds and 2 doubles them
-  (:func:`speed_factor`).
+  (:func:`speed_factor`); a speed the application sets on a mode is the one
+  scaled from then.
 - ``avatarSize`` (radius, eye height, step height) sizes the walking avatar
   (:func:`avatar_of`, ``context.navigationAvatar``).
 - ``transitionType`` and ``transitionTime`` say how the camera moves to a
@@ -31,8 +36,8 @@ import weakref
 from collections.abc import Sequence
 from typing import Any, Optional
 
-__all__ = ['MODES', 'TRANSITIONS', 'apply', 'avatar_of', 'chosen_mode', 'clip', 'headlight',
-           'requested_modes', 'speed_factor', 'transition_of']
+__all__ = ['MODES', 'TRANSITIONS', 'apply', 'avatar_of', 'chosen_mode', 'clip',
+           'document_default', 'headlight', 'requested_modes', 'speed_factor', 'transition_of']
 
 #: The engine's movement modes for each of X3D's navigation types, by name.
 MODES: dict[str, tuple[str, ...]] = {
@@ -53,11 +58,30 @@ SPEEDS = ('walkSpeed', 'runSpeed', 'flySpeed', 'boostSpeed', 'swimSpeed')
 #: X3D's avatarSize default: collision radius, eye height, step height.
 AVATAR = (0.25, 1.6, 0.75)
 
-#: Each mode's own speeds, before any NavigationInfo scaled them.
-_base_speeds: weakref.WeakKeyDictionary[Any, dict[str, float]] = weakref.WeakKeyDictionary()
+#: Each mode's own speeds, and the factor they were last scaled by.
+_base_speeds: weakref.WeakKeyDictionary[Any, tuple[dict[str, float], float]] = (
+    weakref.WeakKeyDictionary())
 
-#: The NavigationInfo last applied to each context.
-_applied: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
+#: The NavigationInfo last applied to each context, and the values of the
+#: fields applied from it.
+_applied: weakref.WeakKeyDictionary[Any, tuple[Any, Any]] = weakref.WeakKeyDictionary()
+
+#: X3D's default NavigationInfo, which a document that binds none has.
+_DOCUMENT_DEFAULT: list[Any] = []
+
+
+def document_default() -> Any:
+    """X3D's default NavigationInfo: what a document that binds none has"""
+    if not _DOCUMENT_DEFAULT:
+        from vrml.x3d import nodes as x3d  # noqa: PLC0415 the X3D declarations, first asked for here
+        _DOCUMENT_DEFAULT.append(x3d.NavigationInfo())
+    return _DOCUMENT_DEFAULT[0]
+
+
+def _values(info: Any) -> tuple[Any, ...]:
+    """The values of `info`'s fields apply() reads: visibilityLimit, avatarSize, speed, type"""
+    return (float(info.visibilityLimit), tuple(float(value) for value in info.avatarSize),
+            float(info.speed), tuple(str(value) for value in info.type))
 
 
 def requested_modes(info: Any) -> Optional[list[str]]:
@@ -131,14 +155,23 @@ def transition_of(info: Any) -> tuple[str, float]:
 
 
 def _scale_speeds(manager: Any, factor: float) -> None:
-    """Set each declared mode's speeds to its own times `factor`"""
+    """Set each declared mode's speeds to its own times `factor`
+
+    A mode's own speed is the one it had before it was first scaled, or one
+    the application has set since: a speed that is no longer the one this
+    last set is taken as the mode's own.
+    """
     for mode in manager.modes():
-        base = _base_speeds.get(mode)
-        if base is None:
-            base = _base_speeds[mode] = {name: float(getattr(mode, name)) for name in SPEEDS
-                                         if hasattr(mode, name)}
-        for name, value in base.items():
-            setattr(mode, name, value * factor)
+        held = _base_speeds.get(mode)
+        base, last = held if held is not None else ({}, 1.0)
+        for name in SPEEDS:
+            if not hasattr(mode, name):
+                continue
+            current = float(getattr(mode, name))
+            if name not in base or abs(current - base[name] * last) > 1e-9:
+                base[name] = current / last if last else current
+            setattr(mode, name, base[name] * factor)
+        _base_speeds[mode] = (base, factor)
 
 
 def clip(platform: Any, info: Any) -> None:
@@ -147,26 +180,35 @@ def clip(platform: Any, info: Any) -> None:
         platform.setClipping(far=float(info.visibilityLimit))
 
 
-def apply(context: Any, info: Any) -> None:
-    """Apply `info` to `context` once for each NavigationInfo bound
+def apply(context: Any, info: Any, document: bool = False) -> None:
+    """Apply `info` to `context` as it is bound, and as its fields change
 
     The far clipping distance of the context's ``platform`` (:func:`clip`),
-    the avatar size (``context.navigationAvatar``), the modes' speeds and the
-    movement mode `info` asks for. `context` answers
-    ``getNavigation()``: its navigation manager, or None where it declares no
-    movement modes.
+    the avatar size (``context.navigationAvatar``) and the modes' speeds, each
+    time one of those fields has changed; and the movement mode `info` asks
+    for, when it is bound or its ``type`` changes. `info` is None where the
+    scene binds none, and `document` says the scene was read from a VRML97 or
+    X3D document, which then has X3D's default NavigationInfo. `context`
+    answers ``getNavigation()``: its navigation manager, or None where it
+    declares no movement modes.
     """
-    if _applied.get(context) is info:
+    if info is None and document:
+        info = document_default()
+    values = None if info is None else _values(info)
+    last = _applied.get(context)
+    if last is not None and last[0] is info and last[1] == values:
         return
-    _applied[context] = info
+    _applied[context] = (info, values)
     platform = getattr(context, 'platform', None)
     if platform is not None:
         clip(platform, info)
     context.navigationAvatar = None if info is None else avatar_of(info)
     manager = context.getNavigation()
-    if manager is None or info is None:
+    if manager is None or info is None or values is None:
         return
     _scale_speeds(manager, speed_factor(info))
+    if last is not None and last[0] is info and last[1] is not None and last[1][3] == values[3]:
+        return
     name = chosen_mode(info, [mode.name for mode in manager.selectable()])
     if name is not None:
         manager.select(name)

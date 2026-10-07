@@ -199,3 +199,53 @@ def test_binding_gives_the_context_the_avatar_size():
 def test_the_transition(fields, expected):
     assert navigationinfo.transition_of(NavigationInfo(**fields)) == expected
     assert navigationinfo.transition_of(None) == ('LINEAR', 1.0)
+
+
+# -- a bound NavigationInfo's fields changed afterwards --------------------------
+
+def test_a_field_changed_after_binding_is_applied():
+    context = Navigating()
+    context.manager = SpeedManager()
+    info = NavigationInfo(type=['WALK'], speed=2.0, avatarSize=[0.4, 1.7, 0.3])
+    _scene = sceneGraph(children=[info])
+    navigationinfo.apply(context, info)
+    walk = context.manager.declared[0]
+    info.speed = 3.0
+    info.avatarSize = [0.5, 1.8, 0.2]
+    navigationinfo.apply(context, info)
+    assert walk.walkSpeed == 9.0
+    assert context.navigationAvatar == (0.5, 1.8, 0.2)
+    assert context.manager.selected == ['walk'], 'a speed is not a reason to choose again'
+
+
+def test_its_type_changed_chooses_the_mode_again():
+    context = Navigating()
+    info = NavigationInfo(type=['WALK'])
+    _scene = sceneGraph(children=[info])
+    navigationinfo.apply(context, info)
+    info.type = ['FLY']
+    navigationinfo.apply(context, info)
+    assert context.manager.selected == ['walk', 'fly']
+
+
+def test_a_speed_the_application_sets_is_scaled_from():
+    context = Navigating()
+    context.manager = SpeedManager()
+    info = NavigationInfo(speed=2.0)
+    _scene = sceneGraph(children=[info])
+    navigationinfo.apply(context, info)
+    walk = context.manager.declared[0]
+    walk.walkSpeed = 10.0
+    info.speed = 3.0
+    navigationinfo.apply(context, info)
+    assert walk.walkSpeed == 15.0
+
+
+def test_a_document_with_none_has_x3ds_default_type():
+    """X3D's default NavigationInfo asks for EXAMINE, then ANY"""
+    context = Navigating()
+    navigationinfo.apply(context, None, document=True)
+    assert context.manager.selected == ['examine']
+    code = Navigating()
+    navigationinfo.apply(code, None)
+    assert code.manager.selected == []
