@@ -73,6 +73,10 @@ class _Context:
     def sceneBounds(self):
         return self._bounds
 
+    def getSceneGraph(self):
+        """No scene, so no viewpoint's centerOfRotation"""
+        return None
+
 
 class TestWhatWasClicked:
     def test_the_point_under_the_cursor_wins(self):

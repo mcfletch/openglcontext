@@ -89,7 +89,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] NavigationInfo `headlight` and `type` (`move.navigationinfo`); `speed`, `avatarSize`, `visibilityLimit` and the transitions not read
   - [x] `ViewpointGroup` (displayed, proximity); NavigationInfo `visibilityLimit`
   - [x] NavigationInfo `speed` (relative to X3D's 1), `avatarSize` for the walking avatar, the viewpoint transitions and `transitionComplete`
-  - [ ] `centerOfRotation`, `retainUserOffsets`, `viewAll`
+  - [x] `centerOfRotation` (the examine pivot with nothing picked), `retainUserOffsets`, `viewAll`
   - [x] environmental sensors (`vrml.x3d.sensors`, sensed once a frame by `scenegraph.x3dsensors`)
   - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit has no normal or texture coordinate)
   - [x] `TimeSensor` (`vrml.x3d.timesensor`): start, stop, pause, resume, and the engine's `rate`; polled by the context's time manager
@@ -97,7 +97,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] `Anchor`: a group; `#viewpoint` bound, other urls through `Context.OnAnchor`
   - [x] the cascade: a field is reached once per cascade, through handlers and their outputs (`vrml.event`)
   - [x] `Collision`: `enabled` and `proxy` in the walk's collision world; `collideTime` and `isActive` from the avatar's touches (`physics.x3dcollision`)
-  - [ ] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor
+  - [x] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor (`SensorTimer`; its multiplier is the sensor's `rate`)
 - Phase 8, engine-mapped components (§9.17)
 - Phase 9, Fast Infoset reader
 - [ ] SimpleParse speed: the ClassicVRML reader runs at about 7 MB/s against

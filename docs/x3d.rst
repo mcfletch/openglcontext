@@ -276,6 +276,12 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   steady pace, ``ANIMATE`` easing in and out, ``TELEPORT`` at once; with no
   NavigationInfo, ``LINEAR`` over a second. ``transitionComplete`` is sent on
   arrival (``viewpointbinding.ViewpointTransition``).
+- A viewpoint with ``viewAll`` places the camera, looking the viewpoint's
+  way, where the whole scene's bounding sphere is in view. One with
+  ``retainUserOffsets`` returns, when bound again, to where the user had
+  moved to from it. Where the document sets the bound viewpoint's
+  ``centerOfRotation``, the examine gestures turn about it when the pointer
+  is on nothing.
 - A ``ViewpointGroup``'s viewpoints are the scene's; the next-viewpoint key
   passes over those of a group that is not ``displayed``, or that has a
   ``size`` and the viewer is outside the box of that size about its

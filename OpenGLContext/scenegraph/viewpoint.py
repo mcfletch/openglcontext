@@ -1,4 +1,5 @@
 """X3D's and VRML97's Viewpoint, and X3D's OrthoViewpoint"""
+import math
 from typing import Any, Optional
 
 from vrml.vrml97 import basenodes
@@ -17,6 +18,7 @@ class Placing:
 
     nearDistance: Any
     farDistance: Any
+    fieldOfView: Any
 
     def moveTo( cls, path: Any, context: Any ) -> None:
         """Given a node-path to a viewpoint, move context's platform there"""
@@ -32,9 +34,32 @@ class Placing:
                 path.quaternion() *
                 quaternion.fromXYZR( *node.orientation )
             ).XYZR()
-            platform.setPosition( newPosition )
             platform.setOrientation( newOrientation )
+            if getattr( node, 'viewAll', False ):
+                framed = node.framing( context, platform )
+                if framed is not None:
+                    newPosition = framed
+            platform.setPosition( newPosition )
         node.project( platform )
+
+    def framing( self, context: Any, platform: Any ) -> Optional[Any]:
+        """Where the camera sees the whole scene, looking the way `platform` faces; None without bounds
+
+        Back from the scene's centre along the view by the distance at which
+        its bounding sphere fills the field of view.
+        """
+        bounds = getattr( context, 'sceneBounds', lambda: None )()
+        if bounds is None:
+            return None
+        centre, radius = bounds
+        half = self.halfView()
+        distance = float( radius ) / max( math.sin( half ), 1e-6 )
+        forward = platform.quaternion * [0.0, 0.0, -1.0, 0.0]
+        return arrays.array( centre[:3], 'd' ) - arrays.array( forward[:3], 'd' ) * distance
+
+    def halfView( self ) -> float:
+        """Half the field of view the scene is framed in, radians"""
+        return float( self.fieldOfView ) / 2.0
 
     def clipping( self ) -> "tuple[Optional[float], Optional[float]]":
         """(near, far): the clip distances, None for each the platform keeps
@@ -75,6 +100,10 @@ class OrthoViewpoint(Placing, x3d.OrthoViewpoint):
 
     #: The window X3D gives an OrthoViewpoint whose fieldOfView is too short.
     DEFAULT_WINDOW = (-1.0, -1.0, 1.0, 1.0)
+
+    def halfView( self ) -> float:
+        """A right angle's half: the scene is framed as a perspective view of it would be"""
+        return math.pi / 4.0
 
     def project( self, platform: Any ) -> None:
         """Give `platform` this viewpoint's orthographic window"""

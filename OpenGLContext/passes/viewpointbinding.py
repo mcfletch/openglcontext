@@ -78,6 +78,26 @@ class ViewpointTransition:
         return position, orientation, fraction >= 1.0
 
 
+def authored_centre(sg: Any) -> Any:
+    """The bound viewpoint's centerOfRotation in the world, where the document sets it; else None"""
+    view = getattr(sg, 'boundViewpoint', None) if sg is not None else None
+    if not view or 'centerOfRotation' not in getattr(view, '__dict__', {}):
+        return None
+    local = np.append(np.asarray(view.centerOfRotation, dtype='d')[:3], 1.0)
+    for path in getattr(sg, 'viewpointPaths', ()):
+        if path[-1] is view:
+            matrix = path.transformMatrix()
+            if matrix is not None:
+                local = local @ np.asarray(matrix, dtype='d')
+            break
+    return local
+
+
+#: Where each viewpoint placed the platform when last bound, for retainUserOffsets.
+_authored: 'weakref.WeakKeyDictionary[Any, tuple[np.ndarray, Any]]' = weakref.WeakKeyDictionary()
+#: The user's offset from each viewpoint that retains it, as it was left.
+_offsets: 'weakref.WeakKeyDictionary[Any, tuple[np.ndarray, Any]]' = weakref.WeakKeyDictionary()
+
 #: Each context's transition in progress.
 _moving: 'weakref.WeakKeyDictionary[Any, ViewpointTransition]' = weakref.WeakKeyDictionary()
 
@@ -115,16 +135,45 @@ def bind_scene_viewpoint(context: Any) -> None:
     platform = getattr(context, 'platform', None) or context.getViewPlatform()
     info = binding.bound(sg, nodetypes.NavigationInfo)
     kind, seconds = navigationinfo.transition_of(info)
-    if not previous or kind == 'TELEPORT' or platform is None:
+    if platform is None or not previous:
         view.moveTo(view_path, context)
+        _remember(view, platform)
+        return
+    retained = getattr(previous, 'retainUserOffsets', False) and previous in _authored
+    if kind == 'TELEPORT' and not retained:
+        view.moveTo(view_path, context)
+        _remember(view, platform)
+        _restore_offset(view, platform)
         return
     position, orientation = np.array(platform.position, 'd'), platform.quaternion
+    if retained:
+        # Where the user had moved to from the viewpoint being left.
+        was, turned = _authored[previous]
+        _offsets[previous] = (position[:3] - was[:3], turned.inverse() * orientation)
     view.moveTo(view_path, context)
+    _remember(view, platform)
+    _restore_offset(view, platform)
+    if kind == 'TELEPORT':
+        return
     move = ViewpointTransition(position, orientation, platform.position,
                                platform.quaternion, systemtime.systemTime(), seconds, kind)
     _moving[context] = move
     platform.setPosition(position[:3])
     platform.setOrientation(orientation)
+
+
+def _remember(view: Any, platform: Any) -> None:
+    """Keep where `view` put the platform, for a viewpoint that retains user offsets"""
+    if platform is not None and getattr(view, 'retainUserOffsets', False):
+        _authored[view] = (np.array(platform.position, 'd'), platform.quaternion)
+
+
+def _restore_offset(view: Any, platform: Any) -> None:
+    """Put the platform where the user had moved to from `view`, where it retains that"""
+    offset = _offsets.pop(view, None) if getattr(view, 'retainUserOffsets', False) else None
+    if offset is not None:
+        platform.setPosition(np.array(platform.position, 'd')[:3] + offset[0])
+        platform.setOrientation(platform.quaternion * offset[1])
 
 
 def _step_transition(context: Any, sg: Any) -> None:

@@ -2003,27 +2003,14 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     def examineCenter(self, event: Any) -> Any:
         """The world point an examine drag should orbit about.
 
-        **What was clicked on, when the click landed on the scene.** Examining
-        the thing you touched is the whole gesture, and unprojecting the pick
-        gives exactly that.
+        What was clicked on, where the click landed on the scene: a picked
+        point is taken where it is within reach of the scene's bounds, since a
+        click on nothing unprojects to the far plane.
 
-        A click that hit *nothing* still unprojects: a depth of 1.0 is a real,
-        usable-looking world point out at the far plane -- measured at 127 units
-        for a model three units across -- and orbiting that is orbiting the sky.
-        So a picked point is taken only where it is within reach of the scene.
-
-        A click that picked nothing -- empty sky, or a context whose selection
-        pass had nothing to report -- used to fall back to a point *ten units*
-        in front of the camera, a constant with no relation to what was on
-        screen. A model framed four units away then orbited about a pivot six
-        units behind itself and a small drag threw the camera right around it;
-        a model a kilometre across pivoted about a point inside its own surface.
-        So the fallback is the scene's own bounding sphere.
-
-        Standing **inside** those bounds -- walking a building -- orbiting the
-        far side of the room is not what the gesture means either, so the pivot
-        is a little way ahead of the camera instead, at a distance taken from
-        the scene rather than from a constant.
+        With nothing picked, the bound viewpoint's ``centerOfRotation`` where
+        the document sets it; otherwise the centre of the scene's bounding
+        sphere, or, standing inside those bounds, a point a little way ahead
+        of the camera at a distance taken from the scene's size.
         """
         platform = self.getViewPlatform()
         bounds = self.sceneBounds()
@@ -2033,6 +2020,10 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             picked = None           # nothing was under the cursor
         if picked is not None and self._withinScene(picked, bounds):
             return picked
+        from OpenGLContext.passes.viewpointbinding import authored_centre
+        centre_of_rotation = authored_centre(self.getSceneGraph())
+        if centre_of_rotation is not None:
+            return centre_of_rotation
         ahead = EXAMINE_PIVOT_FALLBACK      # nothing to go on at all
         if bounds is not None:
             centre, radius = bounds
