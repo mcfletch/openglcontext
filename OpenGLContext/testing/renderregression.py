@@ -8,25 +8,31 @@ directory of the same layout. This module holds the parts they share:
 - :func:`provenance`, the git revision, time and GPU stamped into each record;
 - :func:`compare` and :func:`is_regression`, the per-pixel comparison and the
   rule a render fails by;
+- :func:`render_failure`, why a drawing process failed, and
+  :func:`write_failure`, the record of a render that failed;
 - :func:`build_report`, the HTML report of whatever renders the directory
   holds, with the baseline, the render, the difference and, where the format
-  publishes one, an upstream reference side by side.
+  publishes one, an upstream reference side by side, and :func:`exit_status`,
+  what a run's command exits with.
 """
 from __future__ import annotations
 
 import datetime
 import json
 import os
+import signal
 import subprocess
 import sys
-from collections.abc import Callable
-from typing import Any, Optional
+from collections.abc import Callable, Collection
+from typing import Any, NamedTuple, Optional
 
 from OpenGLContext import atomicfiles, renderoptions
 
 __all__ = [
     'DEFAULT_TOLERANCE', 'DIFF_THRESHOLD', 'source_root', 'gl_renderer', 'provenance',
-    'compare', 'is_regression', 'build_report',
+    'compare', 'is_regression', 'ReportCounts', 'render_failure', 'write_failure',
+    'build_report',
+    'exit_status',
 ]
 
 #: Percent of pixels a render may have differing from its baseline by more than
@@ -147,19 +153,56 @@ def is_regression(result: Any, tolerance: float) -> bool:
     return bool(result.percent_different > tolerance)
 
 
+class ReportCounts(NamedTuple):
+    """The rows of a report that fail a run"""
+
+    regressions: int
+    """Renders that differ from their baselines past the tolerance."""
+    errors: int
+    """Renders that failed: no image, or a drawing process that did not exit cleanly."""
+
+
+def render_failure(returncode: int, stderr: Optional[str], written: bool) -> Optional[str]:
+    """Why a drawing process failed; None where it wrote its image and exited with status 0
+
+    The signal that killed it, or its exit status, with the last line it
+    wrote to stderr; that line alone where it exited cleanly and wrote nothing.
+    """
+    last = (stderr or '').strip().splitlines()[-1:]
+    if returncode < 0:
+        try:
+            how = 'killed by %s' % signal.Signals(-returncode).name
+        except ValueError:
+            how = 'killed by signal %d' % -returncode
+        return ': '.join([how] + last)
+    if returncode:
+        return ': '.join(['exit status %d' % returncode] + last)
+    if not written:
+        return last[0] if last else 'no render'
+    return None
+
+
+def write_failure(out_dir: str, slug: str, record: dict[str, Any]) -> None:
+    """Write the ``<slug>.json`` of a render that failed; `record` carries ``error``"""
+    atomicfiles.write_text(os.path.join(out_dir, slug + '.json'), json.dumps(record, indent=2))
+
+
 def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
                  diff_threshold: int, title: str,
                  upstream: Callable[[dict[str, Any], str], Optional[str]] = lambda _meta, _slug: None,
                  describe: Callable[[dict[str, Any]], str] = lambda meta: meta.get('description', ''),
-                 ) -> int:
-    """Write the HTML report of the renders in `out_dir`; the number of regressions
+                 drawn: Optional[Collection[str]] = None,
+                 ) -> ReportCounts:
+    """Write the HTML report of the renders in `out_dir`; the rows that fail
 
     Each ``<slug>.json`` in `out_dir` is a row: its ``<slug>.png`` against the
     baseline of that name in `baseline_root`, with the difference image, and
     the image `upstream` gives for the row's record and slug (None for none). A row
-    with no render is an error, and one with no baseline is skipped until
-    blessed. Images from other trees are copied in beside the renders, so the
-    report and its render directory move as one.
+    whose record has an ``error``, or with no render, is an error, and one with
+    no baseline is skipped until blessed. Where `drawn` names the slugs this run
+    drew, every other row is shown as not drawn and counts for nothing. Images
+    from other trees are copied in beside the renders, so the report and its
+    render directory move as one.
     """
     from OpenGLContext.testing.report_generator import TestReportGenerator  # noqa: PLC0415 only when reporting
     gen = TestReportGenerator(title=title)
@@ -177,7 +220,7 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
         except OSError:
             return src
 
-    regressions = 0
+    regressions = errors = 0
     slugs = sorted(name[:-5] for name in os.listdir(out_dir) if name.endswith('.json'))
     for slug in slugs:
         try:
@@ -193,8 +236,11 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
         except Exception:
             upstream_path = None
         status, stats, stderr = 'pass', None, ''
-        if not os.path.exists(new_path):
-            status, stderr = 'error', 'no render on disk'
+        if drawn is not None and slug not in drawn:
+            status, stderr = 'skip', 'not drawn in this run'
+        elif meta.get('error') or not os.path.exists(new_path):
+            status, errors = 'error', errors + 1
+            stderr = str(meta.get('error') or 'no render on disk')
         elif not os.path.exists(baseline_path):
             status, stderr = 'skip', 'no baseline -- bless after reviewing'
         else:
@@ -222,4 +268,14 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
     # Linked rather than embedded: a run is hundreds of views of four images
     # each, which embedded would make one HTML file of hundreds of megabytes.
     gen.save(report_path, embed_images=False)
-    return regressions
+    return ReportCounts(regressions, errors)
+
+
+def exit_status(counts: ReportCounts, report_path: str) -> int:
+    """Print where the report is and what failed; 1 where anything did, else 0"""
+    print('\nReport: %s' % report_path)
+    if counts.regressions:
+        print('%d regression(s) detected.' % counts.regressions)
+    if counts.errors:
+        print('%d render(s) failed.' % counts.errors)
+    return 1 if counts.regressions or counts.errors else 0

@@ -21,7 +21,7 @@ of its viewpoints it:
    renders by path (it is not self-contained), keeping it small.
 
     oglc-gltf-regression --bless        # establish/refresh baselines (after review)
-    oglc-gltf-regression                # exit non-zero if anything regressed
+    oglc-gltf-regression                # exit non-zero if a render regressed or failed
     oglc-gltf-regression --only MetalRoughSpheres --only Duck
 
 Downloaded ``.glb`` files and reference screenshots are cached under the shared
@@ -214,7 +214,8 @@ def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out:
                 size: tuple[int, int], frames: int, delay: float,
                 env_prefix: str | None) -> tuple[bool, dict[str, Any]]:
     """Render one scene/camera to ``out``. Returns ``(ok, stats)`` where ``stats``
-    holds the viewer-reported ``load_seconds``/``fps`` for the run (empty on failure)."""
+    holds the viewer-reported ``load_seconds``/``fps``, its ``returncode``, and
+    an ``error`` where it failed (:func:`renderregression.render_failure`)."""
     w, h = size
     common = ['--no-physics', '--capture', out,
               '--frames', str(frames), '--capture-delay', repr(delay),
@@ -259,10 +260,13 @@ def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out:
             timeout=120, capture_output=True, text=True,
             cwd=_source_root() or REPO, env=env)
     except subprocess.TimeoutExpired:
-        print('  render TIMEOUT')
-        return False, {}
+        return False, {'error': 'timed out after 120 seconds'}
     stats = _parse_capture_stats(proc.stdout)
-    return os.path.exists(out), stats
+    stats['returncode'] = proc.returncode
+    error = renderregression.render_failure(proc.returncode, proc.stderr, os.path.exists(out))
+    if error is not None:
+        stats['error'] = error
+    return error is None, stats
 
 
 def _parse_capture_stats(stdout: str | None) -> dict[str, Any]:
@@ -378,29 +382,36 @@ def resolve_model_url(spec: gltf_demos.SceneSpec,
 
 def render_scenes(scenes: list[gltf_demos.SceneSpec], out_dir: str, baseline_root: str,
                   parthenon: str | None, args: argparse.Namespace,
-                  provenance: dict[str, str]) -> None:
+                  provenance: dict[str, str]) -> list[str]:
     """Render each selected view to ``out_dir`` (``<slug>.png`` + ``<slug>.json``),
-    blessing to ``baseline_root`` when asked. Overwrites only the rendered views, so
-    prior renders of other scenes survive for the report."""
+    blessing to ``baseline_root`` when asked; the slugs drawn. Overwrites only the
+    rendered views, so prior renders of other scenes survive for the report. A view
+    that failed has a record with its ``error`` and is not blessed."""
     bless_names = None if args.bless in (None, []) else set(args.bless)
     bless_all = args.bless == []
     os.makedirs(out_dir, exist_ok=True)
     if args.bless is not None:
         os.makedirs(baseline_root, exist_ok=True)
+    drawn = []
     for spec in scenes:
         url, _is_url = resolve_model_url(spec, parthenon)
         for camera in spec.camera_ids():
             slug = spec.slug(camera)
+            drawn.append(slug)
             new_path = os.path.join(out_dir, slug + '.png')
             if url is None:
+                renderregression.write_failure(out_dir, slug, {
+                    'scene': spec.name, 'error': 'model unavailable'})
                 print('  ERROR %s (model unavailable)' % slug)
                 continue
             ok, stats = render_view(spec, camera, url, new_path, args.size,
                                     args.frames, args.delay, None)
-            if not ok:
-                print('  FAIL  %s (render failed)' % slug)
-                continue
             metadata = _view_metadata(spec, camera, url, args, provenance, stats)
+            if not ok:
+                metadata['error'] = stats.get('error', 'no render')
+                renderregression.write_failure(out_dir, slug, metadata)
+                print('  FAIL  %s (%s)' % (slug, metadata['error']))
+                continue
             do_bless = bless_all or (bless_names and spec.name in bless_names)
             try:
                 atomicfiles.write_text(os.path.join(out_dir, slug + '.json'),
@@ -413,20 +424,23 @@ def render_scenes(scenes: list[gltf_demos.SceneSpec], out_dir: str, baseline_roo
             except OSError:
                 pass
             print('  %-5s %s' % ('BLESS' if do_bless else 'OK', slug))
+    return drawn
 
 
 def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
-                 diff_threshold: int) -> int:
+                 diff_threshold: int,
+                 drawn: list[str] | None = None) -> renderregression.ReportCounts:
     """Assemble the HTML report from whatever renders are present in ``out_dir``
     (each ``<slug>.json`` + ``<slug>.png``), diffed against the baseline, with the
     Khronos screenshot of each scene as the upstream reference. Decoupled from
     rendering, so re-rendering one scene then rebuilding keeps every other row.
-    Returns the regression count."""
+    Returns the rows that fail, among `drawn` where given."""
     return renderregression.build_report(
         out_dir, baseline_root, report_path, tolerance, diff_threshold,
         title='glTF Demo Regression -- our reference vs new',
         upstream=lambda meta, slug: gltf.cache_reference_screenshot(
-            meta.get('scene', slug.split('__')[0])))
+            meta.get('scene', slug.split('__')[0])),
+        drawn=drawn)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -436,21 +450,19 @@ def run(args: argparse.Namespace) -> int:
     parthenon = args.parthenon or gltf_demos.find_parthenon()
     report = args.report or default_report_path()
 
+    drawn = None
     if not getattr(args, 'report_only', False):
         provenance = _provenance()
         print('Baselines: %s' % baseline_root)
         print('Renders:   %s' % out_dir)
         print('Provenance: git %s, %s, %s' % (
             provenance['git'], provenance['rendered_at'], provenance['gl_renderer']))
-        render_scenes(select_scenes(args.only), out_dir, baseline_root,
-                      parthenon, args, provenance)
+        drawn = render_scenes(select_scenes(args.only), out_dir, baseline_root,
+                              parthenon, args, provenance)
 
-    regressions = build_report(out_dir, baseline_root, report,
-                               args.tolerance, args.diff_threshold)
-    print('\nReport: %s' % report)
-    if regressions:
-        print('%d regression(s) detected.' % regressions)
-    return 1 if regressions else 0
+    counts = build_report(out_dir, baseline_root, report,
+                          args.tolerance, args.diff_threshold, drawn)
+    return renderregression.exit_status(counts, report)
 
 
 def _parse_size(text: str) -> tuple[int, int]:

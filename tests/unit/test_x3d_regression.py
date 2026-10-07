@@ -87,6 +87,30 @@ class TestTheChildsReport:
         assert R.parse_render_report('nothing\n') == {}
 
 
+class TestTheRendersOutcome:
+    REPORT = 'X3D_RENDER {"problems": [], "viewpoint": null}\n'
+
+    def test_written_by_a_process_that_exited_cleanly(self):
+        assert R.render_outcome(0, self.REPORT, '', True) == (
+            True, {'problems': [], 'viewpoint': None, 'returncode': 0})
+
+    def test_a_process_killed_after_writing_its_image_failed(self):
+        ok, report = R.render_outcome(-11, self.REPORT, 'Fatal Python error\n', True)
+        assert not ok
+        assert report['returncode'] == -11
+        assert report['error'] == 'killed by SIGSEGV: Fatal Python error'
+
+    def test_a_process_that_exited_with_an_error_failed(self):
+        ok, report = R.render_outcome(1, '', 'Traceback\nValueError: no\n', True)
+        assert not ok
+        assert report['error'] == 'exit status 1: ValueError: no'
+
+    def test_no_image_is_a_failure_whatever_the_status(self):
+        ok, report = R.render_outcome(0, '', '', False)
+        assert not ok
+        assert report['error'] == 'no render'
+
+
 def test_a_document_is_rendered_as_authored(tmp_path):
     """One real render: a red box seen from X3D's default viewpoint, through a child process"""
     from OpenGLContext.testing.glcontext import gl_available  # noqa: PLC0415 kept with its use
@@ -161,6 +185,41 @@ def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
 
     monkeypatch.setattr(R, 'render_scene', different)
     assert R.main(arguments + ['--only', 'Box/a']) == 1
+
+
+def test_a_failed_render_fails_the_run(monkeypatch, tmp_path, capsys):
+    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': ''})
+
+    def crashed(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
+        return False, {'error': 'killed by SIGSEGV', 'returncode': -11}
+
+    monkeypatch.setattr(R, 'render_scene', crashed)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+    out_dir = str(tmp_path / 'renders')
+    assert R.main(['--corpus', root, '--baseline-root', str(tmp_path / 'b'),
+                   '--out-dir', out_dir, '--report', str(tmp_path / 'r.html')]) == 1
+    with open(os.path.join(out_dir, 'ConformanceNist.Geometry.Box.a.json')) as stream:
+        record = json.load(stream)
+    assert record['error'] == 'killed by SIGSEGV'
+    assert record['returncode'] == -11
+    assert '1 render(s) failed' in capsys.readouterr().out
+
+
+def test_only_the_documents_drawn_are_counted(monkeypatch, tmp_path):
+    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
+    monkeypatch.setattr(R, 'render_scene', _fake_render)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+    baselines = str(tmp_path / 'baselines')
+    arguments = ['--corpus', root, '--baseline-root', baselines,
+                 '--out-dir', str(tmp_path / 'renders'), '--report', str(tmp_path / 'r.html'),
+                 '--size', '32x24', '--reference', 'web3d']
+    assert R.main(arguments + ['--bless']) == 0
+    Image.new('RGB', (32, 24), (0, 0, 200)).save(
+        os.path.join(baselines, 'ConformanceNist.Geometry.Box.b.png'))
+    assert R.main(arguments + ['--only', 'Box/a']) == 0
+    assert R.main(arguments + ['--report-only']) == 1
 
 
 def test_no_corpus_says_how_to_fetch_one(tmp_path, capsys):

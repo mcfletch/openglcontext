@@ -179,10 +179,11 @@ class TestRenderView:
     def _spec(self, **kw):
         return SceneSpec('Duck', yaw=-0.6, elevation=0.05, tilt=0.0, margin=0.9, **kw)
 
-    def _patch(self, monkeypatch, recorder, stdout='CAPTURE_STATS load_seconds=1.0 fps=42\n'):
+    def _patch(self, monkeypatch, recorder, stdout='CAPTURE_STATS load_seconds=1.0 fps=42\n',
+               returncode=0, stderr=''):
         def fake_run(cmd, **_kw):
             recorder['cmd'] = cmd
-            return types.SimpleNamespace(stdout=stdout)
+            return types.SimpleNamespace(stdout=stdout, returncode=returncode, stderr=stderr)
         monkeypatch.setattr(R.subprocess, 'run', fake_run)
         monkeypatch.setattr(R.os.path, 'exists', lambda _p: True)
 
@@ -191,7 +192,7 @@ class TestRenderView:
         self._patch(monkeypatch, rec)
         ok, stats = R.render_view(self._spec(), None, 'm.glb', 'o.png',
                                   (800, 600), 8, 0.5, None)
-        assert ok is True and stats == {'load_seconds': 1.0, 'fps': 42.0}
+        assert ok is True and stats == {'load_seconds': 1.0, 'fps': 42.0, 'returncode': 0}
         cmd = rec['cmd']
         assert '--no-cameras' in cmd and '--capture' in cmd and 'o.png' in cmd
         assert '--size' in cmd and '800x600' in cmd
@@ -231,7 +232,14 @@ class TestRenderView:
         monkeypatch.setattr(R.subprocess, 'run', boom)
         ok, stats = R.render_view(self._spec(), None, 'm.glb', 'o.png',
                                   (800, 600), 8, 0.5, None)
-        assert ok is False and stats == {}
+        assert ok is False and stats == {'error': 'timed out after 120 seconds'}
+
+    def test_a_viewer_killed_after_its_capture_failed(self, monkeypatch):
+        self._patch(monkeypatch, {}, returncode=-6, stderr='Fatal Python error: Aborted\n')
+        ok, stats = R.render_view(self._spec(), None, 'm.glb', 'o.png',
+                                  (800, 600), 8, 0.5, None)
+        assert ok is False
+        assert stats['error'] == 'killed by SIGABRT: Fatal Python error: Aborted'
 
 
 class TestResolveModelUrl:
@@ -356,16 +364,18 @@ class TestRenderScenes:
         meta = json.loads((out_dir / 'Duck.json').read_text())
         assert meta['scene'] == 'Duck'
 
-    def test_failed_render_is_reported_and_leaves_no_metadata(
+    def test_failed_render_is_reported_and_recorded(
             self, monkeypatch, tmp_path, capsys):
         monkeypatch.setattr(R, 'resolve_model_url',
                             lambda _spec, _parth: ('https://x/Duck.glb', True))
-        monkeypatch.setattr(R, 'render_view', lambda *_a, **_k: (False, {}))
+        monkeypatch.setattr(R, 'render_view',
+                            lambda *_a, **_k: (False, {'error': 'exit status 1'}))
         out_dir = tmp_path / 'out'
         R.render_scenes([SceneSpec('Duck', source=None)], str(out_dir),
-                        str(tmp_path / 'b'), None, self._args(), self._prov())
-        assert 'render failed' in capsys.readouterr().out
-        assert not (out_dir / 'Duck.json').exists()
+                        str(tmp_path / 'b'), None, self._args(bless=[]), self._prov())
+        assert 'exit status 1' in capsys.readouterr().out
+        assert json.loads((out_dir / 'Duck.json').read_text())['error'] == 'exit status 1'
+        assert not (tmp_path / 'b' / 'Duck.png').exists()
 
     def test_unavailable_model_is_skipped(self, monkeypatch, tmp_path, capsys):
         monkeypatch.setattr(R, 'resolve_model_url', lambda _spec, _parth: (None, False))
@@ -376,6 +386,8 @@ class TestRenderScenes:
                         str(tmp_path / 'b'), None, self._args(), self._prov())
         assert 'ran' not in called                      # never tried to render
         assert 'model unavailable' in capsys.readouterr().out
+        record = json.loads((tmp_path / 'o' / 'Gone.json').read_text())
+        assert record['error'] == 'model unavailable'
 
 
 class TestBuildReportAndRun:
@@ -395,7 +407,7 @@ class TestBuildReportAndRun:
         report = str(tmp_path / 'report.html')
         n = R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE,
                            R.DIFF_THRESHOLD)
-        assert n == 0 and os.path.exists(report)
+        assert n == (0, 0) and os.path.exists(report)
 
     def test_diverging_baseline_counts_as_a_regression(self, monkeypatch, tmp_path):
         monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
@@ -407,7 +419,7 @@ class TestBuildReportAndRun:
         report = str(tmp_path / 'report.html')
         n = R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE,
                            R.DIFF_THRESHOLD)
-        assert n == 1
+        assert n == (1, 0)
 
     def test_upstream_screenshot_failure_does_not_break_the_report(
             self, monkeypatch, tmp_path):
@@ -421,7 +433,7 @@ class TestBuildReportAndRun:
         _png(os.path.join(base_dir, 'Duck.png'), (40, 40, 40))
         report = str(tmp_path / 'r.html')
         assert R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE,
-                              R.DIFF_THRESHOLD) == 0
+                              R.DIFF_THRESHOLD) == (0, 0)
         assert os.path.exists(report)
 
     def test_missing_baseline_is_skipped_not_failed(self, monkeypatch, tmp_path):
@@ -431,7 +443,7 @@ class TestBuildReportAndRun:
         report = str(tmp_path / 'report.html')
         n = R.build_report(out_dir, str(tmp_path / 'empty'), report,
                            R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
-        assert n == 0                                    # no baseline -> skip, not fail
+        assert n == (0, 0)                               # no baseline -> skip, not fail
 
     def test_stages_external_baseline_and_upstream_into_the_report_bundle(
             self, monkeypatch, tmp_path):
@@ -460,7 +472,7 @@ class TestBuildReportAndRun:
         report = str(tmp_path / 'r.html')                              # + no render png
         n = R.build_report(str(out_dir), str(tmp_path / 'b'), report,
                            R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
-        assert n == 0 and os.path.exists(report)                       # error, not regression
+        assert n == (0, 1) and os.path.exists(report)                  # an error, not a regression
 
     def test_full_run_renders_then_reports(self, monkeypatch, tmp_path):
         monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)

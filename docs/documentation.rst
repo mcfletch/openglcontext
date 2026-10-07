@@ -106,8 +106,8 @@ Installing the package puts these commands on your path:
    that a rendering change affected only what it was meant to.
 ``oglc-x3d-regression``
    Renders Web3D's X3D example archives and compares each with a blessed
-   baseline, showing Web3D's own render beside ours. See :doc:`Loading X3D
-   <x3d>`.
+   baseline, showing X_ITE's render of the document, or Web3D's, beside ours.
+   See :doc:`Loading X3D <x3d>`.
 ``oglc-ui-demo``
    Demonstrates the overlay UI: the settings screen, the key-binding editor,
    the console and a skin. See :doc:`The overlay UI <overlayui>`.

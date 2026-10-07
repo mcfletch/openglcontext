@@ -15,7 +15,7 @@ never agree pixel for pixel, and never a failure.
 
     oglc-x3d-regression --fetch          # download the corpus with its images, once
     oglc-x3d-regression --bless          # establish or refresh baselines, after review
-    oglc-x3d-regression                  # exit non-zero if anything regressed
+    oglc-x3d-regression                  # exit non-zero if a render regressed or failed
     oglc-x3d-regression --only Geometry/Box --jobs 8
 
 Each document is drawn in a process of its own, and ``--jobs`` runs that
@@ -156,12 +156,28 @@ def parse_render_report(stdout: Optional[str]) -> dict[str, Any]:
     return {}
 
 
+def render_outcome(returncode: int, stdout: Optional[str], stderr: Optional[str],
+                   written: bool) -> tuple[bool, dict[str, Any]]:
+    """Whether a drawing process succeeded, and what it reported
+
+    It succeeded where it wrote its image and exited with status 0. The
+    report is its :data:`REPORT_MARK` line with its ``returncode``, and an
+    ``error`` where it failed (:func:`~OpenGLContext.testing.renderregression.render_failure`).
+    """
+    report = parse_render_report(stdout)
+    report['returncode'] = returncode
+    error = renderregression.render_failure(returncode, stderr, written)
+    if error is not None:
+        report['error'] = error
+    return error is None, report
+
+
 def render_scene(scene: Scene, out: str, size: tuple[int, int], frames: int,
                  timeout: float = RENDER_TIMEOUT,
                  renderer: str = 'pbr') -> tuple[bool, dict[str, Any]]:
     """Draw `scene` to the PNG `out` in a process of its own, with `renderer`
-    (``pbr`` or ``vrml97``); whether it was written, and what the process
-    reported (with ``error`` where it failed)"""
+    (``pbr`` or ``vrml97``); whether it succeeded (:func:`render_outcome`),
+    and what the process reported"""
     if os.path.exists(out):
         os.remove(out)
     env = _render_environment(out, frames, renderer)
@@ -172,11 +188,7 @@ def render_scene(scene: Scene, out: str, size: tuple[int, int], frames: int,
                               cwd=os.path.dirname(scene.path), env=env)
     except subprocess.TimeoutExpired:
         return False, {'error': 'timed out after %.0f seconds' % timeout}
-    report = parse_render_report(proc.stdout)
-    if not os.path.exists(out):
-        report['error'] = (proc.stderr or '').strip().splitlines()[-1:] or ['no render']
-        report['error'] = report['error'][0]
-    return os.path.exists(out), report
+    return render_outcome(proc.returncode, proc.stdout, proc.stderr, os.path.exists(out))
 
 
 def _render_environment(out: str, frames: int, renderer: str = 'pbr') -> dict[str, str]:
@@ -301,9 +313,11 @@ def _view_metadata(scene: Scene, report: dict[str, Any], args: argparse.Namespac
 
 
 def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
-                  args: argparse.Namespace, provenance: dict[str, str]) -> None:
+                  args: argparse.Namespace, provenance: dict[str, str]) -> list[str]:
     """Draw each scene to ``<slug>.png`` in `out_dir` with its ``<slug>.json``
-    record, `args.jobs` at a time, blessing into `baseline_root` where asked"""
+    record, `args.jobs` at a time, blessing into `baseline_root` where asked;
+    the slugs drawn. A render that failed has a record with its ``error``
+    and is not blessed."""
     os.makedirs(out_dir, exist_ok=True)
     if args.bless is not None:
         os.makedirs(baseline_root, exist_ok=True)
@@ -312,9 +326,12 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
         new_path = os.path.join(out_dir, scene.slug + '.png')
         ok, report = render_scene(scene, new_path, args.size, args.frames,
                                   renderer=args.renderer)
-        if not ok:
-            return '  FAIL  %s (%s)' % (scene.name, report.get('error', 'no render'))
         record = _view_metadata(scene, report, args, provenance)
+        if not ok:
+            record.update(error=report.get('error', 'no render'),
+                          returncode=report.get('returncode'))
+            renderregression.write_failure(out_dir, scene.slug, record)
+            return '  FAIL  %s (%s)' % (scene.name, record['error'])
         record.update(_reference(scene, report, args, new_path))
         metadata = json.dumps(record, indent=2)
         atomicfiles.write_text(os.path.join(out_dir, scene.slug + '.json'), metadata)
@@ -327,17 +344,19 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         for line in pool.map(one, scenes):
             print(line, flush=True)
+    return [scene.slug for scene in scenes]
 
 
 def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
-                 diff_threshold: int) -> int:
-    """The HTML report of the renders in `out_dir`, with Web3D's own renders as the
-    upstream column; the number of regressions"""
+                 diff_threshold: int,
+                 drawn: Optional[Sequence[str]] = None) -> renderregression.ReportCounts:
+    """The HTML report of the renders in `out_dir`, with each document's reference
+    as the upstream column; the rows that fail, among `drawn` where given"""
     return renderregression.build_report(
         out_dir, baseline_root, report_path, tolerance, diff_threshold,
         title='X3D Example Regression -- our reference vs new',
         upstream=lambda meta, _slug: meta.get('upstream'),
-        describe=_describe)
+        describe=_describe, drawn=drawn)
 
 
 def _describe(meta: dict[str, Any]) -> str:
@@ -359,6 +378,7 @@ def run(args: argparse.Namespace) -> int:
     baseline_root = args.baseline_root or default_baseline_root()
     out_dir = args.out_dir or default_out_dir()
     report = args.report or default_report_path()
+    drawn = None
     if not args.report_only:
         scenes = find_scenes(root, args.archive or DEFAULT_ARCHIVES, args.only)
         if not scenes:
@@ -370,14 +390,11 @@ def run(args: argparse.Namespace) -> int:
         print('Renders:    %s' % out_dir)
         print('Provenance: git %s, %s, %s' % (
             provenance['git'], provenance['rendered_at'], provenance['gl_renderer']))
-        render_scenes(scenes, out_dir, baseline_root, args, provenance)
+        drawn = render_scenes(scenes, out_dir, baseline_root, args, provenance)
     os.makedirs(out_dir, exist_ok=True)
-    regressions = build_report(out_dir, baseline_root, report, args.tolerance,
-                               args.diff_threshold)
-    print('\nReport: %s' % report)
-    if regressions:
-        print('%d regression(s) detected.' % regressions)
-    return 1 if regressions else 0
+    counts = build_report(out_dir, baseline_root, report, args.tolerance,
+                          args.diff_threshold, drawn)
+    return renderregression.exit_status(counts, report)
 
 
 def _parse_size(text: str) -> tuple[int, int]:

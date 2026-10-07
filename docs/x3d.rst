@@ -416,7 +416,7 @@ never agree pixel for pixel, so it says where to look and never fails a run.
 
    oglc-x3d-regression --fetch          # the corpus with its images, once (about 550 MB)
    oglc-x3d-regression --bless          # make the renders baselines, after review
-   oglc-x3d-regression                  # exit 1 if a render differs from its baseline
+   oglc-x3d-regression                  # exit 1 if a render differs from its baseline or fails
    oglc-x3d-regression --only Geometry/Box --jobs 8
 
 - The archives are ConformanceNist and Vrml2Sourcebook unless ``--archive``
@@ -439,6 +439,13 @@ never agree pixel for pixel, so it says where to look and never fails a run.
 - A render differs where more than 2% of its pixels differ by more than 8 in
   a channel (``--tolerance``, ``--diff-threshold``), as in
   ``oglc-gltf-regression``.
+- A render fails where its process writes no image, or exits with a status
+  other than 0 or by a signal, even after writing one; its row is an error
+  naming the status and the last line the process wrote to stderr. A failed
+  render is not blessed.
+- The exit status counts only the documents drawn in that run; a row left
+  from an earlier run is shown as not drawn. ``--report-only`` counts every
+  row.
 - Only the XML encoding is drawn; pyvrml97's corpus tests hold the other
   encodings to the same scene graph. Scripts are not run, so a scene a
   Script builds is drawn as the document leaves it.
