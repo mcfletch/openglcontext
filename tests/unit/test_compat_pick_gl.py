@@ -79,12 +79,14 @@ except BaseException as e:
         traceback.print_exc()
     else:
         sys.stderr.write('NOGL %r\n' % (e,))
-        os._exit(3)
+        from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+        os._exit(NO_CONTEXT_STATUS)
 
 sys.stderr.write('GL_OK=%r CRASHED=%r HIT=%r\n'
                  % (STATE['gl_ok'], STATE['crashed'], STATE['hit']))
 if not STATE['gl_ok']:
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 if STATE['crashed']:
     os._exit(2)
 os._exit(0)

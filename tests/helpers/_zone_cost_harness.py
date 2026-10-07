@@ -44,6 +44,7 @@ from OpenGLContext.scenegraph.basenodes import (
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.testing.glcontext import gl_available
+from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
 
 try:
     import glfw
@@ -117,5 +118,5 @@ def main() -> None:
 if __name__ == '__main__':
     if glfw is None or not gl_available():
         sys.stderr.write('NOGL no GLFW window with a GL context can be made here\n')
-        os._exit(3)
+        os._exit(NO_CONTEXT_STATUS)
     main()

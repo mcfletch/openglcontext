@@ -77,7 +77,8 @@ except SystemExit:
 except BaseException as e:
     sys.stderr.write('NOGL %r\n' % (e,))
     import traceback; traceback.print_exc()
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 
 # stderr, and flushed: os._exit discards whatever is still buffered.
 sys.stderr.write('LUM=%.3f\n' % STATE['lum'])

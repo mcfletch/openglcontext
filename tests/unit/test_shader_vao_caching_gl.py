@@ -66,12 +66,14 @@ except SystemExit:
 except BaseException as e:
     sys.stderr.write('NOGL %r\n' % (e,))
     import traceback; traceback.print_exc()
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 
 sys.stderr.write('GL_OK=%r warm(after frame5)=%r final(after frame11)=%r\n'
                  % (STATE['gl_ok'], STATE['warm'], STATE['final']))
 if not STATE['gl_ok']:
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 # Steady state: frames 6..11 must not each mint a new VAO.
 os._exit(0 if STATE['final'] == STATE['warm'] else 2)
 '''

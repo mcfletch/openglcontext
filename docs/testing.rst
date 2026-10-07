@@ -438,12 +438,29 @@ showing the child's error output where it has one:
 
 .. code-block:: python
 
-   from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+   import subprocess
+   import sys
 
-   proc = subprocess.run([sys.executable, '-c', DRIVER], capture_output=True,
-                         text=True, env=gl_subprocess_env())
-   skip_if_child_had_no_context(proc.returncode, proc.stderr)
-   assert proc.returncode == 0, proc.stderr
+   from OpenGLContext.testing.gl_env import gl_subprocess_env
+   from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS, skip_if_child_had_no_context
+
+   #: The child program: it draws, or exits with NO_CONTEXT_STATUS where it cannot.
+   DRIVER = f'''
+   import os, sys
+   try:
+       from OpenGLContext.testing.glcontext import hidden_window
+       with hidden_window():
+           pass                                    # draw and check here
+   except Exception as error:
+       sys.stderr.write('NOGL %r\\n' % (error,))
+       os._exit({NO_CONTEXT_STATUS})
+   '''
+
+   def test_the_child_draws():
+       proc = subprocess.run([sys.executable, '-c', DRIVER], capture_output=True,
+                             text=True, env=gl_subprocess_env())
+       skip_if_child_had_no_context(proc.returncode, proc.stderr)
+       assert proc.returncode == 0, proc.stderr
 
 Build the child's environment rather than copying the parent's. The
 parent's environment can hold ``OPENGLCONTEXT_*`` variables set by tests or

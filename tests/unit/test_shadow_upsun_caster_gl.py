@@ -93,7 +93,8 @@ try:
 
     if not CAPTURED:
         sys.stderr.write('NOGL no directional cascades captured\n')
-        os._exit(3)
+        from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+        os._exit(NO_CONTEXT_STATUS)
 
     def ndc(view, proj, pt):
         clip = np.append(pt, 1.0) @ view @ proj
@@ -124,7 +125,8 @@ except SystemExit:
 except BaseException as e:
     import traceback; traceback.print_exc()
     sys.stderr.write('NOGL %r\n' % (e,))
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 '''
 
 

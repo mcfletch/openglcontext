@@ -47,6 +47,7 @@ from OpenGLContext.scenegraph import lod as lod_module
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.testing.glcontext import gl_available
+from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
 
 try:
     import glfw
@@ -197,5 +198,5 @@ if __name__ == '__main__':
     # other failure is the harness's, and ends with its traceback.
     if glfw is None or not gl_available():
         sys.stderr.write('NOGL no GLFW window with a GL context can be made here\n')
-        os._exit(3)
+        os._exit(NO_CONTEXT_STATUS)
     main()

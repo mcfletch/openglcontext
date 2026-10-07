@@ -68,12 +68,13 @@ try:
 except SystemExit:
     raise
 except BaseException as e:
-    sys.stderr.write('NOGL %r\n' % (e,)); import traceback; traceback.print_exc(); os._exit(3)
+    sys.stderr.write('NOGL %r\n' % (e,)); import traceback; traceback.print_exc(); from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS; os._exit(NO_CONTEXT_STATUS)
 
 sys.stderr.write('GL_OK=%r programs_ok=%r nonblack=%d\n'
                  % (STATE['gl_ok'], STATE['programs_ok'], STATE['nonblack']))
 if not STATE['gl_ok']:
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 if not STATE['programs_ok']:
     os._exit(4)
 os._exit(0 if STATE['nonblack'] > 3000 else 2)

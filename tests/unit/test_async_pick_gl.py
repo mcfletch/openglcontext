@@ -57,7 +57,8 @@ except SystemExit:
     raise
 except BaseException as e:
     sys.stderr.write('NOGL %r\n' % (e,))
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 '''
 
 

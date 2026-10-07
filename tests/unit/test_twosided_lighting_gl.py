@@ -90,12 +90,14 @@ except SystemExit:
 except BaseException as e:
     sys.stderr.write('NOGL %r\n' % (e,))
     import traceback; traceback.print_exc()
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 
 sys.stderr.write('SCENARIO=%s GL_OK=%r LUM=%.1f\n'
                  % (SCENARIO, STATE['gl_ok'], STATE['lum']))
 if not STATE['gl_ok']:
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 # Lit back face should be clearly bright; dark (unflipped) is near-zero.
 os._exit(0 if STATE['lum'] > 60.0 else 2)
 '''

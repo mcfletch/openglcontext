@@ -94,7 +94,8 @@ try:
 except BaseException as e:
     import traceback; traceback.print_exc()
     sys.stderr.write('NOGL %r\n' % (e,))
-    os._exit(3)
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
 
 try:
     # Past here GL is up, so a failure is the pass's, not the environment's.
