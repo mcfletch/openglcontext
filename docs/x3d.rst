@@ -85,6 +85,7 @@ implements these X3D nodes, by component:
 
 .. x3d-implemented-start
 
+- CADGeometry - CADAssembly, CADLayer, CADPart
 - Core - MetadataBoolean, MetadataDouble, MetadataFloat, MetadataInteger,
   MetadataSet, MetadataString, WorldInfo
 - EnvironmentalEffects - Background, Fog
@@ -108,6 +109,7 @@ implements these X3D nodes, by component:
 - Lighting - DirectionalLight, PointLight, SpotLight
 - Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint
 - Networking - Anchor, Inline, LoadSensor
+- Picking - PickableGroup
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
 - Rendering - Color, ColorRGBA, Coordinate, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,

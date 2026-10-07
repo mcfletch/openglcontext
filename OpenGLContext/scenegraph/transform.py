@@ -6,24 +6,27 @@ from OpenGL.GL import *
 from OpenGLContext.scenegraph import grouping, boundingvolume
 from vrml import cache
 from vrml.vrml97 import basenodes, transformmatrix
+from vrml.x3d import nodes as x3d
 
 from OpenGLContext.arrays import array, allclose, any
 from math import pi
 RADTODEG = 180/pi
 NULLSCALE = (1.0,1.0,1.0)
 
-class Transform(grouping.Grouping, basenodes.Transform):
-    """Transform node based on VRML 97 Transform
+class Transforming(grouping.Grouping):
+    """A group drawn in the coordinates its translation, rotation and scale make
 
-    The Transform node provides a fairly robust implementation
-    of encapsulated local coordinate setup.  You can set translation,
-    rotation, scale, scaleOrientation and center and have the matrices
-    properly setup and restored (even when you have exceeded the
-    matrix stack depth).
-
-    Reference:
-        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Transform
+    Translation, rotation, scale, scaleOrientation and center set up the
+    local coordinates, restored after the children are drawn. The Transform
+    node and X3D's CADPart, which has the same fields, are drawn by it.
     """
+
+    translation: Any
+    rotation: Any
+    scale: Any
+    scaleOrientation: Any
+    center: Any
+
     def transform( self, mode: Any = None, translate: int = 1, scale: int = 1,
                    rotate: int = 1 ) -> None:
         ''' Perform the actual alteration of the current matrix '''
@@ -118,6 +121,22 @@ class Transform(grouping.Grouping, basenodes.Transform):
         for attr in ('translation','rotation','scale','scaleOrientation','center'):
             holder.depend( self, attr )
         return data
+
+
+class Transform(Transforming, basenodes.Transform):
+    """VRML97's and X3D's Transform
+
+    Reference:
+        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Transform
+    """
+
+
+class CADPart(Transforming, x3d.CADPart):
+    """X3D's CADPart: a part of a CAD model, placed as a Transform is
+
+    Reference:
+        https://www.web3d.org/specifications/X3Dv4Draft/ISO-IEC19775-1v4.1-CD/Part01/components/CADGeometry.html#CADPart
+    """
 
 
 class MatrixTransform( Transform ):
