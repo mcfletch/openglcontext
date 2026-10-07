@@ -75,7 +75,7 @@ _TYPES = {'.x3d': 'model/x3d+xml', '.x3dv': 'model/x3d-vrml', '.x3dj': 'model/x3
 
 class Document(NamedTuple):
     """One document of the corpus: its name (archive and path, no suffix), its
-    file, and its archive's examples folder"""
+    file, and the folder of every archive's examples, which is served"""
 
     name: str
     path: str
@@ -98,8 +98,8 @@ def corpus_directory() -> str:
 
 
 def examples(root: str, archive: str) -> str:
-    """The folder of an extracted archive its examples are in"""
-    return os.path.join(root, archive, 'www.web3d.org', 'x3d', 'content', 'examples', archive)
+    """The folder of an archive's examples, in the tree every archive is extracted into"""
+    return os.path.join(root, 'www.web3d.org', 'x3d', 'content', 'examples', archive)
 
 
 def find_documents(root: str, archives: Sequence[str],
@@ -115,7 +115,8 @@ def find_documents(root: str, archives: Sequence[str],
                 if not name.endswith('.x3d') or os.path.getsize(path) == 0:
                     continue
                 relative = os.path.relpath(path, folder_root)[:-len('.x3d')].replace(os.sep, '/')
-                document = Document('%s/%s' % (archive, relative), path, folder_root)
+                document = Document('%s/%s' % (archive, relative), path,
+                                    os.path.dirname(folder_root))
                 if not only or any(part in document.name for part in only):
                     found.append(document)
     return sorted(found, key=lambda document: document.name)

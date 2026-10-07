@@ -46,7 +46,7 @@ def tarball(tmp_path, members):
 
 
 def write_corpus(root, archive, documents):
-    examples = os.path.join(root, archive, 'www.web3d.org', 'x3d', 'content', 'examples', archive)
+    examples = os.path.join(root, 'www.web3d.org', 'x3d', 'content', 'examples', archive)
     for name, text in documents.items():
         path = os.path.join(examples, name)
         os.makedirs(os.path.dirname(path), exist_ok=True)

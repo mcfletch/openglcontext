@@ -400,7 +400,8 @@ never agree pixel for pixel, so it says where to look and never fails a run.
 - The archives are ConformanceNist and Vrml2Sourcebook unless ``--archive``
   names others; the corpus is kept in pyvrml97's corpus directory
   (``PYVRML97_X3D_CORPUS``, else the user's cache) unless ``--corpus``
-  names another.
+  names another. ``--fetch`` also fetches the archives whose files their
+  scenes name (X3dForWebAuthors), into the same tree.
 - Each document is drawn in a process of its own at 792x465, the size of
   Web3D's renders; ``--jobs`` sets how many at a time.
 - Its frames are counted on the capture clock once its loads have arrived, so
@@ -409,9 +410,9 @@ never agree pixel for pixel, so it says where to look and never fails a run.
   since 1970: a TimeSensor with ``startTime 0`` has finished by then. A document's
   loads are waited for 30 seconds at most, and its record says when that
   was not enough.
-- The archive's examples folder is a content root
-  (:ref:`untrusted-content-roots`): the examples name images in folders
-  above their own.
+- The folder of every archive's examples is a content root
+  (:ref:`untrusted-content-roots`): the examples name images and Inlines in
+  folders above their own, and in other archives.
 - What reading the document reported is in each row of the report.
 - A render differs where more than 2% of its pixels differ by more than 8 in
   a channel (``--tolerance``, ``--diff-threshold``), as in

@@ -24,8 +24,8 @@ DOCUMENT = '''<?xml version="1.0" encoding="UTF-8"?>
 def write_corpus(root, documents):
     """`documents`: relative path under ConformanceNist -> the Scene's extra content"""
     for relative, extra in documents.items():
-        path = os.path.join(root, 'ConformanceNist', 'www.web3d.org', 'x3d', 'content',
-                            'examples', 'ConformanceNist', relative)
+        path = os.path.join(root, 'www.web3d.org', 'x3d', 'content', 'examples',
+                            'ConformanceNist', relative)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w') as stream:
             stream.write(DOCUMENT % extra if extra is not None else '')
@@ -43,7 +43,8 @@ class TestTheRoster:
             'ConformanceNist/Geometry/Box/default_box', 'ConformanceNist/Geometry/Box/texture']
         assert found[0].slug == 'ConformanceNist.Geometry.Box.default_box'
         assert found[0].path.endswith('default_box.x3d')
-        assert found[0].root.endswith(os.path.join('examples', 'ConformanceNist'))
+        # Every archive's folder: a scene may name another archive's files
+        assert found[0].root == os.path.join(root, 'www.web3d.org', 'x3d', 'content', 'examples')
 
     def test_only_narrows_by_part_of_the_name(self, tmp_path):
         root = write_corpus(str(tmp_path), {'Geometry/Box/a.x3d': '', 'Geometry/Cone/b.x3d': ''})
@@ -104,18 +105,24 @@ def test_a_document_is_rendered_as_authored(tmp_path):
     assert report['problems'] == []
 
 
-def test_a_document_may_name_an_image_above_its_folder(tmp_path):
-    """Web3D's examples share images across folders: the archive is a content root"""
+@pytest.mark.parametrize('where, url', [
+    (('ConformanceNist',), '../../blue.png'),
+    (('X3dForWebAuthors', 'Chapter03Grouping'), '../../../X3dForWebAuthors/Chapter03Grouping/blue.png'),
+], ids=['its archive', 'another archive'])
+def test_a_document_may_name_an_image_above_its_folder(tmp_path, where, url):
+    """Web3D's examples share images across folders and across archives: the
+    folder of every archive's examples is a content root"""
     from OpenGLContext.testing.glcontext import gl_available  # noqa: PLC0415 kept with its use
     if not gl_available():
         pytest.skip('no GL context on this machine')
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/textured.x3d': ''})
     scene = R.find_scenes(root, ['ConformanceNist'])[0]
-    Image.new('RGB', (4, 4), (0, 0, 255)).save(os.path.join(scene.root, 'blue.png'))
+    os.makedirs(os.path.join(scene.root, *where), exist_ok=True)
+    Image.new('RGB', (4, 4), (0, 0, 255)).save(os.path.join(scene.root, *where, 'blue.png'))
     with open(scene.path, 'w') as stream:
         stream.write(DOCUMENT.replace(
             '<Material diffuseColor="1 0 0" emissiveColor="1 0 0"/>',
-            '<ImageTexture url=\'"../../blue.png"\'/>') % '')
+            '<ImageTexture url=\'"%s"\'/>' % url) % '')
     out = str(tmp_path / 'blue.png')
     ok, report = R.render_scene(scene, out, size=(96, 64), frames=3)
     assert ok, report

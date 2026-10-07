@@ -73,7 +73,8 @@ class Scene:
     name: str
     #: The document's file.
     path: str
-    #: Its archive's examples folder, which its references may reach across.
+    #: The folder of every archive's examples: its content root, as a scene may
+    #: name files of its own archive and of others.
     root: str
 
     @property
@@ -109,25 +110,21 @@ def default_out_dir() -> str:
     return os.path.join(os.path.dirname(default_report_path()), 'renders')
 
 
-def _examples(root: str, archive: str) -> str:
-    """The folder of an extracted archive its examples are in"""
-    return os.path.join(root, archive, 'www.web3d.org', 'x3d', 'content', 'examples', archive)
-
-
 def find_scenes(root: str, archives: Sequence[str],
                 only: Optional[Sequence[str]] = None) -> list[Scene]:
     """The non-empty documents of `archives` in the corpus at `root`, by name;
     with `only`, those whose name contains one of its strings"""
+    from vrml.x3d import corpus  # noqa: PLC0415 only when looking
     found = []
     for archive in archives:
-        examples = _examples(root, archive)
+        examples = corpus.examples(archive, root)
         for folder, _dirs, names in os.walk(examples):
             for name in names:
                 path = os.path.join(folder, name)
                 if not name.endswith('.x3d') or os.path.getsize(path) == 0:
                     continue
                 relative = os.path.relpath(path, examples)[:-len('.x3d')].replace(os.sep, '/')
-                scene = Scene('%s/%s' % (archive, relative), path, examples)
+                scene = Scene('%s/%s' % (archive, relative), path, os.path.dirname(examples))
                 if not only or any(part in scene.name for part in only):
                     found.append(scene)
     return sorted(found, key=lambda scene: scene.name)
@@ -351,8 +348,8 @@ def run(args: argparse.Namespace) -> int:
     from vrml.x3d import corpus  # noqa: PLC0415 only when running
     root = args.corpus or corpus.directory()
     if args.fetch:
-        for name, count in corpus.fetch(args.archive or DEFAULT_ARCHIVES, root,
-                                        resources=True).items():
+        archives = corpus.with_references(args.archive or DEFAULT_ARCHIVES)
+        for name, count in corpus.fetch(archives, root, resources=True).items():
             print('%s: %d documents' % (name, count))
     baseline_root = args.baseline_root or default_baseline_root()
     out_dir = args.out_dir or default_out_dir()
