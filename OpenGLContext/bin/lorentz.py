@@ -5,9 +5,6 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from pydispatch import dispatcher
-from vrml import protofunctions
-
 from OpenGLContext.arrays import arange
 
 from OpenGLContext.scenegraph.basenodes import *
@@ -72,15 +69,11 @@ class LorentzContext(BaseContext):
 
         print("Should display a Lorentz Attractor")
         print("  s -- switch between IndexedLineset and Pointset presentation")
-        dispatcher.connect(
-            self.OnTime,
-            signal=('set', protofunctions.getField(ts, 'fraction_changed')),
-            sender=ts,
-        )
+        timer = ts.getTimer(self)
+        timer.addEventHandler("fraction", function=self.OnTime)
 
-    def OnTime(self, value: float) -> None:
-        """The TimeSensor's fraction has changed: draw that much of the attractor"""
-        count = int(float(value) * 100000)
+    def OnTime(self, event: Any) -> None:
+        count = int(event.fraction() * 100000)
         points = lorentz(count)
         count = len(points)
         line = arange(0.0, 1.0, 1.0 / float(count + 1))[:count]

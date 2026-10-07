@@ -198,7 +198,9 @@ class TestContext( BaseContext ):
     def OnIdle(self, *arguments):
         self.multiplier = (self.multiplier * 1.00001)
         for name in ('t1','t2','t3'):
-            self.sg.getDEF( name ).rate = self.multiplier
+            t1 = self.sg.getDEF( name )
+            timer = t1.getTimer(self)
+            timer.internal.multiplier = self.multiplier
         self.triggerRedraw(1)
     
 

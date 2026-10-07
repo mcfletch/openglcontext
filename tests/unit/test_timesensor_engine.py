@@ -75,3 +75,50 @@ def test_a_documents_sensor_animates_on_a_capture_clock(gl_context):
         clock.advance(2)
         context.OnDraw(force=1)
         assert tuple(scene.getDEF('T').translation) == pytest.approx((1.0, 0, 0))
+
+
+class TestGetTimer:
+    """``getTimer(context)``: the Timer-style handle on the sensor"""
+
+    def running(self, monkeypatch):
+        now = [10.0]
+        monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
+        sensor = TimeSensor(cycleInterval=4.0, loop=True)
+        context = Timing()
+        sensor.bind(context)
+        return sensor, context, now
+
+    def test_pause_and_resume(self, monkeypatch):
+        sensor, context, now = self.running(monkeypatch)
+        timer = sensor.getTimer(context)
+        context.manager(context)
+        assert timer.active
+        timer.pause()
+        context.manager(context)
+        assert sensor.paused() and not timer.active
+        now[0] = 11.0
+        timer.resume()
+        context.manager(context)
+        assert timer.active
+
+    def test_the_multiplier_is_the_sensors_rate(self, monkeypatch):
+        sensor, context, _now = self.running(monkeypatch)
+        timer = sensor.getTimer(context)
+        timer.internal.multiplier = 2.0
+        assert sensor.rate == 2.0
+        assert timer.internal.multiplier == 2.0
+
+    def test_fraction_and_cycle_handlers(self, monkeypatch):
+        sensor, context, now = self.running(monkeypatch)
+        timer = sensor.getTimer(context)
+        fractions, cycles = [], []
+        timer.addEventHandler('fraction', function=lambda event: fractions.append(
+            (event.fraction(), event.value())))
+        timer.addEventHandler('cycle', function=lambda event: cycles.append(event.value()))
+        context.manager(context)
+        assert fractions == [(pytest.approx(0.5), 10.0)]
+        assert cycles == [10.0]
+
+    def test_one_handle_per_sensor(self, monkeypatch):
+        sensor, context, _now = self.running(monkeypatch)
+        assert sensor.getTimer(context) is sensor.getTimer(Timing())

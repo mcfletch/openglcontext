@@ -179,7 +179,9 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   as X3D says from ``startTime`` to ``stopTime``, pausing at ``pauseTime``
   and resuming at ``resumeTime``. ``pause()`` and ``resume()`` set those two
   to the engine's time. ``rate`` sets how fast its cycles run against the engine's
-  clock, and can be changed while it runs.
+  clock, and can be changed while it runs. ``getTimer(context)`` answers a Timer-style
+  handle on it: ``pause()``, ``resume()``, ``internal.multiplier`` (the
+  rate) and ``addEventHandler('fraction' or 'cycle', function)``.
 - A ``LoadSensor`` is polled in the same way. ``Inline`` and ``ImageTexture``
   record their load state as they read (``vrml.x3d.loadsensor``); other url
   nodes record none and are not waited for.
