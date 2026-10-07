@@ -123,13 +123,17 @@ def near_far_from_points(
     return near, far
 
 
+#: How much wider than the spot's cone its shadow frustum is drawn.
+SPOT_FOV_MARGIN = 1.1
+
+
 def spot_light_view_projection(
     position: Vec3,
     direction: Vec3,
     cutoff_angle: float,
     near: float,
     far: float,
-    fov_margin: float = 1.1,
+    fov_margin: float = SPOT_FOV_MARGIN,
     max_fov: float = np.pi * 0.95,
 ) -> tuple[Matrix4, Matrix4]:
     """View and projection matrices for a spot light's shadow map.

@@ -121,7 +121,18 @@ try:
     r, g, bl = arr[..., 0], arr[..., 1], arr[..., 2]
     grey = (np.abs(r - g) < 25) & (np.abs(g - bl) < 25) & (arr.sum(2) > 60)
     n = int(grey.sum())
-    mean = float(arr.sum(2)[grey].mean()) if n else 0.0
+    # The mean is over the wall's rectangle on screen, less the red caster:
+    # a shadow with no ambient light in it is black, and a mask of grey pixels
+    # alone would leave every shadowed pixel out of the measurement.
+    mean = 0.0
+    if n:
+        rows, cols = np.nonzero(grey)
+        box = (slice(rows.min(), rows.max() + 1), slice(cols.min(), cols.max() + 1))
+        red = (r - np.maximum(g, bl)) > 60
+        wall = np.zeros_like(grey)
+        wall[box] = True
+        wall &= ~red
+        mean = float(arr.sum(2)[wall].mean())
     sys.stdout.write('%d %f\n' % (n, mean)); sys.stdout.flush()
 except SystemExit:
     raise

@@ -39,7 +39,7 @@ def _light(kind):
     return basenodes.SpotLight(
         location=(7, 7, 7),
         direction=(-9, -9, -13),
-        cutOffAngle=0.9,
+        cutOffAngle=0.9, beamWidth=1.570796,
         color=(1, 1, 1), intensity=1.0, ambientIntensity=0.3,
         attenuation=(1, 0, 0),
     )

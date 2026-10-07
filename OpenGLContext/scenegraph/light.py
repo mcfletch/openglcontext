@@ -35,6 +35,10 @@ else:
     _LightHost = object
 
 
+#: The widest field of view, in radians, a light's perspective is drawn with.
+SPOT_PERSPECTIVE_LIMIT = 2 * pi / 3
+
+
 class Light(_LightHost):#nodetypes.Light, nodetypes.Children, node.Node ):
     """Abstract base class for all lights
 
@@ -105,20 +109,18 @@ class Light(_LightHost):#nodetypes.Light, nodetypes.Children, node.Node ):
     ) -> Any:
         """Calculate viewing matrix for our light
 
-        Calculate our projection matrix, note that this assumes that
-        we are a spot-like light with a narrow field-of-view
-        (cutOffAngle).
+        A perspective over the light's cone: the full field of view, twice
+        the spot's ``cutOffAngle``, capped at ``SPOT_PERSPECTIVE_LIMIT``. A
+        wider cone (X3D's default is a half-angle of pi/2) is drawn to that
+        limit. ``cutOffAngle`` here is the full field of view, in radians.
         """
         if cutOffAngle is None:
             if hasattr( self, 'cutOffAngle' ):
-                # cutOffAngle is the cone's half-angle (from the axis); the shadow
-                # projection needs the FULL vertical field of view (gluPerspective
-                # convention), i.e. twice the half-angle, to cover the whole cone.
                 cutOffAngle = self.cutOffAngle * 2 # radians
             else:
                 cutOffAngle = pi/3 # just a reasonable default
         return transformmatrix.perspectiveMatrix(
-            cutOffAngle,
+            min(cutOffAngle, SPOT_PERSPECTIVE_LIMIT),
             aspect,
             near,
             far,

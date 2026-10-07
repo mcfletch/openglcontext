@@ -119,3 +119,18 @@ class TestTheDirectionCanBeOverridden:
     def test_the_argument_wins_over_the_field(self):
         light = SpotLight(location=(0, 0, 0), direction=(0, 0, -1))
         assert not np.allclose(_matrix(light, direction=(0, -1, 0)), IDENTITY)
+
+
+class TestViewMatrix:
+    """``Light.viewMatrix``: the perspective a spot light's shadow is drawn in."""
+
+    def test_the_field_of_view_is_the_whole_cone(self):
+        narrow = np.asarray(SpotLight(cutOffAngle=0.5).viewMatrix(), 'd')
+        # gluPerspective's focal term is 1 / tan(fov / 2), with fov the full cone.
+        assert narrow[1, 1] == pytest.approx(1.0 / np.tan(0.5), rel=1e-5)
+
+    def test_x3ds_default_cone_gives_a_usable_perspective(self):
+        # cutOffAngle pi/2 is a 180 degree cone, which no perspective holds.
+        wide = np.asarray(SpotLight().viewMatrix(), 'd')
+        assert np.all(np.isfinite(wide))
+        assert wide[1, 1] > 0.05

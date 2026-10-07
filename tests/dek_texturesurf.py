@@ -84,6 +84,7 @@ class TestContext( BaseContext ):
         self.light = SpotLight(
             direction = (-10,0,-10),
             cutOffAngle = 1.57,
+            beamWidth = 1.57,
             color = (1,1,1),
             location = (10,0,10),
         )

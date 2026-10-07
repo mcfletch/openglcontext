@@ -86,6 +86,8 @@ class TestContext( BaseContext ):
                         color = [1,.95,.95],
                         intensity = 1,
                         direction = [0,-5,-10],
+                        beamWidth = 1.570796,
+                        cutOffAngle = 0.785398,
                         castShadows = True,
                     ),
                 ],
@@ -95,6 +97,8 @@ class TestContext( BaseContext ):
                 color = [.75,.75,1.0],
                 intensity = .5,
                 direction = [-3,-3,-3],
+                beamWidth = 1.570796,
+                cutOffAngle = 0.785398,
                 castShadows = True,
             ),
         ]

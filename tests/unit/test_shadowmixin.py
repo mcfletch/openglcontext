@@ -60,6 +60,24 @@ class TestCastsShadow:
         assert self.mixin._castsShadow(s, CAPS) is False
 
 
+class TestWideSpotLights:
+    """X3D's default SpotLight cone is a half-angle of pi/2: no one perspective
+    map covers it, so a wide spot is shadowed as a point light is."""
+
+    def test_a_narrow_spot_uses_a_perspective_map(self):
+        assert shadowmixin.spot_shadow_kind(0.5, CAPS) == 'spot'
+
+    def test_a_wide_spot_uses_a_cube_map(self):
+        assert shadowmixin.spot_shadow_kind(np.pi / 2, CAPS) == 'point'
+        assert shadowmixin.spot_shadow_kind(1.1, CAPS) == 'point'
+
+    def test_without_cube_maps_a_wide_spot_keeps_its_perspective_map(self):
+        assert shadowmixin.spot_shadow_kind(np.pi / 2, CAPS_NO_CUBE) == 'spot'
+
+    def test_x3ds_default_spot_is_wide(self):
+        assert shadowmixin.spot_shadow_kind(SpotLight().cutOffAngle, CAPS) == 'point'
+
+
 class TestOccluderPoints:
     def setup_method(self):
         self.mixin = ShadowMapMixin()

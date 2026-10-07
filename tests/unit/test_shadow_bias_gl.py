@@ -100,7 +100,9 @@ def pole_scene():
         )]),
         basenodes.SpotLight(
             location=(3, 3, 3), direction=(-3, -3, -3), color=(0.75, 0.75, 1.0),
-            intensity=2.0, ambientIntensity=0.05, attenuation=(1, 0, 0)),
+            intensity=2.0, ambientIntensity=0.05, attenuation=(1, 0, 0),
+            # A cone one perspective map holds: the bias measured is that map's.
+            beamWidth=1.570796, cutOffAngle=0.785398),
     ]
 
 

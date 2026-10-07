@@ -69,6 +69,8 @@ with rotating lighting in three colours.""")
             location = (0,0,4),
             color = (0,0,1),
             direction = (0,0,-1),
+            beamWidth = 1.570796,
+            cutOffAngle = 0.785398,
         )
         '''We keep a reference to the light objects for later mutations'''
         self.lights = [

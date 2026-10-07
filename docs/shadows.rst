@@ -152,6 +152,12 @@ A spot light lights a cone, which fits inside one shadow map pointed along the
 light's direction. No cascades are needed. Spot shadows can also soften with
 distance (see PCSS below).
 
+A cone wider than 120 degrees (a ``cutOffAngle`` above about 0.95 radians,
+counting a 10% margin) does not fit one map well, and is shadowed with a cube
+map as a point light is, where the driver has cube shadow maps. X3D's default
+``SpotLight`` is such a cone: ``cutOffAngle`` is pi/2 and ``beamWidth`` pi/4.
+VRML97 gave pi/4 and pi/2; a VRML97 file is read with its own defaults.
+
 Point light: a cube map
 ~~~~~~~~~~~~~~~~~~~~~~~
 

@@ -28,6 +28,7 @@ from OpenGLContext.arrays import dot  # numpy re-export via vrml.arrays star imp
 from OpenGLContext import frustum as frustum_module
 from OpenGLContext.scenegraph import light as light_module
 from OpenGLContext.passes import shadowmath
+from OpenGLContext.passes.shadowmath import SPOT_FOV_MARGIN
 from OpenGLContext.passes.instancing import forget_cull_state
 from OpenGLContext.passes.shadowmath import SHADOW_DEPTH_BIAS
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
@@ -83,6 +84,23 @@ def per_light_shadow_resolution(lights: list[Any], default_resolution: int) -> i
                                     for light in lights) if r]
     resolution = max(resolutions) if resolutions else default_resolution
     return int(max(SHADOW_MIN_RESOLUTION, min(resolution, SHADOW_MAX_RESOLUTION)))
+
+
+#: The widest spot-light shadow frustum, in radians of full field of view,
+#: drawn as one perspective map. Past it the map's texels spread too thin to
+#: hold a shadow, and the spot is shadowed with a cube map as a point light is.
+SPOT_PERSPECTIVE_LIMIT = light_module.SPOT_PERSPECTIVE_LIMIT
+
+
+def spot_shadow_kind(cutoff: float, caps: Any) -> str:
+    """'spot' for a perspective shadow map, 'point' for a cube map
+
+    cutoff -- the spot's ``cutOffAngle``, the cone's half-angle in radians.
+    A cone wider than :data:`SPOT_PERSPECTIVE_LIMIT` (X3D's default of pi/2
+    among them) takes a cube map where the driver has cube shadows.
+    """
+    wide = 2.0 * float(cutoff) * SPOT_FOV_MARGIN > SPOT_PERSPECTIVE_LIMIT
+    return 'point' if wide and caps is not None and caps.has_cube_shadow else 'spot'
 
 
 def light_depth_bias(light: Any) -> float:
@@ -342,6 +360,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # only the directional cascades still follow the camera-visible
         # occluder_points.
         if isinstance(light_node, light_module.SpotLight):
+            cutoff = float(getattr(light_node, 'cutOffAngle', 0.785))
+            if spot_shadow_kind(cutoff, caps) == 'point':
+                return self._renderPoint(path, light_node, slot, light_index, caps)
             return self._renderSpot(path, light_node, slot, light_index)
         if isinstance(light_node, light_module.DirectionalLight):
             return self._renderDirectional(path, light_node, slot, light_index,

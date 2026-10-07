@@ -13,6 +13,7 @@ class TestViewPlatform( unittest.TestCase ):
         self.light = light.SpotLight( 
             location = (20,4,3),
             direction = (-8,0,0),
+            cutOffAngle = 0.785398,
         )
     def _are_inverse( self, forward: Any, inverse: Any ) -> None:
         test = array( [20,18,4,1],'f')

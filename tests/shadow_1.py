@@ -121,6 +121,8 @@ class TestContext( BaseContext ):
                 intensity = 1,
                 ambientIntensity = 0.10,
                 direction = [0,-5,-10],
+                beamWidth = 1.570796,
+                cutOffAngle = 0.785398,
             ),
             SpotLight(
                 location = [3,3,3],
@@ -128,6 +130,8 @@ class TestContext( BaseContext ):
                 intensity = .5,
                 ambientIntensity = .05,
                 direction = [-3,-3,-3],
+                beamWidth = 1.570796,
+                cutOffAngle = 0.785398,
             ),
         ]
     def createGeometry( self ):
