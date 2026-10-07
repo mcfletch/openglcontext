@@ -63,12 +63,15 @@ def _environment(settings: Mapping[str, str]) -> Iterator[None]:
 
 
 @contextlib.contextmanager
-def scene_context(children: Sequence[Any], *, size: tuple[int, int] = (96, 96),
+def scene_context(children: Any, *, size: tuple[int, int] = (96, 96),
                   environment: Optional[Mapping[str, str]] = None,
                   base: Any = None, **definition: Any) -> Iterator[Any]:
     """A context drawing a scene of ``children``, current until the block ends.
 
-    ``size`` is the window's in pixels; ``definition`` names further
+    ``children`` is a list of nodes, put in a new ``sceneGraph``, or a scene
+    root (a loaded document), drawn as it is so that its nodes keep the
+    document their urls are resolved against. ``size`` is the window's in
+    pixels; ``definition`` names further
     :class:`~OpenGLContext.contextdefinition.ContextDefinition` fields.
     Raises :class:`~OpenGLContext.testing.glcontext.GLUnavailable` where no
     core-profile context can be made here.
@@ -84,7 +87,12 @@ def scene_context(children: Sequence[Any], *, size: tuple[int, int] = (96, 96),
         from OpenGLContext.contextdefinition import ContextDefinition
         from OpenGLContext.scenegraph import basenodes
         Base = base if base is not None else testingcontext.getInteractive()
-        scene = basenodes.sceneGraph(children=list(children))
+        from vrml.vrml97.scenegraph import SceneGraph
+        scene: Any
+        if isinstance(children, SceneGraph):
+            scene = children
+        else:
+            scene = basenodes.sceneGraph(children=list(children))
 
         class SceneContext(Base):  # type: ignore[misc,valid-type]  # the backend's class, chosen at run time
             contextDefinition = ContextDefinition(size=tuple(size), **definition)

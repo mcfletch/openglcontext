@@ -43,6 +43,7 @@ from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.passes.renderfailures import describe
 from vrml.vrml97 import nodetypes
 from vrml import olist
+from vrml.x3d import nodes as x3dnodes
 from OpenGLContext.scenegraph import shaders
 from pydispatch.dispatcher import connect
 
@@ -214,6 +215,9 @@ class SGObserver( object ):
         #: Each integrated node -> every live path that ends at it. Keyed by
         #: the node, which its paths hold anyway.
         self.nodePaths: dict[Any, list[Any]] = {}
+        #: Each node whose X3D `visible` is false -> the parent paths it was
+        #: hidden from, to walk it under again when it is shown.
+        self._hidden: 'weakref.WeakKeyDictionary[Any, list[Any]]' = weakref.WeakKeyDictionary()
         if scene:
             self.integrate( scene )
         connect(
@@ -228,6 +232,14 @@ class SGObserver( object ):
             self.onSwitchChange,
             signal = switch.SWITCH_CHANGE_SIGNAL,
         )
+        connect(
+            self.onChildrenChange,
+            signal = switch.CHILDREN_CHANGE_SIGNAL,
+        )
+        connect(
+            self.onVisibleChange,
+            signal = self.VISIBLE_SIGNAL,
+        )
     def integrate( self, node: Any, parentPath: Any = None ) -> None:
         """Integrate any children of node which are of interest"""
         if parentPath is None:
@@ -235,6 +247,9 @@ class SGObserver( object ):
         todo = [ (node,parentPath) ]
         while todo:
             next,parents = todo.pop(0)
+            if isinstance( next, x3dnodes.X3DBoundedObject ) and not next.visible:
+                self._hidden.setdefault( next, [] ).append( parents )
+                continue
             path = parents + next
             np = self.npFor( next )
             np.append( path )
@@ -281,6 +296,33 @@ class SGObserver( object ):
                     childPath.invalidate()
             if value is not None and keeping is None:
                 self.integrate( value, path )
+        self.purge()
+    #: Sent when any node's X3D `visible` is set: one field, declared on
+    #: `X3DBoundedObject`, for every grouping node and shape.
+    VISIBLE_SIGNAL = ( 'set', x3dnodes.X3DBoundedObject.visible )
+
+    def onVisibleChange( self, sender: Any, value: Any ) -> None:
+        """`sender`'s X3D `visible` has been set: drop its paths, or walk it again"""
+        if value:
+            for parent in self._hidden.pop( sender, () ):
+                if not parent.broken:
+                    self.integrate( sender, parent )
+            return
+        paths = [ path for path in self.nodePaths.get( sender, () ) if not path.broken ]
+        if not paths:
+            return
+        hidden = self._hidden.setdefault( sender, [] )
+        for path in paths:
+            hidden.append( path.parent )
+            path.invalidate()
+        self.purge()
+    def onChildrenChange( self, sender: Any ) -> None:
+        """`sender`'s rendered children have been replaced: walk them again"""
+        for path in list( self.nodePaths.get( sender, () ) ):
+            for childPath in path.iterchildren():
+                childPath.invalidate()
+            for child in sender.renderedChildren():
+                self.integrate( child, path )
         self.purge()
     def onChildAdd( self, sender: Any, value: Any ) -> None:
         """Sender has a new child named value"""

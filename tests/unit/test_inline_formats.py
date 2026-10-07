@@ -28,9 +28,19 @@ def document(url):
     return ('''<X3D version="4.0"><Scene><Inline url='"%s"'/></Scene></X3D>''' % url).encode()
 
 
+def settle():
+    """Wait for the loads, and put their results in place as a frame would"""
+    from OpenGLContext.context import Context  # noqa: PLC0415 kept with its one use
+    assert background.wait_for_idle(PATIENCE)
+    for reference in list(Context.allContexts):
+        live = reference()
+        if live is not None:
+            live.renderQueue.run()
+
+
 def inlined(scene):
     """The scene's Inline, once its load has finished"""
-    assert background.wait_for_idle(PATIENCE)
+    settle()
     found = scene.children[0]
     assert isinstance(found, Inline)
     return found
@@ -73,7 +83,7 @@ def test_load_false_loads_nothing_until_it_is_set(tmp_path):
     found = inlined(Loader.load(str(tmp_path / 'world.x3d')))
     assert found.renderedChildren() == []
     found.load = True
-    assert background.wait_for_idle(PATIENCE)
+    settle()
     assert len(found.renderedChildren()) == 1
     found.load = False
     assert found.renderedChildren() == []
@@ -90,3 +100,31 @@ def test_the_gltf_reader_mounts_its_group():
     class Native:
         group = 'the group'
     assert formats.adapter_for('model.glb').nodes(Native()) == ['the group']
+
+
+RED_PART = (b'<X3D version="4.0"><Scene><Shape><Appearance><Material diffuseColor="1 0 0" '
+            b'emissiveColor="1 0 0"/></Appearance><Box size="3 3 3"/></Shape></Scene></X3D>')
+
+
+def test_a_scene_read_after_the_world_is_drawn_is_drawn(gl_context, tmp_path):
+    """The pass draws what the Inline reads, though the world was drawn before it arrived."""
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    (tmp_path / 'part.x3d').write_bytes(RED_PART)
+    (tmp_path / 'world.x3d').write_bytes(
+        b'<X3D version="4.0"><Scene><Viewpoint position="0 0 8"/>'
+        b'<Inline load="false" url=\'"part.x3d"\'/></Scene></X3D>')
+    scene = Loader.load(str(tmp_path / 'world.x3d'))
+    with scene_context(scene) as context:
+        context.OnDraw(force=1)
+        scene.children[1].load = True
+        assert background.wait_for_idle(PATIENCE)
+        for _ in range(3):
+            context.renderQueue.run()
+            context.OnDraw(force=1)
+        image = drawn_image(context)
+        h, w = image.shape[:2]
+        red, green, blue = image[h // 2, w // 2]
+        assert red > 100 and red > 3 * max(green, blue, 1)
+        scene.children[1].load = False
+        context.OnDraw(force=1)
+        assert drawn_image(context)[h // 2, w // 2].sum() < 60

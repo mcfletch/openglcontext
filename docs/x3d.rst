@@ -104,8 +104,12 @@ Materials and appearance are described with the :doc:`PBR renderer <pbr>`:
 fields and mapping labels, ``Appearance.alphaMode`` and ``alphaCutoff``, and
 ``MultiTextureTransform``.
 
+A grouping node or shape whose ``visible`` is false is not drawn, picked or
+shadowed, nor is anything under it; setting it takes effect on the next frame.
+
 An ``Inline`` reads any format a registered reader opens: another X3D or
-VRML97 world, an OBJ model or a glTF model. See :ref:`x3d-worlds`.
+VRML97 world, an OBJ model or a glTF model. Its scene is read on the loader
+pool and drawn from the frame after it arrives. See :ref:`x3d-worlds`.
 
 Kept and not drawn
 ~~~~~~~~~~~~~~~~~~

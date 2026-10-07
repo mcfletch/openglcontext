@@ -6,6 +6,9 @@ from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext.scenegraph import boundingvolume
 from pydispatch import dispatcher
 SWITCH_CHANGE_SIGNAL = 'switch-choice-change'
+#: Sent by a node whose `renderedChildren` have been replaced wholesale (an
+#: Inline whose scene has arrived or been let go), for a pass to walk them again.
+CHILDREN_CHANGE_SIGNAL = 'rendered-children-change'
 
 class Switch(basenodes.Switch):
     """Switch node based on VRML 97 Switch

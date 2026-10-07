@@ -8,17 +8,22 @@ nodes that reader says its result is drawn as
 (:meth:`~OpenGLContext.loaders.readers.SceneReader.nodes`): an X3D, VRML97 or
 OBJ scene's children, a glTF model's group. The first url that reads is used.
 
-The read happens on the loader pool. X3D's `load` field says whether the
-scene is wanted: false leaves the Inline empty, and setting it true reads the
-scene again. Setting `url` or `load` supersedes a read still under way.
+The read happens on the loader pool, and the result is put in place on the
+render thread, through a context's render queue, with
+:data:`~OpenGLContext.scenegraph.switch.CHILDREN_CHANGE_SIGNAL` sent for the
+render passes to walk it. X3D's `load` field says whether the scene is wanted:
+false leaves the Inline empty, and setting it true reads the scene again.
+Setting `url` or `load` supersedes a read still under way.
 """
 from collections.abc import Sequence
 from typing import Any
 
+from pydispatch import dispatcher
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import protofunctions, fieldtypes
 from OpenGLContext import context
 from OpenGLContext.loaders import background
+from OpenGLContext.scenegraph.switch import CHILDREN_CHANGE_SIGNAL
 import logging
 
 log = logging.getLogger(__name__)
@@ -92,7 +97,9 @@ class Inline(basenodes.Inline):
     def reload( self ) -> None:
         """Empty the Inline and, where `load` is true, read the scene from `url` again"""
         generation = self.__dict__['_generation'] = self.__dict__.get('_generation', 0) + 1
-        self.inlined = ()
+        if self.inlined:
+            self.inlined = ()
+            dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)
         url = list(self.__dict__.get('url', ()))
         if not url or not self.__dict__.get('load', True):
             return
@@ -100,6 +107,21 @@ class Inline(basenodes.Inline):
             ' '.join(url), self.loadBackground, url, context.Context.allContexts, generation,
             prepare=prepare_scene_loading,
         )
+
+    def deliver(self, nodes: Sequence[Any], generation: Any = None,
+                contexts: Sequence[Any] = ()) -> None:
+        """Draw `nodes` as the inlined scene; on the render thread
+
+        A result for a read since superseded (`generation` not the current
+        one) is dropped. The passes are told to walk the new children, and
+        `contexts` to redraw.
+        """
+        if generation is not None and generation != self.__dict__.get('_generation'):
+            return
+        self.inlined = tuple(nodes)
+        dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)
+        for found in contexts:
+            found.triggerRedraw(1)
 
     def loadBackground(
         self, url: Any, contexts: Sequence[Any] = (), generation: Any = None,
@@ -123,14 +145,12 @@ class Inline(basenodes.Inline):
             except (OSError, ValueError, SyntaxError) as err:
                 log.info("Inline url %s did not read: %s", u, err)
                 continue
-            if generation is not None and generation != self.__dict__.get('_generation'):
-                return
             log.info("loaded %s", u)
-            self.inlined = tuple(nodes)
-            for reference in contexts:
-                c = reference()
-                if c:
-                    c.triggerRedraw(1)
+            live = [found for found in (reference() for reference in contexts) if found]
+            if live:
+                live[0].renderQueue.call(self.deliver, nodes, generation, live)
+            else:
+                self.deliver(nodes, generation)
             return
         log.warning(
             """Unable to load any scene from the url %s for the node %s""",
