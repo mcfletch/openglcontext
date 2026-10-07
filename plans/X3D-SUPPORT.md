@@ -73,9 +73,13 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [ ] baselines not yet blessed: review the report first
     (`oglc-x3d-regression`, then `--bless`)
   - [ ] found by comparing with Web3D's renders, still to fix: a grey plane drawn
-    that Web3D does not (SphereSensor/multisensor); Figure20_17a framed differently;
-    Inlines naming another archive's scenes fail (each archive is extracted to its
-    own tree)
+    that Web3D does not (SphereSensor/multisensor); Figure20_17a framed differently
+  - [x] Inlines naming another archive's scenes: the corpus is one tree
+    (`vrml.x3d.corpus.examples`), `--fetch` adds the archives the drawn ones name
+    (`with_references`: X3dForWebAuthors), and the folder of every archive's
+    examples is the content root. pyvrml97's corpus test reads every fetched
+    archive; X3dForWebAuthors brought the ROUTE-to-a-field-the-version-lacks
+    warning
   - [x] X_ITE references (`--reference x_ite`): drawn by
     `scripts/x3d_xite_references.py`, a `uv run` tool with Playwright as inline
     script metadata, not part of the installed engine; X_ITE 16.4.3 (MIT) from npm,
