@@ -480,7 +480,7 @@ vec3 planarReflected(vec3 probe, vec3 N, float rough) {
 // it is unaffected.  See OpenGLContext/scenegraph/fog.py for the modes.
 uniform int fogMode;              // 0 off, 1 density, 2 VRML97 LINEAR, 3 EXPONENTIAL
 uniform float fogDensity;         // mode 1: per eye-space unit.  2/3: 1/visibilityRange
-uniform vec3 fogColor;            // linear-space horizon/atmosphere colour
+uniform vec3 fogColor;            // mode 1: linear light.  2/3: X3D's colour, as displayed
 
 uniform uint objectId;
 uniform bool instancingEnabled;   // take the id from the per-instance varying
@@ -600,16 +600,15 @@ float spotAttenuation(int i, vec3 L) {
     return t * t;
 }
 
-// A colour faded into the fog colour by this fragment's distance: distant
-// geometry dissolves into the fog, which is what being under water looks like
-// from inside it. Unchanged where there is no fog. displayed() applies the
-// aerial-perspective curve to linear light and X3D's two curves to the colour
-// as it is displayed, where X3D's fog equation is written.
+// A colour faded into the fog colour by this fragment's distance; unchanged
+// where there is no fog. The aerial-perspective curve (mode 1) is applied to
+// linear light, X3D's two curves (modes 2 and 3) to the colour as it is
+// displayed, where X3D's fog equation is written: displayed() and the Phong
+// and unlit branches call it at those two points.
 vec3 fogged(vec3 color) {
     if (fogMode > 0 && fogDensity > 0.0) {
-        // How far through the fog this fragment lies: eye distance over the
-        // visible range for the VRML97 curves, or distance times density for
-        // the aerial-perspective one.  One number, read three ways.
+        // Eye distance over the visible range for X3D's curves; distance
+        // times density for the aerial-perspective one.
         float reach = fogDensity * length(toViewer(vPosition));
         float fog;
         if (fogMode == 1) {
@@ -629,22 +628,40 @@ vec3 fogged(vec3 color) {
     return color;
 }
 
+// The linear HDR colour the bloom composite (ACES, then sRGB) turns into
+// `shown`, a display colour in [0, 1]: what a colour X3D gives as it is
+// displayed is written as, where bloom tone-maps afterwards. The ACES curve
+// is a ratio of quadratics, so each channel is the root of one.
+vec3 untoned(vec3 shown) {
+    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    vec3 y = clamp(sRGBToLinear(clamp(shown, 0.0, 1.0)), 0.0, 1.0);
+    vec3 qa = c * y - a, qb = d * y - b, qc = e * y;
+    return (-qb - sqrt(max(qb * qb - 4.0 * qa * qc, 0.0))) / (2.0 * qa);
+}
+
+// A colour X3D gives as it is displayed (a Phong or unlit surface, already
+// fogged), as it is written out: itself, or its untoned() value for bloom.
+vec3 shown(vec3 color) {
+    return hdrOutput ? untoned(color) : color;
+}
+
 // Linear HDR colour, times exposure, as it is written out: fogged, then
 // tone-mapped and encoded for the display unless bloom composites it later.
 vec3 displayed(vec3 color) {
-    if (fogMode == 1 || hdrOutput) {
+    if (fogMode == 1) {
         color = fogged(color);
     }
-
+    if (fogMode > 1) {
+        // X3D's curves mix in the displayed colour; with bloom that colour is
+        // made here and written as the linear light the composite displays as it.
+        return shown(fogged(linearToSRGB(acesToneMap(color))));
+    }
     // filmic tone map (ACES) + sRGB encode for a non-sRGB framebuffer. Correct
     // ONLY with GL_FRAMEBUFFER_SRGB disabled (the pass forces this); an sRGB draw
     // target would double-encode. See pbrpass framebuffer setup.
     if (!hdrOutput) {                 // default: tone-map + sRGB here
         color = acesToneMap(color);
         color = linearToSRGB(color);
-        if (fogMode > 1) {
-            color = fogged(color);
-        }
     }                                 // bloom pass: leave linear HDR for the composite
     return color;
 }
@@ -671,8 +688,8 @@ void main() {
 
     // KHR_materials_unlit: emit base color directly (no lighting)
     if (unlitMode) {
-        vec3 unlit = hdrOutput ? fogged(albedo)
-                   : (fogMode == 1 ? linearToSRGB(fogged(albedo)) : fogged(linearToSRGB(albedo)));
+        vec3 unlit = shown(fogMode == 1 ? linearToSRGB(fogged(albedo))
+                                        : fogged(linearToSRGB(albedo)));
         fragColor = vec4(unlit, alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());   // unlit is still pickable
         return;
@@ -680,7 +697,7 @@ void main() {
 
     // X3D's Phong equation (19775-1, 17.2.2.5) on the colour values as given:
     // a Color node replaces the diffuse colour, a texture multiplies it, and
-    // the sum is displayed as it is, without the tone map.
+    // the sum is displayed as it is, without the tone map, bloom or not.
     if (phongMode) {
         vec3 diffuse = (hasVertexColor ? vColor.rgb : baseColorFactor)
                      * (hasBaseColor ? baseTex.rgb : vec3(1.0));
@@ -699,13 +716,7 @@ void main() {
             color += phongLight(i, N, V, vPosition, diffuse, metallicFactor * diffuse,
                                 specularColorFactor, roughnessFactor, shadows[i]);
         }
-        color = clamp(color, 0.0, 1.0);
-        if (hdrOutput) {
-            color = fogged(sRGBToLinear(color));     // the bloom composite tone-maps
-        } else {
-            color = fogged(color);
-        }
-        fragColor = vec4(color, alpha);
+        fragColor = vec4(shown(fogged(clamp(color, 0.0, 1.0))), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());
         return;
     }

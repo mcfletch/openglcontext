@@ -19,10 +19,10 @@ def document(appearance):
             + appearance + b"</Appearance>" + QUAD + b"</Shape></Scene></X3D>")
 
 
-def centre(text):
+def centre(text, **definition):
     from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
     from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
-    with scene_context(Loader.loads(text, 'a.x3d'), size=(32, 32)) as context:
+    with scene_context(Loader.loads(text, 'a.x3d'), size=(32, 32), **definition) as context:
         drawn_image(context)
         return tuple(drawn_image(context)[16, 16].astype(int))
 
@@ -54,6 +54,27 @@ def test_a_material_built_in_code_is_converted():
 ])
 def test_drawn_by_x3ds_equation(gl_context, appearance, expected):
     assert centre(document(appearance)) == pytest.approx(expected, abs=3)
+
+
+@pytest.mark.parametrize('appearance, expected', [
+    (b"<Material diffuseColor='0.5 0.25 0'/>", (128, 64, 0)),
+    # no material: unlit, the texture's colour as given
+    (b"<PixelTexture image='1 1 3 0x804000'/>", (128, 64, 0)),
+])
+def test_bloom_leaves_what_x3d_displays_as_it_is(gl_context, appearance, expected):
+    assert centre(document(appearance), bloom=True) == pytest.approx(expected, abs=4)
+
+
+FOGGED = (b"<X3D version='3.3'><Scene><Viewpoint position='0 0 0'/>"
+          b"<Fog fogType='LINEAR' color='0.5 0.25 0' visibilityRange='1'/>"
+          b"<Shape><Appearance>%s</Appearance>" + QUAD + b"</Shape></Scene></X3D>")
+
+
+@pytest.mark.parametrize('bloom', [False, True])
+@pytest.mark.parametrize('appearance', [b"<Material diffuseColor='0 0 1'/>",
+                                        b"<PhysicalMaterial baseColor='0 0 1'/>"])
+def test_a_surface_past_the_fogs_range_is_the_fog_colour(gl_context, appearance, bloom):
+    assert centre(FOGGED % appearance, bloom=bloom) == pytest.approx((128, 64, 0), abs=4)
 
 
 LIT = (b"<X3D version='3.3'><Scene><Viewpoint position='0 0 0'/><NavigationInfo headlight='false'/>"

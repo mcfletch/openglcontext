@@ -54,10 +54,10 @@ A ``Material`` read from a VRML97 or X3D document is drawn by X3D's Phong
 equation (ISO/IEC 19775-1, 17.2.2.5): the emissive colour, plus for each light
 its ``ambientIntensity`` times the Material's ``ambientIntensity`` and diffuse
 colour, its diffuse and its Blinn-Phong specular terms, on the colour values as
-given and without the tone map. A ``Color`` node replaces the diffuse colour, a
-texture multiplies it, and fog is X3D's. Image-based lighting, normal and
-occlusion maps, lightmaps and planar reflections are not read for such a
-shape. A ``Material`` built in code is converted instead: its diffuse colour
+given and without the tone map, bloom on or off. A ``Color`` node replaces the
+diffuse colour, a texture multiplies it, and fog is X3D's. Image-based
+lighting, normal and occlusion maps, lightmaps and planar reflections are not
+read for such a shape. A ``Material`` built in code is converted instead: its diffuse colour
 becomes the base colour and its shininess sets the roughness, lit in linear
 light with a flat ambient term.
 
@@ -782,11 +782,19 @@ use a fog rather than a full-screen overlay, because an overlay has no depth.
 How fog is applied
 ~~~~~~~~~~~~~~~~~~
 
-The shader blends in the fog colour in linear HDR, before tone mapping, which
-keeps fogged highlights from posterising. One uniform carries the scale for
-every mode: the reciprocal of the visible range, which the shader multiplies by
-the fragment's distance. A scene with no ``Fog`` renders unchanged, because
-the fog mode uniform stays at zero.
+X3D's two curves mix the fog colour into the colour as it is displayed, after
+the tone map, as X3D's equation is written. The engine's aerial-perspective
+fog (a density, which terrain sets) mixes in linear HDR before the tone map,
+which keeps fogged highlights from posterising. One uniform carries the scale
+for every mode: the reciprocal of the visible range, or the density, which the
+shader multiplies by the fragment's distance. A scene with no ``Fog`` renders
+unchanged, because the fog mode uniform stays at zero.
+
+With bloom on (``OPENGLCONTEXT_BLOOM=1``), the composite tone-maps the whole
+frame. A colour X3D gives as displayed -- a surface in an X3D fog, a Phong or an unlit
+one -- is written as the linear colour the composite displays as that colour,
+so it looks the same with bloom on or off, and blooms only as far as its
+displayed colour is bright.
 
 A transform above a ``Fog`` node scales its ``visibilityRange``, because the
 specification puts the range in the node's local coordinates. A model authored

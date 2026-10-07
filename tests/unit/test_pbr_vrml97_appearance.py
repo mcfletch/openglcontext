@@ -121,7 +121,7 @@ def test_the_packed_block_follows_every_input():
 def test_the_packed_block_is_held_in_the_scenegraph_cache():
     material = PhysicalMaterial(baseColor=(0.25, 0.5, 0.75))
     packed = pack_material_block(material)
-    version, held = cache.CACHE.getData(material, MATERIAL_BLOCK_KEY)
+    (version, _generation), held = cache.CACHE.getData(material, MATERIAL_BLOCK_KEY)
     assert version == material.factorVersion
     assert held is packed
 
