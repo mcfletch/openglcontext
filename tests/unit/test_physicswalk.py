@@ -591,3 +591,24 @@ class TestZoneGravity:
         monkeypatch.setattr(renderpass, 'current_pass', lambda: None)
         host.stepPhysics(0.01)
         assert host.gravityZones.world.gravity_volumes == before
+
+
+# -- X3D's Collision groups ----------------------------------------------------
+
+class TestCollisionGroups:
+    """A world with Collision groups gives the avatar a body their touches report"""
+
+    def test_the_avatar_has_a_body_where_the_world_has_groups(self):
+        group = basenodes.Collision(children=[_quad(size=4.0, y=3.0)])
+        host = _started(Transform(children=[_quad(), group]))
+        host.enablePhysics(True)
+        assert host.physicsPlatform.character.body is not None
+        reporter = host.physicsCollisionReporter
+        assert reporter is not None and reporter.walker == host.physicsPlatform.character.body
+        assert [group] in reporter.groups.values()
+
+    def test_a_world_without_groups_gives_the_avatar_no_body(self):
+        host = _started()
+        host.enablePhysics(True)
+        assert host.physicsPlatform.character.body is None
+        assert host.physicsCollisionReporter is None

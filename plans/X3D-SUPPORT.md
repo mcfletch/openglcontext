@@ -95,7 +95,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] `LoadSensor` (`vrml.x3d.loadsensor`); `Inline` and `ImageTexture` record their load state
   - [x] `Anchor`: a group; `#viewpoint` bound, other urls through `Context.OnAnchor`
   - [x] the cascade: a field is reached once per cascade, through handlers and their outputs (`vrml.event`)
-  - [ ] `Collision`'s `collideTime` and `isActive`
+  - [x] `Collision`: `enabled` and `proxy` in the walk's collision world; `collideTime` and `isActive` from the avatar's touches (`physics.x3dcollision`)
   - [ ] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor
 - Phase 8, engine-mapped components (§9.17)
 - Phase 9, Fast Infoset reader

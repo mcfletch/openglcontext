@@ -182,6 +182,14 @@ reflect a blurred environment; the cube-map textures, ``origin`` and
 ``global`` are not read. It needs full image-based lighting
 (``ContextDefinition.ibl``).
 
+Walking (:doc:`physics`) collides with what X3D's ``Collision`` groups say:
+a disabled group's children are walked through, a ``proxy`` collides in
+place of the children, and each enabled group's geometry is a body of its
+own in the walk's world (``gltf_world.collision_groups``). As the avatar
+touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
+each enabled group around it, and ``isActive FALSE`` when the touch ends
+(``OpenGLContext.physics.x3dcollision``).
+
 An enabled ``LocalFog`` fogs the siblings in its parent group and their
 descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);
 where LocalFogs nest, the deepest group's fogs what is in it. An instanced

@@ -49,6 +49,8 @@ from OpenGLContext.move.modes import (
 if TYPE_CHECKING:
     from omi_physics.character import CharacterCapabilities, CharacterController
     from omi_physics.world import PhysicsWorld
+
+    from OpenGLContext.physics.x3dcollision import CollisionReporter
     from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
     from OpenGLContext.physics.zones import GravityZones
 
@@ -230,9 +232,15 @@ class PhysicsWalkMixin(object):
         scale = self.physicsAvatarScale(lo, hi)
         capabilities = self.characterCapabilities(scale)
         from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+        from OpenGLContext.physics.gltf_world import collision_groups
+        groups = collision_groups(world)
+        # A world with X3D Collision groups gives the avatar a body, whose
+        # touches with the groups' geometry are their collideTime.
         self.physicsPlatform = PhysicsViewPlatform(
             world, capabilities, yaw=self.physicsYaw,
-            gravity=self.physicsGravity * scale)
+            gravity=self.physicsGravity * scale, body=bool(groups))
+        if groups:
+            self.watchCollisionGroups(world, groups)
         from OpenGLContext.physics.zones import GravityZones
         self.gravityZones = GravityZones(world)
         self.applyMovementModes(scale)
@@ -240,6 +248,19 @@ class PhysicsWalkMixin(object):
         self._physicsLast = self.physicsNow()
         self.physicsPlatform.apply(self)
         return True
+
+    #: Sends the X3D Collision groups' events from the avatar's touches, or None.
+    physicsCollisionReporter: Optional['CollisionReporter'] = None
+
+    def watchCollisionGroups(self, world: 'PhysicsWorld', groups: Any) -> None:
+        """Send the Collision groups' collideTime and isActive as the avatar touches them"""
+        from OpenGLContext.events import systemtime
+        from OpenGLContext.physics.x3dcollision import CollisionReporter
+        assert self.physicsPlatform is not None, 'the avatar is built first'
+        reporter = CollisionReporter(groups, self.physicsPlatform.character.body)
+        self.physicsCollisionReporter = reporter
+        world.add_contact_listener(
+            lambda event: reporter.heard(event, systemtime.systemTime()))
 
     # -- switching --------------------------------------------------------
     def enablePhysics(self, on: bool = True) -> bool:

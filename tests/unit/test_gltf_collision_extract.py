@@ -96,3 +96,31 @@ class TestMinAABBSubstitution:
         g = Transform(children=[shape])
         points, tris = gltf_world.extract_trimesh(g)       # default min_hull_size=0
         assert len(tris) == ntri
+
+
+class TestCollisionGroups:
+    """X3D's Collision: a disabled one's children are walked through; a proxy stands in"""
+
+    def test_a_disabled_collision_group_collides_with_nothing(self):
+        from OpenGLContext.scenegraph.basenodes import Collision  # noqa: PLC0415 kept with its use
+        group = Transform(children=[
+            _shape(np.array([0, 0, 0], 'f')),
+            Collision(enabled=False, children=[_shape(np.array([10, 0, 0], 'f'))]),
+        ])
+        points, tris = gltf_world.extract_trimesh(group)
+        assert tris.shape == (1, 3)
+        assert points[:, 0].max() < 5
+
+    def test_an_enabled_collision_group_collides_with_its_children(self):
+        from OpenGLContext.scenegraph.basenodes import Collision  # noqa: PLC0415 kept with its use
+        group = Collision(children=[_shape(np.array([10, 0, 0], 'f'))])
+        _points, tris = gltf_world.extract_trimesh(group)
+        assert tris.shape == (1, 3)
+
+    def test_a_proxy_collides_in_place_of_the_children(self):
+        from OpenGLContext.scenegraph.basenodes import Collision  # noqa: PLC0415 kept with its use
+        proxy = _shape(np.array([0, 20, 0], 'f'))
+        group = Collision(proxy=proxy, children=[_shape(np.array([10, 0, 0], 'f'))])
+        points, tris = gltf_world.extract_trimesh(group)
+        assert tris.shape == (1, 3)
+        assert points[:, 1].min() >= 20

@@ -203,6 +203,8 @@ OpenGLContext/
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
+│   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
+│   │                 # the walker's touches -- no GL
 │   └── events.py     # Collision subscriptions: a callback per body, delivered
 │                     # once a frame, and a trigger's occupancy
 │                     # -- docs/physics.rst#physics-collisions
