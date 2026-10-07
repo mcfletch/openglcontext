@@ -257,6 +257,8 @@ OpenGLContext/
 │   ├── zone.py       # Zone and its settings nodes; placing a frame's zones
 │   │                 # -- docs/zones.rst
 │   ├── zones.py      # Zones' arithmetic: shapes, distances, layering -- no GL
+│   ├── environmentlight.py  # X3D's EnvironmentLight as the scene's
+│   │                 # image-based light, from its SH coefficients
 │   ├── imagebasedlight.py  # A document's own convolved environment
 │   │                 # (EXT_lights_image_based) -- docs/pbr.rst
 │   ├── octahedral.py # The fold an impostor's views are laid out by; the same

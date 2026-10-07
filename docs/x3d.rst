@@ -106,7 +106,7 @@ implements these X3D nodes, by component:
   OrientationInterpolator, PositionInterpolator, PositionInterpolator2D,
   ScalarInterpolator, SplinePositionInterpolator, SplinePositionInterpolator2D,
   SplineScalarInterpolator, SquadOrientationInterpolator
-- Lighting - DirectionalLight, PointLight, SpotLight
+- Lighting - DirectionalLight, EnvironmentLight, PointLight, SpotLight
 - Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint,
   ViewpointGroup
 - Networking - Anchor, Inline, LoadSensor
@@ -171,6 +171,16 @@ default, light everything. A light casts shadows where its ``shadows`` is
 true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
 The engine's lights made in code are global and cast shadows by default.
+
+An ``EnvironmentLight`` with ``diffuseCoefficients`` (glTF's
+``irradianceCoefficients``: nine RGB spherical-harmonic coefficients,
+multiplied by its ``color``) lights the scene as its image-based light, where
+the scene has no glTF image-based light of its own, with its ``intensity``
+and ``rotation`` (``OpenGLContext.scenegraph.environmentlight``). Its one
+specular level is made from the same coefficients, so smooth surfaces
+reflect a blurred environment; the cube-map textures, ``origin`` and
+``global`` are not read. It needs full image-based lighting
+(``ContextDefinition.ibl``).
 
 An enabled ``LocalFog`` fogs the siblings in its parent group and their
 descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);

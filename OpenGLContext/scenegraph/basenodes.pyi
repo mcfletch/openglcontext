@@ -31,6 +31,7 @@ from OpenGLContext.scenegraph.box import Box as Box
 from OpenGLContext.scenegraph.collision import Collision as Collision
 from OpenGLContext.scenegraph.coordinate import Coordinate as Coordinate
 from OpenGLContext.scenegraph.cubebackground import CubeBackground as CubeBackground
+from OpenGLContext.scenegraph.environmentlight import EnvironmentLight as EnvironmentLight
 from OpenGLContext.scenegraph.extrusions import Extrusion as Extrusion
 from OpenGLContext.scenegraph.extrusions import PolyCone as PolyCone
 from OpenGLContext.scenegraph.extrusions import PolyCylinder as PolyCylinder
@@ -248,6 +249,7 @@ __all__ = [
     'Disk2D',
     'EaseInEaseOut',
     'ElevationGrid',
+    'EnvironmentLight',
     'Extrusion',
     'FloatUniform1f',
     'FloatUniform2f',

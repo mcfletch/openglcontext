@@ -24,6 +24,7 @@ from collections.abc import Hashable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
+from vrml.x3d import nodes as x3dnodes
 
 from OpenGLContext import renderoptions
 from OpenGLContext.passes import zonelayers
@@ -790,10 +791,21 @@ class ZonesMixin(PassResources):
         return self._imageLights
 
     def sceneImageLight(self) -> Any:
-        """The image-based light the scene itself is lit by, or None."""
+        """The image-based light the scene itself is lit by, or None.
+
+        A document's own ImageBasedLight, or else the first EnvironmentLight
+        with one (:meth:`~OpenGLContext.scenegraph.environmentlight.EnvironmentLight.imageLight`).
+        """
         for path in self.paths.get(ImageBasedLight, ()):
             if not getattr(path, 'broken', False):
                 return path[-1]
+        for path in self.paths.get(x3dnodes.EnvironmentLight, ()):
+            if getattr(path, 'broken', False):
+                continue
+            found = getattr(path[-1], 'imageLight', None)
+            light = found() if found is not None else None
+            if light is not None:
+                return light
         return None
 
     def zoneCaptureFaces(self) -> int:
