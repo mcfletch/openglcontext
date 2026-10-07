@@ -106,7 +106,7 @@ Adapter( 'x3d', 'OpenGLContext.viewer.adapters.x3d.X3DAdapter', ['.x3d','.x3dz',
 # document under another name is recognised by its content (loaders.formats).
 Adapter( 'tiles3d', 'OpenGLContext.viewer.adapters.tiles.TilesAdapter', ['tileset.json'] )
 
-Node( 'Anchor', 'vrml.vrml97.basenodes.Anchor' )
+Node( 'Anchor', 'OpenGLContext.scenegraph.anchor.Anchor' )
 Node( 'Appearance', 'OpenGLContext.scenegraph.appearance.Appearance' )
 Node( 'AudioEmitter', 'OpenGLContext.scenegraph.audio.AudioEmitter' )
 Node( 'AudioSource', 'OpenGLContext.scenegraph.audio.AudioSource' )

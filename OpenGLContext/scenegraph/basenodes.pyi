@@ -20,6 +20,7 @@ PROTOTYPES: dict[str, Any]
 from OpenGLContext.scenegraph.shaders import FloatUniform as _FloatUniform
 from OpenGLContext.scenegraph.shaders import IntUniform as _IntUniform
 
+from OpenGLContext.scenegraph.anchor import Anchor as Anchor
 from OpenGLContext.scenegraph.appearance import Appearance as Appearance
 from OpenGLContext.scenegraph.audio import AudioEmitter as AudioEmitter
 from OpenGLContext.scenegraph.audio import AudioSource as AudioSource
@@ -163,7 +164,6 @@ from OpenGLContext.scenegraph.zone import ZoneReverb as ZoneReverb
 from OpenGLContext.scenegraph.zone import ZoneVisibility as ZoneVisibility
 from vrml.route import IS as IS
 from vrml.route import ROUTE as ROUTE
-from vrml.vrml97.basenodes import Anchor as Anchor
 from vrml.vrml97.basenodes import AudioClip as AudioClip
 from vrml.vrml97.basenodes import Color as Color
 from vrml.vrml97.basenodes import MovieTexture as MovieTexture

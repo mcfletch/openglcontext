@@ -226,6 +226,8 @@ OpenGLContext/
 │   │                 # sense: the viewer, a target, the views -- no GL
 │   ├── x3dpointing.py   # X3D's pointing-device sensors told of each
 │   │                 # context's picked pointer -- no GL
+│   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the
+│   │                 # context to follow its url (Context.OnAnchor)
 │   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
 │   │                 # drawn as the PBRMesh their fields build -- docs/x3d.rst
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material

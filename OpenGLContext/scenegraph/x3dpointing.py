@@ -6,7 +6,9 @@ observes its picked ``mousemove`` and ``mousebutton`` events
 (:meth:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin.observeEvents`):
 
 - The sensors an event reaches are the enabled ones among the children of
-  the lowest group on the picked path that has any (:func:`sensors_for`).
+  the lowest group on the picked path that has any, with that group itself
+  where it is an `Anchor` (:func:`sensors_for`). An Anchor released over its
+  geometry follows its url through the context (:meth:`Anchor.follow`).
 - The hit is the picked point (:func:`unprojected`) and the ray the pointer's
   bearing (:func:`pointer_ray`), each in the sensors' coordinates. Picking
   gives a point; the hit has no normal or texture coordinate.
@@ -23,7 +25,10 @@ from typing import Any, Optional
 
 import numpy as np
 from vrml.x3d import pointing
+from vrml.x3d import nodes as x3d
 from vrml.x3d.nodes import X3DPointingDeviceSensorNode
+
+from OpenGLContext.scenegraph.anchor import Anchor
 
 __all__ = ['CylinderSensor', 'PlaneSensor', 'PointerSensing', 'SphereSensor', 'TouchSensor',
            'pointer_ray', 'sensing', 'sensors_for', 'unprojected']
@@ -61,6 +66,8 @@ def sensors_for(path: Any) -> tuple[list[Any], Any]:
     for index in range(len(path) - 1, -1, -1):
         found = [child for child in getattr(path[index], 'children', ())
                  if isinstance(child, X3DPointingDeviceSensorNode) and child.enabled]
+        if isinstance(path[index], x3d.Anchor) and index < len(path) - 1:
+            found.append(path[index])
         if found:
             return found, path[:index + 1]
     return [], None
@@ -83,7 +90,9 @@ def _direction_in(matrix: np.ndarray, direction: Any) -> np.ndarray:
 class PointerSensing:
     """The pointing-device sensors of one context and the pointer's effect on them"""
 
-    def __init__(self) -> None:
+    def __init__(self, context: Any = None) -> None:
+        #: The context whose pointer this is, for an Anchor to follow through.
+        self.context = None if context is None else weakref.ref(context)
         #: The sensors the pointer is over.
         self.over: list[Any] = []
         #: (sensor, world-to-local) for each sensor a held press activated.
@@ -162,8 +171,13 @@ class PointerSensing:
         """The primary button has come up, over `found`"""
         if not self.held:
             return
+        context = None if self.context is None else self.context()
         for sensor, _matrix in self.held:
-            sensor.pointerRelease(sensor in found)
+            if isinstance(sensor, Anchor):
+                if sensor in found and context is not None:
+                    sensor.follow(context)
+            else:
+                sensor.pointerRelease(sensor in found)
         self.held = []
 
 
@@ -175,7 +189,7 @@ def sensing(context: Any) -> PointerSensing:
     """`context`'s PointerSensing, observing its pointer from the first call"""
     found = _SENSING.get(context)
     if found is None:
-        found = _SENSING[context] = PointerSensing()
+        found = _SENSING[context] = PointerSensing(context)
         context.observeEvents('mousemove', found.observe)
         context.observeEvents('mousebutton', found.observe)
     return found

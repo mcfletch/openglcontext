@@ -208,6 +208,10 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   the application's own handlers receive the same events. The hit is the picked point, with no
   normal or texture coordinate. Picking (``ContextDefinition.pickEnabled``)
   has to be on.
+- An ``Anchor`` draws its children as a group, and a click released over
+  them calls ``Context.OnAnchor(anchor, url, parameter)``. The context binds
+  the viewpoint a ``#name`` url names; opening any other url is left to an
+  application that overrides ``OnAnchor``.
 - The bound ``NavigationInfo`` (``OpenGLContext.move.navigationinfo``):
   ``headlight`` true adds a headlight to the scene's lights and false leaves
   it off; a scene with no NavigationInfo has the headlight only where it has

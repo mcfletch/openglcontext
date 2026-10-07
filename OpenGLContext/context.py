@@ -976,6 +976,26 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         (:func:`OpenGLContext.multiview.viewpoints.scene_cameras`) overrides it.
         """
 
+    def OnAnchor(self, anchor: Any, url: Sequence[str], parameter: Sequence[str]) -> bool:
+        """An ``Anchor``'s geometry was clicked: follow its `url`; whether it was followed
+
+        A ``#name`` url binds the viewpoint the scene names so. Any other url
+        is left alone: opening another document is the application's
+        choice, made by overriding this. `parameter` is the Anchor's.
+        """
+        target = url[0] if url else ''
+        if not target.startswith('#'):
+            log.info('Anchor url %r not followed: OnAnchor opens no documents', list(url))
+            return False
+        graph = self.getSceneGraph()
+        viewpoint = graph.getDEF(target[1:]) if graph else None
+        if viewpoint is None:
+            log.info('Anchor url %r names no node of the scene', target)
+            return False
+        viewpoint.set_bind = True
+        self.triggerRedraw(1)
+        return True
+
     def OnNextViewpoint(self, event: Any = None) -> None:
         """Bind the scene's next viewpoint after the bound one"""
         from OpenGLContext.passes.viewpointbinding import next_viewpoint  # noqa: PLC0415 cycle: passes import context
