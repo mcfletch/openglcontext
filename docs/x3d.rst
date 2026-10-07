@@ -10,6 +10,30 @@ reading and writing are pyvrml97's ``vrml.x3d``; the engine supplies the node
 implementations that draw. To open an X3D file and look at it, use
 :doc:`oglc-view <viewer>`.
 
+.. figure:: images/demos/x3d_demo.jpg
+   :alt: A gallery on a checkered marble floor before a brick wall: gold, copper and steel spheres on sandstone plinths, a bronze ball in a lit alcove, a sandstone mound and a small gold vase
+
+   ``oglc-x3d``: an X3D 4 document read by the engine.
+
+The showcase
+------------
+
+``oglc-x3d`` opens ``OpenGLContext/bin/x3d_gallery.x3d``, an X3D 4 document,
+and :doc:`tests/x3d_demo.py <tutorials/x3d_demo>` is the same scene as a
+tutorial. The document's floor and back wall are an ``IndexedTriangleSet``
+and an ``IndexedTriangleStripSet`` wearing ``PhysicalMaterial`` marble and
+brick; three ``PhysicalMaterial`` metals stand on sandstone plinths drawn
+with an X3D 4 ``Material`` and its ``diffuseTexture``; a ``TriangleFanSet``
+with ``ColorRGBA`` colours and a ``LineSet`` make the medallion on the wall;
+an ``ElevationGrid`` is the mound; and a glTF vase is ``Inline``\ d. The sun
+casts shadows, and the alcove's lamp lights only the alcove. The textures and
+the vase are written beside a copy of the document when the command starts,
+in the user cache directory or ``--directory``.
+
+Its keys: ``l`` turns the alcove lamp off and on, ``m`` hides and shows the
+medallion through its ``visible`` field, and ``w`` writes the scene back as
+X3D in each encoding beside the document.
+
 Loading
 -------
 

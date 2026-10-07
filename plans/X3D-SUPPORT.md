@@ -70,7 +70,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [ ] point/spot `radius`; the fixed-function pipeline's scope
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
   - [ ] `TwoSidedMaterial` and `backMaterial`; environment (`EnvironmentLight`, `TextureBackground`, `LocalFog`; the cube-map nodes are Phase 8's CubeMapTexturing)
-  - [ ] showcase command and reference captures
+  - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture
 - Phase 7, runtime (§9.10, §9.15, §9.16)
   - [ ] event cascade; time sensor; interpolators; sequencers, triggers, followers
   - [ ] bindable stacks and navigation

@@ -148,9 +148,10 @@ PATHS = [
         'Building a World',
         """The scenery nodes and the tools around them: rooms lit as rooms,
         mirrors, water, ground cover, levels of detail, roads, audio,
-        particles, instanced batching, writing a scene out as glTF, and
-        recording a session or a video of one.""",
+        particles, instanced batching, writing a scene out as glTF, reading
+        one from X3D, and recording a session or a video of one.""",
         [
+            'x3d_demo',
             'zones_demo',
             'mirrors_room',
             'water_demo',

@@ -113,6 +113,7 @@ oglc-zones = "OpenGLContext.bin.zones_demo:main"
 oglc-lod = "OpenGLContext.bin.lod_demo:main"
 oglc-cover = "OpenGLContext.bin.cover_demo:main"
 oglc-character-sheet = "OpenGLContext.bin.character_sheet:main"
+oglc-x3d = "OpenGLContext.bin.x3d_demo:main"
 # Ship an application built on the engine as a Debian package: a relocatable
 # CPython and the application on top of it, under /opt.
 oglc-deb = "OpenGLContext.packaging.deb:main"
@@ -157,6 +158,8 @@ OpenGLContext = [
     "scenegraph/*.pyi",
     "shaders/*.vert", "shaders/*.frag", "shaders/*.glsl",
     "resources/environment/*.jpg",
+    # The X3D document `oglc-x3d` opens.
+    "bin/*.x3d",
     # The exception to the rule above: the demos' packaging recipe is read
     # rather than opened -- a PyInstaller spec, a build script and the
     # distribution a .deb is built from -- and it ships so that somebody who
