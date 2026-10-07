@@ -46,7 +46,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] texture fields and mapping labels; per-channel texture transforms
   - [x] alpha on `Appearance` (AUTO reads the base texture's alpha), sidedness on `solid`; `UnlitMaterial`
   - [x] OpenGLContext callers migrated
-  - [ ] callers in the other projects migrated (openglcontext-editor, twig-bb, glisteel, glisteel-editor, marble-demo, marble-editor)
+  - [x] callers in the other projects migrated, each on branch `x3d` in its own worktree: openglcontext-editor `835f5ec` (`gathered()`/`combined_mesh()` take an appearance), twig-bb `11865b5` (shader animation drives a `TextureTransformMatrix3D` labelled `TEXCOORD_0:tcmod`), glisteel `c30573b` (mesh helpers take no material), glisteel-editor `f825e8b`, marble-demo `16bbf38`, marble-editor `8057c41`
   - [x] glTF material round trip through X3D (`vrml.x3d.extension`: a class's `x3dExtension` set, `x3dEquivalent()`; the set is named `OpenGLContext`, since it carries the engine's fields as well as glTF's)
   - [x] the packed material block and `pbr_material`'s per-appearance view kept in `vrml.cache` (`MATERIAL_BLOCK_KEY`, `VIEW_KEY`)
   - [ ] the two tables still outside it: `PBRShaderProgram._material_ubos` (GL buffers, deleted by `release()`; moving them to `mode.cache` needs a buffer owner that `contextresources` frees) and the glTF loader's `_SHARED` (texture nodes interned by image content, so two documents' copies of one image are one node and instance together)
