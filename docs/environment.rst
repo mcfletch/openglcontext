@@ -375,6 +375,11 @@ The window, capture and the interface
        animated by a ``Timer`` or a ``TimeSensor`` then reaches the same point
        in every run, however long the process took to start. ``0`` keeps the
        wall clock. See :ref:`The clock a recording runs on <recording-clock>`.
+   * - ``OPENGLCONTEXT_LOAD_WAIT``
+     - seconds
+     - ``30``
+     - The longest a bounded run waits for its scene and the urls its nodes
+       name to load before it counts frames. See :doc:`Loading <loading>`.
    * - ``OPENGLCONTEXT_CAPTURE_START``
      - seconds
      - ``0``

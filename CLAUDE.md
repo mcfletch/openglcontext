@@ -95,6 +95,8 @@ OpenGLContext/
 │   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
 │   └── controlnet.py # A NURBS node's control points, as pickable markers
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.rst
+│   ├── loadwait.py   # How long a bounded run waits for loads before it
+│   │                 # counts frames -- no GL
 │   ├── framestep.py  # A simulation's time step each frame, from the clock:
 │   │                 # the longest step and a frame cap -- no GL
 │   ├── renderqueue.py  # Calls background threads queue to be made on the

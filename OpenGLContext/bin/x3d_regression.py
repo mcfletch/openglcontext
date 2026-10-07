@@ -47,8 +47,6 @@ __all__ = [
 DEFAULT_SIZE = (792, 465)
 #: Frames drawn once the document's loads have arrived, on the capture clock.
 DEFAULT_FRAMES = 8
-#: Seconds a document's loads are waited for before it is drawn without them.
-LOAD_WAIT = 30.0
 #: Seconds one document's process is given.
 RENDER_TIMEOUT = 120.0
 #: The archives drawn where none are named.
@@ -213,14 +211,13 @@ def draw_document(path: str, root: str, size: tuple[int, int]) -> None:
 
     Run in the drawing process. Its frames are not counted, and its clock does
     not move, until the document's own loads -- the scene, and the textures
-    and Inlines its nodes fetch -- have arrived, or :data:`LOAD_WAIT` seconds
-    have passed. Prints the read's problems and the bound viewpoint as one
+    and Inlines its nodes fetch -- have arrived, or the context's load wait
+    (:mod:`OpenGLContext.events.loadwait`) has run out. Prints the read's
+    problems, the bound viewpoint and whether the wait ran out as one
     :data:`REPORT_MARK` line.
     """
-    import time  # noqa: PLC0415 only in the drawing process
     from OpenGLContext import testingcontext  # noqa: PLC0415 only in the drawing process
     from OpenGLContext.contextdefinition import ContextDefinition  # noqa: PLC0415 only in the drawing process
-    from OpenGLContext.loaders import background  # noqa: PLC0415 only in the drawing process
     from OpenGLContext.loaders import resolver  # noqa: PLC0415 only in the drawing process
     from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 only in the drawing process
 
@@ -230,20 +227,11 @@ def draw_document(path: str, root: str, size: tuple[int, int]) -> None:
 
     class Document(base):                       # pragma: no cover - its own process
         def OnInit(self) -> None:
-            self.started = time.monotonic()
             self.sg = Loader.load(path)
             report['problems'] = [
                 '%s: %s' % (problem.severity, problem.message)
                 for problem in getattr(self.sg, 'problems', ())
                 if problem.severity != 'info'][:MAX_PROBLEMS]
-
-        def loadsPending(self) -> bool:
-            pending = (super().loadsPending() or background.pending() > 0
-                       or len(getattr(self, 'renderQueue', ())) > 0)
-            if pending and time.monotonic() - self.started > LOAD_WAIT:
-                report['loads_waited'] = True
-                return False
-            return pending
 
         def _autoExitCapture(self) -> None:
             from OpenGLContext.passes.viewpointbinding import default_viewpoint  # noqa: PLC0415 its own process
@@ -251,6 +239,8 @@ def draw_document(path: str, root: str, size: tuple[int, int]) -> None:
             if view is not None and view is not default_viewpoint(self.sg):
                 report['viewpoint'] = {'description': str(view.description),
                                        'DEF': str(getattr(view, 'DEF', '') or '')}
+            report['loads_waited'] = bool(getattr(self, 'loadWait', None)
+                                          and self.loadWait.waited)
             print(REPORT_MARK + json.dumps(report), flush=True)
             super()._autoExitCapture()
 

@@ -150,10 +150,15 @@ builds ``SceneLoader()``, waits with ``request.wait( timeout )`` and calls
 ``poll()``.
 
 A bounded run (``OPENGLCONTEXT_AUTO_EXIT_FRAMES``, a capture) does not count a
-frame while a request is pending, and its clock stands still, so a script that
-loads in ``OnInit`` is captured with its scene mounted. ``context.loadsPending()``
-answers whether any request is pending, for a program that has to wait for
-its scenes in the same way.
+frame while a request is pending, or while a load on the loader pool -- an
+``Inline``, a texture a node's url names -- is under way, and its clock stands
+still, so a script that loads in ``OnInit`` is captured with its scene and
+what it names mounted. ``context.loadsPending()`` answers whether it is still
+waiting, for a program that has to wait for its scenes in the same way. The
+wait lasts 30 seconds at most from the first frame
+(``OPENGLCONTEXT_LOAD_WAIT``), so a scene that keeps loading, streamed tiles
+say, is captured all the same; ``context.loadWait.waited`` says the limit was
+reached (``OpenGLContext.events.loadwait``).
 
 Releasing a context's window closes its loader: pending requests are cancelled
 and ``load()`` and ``submit()`` raise ``RuntimeError``.

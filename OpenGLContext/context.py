@@ -111,6 +111,7 @@ from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.screen import ScreenMixin
 from OpenGLContext.vrmlcontext import VRMLSceneMixin
 from OpenGLContext import windowsystem as _windowsystem
+from OpenGLContext.events.loadwait import DEFAULT_LIMIT, LoadWait
 
 if TYPE_CHECKING:
     from OpenGLContext.windowsystem import WindowSystem
@@ -1124,13 +1125,21 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         self.sceneLoader = SceneLoader(owner=self, queue=self.renderQueue)
 
     def loadsPending(self) -> bool:
-        """Whether a scene is still being loaded or waits to be delivered
+        """Whether a scene, or a url a node of it names (an Inline, a texture),
+        is still being loaded or waits to be delivered
 
         What a bounded run (a capture, an auto-exit) waits out before it counts
-        another frame.  False for a context assembled without ``__init__``.
+        another frame, for :attr:`loadWait`'s limit at most
+        (:mod:`OpenGLContext.events.loadwait`).
         """
+        from OpenGLContext.loaders import background  # noqa: PLC0415 the pool's module, imported as loads begin
         loader = getattr(self, 'sceneLoader', None)
-        return bool(loader is not None and loader.pending)
+        loading = bool(loader is not None and loader.pending) or background.pending() > 0
+        wait = self.__dict__.get('loadWait')
+        if wait is None:
+            wait = self.__dict__['loadWait'] = LoadWait(
+                renderoptions.env_number_once('OPENGLCONTEXT_LOAD_WAIT', DEFAULT_LIMIT))
+        return wait.pending(loading, time.monotonic())
 
     def runRenderQueue(self) -> int:
         """Make the calls other threads have queued on :attr:`renderQueue`
