@@ -398,7 +398,10 @@ def material_to_pbr(material_node: Any) -> "dict[str, Any]":
 
 #: The key an :class:`AppearanceMaterial` holds its current version under in
 #: vrml's global cache, against its appearance.
-_VIEW_KEY = 'pbr_material'
+_VIEW_VERSION_KEY = 'pbr-view-version'
+#: The key :func:`pbr_material` keeps an appearance's view under in vrml's
+#: global cache, against the appearance.
+VIEW_KEY = 'pbr-view'
 
 
 class AppearanceMaterial(object):
@@ -445,7 +448,7 @@ class AppearanceMaterial(object):
     def factorVersion(self) -> int:
         """A count that moves whenever a field this view reads from is set"""
         appearance = self.appearance
-        if appearance is not None and cache.CACHE.getData(appearance, _VIEW_KEY) is None:
+        if appearance is not None and cache.CACHE.getData(appearance, _VIEW_VERSION_KEY) is None:
             self._version += 1
             self._watch(appearance)
         return self._version
@@ -453,16 +456,12 @@ class AppearanceMaterial(object):
     @staticmethod
     def _watch(appearance: Any) -> None:
         """Hold a version against the fields of the nodes the view reads now"""
-        holder = cache.CACHE.holder(appearance, True, _VIEW_KEY)
+        holder = cache.CACHE.holder(appearance, True, _VIEW_VERSION_KEY)
         for name in ('material', 'texture'):
             holder.depend(appearance, name)
         if appearance.material:
             for source_field in protofunctions.getFields(appearance.material):
                 holder.depend(appearance.material, source_field)
-
-
-_appearance_views: 'weakref.WeakKeyDictionary[Any, AppearanceMaterial]' = \
-    weakref.WeakKeyDictionary()
 
 
 def pbr_material(appearance: Any) -> Any:
@@ -472,14 +471,16 @@ def pbr_material(appearance: Any) -> Any:
     is drawn as itself.
     Any other appearance (a VRML97 `Material` with its `texture` and
     `textureTransform` beside it, or no material) is drawn as its
-    :class:`AppearanceMaterial`, one per appearance.
+    :class:`AppearanceMaterial`, one per appearance, kept in vrml's cache
+    under :data:`VIEW_KEY` for as long as the appearance lives.
     """
     if appearance is None:
         return None
     material = getattr(appearance, 'material', None)
     if isinstance(material, ChannelMaterial):
         return material
-    view = _appearance_views.get(appearance)
+    view = cache.CACHE.getData(appearance, VIEW_KEY)
     if view is None:
-        view = _appearance_views[appearance] = AppearanceMaterial(appearance)
+        view = AppearanceMaterial(appearance)
+        cache.CACHE.holder(appearance, view, VIEW_KEY)
     return view

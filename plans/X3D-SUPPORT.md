@@ -48,7 +48,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] OpenGLContext callers migrated
   - [ ] callers in the other projects migrated (openglcontext-editor, twig-bb, glisteel, glisteel-editor, marble-demo, marble-editor)
   - [ ] glTF material round trip through X3D
-  - [ ] one texture cache: the glTF loader's `_SHARED` content table and the pass's `_packed_block` attribute folded into `vrml.cache`/`textureCache`
+  - [x] the packed material block and `pbr_material`'s per-appearance view kept in `vrml.cache` (`MATERIAL_BLOCK_KEY`, `VIEW_KEY`)
+  - [ ] the two tables still outside it: `PBRShaderProgram._material_ubos` (GL buffers, deleted by `release()`; moving them to `mode.cache` needs a buffer owner that `contextresources` frees) and the glTF loader's `_SHARED` (texture nodes interned by image content, so two documents' copies of one image are one node and instance together)
 - [ ] Visual suite (not this plan's, found during Phase 5): `8a81ad99` made
   `ContextDefinition.renderer` default to `pbr`, so 53 VRML97 demo scripts
   draw through the PBR pass against baselines captured from the VRML97 pass.

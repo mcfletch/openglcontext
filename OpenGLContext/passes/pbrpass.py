@@ -29,6 +29,7 @@ from OpenGL.GL import (
     glUniform1iv, glUniform4fv,
 )
 from OpenGL.GL import shaders as GL_shaders
+from vrml import cache
 
 from OpenGLContext import renderoptions
 from OpenGLContext.passes import flatcore
@@ -287,23 +288,28 @@ BAKED_LIGHT_BIT = 64
 
 
 
+#: The key a material's packed block is kept under in vrml's cache, with the
+#: ``factorVersion`` it was packed at.
+MATERIAL_BLOCK_KEY = 'material-block'
+
+
 def pack_material_block(material: Any) -> np.ndarray:
     """Pack a material into the std140 MaterialBlock byte layout (float32 array).
 
-    Kept on the material against its own ``factorVersion``, the count every
-    runtime material edit moves: an instanced group repacks its whole
-    material table every frame, and a crowd of figures out of one document
-    carries a material apiece that nothing is changing.
+    Kept in vrml's cache against the material and its ``factorVersion``, the
+    count every runtime material edit moves: an instanced group repacks its
+    whole material table every frame, and a crowd of figures out of one
+    document carries a material apiece that nothing is changing. None, the
+    neutral grey of a shape with no material, is packed each time.
     """
+    if material is None:
+        return _pack_material_block(None)
     version = int(getattr(material, 'factorVersion', 0))
-    cached = getattr(material, '_packed_block', None)
+    cached = cache.CACHE.getData(material, MATERIAL_BLOCK_KEY)
     if cached is not None and cached[0] == version:
         return np.asarray(cached[1])
     packed = _pack_material_block(material)
-    try:
-        material._packed_block = (version, packed)
-    except Exception:       # pragma: no cover - a material that refuses attributes
-        pass
+    cache.CACHE.holder(material, (version, packed), MATERIAL_BLOCK_KEY)
     return packed
 
 

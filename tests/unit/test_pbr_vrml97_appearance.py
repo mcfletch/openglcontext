@@ -10,8 +10,10 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from vrml import cache
+
 from OpenGLContext.passes.pbrpass import (
-    PBRShaderProgram, _pack_material_block, pack_material_block,
+    MATERIAL_BLOCK_KEY, PBRShaderProgram, _pack_material_block, pack_material_block,
 )
 from OpenGLContext.scenegraph import texturemapping
 from OpenGLContext.scenegraph.texturemapping import texture_mapping, texture_transform_matrix
@@ -20,7 +22,7 @@ from OpenGLContext.scenegraph.basenodes import (
     TextureTransform,
 )
 from OpenGLContext.scenegraph.physicalmaterial import (
-    PhysicalMaterial, pbr_material, srgb_to_linear,
+    VIEW_KEY, PhysicalMaterial, pbr_material, srgb_to_linear,
 )
 from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.memo import check_memo_inputs
@@ -57,6 +59,17 @@ class TestTheView:
         assert pbr_material(appearance) is pbr_material(appearance)
         assert pbr_material(appearance) is not pbr_material(
             Appearance(material=appearance.material))
+
+    def test_the_view_is_held_in_the_scenegraph_cache(self):
+        """Held against the appearance and dropped with it, like every other memo."""
+        import gc  # noqa: PLC0415 kept with its one use
+        import weakref  # noqa: PLC0415 kept with its one use
+        appearance = Appearance(material=Material())
+        view = weakref.ref(pbr_material(appearance))
+        assert cache.CACHE.getData(appearance, VIEW_KEY) is view()
+        del appearance
+        gc.collect()
+        assert view() is None
 
     def test_transparency_is_the_materials(self):
         appearance = Appearance(material=Material(transparency=0.25))
@@ -103,6 +116,14 @@ def test_the_packed_block_follows_every_input():
         ('replacement.diffuseColor',
          lambda: setattr(replacement, 'diffuseColor', (0.3, 0.3, 0.9))),
     ], fresh=fresh)
+
+
+def test_the_packed_block_is_held_in_the_scenegraph_cache():
+    material = PhysicalMaterial(baseColor=(0.25, 0.5, 0.75))
+    packed = pack_material_block(material)
+    version, held = cache.CACHE.getData(material, MATERIAL_BLOCK_KEY)
+    assert version == material.factorVersion
+    assert held is packed
 
 
 def test_the_texture_mapping_follows_every_transform_field():
