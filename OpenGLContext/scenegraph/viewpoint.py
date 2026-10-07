@@ -1,21 +1,23 @@
-"""VRML97 Viewpoint node"""
-from typing import Any
+"""X3D's and VRML97's Viewpoint, and X3D's OrthoViewpoint"""
+from typing import Any, Optional
 
-from vrml.vrml97 import basenodes, nodetypes
+from vrml.vrml97 import basenodes
+from vrml.x3d import nodes as x3d
 from OpenGLContext import quaternion
 from OpenGLContext import arrays
 
-class Viewpoint(basenodes.Viewpoint):
-    """Viewpoint node based on VRML 97 Viewpoint
-    Reference:
-        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Viewpoint
 
-    The viewpoint node in VRML is kind of a mess to work with,
-    so we don't try to support much of its functionality.
-    Mostly we want to use it for configuring the
-    viewplatform initially and to allow for switching between
-    predefined viewpoints within a world.
+class Placing:
+    """A viewpoint that places a context's view platform when it is bound
+
+    Its position and orientation where `jump` is true, its projection
+    (:meth:`project`), and the clip planes `nearDistance` and `farDistance`
+    where each is positive.
     """
+
+    nearDistance: Any
+    farDistance: Any
+
     def moveTo( cls, path: Any, context: Any ) -> None:
         """Given a node-path to a viewpoint, move context's platform there"""
         matrix = path.transformMatrix( )
@@ -32,13 +34,52 @@ class Viewpoint(basenodes.Viewpoint):
             ).XYZR()
             platform.setPosition( newPosition )
             platform.setOrientation( newOrientation )
-        # near/far are not VRML97 Viewpoint fields, but a loader (e.g. glTF) may
-        # stash them on the node so a bound camera keeps its authored clip planes;
-        # both default to None, which setFrustum reads as "leave unchanged".
-        platform.setFrustum(
-            node.fieldOfView,
-            None,
-            getattr( node, 'near', None ),
-            getattr( node, 'far', None ),
+        node.project( platform )
+
+    def clipping( self ) -> "tuple[Optional[float], Optional[float]]":
+        """(near, far): the clip distances, None for each the platform keeps
+
+        `nearDistance` and `farDistance` where positive; otherwise the
+        `near` and `far` a loader (glTF) may set on the node.
+        """
+        near = float( self.nearDistance ) if self.nearDistance > 0 else getattr( self, 'near', None )
+        far = float( self.farDistance ) if self.farDistance > 0 else getattr( self, 'far', None )
+        return near, far
+
+    def project( self, platform: Any ) -> None:
+        """Give `platform` this viewpoint's projection"""
+        raise NotImplementedError
+
+
+class Viewpoint(Placing, basenodes.Viewpoint):
+    """VRML97's and X3D's Viewpoint: a perspective view
+
+    Reference:
+        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Viewpoint
+    """
+
+    def project( self, platform: Any ) -> None:
+        """Give `platform` this viewpoint's perspective, `fieldOfView` radians"""
+        platform.setFrustum( self.fieldOfView, None, *self.clipping() )
+
+
+class OrthoViewpoint(Placing, x3d.OrthoViewpoint):
+    """X3D's OrthoViewpoint: a view through an orthographic window
+
+    `fieldOfView` is the window, (minimum x, minimum y, maximum x, maximum
+    y) in the viewpoint's coordinates, widened along one axis to the shape
+    of the view; one with fewer than four values is X3D's default window.
+    """
+
+    PROTO = 'OrthoViewpoint'
+
+    #: The window X3D gives an OrthoViewpoint whose fieldOfView is too short.
+    DEFAULT_WINDOW = (-1.0, -1.0, 1.0, 1.0)
+
+    def project( self, platform: Any ) -> None:
+        """Give `platform` this viewpoint's orthographic window"""
+        window = [float( value ) for value in self.fieldOfView]
+        platform.setOrthographic(
+            window[:4] if len( window ) >= 4 else self.DEFAULT_WINDOW,
+            *self.clipping()
         )
-    

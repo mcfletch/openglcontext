@@ -14,12 +14,18 @@ interactive context mixes in; the movement modes in
 :mod:`OpenGLContext.move.modes` drive it, and the editor views in
 :mod:`OpenGLContext.edit` subclass it to look at a world from overhead or from
 a fixed orbit.
+
+The projection is a perspective one through the frustum, or, once
+:meth:`ViewPlatform.setOrthographic` has given it a window, an orthographic
+one through that window (an X3D ``OrthoViewpoint``), until the next
+:meth:`ViewPlatform.setFrustum`.
 """
 
 from math import atan2, pi
 from collections.abc import Sequence
 from typing import Any, Optional, cast
 
+import numpy as np
 from numpy import array, dot, negative, radians
 from OpenGLContext import quaternion
 from OpenGLContext.quaternion import Quaternion
@@ -32,11 +38,32 @@ from OpenGL.GL import (
     GL_MODELVIEW,
     glRotate,
     glTranslate,
+    glOrtho,
 )
 from OpenGL.GLU import gluPerspective
 
 
 RADTODEG = 180 / pi
+
+#: An orthographic window: minimum x, minimum y, maximum x, maximum y.
+Window = tuple[float, float, float, float]
+
+
+def fitted_window(window: Sequence[float], aspect: float) -> Window:
+    """`window` widened about its centre along one axis to the shape `aspect`
+
+    `aspect` is width over height. The whole of `window` stays in view.
+    """
+    left, bottom, right, top = (float(value) for value in window[:4])
+    width, height = right - left, top - bottom
+    if height > 0 and width > 0 and aspect > 0:
+        if width / height < aspect:
+            grow = (height * aspect - width) / 2.0
+            left, right = left - grow, right + grow
+        else:
+            grow = (width / aspect - height) / 2.0
+            bottom, top = bottom - grow, top + grow
+    return (left, bottom, right, top)
 
 
 class ViewPlatform(object):
@@ -69,6 +96,8 @@ class ViewPlatform(object):
     position: Any
     #: View orientation.
     quaternion: Quaternion
+    #: The orthographic window projected through, or None for the frustum.
+    window: Optional[Window] = None
 
     def __init__(
         self,
@@ -112,6 +141,24 @@ class ViewPlatform(object):
         if far is None:
             far = self.frustum[3]
         self.frustum = (fieldOfView * 180.0 / pi, aspect, near, far)
+        self.window = None
+
+    def setOrthographic(self, window: Sequence[float],
+                        near: Optional[float] = None,
+                        far: Optional[float] = None) -> None:
+        """Project orthographically through `window` until the next :meth:`setFrustum`
+
+        window -- minimum x, minimum y, maximum x, maximum y, in the
+            platform's own coordinates; widened to the view's shape
+            (:func:`fitted_window`)
+        near, far -- the clipping distances; None leaves each as it is
+        """
+        fieldOfView, aspect, oldNear, oldFar = self.frustum
+        self.frustum = (fieldOfView, aspect,
+                        oldNear if near is None else near,
+                        oldFar if far is None else far)
+        left, bottom, right, top = (float(value) for value in window[:4])
+        self.window = (left, bottom, right, top)
 
     def setViewport(self, x: float, y: float) -> None:
         """Set the current viewport/window dimensions
@@ -181,7 +228,12 @@ class ViewPlatform(object):
         glMatrixMode(GL_PROJECTION)
         if identity:
             glLoadIdentity()
-        gluPerspective(*self.frustum)
+        if self.window is not None:
+            _fov, aspect, near, far = self.frustum
+            left, bottom, right, top = fitted_window(self.window, aspect)
+            glOrtho(left, right, bottom, top, near, far)
+        else:
+            gluPerspective(*self.frustum)
         glMatrixMode(GL_MODELVIEW)
         if identity:
             glLoadIdentity()
@@ -195,6 +247,16 @@ class ViewPlatform(object):
         fovy, aspect, zNear, zFar = self.frustum
         if trimDepth is not None:
             zFar = trimDepth
+        if self.window is not None:
+            # The pass trims with a negative depth, which the perspective
+            # matrix reads as a far plane at infinity; here it would turn
+            # the depth range inside out, so only a positive one trims.
+            far = self.frustum[3] if trimDepth is None or trimDepth <= 0 else zFar
+            left, bottom, right, top = fitted_window(self.window, aspect)
+            projection = transformmatrix.orthoMatrix(left, right, bottom, top, zNear, far)
+            if inverse:
+                return np.linalg.inv(projection).astype('f')
+            return projection
         return transformmatrix.perspectiveMatrix(
             radians(fovy),
             aspect,

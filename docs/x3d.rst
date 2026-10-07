@@ -106,7 +106,7 @@ implements these X3D nodes, by component:
   ScalarInterpolator, SplinePositionInterpolator, SplinePositionInterpolator2D,
   SplineScalarInterpolator, SquadOrientationInterpolator
 - Lighting - DirectionalLight, PointLight, SpotLight
-- Navigation - Billboard, Collision, LOD, NavigationInfo, Viewpoint
+- Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint
 - Networking - Anchor, Inline
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
 - Rendering - Color, ColorRGBA, Coordinate, IndexedLineSet,
@@ -180,6 +180,12 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   ``HDRBackground``) are bindable in the same way. The next-viewpoint key
   binds the viewpoint after the bound one
   (``viewpointbinding.next_viewpoint``).
+- A bound viewpoint's ``nearDistance`` and ``farDistance`` set the clip
+  planes where positive. An ``OrthoViewpoint`` projects orthographically
+  through its ``fieldOfView`` window (minimum x, minimum y, maximum x,
+  maximum y), widened along one axis to the shape of the window it is drawn
+  in (``ViewPlatform.setOrthographic``); a perspective viewpoint bound after
+  it ends the orthographic projection.
 - A follower moves a step each frame on the engine's clock while it is
   moving, queued on its window's render queue.
 - A ``KeySensor`` hears every key its window receives, including keys a
