@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
+from vrml.x3d import nodes as x3dnodes
 from OpenGL.GL import (
     glEnable, glDisable, glBlendFunc, glDepthMask,
     GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
@@ -26,6 +27,7 @@ from OpenGLContext.passes.disposal import PassResources, let_go
 from OpenGLContext.passes.layerguard import LayerGuard
 from OpenGLContext.passes.reflectionpass import ReflectionsMixin
 from OpenGLContext.debug.logs import getTraceback
+from OpenGLContext.passes import localfog
 from OpenGLContext.scenegraph import fog as fognode
 
 if TYPE_CHECKING:
@@ -49,6 +51,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
 
     if TYPE_CHECKING:
         shader_program: Any
+        paths: dict[type, list[Any]]
         _gl_renderer: str
         context: Any
         matrix: Any
@@ -216,10 +219,36 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         """
         path = self.currentFog()
         if path is None:
-            shader.set_fog(0.0, mode=fognode.FOG_NONE)
-            return
-        mode, density, color = path[-1].fogParameters(path.transformMatrix())
+            self._globalFog = (fognode.FOG_NONE, 0.0, (0.6, 0.7, 0.85))
+        else:
+            self._globalFog = path[-1].fogParameters(path.transformMatrix())
+        mode, density, color = self._globalFog
         shader.set_fog(density, color, mode=mode)
+        self.localFogs = localfog.local_fogs(self.paths.get(x3dnodes.LocalFog, ()))
+        self._localFogApplied = None
+
+    #: The bound Fog's ``(mode, density, colour)`` this frame.
+    _globalFog: Any = None
+    #: This frame's enabled LocalFogs (:func:`OpenGLContext.passes.localfog.local_fogs`).
+    localFogs: Any = ()
+    #: The LocalFog path the shader's fog is set from now, or None for the bound Fog.
+    _localFogApplied: Any = None
+
+    def applyLocalFog(self, shader: Any, path: Any) -> None:
+        """Give the draw at the end of `path` the LocalFog it is in, or the bound Fog"""
+        if not self.localFogs and self._localFogApplied is None:
+            return
+        found = localfog.fog_for(self.localFogs, path) if self.localFogs else None
+        if found is self._localFogApplied:
+            return
+        self._localFogApplied = found
+        if found is None:
+            mode, density, color = self._globalFog or (fognode.FOG_NONE, 0.0, (0.0, 0.0, 0.0))
+        else:
+            mode, density, color = found[-1].fogParameters(found.transformMatrix())
+        setter = getattr(shader, 'set_fog', None)
+        if setter is not None:
+            setter(density, color, mode=mode)
 
 
     # -- transmission (KHR_materials_transmission) --------------------------

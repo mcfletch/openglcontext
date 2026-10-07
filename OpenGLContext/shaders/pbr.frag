@@ -594,12 +594,10 @@ float spotAttenuation(int i, vec3 L) {
     return t * t;
 }
 
-// Linear HDR colour, times exposure, as it is written out: fogged, then
-// tone-mapped and encoded for the display unless bloom composites it later.
-vec3 displayed(vec3 color) {
-    // Fog in linear HDR (before tone map): distant geometry fades into the fog
-    // colour, which dissolves the far edge of a terrain patch and is what being
-    // under water looks like from inside it.
+// A linear colour faded into the fog colour by this fragment's distance:
+// distant geometry dissolves into the fog, which is what being under water
+// looks like from inside it. Unchanged where there is no fog.
+vec3 fogged(vec3 color) {
     if (fogMode > 0 && fogDensity > 0.0) {
         // How far through the fog this fragment lies: eye distance over the
         // visible range for the VRML97 curves, or distance times density for
@@ -620,6 +618,13 @@ vec3 displayed(vec3 color) {
         }
         color = mix(color, fogColor, clamp(fog, 0.0, 1.0));
     }
+    return color;
+}
+
+// Linear HDR colour, times exposure, as it is written out: fogged, then
+// tone-mapped and encoded for the display unless bloom composites it later.
+vec3 displayed(vec3 color) {
+    color = fogged(color);
 
     // filmic tone map (ACES) + sRGB encode for a non-sRGB framebuffer. Correct
     // ONLY with GL_FRAMEBUFFER_SRGB disabled (the pass forces this); an sRGB draw
@@ -653,7 +658,8 @@ void main() {
 
     // KHR_materials_unlit: emit base color directly (no lighting)
     if (unlitMode) {
-        fragColor = vec4(hdrOutput ? albedo : linearToSRGB(albedo), alpha);
+        vec3 unlit = fogged(albedo);
+        fragColor = vec4(hdrOutput ? unlit : linearToSRGB(unlit), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());   // unlit is still pickable
         return;
     }

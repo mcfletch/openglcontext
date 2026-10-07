@@ -566,8 +566,12 @@ class ZonesMixin(PassResources):
                    program: Any = None) -> None:
         """Hand the program the zones reaching the object about to be drawn
 
-        and switch off the bound lights whose scope it is outside.
+        and switch off the bound lights whose scope it is outside, and give it
+        the LocalFog it is in where the pass applies them.
         """
+        local_fog = getattr(self, 'applyLocalFog', None)
+        if local_fog is not None:
+            local_fog(shader, path)
         scope = lightscope.scope_mask(self.scopedLights, path) if self.scopedLights else 0
         if not self._zones:
             self._applyLightsOff(shader, scope, program)
@@ -604,6 +608,10 @@ class ZonesMixin(PassResources):
         """
         if not members:
             return
+        # The group draws as one, in the LocalFog of the first of it.
+        local_fog = getattr(self, 'applyLocalFog', None)
+        if local_fog is not None:
+            local_fog(shader, members[0][4])
         if not self._zones:
             scope = 0
             if self.scopedLights:

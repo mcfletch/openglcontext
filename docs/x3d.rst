@@ -88,7 +88,7 @@ implements these X3D nodes, by component:
 - CADGeometry - CADAssembly, CADLayer, CADPart
 - Core - MetadataBoolean, MetadataDouble, MetadataFloat, MetadataInteger,
   MetadataSet, MetadataString, WorldInfo
-- EnvironmentalEffects - Background, Fog, TextureBackground
+- EnvironmentalEffects - Background, Fog, LocalFog, TextureBackground
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
 - EnvironmentalSensor - ProximitySensor, TransformSensor, VisibilitySensor
@@ -171,6 +171,11 @@ default, light everything. A light casts shadows where its ``shadows`` is
 true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
 The engine's lights made in code are global and cast shadows by default.
+
+An enabled ``LocalFog`` fogs the siblings in its parent group and their
+descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);
+where LocalFogs nest, the deepest group's fogs what is in it. An instanced
+group of shapes takes the LocalFog of the first of them.
 
 A ``TextureBackground`` is drawn as a ``Background`` is: its sky and ground
 colours on a sphere, and its six ``...Texture`` sides as a cube over it once

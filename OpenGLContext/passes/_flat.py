@@ -1064,6 +1064,8 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         ImageBasedLight,
         # The environmental sensors, told each frame what they sense.
         x3dnodes.X3DEnvironmentalSensorNode,
+        # The fogs scoped to their groups, chosen per draw.
+        x3dnodes.LocalFog,
     ]
 
     #: The grid this frame's objects are lit from, or None where the scene

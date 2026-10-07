@@ -736,7 +736,9 @@ be three ``Fog`` nodes in one scene, with one in force at a time:
 ``fog.set_bind = True`` puts one in force, and ``set_bind = False`` returns to
 the one it covered (:ref:`X3D binding <x3d-binding>`).
 
-Fog is applied by the PBR shader. The VRML97 core shader does not apply it.
+Fog is applied by the PBR shader, to unlit surfaces as to lit ones. The
+VRML97 core shader does not apply it. X3D's ``LocalFog`` fogs only its own
+group (:doc:`X3D <x3d>`).
 
 Choosing a fog curve
 ~~~~~~~~~~~~~~~~~~~~
