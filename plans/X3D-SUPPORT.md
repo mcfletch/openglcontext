@@ -60,8 +60,9 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     this branch's renders of 51 of the failing scripts match them exactly
 - [x] `oglc-x3d-regression` (2026-10-07): every .x3d of Web3D's ConformanceNist and
   Vrml2Sourcebook archives (1181) drawn as authored in a plain Context, compared with
-  baselines in `tests/reference_images/x3d_baseline`, Web3D's own render of the bound
-  viewpoint beside each (1065 have one). Shared machinery with the glTF tool in
+  baselines in `tests/reference_images/x3d_baseline`, X_ITE's render beside each
+  (`--reference x_ite`, the default), or Web3D's own render of the bound viewpoint
+  (1065 have one). Shared machinery with the glTF tool in
   `OpenGLContext.testing.renderregression`; the corpus is `vrml.x3d.corpus`
   - fixed on the way: a document with no viewpoint is seen through X3D's default
     (fieldOfView 0.7854); a viewpoint's fieldOfView spans the smaller dimension;
@@ -88,11 +89,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     `tests/reference_images/x3d_xite`, which the regression reads. Chromium needs
     libnss3, libnspr4, libatk1.0, libatk-bridge2.0, libxdamage1 and libatspi2.0 in
     the container (the workspace's `.devcontainer/Dockerfile` installs them)
-  - [ ] a `Material` is drawn by the PBR pass through its metallic-roughness
-    conversion, so its shading differs from X3D's Phong equation (brighter on the
-    tree's ground). The vrml97 pass draws X3D's equation (within 0.5% of X_ITE on
-    the tree, the Box, the cafe sign) but has no fog. Which a document's Material
-    is drawn by in the PBR pass is a decision for the maintainer
+  - [x] a document's `Material` in the PBR pass: drawn by X3D's Phong equation
+    (below); the vrml97 pass fogs (below)
   - [x] a Shape with no Appearance in a document is drawn unlit white
   - [x] X3D's fog curves fade the displayed colour, after tone mapping
     (`tests/unit/test_fog_render_gl.py`); the aerial-perspective curve stays in
@@ -124,9 +122,9 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     with the PBR pass, 1.8% with the VRML97 pass, whose worst were the fog
     documents it did not fog;
     to look at next: Background fogged (fogtype_linear: our frame is the fog
-    colour), the Snake's background colour, Figure20_09's viewpoint, the
-    SphereSensor tests' framing X_ITE runs Scripts, so its render
-    of a document whose scene a Script builds shows what ours does not draw
+    colour), the Snake's background colour, Figure20_09's viewpoint, and the
+    SphereSensor tests' framing. X_ITE runs Scripts, so its render of a document
+    whose scene a Script builds shows what ours does not draw
   - [x] Background image faces: each side drawn as its own quad once its image
     has loaded, turned as X3D says, transparent parts showing the sky
     (`tests/unit/test_background_faces.py`); the old cube map drew only with
@@ -217,12 +215,12 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture
 - Phase 7, runtime (§9.10, §9.15, §9.16)
   - [x] event utilities, sequencers and `KeySensor` with their behaviour (`vrml.x3d.runtime`); the engine's `TimeTrigger` clock and `KeySensor` keys (`scenegraph/x3druntime.py`, `observeEvents`)
-  - [x] the 2D, spline, squad and ease interpolators (`vrml.x3d.interpolation`); `StringSensor`
+  - [x] every interpolator (`vrml.x3d.interpolation`, `vrml.x3d.runtime`; the engine registers pyvrml97's); `StringSensor`
   - [x] followers (`vrml.x3d.followers`; ticked through the render queue in the engine, `x3druntime.Ticked`)
   - [x] time is the scene's clock (`vrml.x3d.timing`, `Timed.now`; the engine's `SceneGraph.clock` is `systemtime`, so followers and `TimeTrigger` follow a capture's fixed step)
   - [x] bind stacks (`vrml.x3d.binding`): backgrounds (the engine's own too), fogs, viewpoints and NavigationInfo bound by `set_bind`; `next_viewpoint`
   - [x] `OrthoViewpoint` (`ViewPlatform.setOrthographic`), `nearDistance`/`farDistance`
-  - [x] NavigationInfo `headlight` and `type` (`move.navigationinfo`); `speed`, `avatarSize`, `visibilityLimit` and the transitions not read
+  - [x] NavigationInfo `headlight` and `type` (`move.navigationinfo`), applied as they change; a document with none has X3D's default
   - [x] `ViewpointGroup` (displayed, proximity); NavigationInfo `visibilityLimit`
   - [x] NavigationInfo `speed` (relative to X3D's 1), `avatarSize` for the walking avatar, the viewpoint transitions and `transitionComplete`
   - [x] `centerOfRotation` (the examine pivot with nothing picked), `retainUserOffsets`, `viewAll`
