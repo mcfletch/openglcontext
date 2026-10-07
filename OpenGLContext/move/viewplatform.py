@@ -143,6 +143,17 @@ class ViewPlatform(object):
         self.frustum = (fieldOfView * 180.0 / pi, aspect, near, far)
         self.window = None
 
+    def setClipping(self, near: Optional[float] = None,
+                    far: Optional[float] = None) -> None:
+        """Set the clipping distances, leaving the projection as it is
+
+        None leaves that distance as it is.
+        """
+        fieldOfView, aspect, oldNear, oldFar = self.frustum
+        self.frustum = (fieldOfView, aspect,
+                        oldNear if near is None else near,
+                        oldFar if far is None else far)
+
     def setOrthographic(self, window: Sequence[float],
                         near: Optional[float] = None,
                         far: Optional[float] = None) -> None:
@@ -153,10 +164,7 @@ class ViewPlatform(object):
             (:func:`fitted_window`)
         near, far -- the clipping distances; None leaves each as it is
         """
-        fieldOfView, aspect, oldNear, oldFar = self.frustum
-        self.frustum = (fieldOfView, aspect,
-                        oldNear if near is None else near,
-                        oldFar if far is None else far)
+        self.setClipping(near, far)
         left, bottom, right, top = (float(value) for value in window[:4])
         self.window = (left, bottom, right, top)
 

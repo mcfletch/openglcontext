@@ -133,6 +133,7 @@ from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMaterial
 from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint as OrthoViewpoint
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
+from OpenGLContext.scenegraph.viewpointgroup import ViewpointGroup as ViewpointGroup
 from OpenGLContext.scenegraph.x3dgroups import CADAssembly as CADAssembly
 from OpenGLContext.scenegraph.x3dgroups import CADLayer as CADLayer
 from OpenGLContext.scenegraph.x3dgroups import PickableGroup as PickableGroup
@@ -378,6 +379,7 @@ __all__ = [
     'TrimmedSurface',
     'UnlitMaterial',
     'Viewpoint',
+    'ViewpointGroup',
     'VisibilitySensor',
     'WorldInfo',
     'X3DScene',

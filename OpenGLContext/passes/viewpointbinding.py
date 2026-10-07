@@ -15,6 +15,7 @@ the view platform only; :func:`next_viewpoint` binds the next.
 from collections.abc import Sequence
 from typing import Any
 
+import numpy as np
 from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
 import logging
@@ -70,16 +71,42 @@ def bind_scene_viewpoint(context: Any) -> None:
         sg.boundViewpoint = view
 
 
+def listed(path: Any, viewer: Any) -> bool:
+    """Whether the viewpoint at the end of `path` is offered to a viewer at `viewer`
+
+    Every ViewpointGroup on the path has to offer it
+    (:meth:`~OpenGLContext.scenegraph.viewpointgroup.ViewpointGroup.lists`);
+    `viewer` is a world position, or None to ask only whether each is
+    displayed.
+    """
+    for index, node in enumerate(path[:-1]):
+        lists = getattr(node, 'lists', None)
+        if lists is None:
+            continue
+        local = None
+        if viewer is not None:
+            placed = path[:index + 1].transformMatrix()
+            local = np.append(np.asarray(viewer, np.float64)[:3], 1.0)
+            if placed is not None:
+                local = local @ np.linalg.inv(np.asarray(placed, np.float64))
+        if not (lists(local[:3]) if local is not None else node.displayed):
+            return False
+    return True
+
+
 def next_viewpoint(context: Any, step: int = 1) -> Any:
     """Bind the viewpoint `step` along the scene's from the bound one; that viewpoint
 
-    None where the scene has no viewpoints.
+    Only the viewpoints offered to the viewer (:func:`listed`) are stepped
+    through. None where the scene offers none.
     """
     sg = context.getSceneGraph()
     paths = list(getattr(sg, 'viewpointPaths', ())) if sg is not None else []
-    if not paths:
+    platform = context.getViewPlatform() if paths else None
+    viewer = None if platform is None else platform.position
+    views = [path[-1] for path in paths if listed(path, viewer)]
+    if not views:
         return None
-    views = [path[-1] for path in paths]
     current = binding.bound(views[0])
     index = next((i for i, view in enumerate(views) if view is current), -step)
     following = views[(index + step) % len(views)]

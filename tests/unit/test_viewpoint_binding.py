@@ -143,13 +143,10 @@ class TestTheRenderPassesPaths:
         assert sg.boundViewpoint is late
 
 
-class _Path:
+class _Path(tuple):
     """Minimal nodepath: identity transform, single leaf viewpoint."""
-    def __init__(self, node):
-        self._node = node
-
-    def __getitem__(self, i):
-        return self._node
+    def __new__(cls, node):
+        return super().__new__(cls, (node,))
 
     def transformMatrix(self):
         return np.identity(4)

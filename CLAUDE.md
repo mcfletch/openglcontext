@@ -230,6 +230,8 @@ OpenGLContext/
 │   │                 # context to follow its url (Context.OnAnchor)
 │   ├── x3dgroups.py  # X3D's CADAssembly, CADLayer and PickableGroup as
 │   │                 # groups (CADPart is in transform.py)
+│   ├── viewpointgroup.py  # X3D's ViewpointGroup: which viewpoints the
+│   │                 # next-viewpoint key offers
 │   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
 │   │                 # drawn as the PBRMesh their fields build -- docs/x3d.rst
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material

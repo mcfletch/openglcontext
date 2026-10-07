@@ -75,7 +75,9 @@ def test_load_false_loads_nothing_until_it_is_set(tmp_path):
     (tmp_path / 'part.x3d').write_bytes(PART)
     (tmp_path / 'world.x3d').write_bytes(document('part.x3d').replace(
         b'<Inline ', b'<Inline load="false" '))
-    found = inlined(Loader.load(str(tmp_path / 'world.x3d')))
+    # Held: the url is resolved against the scene's own location.
+    scene = Loader.load(str(tmp_path / 'world.x3d'))
+    found = inlined(scene)
     assert found.renderedChildren() == []
     found.load = True
     settle()

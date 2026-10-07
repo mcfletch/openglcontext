@@ -1,7 +1,7 @@
 """What a scene's bound NavigationInfo asks of the context -- no GL
 
 X3D's ``NavigationInfo`` (ISO/IEC 19775-1, 23.4.4) is bound as viewpoints are
-(:mod:`vrml.x3d.binding`). The engine reads two of its fields:
+(:mod:`vrml.x3d.binding`). The engine reads three of its fields:
 
 - ``headlight``: true adds a headlight to the scene's own lights, false leaves
   it off (:func:`headlight`). A scene with no NavigationInfo has the headlight
@@ -12,9 +12,10 @@ X3D's ``NavigationInfo`` (ISO/IEC 19775-1, 23.4.4) is bound as viewpoints are
   navigation offers is selected (:func:`apply`); ``ANY`` and the types with
   no engine mode leave the choice with the player. A context with no
   declared movement modes keeps its own navigation.
+- ``visibilityLimit``, where positive, is the far clipping distance from the
+  time the NavigationInfo is bound (:func:`clip`).
 
-``speed``, ``avatarSize``, ``visibilityLimit`` and the transition fields are
-not read.
+``speed``, ``avatarSize`` and the transition fields are not read.
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ import weakref
 from collections.abc import Sequence
 from typing import Any, Optional
 
-__all__ = ['MODES', 'apply', 'chosen_mode', 'headlight', 'requested_modes']
+__all__ = ['MODES', 'apply', 'chosen_mode', 'clip', 'headlight', 'requested_modes']
 
 #: The engine's movement modes for each of X3D's navigation types, by name.
 MODES: dict[str, tuple[str, ...]] = {
@@ -74,15 +75,26 @@ def headlight(info: Any, lights: int) -> bool:
     return bool(info.headlight)
 
 
-def apply(context: Any, info: Any) -> None:
-    """Select the mode `info` asks for on `context`, once for each NavigationInfo bound
+def clip(platform: Any, info: Any) -> None:
+    """Give `platform` `info`'s visibilityLimit as its far distance, where positive"""
+    if info is not None and float(info.visibilityLimit) > 0:
+        platform.setClipping(far=float(info.visibilityLimit))
 
-    `context` answers ``getNavigation()``: its navigation manager, or None
-    where it declares no movement modes.
+
+def apply(context: Any, info: Any) -> None:
+    """Apply `info` to `context` once for each NavigationInfo bound
+
+    The far clipping distance of the context's ``platform`` (:func:`clip`),
+    and the movement mode `info` asks for. `context` answers
+    ``getNavigation()``: its navigation manager, or None where it declares no
+    movement modes.
     """
     if _applied.get(context) is info:
         return
     _applied[context] = info
+    platform = getattr(context, 'platform', None)
+    if platform is not None:
+        clip(platform, info)
     manager = context.getNavigation()
     if manager is None or info is None:
         return

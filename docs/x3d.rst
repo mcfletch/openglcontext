@@ -107,7 +107,8 @@ implements these X3D nodes, by component:
   ScalarInterpolator, SplinePositionInterpolator, SplinePositionInterpolator2D,
   SplineScalarInterpolator, SquadOrientationInterpolator
 - Lighting - DirectionalLight, PointLight, SpotLight
-- Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint
+- Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint,
+  ViewpointGroup
 - Networking - Anchor, Inline, LoadSensor
 - Picking - PickableGroup
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
@@ -177,7 +178,8 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   bound to on every pass of the event cascade, at the engine's time, and runs
   as X3D says from ``startTime`` to ``stopTime``, pausing at ``pauseTime``
   and resuming at ``resumeTime``. ``pause()`` and ``resume()`` set those two
-  to the engine's time.
+  to the engine's time. ``rate`` sets how fast its cycles run against the engine's
+  clock, and can be changed while it runs.
 - A ``LoadSensor`` is polled in the same way. ``Inline`` and ``ImageTexture``
   record their load state as they read (``vrml.x3d.loadsensor``); other url
   nodes record none and are not waited for.
@@ -221,8 +223,13 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   context's declared movement modes offer is selected: ``WALK`` is ``walk``
   or ``fps``, ``FLY`` is ``fly``, and ``EXAMINE``, ``LOOKAT`` and
   ``EXPLORE`` are ``examine``. A context with no declared modes keeps its
-  own navigation. ``speed``, ``avatarSize``, ``visibilityLimit`` and the
+  own navigation. A positive ``visibilityLimit`` is the far clipping
+  distance from the time it is bound. ``speed``, ``avatarSize`` and the
   transition fields are not read.
+- A ``ViewpointGroup``'s viewpoints are the scene's; the next-viewpoint key
+  passes over those of a group that is not ``displayed``, or that has a
+  ``size`` and the viewer is outside the box of that size about its
+  ``center``.
 - A follower moves a step each frame on the engine's clock while it is
   moving, queued on its window's render queue.
 - A ``KeySensor`` hears every key its window receives, including keys a
