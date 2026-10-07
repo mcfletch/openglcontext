@@ -1062,6 +1062,8 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         # image-based light, which fills the scene's layer of the probe.
         zonenodes.Zone,
         ImageBasedLight,
+        # The environmental sensors, told each frame what they sense.
+        x3dnodes.X3DEnvironmentalSensorNode,
     ]
 
     #: The grid this frame's objects are lit from, or None where the scene

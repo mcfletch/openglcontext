@@ -90,7 +90,7 @@ implements these X3D nodes, by component:
 - EnvironmentalEffects - Background, Fog
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
-- EnvironmentalSensor - ProximitySensor, VisibilitySensor
+- EnvironmentalSensor - ProximitySensor, TransformSensor, VisibilitySensor
 - Geometry2D - Arc2D, ArcClose2D, Circle2D, Disk2D, Polyline2D, Polypoint2D,
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
@@ -186,6 +186,11 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   maximum y), widened along one axis to the shape of the window it is drawn
   in (``ViewPlatform.setOrthographic``); a perspective viewpoint bound after
   it ends the orthographic projection.
+- The environmental sensors are told once a frame what they sense
+  (``OpenGLContext.scenegraph.x3dsensors``): a ``ProximitySensor`` the
+  active view's camera, a ``TransformSensor`` its ``targetObject`` where the
+  scene draws it, and a ``VisibilitySensor`` whether its box is within any
+  view's frustum.
 - The bound ``NavigationInfo`` (``OpenGLContext.move.navigationinfo``):
   ``headlight`` true adds a headlight to the scene's lights and false leaves
   it off; a scene with no NavigationInfo has the headlight only where it has

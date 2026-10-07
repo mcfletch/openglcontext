@@ -222,6 +222,8 @@ OpenGLContext/
 │   ├── x3druntime.py # X3D's TimeTrigger on the engine clock and KeySensor on
 │   │                 # the context's keys; the other event utilities are
 │   │                 # vrml.x3d.runtime's -- docs/x3d.rst
+│   ├── x3dsensors.py # X3D's environmental sensors told each frame what they
+│   │                 # sense: the viewer, a target, the views -- no GL
 │   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
 │   │                 # drawn as the PBRMesh their fields build -- docs/x3d.rst
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material

@@ -167,11 +167,9 @@ from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
 from vrml.vrml97.basenodes import NormalInterpolator as NormalInterpolator
 from vrml.vrml97.basenodes import PlaneSensor as PlaneSensor
-from vrml.vrml97.basenodes import ProximitySensor as ProximitySensor
 from vrml.vrml97.basenodes import SphereSensor as SphereSensor
 from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
 from vrml.vrml97.basenodes import TouchSensor as TouchSensor
-from vrml.vrml97.basenodes import VisibilitySensor as VisibilitySensor
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
 from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean
@@ -198,6 +196,9 @@ from vrml.x3d.runtime import SplinePositionInterpolator as SplinePositionInterpo
 from vrml.x3d.runtime import SplinePositionInterpolator2D as SplinePositionInterpolator2D
 from vrml.x3d.runtime import SplineScalarInterpolator as SplineScalarInterpolator
 from vrml.x3d.runtime import SquadOrientationInterpolator as SquadOrientationInterpolator
+from vrml.x3d.sensors import ProximitySensor as ProximitySensor
+from vrml.x3d.sensors import TransformSensor as TransformSensor
+from vrml.x3d.sensors import VisibilitySensor as VisibilitySensor
 
 __all__ = [
     'Anchor',
@@ -359,6 +360,7 @@ __all__ = [
     'TimeTrigger',
     'TouchSensor',
     'Transform',
+    'TransformSensor',
     'TriangleFanSet',
     'TriangleSet',
     'TriangleSet2D',

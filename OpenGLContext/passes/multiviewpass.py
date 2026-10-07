@@ -25,6 +25,8 @@ from OpenGL.GL import (
 )
 
 from OpenGLContext.arrays import array, asarray, dot
+from vrml.x3d.nodes import X3DEnvironmentalSensorNode
+
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.disposal import PassResources
 import logging
@@ -48,6 +50,8 @@ class MultiviewPassMixin( PassResources ):
         shader_program: Any
         use_shaders: bool
         use_shadows: bool
+        paths: dict[type, list[Any]]
+        nodePaths: dict[Any, list[Any]]
         modelView: Any
         projection: Any
         modelproj: Any
@@ -460,6 +464,7 @@ class MultiviewPassMixin( PassResources ):
         self.chooseLevels( [
             viewer_for( frame.camera, frame.modelView, frame.projection )
             for frame in frames ] )
+        self.senseEnvironment( frames )
         # Kept for the frame: the shadow casters, each mirror view and each
         # zone capture read the same walk.
         gathered = self.gatherPaths()
@@ -481,6 +486,24 @@ class MultiviewPassMixin( PassResources ):
         self.applyViewFrame( active, gl=False )
         self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )
         return frames
+
+    def senseEnvironment( self, frames: Sequence['ViewFrame'] ) -> None:
+        """Tell the scene's environmental sensors what they sense from these views.
+
+        The viewer is the active view's camera; a box is in view where it is
+        within any view's frustum (:func:`OpenGLContext.scenegraph.x3dsensors.sense`).
+        """
+        paths = self.paths.get( X3DEnvironmentalSensorNode )
+        if not paths or not frames:
+            return
+        from OpenGLContext.scenegraph import x3dsensors
+        active = self.activeFrame if self.activeFrame is not None else frames[0]
+        try:
+            viewer = numpy.linalg.inv( asarray( active.modelView, 'd' ) )
+        except numpy.linalg.LinAlgError:
+            return
+        x3dsensors.sense( list( paths ), self.nodePaths, viewer,
+                          [ frame.frustum.planes for frame in frames ] )
 
     @staticmethod
     def cameraPosition( frame: 'ViewFrame' ) -> Any:
