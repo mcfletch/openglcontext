@@ -123,6 +123,8 @@ from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMaterial
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
+from OpenGLContext.scenegraph.x3druntime import KeySensor as KeySensor
+from OpenGLContext.scenegraph.x3druntime import TimeTrigger as TimeTrigger
 from OpenGLContext.scenegraph.zone import Zone as Zone
 from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
 from OpenGLContext.scenegraph.zone import ZoneEnvironment as ZoneEnvironment
@@ -160,6 +162,12 @@ from vrml.x3d.nodes import MultiTextureTransform as MultiTextureTransform
 from vrml.x3d.nodes import Tangent as Tangent
 from vrml.x3d.nodes import TextureProperties as TextureProperties
 from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
+from vrml.x3d.runtime import BooleanFilter as BooleanFilter
+from vrml.x3d.runtime import BooleanSequencer as BooleanSequencer
+from vrml.x3d.runtime import BooleanToggle as BooleanToggle
+from vrml.x3d.runtime import BooleanTrigger as BooleanTrigger
+from vrml.x3d.runtime import IntegerSequencer as IntegerSequencer
+from vrml.x3d.runtime import IntegerTrigger as IntegerTrigger
 
 __all__ = [
     'Anchor',
@@ -169,6 +177,10 @@ __all__ = [
     'AudioSource',
     'Background',
     'Billboard',
+    'BooleanFilter',
+    'BooleanSequencer',
+    'BooleanToggle',
+    'BooleanTrigger',
     'Box',
     'Collision',
     'Color',
@@ -220,6 +232,9 @@ __all__ = [
     'IntUniform2i',
     'IntUniform3i',
     'IntUniform4i',
+    'IntegerSequencer',
+    'IntegerTrigger',
+    'KeySensor',
     'LOD',
     'LineSet',
     'MMImageTexture',
@@ -282,6 +297,7 @@ __all__ = [
     'TextureTransformMatrix3D',
     'TextureUniform',
     'TimeSensor',
+    'TimeTrigger',
     'TouchSensor',
     'Transform',
     'TriangleFanSet',

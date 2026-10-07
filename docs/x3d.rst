@@ -88,9 +88,12 @@ implements these X3D nodes, by component:
 - Core - MetadataBoolean, MetadataDouble, MetadataFloat, MetadataInteger,
   MetadataSet, MetadataString, WorldInfo
 - EnvironmentalEffects - Background, Fog
+- EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
+  BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
 - EnvironmentalSensor - ProximitySensor, VisibilitySensor
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, IndexedFaceSet, Sphere
 - Grouping - Group, Switch, Transform
+- KeyDeviceSensor - KeySensor
 - Interpolation - ColorInterpolator, CoordinateInterpolator,
   NormalInterpolator, OrientationInterpolator, PositionInterpolator,
   ScalarInterpolator
@@ -143,6 +146,13 @@ default, light everything. A light casts shadows where its ``shadows`` is
 true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
 The engine's lights made in code are global and cast shadows by default.
+
+The event utilities and sequencers are pyvrml97's behaviours
+(``vrml.x3d.runtime``); a ``TimeTrigger`` sends the engine's time, and a
+``KeySensor`` hears every key its window receives, including keys a program has
+bound itself, as ``keyPress`` for a character, ``actionKeyPress`` for the
+function, arrow and page keys, and ``shiftKey``, ``controlKey`` and ``altKey``
+while those are held. ``Context.observeEvents`` is how it listens.
 
 An ``Inline`` reads any format a registered reader opens: another X3D or
 VRML97 world, an OBJ model or a glTF model. Its scene is read on the loader

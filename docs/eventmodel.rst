@@ -93,6 +93,12 @@ key produces no character, so bind it on ``keyboard`` (see
 :ref:`overlayui-quickstart`). Passing ``function=None`` removes a handler and
 returns the one it replaces.
 
+``observeEvents(eventType, function)`` tells ``function`` of every event of a
+type before the handlers see it, whatever handles it; what it returns is
+ignored. It is for something that watches a whole stream, as an X3D
+``KeySensor`` hears every key. Observers are held weakly, like handlers, and
+``stop=True`` ends one.
+
 Mouse events reach handlers after the selection pass has resolved what is
 under the pointer; :ref:`events-and-selection` below describes that path.
 For held-key movement, the movement modes read an input sampler rather than

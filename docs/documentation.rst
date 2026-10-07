@@ -125,6 +125,12 @@ Installing the package puts these commands on your path:
    lamp, one lit by a probe captured inside it and a cool lamp, and a statue
    shown only from inside its room, with keys to take the zones away. See
    :ref:`The zones demo <zones-demo>`.
+
+``oglc-x3d``
+   A gallery read from an X3D 4 document: metal, marble, brick and sandstone
+   surfaces, a lamp that lights only its alcove, shadows, X3D's triangle sets
+   and an Inlined glTF model, with keys to switch the lamp, hide a node and
+   write the scene back out as X3D. See :doc:`Loading X3D <x3d>`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

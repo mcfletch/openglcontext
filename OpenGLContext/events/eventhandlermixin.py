@@ -1,5 +1,7 @@
 """Mix in functionality for Context classes needing event support"""
 
+import inspect
+import weakref
 import queue
 import logging
 import time
@@ -231,6 +233,29 @@ class EventHandlerMixin(HeldKeyMixin):
         else:
             raise KeyError("""Unrecognised EventManager type %s""" % (repr(eventType)))
 
+    def observeEvents(self, eventType: Any, function: Any, stop: bool = False) -> None:
+        """Have `function` told of every event of `eventType`, before its handlers
+
+        For something that watches a whole stream rather than taking part in
+        dispatch: it is told of events whatever handles them, and what it
+        returns is ignored. Held weakly, as handlers are, so a bound method's
+        object going away ends the observation. `stop` ends it.
+        """
+        observers = self.__dict__.setdefault('_eventObservers', {})
+        found = [reference for reference in observers.get(as_str(eventType), [])
+                 if reference() is not None and reference() != function]
+        if not stop:
+            found.append(weakref.WeakMethod(function) if inspect.ismethod(function)
+                         else weakref.ref(function))
+        observers[as_str(eventType)] = found
+
+    def observersOf(self, eventType: Any) -> list[Any]:
+        """The functions observing `eventType` (:meth:`observeEvents`) still alive"""
+        observers = self.__dict__.get('_eventObservers', {})
+        return [function for function in (reference() for reference in
+                                          observers.get(as_str(eventType), []))
+                if function is not None]
+
     def captureEvents(self, eventType: Any, manager: Any = None) -> None:
         """Temporarily capture events of a particular type.
 
@@ -292,6 +317,9 @@ class EventHandlerMixin(HeldKeyMixin):
         route = getattr(self, 'routeEvent', None)
         if route is not None:
             route(event)
+        if '_eventObservers' in self.__dict__:
+            for observer in self.observersOf(event.type):
+                observer(event)
         if manager:
             event.context = self
             if self.drawing:

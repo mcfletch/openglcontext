@@ -216,6 +216,9 @@ OpenGLContext/
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── composedgeometry.py  # X3D triangle/line sets and ElevationGrid as
 │   │                 # glTF-shaped arrays -- NumPy only, no GL
+│   ├── x3druntime.py # X3D's TimeTrigger on the engine clock and KeySensor on
+│   │                 # the context's keys; the other event utilities are
+│   │                 # vrml.x3d.runtime's -- docs/x3d.rst
 │   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
 │   │                 # drawn as the PBRMesh their fields build -- docs/x3d.rst
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material

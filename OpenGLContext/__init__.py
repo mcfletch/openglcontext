@@ -186,6 +186,15 @@ Node( 'IndexedTriangleFanSet', 'OpenGLContext.scenegraph.meshgeometry.IndexedTri
 Node( 'TriangleStripSet', 'OpenGLContext.scenegraph.meshgeometry.TriangleStripSet' )
 Node( 'IndexedTriangleStripSet', 'OpenGLContext.scenegraph.meshgeometry.IndexedTriangleStripSet' )
 Node( 'LineSet', 'OpenGLContext.scenegraph.meshgeometry.LineSet' )
+# X3D's event utilities: pyvrml97's behaviours, and the engine's clock and keys.
+Node( 'BooleanFilter', 'vrml.x3d.runtime.BooleanFilter' )
+Node( 'BooleanToggle', 'vrml.x3d.runtime.BooleanToggle' )
+Node( 'BooleanTrigger', 'vrml.x3d.runtime.BooleanTrigger' )
+Node( 'IntegerTrigger', 'vrml.x3d.runtime.IntegerTrigger' )
+Node( 'BooleanSequencer', 'vrml.x3d.runtime.BooleanSequencer' )
+Node( 'IntegerSequencer', 'vrml.x3d.runtime.IntegerSequencer' )
+Node( 'TimeTrigger', 'OpenGLContext.scenegraph.x3druntime.TimeTrigger' )
+Node( 'KeySensor', 'OpenGLContext.scenegraph.x3druntime.KeySensor' )
 # X3D nodes that are data the engine reads through their declarations.
 Node( 'ColorRGBA', 'vrml.x3d.nodes.ColorRGBA' )
 Node( 'MultiTextureCoordinate', 'vrml.x3d.nodes.MultiTextureCoordinate' )
