@@ -27,6 +27,35 @@ def test_a_time_trigger_sends_the_engines_time(monkeypatch):
     assert made.triggerTime == 99.5
 
 
+def test_an_engine_scenes_clock_is_the_engines(monkeypatch):
+    """A node pyvrml97 times, rooted in an engine scene, is on the engine's clock"""
+    from OpenGLContext.scenegraph.scenegraph import SceneGraph, X3DScene  # noqa: PLC0415 kept with its use
+    monkeypatch.setattr(systemtime, 'systemTime', lambda: 12.25)
+    for kind in (SceneGraph, X3DScene):
+        made = runtime.TimeTrigger()
+        scene = kind(children=[made])
+        assert scene.clock() == 12.25
+        assert made.now() == 12.25
+
+
+def test_a_follower_set_and_stepped_under_a_fixed_step_clock_arrives():
+    """The destination is stamped on the clock the steps are taken on"""
+    from OpenGLContext.video.clock import FixedStepClock  # noqa: PLC0415 kept with its use
+    with FixedStepClock(4, start=0.0) as clock:
+        chaser = x3druntime.ScalarChaser(duration=1.0)
+        context = QueueContext()
+        chaser.bind(context)
+        chaser.set_destination = 4.0
+        for _ in range(3):
+            clock.advance()
+            context.renderQueue.run()
+        assert 0.0 < chaser.value_changed < 4.0
+        for _ in range(2):
+            clock.advance()
+            context.renderQueue.run()
+        assert chaser.value_changed == pytest.approx(4.0)
+
+
 @pytest.mark.parametrize('engine, x3d', [
     ('a', 'a'), ('<up>', 'UP'), ('<F4>', 'F4'), ('<pageup>', 'PGUP'), ('<pagedown>', 'PGDN'),
     ('<shift>', 'SHIFT'), ('<ctrl>', 'CONTROL'), ('<alt>', 'ALT'), ('<return>', '\n'),
@@ -112,7 +141,6 @@ def test_each_follower_is_the_engines(name):
 def test_a_follower_ticks_through_its_contexts_queue_until_it_rests(monkeypatch):
     now = [10.0]
     monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
-    monkeypatch.setattr(x3druntime.followers, 'clock', lambda: now[0])
     chaser = x3druntime.ScalarChaser(duration=1.0)
     context = QueueContext()
     chaser.bind(context)
@@ -129,7 +157,6 @@ def test_a_follower_ticks_through_its_contexts_queue_until_it_rests(monkeypatch)
 def test_a_follower_moving_before_it_is_bound_starts_when_bound(monkeypatch):
     now = [10.0]
     monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
-    monkeypatch.setattr(x3druntime.followers, 'clock', lambda: now[0])
     chaser = x3druntime.ScalarChaser(duration=1.0, initialValue=0.0, initialDestination=2.0)
     context = QueueContext()
     chaser.bind(context)
@@ -140,7 +167,6 @@ def test_a_documents_chaser_moves_a_transform(gl_context, monkeypatch):
     from OpenGLContext.testing.scenes import scene_context  # noqa: PLC0415 GL
     now = [50.0]
     monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
-    monkeypatch.setattr(x3druntime.followers, 'clock', lambda: now[0])
     scene = Loader.loads(b'''<X3D version="4.0"><Scene>
       <PositionChaser DEF="C" duration="1" initialDestination="0 0 0"/>
       <Transform DEF="T"><Shape><Box/></Shape></Transform>
@@ -160,7 +186,6 @@ def test_a_follower_bound_to_a_context_that_draws_nothing_still_moves(monkeypatc
     """A window that has stopped drawing does not hold up the follower for the others."""
     now = [10.0]
     monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
-    monkeypatch.setattr(x3druntime.followers, 'clock', lambda: now[0])
     chaser = x3druntime.ScalarChaser(duration=1.0)
     idle, drawing = QueueContext(), QueueContext()
     chaser.bind(idle)

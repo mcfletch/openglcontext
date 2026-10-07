@@ -165,6 +165,9 @@ The event utilities, sequencers, followers and the interpolators X3D adds to
 VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
 ``vrml.x3d.followers``). In the engine:
 
+- A scene's time is the engine's (``systemtime.systemTime``, which a capture
+  steps a frame at a time): ``SceneGraph.clock`` is what pyvrml97's timed
+  nodes read, and the engine's own timed classes read it in no scene too.
 - A ``TimeTrigger`` sends the engine's time.
 - A follower moves a step each frame on the engine's clock while it is
   moving, queued on its window's render queue.

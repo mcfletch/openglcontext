@@ -4,6 +4,7 @@ from typing import Any
 from vrml.vrml97 import scenegraph, nodetypes
 from vrml import field, node
 from vrml.x3d import scene as x3dscene
+from OpenGLContext.events import systemtime
 from OpenGL.GL import *
 
 class SceneGraph(scenegraph.SceneGraph):
@@ -12,9 +13,15 @@ class SceneGraph(scenegraph.SceneGraph):
     See:
         vrml.vrml97.scenegraph.SceneGraph for
         implementation details
+
+    The scene's time is the engine's (:meth:`clock`), which the X3D nodes
+    rooted in it stamp with (:mod:`vrml.x3d.timing`).
     """
     boundViewpoint = node.SFNode( 'boundViewpoint' )
     viewpointPaths = ()
+    def clock(self) -> float:
+        """The engine's time, in seconds"""
+        return systemtime.systemTime()
     def renderedChildren(
         self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
     ) -> list[Any]:

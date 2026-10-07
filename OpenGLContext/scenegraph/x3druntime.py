@@ -1,11 +1,11 @@
 """X3D's event utilities and KeySensor, as the engine runs them
 
 The behaviours are pyvrml97's (:mod:`vrml.x3d.runtime`,
-:mod:`vrml.x3d.followers`). Here each follower, once bound to a context,
+:mod:`vrml.x3d.followers`). Each timed node here is :class:`EngineTimed`, on
+the engine's clock (:func:`~OpenGLContext.events.systemtime.systemTime`)
+whether or not it is in a scene. Each follower, once bound to a context,
 moves a step each frame through the context's render queue while it is
-moving (:class:`Ticked`), on the engine's clock; a
-`TimeTrigger` sends the engine's time
-(:func:`~OpenGLContext.events.systemtime.systemTime`); a `KeySensor`
+moving (:class:`Ticked`); a `TimeTrigger` sends the engine's time; a `KeySensor`
 observes every keyboard event of each context it is bound to
 (:meth:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin.observeEvents`),
 under X3D's names for the keys (:func:`x3d_key`), and a `StringSensor` every
@@ -17,13 +17,13 @@ from typing import Any, Optional
 
 import weakref
 
-from vrml.x3d import followers, runtime
+from vrml.x3d import followers, runtime, timing
 
 from OpenGLContext.events import systemtime
 from OpenGLContext.events.renderqueue import DEFER
 
 __all__ = ['ColorChaser', 'ColorDamper', 'CoordinateChaser', 'CoordinateDamper', 'ENGINE_KEYS',
-           'KeySensor', 'OrientationChaser', 'OrientationDamper', 'PositionChaser',
+           'EngineTimed', 'KeySensor', 'OrientationChaser', 'OrientationDamper', 'PositionChaser',
            'PositionChaser2D', 'PositionDamper', 'PositionDamper2D', 'ScalarChaser',
            'ScalarDamper', 'StringSensor', 'TexCoordChaser2D', 'TexCoordDamper2D', 'Ticked',
            'TimeTrigger', 'x3d_key']
@@ -47,11 +47,16 @@ def x3d_key(name: str) -> Optional[str]:
     return name if len(name) == 1 else None
 
 
-class TimeTrigger(runtime.TimeTrigger):
-    """Sends the engine's time for each boolean it receives"""
+class EngineTimed(timing.Timed):
+    """A node timed on the engine's clock"""
 
-    def on_set_boolean(self, _value: Any) -> None:
-        self.triggerTime = systemtime.systemTime()
+    def now(self) -> float:
+        """The engine's time, in seconds"""
+        return systemtime.systemTime()
+
+
+class TimeTrigger(EngineTimed, runtime.TimeTrigger):
+    """Sends the engine's time for each boolean it receives"""
 
 
 class KeySensor(runtime.KeySensor):
@@ -89,7 +94,7 @@ class StringSensor(runtime.StringSensor):
             self.typed(character)
 
 
-class Ticked:
+class Ticked(EngineTimed):
     """A follower moved each frame, on the engine's clock, while it is moving
 
     Bound to contexts, it queues a step on each one's render queue when it
@@ -107,7 +112,7 @@ class Ticked:
         contexts = self.__dict__.setdefault('_contexts', [])
         if not any(reference() is context for reference in contexts):
             contexts.append(weakref.ref(context))
-        if self.advance(systemtime.systemTime()):
+        if self.advance(self.now()):
             self.wake()
         return True
 
@@ -125,7 +130,7 @@ class Ticked:
 
     def tick(self, context: Any) -> Any:
         """One frame's step through `context`; DEFER while the follower is still moving"""
-        moving = self.advance(systemtime.systemTime())
+        moving = self.advance(self.now())
         context.triggerRedraw(1)
         if moving:
             return DEFER
