@@ -173,14 +173,14 @@ def render_outcome(returncode: int, stdout: Optional[str], stderr: Optional[str]
 
 
 def render_scene(scene: Scene, out: str, size: tuple[int, int], frames: int,
-                 timeout: float = RENDER_TIMEOUT,
-                 renderer: str = 'pbr') -> tuple[bool, dict[str, Any]]:
+                 timeout: float = RENDER_TIMEOUT, renderer: str = 'pbr',
+                 backend: str = 'glfw') -> tuple[bool, dict[str, Any]]:
     """Draw `scene` to the PNG `out` in a process of its own, with `renderer`
-    (``pbr`` or ``vrml97``); whether it succeeded (:func:`render_outcome`),
-    and what the process reported"""
+    (``pbr`` or ``vrml97``) on window system `backend`; whether it succeeded
+    (:func:`render_outcome`), and what the process reported"""
     if os.path.exists(out):
         os.remove(out)
-    env = _render_environment(out, frames, renderer)
+    env = _render_environment(out, frames, renderer, backend)
     command = [sys.executable, '-m', 'OpenGLContext.bin.x3d_regression', '--render', scene.path,
                '--root', scene.root, '--size', '%dx%d' % size]
     try:
@@ -191,16 +191,14 @@ def render_scene(scene: Scene, out: str, size: tuple[int, int], frames: int,
     return render_outcome(proc.returncode, proc.stdout, proc.stderr, os.path.exists(out))
 
 
-def _render_environment(out: str, frames: int, renderer: str = 'pbr') -> dict[str, str]:
-    """The drawing process's environment: a clean one, drawing with `renderer`
-    and capturing `frames` frames to `out`"""
-    return renderoptions.clean_environment(
-        OPENGLCONTEXT_RENDERER=renderer,
-        OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_NO_VSYNC='1',
-        OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND='glfw',
-        OPENGLCONTEXT_SHADOW_CASCADES='3', OPENGLCONTEXT_BLOOM='0',
-        OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1', OPENGLCONTEXT_AUDIO='0',
-        OPENGLCONTEXT_SEED='4242',
+def _render_environment(out: str, frames: int, renderer: str = 'pbr',
+                        backend: str = 'glfw') -> dict[str, str]:
+    """The drawing process's environment: a clean one on `backend`, drawing
+    with `renderer` and capturing `frames` frames to `out`"""
+    return renderregression.capture_environment(
+        backend,
+        OPENGLCONTEXT_RENDERER=renderer, OPENGLCONTEXT_BLOOM='0',
+        OPENGLCONTEXT_AUDIO='0', OPENGLCONTEXT_SEED='4242',
         OPENGLCONTEXT_CAPTURE_START=repr(WORLD_START),
         OPENGLCONTEXT_AUTO_EXIT_FRAMES=str(frames),
         OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR=os.path.dirname(os.path.abspath(out)),
@@ -334,7 +332,7 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
     def drawn(scene: Scene) -> str:
         new_path = os.path.join(out_dir, scene.slug + '.png')
         ok, report = render_scene(scene, new_path, args.size, args.frames,
-                                  renderer=args.renderer)
+                                  renderer=args.renderer, backend=args.backend)
         record = _view_metadata(scene, report, args, provenance)
         if not ok:
             record.update(error=report.get('error', 'no render'),
@@ -391,7 +389,8 @@ def run(args: argparse.Namespace) -> int:
         if not scenes:
             print('No X3D documents in %s; --fetch downloads the corpus' % root)
             return 2
-        provenance = renderregression.provenance(lambda: renderregression.gl_renderer())
+        provenance = renderregression.provenance(
+            lambda: renderregression.gl_renderer(args.backend))
         print('Corpus:     %s (%d documents)' % (root, len(scenes)))
         print('Baselines:  %s' % baseline_root)
         print('Renders:    %s' % out_dir)
@@ -419,11 +418,6 @@ def bless(out_dir: str, baseline_root: str, parts: Sequence[str]) -> int:
     return 0
 
 
-def _parse_size(text: str) -> tuple[int, int]:
-    width, _, height = text.lower().partition('x')
-    return (int(width), int(height))
-
-
 def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
     from vrml.x3d import corpus  # noqa: PLC0415 for the archive names
     parser = argparse.ArgumentParser(prog=prog, description=__doc__,
@@ -436,35 +430,13 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
                              % ' and '.join(DEFAULT_ARCHIVES))
     parser.add_argument('--corpus', metavar='DIR',
                         help='the corpus directory (default: vrml.x3d.corpus.directory())')
-    parser.add_argument('--only', action='append', metavar='PART',
-                        help='draw only the documents whose name contains PART (repeatable)')
-    parser.add_argument('--bless', nargs='*', metavar='PART', default=None,
-                        help='make the renders already drawn, as the report shows them, the '
-                             'baselines: every one, or those whose name contains a PART; '
-                             'nothing is drawn')
+    renderregression.add_arguments(
+        parser, names='whose document name contains a PART',
+        baselines='tests/reference_images/x3d_baseline or $OPENGLCONTEXT_X3D_BASELINE',
+        renders='tests/x3d_regression/renders', size=DEFAULT_SIZE, frames=DEFAULT_FRAMES,
+        frames_help='frames drawn once the loads have arrived')
     parser.add_argument('--jobs', type=int, default=os.cpu_count() or 1,
                         help='documents drawn at a time (default: the processor count)')
-    parser.add_argument('--baseline-root', metavar='DIR',
-                        help='baseline directory (default: tests/reference_images/x3d_baseline '
-                             'or $OPENGLCONTEXT_X3D_BASELINE)')
-    parser.add_argument('--report', metavar='HTML', help='report path')
-    parser.add_argument('--out-dir', metavar='DIR',
-                        help='the renders, records and differences (default: '
-                             'tests/x3d_regression/renders)')
-    parser.add_argument('--report-only', action='store_true',
-                        help='rebuild the report from the renders already there')
-    parser.add_argument('--size', type=_parse_size, default=DEFAULT_SIZE, metavar='WxH',
-                        help='render size (default %dx%d, the size of Web3D\'s renders)'
-                             % DEFAULT_SIZE)
-    parser.add_argument('--frames', type=int, default=DEFAULT_FRAMES,
-                        help='frames drawn once the loads have arrived (default %d)'
-                             % DEFAULT_FRAMES)
-    parser.add_argument('--tolerance', type=float, default=renderregression.DEFAULT_TOLERANCE,
-                        metavar='PCT', help='percent of pixels that may differ (default %.1f)'
-                        % renderregression.DEFAULT_TOLERANCE)
-    parser.add_argument('--diff-threshold', type=int, default=renderregression.DIFF_THRESHOLD,
-                        metavar='N', help='per-channel difference a pixel must exceed to count '
-                        '(default %d)' % renderregression.DIFF_THRESHOLD)
     parser.add_argument('--reference', choices=('x_ite', 'web3d'), default='x_ite',
                         help="what each render is shown beside: X_ITE's render of it "
                              "(default, where there is one), or Web3D's published one")
@@ -472,7 +444,7 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
                         help="X_ITE's renders (default: tests/reference_images/x3d_xite)")
     parser.add_argument('--renderer', choices=('pbr', 'vrml97'), default='pbr',
                         help="the pass documents are drawn with: the PBR pass (default), "
-                             "or the VRML97 pass, which shades a Material by X3D's equation")
+                             "or the VRML97 pass")
     parser.add_argument('--render', metavar='DOCUMENT', help=argparse.SUPPRESS)
     parser.add_argument('--root', metavar='DIR', help=argparse.SUPPRESS)
     return parser

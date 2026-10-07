@@ -46,13 +46,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))          # this package's parent dir
 
 
-#: The source checkout, from the current directory or this package
-_source_root = renderregression.source_root
-
 
 def default_report_path() -> str:
     """Default report location: a subdirectory of the source tree's tests/."""
-    root = _source_root() or REPO
+    root = renderregression.source_root() or REPO
     return os.path.join(root, 'tests', 'gltf_regression', 'gltf_regression_report.html')
 
 # Render/capture defaults. Six frames + a short settle is the combination the
@@ -64,10 +61,6 @@ DEFAULT_SIZE = (900, 640)
 # -- past tolerance). Keep bless and test on the SAME values.
 DEFAULT_FRAMES = 8
 DEFAULT_DELAY = 0.5
-# Regression tolerance: percent of pixels allowed to differ by more than
-# DIFF_THRESHOLD per channel (the project's documented visual-regression default).
-DEFAULT_TOLERANCE = renderregression.DEFAULT_TOLERANCE
-DIFF_THRESHOLD = renderregression.DIFF_THRESHOLD
 
 
 def default_baseline_root() -> str:
@@ -213,7 +206,7 @@ def resolve_model(spec: gltf_demos.SceneSpec, parthenon: str | None = None) -> s
 # --------------------------------------------------------------------------- #
 def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out: str,
                 size: tuple[int, int], frames: int, delay: float,
-                env_prefix: str | None) -> tuple[bool, dict[str, Any]]:
+                backend: str = 'glfw') -> tuple[bool, dict[str, Any]]:
     """Render one scene/camera to ``out``. Returns ``(ok, stats)`` where ``stats``
     holds the viewer-reported ``load_seconds``/``fps``, its ``returncode``, and
     an ``error`` where it failed (:func:`renderregression.render_failure`)."""
@@ -249,17 +242,13 @@ def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out:
     # this process happens to be carrying: a baseline comparison whose result
     # depends on which variables were set before it is not a baseline.  See
     # `renderoptions.clean_environment`.
-    env = renderoptions.clean_environment(
-        OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_NO_VSYNC='1',
-        OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND='glfw',
-        OPENGLCONTEXT_SHADOW_CASCADES='3',
-        OPENGLCONTEXT_BLOOM='1' if getattr(spec, 'bloom', False) else '0',
-        OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1')
+    env = renderregression.capture_environment(
+        backend, OPENGLCONTEXT_BLOOM='1' if getattr(spec, 'bloom', False) else '0')
     try:
         proc = subprocess.run(
             [sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
             timeout=120, capture_output=True, text=True,
-            cwd=_source_root() or REPO, env=env)
+            cwd=renderregression.source_root() or REPO, env=env)
     except subprocess.TimeoutExpired:
         return False, {'error': 'timed out after 120 seconds'}
     stats = _parse_capture_stats(proc.stdout)
@@ -284,10 +273,6 @@ def _parse_capture_stats(stdout: str | None) -> dict[str, Any]:
     return stats
 
 
-compare = renderregression.compare
-is_regression = renderregression.is_regression
-
-
 # --------------------------------------------------------------------------- #
 # Driver.
 # --------------------------------------------------------------------------- #
@@ -297,15 +282,6 @@ def select_scenes(only: list[str] | None) -> list[gltf_demos.SceneSpec]:
         return list(gltf_demos.iter_scenes())
     wanted = set(only)
     return [s for s in gltf_demos.iter_scenes() if s.name in wanted]
-
-
-_gl_renderer = renderregression.gl_renderer
-
-
-def _provenance() -> dict[str, str]:
-    """Git hash (+``-dirty``), timestamp and GPU identity, stamped into every
-    render's metadata so a baseline records exactly how (and on what) it was made."""
-    return renderregression.provenance(lambda: _gl_renderer())
 
 
 def _view_metadata(spec: gltf_demos.SceneSpec, camera: int | None, url: str | None,
@@ -416,7 +392,7 @@ def _render_one(spec: gltf_demos.SceneSpec, camera: int | None, url: str | None,
             'scene': spec.name, 'error': 'model unavailable'})
         return '  ERROR %s (model unavailable)' % slug
     ok, stats = render_view(spec, camera, url, new_path, args.size,
-                            args.frames, args.delay, None)
+                            args.frames, args.delay, getattr(args, 'backend', 'glfw'))
     metadata = _view_metadata(spec, camera, url, args, provenance, stats)
     if not ok:
         metadata['error'] = stats.get('error', 'no render')
@@ -469,7 +445,8 @@ def run(args: argparse.Namespace) -> int:
 
     drawn = None
     if not getattr(args, 'report_only', False):
-        provenance = _provenance()
+        provenance = renderregression.provenance(
+            lambda: renderregression.gl_renderer(args.backend))
         print('Baselines: %s' % baseline_root)
         print('Renders:   %s' % out_dir)
         print('Provenance: git %s, %s, %s' % (
@@ -482,44 +459,18 @@ def run(args: argparse.Namespace) -> int:
     return renderregression.exit_status(counts, report)
 
 
-def _parse_size(text: str) -> tuple[int, int]:
-    w, _, h = text.lower().partition('x')
-    return (int(w), int(h))
-
-
 def build_parser(prog: str = 'oglc-gltf-regression') -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog=prog, description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--bless', nargs='*', metavar='NAME', default=None,
-                   help='make the renders already drawn, as the report shows them, the '
-                        'baselines: every one, or those of the named scenes; nothing is '
-                        'rendered')
-    p.add_argument('--only', action='append', metavar='NAME',
-                   help='render only this scene (repeatable)')
-    p.add_argument('--baseline-root', metavar='DIR',
-                   help='baseline directory (default: '
-                        'tests/reference_images/gltf_baseline or '
-                        '$OPENGLCONTEXT_GLTF_BASELINE)')
+    renderregression.add_arguments(
+        p, names='of the scene named PART',
+        baselines='tests/reference_images/gltf_baseline or $OPENGLCONTEXT_GLTF_BASELINE',
+        renders='tests/gltf_regression/renders', size=DEFAULT_SIZE, frames=DEFAULT_FRAMES,
+        frames_help='frames drawn before the capture')
     p.add_argument('--parthenon', metavar='GLB',
                    help='path to a local Parthenon .glb (default: auto-detect sibling)')
-    p.add_argument('--report', metavar='HTML', help='report output path')
-    p.add_argument('--out-dir', metavar='DIR',
-                   help='persistent directory of per-view renders/metadata/diffs '
-                        '(default: tests/gltf_regression/renders)')
-    p.add_argument('--report-only', action='store_true',
-                   help='rebuild the report from the existing renders directory '
-                        'without rendering anything')
-    p.add_argument('--size', type=_parse_size, default=DEFAULT_SIZE, metavar='WxH',
-                   help='render size (default %dx%d)' % DEFAULT_SIZE)
-    p.add_argument('--frames', type=int, default=DEFAULT_FRAMES,
-                   help='frames to render before capture (default %d)' % DEFAULT_FRAMES)
     p.add_argument('--delay', type=float, default=DEFAULT_DELAY,
                    help='settle seconds before capture (default %.2f)' % DEFAULT_DELAY)
-    p.add_argument('--tolerance', type=float, default=DEFAULT_TOLERANCE, metavar='PCT',
-                   help='percent of pixels allowed to differ (default %.1f)' % DEFAULT_TOLERANCE)
-    p.add_argument('--diff-threshold', type=int, default=DIFF_THRESHOLD, metavar='N',
-                   help='per-channel delta a pixel must exceed to count as different '
-                        '(default %d)' % DIFF_THRESHOLD)
     return p
 
 

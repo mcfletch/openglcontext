@@ -18,6 +18,7 @@ directory of the same layout. This module holds the parts they share:
 """
 from __future__ import annotations
 
+import argparse
 import datetime
 import json
 import os
@@ -30,7 +31,8 @@ from typing import Any, NamedTuple, Optional
 from OpenGLContext import atomicfiles, renderoptions
 
 __all__ = [
-    'DEFAULT_TOLERANCE', 'DIFF_THRESHOLD', 'source_root', 'gl_renderer', 'provenance',
+    'BACKENDS', 'DEFAULT_TOLERANCE', 'DIFF_THRESHOLD', 'source_root', 'gl_renderer',
+    'provenance', 'capture_environment', 'parse_size', 'add_arguments',
     'compare', 'is_regression', 'ReportCounts', 'render_failure', 'write_failure',
     'promote', 'build_report',
     'exit_status',
@@ -82,8 +84,13 @@ with hidden_window('provenance', size=(8, 8), profile='core'):
 """
 
 
-def gl_renderer() -> dict[str, str]:
-    """The GPU's GL_RENDERER and GL_VERSION, asked in a throwaway hidden context
+#: The window systems a run can draw on: a hidden GLFW window, or none at all.
+BACKENDS = ('glfw', 'offscreen', 'egl', 'wgl')
+
+
+def gl_renderer(backend: str = 'glfw') -> dict[str, str]:
+    """The GPU's GL_RENDERER and GL_VERSION, asked in a throwaway context on
+    `backend`, the window system the renders are drawn on
 
     The context is the core profile the renders are made in, since a driver
     that names the profile in GL_VERSION would otherwise stamp every baseline
@@ -94,7 +101,7 @@ def gl_renderer() -> dict[str, str]:
             [sys.executable, '-c', _PROVENANCE_PROGRAM],
             capture_output=True, text=True, timeout=30,
             env=dict(renderoptions.environment(), OPENGLCONTEXT_HIDDEN='1',
-                     OPENGLCONTEXT_BACKEND='glfw'),
+                     OPENGLCONTEXT_BACKEND=backend),
         ).stdout.splitlines()
         return {'gl_renderer': (out[0].strip() if out else '') or 'unknown',
                 'gl_version': out[1].strip() if len(out) > 1 else ''}
@@ -120,6 +127,60 @@ def provenance(renderer: Callable[[], dict[str, str]] = gl_renderer) -> dict[str
              'rendered_at': datetime.datetime.now().isoformat(timespec='seconds')}
     found.update(renderer())
     return found
+
+
+def capture_environment(backend: str = 'glfw', **settings: str) -> dict[str, str]:
+    """A drawing process's environment: a clean one, hidden, in the core
+    profile on `backend`, with three shadow cascades and no frame counter,
+    and `settings` over that"""
+    pinned = dict(
+        OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_NO_VSYNC='1',
+        OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND=backend,
+        OPENGLCONTEXT_SHADOW_CASCADES='3', OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1')
+    pinned.update(settings)
+    return renderoptions.clean_environment(None, **pinned)
+
+
+def parse_size(text: str) -> tuple[int, int]:
+    """``WxH`` as (width, height)"""
+    width, _, height = text.lower().partition('x')
+    return (int(width), int(height))
+
+
+def add_arguments(parser: argparse.ArgumentParser, *, names: str, baselines: str,
+                  renders: str, size: tuple[int, int], frames: int,
+                  frames_help: str) -> None:
+    """The options both regression commands take
+
+    names -- what `--only` and `--bless` match, said for the help: "whose
+        name contains PART", say
+    baselines, renders -- the default baseline and render directories, for the help
+    """
+    parser.add_argument('--only', action='append', metavar='PART',
+                        help='draw only the ones %s (repeatable)' % names)
+    parser.add_argument('--bless', nargs='*', metavar='PART', default=None,
+                        help='make the renders already drawn, as the report shows them, the '
+                             'baselines: every one, or those %s; nothing is drawn' % names)
+    parser.add_argument('--baseline-root', metavar='DIR',
+                        help='the baselines (default: %s)' % baselines)
+    parser.add_argument('--out-dir', metavar='DIR',
+                        help='the renders, records and differences (default: %s)' % renders)
+    parser.add_argument('--report', metavar='HTML', help='where the report is written')
+    parser.add_argument('--report-only', action='store_true',
+                        help='rebuild the report from the renders already drawn')
+    parser.add_argument('--size', type=parse_size, default=size, metavar='WxH',
+                        help='render size (default %dx%d)' % size)
+    parser.add_argument('--frames', type=int, default=frames,
+                        help='%s (default %d)' % (frames_help, frames))
+    parser.add_argument('--backend', choices=BACKENDS, default='glfw',
+                        help="the window system drawn on: a hidden GLFW window (default), "
+                             "or none (offscreen, egl, wgl)")
+    parser.add_argument('--tolerance', type=float, default=DEFAULT_TOLERANCE, metavar='PCT',
+                        help='percent of pixels that may differ (default %.1f)'
+                             % DEFAULT_TOLERANCE)
+    parser.add_argument('--diff-threshold', type=int, default=DIFF_THRESHOLD, metavar='N',
+                        help='per-channel difference a pixel must exceed to count '
+                             '(default %d)' % DIFF_THRESHOLD)
 
 
 def compare(baseline_path: str, new_path: str, diff_out: str,

@@ -16,6 +16,7 @@ PIL = pytest.importorskip("PIL")
 from PIL import Image
 
 from OpenGLContext.bin import gltf_regression as R
+from OpenGLContext.testing import renderregression as RR
 from OpenGLContext.loaders.gltf_demos import SceneSpec
 from OpenGLContext.loaders import resolver
 from OpenGLContext.testing.glcontext import gl_available
@@ -31,9 +32,9 @@ class TestCompare:
         b = str(tmp_path / 'b.png')
         _png(a, (120, 130, 140))
         _png(b, (120, 130, 140))
-        result, stats = R.compare(a, b, str(tmp_path / 'd.png'), R.DIFF_THRESHOLD)
+        result, stats = RR.compare(a, b, str(tmp_path / 'd.png'), RR.DIFF_THRESHOLD)
         assert stats['percent_different'] == 0.0
-        assert R.is_regression(result, R.DEFAULT_TOLERANCE) is False
+        assert RR.is_regression(result, RR.DEFAULT_TOLERANCE) is False
 
     def test_changed_image_is_a_regression_and_writes_a_diff(self, tmp_path):
         a = str(tmp_path / 'a.png')
@@ -41,9 +42,9 @@ class TestCompare:
         diff = str(tmp_path / 'd.png')
         _png(a, (10, 10, 10))
         _png(b, (200, 200, 200))
-        result, stats = R.compare(a, b, diff, R.DIFF_THRESHOLD)
-        assert stats['percent_different'] > R.DEFAULT_TOLERANCE
-        assert R.is_regression(result, R.DEFAULT_TOLERANCE) is True
+        result, stats = RR.compare(a, b, diff, RR.DIFF_THRESHOLD)
+        assert stats['percent_different'] > RR.DEFAULT_TOLERANCE
+        assert RR.is_regression(result, RR.DEFAULT_TOLERANCE) is True
         assert os.path.exists(diff)          # a heatmap was saved
 
     def test_shape_mismatch_is_a_regression(self, tmp_path):
@@ -51,9 +52,9 @@ class TestCompare:
         b = str(tmp_path / 'b.png')
         _png(a, (0, 0, 0), size=(16, 16))
         _png(b, (0, 0, 0), size=(8, 8))
-        result, _ = R.compare(a, b, str(tmp_path / 'd.png'), R.DIFF_THRESHOLD)
+        result, _ = RR.compare(a, b, str(tmp_path / 'd.png'), RR.DIFF_THRESHOLD)
         assert result.shapes_match is False
-        assert R.is_regression(result, R.DEFAULT_TOLERANCE) is True
+        assert RR.is_regression(result, RR.DEFAULT_TOLERANCE) is True
 
 
 class TestSelectAndBless:
@@ -84,7 +85,7 @@ class TestReportLocation:
         assert 'site-packages' not in path and '.venv' not in path
 
     def test_source_root_has_tests_and_package(self):
-        root = R._source_root()
+        root = RR.source_root()
         assert root is not None
         assert os.path.isdir(os.path.join(root, 'tests'))
         assert os.path.isfile(os.path.join(root, 'OpenGLContext', '__init__.py'))
@@ -93,13 +94,13 @@ class TestReportLocation:
         # From a directory with no markers the cwd branch walks to the filesystem
         # root and breaks, then the REPO fallback still finds the checkout.
         monkeypatch.chdir(tmp_path)
-        assert R._source_root() is not None
+        assert RR.source_root() is not None
 
 
 class TestParseSize:
     def test_parses_wxh(self):
-        assert R._parse_size('1280x720') == (1280, 720)
-        assert R._parse_size('900X640') == (900, 640)
+        assert RR.parse_size('1280x720') == (1280, 720)
+        assert RR.parse_size('900X640') == (900, 640)
 
 
 class TestEnvironmentResolution:
@@ -191,7 +192,7 @@ class TestRenderView:
         rec = {}
         self._patch(monkeypatch, rec)
         ok, stats = R.render_view(self._spec(), None, 'm.glb', 'o.png',
-                                  (800, 600), 8, 0.5, None)
+                                  (800, 600), 8, 0.5)
         assert ok is True and stats == {'load_seconds': 1.0, 'fps': 42.0, 'returncode': 0}
         cmd = rec['cmd']
         assert '--no-cameras' in cmd and '--capture' in cmd and 'o.png' in cmd
@@ -201,14 +202,14 @@ class TestRenderView:
         rec = {}
         self._patch(monkeypatch, rec)
         spec = self._spec(eye=(1.0, 2.0, 3.0), look_at=(0.0, 0.0, 0.0))
-        R.render_view(spec, None, 'm.glb', 'o.png', (800, 600), 8, 0.5, None)
+        R.render_view(spec, None, 'm.glb', 'o.png', (800, 600), 8, 0.5)
         joined = ' '.join(rec['cmd'])
         assert '--eye=' in joined and '--look-at=' in joined
 
     def test_baked_camera_run_adopts_the_authored_pose(self, monkeypatch):
         rec = {}
         self._patch(monkeypatch, rec)
-        R.render_view(self._spec(), 2, 'm.glb', 'o.png', (800, 600), 8, 0.5, None)
+        R.render_view(self._spec(), 2, 'm.glb', 'o.png', (800, 600), 8, 0.5)
         cmd = rec['cmd']
         assert '--camera' in cmd and '2' in cmd and '--no-cameras' not in cmd
 
@@ -216,14 +217,14 @@ class TestRenderView:
         rec = {}
         self._patch(monkeypatch, rec)
         R.render_view(self._spec(background='cube', environment='studio'),
-                      None, 'm.glb', 'o.png', (800, 600), 8, 0.5, None)
+                      None, 'm.glb', 'o.png', (800, 600), 8, 0.5)
         assert '--environment' in rec['cmd'] and '--ibl-intensity' in rec['cmd']
 
     def test_animated_scene_pins_the_animation_time(self, monkeypatch):
         rec = {}
         self._patch(monkeypatch, rec)
         R.render_view(self._spec(anim_time=1.0), None, 'm.glb', 'o.png',
-                      (800, 600), 8, 0.5, None)
+                      (800, 600), 8, 0.5)
         assert '--anim-time' in rec['cmd']
 
     def test_timeout_reports_failure(self, monkeypatch):
@@ -231,13 +232,13 @@ class TestRenderView:
             raise subprocess.TimeoutExpired(cmd, 120)
         monkeypatch.setattr(R.subprocess, 'run', boom)
         ok, stats = R.render_view(self._spec(), None, 'm.glb', 'o.png',
-                                  (800, 600), 8, 0.5, None)
+                                  (800, 600), 8, 0.5)
         assert ok is False and stats == {'error': 'timed out after 120 seconds'}
 
     def test_a_viewer_killed_after_its_capture_failed(self, monkeypatch):
         self._patch(monkeypatch, {}, returncode=-6, stderr='Fatal Python error: Aborted\n')
         ok, stats = R.render_view(self._spec(), None, 'm.glb', 'o.png',
-                                  (800, 600), 8, 0.5, None)
+                                  (800, 600), 8, 0.5)
         assert ok is False
         assert stats['error'] == 'killed by SIGABRT: Fatal Python error: Aborted'
 
@@ -407,8 +408,8 @@ class TestBuildReportAndRun:
         os.makedirs(base_dir)
         _png(os.path.join(base_dir, 'Duck.png'), (40, 40, 40))       # identical
         report = str(tmp_path / 'report.html')
-        n = R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE,
-                           R.DIFF_THRESHOLD)
+        n = R.build_report(out_dir, base_dir, report, RR.DEFAULT_TOLERANCE,
+                           RR.DIFF_THRESHOLD)
         assert n == (0, 0) and os.path.exists(report)
 
     def test_diverging_baseline_counts_as_a_regression(self, monkeypatch, tmp_path):
@@ -419,8 +420,8 @@ class TestBuildReportAndRun:
         os.makedirs(base_dir)
         _png(os.path.join(base_dir, 'Duck.png'), (0, 0, 0))          # wildly different
         report = str(tmp_path / 'report.html')
-        n = R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE,
-                           R.DIFF_THRESHOLD)
+        n = R.build_report(out_dir, base_dir, report, RR.DEFAULT_TOLERANCE,
+                           RR.DIFF_THRESHOLD)
         assert n == (1, 0)
 
     def test_upstream_screenshot_failure_does_not_break_the_report(
@@ -434,8 +435,8 @@ class TestBuildReportAndRun:
         os.makedirs(base_dir)
         _png(os.path.join(base_dir, 'Duck.png'), (40, 40, 40))
         report = str(tmp_path / 'r.html')
-        assert R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE,
-                              R.DIFF_THRESHOLD) == (0, 0)
+        assert R.build_report(out_dir, base_dir, report, RR.DEFAULT_TOLERANCE,
+                              RR.DIFF_THRESHOLD) == (0, 0)
         assert os.path.exists(report)
 
     def test_missing_baseline_is_skipped_not_failed(self, monkeypatch, tmp_path):
@@ -444,7 +445,7 @@ class TestBuildReportAndRun:
         self._stage(out_dir, 'Duck')
         report = str(tmp_path / 'report.html')
         n = R.build_report(out_dir, str(tmp_path / 'empty'), report,
-                           R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+                           RR.DEFAULT_TOLERANCE, RR.DIFF_THRESHOLD)
         assert n == (0, 0)                               # no baseline -> skip, not fail
 
     def test_stages_external_baseline_and_upstream_into_the_report_bundle(
@@ -461,7 +462,7 @@ class TestBuildReportAndRun:
         # report lives in its own dir, so the baseline/upstream are OUTSIDE it and
         # get copied into the render dir to make a self-contained bundle.
         report = str(tmp_path / 'reportdir' / 'r.html')
-        R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+        R.build_report(out_dir, base_dir, report, RR.DEFAULT_TOLERANCE, RR.DIFF_THRESHOLD)
         assert os.path.exists(os.path.join(out_dir, 'Duck_baseline.png'))
         assert os.path.exists(os.path.join(out_dir, 'Duck_upstream.png'))
 
@@ -474,15 +475,15 @@ class TestBuildReportAndRun:
         os.makedirs(base_dir)
         _png(os.path.join(base_dir, 'Duck.png'), (40, 40, 40))
         report = str(tmp_path / 'reportdir' / 'r.html')
-        R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+        R.build_report(out_dir, base_dir, report, RR.DEFAULT_TOLERANCE, RR.DIFF_THRESHOLD)
         copied = []
         real = R.renderregression.atomicfiles.copy_file
         monkeypatch.setattr(R.renderregression.atomicfiles, 'copy_file',
                             lambda src, dst: copied.append(dst) or real(src, dst))
-        R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+        R.build_report(out_dir, base_dir, report, RR.DEFAULT_TOLERANCE, RR.DIFF_THRESHOLD)
         assert copied == []
         _png(os.path.join(base_dir, 'Duck.png'), (41, 40, 40), size=(32, 32))   # replaced
-        R.build_report(out_dir, base_dir, report, R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+        R.build_report(out_dir, base_dir, report, RR.DEFAULT_TOLERANCE, RR.DIFF_THRESHOLD)
         assert copied == [os.path.join(out_dir, 'Duck_baseline.png')]
 
     def test_unreadable_metadata_and_a_missing_render_are_reported_as_errors(
@@ -493,12 +494,12 @@ class TestBuildReportAndRun:
         (out_dir / 'Broken.json').write_text('this is not json {')     # unreadable meta
         report = str(tmp_path / 'r.html')                              # + no render png
         n = R.build_report(str(out_dir), str(tmp_path / 'b'), report,
-                           R.DEFAULT_TOLERANCE, R.DIFF_THRESHOLD)
+                           RR.DEFAULT_TOLERANCE, RR.DIFF_THRESHOLD)
         assert n == (0, 1) and os.path.exists(report)                  # an error, not a regression
 
     def test_full_run_renders_then_reports(self, monkeypatch, tmp_path):
         monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
-        monkeypatch.setattr(R, '_provenance', lambda: {
+        monkeypatch.setattr(RR, 'gl_renderer', lambda *_backend: {
             'git': 'g', 'rendered_at': 't', 'gl_renderer': 'r', 'gl_version': 'v'})
         out_dir = str(tmp_path / 'out')
         base_dir = str(tmp_path / 'base')
@@ -509,10 +510,10 @@ class TestBuildReportAndRun:
         os.makedirs(base_dir)
         _png(os.path.join(base_dir, 'Duck.png'), (40, 40, 40))
         args = argparse.Namespace(
-            baseline_root=base_dir, out_dir=out_dir, parthenon=None,
+            backend='glfw', baseline_root=base_dir, out_dir=out_dir, parthenon=None,
             report=str(tmp_path / 'r.html'), report_only=False, only=None,
             bless=None, size=(64, 48), frames=4, delay=0.2,
-            tolerance=R.DEFAULT_TOLERANCE, diff_threshold=R.DIFF_THRESHOLD)
+            tolerance=RR.DEFAULT_TOLERANCE, diff_threshold=RR.DIFF_THRESHOLD)
         assert R.run(args) == 0
 
     def test_report_only_run_rebuilds_without_rendering(self, monkeypatch, tmp_path):
@@ -526,9 +527,9 @@ class TestBuildReportAndRun:
         os.makedirs(base_dir)
         _png(os.path.join(base_dir, 'Duck.png'), (40, 40, 40))
         args = argparse.Namespace(
-            baseline_root=base_dir, out_dir=out_dir, parthenon=None,
+            backend='glfw', baseline_root=base_dir, out_dir=out_dir, parthenon=None,
             report=str(tmp_path / 'r.html'), report_only=True, only=None,
-            tolerance=R.DEFAULT_TOLERANCE, diff_threshold=R.DIFF_THRESHOLD)
+            tolerance=RR.DEFAULT_TOLERANCE, diff_threshold=RR.DIFF_THRESHOLD)
         assert R.run(args) == 0
 
     def test_main_report_only_returns_the_regression_count(self, monkeypatch, tmp_path):
@@ -545,7 +546,7 @@ class TestBuildReportAndRun:
 
 class TestProvenance:
     def test_provenance_stamps_git_time_and_gpu_identity(self):
-        prov = R._provenance()
+        prov = RR.provenance()
         assert set(prov) >= {'git', 'rendered_at', 'gl_renderer', 'gl_version'}
         assert prov['git']                               # a hash or 'unknown', never empty
         assert 'T' in prov['rendered_at']                # ISO timestamp
@@ -561,7 +562,7 @@ class TestProvenance:
 
         if not gl_available():
             pytest.skip('no GL context can be created in this process')
-        version = R._gl_renderer()['gl_version'].lower()
+        version = RR.gl_renderer()['gl_version'].lower()
         assert 'compatibility' not in version, version
 
 

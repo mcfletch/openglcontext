@@ -36,6 +36,7 @@ pytest.importorskip("PIL")
 pytest.importorskip("numpy")
 
 from OpenGLContext.bin import gltf_regression as R
+from OpenGLContext.testing import renderregression as RR
 from OpenGLContext.loaders import gltf_demos
 from OpenGLContext.testing.display import display_available
 
@@ -85,7 +86,7 @@ TOLERANCES = {
 def _tolerance_for(spec):
     """How much of this scene's frame may differ from its baseline."""
     entry = TOLERANCES.get(spec.name)
-    return entry[0] if entry else R.DEFAULT_TOLERANCE
+    return entry[0] if entry else RR.DEFAULT_TOLERANCE
 
 _BASELINE_ROOT = R.default_baseline_root()
 _HAS_DISPLAY = display_available()
@@ -229,6 +230,6 @@ def test_view_matches_baseline(spec, camera, tmp_path):
     if not rendered:
         pytest.skip("render did not produce a frame (GL/network flake or timeout)")
 
-    result, stats = R.compare(baseline, out, diff, R.DIFF_THRESHOLD)
-    assert not R.is_regression(result, _tolerance_for(spec)), (
+    result, stats = RR.compare(baseline, out, diff, RR.DIFF_THRESHOLD)
+    assert not RR.is_regression(result, _tolerance_for(spec)), (
         "%s regressed vs baseline: %s" % (slug, result))

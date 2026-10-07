@@ -517,6 +517,9 @@ document is at a different point of its animation in the two.
      - frames drawn once the loads have arrived
    * - ``--renderer pbr|vrml97``
      - the pass the documents are drawn with (``pbr``)
+   * - ``--backend glfw|offscreen|egl|wgl``
+     - the window system the documents are drawn on: a hidden GLFW window
+       (``glfw``), or none, for a machine with no display
    * - ``--reference x_ite|web3d``
      - the reference each render is shown beside (``x_ite``)
    * - ``--reference-root DIR``

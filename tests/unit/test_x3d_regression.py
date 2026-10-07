@@ -157,13 +157,13 @@ def test_a_document_may_name_an_image_above_its_folder(tmp_path, where, url):
 def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
 
-    def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
+    def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
         Image.new('RGB', size, (200, 0, 0)).save(out)
         return True, {'problems': ['warning: something'], 'viewpoint': None}
 
     monkeypatch.setattr(R, 'render_scene', fake_render)
     monkeypatch.setattr(R.renderregression, 'gl_renderer',
-                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
     baselines, out_dir = str(tmp_path / 'baselines'), str(tmp_path / 'renders')
     report = str(tmp_path / 'report.html')
     arguments = ['--corpus', root, '--baseline-root', baselines, '--out-dir', out_dir,
@@ -181,7 +181,7 @@ def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
     assert record['gl_renderer'] == 'test'
     assert os.path.exists(report)
 
-    def different(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
+    def different(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
         Image.new('RGB', size, (0, 0, 200)).save(out)
         return True, {'problems': [], 'viewpoint': None}
 
@@ -192,12 +192,12 @@ def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
 def test_a_failed_render_fails_the_run(monkeypatch, tmp_path, capsys):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': ''})
 
-    def crashed(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
+    def crashed(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
         return False, {'error': 'killed by SIGSEGV', 'returncode': -11}
 
     monkeypatch.setattr(R, 'render_scene', crashed)
     monkeypatch.setattr(R.renderregression, 'gl_renderer',
-                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
     out_dir = str(tmp_path / 'renders')
     assert R.main(['--corpus', root, '--baseline-root', str(tmp_path / 'b'),
                    '--out-dir', out_dir, '--report', str(tmp_path / 'r.html')]) == 1
@@ -212,7 +212,7 @@ def test_one_documents_failure_leaves_the_others_drawn(monkeypatch, tmp_path):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
     monkeypatch.setattr(R, 'render_scene', _fake_render)
     monkeypatch.setattr(R.renderregression, 'gl_renderer',
-                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
     real = R._reference
 
     def failing(scene, report, args, rendered):
@@ -233,7 +233,7 @@ def test_only_the_documents_drawn_are_counted(monkeypatch, tmp_path):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
     monkeypatch.setattr(R, 'render_scene', _fake_render)
     monkeypatch.setattr(R.renderregression, 'gl_renderer',
-                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
     baselines = str(tmp_path / 'baselines')
     arguments = ['--corpus', root, '--baseline-root', baselines,
                  '--out-dir', str(tmp_path / 'renders'), '--report', str(tmp_path / 'r.html'),
@@ -250,12 +250,12 @@ def test_bless_promotes_what_was_drawn_and_reviewed(monkeypatch, tmp_path, capsy
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
     drawn = []
 
-    def counting(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
+    def counting(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
         drawn.append(scene.name)
         return _fake_render(scene, out, size, frames)
     monkeypatch.setattr(R, 'render_scene', counting)
     monkeypatch.setattr(R.renderregression, 'gl_renderer',
-                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
     baselines, out_dir = str(tmp_path / 'b'), str(tmp_path / 'renders')
     arguments = ['--corpus', root, '--baseline-root', baselines, '--out-dir', out_dir,
                  '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--reference', 'web3d']
@@ -278,7 +278,7 @@ def test_no_corpus_says_how_to_fetch_one(tmp_path, capsys):
     assert '--fetch' in capsys.readouterr().out
 
 
-def _fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr'):
+def _fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
     Image.new('RGB', size, (200, 0, 0)).save(out)
     return True, {'problems': [], 'viewpoint': None}
 
@@ -287,7 +287,7 @@ def _run_with_references(monkeypatch, tmp_path, references):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': ''})
     monkeypatch.setattr(R, 'render_scene', _fake_render)
     monkeypatch.setattr(R.renderregression, 'gl_renderer',
-                        lambda: {'gl_renderer': 'test', 'gl_version': '0'})
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
     out_dir = str(tmp_path / 'renders')
     R.main(['--corpus', root, '--baseline-root', str(tmp_path / 'b'), '--out-dir', out_dir,
             '--report', str(tmp_path / 'r.html'), '--size', '32x24',
@@ -333,3 +333,10 @@ def test_the_renderer_a_document_is_drawn_with(tmp_path, renderer):
     env = R._render_environment(str(tmp_path / 'a.png'), 8, renderer)
     assert env['OPENGLCONTEXT_RENDERER'] == renderer
     assert R.build_parser().parse_args([]).renderer == 'pbr'
+
+
+def test_the_backend_a_document_is_drawn_on():
+    args = R.build_parser().parse_args(['--backend', 'egl'])
+    assert args.backend == 'egl'
+    assert R._render_environment('out.png', 4, 'pbr', args.backend)['OPENGLCONTEXT_BACKEND'] == 'egl'
+    assert R.build_parser().parse_args([]).backend == 'glfw'
