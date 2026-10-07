@@ -1577,6 +1577,12 @@ An application that wants behaviour attached to a `Script` node's interface
 writes it in Python against the node's fields, as it would for any node, and
 registers it from the application's own code; the file supplies no code.
 
+- [ ] Next, once this plan and its review findings are done (asked
+  2026-10-07): look at whether jsrun can run ECMAScript `Script` nodes --
+  the sandbox it gives, the X3D ECMAScript binding (19777-1) it would need,
+  how a script's events join the cascade, and what that does to the
+  untrusted-content rules. A proposal, not an implementation, comes first.
+
 ## 10. Licensing and provenance
 
 - X3DUOM. Neither the files nor their page

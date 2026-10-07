@@ -117,7 +117,7 @@ class TestGetTimer:
         timer.addEventHandler('cycle', function=lambda event: cycles.append(event.value()))
         context.manager(context)
         assert fractions == [(pytest.approx(0.5), 10.0)]
-        assert cycles == [10.0]
+        assert cycles == [8.0], 'the time the cycle under way began'
 
     def test_one_handle_per_sensor(self, monkeypatch):
         sensor, context, _now = self.running(monkeypatch)
