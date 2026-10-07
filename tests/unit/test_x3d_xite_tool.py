@@ -35,6 +35,15 @@ def tool():
         sys.modules.pop(spec.name, None)
 
 
+def test_a_distribution_is_cached_once_unpacked(tmp_path, tool):
+    assert tool.cached_distribution(str(tmp_path)) is None
+    dist = tmp_path / 'openglcontext-tools' / 'x_ite' / tool.VERSION / 'dist'
+    dist.mkdir(parents=True)
+    (dist / 'x_ite.min.js').write_text('')
+    assert tool.cached_distribution(str(tmp_path)) == str(dist)
+    assert tool.distribution(str(tmp_path)) == str(dist)
+
+
 def tarball(tmp_path, members):
     path = tmp_path / 'x_ite.tgz'
     with tarfile.open(path, 'w:gz') as archive:
@@ -167,11 +176,26 @@ def test_documents_with_references_are_not_drawn_again(tool, tmp_path, monkeypat
     assert tool.render_all(documents, str(out), (8, 8), jobs=2, refresh=True) == 2
 
 
-def test_a_document_rendered_by_x_ite(tmp_path):
-    """One real render, through ``uv run`` as the script is used: a red box on black"""
+#: What ``uv run`` resolves the script's dependencies from.
+PACKAGE_INDEX = 'https://pypi.org/simple/playwright/'
+
+
+@pytest.mark.network
+@pytest.mark.slow
+def test_a_document_rendered_by_x_ite(tmp_path, tool):
+    """One real render, through ``uv run`` as the script is used: a red box on black
+
+    The run fetches Playwright, its Chromium and X_ITE where they are not cached.
+    """
+    from OpenGLContext.testing.network import unreachable  # noqa: PLC0415 kept with its use
     uv = shutil.which('uv') or os.path.join(os.path.dirname(sys.executable), 'uv')
     if not os.path.exists(uv):
         pytest.skip('uv runs the script, and is not installed')
+    needed = [PACKAGE_INDEX] + ([] if tool.cached_distribution() else [tool.TARBALL_URL])
+    for url in needed:
+        reason = unreachable(url)
+        if reason:
+            pytest.skip(reason)
     import numpy as np  # noqa: PLC0415 kept with its use
     from PIL import Image  # noqa: PLC0415 kept with its use
     corpus, out = str(tmp_path / 'corpus'), tmp_path / 'out'

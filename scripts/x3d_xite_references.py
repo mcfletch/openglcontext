@@ -168,12 +168,22 @@ def unpack(source: str, destination: str) -> str:
     return os.path.join(root, 'dist')
 
 
+def _distribution_directory(cache: Optional[str] = None) -> str:
+    return os.path.join(cache or _cache_directory(), 'openglcontext-tools', 'x_ite', VERSION)
+
+
+def cached_distribution(cache: Optional[str] = None) -> Optional[str]:
+    """The folder of X_ITE's ``dist`` files where they were downloaded before; else None"""
+    dist = os.path.join(_distribution_directory(cache), 'dist')
+    return dist if os.path.exists(os.path.join(dist, 'x_ite.min.js')) else None
+
+
 def distribution(cache: Optional[str] = None) -> str:
     """The folder of X_ITE's ``dist`` files, downloaded and checked once"""
-    where = os.path.join(cache or _cache_directory(), 'openglcontext-tools', 'x_ite', VERSION)
-    dist = os.path.join(where, 'dist')
-    if os.path.exists(os.path.join(dist, 'x_ite.min.js')):
-        return dist
+    found = cached_distribution(cache)
+    if found is not None:
+        return found
+    where = _distribution_directory(cache)
     tarball = os.path.join(where, 'x_ite.tgz')
     with urllib.request.urlopen(TARBALL_URL, timeout=300) as response:  # noqa: S310 the https constant above
         data = response.read()
