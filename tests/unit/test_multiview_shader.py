@@ -25,7 +25,7 @@ LIT_VERTEX = shadersource.preprocess_shader('vrml97_lighting.vert')
 class TestWhatTheVertexStageHandsOn:
     def test_every_output_is_found_with_its_type(self):
         found = {v.name: v for v in shadersource.vertex_outputs(LIT_VERTEX)}
-        assert set(found) == {'vNormal', 'vPosition', 'vTexCoord', 'vObjectId'}
+        assert set(found) == {'vNormal', 'vPosition', 'vTexCoord', 'vColor', 'vObjectId'}
         assert found['vNormal'].type == 'vec3'
         assert found['vObjectId'].flat and not found['vNormal'].flat
 
@@ -86,7 +86,7 @@ class TestWhatTheVertexStageHandsOn:
     def test_each_output_is_renamed_for_the_geometry_stage_to_read(self):
         defines = shadersource.geometry_input_defines(LIT_VERTEX)
         assert '#define vNormal gs_vNormal' in defines
-        assert len(defines) == 4
+        assert len(defines) == 5
 
 
 class TestTheVertexRouting:

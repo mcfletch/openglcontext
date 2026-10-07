@@ -179,6 +179,10 @@ class Shape(basenodes.Shape):
             if not textured:
                 shader_program.set_texture_enabled(False)
                 mode._bound_texture_id = None
+            # One uniform for the pass: a mesh with colours sets it for its own
+            # draw, and every other shape is drawn with its material's colour.
+            if hasattr(shader_program, 'set_vertex_color'):
+                shader_program.set_vertex_color(False)
 
         # Render the geometry (it will detect shader_mode and use shader path)
         self.geometry.render(textured=textured, mode=mode)

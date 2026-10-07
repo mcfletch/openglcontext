@@ -851,6 +851,11 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         """Set scene ambient color."""
         self._set_uniform3f('sceneAmbient', ambient)
 
+    def set_vertex_color(self, enabled: bool) -> None:
+        """Whether the lit program reads the mesh's per-vertex colours in place
+        of the material's diffuse colour"""
+        self._set_uniform1i('hasVertexColor', int(bool(enabled)), self.program)
+
     def set_fog(self, density: float = 0.0, color: Color3 = (0.6, 0.7, 0.85),
                 mode: int = 1) -> None:
         """Set the frame's fog on each program that draws the scene's shapes

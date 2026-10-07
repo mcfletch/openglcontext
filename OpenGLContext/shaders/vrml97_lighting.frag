@@ -25,6 +25,9 @@ in vec3 vNormal;
 in vec3 vPosition;
 #include "_viewer_inc.glsl"
 in vec2 vTexCoord;
+in vec4 vColor;
+// A mesh's per-vertex colours, which replace diffuseColor (X3D 17.2.2.4)
+uniform bool hasVertexColor;
 
 // Material uniforms (VRML97 Material node properties)
 uniform vec3 diffuseColor;
@@ -73,7 +76,7 @@ void main() {
     vec3 viewDir = normalize(toViewer(vPosition));
 
     // Get base diffuse color (from texture or material)
-    vec3 matDiffuse = diffuseColor;
+    vec3 matDiffuse = hasVertexColor ? vColor.rgb : diffuseColor;
     float alpha = 1.0 - transparency;
 
     if (hasDiffuseTexture) {

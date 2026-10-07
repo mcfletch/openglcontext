@@ -108,6 +108,9 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     torch, 0.2 m from a wall with attenuation `0 0.6 0`, lit it eight times over
   - [x] the VRML97 pass fogs (`_x3d_fog_inc.glsl`, `VRML97ShaderProgram.set_fog`,
     `FlatPass.fogSetup`); `oglc-x3d-regression --renderer vrml97`
+  - [x] the VRML97 pass draws a mesh's per-vertex colours (ElevationGrid and the
+    triangle sets: `hasVertexColor` in its lit shader), and an instanced group's
+    texture (`FlatPass._bindGroupTexture`)
   - [x] a viewpoint, background, fog or navigation in an Inline's file is not
     bound first (pyvrml97 `binding.current_path`; 19775-1 7.2.2 rule 4):
     Figure20_09 opened on the vaulted ceiling's own viewpoint

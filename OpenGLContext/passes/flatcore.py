@@ -191,8 +191,26 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         else:
             apply_winding_cull(self, bool(getattr(geom, 'ccw', True)),
                                bool(getattr(geom, 'solid', True)))
+        textured = self._bindGroupTexture(shader, appearance)
         shader.set_instancing(True, program=prog)
         try:
             draw_instanced_mesh(gpu, modelviews, oids, copies=self.viewCopies)
         finally:
             shader.set_instancing(False, program=prog)
+            if textured:
+                shader.unbind_texture()
+
+    def _bindGroupTexture(self, shader: Any, appearance: Any) -> bool:
+        """Bind the group's appearance's texture and its transform, as a Shape
+        drawn alone does; whether one was bound"""
+        texture = getattr(appearance, 'texture', None) if appearance is not None else None
+        tex = texture.cached(self) if texture else None
+        if tex is None:
+            shader.set_texture_enabled(False)
+            return False
+        shader.bind_texture(tex)
+        if appearance.textureTransform:
+            shader.set_texture_transform(appearance.textureTransform)
+        else:
+            shader.set_default_texture_transform()
+        return True

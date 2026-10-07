@@ -7,6 +7,7 @@
 layout(location = 0) in vec2 aTexCoord;  // optional: sampled where a texture is bound
 layout(location = 1) in vec3 aNormal;    // required: shading has no direction without it
 layout(location = 2) in vec3 aPosition;  // required
+layout(location = 4) in vec4 aColor;     // optional: read where hasVertexColor says the mesh carries it
 
 // Per-instance inputs (divisor 1); a mat4 spans locations 5..8, the packed object
 // id at 9. Used only when instancingEnabled -- matches the PBR shader convention.
@@ -24,6 +25,7 @@ uniform bool instancingEnabled;
 out vec3 vNormal;
 out vec3 vPosition;  // Position in eye/view space
 out vec2 vTexCoord;
+out vec4 vColor;
 flat out uint vObjectId;
 #include "_multiview_inc.glsl"
 
@@ -45,6 +47,7 @@ void main() {
     // Apply texture transform (2D homogeneous coordinates)
     vec3 transformedTex = textureMatrix * vec3(aTexCoord, 1.0);
     vTexCoord = transformedTex.xy;
+    vColor = aColor;
 
     // Final clip-space position
     gl_Position = projectionMatrix * eyePosition;
