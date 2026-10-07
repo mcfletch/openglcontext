@@ -754,7 +754,7 @@ class SceneViewerMixin( CaptionMixin,
         """
         return PointLight(location=light.location, color=cls.PLACED_LIGHT_COLOR,
                           intensity=light.intensity, attenuation=(0.0, 0.0, 1.0),
-                          castShadows=False)
+                          shadows=False)
 
     @staticmethod
     def defaultLights(radius: float) -> List[Light]:
@@ -767,10 +767,10 @@ class SceneViewerMixin( CaptionMixin,
         return [
             DirectionalLight(direction=(-0.62, -0.42, -0.28),
                              color=(1.0, 0.86, 0.62), intensity=3.6,
-                             castShadows=True),
+                             shadows=True),
             PointLight(location=(radius * 2, radius * 2.2, -radius * 2),
                        color=(0.55, 0.68, 0.92), intensity=0.25,
-                       attenuation=(1, 0, 0), castShadows=False),
+                       attenuation=(1, 0, 0), shadows=False),
         ]
 
     # -- framing ----------------------------------------------------------

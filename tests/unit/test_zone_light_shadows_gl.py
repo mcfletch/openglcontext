@@ -28,7 +28,7 @@ def lit(monkeypatch):
 
 
 def _scene(zone_at):
-    sun = DirectionalLight(direction=(-0.3, -1.0, -0.2), castShadows=True)
+    sun = DirectionalLight(direction=(-0.3, -1.0, -0.2), shadows=True)
     children = [
         Transform(translation=(0.0, -1.0, -5.0), children=[
             Shape(geometry=Box(size=(8.0, 0.2, 8.0)))]),

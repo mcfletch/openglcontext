@@ -100,7 +100,7 @@ SCRIPT = textwrap.dedent('''
     Base = testingcontext.getInteractive('glfw')
     LAMPS = [] if sys.argv[4] == 'none' else [SpotLight(
         location=(3, 5, 3), direction=(-3, -5, -3), color=(1, 1, 1),
-        intensity=1 if sys.argv[4] == 'lamp' else 0, castShadows=True)]
+        intensity=1 if sys.argv[4] == 'lamp' else 0, shadows=True)]
 
     def block(size, at, colour):
         return Transform(translation=at, children=[Shape(

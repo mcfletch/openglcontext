@@ -171,3 +171,13 @@ def test_the_documented_node_list_is_the_engines():
     found = {name: x3d.CONCRETE_NODES[name].COMPONENT[0]
              for name in prototypes() if name != 'X3DScene'}
     assert documented == found
+
+
+@pytest.mark.parametrize('attributes, expected', [('', False), (' shadows="true"', True)])
+def test_a_documents_light_casts_shadows_only_where_it_says_so(attributes, expected):
+    document = ('<X3D version="4.0"><Scene><PointLight%s/><Shape castShadow="false"><Box/>'
+                '</Shape></Scene></X3D>' % attributes).encode()
+    scene = Loader.loads(document, 'scene.x3d')
+    assert bool(scene.children[0].shadows) is expected
+    assert not scene.children[1].castShadow
+    assert basenodes.PointLight().shadows

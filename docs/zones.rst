@@ -101,7 +101,7 @@ Zones from code
    )
 
    door_light = SpotLight(location=(22.75, 6.0, 0), direction=(-1, -0.2, 0),
-                          cutOffAngle=1.2, beamWidth=0.2, castShadows=True)
+                          cutOffAngle=1.2, beamWidth=0.2, shadows=True)
    fountain = AudioEmitter(type='global', sources=[
        AudioSource(url=['sounds/fountain.ogg'], loop=True, autoplay=True)])
 

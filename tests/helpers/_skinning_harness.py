@@ -236,7 +236,7 @@ def _ground(size=9.0):
                          indices=np.array([0, 1, 2, 0, 2, 3], np.uint32)),
         appearance=Appearance(material=PhysicalMaterial(baseColor=(0.55, 0.57, 0.6),
                                                    roughness=1.0)))
-    shape.castsShadow = False
+    shape.castShadow = False
     return shape
 
 

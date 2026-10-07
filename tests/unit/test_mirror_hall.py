@@ -148,8 +148,8 @@ def test_only_the_lamp_housings_cast_no_shadow(hall):
     lamp = hall.finish.lamp
     housings = [r[5] for r in records if r[5].appearance.material is lamp]
     assert housings
-    assert not any(shape.castsShadow for shape in housings)
-    assert all(r[5].castsShadow for r in records if r[5].appearance.material is not lamp)
+    assert not any(shape.castShadow for shape in housings)
+    assert all(r[5].castShadow for r in records if r[5].appearance.material is not lamp)
 
 
 def test_the_sun_comes_in_through_the_windows_well_onto_the_floor(hall):

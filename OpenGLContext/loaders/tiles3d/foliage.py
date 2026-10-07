@@ -778,7 +778,7 @@ def no_shadow(node: Any) -> Any:
     while stack:
         n = stack.pop()
         if type(n).__name__ == "Shape":
-            n.castsShadow = False
+            n.castShadow = False
         stack.extend(getattr(n, "children", None) or [])
     return node
 

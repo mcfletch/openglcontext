@@ -149,7 +149,7 @@ class TestContext(BaseContext):
         ground = Shape(appearance=Appearance(
                            material=Material(diffuseColor=(0.34, 0.36, 0.33))),
                        geometry=Box(size=(60.0, 0.1, 60.0)))
-        ground.castsShadow = False
+        ground.castShadow = False
         self.crowd = WanderingCrowd(
             FIELD, speed=SPEED, scale=SCALE,
             gait=partial(Gait, walk=WALK, run=RUN, idle=IDLE,

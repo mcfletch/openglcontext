@@ -29,13 +29,8 @@ def document(url):
 
 
 def settle():
-    """Wait for the loads, and put their results in place as a frame would"""
-    from OpenGLContext.context import Context  # noqa: PLC0415 kept with its one use
+    """Wait for the loads to finish"""
     assert background.wait_for_idle(PATIENCE)
-    for reference in list(Context.allContexts):
-        live = reference()
-        if live is not None:
-            live.renderQueue.run()
 
 
 def inlined(scene):
@@ -118,8 +113,7 @@ def test_a_scene_read_after_the_world_is_drawn_is_drawn(gl_context, tmp_path):
         context.OnDraw(force=1)
         scene.children[1].load = True
         assert background.wait_for_idle(PATIENCE)
-        for _ in range(3):
-            context.renderQueue.run()
+        for _ in range(2):
             context.OnDraw(force=1)
         image = drawn_image(context)
         h, w = image.shape[:2]

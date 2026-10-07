@@ -502,7 +502,7 @@ The flag is in ``extras`` rather than an extension, so a viewer that does not
 know it draws the node as usual. In Blender, set an object custom property of
 the same name; the add-on in `OpenGLContext-editor
 <https://github.com/mcfletch/openglcontext-editor>`__ writes it. In the
-scenegraph, the flag becomes :ref:`Shape.castsShadow <optout>`.
+scenegraph, the flag becomes :ref:`Shape.castShadow <optout>`.
 
 .. _omi:
 

@@ -506,7 +506,7 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
     if kind == 'directional':
         # Directional intensity is illuminance (lux); no distance falloff.
         return DirectionalLight(direction=direction, color=color,
-                                intensity=intensity, castShadows=shadows)
+                                intensity=intensity, shadows=shadows)
     # KHR_lights_punctual point/spot intensity is luminous intensity (candela) and
     # falls off inverse-square, windowed by an optional `range`. VRML attenuation
     # (constant, linear, quadratic) expresses that as pure quadratic (0,0,1); the
@@ -527,11 +527,11 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
                               minimum=0.0, maximum=outer)
         light: PointLight | SpotLight = SpotLight(
             location=pos, direction=direction, color=color,
-            intensity=intensity, castShadows=shadows, attenuation=atten,
+            intensity=intensity, shadows=shadows, attenuation=atten,
             cutOffAngle=outer, beamWidth=inner)
     else:
         light = PointLight(location=pos, color=color, intensity=intensity,
-                           castShadows=shadows, attenuation=atten)
+                           shadows=shadows, attenuation=atten)
     _beside_fields(light, _gltf_range=rng)
     return light
 
@@ -634,8 +634,8 @@ class _SceneBuilder:
                 self.hooks, world)
             if shape is not None:
                 shapes.append((shape, bounds))
-                if not casts and hasattr(shape, 'castsShadow'):
-                    shape.castsShadow = False
+                if not casts and hasattr(shape, 'castShadow'):
+                    shape.castShadow = False
                 # A hook may have put something else here entirely, which has
                 # no geometry of its own to ask about.
                 geo = getattr(shape, 'geometry', None)

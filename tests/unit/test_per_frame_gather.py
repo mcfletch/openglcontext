@@ -197,7 +197,7 @@ class TestTheShadowPoolReadsTheGather:
     def test_a_node_that_opts_out_of_casting_is_left_out(self):
         passing, _moves = self._pass(3)
         passing.renderSet(np.eye(4, dtype='f'))
-        passing.gatherPaths().nodes[1].castsShadow = False
+        passing.gatherPaths().nodes[1].castShadow = False
 
         records = passing._shadowCasterRecords()
 

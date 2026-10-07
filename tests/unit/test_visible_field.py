@@ -22,7 +22,6 @@ def watched():
     watcher.nodePaths = {}
     watcher.paths = {}
     watcher.contexts = []
-    watcher._hidden = {}
     watcher.integrate(scene)
     dispatcher.connect(watcher.onVisibleChange, signal=FlatPass.VISIBLE_SIGNAL)
     yield watcher, holder, shape
@@ -48,7 +47,7 @@ class TestThePaths:
     def test_a_node_hidden_before_it_is_walked_is_not_walked(self):
         shape = basenodes.Shape(geometry=basenodes.Box(), visible=False)
         watcher = FlatPass.__new__(FlatPass)
-        watcher.nodePaths, watcher.paths, watcher.contexts, watcher._hidden = {}, {}, [], {}
+        watcher.nodePaths, watcher.paths, watcher.contexts = {}, {}, []
         watcher.integrate(basenodes.Group(children=[shape]))
         assert live(watcher, shape) == []
 

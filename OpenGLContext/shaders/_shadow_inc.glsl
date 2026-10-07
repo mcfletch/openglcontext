@@ -25,6 +25,7 @@
 uniform int   shadowCount;
 uniform int   shadowLightIndex[MAX_SHADOW_LIGHTS];
 uniform int   shadowKind[MAX_SHADOW_LIGHTS];
+uniform float shadowIntensity[MAX_SHADOW_LIGHTS];   // 0 no shadow .. 1 full (X3D shadowIntensity)
 uniform vec3  shadowDepthBias[MAX_SHADOW_LIGHTS * MAX_CASCADES];  // world bias -> map depth
 uniform float shadowNormalOffset;
 uniform float shadowTexel;
@@ -262,33 +263,33 @@ void resolveShadows(inout float lightShadow[MAX_LIGHTS]) {
 #if MAX_SHADOW_LIGHTS > 0
     if (0 < shadowCount)
 #ifdef SHADOW_CUBE_ARRAY
-        lightShadow[shadowLightIndex[0]] = shadowForSlotK(0);
+        lightShadow[shadowLightIndex[0]] = mix(1.0, shadowForSlotK(0), shadowIntensity[0]);
 #else
-        lightShadow[shadowLightIndex[0]] = shadowForSlotK(0, shadowCube_0);
+        lightShadow[shadowLightIndex[0]] = mix(1.0, shadowForSlotK(0, shadowCube_0), shadowIntensity[0]);
 #endif
 #endif
 #if MAX_SHADOW_LIGHTS > 1
     if (1 < shadowCount)
 #ifdef SHADOW_CUBE_ARRAY
-        lightShadow[shadowLightIndex[1]] = shadowForSlotK(1);
+        lightShadow[shadowLightIndex[1]] = mix(1.0, shadowForSlotK(1), shadowIntensity[1]);
 #else
-        lightShadow[shadowLightIndex[1]] = shadowForSlotK(1, shadowCube_1);
+        lightShadow[shadowLightIndex[1]] = mix(1.0, shadowForSlotK(1, shadowCube_1), shadowIntensity[1]);
 #endif
 #endif
 #if MAX_SHADOW_LIGHTS > 2
     if (2 < shadowCount)
 #ifdef SHADOW_CUBE_ARRAY
-        lightShadow[shadowLightIndex[2]] = shadowForSlotK(2);
+        lightShadow[shadowLightIndex[2]] = mix(1.0, shadowForSlotK(2), shadowIntensity[2]);
 #else
-        lightShadow[shadowLightIndex[2]] = shadowForSlotK(2, shadowCube_2);
+        lightShadow[shadowLightIndex[2]] = mix(1.0, shadowForSlotK(2, shadowCube_2), shadowIntensity[2]);
 #endif
 #endif
 #if MAX_SHADOW_LIGHTS > 3
     if (3 < shadowCount)
 #ifdef SHADOW_CUBE_ARRAY
-        lightShadow[shadowLightIndex[3]] = shadowForSlotK(3);
+        lightShadow[shadowLightIndex[3]] = mix(1.0, shadowForSlotK(3), shadowIntensity[3]);
 #else
-        lightShadow[shadowLightIndex[3]] = shadowForSlotK(3, shadowCube_3);
+        lightShadow[shadowLightIndex[3]] = mix(1.0, shadowForSlotK(3, shadowCube_3), shadowIntensity[3]);
 #endif
 #endif
 }

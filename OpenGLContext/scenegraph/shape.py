@@ -44,13 +44,13 @@ class Shape(basenodes.Shape):
     # the colour buffer. Default True keeps every existing shape pickable.
     pickable = field.newField('pickable', 'SFBool', 1, True)
 
-    # Whether this shape is drawn into the shadow maps. Clear it for geometry
-    # that costs more to rasterise into every cascade than its shadow is worth
-    # -- dense alpha foliage -- and for geometry that stands in for something
-    # that is not there, like a sky drawn as a backdrop. The shape rather than
-    # the geometry, because a shadow caster is a renderable and the geometry
-    # under one may be shared with a shape that does cast.
-    castsShadow = field.newField('castsShadow', 'SFBool', 1, True)
+    # X3D's `castShadow`: whether this shape is drawn into the shadow maps.
+    # Clear it for geometry that costs more to rasterise into every cascade
+    # than its shadow is worth -- dense alpha foliage -- and for geometry that
+    # stands in for something that is not there, like a sky drawn as a
+    # backdrop. The shape rather than the geometry, because a shadow caster is
+    # a renderable and the geometry under one may be shared with a shape that
+    # does cast. The field is the X3D declaration's.
 
     def Render(self, mode: Any = None) -> Any:
         """Do run-time rendering of the Shape for the given mode"""

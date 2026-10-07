@@ -70,24 +70,28 @@ Each variable sets the default of a ``ContextDefinition`` field
 can change while the program runs. See :doc:`environment` and
 :ref:`overlayui-settings`.
 
-A light casts shadows when its ``castShadows`` field is set. It is set by
-default on all three light types. Clear it on a light that should light the
-scene without casting shadows. A glTF ``KHR_lights_punctual`` light uses the
-extension's ``castShadows`` value where the file gives one; otherwise only a
-directional light casts shadows.
+A light casts shadows when its ``shadows`` field (X3D's) is set. It is set
+by default on all three light types made in code. Clear it on a light that
+should light the scene without casting shadows. A light in an X3D document
+casts shadows only where the document sets ``shadows``, as X3D specifies. A
+glTF ``KHR_lights_punctual`` light uses the extension's ``castShadows`` value
+where the file gives one; otherwise only a directional light casts shadows.
+
+``shadowIntensity`` (X3D's, from 0 to 1, default 1) is how dark a light's
+shadow is: a shadowed point receives ``1 - shadowIntensity`` of that light.
 
 .. _optout:
 
 Geometry That Does Not Cast
 ---------------------------
 
-Clear ``castsShadow`` on a ``Shape`` to leave it out of every shadow map. The
+Clear ``castShadow`` (X3D's) on a ``Shape`` to leave it out of every shadow map. The
 shape still renders, is still lit, and still receives shadows from other
 objects. It does not cast a shadow of its own.
 
 .. code-block:: python
 
-   shape = Shape( geometry = ..., appearance = ..., castsShadow = False )
+   shape = Shape( geometry = ..., appearance = ..., castShadow = False )
 
 Clear it for these kinds of geometry:
 

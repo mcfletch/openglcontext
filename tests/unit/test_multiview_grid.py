@@ -211,4 +211,4 @@ class TestTheNodeAViewDraws:
 
     def test_it_is_neither_picked_nor_casts_a_shadow(self):
         grid = Grid()
-        assert grid.pickable is False and grid.castsShadow is False
+        assert grid.pickable is False and grid.castShadow is False

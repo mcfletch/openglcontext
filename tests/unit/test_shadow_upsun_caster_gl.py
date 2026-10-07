@@ -74,7 +74,7 @@ try:
                 basenodes.Transform(translation=tuple(float(x) for x in CASTER_PT),
                                     children=[wall]),
                 basenodes.DirectionalLight(direction=tuple(float(x) for x in LIGHT),
-                                           intensity=1.0, castShadows=True),
+                                           intensity=1.0, shadows=True),
             ])
 
     ctx = C(); ctx.deferRedraw = True

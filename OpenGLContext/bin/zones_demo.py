@@ -82,7 +82,7 @@ class ZoneCourt:
         self.holders: dict[str, Any] = {}
         self.sun = basenodes.DirectionalLight(
             direction=(-0.35, -1.0, -0.55), color=(1.0, 0.96, 0.9),
-            intensity=2.2, castShadows=True)
+            intensity=2.2, shadows=True)
         #: The statue only the east room's zone shows.
         self.statue = self._statue()
         self.statue_shown = basenodes.ZoneVisibility(nodes=[self.statue],
@@ -159,7 +159,7 @@ class ZoneCourt:
         colour, intensity = LAMPS[name]
         lamp = basenodes.PointLight(location=(x, height - 0.4, ROOM_Z),
                                     color=colour, intensity=intensity,
-                                    radius=8.0, castShadows=False)
+                                    radius=8.0, shadows=False)
         self.lamps[name] = lamp
         settings: list[Any] = [basenodes.ZoneLights(lights=[lamp])]
         if name == 'east':

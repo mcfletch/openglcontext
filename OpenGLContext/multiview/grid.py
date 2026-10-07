@@ -199,7 +199,7 @@ class Grid(nodetypes.Rendering, nodetypes.Children, node.Node):
     heavyColour = field.newField('heavyColour', 'SFColor', 1, (0.5, 0.51, 0.54))
 
     pickable = False
-    castsShadow = False
+    castShadow = False
 
     def linesFor(self, view: Optional[View]) -> Optional[GridLines]:
         """What to rule ``view`` with, or None where its style asks for no grid."""

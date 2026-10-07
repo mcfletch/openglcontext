@@ -83,7 +83,7 @@ def main() -> None:
                       appearance=Appearance(material=PhysicalMaterial(
                           baseColor=(0.7, 0.7, 0.7), metallic=0.3, roughness=0.4))),
                 DirectionalLight(direction=(-0.3, -1.0, -0.2), intensity=2.0,
-                                 castShadows=True),
+                                 shadows=True),
             ]
             if mode in ('zones', 'probes'):
                 for index, x in enumerate((-3.0, -1.0, 1.0, 3.0)):

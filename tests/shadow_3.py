@@ -59,7 +59,7 @@ class TestContext( BaseContext ):
         self.addEventHandler( "keypress", name="s", function = self.OnToggleTimer)
     '''=Lights that Cast Shadows=
 
-    A light casts a shadow when its castShadows field is set, which is the
+    A light casts a shadow when its shadows field is set, which is the
     default for every light type. The engine gives each casting light a
     shadow map of the kind that suits its shape: a single map for a
     spotlight's cone, a cascaded set for a directional light's parallel
@@ -88,7 +88,7 @@ class TestContext( BaseContext ):
                         direction = [0,-5,-10],
                         beamWidth = 1.570796,
                         cutOffAngle = 0.785398,
-                        castShadows = True,
+                        shadows = True,
                     ),
                 ],
             ),
@@ -99,7 +99,7 @@ class TestContext( BaseContext ):
                 direction = [-3,-3,-3],
                 beamWidth = 1.570796,
                 cutOffAngle = 0.785398,
-                castShadows = True,
+                shadows = True,
             ),
         ]
     '''=The Scene=

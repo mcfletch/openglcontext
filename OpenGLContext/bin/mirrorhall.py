@@ -190,7 +190,7 @@ class Hall:
             placed = surfaces.shape(surfaces.merge([part.geometry for part in parts]),
                                     parts[0].material)
             # A lamp's housing stands between its light and the room.
-            placed.children[0].castsShadow = parts[0].material is not self.finish.lamp
+            placed.children[0].castShadow = parts[0].material is not self.finish.lamp
             scenery.append(placed)
         # The room's environment light is what can be seen inside it: the
         # lamps, the sunlit floor and the sky through the windows.

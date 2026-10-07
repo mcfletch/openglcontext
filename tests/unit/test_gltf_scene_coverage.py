@@ -102,7 +102,7 @@ class TestLightNodeGuard:
 
     def test_a_shadow_flag_written_as_a_word_reads_as_the_word_says(self):
         light = gs._light_node({'type': 'directional', 'castShadows': 'false'}, np.eye(4))
-        assert not light.castShadows
+        assert not light.shadows
 
     def test_a_figure_that_is_not_a_number_takes_the_default(self, caplog):
         light = gs._light_node({'type': 'spot', 'intensity': 'bright', 'range': 'far',

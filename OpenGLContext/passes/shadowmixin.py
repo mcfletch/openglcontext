@@ -44,11 +44,11 @@ log = logging.getLogger(__name__)
 def casts_shadow(node: Any) -> bool:
     """Whether a renderable node is drawn into the shadow maps.
 
-    Not where it says it does not (``castsShadow = False``), and not where its
+    Not where it says it does not (``castShadow = False``), and not where its
     material is an octahedral impostor: the card turns to face the camera in
     the lit pass only, and drawn from a light it would be a fixed rectangle.
     """
-    if not getattr(node, 'castsShadow', True):
+    if not getattr(node, 'castShadow', True):
         return False
     material = getattr(getattr(node, 'appearance', None), 'material', None)
     return not getattr(material, 'octahedralViews', 0)
@@ -119,6 +119,18 @@ def _local_box(volume: Any, box_visible: Any) -> Optional[tuple[Any, Any]]:
     low, high = points[:, :3].min(axis=0), points[:, :3].max(axis=0)
     return (low + high) * 0.5, (high - low) * 0.5
 
+
+
+def shadow_intensity(light: Any) -> float:
+    """How dark `light`'s shadow is: X3D's `shadowIntensity`, held to 0 (none) to 1 (full)
+
+    A light without the field, or with a value that is not a number, casts
+    full shadows.
+    """
+    value = float(getattr(light, 'shadowIntensity', 1.0))
+    if value != value:
+        return 1.0
+    return min(max(value, 0.0), 1.0)
 
 class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     """Adds shadow-map depth pre-pass + uniform binding to a FlatPass."""
@@ -211,7 +223,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         shader = self.shader_program
         if shader is None or shader.program is None:
             return
-        # Let geometry opt out of casting shadows (``node.castsShadow = False``) — dense
+        # Let geometry opt out of casting shadows (``node.castShadow = False``) — dense
         # alpha foliage (grass) is expensive to render into every cascade for little
         # visual gain. This keeps the opted-out geometry out of the cascade fit /
         # camera-visible occluder set; the depth-pass caster pool excludes it in
@@ -281,6 +293,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                     camera_view, camera_proj, occluder_points, caps,
                 )
                 if binding is not None:
+                    binding['intensity'] = shadow_intensity(light_node)
                     self._shadow_bindings.append(binding)
                     slot += 1
         finally:
@@ -332,6 +345,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 cascade_by_fit=not fitted,
             )
             for b in bindings:
+                shader.set_shadow_intensity(b['slot'], b.get('intensity', 1.0))
                 if b['kind'] == 'spot':
                     shader.bind_spot_slot(
                         b['slot'], b['light_index'],
@@ -649,7 +663,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         return out if out else toRender
 
     def _castsShadow(self, light_node: Any, caps: ShadowCapabilities) -> bool:
-        if not getattr(light_node, 'castShadows', True):
+        if not getattr(light_node, 'shadows', True):
             return False
         if isinstance(light_node, light_module.SpotLight):
             return True
@@ -736,7 +750,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
         A shadow caster behind the camera still casts into the visible scene, so
         the caster pool must be the whole scene, not the camera-visible render set.
-        Geometry that opts out with ``node.castsShadow = False`` (e.g. dense alpha
+        Geometry that opts out with ``node.castShadow = False`` (e.g. dense alpha
         foliage), and an impostor (:func:`casts_shadow`), is excluded here, so it
         is drawn into no depth map -- this is the pool the per-light depth pass
         actually culls from. Each record mirrors the

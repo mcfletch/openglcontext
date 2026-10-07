@@ -34,9 +34,9 @@ def test_spot_defaults_to_quarter_pi_cone_when_unspecified():
 
 def test_spot_does_not_cast_shadows_by_default():
     node = gltf.scene._light_node({'type': 'spot'}, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
-    assert not node.castShadows
+    assert not node.shadows
     lit = gltf.scene._light_node({'type': 'spot', 'castShadows': True}, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
-    assert lit.castShadows
+    assert lit.shadows
 
 
 def test_point_and_directional_unaffected_by_spot_handling():
@@ -44,4 +44,4 @@ def test_point_and_directional_unaffected_by_spot_handling():
     assert isinstance(p, PointLight)
     d = gltf.scene._light_node({'type': 'directional'}, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
     assert isinstance(d, DirectionalLight)
-    assert d.castShadows          # directionals still default to shadow casters
+    assert d.shadows          # directionals still default to shadow casters

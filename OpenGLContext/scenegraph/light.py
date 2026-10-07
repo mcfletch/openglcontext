@@ -173,8 +173,11 @@ class PointLight(basenodes.PointLight, Light):
         (+ Light attributes)
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#PointLight
     """
+    #: X3D's `shadows`, true for a light made in code: a light casts shadows
+    #: unless told not to. A light an X3D document builds has X3D's false
+    #: unless the document says otherwise.
+    shadows = field.newField('shadows', 'SFBool', 1, True)
     # Shadow-mapping controls (OpenGLContext extension fields)
-    castShadows = field.newField('castShadows', 'SFBool', 1, True)
     shadowBias = field.newField('shadowBias', 'SFFloat', 1, SHADOW_DEPTH_BIAS)
     shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
 
@@ -239,8 +242,11 @@ class DirectionalLight (basenodes.DirectionalLight, Light):
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#DirectionalLight
     '''
     pointSource = 0.0
+    #: X3D's `shadows`, true for a light made in code: a light casts shadows
+    #: unless told not to. A light an X3D document builds has X3D's false
+    #: unless the document says otherwise.
+    shadows = field.newField('shadows', 'SFBool', 1, True)
     # Shadow-mapping controls (OpenGLContext extension fields)
-    castShadows = field.newField('castShadows', 'SFBool', 1, True)
     shadowBias = field.newField('shadowBias', 'SFFloat', 1, SHADOW_DEPTH_BIAS)
     shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
 

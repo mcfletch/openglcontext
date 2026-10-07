@@ -56,7 +56,7 @@ class TestCastsShadow:
 
     def test_castshadows_false_disables(self):
         s = SpotLight(location=(0, 5, 0), direction=(0, -1, 0), cutOffAngle=0.5)
-        s.castShadows = False
+        s.shadows = False
         assert self.mixin._castsShadow(s, CAPS) is False
 
 
@@ -437,7 +437,7 @@ class TestRenderShadowMapsGuards:
     """The cheap early-outs of renderShadowMaps (no GL needed to reach them)."""
 
     def _node(self, casts=True):
-        return types.SimpleNamespace(castsShadow=casts)
+        return types.SimpleNamespace(castShadow=casts)
 
     def _record(self, node):
         return (None, None, np.identity(4, 'd'), None, [node], node)
@@ -508,7 +508,7 @@ if __name__ == '__main__':
 
 
 class TestWhereACallerSetsTheOptOut:
-    """``castsShadow`` is a field of ``Shape``, and the shape is what is read.
+    """``castShadow`` is a field of ``Shape``, and the shape is what is read.
 
     A shadow caster is a renderable, so the pass reaches it through the
     rendering paths and reads the flag off the node it finds there -- the
@@ -522,16 +522,16 @@ class TestWhereACallerSetsTheOptOut:
 
     def test_it_is_a_declared_field(self):
         declared = {f.name for f in protofunctions.getFields(Shape)}
-        assert 'castsShadow' in declared
+        assert 'castShadow' in declared
 
     def test_a_shape_casts_unless_it_is_told_not_to(self):
-        assert self.shape().castsShadow
+        assert self.shape().castShadow
 
     def test_it_reads_back_what_was_set(self):
-        assert not self.shape(castsShadow=False).castsShadow
+        assert not self.shape(castShadow=False).castShadow
 
     def test_the_caster_pool_leaves_out_a_shape_that_opted_out(self):
-        casting, opted_out = self.shape(), self.shape(castsShadow=False)
+        casting, opted_out = self.shape(), self.shape(castShadow=False)
         # The real pass over real paths: the caster pool is drawn from the
         # frame's own gather, which is what walks a path to its node.
         mixin = flatcore.FlatPass.__new__(flatcore.FlatPass)
@@ -561,7 +561,7 @@ class TestWhereACallerSetsTheOptOut:
     def test_the_cascade_fit_leaves_out_a_shape_that_opted_out(self):
         fitted = []
         mixin = TestRenderShadowMapsGuards()._ready(fitted)
-        casting, opted_out = self.shape(), self.shape(castsShadow=False)
+        casting, opted_out = self.shape(), self.shape(castShadow=False)
         mixin.renderShadowMaps([_record(np.identity(4, 'd'), None, node)
                                 for node in (casting, opted_out)])
         assert [[record[5] for record in records] for records in fitted] == [[casting]]

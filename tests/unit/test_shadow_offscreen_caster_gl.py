@@ -69,7 +69,7 @@ try:
                 basenodes.Transform(translation=(0, -1, 0), children=[receiver]),
                 basenodes.Transform(translation=(0, 1, 40), children=[caster]),  # behind camera
                 basenodes.DirectionalLight(direction=(0.2, -1, 0.1), intensity=1.0,
-                                           castShadows=True),
+                                           shadows=True),
             ])
 
     ctx = C(); ctx.deferRedraw = True

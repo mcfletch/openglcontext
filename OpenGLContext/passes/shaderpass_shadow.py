@@ -173,6 +173,12 @@ class _ShadowUniformMixin:
             return
         self._bind_shadow_texture(self.SHADOW_CUBE_BASE, GL_TEXTURE_CUBE_MAP_ARRAY, texture_id)
 
+    def set_shadow_intensity(self, slot: int, intensity: float) -> None:
+        """How dark a slot's shadow is, 0 (none) to 1 (full): its light's `shadowIntensity`"""
+        if slot >= self.MAX_SHADOW_LIGHTS or self._shadow_prog is None:
+            return
+        self._set_uniform1f(f'shadowIntensity[{slot}]', float(intensity), self._shadow_prog)
+
     def bind_spot_slot(self, slot: int, light_index: int,
                        shadow_matrix_eye: 'Matrix4',
                        bias_terms: Any = (0.0, 0.0, 0.0)) -> None:

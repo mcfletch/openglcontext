@@ -8,10 +8,9 @@ nodes that reader says its result is drawn as
 (:meth:`~OpenGLContext.loaders.readers.SceneReader.nodes`): an X3D, VRML97 or
 OBJ scene's children, a glTF model's group. The first url that reads is used.
 
-The read happens on the loader pool, and the result is put in place on the
-render thread, through a context's render queue, with
-:data:`~OpenGLContext.scenegraph.switch.CHILDREN_CHANGE_SIGNAL` sent for the
-render passes to walk it. X3D's `load` field says whether the scene is wanted:
+The read happens on the loader pool. Its nodes replace the Inline's
+`inlined` there, and :data:`~OpenGLContext.scenegraph.switch.CHILDREN_CHANGE_SIGNAL`
+is sent; each render pass walks them at the start of its next frame. X3D's `load` field says whether the scene is wanted:
 false leaves the Inline empty, and setting it true reads the scene again.
 Setting `url` or `load` supersedes a read still under way.
 """
@@ -108,21 +107,6 @@ class Inline(basenodes.Inline):
             prepare=prepare_scene_loading,
         )
 
-    def deliver(self, nodes: Sequence[Any], generation: Any = None,
-                contexts: Sequence[Any] = ()) -> None:
-        """Draw `nodes` as the inlined scene; on the render thread
-
-        A result for a read since superseded (`generation` not the current
-        one) is dropped. The passes are told to walk the new children, and
-        `contexts` to redraw.
-        """
-        if generation is not None and generation != self.__dict__.get('_generation'):
-            return
-        self.inlined = tuple(nodes)
-        dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)
-        for found in contexts:
-            found.triggerRedraw(1)
-
     def loadBackground(
         self, url: Any, contexts: Sequence[Any] = (), generation: Any = None,
     ) -> None:
@@ -145,12 +129,15 @@ class Inline(basenodes.Inline):
             except (OSError, ValueError, SyntaxError) as err:
                 log.info("Inline url %s did not read: %s", u, err)
                 continue
+            if generation is not None and generation != self.__dict__.get('_generation'):
+                return
             log.info("loaded %s", u)
-            live = [found for found in (reference() for reference in contexts) if found]
-            if live:
-                live[0].renderQueue.call(self.deliver, nodes, generation, live)
-            else:
-                self.deliver(nodes, generation)
+            self.inlined = tuple(nodes)
+            dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)
+            for reference in contexts:
+                found = reference()
+                if found is not None:
+                    found.triggerRedraw(1)
             return
         log.warning(
             """Unable to load any scene from the url %s for the node %s""",

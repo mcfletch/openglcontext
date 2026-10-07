@@ -46,7 +46,7 @@ try:
             self.sg = basenodes.sceneGraph(children=[
                 quad,
                 basenodes.DirectionalLight(direction=(0.2, -1, -0.5), intensity=1.0,
-                                           castShadows=True),
+                                           shadows=True),
             ])
 
     ctx = C(); ctx.deferRedraw = True

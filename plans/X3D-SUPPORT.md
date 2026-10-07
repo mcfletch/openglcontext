@@ -59,7 +59,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered
   - [x] the render pass skips nodes whose X3D `visible` is false (`FlatPass.onVisibleChange`)
   - [x] an Inline's scene arriving after the world was walked is drawn (`CHILDREN_CHANGE_SIGNAL`, delivered through the render queue)
-  - [ ] lights: X3D `shadows` and the engine's `castShadows`; `InstancedShape` the X3D node
+  - [x] lights: X3D's `shadows` replaces `castShadows` (true for a light made in code, X3D's false in a document: the builder's `declared_defaults`); `shadowIntensity` per shadow slot; `Shape.castShadow` replaces `castsShadow`
+  - [ ] `InstancedShape` the X3D node
   - [x] X3D loader (`loaders/x3d.py`, `prototypes()`), viewer adapter with the `head` as a notice, `.json` sniffing, archive members
   - [x] `Inline` reads any registered format (`SceneReader.nodes()`), X3D's `load` field; the builder roots nodes before their fields are set
   - [x] Interchange geometry: the six triangle sets, `ElevationGrid` (with `creaseAngle`), `LineSet`; `ColorRGBA`, `Tangent`, `MultiTextureCoordinate` mapping labels (`composedgeometry`, `meshgeometry`); data nodes registered as their declarations

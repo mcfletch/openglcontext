@@ -15,6 +15,7 @@ a context and caches the choice across frames.
 from __future__ import annotations
 
 import contextlib
+import threading
 import weakref
 from types import MappingProxyType
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -215,9 +216,6 @@ class SGObserver( object ):
         #: Each integrated node -> every live path that ends at it. Keyed by
         #: the node, which its paths hold anyway.
         self.nodePaths: dict[Any, list[Any]] = {}
-        #: Each node whose X3D `visible` is false -> the parent paths it was
-        #: hidden from, to walk it under again when it is shown.
-        self._hidden: 'weakref.WeakKeyDictionary[Any, list[Any]]' = weakref.WeakKeyDictionary()
         if scene:
             self.integrate( scene )
         connect(
@@ -297,6 +295,23 @@ class SGObserver( object ):
             if value is not None and keeping is None:
                 self.integrate( value, path )
         self.purge()
+    #: Guards :attr:`_pendingWalks`, which any thread adds to.
+    _pendingLock = threading.Lock()
+
+    @property
+    def _pendingWalks( self ) -> 'weakref.WeakSet[Any]':
+        """Nodes whose rendered children were replaced since the last frame"""
+        found: 'weakref.WeakSet[Any]' = self.__dict__.setdefault(
+            '_pendingWalksSet', weakref.WeakSet() )
+        return found
+
+    @property
+    def _hidden( self ) -> 'weakref.WeakKeyDictionary[Any, list[Any]]':
+        """Each node whose X3D `visible` is false -> the parent paths it was hidden from"""
+        found: 'weakref.WeakKeyDictionary[Any, list[Any]]' = self.__dict__.setdefault(
+            '_hiddenNodes', weakref.WeakKeyDictionary() )
+        return found
+
     #: Sent when any node's X3D `visible` is set: one field, declared on
     #: `X3DBoundedObject`, for every grouping node and shape.
     VISIBLE_SIGNAL = ( 'set', x3dnodes.X3DBoundedObject.visible )
@@ -317,13 +332,26 @@ class SGObserver( object ):
             path.invalidate()
         self.purge()
     def onChildrenChange( self, sender: Any ) -> None:
-        """`sender`'s rendered children have been replaced: walk them again"""
-        for path in list( self.nodePaths.get( sender, () ) ):
-            for childPath in path.iterchildren():
-                childPath.invalidate()
-            for child in sender.renderedChildren():
-                self.integrate( child, path )
-        self.purge()
+        """`sender`'s rendered children have been replaced: walk them at the next frame
+
+        Sent from whichever thread replaced them (an Inline's from the loader
+        pool), so the walk waits for :meth:`walkPending` on the render thread.
+        """
+        with self._pendingLock:
+            self._pendingWalks.add( sender )
+    def walkPending( self ) -> None:
+        """Walk again each node whose rendered children were replaced; once a frame"""
+        with self._pendingLock:
+            pending = list( self._pendingWalks )
+            self._pendingWalks.clear()
+        for sender in pending:
+            for path in list( self.nodePaths.get( sender, () ) ):
+                for childPath in path.iterchildren():
+                    childPath.invalidate()
+                for child in sender.renderedChildren():
+                    self.integrate( child, path )
+        if pending:
+            self.purge()
     def onChildAdd( self, sender: Any, value: Any ) -> None:
         """Sender has a new child named value"""
         if hasattr( sender, 'renderedChildren' ):
@@ -2176,6 +2204,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
             self.MAX_LIGHTS = 8 #glGetIntegerv( GL_MAX_LIGHTS )
         self.context = context
         self.cache = context.cache
+        self.walkPending()
         self.layoutViews( context )
 
         # Anything the application pins to the camera -- a first-person weapon,
