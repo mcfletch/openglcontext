@@ -275,6 +275,10 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   the application's own handlers receive the same events. The hit is the picked point, with no
   normal or texture coordinate. Picking (``ContextDefinition.pickEnabled``)
   has to be on.
+- A ``Billboard`` is turned toward the camera of a frame's first view once a
+  frame, before the frame is drawn (``FlatPass.faceBillboards``): about its
+  ``axisOfRotation``, or with ``0 0 0`` facing the camera with its +Y along the
+  camera's up. Shadows are cast as it faces the camera.
 - An ``IndexedFaceSet`` or a triangle set with no ``texCoord`` takes X3D's
   default texture coordinates: s from 0 to 1 along the largest dimension of
   its coordinates' bounding box, t along the second largest in the same units

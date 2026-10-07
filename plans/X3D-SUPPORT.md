@@ -72,12 +72,10 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     so the examples reach images above their folders
   - [ ] baselines not yet blessed: review the report first
     (`oglc-x3d-regression`, then `--bless`)
-  - [ ] found by comparing with Web3D's renders, still to fix: Background image
-    faces (`*Url` fields) draw nothing (test_wholepng and kin); a cut-out alpha
-    texture draws nothing (Figure17_10cTextureTransparencyTree); a grey plane drawn
+  - [ ] found by comparing with Web3D's renders, still to fix: a grey plane drawn
     that Web3D does not (SphereSensor/multisensor); Figure20_17a framed differently;
-    Billboard does not turn toward the viewer; Inlines naming another archive's
-    scenes fail (each archive is extracted to its own tree)
+    Inlines naming another archive's scenes fail (each archive is extracted to its
+    own tree)
   - [x] X_ITE references (`--reference x_ite`): drawn by
     `scripts/x3d_xite_references.py`, a `uv run` tool with Playwright as inline
     script metadata, not part of the installed engine; X_ITE 16.4.3 (MIT) from npm,
@@ -87,15 +85,21 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     libnss3, libnspr4, libatk1.0, libatk-bridge2.0, libxdamage1 and libatspi2.0 in
     the container (the workspace's `.devcontainer/Dockerfile` installs them)
   - [ ] found against X_ITE, still to fix: fog with a Background fades to white
-    (Figure23_5); Billboard does not turn toward the viewer; a shape with no
-    Material is lit grey where X3D draws it unlit, and a Material is lit
-    brighter than X3D's lighting equation gives (the tree's ground). X_ITE runs Scripts, so its render
+    (Figure23_5): the fog formulas are X3D's, mixed in linear light and then
+    tone-mapped and sRGB-encoded, where X3D's equations work on the colour values
+    themselves; a shape with no Material is lit grey where X3D draws it unlit, and a
+    Material's shading differs from X3D's Phong equation (brighter on the tree's
+    ground, darker on Figure23_1's) for the same reason: Material is drawn through
+    the PBR conversion X_ITE runs Scripts, so its render
     of a document whose scene a Script builds shows what ours does not draw
   - [x] Background image faces: each side drawn as its own quad once its image
     has loaded, turned as X3D says, transparent parts showing the sky
     (`tests/unit/test_background_faces.py`); the old cube map drew only with
     all six and mirrored each. `CubeBackground.faceLayout "CUBEMAP"` keeps GL's
     layout for the IBL environment and glTF cube map skies
+  - [x] Billboard turns toward the first view's camera once a frame
+    (`FlatPass.faceBillboards`, `billboard.billboard_rotation`,
+    `tests/unit/test_billboard.py`)
   - [x] the cut-out tree drew nothing: a face set with no texCoord had no
     texture coordinates, so every vertex read the image's corner. X3D's default
     (`composedgeometry.default_texcoords`) for IndexedFaceSet and the triangle

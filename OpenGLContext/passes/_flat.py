@@ -21,7 +21,7 @@ from types import MappingProxyType
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
-from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid
+from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard
 from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGLContext.scenegraph import bindable
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
@@ -1055,6 +1055,8 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         # frame so it can be told where the viewer is, and the same path
         # bookkeeping that finds the lights will find it.
         lod.LOD,
+        # And each Billboard, turned toward the camera once a frame.
+        billboard.Billboard,
         # Likewise: the baked irradiance grid is looked up once a frame and
         # then sampled per object, so it is found the same way a light is.
         lightgrid.LightGrid,
@@ -1356,6 +1358,23 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                         [ node.levelAt( *numbers ) for numbers in asked ] ) )
             except Exception as err:
                 self._levelFailed( node, err )
+
+    def faceBillboards( self, modelview: Any ) -> None:
+        """Turn every Billboard toward the camera whose modelview is ``modelview``
+
+        Before the render set is gathered, as :meth:`chooseLevels` is: a
+        Billboard that turns moves the paths through it. Paths come outermost
+        first, so a Billboard inside another is turned in its parent's new
+        coordinates.
+        """
+        for path in self.paths.get( billboard.Billboard, () ):
+            node = path[-1]
+            inverse = node.localMatrices().data[1]
+            world = path.transformMatrix()
+            parent = world if inverse is None else dot( inverse, world )
+            viewer = billboard.viewer_in( parent, modelview )
+            if viewer is not None:
+                node.face( *viewer )
 
     #: The level-of-detail nodes already reported as unable to choose a level.
     _levelsFailed: Optional['weakref.WeakSet[Any]'] = None
