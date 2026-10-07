@@ -44,6 +44,7 @@ from typing import Any, Optional
 import numpy as np
 from vrml import field, node, protofunctions
 from vrml.vrml97 import nodetypes
+from vrml.x3d import nodes as x3d
 
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.frommesh import mesh_from_primitive
@@ -67,6 +68,9 @@ class SweptGeometry(nodetypes.Geometry, node.Node):
     volumes, drawing, instancing -- is handled here.
     """
 
+    #: The metadata set an X3D document carries the engine's fields in
+    #: (`vrml.x3d.extension`).
+    x3dExtension = 'OpenGLContext'
     normals = field.newField('normals', 'SFString', 1, 'edge')
     texture = field.newField('texture', 'SFString', 1, 'normalized')
     solid = field.newField('solid', 'SFBool', 1, True)
@@ -384,35 +388,15 @@ class PolyCone(SweptGeometry):
                         texture=self._texture_mode())
 
 
-class Extrusion(SweptGeometry):
-    """VRML97's ``Extrusion``: a cross-section swept along a spine.
+class Extrusion(SweptGeometry, x3d.Extrusion):
+    """X3D's and VRML97's ``Extrusion``: a cross-section swept along a spine.
 
-    The fields are the specification's, with its own defaults: a unit square
-    swept one unit along +y. A ``crossSection`` or ``spine`` whose last point
-    repeats its first is closed, and the surface has no seam there.
+    The fields are the X3D declaration's, with the specification's defaults: a
+    unit square swept one unit along +y. A ``crossSection`` or ``spine`` whose
+    last point repeats its first is closed, and the surface has no seam there.
 
-    Reference: ISO/IEC 14772-1:1997 clause 6.23.
+    Reference: ISO/IEC 14772-1:1997 clause 6.23; ISO/IEC 19775-1 13.3.5.
     """
-
-    PROTO = 'Extrusion'
-
-    crossSection = field.newField(
-        'crossSection', 'MFVec2f', 0,
-        [[1.0, 1.0], [1.0, -1.0], [-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]])
-    spine = field.newField('spine', 'MFVec3f', 0, [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
-    scale = field.newField('scale', 'MFVec2f', 0, [[1.0, 1.0]])
-    orientation = field.newField('orientation', 'MFRotation', 0, [[0.0, 0.0, 1.0, 0.0]])
-    beginCap = field.newField('beginCap', 'SFBool', 0, 1)
-    endCap = field.newField('endCap', 'SFBool', 0, 1)
-    ccw = field.newField('ccw', 'SFBool', 0, 1)
-    convex = field.newField('convex', 'SFBool', 0, 1)
-    creaseAngle = field.newField('creaseAngle', 'SFFloat', 0, 0.0)
-
-    #: Events the specification declares for the node.
-    set_crossSection = field.newEvent('set_crossSection', 'MFVec2f', 0)
-    set_orientation = field.newEvent('set_orientation', 'MFRotation', 0)
-    set_scale = field.newEvent('set_scale', 'MFVec2f', 0)
-    set_spine = field.newEvent('set_spine', 'MFVec3f', 0)
 
     depend_fields = SweptGeometry.depend_fields + (
         'crossSection', 'spine', 'scale', 'orientation', 'beginCap', 'endCap',

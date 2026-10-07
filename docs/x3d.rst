@@ -93,7 +93,7 @@ implements these X3D nodes, by component:
 - EnvironmentalSensor - ProximitySensor, VisibilitySensor
 - Geometry2D - Arc2D, ArcClose2D, Circle2D, Disk2D, Polyline2D, Polypoint2D,
   Rectangle2D, TriangleSet2D
-- Geometry3D - Box, Cone, Cylinder, ElevationGrid, IndexedFaceSet, Sphere
+- Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
 - Grouping - Group, Switch, Transform
 - KeyDeviceSensor - KeySensor, StringSensor
 - Interpolation - ColorInterpolator, CoordinateInterpolator,
