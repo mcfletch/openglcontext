@@ -69,3 +69,38 @@ def test_a_shape_with_no_appearance_in_a_document_is_unlit_white(gl_context):
         drawn_image(context)
         centre = drawn_image(context)[16, 16].astype(int)
     assert tuple(centre) == pytest.approx((255, 255, 255), abs=3)
+
+
+class StubProbe:
+    def __init__(self, studio):
+        self.studio = studio
+
+
+@pytest.mark.parametrize('mode, probe, document, expected', [
+    ('analytic', None, True, 'off'),
+    ('full', StubProbe(studio=True), True, 'off'),
+    ('full', StubProbe(studio=False), True, 'full'),
+    ('analytic', None, False, 'analytic'),
+    ('full', StubProbe(studio=True), False, 'full'),
+    ('off', None, True, 'off'),
+])
+def test_a_document_has_no_studio_environment(mode, probe, document, expected):
+    """X3D lights a document by its lights alone; an environment it supplies is kept"""
+    from OpenGLContext.passes import ibl  # noqa: PLC0415 kept with its use
+    assert ibl.scene_mode(mode, probe, document) == expected
+
+
+DARK = (b"<X3D version='3.3'><Scene><Viewpoint position='0 0 0'/>"
+        b"<NavigationInfo headlight='false'/><Shape><Appearance>"
+        b"<Material diffuseColor='1 1 1'/></Appearance><IndexedFaceSet coordIndex='0 1 2 3'>"
+        b"<Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/></IndexedFaceSet>"
+        b"</Shape></Scene></X3D>")
+
+
+def test_a_document_with_no_light_is_dark(gl_context):
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    with scene_context(Loader.loads(DARK, 'a.x3d'), size=(32, 32)) as context:
+        drawn_image(context)
+        centre = drawn_image(context)[16, 16].astype(int)
+    assert max(centre) < 12, centre

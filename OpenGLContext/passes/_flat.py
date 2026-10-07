@@ -1159,6 +1159,12 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         path = binding.current_path( list( self.paths.get( nodetypes.NavigationInfo, () ) ) )
         return None if path is None else path[-1]
 
+    def sceneIsDocument( self ) -> bool:
+        """Whether the scene was read from a VRML97 or X3D document, which is
+        lit as those standards say rather than as the engine lights a scene
+        built in code"""
+        return isinstance( self.scene, X3DScene )
+
     def hasHeadlight( self, lights: int ) -> bool:
         """Whether a frame with ``lights`` of the scene's own lights adds the headlight
 
@@ -1166,7 +1172,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         binds none (:func:`OpenGLContext.move.navigationinfo.headlight`).
         """
         return navigationinfo.headlight( self.currentNavigation(), lights,
-                                         isinstance( self.scene, X3DScene ) )
+                                         self.sceneIsDocument() )
 
     # Persistent object-id <-> path map for MRT picking. Stable per-path ids
     # (stashed on the NodePath) mean the {id: path} map is only mutated when the

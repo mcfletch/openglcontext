@@ -100,7 +100,16 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] a document's Appearance with no material is unlit
     (`tests/unit/test_document_unlit.py`)
   - [x] a document with no NavigationInfo has the headlight (Figure23_1's ground
-    was lit by its 0.2 DirectionalLight alone) X_ITE runs Scripts, so its render
+    was lit by its 0.2 DirectionalLight alone)
+  - [x] a document is lit without the built-in studio environment
+    (`ibl.scene_mode`): Floor 61% -> 0% unlike X_ITE, the temple 57% -> 8%, the
+    tree 55% -> 0.05%
+  - [x] X3D's attenuation floor of 1 (`lightAttenuationFloor`): the dungeon's
+    torch, 0.2 m from a wall with attenuation `0 0.6 0`, lit it eight times over
+  - [ ] whole corpus against X_ITE (2026-10-07): median 4.9% of pixels unlike;
+    to look at next: Background fogged (fogtype_linear: our frame is the fog
+    colour), the Snake's background colour, Figure20_09's viewpoint, the
+    SphereSensor tests' framing X_ITE runs Scripts, so its render
     of a document whose scene a Script builds shows what ours does not draw
   - [x] Background image faces: each side drawn as its own quad once its image
     has loaded, turned as X3D says, transparent parts showing the sky

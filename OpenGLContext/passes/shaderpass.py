@@ -867,6 +867,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         cutoff_angle: float = 0.785,
         light_range: float = 0.0,
         light_radius: float = 0.0,
+        attenuation_floor: float = 1.0,
         program: Optional[int] = None
     ) -> None:
         """Set parameters for a single light.
@@ -884,6 +885,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             light_range: glTF's range, the distance its falloff window ends at; 0 for none
             light_radius: VRML97's and X3D's radius, the distance past which
                 nothing is lit, in eye space; 0 for none
+            attenuation_floor: the least the attenuation divides by: 1 for
+                X3D's lights, which never light more than their intensity,
+                and near 0 for glTF's, which fall off inverse-square
             program: Shader program to set uniforms on (defaults to main lit program)
         """
         if index >= self.MAX_LIGHTS:
@@ -899,6 +903,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self._set_uniform3f(f'lightAttenuation[{index}]', attenuation, program)
         self._set_uniform1f(f'lightRange[{index}]', light_range, program)
         self._set_uniform1f(f'lightRadius[{index}]', light_radius, program)
+        self._set_uniform1f(f'lightAttenuationFloor[{index}]', attenuation_floor, program)
         self._set_uniform1f(f'lightIntensity[{index}]', intensity, program)
         self._set_uniform1f(f'lightBeamWidth[{index}]', beam_width, program)
         self._set_uniform1f(f'lightCutOffAngle[{index}]', cutoff_angle, program)
@@ -1201,6 +1206,17 @@ def _eye_radius(light_node: Any, modelview_matrix: Optional[Matrix4]) -> float:
     return radius * float(max(np.linalg.norm(row) for row in rows))
 
 
+#: The least a glTF light's attenuation divides by: KHR_lights_punctual falls
+#: off inverse-square with no floor, and this keeps the division finite.
+GLTF_ATTENUATION_FLOOR = 1e-4
+
+
+def _attenuation_floor(light_node: Any) -> float:
+    """The least `light_node`'s attenuation divides by: X3D's 1, or a glTF light's
+    :data:`GLTF_ATTENUATION_FLOOR`"""
+    return GLTF_ATTENUATION_FLOOR if hasattr(light_node, '_gltf_range') else 1.0
+
+
 def configure_light_from_node(
     shader_program: VRML97ShaderProgram,
     index: int,
@@ -1295,6 +1311,7 @@ def configure_light_from_node(
             cutoff_angle=cutoff_angle,
             light_range=float(getattr(light_node, '_gltf_range', 0.0)),
             light_radius=_eye_radius(light_node, modelview_matrix),
+            attenuation_floor=_attenuation_floor(light_node),
             program=program,
         )
 
@@ -1312,6 +1329,7 @@ def configure_light_from_node(
             intensity=intensity,
             light_range=float(getattr(light_node, '_gltf_range', 0.0)),
             light_radius=_eye_radius(light_node, modelview_matrix),
+            attenuation_floor=_attenuation_floor(light_node),
             program=program,
         )
 

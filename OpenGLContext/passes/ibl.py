@@ -110,6 +110,20 @@ def fill_scale(mode: str, probe: Optional['IBLProbe'], scene_lit: bool = True,
     return 1.0
 
 
+def scene_mode(mode: str, probe: Optional['IBLProbe'], document: bool) -> str:
+    """The environment-lighting mode a scene is drawn with
+
+    A scene read from a VRML97 or X3D document is lit by its own lights
+    alone, as those standards light it: the built-in studio (the analytic sky,
+    or a probe built from it) is off there, and an environment the scene
+    supplies is kept.
+    """
+    if document and (mode == 'analytic' or (mode == 'full' and probe is not None
+                                             and probe.studio)):
+        return 'off'
+    return mode
+
+
 def environment_cubemap_prefix() -> Optional[str]:
     """Path prefix of an environment cubemap face set, or None.
 

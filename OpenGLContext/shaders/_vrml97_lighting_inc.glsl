@@ -17,7 +17,8 @@ float calcAttenuation(int lightIndex, float distance) {
         return 0.0;
     }
     vec3 atten = lightAttenuation[lightIndex];
-    return 1.0 / max(atten.x + atten.y * distance + atten.z * distance * distance, 1e-4);
+    return 1.0 / max(atten.x + atten.y * distance + atten.z * distance * distance,
+                     max(lightAttenuationFloor[lightIndex], 1e-4));
 }
 
 // Spot cone falloff: a LINEAR ramp in cos-angle from the outer cutoff to the

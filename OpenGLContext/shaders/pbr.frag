@@ -916,7 +916,8 @@ void main() {
             float dist = length(lv);
             L = lv / max(dist, 1e-4);
             vec3 a = lightAttenuation[i];
-            atten = 1.0 / max(a.x + a.y * dist + a.z * dist * dist, 1e-4);
+            atten = 1.0 / max(a.x + a.y * dist + a.z * dist * dist,
+                              max(lightAttenuationFloor[i], 1e-4));
             // KHR_lights_punctual range window: clamp(1-(d/range)^4,0,1)/d^2, applied
             // ONCE (the reference windows the inverse-square a single time, not w*w).
             if (lightRange[i] > 0.0) {

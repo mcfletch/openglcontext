@@ -202,6 +202,13 @@ A ``Fog`` or ``LocalFog`` fades the colour as it is displayed, after tone
 mapping, by X3D's equation: a ``LINEAR`` fog leaves an object
 ``(visibilityRange - distance) / visibilityRange`` of its own colour.
 
+A document is lit by its own lights and its headlight: the PBR pass's
+built-in studio environment, which lights a scene built in code, is off for it,
+and an environment it supplies is kept (``ibl.scene_mode``). A ``PointLight``
+or ``SpotLight`` falls off by X3D's ``1 / max(attenuation[0] +
+attenuation[1] d + attenuation[2] d², 1)``, so it never lights a surface
+more than its intensity; a glTF light falls off inverse-square.
+
 In a document, an ``Appearance`` with no ``material`` is unlit: the shape is
 its texture's colour, or white; a ``Shape`` with no ``appearance`` is unlit
 white. A scene built in code draws either in a lit neutral grey. A ``Material`` is drawn by the PBR pass
