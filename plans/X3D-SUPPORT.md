@@ -64,6 +64,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] X3D loader (`loaders/x3d.py`, `prototypes()`), viewer adapter with the `head` as a notice, `.json` sniffing, archive members
   - [x] `Inline` reads any registered format (`SceneReader.nodes()`), X3D's `load` field; the builder roots nodes before their fields are set
   - [x] Interchange geometry: the six triangle sets, `ElevationGrid` (with `creaseAngle`), `LineSet`; `ColorRGBA`, `Tangent`, `MultiTextureCoordinate` mapping labels (`composedgeometry`, `meshgeometry`); data nodes registered as their declarations
+  - [x] Geometry2D: Rectangle2D, TriangleSet2D, Disk2D, ArcClose2D as meshes; Circle2D, Arc2D, Polyline2D, Polypoint2D through `DrawnAs` (`loaders.x3d.X3D_ONLY` for the name the NURBS trim curve holds)
   - [ ] `IndexedFaceSet`, `Extrusion` and the primitives onto the same arrays; `TextureCoordinateGenerator`; `CoordinateDouble` rebased to a float32 origin
   - [x] docs/x3d.rst with the implemented-node list, held to `prototypes()` by a test
   - [x] light scope: `global` false lights only its parent group's descendants (`passes.lightscope`, the per-draw `lightsOff` mask); the engine's DirectionalLight made in code is global; VRML97 dialect default `global FALSE`

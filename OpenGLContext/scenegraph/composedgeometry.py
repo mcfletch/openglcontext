@@ -17,6 +17,7 @@ clockwise as seen from their front.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -24,7 +25,8 @@ from typing import Any, Optional
 import numpy as np
 from numpy.typing import ArrayLike
 
-__all__ = ['ComposedArrays', 'composed_arrays', 'crease_normals', 'fans', 'grid_points',
+__all__ = ['ComposedArrays', 'arc_close', 'arc_points', 'arc_sweep', 'composed_arrays',
+           'crease_normals', 'disk', 'fans', 'grid_points', 'rectangle', 'triangle_set_2d',
            'grid_texcoords', 'grid_triangles', 'indexed_fans', 'indexed_strips',
            'indexed_triangles', 'line_segments', 'per_quad', 'split_index', 'strips',
            'triangle_set']
@@ -175,6 +177,82 @@ def crease_normals(points: np.ndarray, triangles: np.ndarray, crease_angle: floa
     found[empty] = faces[corner_face[empty]]
     smoothed: np.ndarray = np.nan_to_num(found).astype(np.float32)
     return smoothed
+
+
+def arc_sweep(start: float, end: float) -> float:
+    """How far an X3D arc turns, counter-clockwise from `start` to `end`, in radians
+
+    The same start and end, or a whole turn between them, is a circle.
+    """
+    sweep = (float(end) - float(start)) % (2.0 * math.pi)
+    return sweep if sweep > 1e-12 else 2.0 * math.pi
+
+
+def arc_points(radius: float, start: float, end: float, segments: int) -> np.ndarray:
+    """Points along an arc in the z=0 plane, `segments` + 1 of them from start to end"""
+    angles = float(start) + np.linspace(0.0, arc_sweep(start, end), max(int(segments), 1) + 1)
+    return np.stack([np.cos(angles) * radius, np.sin(angles) * radius,
+                     np.zeros_like(angles)], axis=1).astype(np.float32)
+
+
+def _flat_texcoords(points: np.ndarray, low: ArrayLike, high: ArrayLike) -> np.ndarray:
+    """Points' x and y across a box, as texture coordinates from 0 to 1"""
+    bottom, top = np.asarray(low, np.float64), np.asarray(high, np.float64)
+    span = np.where(top - bottom > 0, top - bottom, 1.0)
+    found: np.ndarray = ((points[:, :2] - bottom) / span).astype(np.float32)
+    return found
+
+
+def rectangle(size: ArrayLike) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """A `Rectangle2D`: points, triangles and texture coordinates, centred on the origin"""
+    half_x, half_y = (float(value) / 2.0 for value in np.asarray(size).ravel()[:2])
+    points = np.array([(-half_x, -half_y, 0), (half_x, -half_y, 0), (half_x, half_y, 0),
+                       (-half_x, half_y, 0)], np.float32)
+    texcoords = np.array([(0, 0), (1, 0), (1, 1), (0, 1)], np.float32)
+    return points, np.array([[0, 1, 2], [0, 2, 3]], np.int64), texcoords
+
+
+def disk(inner: float, outer: float, segments: int) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """A `Disk2D`: a fan round the centre, or a ring where `inner` is above 0"""
+    count = max(int(segments), 3)
+    ring = arc_points(outer, 0.0, 2.0 * math.pi, count)[:-1]
+    step = np.arange(count)
+    if inner <= 0.0:
+        points = np.concatenate([np.zeros((1, 3), np.float32), ring])
+        triangles = np.stack([np.zeros(count, np.int64), step + 1, (step + 1) % count + 1], axis=1)
+    else:
+        points = np.concatenate([ring, arc_points(inner, 0.0, 2.0 * math.pi, count)[:-1]])
+        following = (step + 1) % count
+        triangles = np.concatenate([
+            np.stack([step + count, step, following], axis=1),
+            np.stack([step + count, following, following + count], axis=1),
+        ]).astype(np.int64)
+    return points, triangles, _flat_texcoords(points, (-outer, -outer), (outer, outer))
+
+
+def arc_close(radius: float, start: float, end: float, closure: str,
+              segments: int) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """An `ArcClose2D`: closed through the centre ('PIE') or across its ends ('CHORD')"""
+    count = max(int(segments), 1)
+    arc = arc_points(radius, start, end, count)
+    step = np.arange(count)
+    if str(closure).upper() == 'CHORD':
+        points = arc
+        inner = np.arange(1, count, dtype=np.int64)
+        triangles = np.stack([np.zeros(len(inner), np.int64), inner, inner + 1], axis=1)
+    else:
+        points = np.concatenate([np.zeros((1, 3), np.float32), arc])
+        triangles = np.stack([np.zeros(count, np.int64), step + 1, step + 2], axis=1)
+    return points, triangles, _flat_texcoords(points, (-radius, -radius), (radius, radius))
+
+
+def triangle_set_2d(vertices: ArrayLike) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """A `TriangleSet2D`: its vertices three at a time, textured across their bounds"""
+    flat = np.asarray(vertices, np.float32).reshape(-1, 2)
+    points = np.concatenate([flat, np.zeros((len(flat), 1), np.float32)], axis=1)
+    low = flat.min(axis=0) if len(flat) else (0.0, 0.0)
+    high = flat.max(axis=0) if len(flat) else (1.0, 1.0)
+    return points, triangle_set(len(points)), _flat_texcoords(points, low, high)
 
 
 @dataclass

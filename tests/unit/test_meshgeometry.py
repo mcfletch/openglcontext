@@ -140,7 +140,7 @@ def test_a_line_set_is_drawn_as_its_polylines():
     lines = read('<LineSet vertexCount="3 2"><Coordinate point="0 0 0 1 0 0 1 1 0 2 2 0 3 3 0"/>'
                  '</LineSet>')
     assert type(lines) is meshgeometry.LineSet
-    assert list(lines.lines().coordIndex) == [0, 1, 2, -1, 3, 4, -1]
+    assert list(lines.drawn().coordIndex) == [0, 1, 2, -1, 3, 4, -1]
 
 
 def _centre(image):

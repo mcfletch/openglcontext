@@ -216,6 +216,7 @@ OpenGLContext/
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── composedgeometry.py  # X3D triangle/line sets and ElevationGrid as
 │   │                 # glTF-shaped arrays -- NumPy only, no GL
+│   ├── geometry2d.py # X3D's Geometry2D nodes in the z=0 plane -- docs/x3d.rst
 │   ├── x3druntime.py # X3D's TimeTrigger on the engine clock and KeySensor on
 │   │                 # the context's keys; the other event utilities are
 │   │                 # vrml.x3d.runtime's -- docs/x3d.rst

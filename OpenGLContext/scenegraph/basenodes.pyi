@@ -35,6 +35,13 @@ from OpenGLContext.scenegraph.extrusions import PolyCone as PolyCone
 from OpenGLContext.scenegraph.extrusions import PolyCylinder as PolyCylinder
 from OpenGLContext.scenegraph.fog import Fog as Fog
 from OpenGLContext.scenegraph.gear import Gear as Gear
+from OpenGLContext.scenegraph.geometry2d import Arc2D as Arc2D
+from OpenGLContext.scenegraph.geometry2d import ArcClose2D as ArcClose2D
+from OpenGLContext.scenegraph.geometry2d import Circle2D as Circle2D
+from OpenGLContext.scenegraph.geometry2d import Disk2D as Disk2D
+from OpenGLContext.scenegraph.geometry2d import Polypoint2D as Polypoint2D
+from OpenGLContext.scenegraph.geometry2d import Rectangle2D as Rectangle2D
+from OpenGLContext.scenegraph.geometry2d import TriangleSet2D as TriangleSet2D
 from OpenGLContext.scenegraph.group import Group as Group
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight as ImageBasedLight
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture as ImageDataTexture
@@ -172,6 +179,8 @@ from vrml.x3d.runtime import IntegerTrigger as IntegerTrigger
 __all__ = [
     'Anchor',
     'Appearance',
+    'Arc2D',
+    'ArcClose2D',
     'AudioClip',
     'AudioEmitter',
     'AudioSource',
@@ -182,6 +191,7 @@ __all__ = [
     'BooleanToggle',
     'BooleanTrigger',
     'Box',
+    'Circle2D',
     'Collision',
     'Color',
     'ColorInterpolator',
@@ -194,6 +204,7 @@ __all__ = [
     'Cylinder',
     'CylinderSensor',
     'DirectionalLight',
+    'Disk2D',
     'ElevationGrid',
     'Extrusion',
     'FloatUniform1f',
@@ -268,9 +279,11 @@ __all__ = [
     'PolyCone',
     'PolyCylinder',
     'Polyline2D',
+    'Polypoint2D',
     'PositionInterpolator',
     'ProximitySensor',
     'ROUTE',
+    'Rectangle2D',
     'ScalarInterpolator',
     'ScreenCoverageLOD',
     'Shader',
@@ -302,6 +315,7 @@ __all__ = [
     'Transform',
     'TriangleFanSet',
     'TriangleSet',
+    'TriangleSet2D',
     'TriangleStripSet',
     'TrimmedSurface',
     'UnlitMaterial',

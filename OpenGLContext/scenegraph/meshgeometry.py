@@ -32,14 +32,15 @@ from OpenGLContext.scenegraph.texturemapping import label_set
 
 log = logging.getLogger(__name__)
 
-__all__ = ['ElevationGrid', 'IndexedTriangleFanSet', 'IndexedTriangleSet',
-           'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn', 'MeshGeometry',
+__all__ = ['DRAWN_KEY', 'DrawnAs', 'ElevationGrid', 'IndexedTriangleFanSet',
+           'IndexedTriangleSet', 'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
+           'MeshGeometry', 'polylines',
            'TriangleFanSet', 'TriangleSet', 'TriangleStripSet']
 
 #: The key a set's mesh is kept under in vrml's cache.
 MESH_KEY = 'composed-mesh'
-#: The key a LineSet's lines are kept under in vrml's cache.
-LINES_KEY = 'line-set-lines'
+#: The key what a DrawnAs node is drawn as is kept under in vrml's cache.
+DRAWN_KEY = 'drawn-as'
 _reported: "set[tuple[str, str]]" = set()
 
 
@@ -88,7 +89,7 @@ class MeshDrawn:
 
     def coordinateNodes(self) -> "list[Any]":
         """The texture coordinate nodes, in set order (TEXCOORD_0, _1, ...)"""
-        found = self.texCoord
+        found = getattr(self, 'texCoord', None)
         if not found:
             return []
         if isinstance(found, x3d.MultiTextureCoordinate):
@@ -266,34 +267,59 @@ class IndexedTriangleStripSet(MeshGeometry, x3d.IndexedTriangleStripSet):
         return composedgeometry.indexed_strips(self.index)
 
 
-class LineSet(x3d.LineSet):
-    """Polylines of `vertexCount` points each, drawn as the engine's IndexedLineSet"""
+class DrawnAs:
+    """A geometry node drawn as another engine node its fields build
 
-    def lines(self) -> Any:
-        """The IndexedLineSet drawn for this set, kept in vrml's cache under :data:`LINES_KEY`"""
-        from OpenGLContext.scenegraph.indexedlineset import IndexedLineSet  # noqa: PLC0415 imports GL
-        found = cache.CACHE.getData(self, LINES_KEY)
+    A line or point set is drawn as the engine's `IndexedLineSet` or
+    `PointSet`; :meth:`drawn` keeps the one :meth:`buildDrawn` makes in vrml's
+    cache until a field of this node is set.
+    """
+
+    def buildDrawn(self) -> Any:
+        """The engine node this node is drawn as, made from its fields now"""
+        raise NotImplementedError('%s must build what it is drawn as' % type(self).__name__)
+
+    def drawn(self) -> Any:
+        """The engine node this node is drawn as, kept under :data:`DRAWN_KEY`"""
+        found = cache.CACHE.getData(self, DRAWN_KEY)
         if found is None:
-            index: "list[int]" = []
-            start = 0
-            for count in (int(value) for value in self.vertexCount):
-                if count >= 2:
-                    index.extend(range(start, start + count))
-                    index.append(-1)
-                start += max(count, 0)
-            found = IndexedLineSet(coord=self.coord, color=self.color, coordIndex=index,
-                                   colorPerVertex=True)
-            holder = cache.CACHE.holder(self, found, LINES_KEY)
-            for name in ('coord', 'color', 'vertexCount'):
-                holder.depend(self, name)
+            found = self.buildDrawn()
+            holder = cache.CACHE.holder(self, found, DRAWN_KEY)
+            for declared in protofunctions.getFields(self):
+                if not declared.name.startswith(' '):
+                    holder.depend(self, declared)
         return found
 
     def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
                transparent: int = 0, mode: Any = None) -> Any:
-        """Draw the lines"""
-        return self.lines().render(visible=visible, lit=lit, textured=textured,
+        """Draw the engine node"""
+        return self.drawn().render(visible=visible, lit=lit, textured=textured,
                                    transparent=transparent, mode=mode)
 
     def boundingVolume(self, mode: Any = None) -> Any:
-        """The lines' bounds"""
-        return self.lines().boundingVolume(mode)
+        """The engine node's bounds"""
+        return self.drawn().boundingVolume(mode)
+
+
+def polylines(points: Any, counts: "list[int]") -> Any:
+    """An engine IndexedLineSet of runs of `points`, `counts` points each"""
+    from OpenGLContext.scenegraph.indexedlineset import IndexedLineSet  # noqa: PLC0415 imports GL
+    index: "list[int]" = []
+    start = 0
+    for count in counts:
+        if count >= 2:
+            index.extend(range(start, start + count))
+            index.append(-1)
+        start += max(count, 0)
+    coord = points if isinstance(points, x3d.X3DCoordinateNode) else x3d.Coordinate(point=points)
+    return IndexedLineSet(coord=coord, coordIndex=index, colorPerVertex=True)
+
+
+class LineSet(DrawnAs, x3d.LineSet):
+    """Polylines of `vertexCount` points each, drawn as the engine's IndexedLineSet"""
+
+    def buildDrawn(self) -> Any:
+        """An IndexedLineSet of the set's own coordinates and colours"""
+        lines = polylines(self.coord, [int(value) for value in self.vertexCount])
+        lines.color = self.color
+        return lines

@@ -186,6 +186,13 @@ Node( 'IndexedTriangleFanSet', 'OpenGLContext.scenegraph.meshgeometry.IndexedTri
 Node( 'TriangleStripSet', 'OpenGLContext.scenegraph.meshgeometry.TriangleStripSet' )
 Node( 'IndexedTriangleStripSet', 'OpenGLContext.scenegraph.meshgeometry.IndexedTriangleStripSet' )
 Node( 'LineSet', 'OpenGLContext.scenegraph.meshgeometry.LineSet' )
+Node( 'Rectangle2D', 'OpenGLContext.scenegraph.geometry2d.Rectangle2D' )
+Node( 'TriangleSet2D', 'OpenGLContext.scenegraph.geometry2d.TriangleSet2D' )
+Node( 'Disk2D', 'OpenGLContext.scenegraph.geometry2d.Disk2D' )
+Node( 'ArcClose2D', 'OpenGLContext.scenegraph.geometry2d.ArcClose2D' )
+Node( 'Circle2D', 'OpenGLContext.scenegraph.geometry2d.Circle2D' )
+Node( 'Arc2D', 'OpenGLContext.scenegraph.geometry2d.Arc2D' )
+Node( 'Polypoint2D', 'OpenGLContext.scenegraph.geometry2d.Polypoint2D' )
 # X3D's event utilities: pyvrml97's behaviours, and the engine's clock and keys.
 Node( 'BooleanFilter', 'vrml.x3d.runtime.BooleanFilter' )
 Node( 'BooleanToggle', 'vrml.x3d.runtime.BooleanToggle' )

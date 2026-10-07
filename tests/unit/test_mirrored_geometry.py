@@ -65,6 +65,10 @@ CASES = {
         coord=basenodes.Coordinate(point=TRIANGLE), stripCount=[3]),
     'IndexedTriangleStripSet': lambda: basenodes.IndexedTriangleStripSet(
         coord=basenodes.Coordinate(point=TRIANGLE), index=[0, 1, 2]),
+    'Rectangle2D': lambda: basenodes.Rectangle2D(size=(2, 1)),
+    'TriangleSet2D': lambda: basenodes.TriangleSet2D(vertices=[(-1, -1), (1, -1), (0.5, 1)]),
+    'Disk2D': lambda: basenodes.Disk2D(innerRadius=0.3, outerRadius=1.0),
+    'ArcClose2D': lambda: basenodes.ArcClose2D(radius=1.0, startAngle=0.2, endAngle=2.0),
     'ElevationGrid': lambda: basenodes.ElevationGrid(
         xDimension=3, zDimension=3, xSpacing=0.5, zSpacing=0.5,
         height=[0, 0.2, 0, 0.1, 0.5, 0.1, 0, 0.3, 0], solid=False),
@@ -77,6 +81,9 @@ CASES = {
 NO_FACES = {
     'IndexedLineSet': 'lines have no winding to turn over',
     'LineSet': 'lines have no winding to turn over',
+    'Circle2D': 'lines have no winding to turn over',
+    'Arc2D': 'lines have no winding to turn over',
+    'Polypoint2D': 'points have no winding to turn over',
     'PointSet': 'points have no winding to turn over',
     'NurbsCurve': 'a curve is drawn as a line',
     'Text': ('its glyphs are screen-aligned bitmaps, which a mirror does not turn '

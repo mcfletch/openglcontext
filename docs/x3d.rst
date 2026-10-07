@@ -91,6 +91,8 @@ implements these X3D nodes, by component:
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
 - EnvironmentalSensor - ProximitySensor, VisibilitySensor
+- Geometry2D - Arc2D, ArcClose2D, Circle2D, Disk2D, Polyline2D, Polypoint2D,
+  Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, IndexedFaceSet, Sphere
 - Grouping - Group, Switch, Transform
 - KeyDeviceSensor - KeySensor
@@ -125,6 +127,12 @@ false turns the triangles round. A ``MultiTextureCoordinate``'s entries are
 ``TEXCOORD_0``, ``TEXCOORD_1`` and so on, and an entry's ``mapping`` label is
 what a material's ``...TextureMapping`` names. The renderer reads two
 coordinate sets. A ``LineSet`` is drawn as an ``IndexedLineSet``.
+
+The Geometry2D nodes lie in the z=0 plane facing +z: ``Rectangle2D``,
+``TriangleSet2D``, ``Disk2D`` and ``ArcClose2D`` as meshes with texture
+coordinates across their bounds, ``Circle2D``, ``Arc2D`` and ``Polyline2D`` as
+lines, and ``Polypoint2D`` as points. A curve has 48 segments to a whole turn
+(``geometry2d.SEGMENTS``).
 
 Materials and appearance are described with the :doc:`PBR renderer <pbr>`:
 ``PhysicalMaterial``, ``UnlitMaterial`` and ``Material`` with their texture

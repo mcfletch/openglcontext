@@ -29,7 +29,7 @@ XML = b'''<?xml version="1.0" encoding="UTF-8"?>
       <Appearance><Material diffuseColor="1 0 0" emissiveColor="1 0 0"/></Appearance>
       <Box size="3 3 3"/>
     </Shape>
-    <Shape><Disk2D/></Shape>
+    <Shape><NurbsPatchSurface/></Shape>
   </Scene>
 </X3D>
 '''
@@ -64,8 +64,8 @@ def test_each_encoding_loads_into_the_engines_nodes(name):
 
 def test_a_node_the_engine_does_not_implement_is_its_declaration_and_reported():
     scene = Loader.loads(XML, 'scene.x3d')
-    assert type(scene.children[2].geometry) is x3d.Disk2D
-    assert any('Disk2D' in str(problem.message) for problem in scene.problems)
+    assert type(scene.children[2].geometry) is x3d.NurbsPatchSurface
+    assert any('NurbsPatchSurface' in str(problem.message) for problem in scene.problems)
 
 
 def test_the_engines_classes_are_used_only_where_they_implement_the_declaration():
@@ -74,7 +74,7 @@ def test_the_engines_classes_are_used_only_where_they_implement_the_declaration(
         if name != 'X3DScene':
             assert issubclass(cls, x3d.CONCRETE_NODES[name]), name
     assert found['Shape'] is basenodes.Shape
-    assert 'Disk2D' not in found
+    assert 'NurbsPatchSurface' not in found
 
 
 def test_a_broken_document_gives_what_it_read_and_logs_the_errors(caplog):

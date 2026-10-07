@@ -20,6 +20,10 @@ log = logging.getLogger(__name__)
 
 __all__ = ['X3DHandler', 'defaultHandler', 'prototypes']
 
+#: X3D nodes whose name the engine's registry gives to another class (the
+#: VRML97 NURBS extension's `Polyline2D`), by name: (module, class).
+X3D_ONLY = {'Polyline2D': ('OpenGLContext.scenegraph.geometry2d', 'Polyline2D')}
+
 #: How each problem's severity is logged.
 _LEVELS = {'error': logging.ERROR, 'warning': logging.WARNING, 'info': logging.INFO}
 
@@ -29,8 +33,10 @@ def prototypes() -> "dict[str, type]":
 
     A registered class counts when it derives from the X3D declaration of its
     name; the others (a node of the same name with other fields) are left to
-    the declaration. `X3DScene` is the engine's scene class.
+    the declaration, or to the class :data:`X3D_ONLY` names. `X3DScene` is
+    the engine's scene class.
     """
+    import importlib  # noqa: PLC0415 kept with its use
     from OpenGLContext.scenegraph import basenodes  # noqa: PLC0415 the registry fills at first import
     from OpenGLContext.scenegraph.scenegraph import X3DScene  # noqa: PLC0415 beside the registry
     found: "dict[str, type]" = {}
@@ -38,6 +44,8 @@ def prototypes() -> "dict[str, type]":
         declared = x3d.CONCRETE_NODES.get(name)
         if declared is not None and isinstance(cls, type) and issubclass(cls, declared):
             found[name] = cls
+    for name, (module, attribute) in X3D_ONLY.items():
+        found[name] = getattr(importlib.import_module(module), attribute)
     found['X3DScene'] = X3DScene
     return found
 
