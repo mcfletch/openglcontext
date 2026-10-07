@@ -1755,3 +1755,22 @@ Recorded 2026-10-07:
    compatibility alias; it has not been in a release (§9.13, phase 5).
 7. No script support. `Script` nodes are read, kept and written, and never
    run (§9.18).
+
+Review findings not taken as written, recorded 2026-10-07:
+
+- The generated stubs keep `**fields` on each constructor, documented as the
+  extension fields a dialect or a prototype adds.
+- Bind stacks per `Layer` are an open item (§9.15); one stack per scene is
+  what is implemented.
+- pyvrml97 commit messages written before the commit-message rule are
+  history and are not rewritten.
+- The followers' "first use wakes the node" sub-finding is how 19775-1
+  defines a follower, not a defect.
+- The writers refuse a scene nested deeper than the interpreter's recursion
+  limit with "nested too deeply"; the limit is documented rather than lifted.
+- `scripts/x3d_xite_references.py --archive` takes any archive under
+  `--corpus`, not only pyvrml97's list, so a test corpus can name its own.
+- `loaders.x3d.prototypes()` and `vrml97_prototypes()` are built at each
+  parse: 0.014 ms and 0.031 ms against 0.25 ms for the smallest document's
+  parse, once per load. A memo would need invalidating on writes an
+  application makes to the registries directly.
