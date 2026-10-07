@@ -63,6 +63,12 @@ There are two kinds of routing:
   directions: setting the prototype's field updates the internal node, and
   setting the internal node's field updates the prototype's field.
 
+Routes are followed as the source field is set, on the thread that set it.
+A change and everything its routes set going -- including a node's handler
+for an input event and the outputs that handler sends -- is one cascade, in
+which each field is reached at most once, so routes that form a loop end
+(``vrml.event``).
+
 .. _event-handlers:
 
 Event handlers
