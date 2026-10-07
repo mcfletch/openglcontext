@@ -51,6 +51,9 @@ class TestHasMouseMoveHandlersDelegates:
             def isCapturingEvents(self, _t):
                 """A drag that took the type over registers no receivers."""
                 return False
+
+            def observersOf(self, _t):
+                return []
         f = Fake()
         f.hasMouseMoveHandlers = ContextCore.hasMouseMoveHandlers.__get__(f)
         return f

@@ -224,6 +224,8 @@ OpenGLContext/
 │   │                 # vrml.x3d.runtime's -- docs/x3d.rst
 │   ├── x3dsensors.py # X3D's environmental sensors told each frame what they
 │   │                 # sense: the viewer, a target, the views -- no GL
+│   ├── x3dpointing.py   # X3D's pointing-device sensors told of each
+│   │                 # context's picked pointer -- no GL
 │   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
 │   │                 # drawn as the PBRMesh their fields build -- docs/x3d.rst
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material

@@ -131,6 +131,10 @@ from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMaterial
 from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint as OrthoViewpoint
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
+from OpenGLContext.scenegraph.x3dpointing import CylinderSensor as CylinderSensor
+from OpenGLContext.scenegraph.x3dpointing import PlaneSensor as PlaneSensor
+from OpenGLContext.scenegraph.x3dpointing import SphereSensor as SphereSensor
+from OpenGLContext.scenegraph.x3dpointing import TouchSensor as TouchSensor
 from OpenGLContext.scenegraph.x3druntime import ColorChaser as ColorChaser
 from OpenGLContext.scenegraph.x3druntime import ColorDamper as ColorDamper
 from OpenGLContext.scenegraph.x3druntime import CoordinateChaser as CoordinateChaser
@@ -161,15 +165,11 @@ from vrml.route import ROUTE as ROUTE
 from vrml.vrml97.basenodes import Anchor as Anchor
 from vrml.vrml97.basenodes import AudioClip as AudioClip
 from vrml.vrml97.basenodes import Color as Color
-from vrml.vrml97.basenodes import CylinderSensor as CylinderSensor
 from vrml.vrml97.basenodes import MovieTexture as MovieTexture
 from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
 from vrml.vrml97.basenodes import NormalInterpolator as NormalInterpolator
-from vrml.vrml97.basenodes import PlaneSensor as PlaneSensor
-from vrml.vrml97.basenodes import SphereSensor as SphereSensor
 from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
-from vrml.vrml97.basenodes import TouchSensor as TouchSensor
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
 from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean

@@ -191,6 +191,15 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   active view's camera, a ``TransformSensor`` its ``targetObject`` where the
   scene draws it, and a ``VisibilitySensor`` whether its box is within any
   view's frustum.
+- The pointing-device sensors (``TouchSensor``, ``PlaneSensor``,
+  ``CylinderSensor``, ``SphereSensor``) are told of their context's picked
+  pointer (``OpenGLContext.scenegraph.x3dpointing``). The sensors reached are
+  the enabled ones beside the geometry under the pointer, in the lowest group
+  on its path that has any; the primary button presses them, and a drag
+  continues on or off their geometry until it is released. The scene's and
+  the application's own handlers receive the same events. The hit is the picked point, with no
+  normal or texture coordinate. Picking (``ContextDefinition.pickEnabled``)
+  has to be on.
 - The bound ``NavigationInfo`` (``OpenGLContext.move.navigationinfo``):
   ``headlight`` true adds a headlight to the scene's lights and false leaves
   it off; a scene with no NavigationInfo has the headlight only where it has

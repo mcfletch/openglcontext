@@ -410,6 +410,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         # a second implementation for the MRO to choose between.
         def isCapturingEvents(self, eventType: Any) -> Any: ...
         def getEventManager(self, eventType: Any) -> Any: ...
+        def observersOf(self, eventType: Any) -> list[Any]: ...
         def initializeEventManagers(self) -> None: ...
         def addEventHandler(self, eventType: Any, *arguments: Any,
                             **named: Any) -> None: ...
@@ -1944,7 +1945,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         was filtered away before it arrived.
         """
         for event_type in ('mousemove', 'mousein', 'mouseout'):
-            if self.isCapturingEvents(event_type):
+            if self.isCapturingEvents(event_type) or self.observersOf(event_type):
                 return True
             manager = self.getEventManager(event_type)
             if manager is not None and manager.hasReceivers():
