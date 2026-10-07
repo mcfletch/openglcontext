@@ -312,6 +312,8 @@ OpenGLContext/
 │                     # of -- numpy only
 ├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
 │                     # toolkit -- docs/embedding.rst
+├── lighting.py       # Which lighting rules a scene is drawn by: X3D's for a
+│                     # document, the engine's for code -- docs/x3d.rst
 ├── processexit.py    # Ending the process at once, output and coverage flushed:
 │                     # what a capture or a bounded run exits through
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition

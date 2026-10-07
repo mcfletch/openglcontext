@@ -1500,6 +1500,13 @@ reflections.
   `specularTexture` the prefiltered cube map.
 - `Background` and `TextureBackground` map onto the existing background nodes;
   `Fog`, `LocalFog` and `FogCoordinate` onto the fog support.
+- Lighting rules (landed). `OpenGLContext.lighting` decides whether a scene
+  is lit by X3D's rules (its own lights and headlight, X3D attenuation, no
+  studio environment, no ambient fill, an `Appearance` with no material
+  unlit) or the engine's. `ContextDefinition.lighting` / `OPENGLCONTEXT_LIGHTING`
+  chooses `auto` (by whether the scene is a document), `x3d` or `engine`.
+  Three separate document-versus-code checks (the material, the pass, the
+  flat pass's ambient and headlight) read this one switch.
 
 ### 9.15 Bindable nodes and navigation
 

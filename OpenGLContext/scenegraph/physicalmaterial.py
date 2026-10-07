@@ -22,7 +22,8 @@ import numpy as np
 
 from vrml import cache, field, node, protofunctions
 from vrml.x3d import nodes as x3d
-from vrml.x3d.scene import X3DScene
+
+from OpenGLContext import lighting
 
 #: The texture field of each channel the PBR pass binds, by channel name.
 CHANNEL_FIELDS = {
@@ -456,11 +457,6 @@ def two_sided(appearance: Any) -> bool:
     return side_material(appearance, back=True) is not side_material(appearance)
 
 
-def in_document(node: Any) -> bool:
-    """Whether `node` belongs to a scene read from a VRML97 or X3D document"""
-    return node is not None and isinstance(protofunctions.root(node), X3DScene)
-
-
 class AppearanceMaterial(object):
     """The metallic/roughness material a VRML97-style `Appearance` is drawn as
 
@@ -481,7 +477,7 @@ class AppearanceMaterial(object):
         self._appearance = weakref.ref(appearance)
         self._back = back
         self._version = 0
-        self._document: Optional[bool] = None
+        self._x3d: Optional[bool] = None
 
     @property
     def appearance(self) -> Any:
@@ -534,23 +530,23 @@ class AppearanceMaterial(object):
     @property
     def factorVersion(self) -> int:
         """A count that moves whenever a field this view reads from is set, or
-        the appearance joins or leaves a document (:attr:`inDocument`)"""
+        the rules the appearance is lit by change (:attr:`x3dLit`)"""
         appearance = self.appearance
         key = _VIEW_VERSION_KEY + ('-back' if self._back else '')
         if appearance is not None and cache.CACHE.getData(appearance, key) is None:
             self._version += 1
             self._watch(appearance, key)
-        document = self.inDocument
-        if document != self._document:
-            self._document = document
+        x3d = self.x3dLit
+        if x3d != self._x3d:
+            self._x3d = x3d
             self._version += 1
         return self._version
 
     @property
-    def inDocument(self) -> bool:
-        """Whether the appearance belongs to a scene read from a VRML97 or X3D
-        document, where an appearance with no material is unlit"""
-        return in_document(self.appearance)
+    def x3dLit(self) -> bool:
+        """Whether the appearance is lit by X3D's rules (:mod:`OpenGLContext.lighting`):
+        its Material by the Phong equation, and unlit where it has none"""
+        return lighting.x3d_lit(self.appearance)
 
     @staticmethod
     def _watch(appearance: Any, key: str) -> None:

@@ -689,9 +689,10 @@ void main() {
         vec3 V = normalize(toViewer(vPosition));
         float shadows[MAX_LIGHTS];
         resolveShadows(shadows);
+        // X3D's ambient light is each light's own (phongLight), not the
+        // pass's flat fill
         vec3 color = emissiveFactor
-                   * (hasEmissive ? texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb : vec3(1.0))
-                   + metallicFactor * diffuse * sceneAmbient;
+                   * (hasEmissive ? texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb : vec3(1.0));
         for (int i = 0; i < MAX_LIGHTS; i++) {
             if (i >= numLights) break;
             if ((lightsOff & (1 << i)) != 0) continue;   // a zone's light, off for this draw

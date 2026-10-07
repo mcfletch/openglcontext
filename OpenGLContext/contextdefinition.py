@@ -166,6 +166,11 @@ class ContextDefinition( node.Node ):
     # (env: OPENGLCONTEXT_RENDERER).
     renderer = field.newField("renderer", "SFString", 1, _get_default_renderer)
 
+    # Which rules light a scene: X3D's, the engine's, or 'auto' -- a scene read
+    # from a VRML97 or X3D document by X3D's (env: OPENGLCONTEXT_LIGHTING).
+    # See OpenGLContext.lighting.
+    lighting = field.newField("lighting", "SFString", 1, renderoptions.default_lighting)
+
     # Non-blocking pick readback: read the MRT object-id/depth under each pick
     # sample into a PBO with a fence instead of a synchronous glReadPixels, and
     # dispatch the resolved events a frame later. Avoids the GPU->CPU stall so
@@ -393,6 +398,9 @@ class ContextDefinition( node.Node ):
         'renderer': {'label': 'Render Engine',
                      'options': renderoptions.CHOICES['renderer'],
                      'optionLabels':renderoptions.LABELS['renderer']},
+        'lighting': {'label': 'Lighting rules',
+                     'options': renderoptions.CHOICES['lighting'],
+                     'optionLabels': renderoptions.LABELS['lighting']},
         'planarReflections': {'label': 'Reflections'},
         'reflectionViews': {'label': 'Reflections per frame', 'minimum': 0,
                             'maximum': 16, 'step': 1},
@@ -424,7 +432,7 @@ class ContextDefinition( node.Node ):
         'bloom', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
         'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',
-        'renderer',
+        'renderer', 'lighting',
     )
     #: Fields a settings screen shows under "Interface": how the overlay itself
     #: is drawn and how much of the display the window takes, as opposed to what

@@ -212,10 +212,19 @@ more than its intensity; a glTF light falls off inverse-square.
 In a document, an ``Appearance`` with no ``material`` is unlit: the shape is
 its texture's colour, or white; a ``Shape`` with no ``appearance`` is unlit
 white. A scene built in code draws either in a lit neutral grey. A
-``Material`` is drawn by X3D's Phong equation in both renderers (:doc:`pbr`),
-each light adding its ``ambientIntensity``; a document has no other ambient
-light. ``oglc-x3d-regression --renderer vrml97`` draws the corpus with the
-VRML97 pass.
+``PhysicalMaterial`` is drawn by the PBR pass's metallic/roughness BRDF, as
+glTF's materials are. A document's ``Material`` is drawn by X3D's Phong
+equation in both renderers (:doc:`pbr`), each light adding its
+``ambientIntensity``; a document has no other ambient light. The PBR pass
+draws a ``Material`` in a scene built in code as an equivalent
+metallic/roughness material. ``oglc-x3d-regression --renderer vrml97`` draws
+the corpus with the VRML97 pass.
+
+Which of these rules applies is the context definition's ``lighting`` field
+(``OPENGLCONTEXT_LIGHTING``, ``OpenGLContext.lighting``): ``auto``, the
+default, applies X3D's rules to a scene loaded from a document and the
+engine's to one built in code; ``x3d`` and ``engine`` apply one set to every
+scene.
 
 An enabled ``LocalFog`` fogs the siblings in its parent group and their
 descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);

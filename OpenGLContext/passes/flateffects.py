@@ -75,7 +75,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
                            bvolume: Any, program: Any = None) -> None: ...
 
         def currentFog(self) -> Any: ...
-        def sceneIsDocument(self) -> bool: ...
+        def x3dLighting(self) -> bool: ...
 
     # Transmission (KHR_materials_transmission). Filled on the first frame from the
     # GL renderer string; 'full' captures an opaque backdrop, 'blend' fakes it.
@@ -166,7 +166,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
             return 'off'
         from OpenGLContext.passes import ibl
         mode, probe = prepared if prepared is not None else self.iblPrepare()
-        mode = ibl.scene_mode(mode, probe, self.sceneIsDocument())
+        mode = ibl.scene_mode(mode, probe, self.x3dLighting())
 
         # eyeToWorld is uploaded with glUniformMatrix4fv, which targets the bound
         # program; the probe build leaves no program bound, so bind the lit PBR

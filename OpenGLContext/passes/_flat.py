@@ -40,6 +40,7 @@ import numpy
 
 from OpenGLContext import frustum
 from OpenGLContext.move import navigationinfo
+from OpenGLContext import lighting, renderoptions
 from OpenGLContext.passes import lightscope
 from OpenGLContext.passes.disposal import let_go
 from OpenGLContext.passes.framestate import FrameState
@@ -49,7 +50,6 @@ from vrml.vrml97 import nodetypes
 from vrml import olist
 from vrml.x3d import binding
 from vrml.x3d import nodes as x3dnodes
-from vrml.x3d.scene import X3DScene
 from OpenGLContext.scenegraph import shaders
 from pydispatch.dispatcher import connect
 
@@ -1159,11 +1159,16 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         path = binding.current_path( list( self.paths.get( nodetypes.NavigationInfo, () ) ) )
         return None if path is None else path[-1]
 
-    def sceneIsDocument( self ) -> bool:
-        """Whether the scene was read from a VRML97 or X3D document, which is
-        lit as those standards say rather than as the engine lights a scene
-        built in code"""
-        return isinstance( getattr( self, 'scene', None ), X3DScene )
+    def x3dLighting( self ) -> bool:
+        """Whether the scene is lit by X3D's rules rather than the engine's
+
+        ``ContextDefinition.lighting`` (:mod:`OpenGLContext.lighting`): with
+        ``auto``, a scene read from a VRML97 or X3D document is. Also tells
+        the material views which rules this pass is drawing with.
+        """
+        chosen = renderoptions.choice( self, 'lighting', renderoptions.default_lighting() )
+        lighting.use( chosen )
+        return lighting.scene_x3d_lit( getattr( self, 'scene', None ), chosen )
 
     def hasHeadlight( self, lights: int ) -> bool:
         """Whether a frame with ``lights`` of the scene's own lights adds the headlight
@@ -1172,7 +1177,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         binds none (:func:`OpenGLContext.move.navigationinfo.headlight`).
         """
         return navigationinfo.headlight( self.currentNavigation(), lights,
-                                         self.sceneIsDocument() )
+                                         self.x3dLighting() )
 
     # Persistent object-id <-> path map for MRT picking. Stable per-path ids
     # (stashed on the NodePath) mean the {id: path} map is only mutated when the
@@ -2017,7 +2022,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         grey level or an RGB colour (extra components are ignored); anything
         else is reported once and :attr:`DEFAULT_AMBIENT` stands.
         """
-        if self.sceneIsDocument():
+        if self.x3dLighting():
             # X3D's ambient light is each light's ambientIntensity alone
             return (0.0, 0.0, 0.0)
         amb = getattr(getattr(self, 'context', None), 'gltf_scene_ambient', None)

@@ -43,13 +43,14 @@ from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.physicalmaterial import (
     AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha, source_of,
-    two_sided, in_document,
+    two_sided,
     material_to_pbr, pbr_material,
 )
 from OpenGLContext.scenegraph.material_fields import read_material_fields
 from OpenGLContext.scenegraph.texgen import TexGen
 from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
+from OpenGLContext import lighting
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS, ZonePack
 from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT, palette_supported
@@ -71,7 +72,7 @@ class _NoMaterial:
 
 _NO_MATERIAL = _NoMaterial()
 
-#: What a document's shape with no appearance is drawn with: X3D's unlit white.
+#: What a shape with no appearance is drawn with under X3D's rules: unlit white.
 _DOCUMENT_UNLIT = UnlitMaterial(emissiveColor=(1.0, 1.0, 1.0))
 
 #: Each material's factor block in each context, as ``{'block': (buffer,
@@ -279,7 +280,7 @@ def _material_factors(material: Any) -> dict:
         return dict(_DEFAULT_FACTORS, base_color=tuple(material.emissiveColor)[:3],
                     normal_scale=float(material.normalScale), unlit=1)
     if isinstance(material, AppearanceMaterial):
-        if material.inDocument:
+        if material.x3dLit:
             if not material.material:
                 # X3D: an appearance with no material is unlit, white times its texture
                 return dict(_DEFAULT_FACTORS, unlit=1)
@@ -973,13 +974,14 @@ class PBRShaderProgram(VRML97ShaderProgram):
         is what is drawn with it, whose coordinate sets the appearance's
         mapping labels name. ``back`` configures the back faces' material
         (:func:`~OpenGLContext.scenegraph.physicalmaterial.side_material`).
-        A shape with no appearance is drawn unlit white in a document, as X3D
-        says, and in the engine's lit neutral grey otherwise.
+        A shape with no appearance is drawn unlit white under X3D's lighting
+        rules (:mod:`OpenGLContext.lighting`), and in the engine's lit neutral
+        grey under its own.
         """
         if appearance:
             material = pbr_material(appearance, back)
         else:
-            material = _DOCUMENT_UNLIT if in_document(geometry) else None
+            material = _DOCUMENT_UNLIT if lighting.x3d_lit(geometry) else None
         # The coordinates depend on the geometry as well as the appearance, so
         # they are set before the same-material early-out.
         self.set_texture_mapping(texture_mapping(appearance, geometry))

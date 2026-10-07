@@ -78,6 +78,7 @@ def is_render_configuration(name: str) -> bool:
 #: than the readers: see :func:`clean_environment`.
 ENVIRONMENT: tuple[str, ...] = (
     'OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_RENDERER',
+    'OPENGLCONTEXT_LIGHTING',
     'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_SHADOWS_SOFT',
     'OPENGLCONTEXT_SHADOW_CASCADES', 'OPENGLCONTEXT_MAXIMUM_LIGHTS',
     'OPENGLCONTEXT_BLOOM', 'OPENGLCONTEXT_IBL', 'OPENGLCONTEXT_IBL_INTENSITY',
@@ -196,6 +197,7 @@ CHOICES: dict[str, tuple[str, ...]] = {
     'profile': ('compatibility', 'core'),
     'multiview': ('auto', 'vertex', 'geometry', 'sequential'),
     'renderer': ('pbr','vrml97'),
+    'lighting': ('auto', 'x3d', 'engine'),
 }
 
 #: Other spellings an environment variable may give a choice by.
@@ -210,6 +212,7 @@ LABELS: dict[str, tuple[str, ...]] = {
     'profile': ('Compatibility', 'Core'),
     'multiview': ('Automatic', 'Vertex shader', 'Geometry shader', 'One view at a time'),
     'renderer': ('Physically Based','VRML97'),
+    'lighting': ('By the scene', 'X3D', 'Engine'),
 }
 
 
@@ -331,6 +334,12 @@ def env_choice_once(name: str, allowed: Sequence[str], synonyms: dict[str, str],
     if name not in _ENV_CACHE:
         _ENV_CACHE[name] = env_choice(name, allowed, synonyms, default)
     return str(_ENV_CACHE[name])
+
+
+def default_lighting() -> str:
+    """The rules a scene is lit by where its definition names none:
+    ``OPENGLCONTEXT_LIGHTING``, one of :data:`CHOICES` ``['lighting']``, else ``auto``"""
+    return env_choice_once('OPENGLCONTEXT_LIGHTING', CHOICES['lighting'], {}, 'auto')
 
 
 def env_text_once(name: str, default: str = '') -> str:

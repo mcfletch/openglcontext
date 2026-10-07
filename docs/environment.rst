@@ -103,6 +103,13 @@ Choosing the renderer
      - ``pbr`` selects the metallic/roughness renderer and ``vrml97`` the
        renderer with the legacy VRML97 lighting model. A context class may set
        ``renderer`` for itself instead. See :doc:`PBR <pbr>`.
+   * - ``OPENGLCONTEXT_LIGHTING``
+     - ``auto``, ``x3d``, ``engine``
+     - ``auto``
+     - Which lighting rules a scene is drawn by: ``x3d`` lights it by its own
+       lights and headlight alone, with X3D's attenuation; ``engine`` adds the
+       studio environment and ambient fill; ``auto`` chooses ``x3d`` for a
+       scene loaded from a document. See :doc:`X3D <x3d>`.
    * - ``OPENGLCONTEXT_MULTIVIEW``
      - ``auto``, ``vertex``, ``geometry``, ``sequential``
      - ``auto``
