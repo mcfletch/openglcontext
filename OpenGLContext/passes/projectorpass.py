@@ -102,7 +102,7 @@ class ProjectorImages:
         if not again and self._held[layer] is holder:
             return
         self._ensure()
-        assert self._fbos is not None
+        assert self._fbos is not None and self.texture is not None
         read, draw = self._fbos
         previous = (int(glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING)),
                     int(glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING)))
@@ -181,7 +181,7 @@ class ProjectorsMixin:
         if unit is None or not program:
             self.castProjectors = []
             return
-        cast = []
+        cast: list[tuple[Any, Any, Any]] = []
         images = self._projectorImages
         for path in cast_projectors(light_paths):
             node = path[-1]

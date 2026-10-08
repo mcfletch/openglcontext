@@ -212,8 +212,11 @@ class ComposedTexture3D(_Texture3D, x3d.ComposedTexture3D):
                 holder.depend(child, 'image')
 
     def buildVolume(self) -> Optional[np.ndarray]:
-        slices = [image_array(child) for child in self.texture if child]
-        slices = [found for found in slices if found is not None]
+        slices: list[np.ndarray] = []
+        for child in self.texture:
+            found = image_array(child) if child else None
+            if found is not None:
+                slices.append(found)
         if not slices:
             return None
         height, width, channels = slices[0].shape
@@ -277,7 +280,8 @@ class ImageTexture3D(_Texture3D, x3d.ImageTexture3D):
             context = reference()
             if context:
                 context.triggerRedraw(1)
-        return volume
+        loaded: np.ndarray = volume
+        return loaded
 
     def _deleteVolume(self) -> None:
         self.volume = None

@@ -114,7 +114,7 @@ class CubeMapTexture(node.Node):
     def hasAlpha(self) -> bool:
         """Whether the faces have an alpha channel"""
         faces = self.faceImages()
-        return bool(faces) and faces[0].shape[-1] == 4
+        return faces is not None and faces[0].shape[-1] == 4
 
     def cached(self, mode: Any = None) -> Any:
         """The cube map in ``mode``'s context, or None before it has six faces"""

@@ -84,10 +84,11 @@ class GeneratedSchedule:
 
         A texture never drawn that is due asks for a frame to be drawn in.
         """
-        paths = self._asked.get(node)
-        first = paths is None
+        held = self._asked.get(node)
+        first = held is None
+        paths: list[Any] = [] if held is None else held
         if first:
-            paths = self._asked[node] = []
+            self._asked[node] = paths
         if path is not None and not any(path is held for held in paths):
             paths.append(path)
         return first and not self.drawn(node) and self.due(node)
@@ -168,7 +169,7 @@ class PictureTarget:
         red, green, blue, alpha = (float(v) for v in glGetFloatv(GL_COLOR_CLEAR_VALUE))
         self._clear = (red, green, blue, alpha)
         self._ensure()
-        assert self._fbo is not None
+        assert self._fbo is not None and self.colour is not None and self.depth is not None
         glBindFramebuffer(GL_FRAMEBUFFER, self._fbo)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                                self.colour, 0)
@@ -223,7 +224,8 @@ class _SceneWalk:
 
     @property
     def _hidden(self) -> dict[Any, list[Any]]:
-        return self.__dict__.setdefault('_hiddenNodes', {})
+        found: dict[Any, list[Any]] = self.__dict__.setdefault('_hiddenNodes', {})
+        return found
 
 
 class GeneratedTexturesMixin:

@@ -258,12 +258,14 @@ def transform_matrix(transform: Any) -> np.ndarray:
     if transform is None:
         return _IDENTITY.copy()
     if isinstance(transform, x3d.TextureTransformMatrix3D):
-        return np.asarray(transform.matrix, np.float32).reshape(4, 4)[:3].copy()
+        rows: np.ndarray = np.asarray(transform.matrix, np.float32).reshape(4, 4)[:3].copy()
+        return rows
     if isinstance(transform, x3d.TextureTransform3D):
         centre = np.asarray(transform.center, np.float64)
-        matrix = (_translate(centre) @ _rotate(transform.rotation) @ _scale(transform.scale)
-                  @ _translate(-centre) @ _translate(transform.translation))
-        return matrix[:3].astype(np.float32)
+        matrix: np.ndarray = (_translate(centre) @ _rotate(transform.rotation)
+                              @ _scale(transform.scale) @ _translate(-centre)
+                              @ _translate(transform.translation))
+        return np.asarray(matrix[:3], np.float32)
     if isinstance(transform, x3d.TextureTransform):
         flat = texture_transform_matrix(transform)
         found = _IDENTITY.copy()
@@ -348,7 +350,7 @@ def compute_layers(appearance: Any, geometry: Any, back: bool = False) -> Option
         factor = (1.0, 1.0, 1.0, 1.0)
     entries = coordinate_nodes(geometry)
     transforms = _transform_nodes(appearance)
-    layers = []
+    layers: list[Layer] = []
     for index, child in enumerate(textures):
         if not child:
             continue
@@ -399,7 +401,8 @@ def texture_layers(appearance: Any, geometry: Any, back: bool = False) -> Option
         if geometry is not None:
             _depend_geometry(holder, geometry)
         by_geometry[marker] = found
-    return found
+    table: Optional[LayerTable] = found
+    return table
 
 
 class _Marker:

@@ -56,7 +56,8 @@ class LayerUnits(NamedTuple):
 class PackedLayers(NamedTuple):
     """One draw's layer uniforms and the textures to bind for them"""
 
-    count: int
+    #: How many layers the chain combines.
+    layers: int
     info: np.ndarray        # (MAX_LAYERS, 4) int32
     rows: np.ndarray        # (3 * MAX_LAYERS, 4) float32
     parameters: np.ndarray  # (2 * MAX_LAYERS, 4) float32
@@ -110,7 +111,7 @@ def pack_layers(table: LayerTable, units: LayerUnits, mode: Any) -> PackedLayers
                               int(tex.texture)))
         elif layer.source != 0:
             kind = layer.kind
-        generated = generated or (kind and layer.coordinate == COORD_GENERATED)
+        generated = generated or bool(kind and layer.coordinate == COORD_GENERATED)
         info[index] = (
             kind | (layer.coordinate << 2) | ((layer.set & 1) << 5) | ((layer.generator & 15) << 6),
             layer.mode | (layer.alpha_mode << 5),
@@ -210,7 +211,7 @@ class TextureLayersMixin:
             glActiveTexture(GL_TEXTURE0 + unit)
             glBindTexture(texture_target, name)
         glActiveTexture(GL_TEXTURE0)
-        self._set_uniform1i('textureLayerCount', packed.count, target)
+        self._set_uniform1i('textureLayerCount', packed.layers, target)
         return tuple(unit for unit, _target, _name in packed.binds)
 
     def init_layer_samplers(self, program: Any) -> None:
