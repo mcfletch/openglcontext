@@ -78,6 +78,25 @@ def _upload_view_list(location: int, indices: tuple[int, ...]) -> None:
     glUniform4iv(location, len(indices) // 4, np.asarray(indices, 'i'))
 
 
+#: The programs :func:`link_program` gave a geometry stage, by GL name.
+GEOMETRY_STAGE_PROGRAMS: set[int] = set()
+
+
+def release_geometry_stage_hold(programs: Iterable[Optional[int]]) -> None:
+    """Bind each of `programs` that has a geometry stage, then none
+
+    Mesa keeps the program bound after one with a geometry stage alive,
+    deleted or not, until a program with a geometry stage is bound again; a
+    pass deleting its programs binds those first, so every one it deletes
+    goes.
+    """
+    staged = [int(name) for name in programs if name and int(name) in GEOMETRY_STAGE_PROGRAMS]
+    for name in staged:
+        glUseProgram(name)
+    if staged:
+        glUseProgram(0)
+
+
 def link_program(vert_source: str, frag_source: str, validate: bool = True,
                  views: int = 0, strategy: str = 'geometry',
                  position: str = 'vPosition',
@@ -120,6 +139,8 @@ def link_program(vert_source: str, frag_source: str, validate: bool = True,
     shaders.append(GL_shaders.compileShader(frag_source, GL_FRAGMENT_SHADER))
     program = GL_shaders.compileProgram(*shaders, validate=validate)
     VRML97ShaderProgram._delete_shaders(*shaders)
+    if views or geometry_source is not None:
+        GEOMETRY_STAGE_PROGRAMS.add(int(program))
     if views:
         index = glGetUniformBlockIndex(program, 'ViewBlock')
         if index != GL_INVALID_INDEX:
@@ -528,7 +549,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         held: set[Optional[int]] = {getattr(self, name, None) for name in self._PROGRAM_ATTRS}
         for found in (self.__dict__.pop('_program_sets', None) or {}).values():
             held.update((found or {}).values())
+        release_geometry_stage_hold(held)
         for program in (int(name) for name in held if name):
+            GEOMETRY_STAGE_PROGRAMS.discard(program)
             try:
                 glDeleteProgram(program)
             except Exception:
@@ -882,11 +905,16 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self._set_uniform1f('transparency', transparency)
         self._set_uniform1i('unlit', 0)
 
-    def set_unlit_material(self) -> None:
-        """Draw the next shapes unlit: white, times a texture or a Color node,
-        as X3D draws an appearance with no material"""
-        self.set_material(diffuse=(1.0, 1.0, 1.0), specular=(0.0, 0.0, 0.0),
-                          ambient_intensity=0.0, shininess=0.0)
+    def set_unlit_material(self, color: Color3 = (1.0, 1.0, 1.0),
+                           transparency: float = 0.0) -> None:
+        """Draw the next shapes unlit: `color`, times a texture or a Color node
+
+        White is how X3D draws an appearance with no material; an
+        UnlitMaterial gives its emissiveColor and transparency.
+        """
+        red, green, blue = (float(part) for part in color)
+        self.set_material(diffuse=(red, green, blue), specular=(0.0, 0.0, 0.0),
+                          ambient_intensity=0.0, shininess=0.0, transparency=transparency)
         self._set_uniform1i('unlit', 1)
 
     def set_default_material(self) -> None:
@@ -1535,6 +1563,11 @@ def configure_material_from_node(
     """
     if material_node is None:
         shader_program.set_default_material()
+        return
+    from vrml.x3d import nodes as x3dnodes  # noqa: PLC0415 kept with its use
+    if isinstance(material_node, x3dnodes.UnlitMaterial):
+        shader_program.set_unlit_material(tuple(material_node.emissiveColor),
+                                          float(material_node.transparency))
         return
 
     from OpenGLContext.scenegraph.material_fields import read_material_fields

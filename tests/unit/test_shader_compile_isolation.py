@@ -52,4 +52,4 @@ class TestCompileIsolation:
         assert sp.compile() is True
         assert all(getattr(sp, n) is not None for n in (
             'program', 'unlit_program', 'vertex_color_program',
-            'point_program', 'line_program', 'depth_program'))
+            'point_program', 'line_program', 'wide_line_program', 'depth_program'))

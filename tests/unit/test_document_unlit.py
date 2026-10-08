@@ -104,3 +104,16 @@ def test_a_document_with_no_light_is_dark(gl_context):
         drawn_image(context)
         centre = drawn_image(context)[16, 16].astype(int)
     assert max(centre) < 12, centre
+
+
+@pytest.mark.parametrize('renderer', ['pbr', 'vrml97'])
+def test_an_unlit_material_is_its_emissive_colour(gl_context, renderer):
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b'<X3D version="4.0"><Scene><Viewpoint position="0 0 3"/><Shape>'
+                         b'<Appearance><UnlitMaterial emissiveColor="1 0.5 0"/></Appearance>'
+                         b'<Box size="2 2 0.1"/></Shape></Scene></X3D>', 'scene.x3d')
+    with scene_context(scene, size=(32, 32), renderer=renderer) as context:
+        drawn_image(context)
+        red, green, blue = drawn_image(context).astype(int)[16, 16]
+    assert red > 245 and 110 < green < 200 and blue < 10
