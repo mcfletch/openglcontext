@@ -534,8 +534,12 @@ class PBRMesh(x3d.X3DGeometryNode):
         self._apply_deform()
 
     def _apply_deform(self) -> None:
-        """Recompute positions/normals/tangents = skin(morph(base))."""
-        pos, nrm, tan, uvs = self._deformed()
+        """Recompute positions/normals/tangents = skin(morph(base)).
+
+        A mesh the vertex shader skins keeps the morphed rest pose in its
+        arrays, which the shader then poses.
+        """
+        pos, nrm, tan, uvs = self._deformed(skin=not self.skin_on_gpu)
         self.positions = None if pos is None else np.ascontiguousarray(pos, dtype=np.float32)
         self.normals = None if nrm is None else np.ascontiguousarray(nrm, dtype=np.float32)
         self.tangents = tan
@@ -558,8 +562,11 @@ class PBRMesh(x3d.X3DGeometryNode):
             return self.positions
         return self._deformed()[0]
 
-    def _deformed(self) -> tuple:
-        """(positions, normals, tangents, texcoords) = surface(skin(morph(base)))."""
+    def _deformed(self, skin: bool = True) -> tuple:
+        """(positions, normals, tangents, texcoords) = surface(skin(morph(base))).
+
+        ``skin`` false leaves the skin out: what the shader is handed to pose.
+        """
         pos = None if self._base_positions is None else self._base_positions.astype(np.float64)
         nrm = None if self._base_normals is None else self._base_normals.astype(np.float64)
         tan = None if self._base_tangents is None else self._base_tangents.copy()
@@ -575,7 +582,8 @@ class PBRMesh(x3d.X3DGeometryNode):
                 if tan is not None and 'tangents' in tgt:
                     tan[:, :3] += wi * tgt['tangents']
         # 2) skin: linear blend of the per-vertex weighted joint matrices
-        if self._skin_matrices is not None and self.skin_joints is not None and pos is not None:
+        if (skin and self._skin_matrices is not None and self.skin_joints is not None
+                and pos is not None):
             mats = self._skin_matrices                      # (J,4,4) row-vector
             per_vertex = np.einsum(
                 'nk,nkij->nij', self.skin_weights, mats[self.skin_joints])  # (N,4,4)

@@ -306,6 +306,8 @@ class ComposedArrays:
     short: "list[str]" = field(default_factory=list)
     #: The glTF primitive mode: triangles.
     mode: int = 4
+    #: The coordinate each vertex was read from, or None where that is not known.
+    sources: Optional[np.ndarray] = None
 
 
 def _face_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
@@ -426,4 +428,6 @@ def composed_arrays(
     return ComposedArrays(
         attributes={name: np.ascontiguousarray(value, dtype=np.float32)
                     for name, value in attributes.items()},
-        indices=indices, dropped=int((~valid).sum()), short=short)
+        indices=indices, dropped=int((~valid).sum()), short=short,
+        sources=np.arange(count, dtype=np.int64) if corners is None
+        else np.asarray(corners, dtype=np.int64))

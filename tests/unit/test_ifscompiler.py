@@ -239,6 +239,12 @@ class TestIndexedValueSource:
         val, idx = src(0, 0)
         assert idx == 1 and val == ('b',)
 
+    def test_overflow_past_every_value_uses_the_last_value(self):
+        """Coordinate indices read for four texture coordinates (JoeKick.x3d):
+        the last index listed is past the values too, so the last value is used."""
+        src = IndexedValueSource([0, 386], [], [('a',), ('b',), ('c',), ('d',)], False)
+        assert src(1, 0) == (('d',), 3)
+
     def test_overflow_with_no_valid_index_returns_none(self):
         src = IndexedValueSource([0], [-1, -1], [('a',), ('b',)], False)
         # metaIndex maps to index -1 -> warned/None before overflow branch

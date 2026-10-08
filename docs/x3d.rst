@@ -105,6 +105,8 @@ implements these X3D nodes, by component:
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
 - Grouping - Group, StaticGroup, Switch, Transform
+- HAnim - HAnimDisplacer, HAnimHumanoid, HAnimJoint, HAnimMotion, HAnimPose,
+  HAnimSegment, HAnimSite
 - Followers - ColorChaser, ColorDamper, CoordinateChaser, CoordinateDamper,
   OrientationChaser, OrientationDamper, PositionChaser, PositionChaser2D,
   PositionDamper, PositionDamper2D, ScalarChaser, ScalarDamper,

@@ -1419,6 +1419,14 @@ def configure_light_from_node(
         # Return as (x, y, z, 1.0) - w=1 for positional light
         return (float(transformed[0]), float(transformed[1]), float(transformed[2]), 1.0)
 
+    # A directional or spot light aimed nowhere lights nothing: X3D's
+    # spot and diffuse terms are zero for it, and the shader cannot normalise it.
+    aimed = getattr(light_node, 'direction', None)
+    if (isinstance(light_node, (light_module.DirectionalLight, light_module.SpotLight))
+            and aimed is not None and not np.any(np.asarray(aimed, dtype=np.float64))):
+        shader_program.set_light(index, light_type='off', program=program)
+        return
+
     # Determine light type and parameters
     if isinstance(light_node, light_module.DirectionalLight):
         # Directional light - direction is constant

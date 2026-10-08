@@ -20,6 +20,7 @@ from itertools import zip_longest
 from collections.abc import Iterator
 from typing import Any, Optional
 
+import numpy as np
 from numpy import add, arccos, array, asarray, divide, dot, ones, repeat
 from OpenGL.GL import GL_TRIANGLES
 
@@ -274,6 +275,15 @@ class ArrayGeometryCompiler(IFSCompiler):
         # XXX check to see if we are all using the same indices,
         # if so, we can possibly use IndexedPolygons instead
         # of IndexedFaceSet for rendering...
+        found = self.expandedArraysAndSources()
+        return None if found is None else found[0]
+
+    def expandedArraysAndSources(self) -> Optional[tuple[tuple[Any, Any, Any, Any], Any]]:
+        """:meth:`expandedArrays`, and the coordinate index each vertex was read from
+
+        A vertex the tessellator made where polygon edges cross has the
+        index of the nearest coordinate.
+        """
         vertices = self.tessellate()
 
         # vertices is now a list of vertices such that
@@ -322,7 +332,21 @@ class ArrayGeometryCompiler(IFSCompiler):
                 vertexArray, self.target.coord.point)
         else:
             textureCoordinateArray = None
-        return vertexArray, colorArray, normalArray, textureCoordinateArray
+        return ((vertexArray, colorArray, normalArray, textureCoordinateArray),
+                self._sources(vertices, vertexArray))
+
+    def _sources(self, vertices: Any, vertexArray: Any) -> Any:
+        """The coordinate index of each tessellated vertex"""
+        sources = np.array([
+            -1 if getattr(vertex, 'coordIndex', None) is None else int(vertex.coordIndex)
+            for vertex in vertices], dtype=np.int64)
+        made = np.flatnonzero(sources < 0)
+        if len(made):
+            points = np.asarray(self.target.coord.point, dtype=np.float64)
+            for index in made:
+                distance = np.sum((points - vertexArray[index]) ** 2, axis=1)
+                sources[index] = int(np.argmin(distance))
+        return sources
 
     def compile(
         self,
@@ -620,11 +644,13 @@ class IndexedValueSource(object):
                     )
                     return None, -1
                 elif finalIndex >= len(self.values):
-                    # XXX should be the last *index* not the last value!
+                    # The last index listed, or the last value where that is
+                    # past the values too.
                     finalIndex = self.lastNonNullIndex()
                     if finalIndex is None:  # pragma: no cover - reaching here needs
                         # every index == -1, but then indices[index] < 0 above wins first
                         return None, -1
+                    finalIndex = min(int(finalIndex), len(self.values) - 1)
                 return self.values[finalIndex], finalIndex
             else:
                 log.warning(
