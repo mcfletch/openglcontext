@@ -31,8 +31,12 @@ SUB_PROGRAMS = (
     'vertex_color_program',
     'point_program',
     'line_program',
+    'wide_line_program',
     'depth_program',
 )
+
+#: The programs that draw the scene's shapes, which the fog reaches.
+FOGGED = tuple(name for name in SUB_PROGRAMS if name != 'depth_program')
 
 
 @pytest.fixture
@@ -80,7 +84,7 @@ def test_the_fog_reaches_every_program_and_binds_none_when_unchanged(compiled, m
     from OpenGL.GL import glGetUniformfv  # noqa: PLC0415 kept with its use
     from OpenGLContext.passes import shaderpass  # noqa: PLC0415 kept with its use
     compiled.set_fog(0.05, (1.0, 0.5, 0.25), 2)
-    for attribute in ('program', 'unlit_program', 'point_program', 'line_program'):
+    for attribute in FOGGED:
         handle = getattr(compiled, attribute)
         value = (ctypes.c_float * 3)()
         glGetUniformfv(handle, glGetUniformLocation(handle, 'fogColor'), value)
@@ -96,4 +100,16 @@ def test_the_fog_reaches_every_program_and_binds_none_when_unchanged(compiled, m
     compiled.set_fog(0.05, (1.0, 0.5, 0.25), 2)
     assert bound == []
     compiled.set_fog(0.05, (1.0, 1.0, 1.0), 2)
-    assert len(bound) == len({getattr(compiled, name) for name in SUB_PROGRAMS[:5]})
+    assert len(bound) == len({getattr(compiled, name) for name in FOGGED})
+
+
+def test_release_frees_every_program_after_a_geometry_stage_was_bound(compiled):
+    """Mesa (radeonsi and llvmpipe alike) keeps a program alive after it is
+    deleted where it was bound after one with a geometry stage, until a
+    geometry-stage program is bound again"""
+    from OpenGL.GL import glIsProgram, glUseProgram  # noqa: PLC0415 kept with its use
+    held = {name: getattr(compiled, name) for name in compiled._PROGRAM_ATTRS}
+    for program in (compiled.wide_line_program, compiled.program, 0):
+        glUseProgram(program)
+    compiled.release()
+    assert [name for name, program in held.items() if program and glIsProgram(program)] == []

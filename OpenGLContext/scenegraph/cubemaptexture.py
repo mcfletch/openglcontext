@@ -127,7 +127,7 @@ class CubeMapTexture(node.Node):
         from OpenGLContext.scenegraph.sampler import apply_sampler, sampler_of  # noqa: PLC0415 GL
         from OpenGLContext.texture import CubeTexture  # noqa: PLC0415 GL only when drawn
         tex = CubeTexture(dict(zip(_GL_NAMES, faces, strict=True)))
-        apply_sampler(tex, sampler_of(self))
+        apply_sampler(tex, sampler_of(self, faces[0].shape[:2]))
         holder = mode.cache.holder(self, tex)
         self.dependFaces(holder)
         holder.depend(self, 'textureProperties')

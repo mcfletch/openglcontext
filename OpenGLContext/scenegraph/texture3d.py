@@ -126,7 +126,8 @@ class _Texture3D(node.Node):
         from OpenGLContext.scenegraph.sampler import apply_sampler, sampler_of  # noqa: PLC0415 GL
         from OpenGLContext.texture import VolumeTexture  # noqa: PLC0415 GL only when drawn
         tex = VolumeTexture(volume)
-        apply_sampler(tex, sampler_of(self))
+        depth, height, width = volume.shape[:3]
+        apply_sampler(tex, sampler_of(self, (width, height, depth)))
         holder = mode.cache.holder(self, tex)
         self.dependVolume(holder)
         for name in ('repeatS', 'repeatT', 'repeatR', 'textureProperties'):
