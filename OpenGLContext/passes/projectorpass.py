@@ -169,7 +169,7 @@ class ProjectorsMixin:
         super().disposeResources()  # type: ignore[misc]  # the pass's chain of mixins ends in one
 
     def projectorScopes(self) -> lightscope.Scoped:
-        """The scoped projectors among those cast, with their ``lightsOff`` bits"""
+        """The cast projectors whose ``global`` is false, with their ``lightsOff`` bits"""
         return lightscope.scoped_lights(self.castProjectors, first=PROJECTOR_SCOPE_BIT)
 
     def setupProjectors(self, light_paths: Sequence[Any]) -> None:

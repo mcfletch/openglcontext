@@ -517,7 +517,7 @@ uint effectiveObjectId() {
 #include "_shadow_inc.glsl"
 // X3D's Phong terms per light, for phongMode
 #include "_phong_inc.glsl"
-// X3D's texture projectors, scoped by _phong_inc's lightsOff
+// X3D's texture projectors, switched off per draw by _phong_inc's lightsOff
 #include "_projectors_inc.glsl"
 
 // sRGB decode alias kept local so callers read as intent ("decode this texel").

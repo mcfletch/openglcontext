@@ -85,7 +85,7 @@ layout(location = 1) out vec4 fragObjectId;
 
 // X3D's Phong terms, shared with vrml97_vertex_color.frag and pbr.frag.
 #include "_phong_inc.glsl"
-// X3D's texture projectors, scoped by _phong_inc's lightsOff
+// X3D's texture projectors, switched off per draw by _phong_inc's lightsOff
 #include "_projectors_inc.glsl"
 #include "_x3d_fog_inc.glsl"
 #include "_fill_inc.glsl"

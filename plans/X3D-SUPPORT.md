@@ -301,7 +301,7 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
     (`scenegraph.textureprojector`, `passes.projectorpass`,
     `shaders/_projectors_inc.glsl`): up to four, pictures in one array
-    texture, scoped as lights through `lightsOff` bits 16+, modulating the
+    texture, limited to their group as lights are through `lightsOff` bits 16+, modulating the
     diffuse colour as X_ITE does; `shadows` and the compatibility profile
     not drawn. Projectors and EnvironmentLight are no longer bound as
     directional lamps
