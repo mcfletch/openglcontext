@@ -1780,3 +1780,26 @@ Review findings not taken as written, recorded 2026-10-07:
 - The engine's callers of `Texture(image)` were checked against the row-order
   default: atlas pages hold `ImageTexture` images, bottom row first, and the
   font atlases are arrays, stored as they are.
+
+Corpus renders that differ from X_ITE by more than 10%, looked at 2026-10-08:
+
+- [x] `unlit_color`: a PointSet with more colours than points drew white;
+  the first colours are used (X3D 11.4.11).
+- [x] `greyscale_alpha_png`: a greyscale PNG whose transparency is a tRNS
+  chunk drew opaque; `Texture.ensureRGB` gives such an image an alpha
+  channel.
+- [x] Sphere, Cylinder and Cone texture coordinates followed neither the seam
+  at the back nor v upward; they are VRML97's now, and the top cap's image
+  has its top toward -Z.
+- Figure22_2 and other ground colours: X_ITE and Web3D's render draw the
+  nadir colour solid up to the first `groundAngle`; VRML97 and X3D
+  interpolate the colours between the angles, as drawn here.
+- PixelTexture filtering: X_ITE magnifies a PixelTexture with no
+  TextureProperties by nearest texel; the specification leaves the default
+  filter to the browser, and the engine filters linearly.
+- WALK documents: X_ITE drops a walking viewer to the floor at load, before
+  the first frame; the engine's capture shows the viewer where the
+  Viewpoint places it.
+- [ ] Text: smaller and fainter than X_ITE's in the NIST Text tests.
+- [ ] Viewpoint framing: StopWatch, Figure20_17a, Collision `children500`,
+  the dungeon corridors.
