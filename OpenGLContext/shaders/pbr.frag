@@ -666,7 +666,15 @@ float occlusionShare() {
     return 1.0 + occlusionStrength * (o - 1.0);
 }
 
+#include "_fill_inc.glsl"
+
 void main() {
+    vec4 hatched;
+    if (x3dHatch(hatched)) {
+        fragColor = hatched;
+        fragObjectId = encodeObjectId(effectiveObjectId());
+        return;
+    }
     // Fetch this fragment's material ONCE: the per-instance index when instancing,
     // else element 0 (the single bound material). All factor reads below use the
     // register copy _M, not repeated UBO fetches.

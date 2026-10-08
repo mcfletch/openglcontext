@@ -1,6 +1,6 @@
-"""X3D geometry drawn as the mesh its fields build: the triangle sets, ElevationGrid, LineSet
+"""X3D geometry drawn as the mesh its fields build: the triangle and quad sets, ElevationGrid, LineSet
 
-Each triangle set and `ElevationGrid` is drawn as the
+Each triangle set, quad set and `ElevationGrid` is drawn as the
 :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh` its fields build
 (:meth:`MeshDrawn.mesh`): its triangles come from
 :mod:`~OpenGLContext.scenegraph.composedgeometry` (from its `index`,
@@ -32,9 +32,9 @@ from OpenGLContext.scenegraph.texturemapping import label_set
 
 log = logging.getLogger(__name__)
 
-__all__ = ['DRAWN_KEY', 'DrawnAs', 'ElevationGrid', 'IndexedTriangleFanSet',
+__all__ = ['DRAWN_KEY', 'DrawnAs', 'ElevationGrid', 'IndexedQuadSet', 'IndexedTriangleFanSet',
            'IndexedTriangleSet', 'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
-           'MeshGeometry', 'polylines',
+           'MeshGeometry', 'polylines', 'QuadSet',
            'TriangleFanSet', 'TriangleSet', 'TriangleStripSet']
 
 #: The key a set's mesh is kept under in vrml's cache.
@@ -149,14 +149,23 @@ class MeshDrawn:
                 arrays.indices)
         return mesh_from_primitive(arrays, solid=solid)
 
+    def dependOn(self, holder: Any) -> None:
+        """Make `holder` depend on every field the mesh is built from"""
+        _depend_on_fields(holder, self)
+
     def mesh(self) -> Optional[Any]:
         """The mesh drawn for this set, kept in vrml's cache under :data:`MESH_KEY`"""
         held = cache.CACHE.getData(self, MESH_KEY)
         if held is None:
             held = (self.buildMesh(),)
-            _depend_on_fields(cache.CACHE.holder(self, held, MESH_KEY), self)
+            self.dependOn(cache.CACHE.holder(self, held, MESH_KEY))
         found: Optional[Any] = held[0]
         return found
+
+    def meshArrays(self) -> Any:
+        """The mesh's triangles; None for a node with nothing to draw"""
+        found = self.mesh()
+        return None if found is None else found.meshArrays()
 
     def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
                transparent: int = 0, mode: Any = None) -> int:
@@ -173,15 +182,33 @@ class MeshDrawn:
         return True if found is None else bool(found.depthDraw(mode))
 
     def boundingVolume(self, mode: Any = None) -> Any:
-        """The mesh's bounds; an empty volume for a set with nothing to draw"""
+        """The mesh's bounds; an empty volume for a set with nothing to draw
+
+        Kept until a field the mesh is built from is set, so a shape's
+        bounds, which depend on this volume, follow its geometry.
+        """
+        current = boundingvolume.getCachedVolume(self)
+        if current is not None:
+            return current
         found = self.mesh()
-        if found is None:
-            return boundingvolume.BoundingVolume()
-        return found.boundingVolume(mode)
+        volume = (boundingvolume.BoundingVolume() if found is None
+                  else found.boundingVolume(mode))
+        self.dependOn(boundingvolume.holdVolume(self, volume))
+        return volume
 
 
 class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
     """An X3D composed geometry node: a subclass gives :meth:`triangles`"""
+
+    #: Triangles each face is drawn as, so a colour or normal per face covers
+    #: them all.
+    TRIANGLES_PER_FACE = 1
+
+    def perFace(self, values: Any, per_vertex: bool) -> Any:
+        """`values` one per triangle, where they are one per face"""
+        if values is None or per_vertex or self.TRIANGLES_PER_FACE == 1:
+            return values
+        return np.repeat(np.asarray(values), self.TRIANGLES_PER_FACE, axis=0)
 
     def triangles(self) -> np.ndarray:
         """The set's triangles, three coordinate indices each"""
@@ -194,8 +221,10 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
             return None
         return self.meshFrom(composedgeometry.composed_arrays(
             points, self.triangles(), ccw=bool(self.ccw),
-            normals=_values(self.normal, 'vector'), normal_per_vertex=bool(self.normalPerVertex),
-            colors=_values(self.color, 'color'), color_per_vertex=bool(self.colorPerVertex),
+            normals=self.perFace(_values(self.normal, 'vector'), bool(self.normalPerVertex)),
+            normal_per_vertex=bool(self.normalPerVertex),
+            colors=self.perFace(_values(self.color, 'color'), bool(self.colorPerVertex)),
+            color_per_vertex=bool(self.colorPerVertex),
             texcoords=self.coordinates() or [composedgeometry.default_texcoords(points)],
             tangents=_values(self.tangent, 'vector')),
             solid=bool(self.solid))
@@ -277,6 +306,25 @@ class IndexedTriangleStripSet(MeshGeometry, x3d.IndexedTriangleStripSet):
 
     def triangles(self) -> np.ndarray:
         return composedgeometry.indexed_strips(self.index)
+
+
+class QuadSet(MeshGeometry, x3d.QuadSet):
+    """Quadrilaterals of the points taken four at a time, two triangles each"""
+
+    TRIANGLES_PER_FACE = 2
+
+    def triangles(self) -> np.ndarray:
+        points = _values(self.coord, 'point')
+        return composedgeometry.quad_set(0 if points is None else len(points))
+
+
+class IndexedQuadSet(MeshGeometry, x3d.IndexedQuadSet):
+    """Quadrilaterals of `index` taken four at a time, two triangles each"""
+
+    TRIANGLES_PER_FACE = 2
+
+    def triangles(self) -> np.ndarray:
+        return composedgeometry.indexed_quads(self.index)
 
 
 class DrawnAs:

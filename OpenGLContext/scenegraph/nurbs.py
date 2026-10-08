@@ -159,6 +159,19 @@ class _SurfaceRenderer(object):
         """The surface's triangles (subclass hook)."""
         return None
 
+    def meshArrays(self) -> Any:
+        """The surface's triangles at its own sampling; None where it cannot be evaluated"""
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        try:
+            found = self._tessellate()
+        except (NurbsError, ValueError) as err:
+            log.error("Cannot tessellate %s: %s", self, err)
+            return None
+        if found is None or not found.triangle_count:
+            return None
+        return meshdata.arrays(found.positions, found.normals, found.texcoords, found.colors,
+                               indices=found.indices)
+
     # -- drawing -------------------------------------------------------------
     def _render_shader(self, mode: Any, vertices: Any, indices: Any,
                        count: int, has_colors: bool) -> int:

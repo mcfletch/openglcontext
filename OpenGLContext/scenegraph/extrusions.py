@@ -124,6 +124,11 @@ class SweptGeometry(nodetypes.Geometry, node.Node):
                 holder.depend(self, protofunctions.getField(self, name))
         return built
 
+    def meshArrays(self) -> Any:
+        """The generated mesh's triangles; None where the fields generate none"""
+        built = self.geometry()
+        return None if built is None else built.meshArrays()
+
     def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
                transparent: int = 0, mode: Any = None) -> int:
         """Draw the generated mesh, in whichever profile is in use.

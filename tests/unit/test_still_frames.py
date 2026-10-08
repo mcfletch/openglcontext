@@ -5,7 +5,7 @@ allocations, uploads and compiles are counted by
 :func:`OpenGLContext.testing.stillframe.check_still_frame`. The scenes are the
 ones a game's still moment is made of: VRML97 primitives through both
 renderers, a field of shapes drawn as one instanced group, a mirror with
-bloom, shadows, and text.
+bloom, shadows, text, and X3D's line, point and fill properties.
 """
 import pytest
 
@@ -50,6 +50,24 @@ def _text():
         geometry=basenodes.Text(string=['still']), appearance=_look((1, 1, 1)))])]
 
 
+def _styled():
+    """Lines, points and a polygon drawn by X3D's line, point and fill properties"""
+    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+    points = basenodes.Coordinate(point=[(-2, -1, -6), (2, -1, -6), (2, 1, -6), (-2, 1, -6)])
+    look = basenodes.Appearance(
+        material=basenodes.Material(diffuseColor=(1, 0, 0), emissiveColor=(1, 1, 1)),
+        lineProperties=x3d.LineProperties(linetype=2, linewidthScaleFactor=3),
+        pointProperties=x3d.PointProperties(pointSizeScaleFactor=6, pointSizeMaxValue=6),
+        fillProperties=x3d.FillProperties(hatchStyle=5, hatchColor=(0, 1, 0)))
+    return [basenodes.Shape(geometry=basenodes.IndexedLineSet(coord=points,
+                                                              coordIndex=[0, 1, 2, 3, 0]),
+                            appearance=look),
+            basenodes.Shape(geometry=basenodes.PointSet(coord=points), appearance=look),
+            basenodes.Shape(geometry=basenodes.IndexedFaceSet(coord=points,
+                                                              coordIndex=[0, 1, 2, 3, -1]),
+                            appearance=look)]
+
+
 PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
 
 
@@ -61,6 +79,7 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
                                     OPENGLCONTEXT_BLOOM='1'), id='mirror-bloom'),
     pytest.param(_primitives, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='shadows'),
     pytest.param(_text, PBR, id='text'),
+    pytest.param(_styled, PBR, id='line-point-fill-properties'),
 ])
 def test_a_still_frame_asks_nothing_new_of_gl(scene, environment):
     with scene_context(scene(), environment=environment) as context:

@@ -55,6 +55,7 @@ from OpenGLContext.scenegraph.indexedfaceset import IndexedFaceSet as IndexedFac
 from OpenGLContext.scenegraph.indexedlineset import IndexedLineSet as IndexedLineSet
 from OpenGLContext.scenegraph.indexedpolygons import IndexedPolygons as IndexedPolygons
 from OpenGLContext.scenegraph.inline import Inline as Inline
+from OpenGLContext.scenegraph.inlinegeometry import InlineGeometry as InlineGeometry
 from OpenGLContext.scenegraph.interpolators import ColorInterpolator as ColorInterpolator
 from OpenGLContext.scenegraph.interpolators import CoordinateInterpolator as CoordinateInterpolator
 from OpenGLContext.scenegraph.interpolators import NormalInterpolator as NormalInterpolator
@@ -68,10 +69,12 @@ from OpenGLContext.scenegraph.lod import LOD as LOD
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD as ScreenCoverageLOD
 from OpenGLContext.scenegraph.material import Material as Material
 from OpenGLContext.scenegraph.meshgeometry import ElevationGrid as ElevationGrid
+from OpenGLContext.scenegraph.meshgeometry import IndexedQuadSet as IndexedQuadSet
 from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleFanSet as IndexedTriangleFanSet
 from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleSet as IndexedTriangleSet
 from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleStripSet as IndexedTriangleStripSet
 from OpenGLContext.scenegraph.meshgeometry import LineSet as LineSet
+from OpenGLContext.scenegraph.meshgeometry import QuadSet as QuadSet
 from OpenGLContext.scenegraph.meshgeometry import TriangleFanSet as TriangleFanSet
 from OpenGLContext.scenegraph.meshgeometry import TriangleSet as TriangleSet
 from OpenGLContext.scenegraph.meshgeometry import TriangleStripSet as TriangleStripSet
@@ -140,8 +143,10 @@ from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint as OrthoViewpoint
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
 from OpenGLContext.scenegraph.viewpointgroup import ViewpointGroup as ViewpointGroup
 from OpenGLContext.scenegraph.x3dgroups import CADAssembly as CADAssembly
+from OpenGLContext.scenegraph.x3dgroups import CADFace as CADFace
 from OpenGLContext.scenegraph.x3dgroups import CADLayer as CADLayer
 from OpenGLContext.scenegraph.x3dgroups import PickableGroup as PickableGroup
+from OpenGLContext.scenegraph.x3dgroups import StaticGroup as StaticGroup
 from OpenGLContext.scenegraph.x3dpointing import CylinderSensor as CylinderSensor
 from OpenGLContext.scenegraph.x3dpointing import PlaneSensor as PlaneSensor
 from OpenGLContext.scenegraph.x3dpointing import SphereSensor as SphereSensor
@@ -181,6 +186,9 @@ from vrml.vrml97.basenodes import Normal as Normal
 from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
+from vrml.x3d.nodes import CoordinateDouble as CoordinateDouble
+from vrml.x3d.nodes import FillProperties as FillProperties
+from vrml.x3d.nodes import LineProperties as LineProperties
 from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean
 from vrml.x3d.nodes import MetadataDouble as MetadataDouble
 from vrml.x3d.nodes import MetadataFloat as MetadataFloat
@@ -189,6 +197,7 @@ from vrml.x3d.nodes import MetadataSet as MetadataSet
 from vrml.x3d.nodes import MetadataString as MetadataString
 from vrml.x3d.nodes import MultiTextureCoordinate as MultiTextureCoordinate
 from vrml.x3d.nodes import MultiTextureTransform as MultiTextureTransform
+from vrml.x3d.nodes import PointProperties as PointProperties
 from vrml.x3d.nodes import Tangent as Tangent
 from vrml.x3d.nodes import TextureProperties as TextureProperties
 from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
@@ -226,6 +235,7 @@ __all__ = [
     'BooleanTrigger',
     'Box',
     'CADAssembly',
+    'CADFace',
     'CADLayer',
     'CADPart',
     'Circle2D',
@@ -240,6 +250,7 @@ __all__ = [
     'Coordinate',
     'CoordinateChaser',
     'CoordinateDamper',
+    'CoordinateDouble',
     'CoordinateInterpolator',
     'CoordinateInterpolator2D',
     'CubeBackground',
@@ -251,6 +262,7 @@ __all__ = [
     'ElevationGrid',
     'EnvironmentLight',
     'Extrusion',
+    'FillProperties',
     'FloatUniform1f',
     'FloatUniform2f',
     'FloatUniform3f',
@@ -279,10 +291,12 @@ __all__ = [
     'IndexedFaceSet',
     'IndexedLineSet',
     'IndexedPolygons',
+    'IndexedQuadSet',
     'IndexedTriangleFanSet',
     'IndexedTriangleSet',
     'IndexedTriangleStripSet',
     'Inline',
+    'InlineGeometry',
     'IntUniform1i',
     'IntUniform2i',
     'IntUniform3i',
@@ -291,6 +305,7 @@ __all__ = [
     'IntegerTrigger',
     'KeySensor',
     'LOD',
+    'LineProperties',
     'LineSet',
     'LoadSensor',
     'LocalFog',
@@ -325,6 +340,7 @@ __all__ = [
     'PlanarReflector',
     'PlaneSensor',
     'PointLight',
+    'PointProperties',
     'PointSet',
     'PolyCone',
     'PolyCylinder',
@@ -337,6 +353,7 @@ __all__ = [
     'PositionInterpolator',
     'PositionInterpolator2D',
     'ProximitySensor',
+    'QuadSet',
     'ROUTE',
     'Rectangle2D',
     'ScalarChaser',
@@ -360,6 +377,7 @@ __all__ = [
     'SplineScalarInterpolator',
     'SpotLight',
     'SquadOrientationInterpolator',
+    'StaticGroup',
     'StringSensor',
     'Switch',
     'Tangent',

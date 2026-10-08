@@ -33,6 +33,18 @@ def _trimmed_surface():
     return nurbs.TrimmedSurface(surface=_nurbs_surface())
 
 
+def _inline_geometry():
+    """An InlineGeometry holding the mesh a read would give it"""
+    from OpenGLContext.scenegraph.inlinegeometry import InlineGeometry  # noqa: PLC0415 kept with its use
+    found = InlineGeometry(solid=True)
+    found.loaded = PBRMesh(positions=np.array(TRIANGLE, 'f'),
+                           indices=np.array([0, 1, 2], np.uint32))
+    return found
+
+
+QUAD = [(-1, -1, 0), (1, -1, 0), (0.5, 1, 0), (-0.6, 0.4, 0)]
+
+
 #: A way to make each geometry, by class name.
 CASES = {
     'Box': lambda: basenodes.Box(size=(1.5, 1, 1)),
@@ -65,6 +77,10 @@ CASES = {
         coord=basenodes.Coordinate(point=TRIANGLE), stripCount=[3]),
     'IndexedTriangleStripSet': lambda: basenodes.IndexedTriangleStripSet(
         coord=basenodes.Coordinate(point=TRIANGLE), index=[0, 1, 2]),
+    'QuadSet': lambda: basenodes.QuadSet(coord=basenodes.Coordinate(point=QUAD)),
+    'IndexedQuadSet': lambda: basenodes.IndexedQuadSet(
+        coord=basenodes.Coordinate(point=QUAD), index=[0, 1, 2, 3]),
+    'InlineGeometry': _inline_geometry,
     'Rectangle2D': lambda: basenodes.Rectangle2D(size=(2, 1)),
     'TriangleSet2D': lambda: basenodes.TriangleSet2D(vertices=[(-1, -1), (1, -1), (0.5, 1)]),
     'Disk2D': lambda: basenodes.Disk2D(innerRadius=0.3, outerRadius=1.0),

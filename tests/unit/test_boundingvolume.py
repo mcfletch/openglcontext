@@ -179,3 +179,14 @@ class TestTheBoxAroundARunOfNodes:
         centre, radius = boundingvolume.boundingSphere(nodes)
         assert np.allclose(centre, (4.0, 0.0, 0.0))
         assert radius == pytest.approx(np.sqrt(1 + 4 + 9))
+
+
+def test_a_shapes_bounds_follow_its_geometrys_points():
+    """The shape's volume is its geometry's; it is rebuilt with the geometry's"""
+    from OpenGLContext.scenegraph import basenodes  # noqa: PLC0415 kept with its use
+    points = basenodes.Coordinate(point=[(-1, -1, 0), (1, -1, 0), (1, 1, 0)])
+    shape = basenodes.Shape(geometry=basenodes.IndexedFaceSet(coord=points,
+                                                             coordIndex=[0, 1, 2, -1]))
+    assert np.allclose(shape.boundingVolume(None).getPoints()[:, :3].max(axis=0), (1, 1, 0))
+    points.point = [(-5, -5, 0), (5, -5, 0), (5, 5, 0)]
+    assert np.allclose(shape.boundingVolume(None).getPoints()[:, :3].max(axis=0), (5, 5, 0))

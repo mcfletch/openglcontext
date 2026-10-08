@@ -6,7 +6,7 @@ from OpenGL.arrays import vbo
 from typing import Any
 from vrml import field
 from vrml.vrml97 import basenodes
-from OpenGLContext.scenegraph import coordinatebounded
+from OpenGLContext.scenegraph import coordinatebounded, drawproperties
 from OpenGLContext.scenegraph.vertexsemantics import (
     LOC_POSITION, LOC_COLOR,
 )
@@ -45,13 +45,24 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
     `size`, `minSize`, `maxSize` and `attenuation` are the engine's own: the
     point size in pixels, its bounds, and the distance attenuation
-    coefficients (constant, linear, quadratic) GL applies to it.
+    coefficients (constant, linear, quadratic) the fixed-function pipeline
+    applies to it. In the shader paths the points are `size` pixels across
+    (at least `minSize`); an appearance's X3D `PointProperties` replaces
+    them there (:func:`~OpenGLContext.scenegraph.drawproperties.point_size`).
     """
 
     size = field.newField('size', 'SFFloat', 1, 1.0)
     minSize = field.newField('minSize', 'SFFloat', 1, 0.0)
     maxSize = field.newField('maxSize', 'SFFloat', 1, 1.0)
     attenuation = field.newField('attenuation', 'SFVec3f', 1, [1.0, 0.0, 0.0])
+
+    def pointSize(self, properties: Any = None) -> drawproperties.PointSize:
+        """The size points are drawn at: the appearance's `PointProperties`
+        where it has one, else this node's own `size`, at least `minSize`"""
+        if properties:
+            return drawproperties.point_size(properties)
+        size = float(max(self.size, self.minSize))
+        return drawproperties.PointSize(size, size, size)
 
     def pointColours(self) -> Any:
         """One colour per point, `(n, 3)`, or None
@@ -162,11 +173,8 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
         shader_program.set_matrices(mode.matrix, mode.projection, program=program)
 
-        # Set point size uniform (for shader-controlled point sizes)
-        point_size = max(self.size, self.minSize)
-        point_size_loc = glGetUniformLocation(program, 'pointSize')
-        if point_size_loc != -1:
-            glUniform1f(point_size_loc, point_size)
+        size = self.pointSize(getattr(mode, '_pointProperties', None))
+        shader_program.set_point_size(size, program)
 
         # Check if a texture is bound (from Shape/Appearance) for point sprites
         # The texture ID is stored in the mode by Shape._render_shader
@@ -209,9 +217,6 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             glBindVertexArray(0)
             gpu['vao'] = vao
 
-        # Set point size (both fixed-function and shader-controlled)
-        glPointSize(point_size)
-        # Enable shader-controlled point sizes (gl_PointSize in vertex shader)
         glEnable(GL_PROGRAM_POINT_SIZE)
 
         # Enable blending for particle effects
@@ -235,7 +240,6 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
         glDisable(GL_BLEND)
         glDisable(GL_PROGRAM_POINT_SIZE)
-        glPointSize(1.0)
 
         # Restore the lit shader
         shader_program.use(lit=True)

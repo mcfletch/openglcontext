@@ -23,6 +23,7 @@ Notes regarding general implementation:
     the Flat renderer.
 """
 
+import weakref
 from collections.abc import Sequence
 from typing import Any, Optional
 
@@ -432,16 +433,42 @@ def cacheVolume(
     nodeFieldPairs -- set of (node,fieldName) tuples giving
         the dependencies for the volume.  Should normally
         include the node itself. If fieldName is None
-        a dependency is created on the node itself.
+        a dependency is created on the node itself; where that is a
+        volume cached here, on the cache entry holding it as well, so this
+        volume is cleared when that one is. A shape's volume is its
+        geometry's volume object, which the shape's own entry keeps alive.
     """
-    holder = cache.CACHE.holder(node, key="boundingVolume", data=volume)
+    sources = [_HOLDERS.get(n) for n, attr in nodeFieldPairs
+               if n and attr is None and isinstance(n, BoundingVolume)]
+    holder = holdVolume(node, volume)
     for n, attr in nodeFieldPairs:
         if n:
             if attr is not None:
                 holder.depend(n, protofunctions.getField(n, attr))
             else:
                 holder.depend(n, None)
+    for found in sources:
+        source = found() if found is not None else None
+        if source is not None and source is not holder:
+            holder.depend_holder(source)
     return volume
+
+
+#: The cache entry each cached volume was last stored in, held weakly both ways.
+_HOLDERS: 'weakref.WeakKeyDictionary[BoundingVolume, weakref.ref[Any]]' = (
+    weakref.WeakKeyDictionary())
+
+
+def holdVolume(node: Any, volume: BoundingVolume) -> Any:
+    """The cache entry holding `volume` as `node`'s, made now; the caller adds its dependencies
+
+    A volume depending on this one through :func:`cacheVolume` is cleared
+    with it.
+    """
+    holder = cache.CACHE.holder(node, key="boundingVolume", data=volume)
+    if isinstance(volume, BoundingVolume):
+        _HOLDERS[volume] = weakref.ref(holder)
+    return holder
 
 
 def getCachedVolume(node: Any) -> Optional[BoundingVolume]:

@@ -94,7 +94,7 @@ implements these X3D nodes, by component:
 
 .. x3d-implemented-start
 
-- CADGeometry - CADAssembly, CADLayer, CADPart
+- CADGeometry - CADAssembly, CADFace, CADLayer, CADPart, IndexedQuadSet, QuadSet
 - Core - MetadataBoolean, MetadataDouble, MetadataFloat, MetadataInteger,
   MetadataSet, MetadataString, WorldInfo
 - EnvironmentalEffects - Background, Fog, LocalFog, TextureBackground
@@ -104,7 +104,7 @@ implements these X3D nodes, by component:
 - Geometry2D - Arc2D, ArcClose2D, Circle2D, Disk2D, Polyline2D, Polypoint2D,
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
-- Grouping - Group, Switch, Transform
+- Grouping - Group, StaticGroup, Switch, Transform
 - Followers - ColorChaser, ColorDamper, CoordinateChaser, CoordinateDamper,
   OrientationChaser, OrientationDamper, PositionChaser, PositionChaser2D,
   PositionDamper, PositionDamper2D, ScalarChaser, ScalarDamper,
@@ -118,13 +118,14 @@ implements these X3D nodes, by component:
 - Lighting - DirectionalLight, EnvironmentLight, PointLight, SpotLight
 - Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint,
   ViewpointGroup
-- Networking - Anchor, Inline, LoadSensor
+- Networking - Anchor, Inline, InlineGeometry, LoadSensor
 - Picking - PickableGroup
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
-- Rendering - Color, ColorRGBA, Coordinate, IndexedLineSet,
+- Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
   Normal, PointSet, Tangent, TriangleFanSet, TriangleSet, TriangleStripSet
-- Shape - Appearance, Material, PhysicalMaterial, Shape, TwoSidedMaterial, UnlitMaterial
+- Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
+  PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - AudioClip, Sound
 - Text - FontStyle, Text
 - Texturing - ImageTexture, MovieTexture, MultiTextureCoordinate,
@@ -138,13 +139,15 @@ implements these X3D nodes, by component:
 Geometry
 ~~~~~~~~
 
-The triangle sets and ``ElevationGrid`` are drawn as the mesh their fields
-build (``OpenGLContext.scenegraph.meshgeometry``): normals that are not given
-are generated, smoothed across folds within ``creaseAngle`` for
-``ElevationGrid`` and across every shared coordinate for the triangle sets
-whose ``normalPerVertex`` is true; ``colorPerVertex`` and ``normalPerVertex``
-false give one value per triangle (per quad for ``ElevationGrid``); ``ccw``
-false turns the triangles round. In these and in ``IndexedFaceSet``, a
+The triangle sets, the quad sets and ``ElevationGrid`` are drawn as the mesh
+their fields build (``OpenGLContext.scenegraph.meshgeometry``): normals that
+are not given are generated, smoothed across folds within ``creaseAngle`` for
+``ElevationGrid`` and across every shared coordinate for the triangle and quad
+sets whose ``normalPerVertex`` is true; ``colorPerVertex`` and
+``normalPerVertex`` false give one value per triangle (per quad for the quad
+sets and ``ElevationGrid``); ``ccw`` false turns the triangles round. A quad
+is drawn as two triangles split from its first corner, so a quad that is not
+flat bends along that diagonal. In these and in ``IndexedFaceSet``, a
 ``Color`` or ``ColorRGBA`` replaces the ``Material``'s ``diffuseColor``, in
 both renderers. A ``MultiTextureCoordinate``'s entries are
 ``TEXCOORD_0``, ``TEXCOORD_1`` and so on, and an entry's ``mapping`` label is
@@ -165,6 +168,21 @@ coordinates across their bounds, ``Circle2D``, ``Arc2D`` and ``Polyline2D`` as
 lines, and ``Polypoint2D`` as points. A curve has 48 segments to a whole turn
 (``geometry2d.SEGMENTS``).
 
+Coordinates may be a ``CoordinateDouble`` wherever a ``Coordinate`` is
+read; they are drawn in single precision, about seven significant digits.
+
+``InlineGeometry`` draws the triangles of the file its ``url`` names, in any
+format an ``Inline`` reads (an OBJ, a glTF model, an X3D or VRML97
+document), with the appearance of the ``Shape`` holding it: every shape in
+the file is placed by its transforms and joined into one mesh
+(``OpenGLContext.scenegraph.meshdata.merged_arrays``), and the file's own
+materials are not used. ``smooth`` false gives each triangle its own normal.
+The file is read in the background and the geometry is empty until it
+arrives; ``load`` and ``url`` behave as on ``Inline``.
+
+A ``StaticGroup`` draws its children as a ``Group`` does, and a ``CADFace``
+draws its ``shape``.
+
 An ``IndexedFaceSet`` or a triangle set with no ``texCoord`` takes X3D's
 default texture coordinates: s from 0 to 1 along the largest dimension of
 its coordinates' bounding box, t along the second largest in the same units
@@ -179,6 +197,35 @@ shader paths do not generate coordinates.
 
 A grouping node or shape whose ``visible`` is false is not drawn, picked or
 shadowed, nor is anything under it; setting it takes effect on the next frame.
+
+Line, point and fill properties
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An ``Appearance``'s ``lineProperties``, ``pointProperties`` and
+``fillProperties`` are drawn in both renderers and in the compatibility
+profile (``OpenGLContext.scenegraph.drawproperties``):
+
+- ``LineProperties`` - ``linewidthScaleFactor`` is the width in pixels (zero
+  or less is one pixel), and ``linetype`` 1 to 5 are solid, dashed, dotted,
+  dash-dot and dash-dot-dot, the dashes in pixels and as long again for each
+  pixel of width. Another linetype is drawn solid and reported once. In the
+  shader paths a styled line is a band facing the screen, its dashes
+  continuing around each polyline's corners; the compatibility profile uses
+  the line width and stipple, whose pattern repeats every multiple of 16
+  pixels nearest its length.
+- ``PointProperties`` - points are ``pointSizeScaleFactor`` pixels over
+  ``a + b r + c r²`` for ``attenuation`` (a, b, c) and the distance r from
+  the viewer, between ``pointSizeMinValue`` and ``pointSizeMaxValue``
+  pixels. Without one, an engine ``PointSet``'s own ``size`` is its pixels.
+- ``FillProperties`` - ``hatchStyle`` 1 to 6 (horizontal, vertical, rising,
+  falling, square and diagonal crosshatch) are drawn over the polygon in
+  ``hatchColor``, unlit, the lines eight pixels apart and fixed to the
+  screen; ``filled`` false draws only the hatching, or nothing where
+  ``hatched`` is false. Another style is drawn as style 1 and reported once.
+  It applies to polygons, not to lines or points.
+
+A shape drawn with a line or fill style is drawn by itself, not instanced
+with others.
 
 Materials and appearance
 ~~~~~~~~~~~~~~~~~~~~~~~~

@@ -207,6 +207,12 @@ class Teapot(nodetypes.Geometry, node.Node):
     #: what the mesh depends on instead of restating it.
     instanceGPU_depend_fields = ('size', 'lid', 'steps')
 
+    def meshArrays(self) -> Any:
+        """The teapot's triangles at its instanced tessellation; None where it cannot be made"""
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        found = self._instanceArrays()
+        return None if found is None else meshdata.arrays(*found)
+
     def instanceGPU(self, mode: Any) -> Any:
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
         from OpenGLContext.passes.instancing import build_mesh_gpu

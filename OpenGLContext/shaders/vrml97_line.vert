@@ -3,6 +3,7 @@
 // Line vertex shader with per-vertex color support
 // Used for IndexedLineSet geometry
 
+layout(location = 0) in vec2 aTexCoord;  // optional: s is the distance along the polyline, for a dash pattern
 layout(location = 2) in vec3 aPosition;  // required
 layout(location = 4) in vec3 aColor;     // required: this program is chosen for the colours
 
@@ -17,6 +18,7 @@ uniform bool instancingEnabled;
 
 out vec3 vColor;
 out vec3 vEyePosition;    // for the fog: its length, per fragment
+out float vAlong;         // the distance along the polyline
 
 void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
@@ -24,4 +26,5 @@ void main() {
     vEyePosition = eyePosition.xyz;
     gl_Position = projectionMatrix * eyePosition;
     vColor = aColor;
+    vAlong = aTexCoord.s;
 }

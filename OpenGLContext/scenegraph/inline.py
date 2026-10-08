@@ -15,7 +15,7 @@ false leaves the Inline empty, and setting it true reads the scene again.
 Setting `url` or `load` supersedes a read still under way.
 """
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Optional
 
 from pydispatch import dispatcher
 from vrml.vrml97 import basenodes, nodetypes
@@ -52,6 +52,38 @@ def prepare_scene_loading() -> None:
     background.prepare(imagetexture.prepare_image_loading,
                        shaders.prepare_shader_loading,
                        hdrbackground.prepare_panorama_loading)
+
+
+def read_first(urls: Sequence[str], node: Any) -> Optional[tuple[Any, list[Any]]]:
+    """The scene the first of `urls` that reads gives, and the nodes it is drawn as
+
+    Each url is resolved against the document `node` belongs to. None where
+    none reads.
+    """
+    from OpenGLContext.loaders import formats
+    from OpenGLContext.loaders.loader import Loader
+    root = protofunctions.root(node)
+    baseURI = root.baseURI if root else None
+    for u in urls:
+        try:
+            target = Loader.resolve(u, baseURI)
+            reader = formats.adapter_for(target)
+            native = reader.read(target)
+            nodes = reader.nodes(native)
+        except (OSError, ValueError, SyntaxError) as err:
+            log.info("url %s did not read: %s", u, err)
+            continue
+        log.info("loaded %s", u)
+        return native, list(nodes)
+    return None
+
+
+def redraw(contexts: Sequence[Any]) -> None:
+    """Ask each context still open among the weak references `contexts` to draw again"""
+    for reference in contexts:
+        found = reference()
+        if found is not None:
+            found.triggerRedraw(1)
 
 
 class InlineURLField( fieldtypes.MFString ):
@@ -120,22 +152,11 @@ class Inline(basenodes.Inline):
         generation -- the read this is, from :meth:`reload`; a result for a
             read since superseded is dropped
         """
-        from OpenGLContext.loaders import formats
-        from OpenGLContext.loaders.loader import Loader
-        root = protofunctions.root(self)
-        baseURI = root.baseURI if root else None
-        for u in url:
-            try:
-                target = Loader.resolve(u, baseURI)
-                reader = formats.adapter_for(target)
-                native = reader.read(target)
-                nodes = reader.nodes(native)
-            except (OSError, ValueError, SyntaxError) as err:
-                log.info("Inline url %s did not read: %s", u, err)
-                continue
-            if generation is not None and generation != self.__dict__.get('_generation'):
-                return
-            log.info("loaded %s", u)
+        read = read_first(url, self)
+        if generation is not None and generation != self.__dict__.get('_generation'):
+            return
+        if read is not None:
+            native, nodes = read
             # Held for as long as its nodes are drawn: they hold the scene they
             # were read into weakly, and it is what says they are a document's
             # and the base an Inline among them resolves its url against.
@@ -143,13 +164,9 @@ class Inline(basenodes.Inline):
             self.inlined = tuple(nodes)
             loadsensor.set_load_state(self, loadsensor.LOADED)
             dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)
-            for reference in contexts:
-                found = reference()
-                if found is not None:
-                    found.triggerRedraw(1)
+            redraw(contexts)
             return
-        if generation is None or generation == self.__dict__.get('_generation'):
-            loadsensor.set_load_state(self, loadsensor.FAILED)
+        loadsensor.set_load_state(self, loadsensor.FAILED)
         log.warning(
             """Unable to load any scene from the url %s for the node %s""",
             url,

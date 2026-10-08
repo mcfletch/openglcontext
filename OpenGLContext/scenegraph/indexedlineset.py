@@ -1,7 +1,11 @@
 """IndexedLineSet: polylines with per-vertex or per-line colour
 
 Draws through the shader pass under the core profile, and as a display list
-under the compatibility profile.
+under the compatibility profile. An appearance's X3D `LineProperties`
+widens and dashes the lines
+(:func:`~OpenGLContext.scenegraph.drawproperties.line_style`): through the
+pass's wide-line program, whose geometry stage draws each segment as a quad
+facing the screen, or with the fixed-function line width and stipple.
 """
 from collections.abc import Iterator, Sequence
 from typing import Any, Optional
@@ -10,9 +14,9 @@ from OpenGL.GL import *
 from OpenGL.GL import glDeleteVertexArrays
 from OpenGL.arrays import vbo
 from OpenGLContext import displaylist
-from OpenGLContext.scenegraph import coordinatebounded
+from OpenGLContext.scenegraph import coordinatebounded, drawproperties
 from OpenGLContext.scenegraph.vertexsemantics import (
-    LOC_POSITION, LOC_COLOR,
+    LOC_COLOR, LOC_POSITION, LOC_TEXCOORD,
 )
 from vrml.vrml97 import basenodes
 import warnings
@@ -206,8 +210,20 @@ class IndexedLineSet(
                 dl = self.compile(mode=mode)
             if dl is None:
                 return 1
-            # okay, is now a (cached) display list object
-            dl()
+            style = drawproperties.line_style(getattr(mode, '_lineProperties', None))
+            if style.plain:
+                dl()
+                return 1
+            factor, pattern = drawproperties.stipple(style)
+            glLineWidth(style.width)
+            if style.pattern:
+                glEnable(GL_LINE_STIPPLE)
+                glLineStipple(factor, pattern)
+            try:
+                dl()
+            finally:
+                glDisable(GL_LINE_STIPPLE)
+                glLineWidth(1.0)
         return 1
 
     def _render_shader(self, mode: Any) -> int:
@@ -226,7 +242,17 @@ class IndexedLineSet(
             return 1
 
         has_colors = bool(self.color and len(self.color.color) > 0)
-        if has_colors:
+        style = drawproperties.line_style(getattr(mode, '_lineProperties', None))
+        program = None
+        if not style.plain:
+            program = shader_program.use_wide_line()
+        if program is not None:
+            shader_program.set_line_style(style, mode.getViewport(), program)
+            if not has_colors:
+                # One colour, the constant value of the program's colour input
+                glVertexAttrib3f(LOC_COLOR, *(getattr(mode, '_solid_color', None)
+                                              or (1.0, 1.0, 1.0, 1.0))[:3])
+        elif has_colors:
             shader_program.use_line()
             program = shader_program.line_program
         else:
@@ -254,10 +280,13 @@ class IndexedLineSet(
             vbo_obj.bind()
             glEnableVertexAttribArray(LOC_POSITION)
             glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride, None)
+            glEnableVertexAttribArray(LOC_TEXCOORD)
+            glVertexAttribPointer(LOC_TEXCOORD, 1, GL_FLOAT, GL_FALSE, stride,
+                                  ctypes.c_void_p(12))
             if has_colors:
                 glEnableVertexAttribArray(LOC_COLOR)
                 glVertexAttribPointer(LOC_COLOR, 3, GL_FLOAT, GL_FALSE, stride,
-                                      ctypes.c_void_p(12))
+                                      ctypes.c_void_p(16))
             vbo_obj.unbind()
             glBindVertexArray(0)
             gpu['vao'] = vao
@@ -303,12 +332,16 @@ class IndexedLineSet(
         rows: list[Any] = []
         segments: list[tuple[int, int]] = []
         first = 0
-        width = 6 if has_colors else 3
+        # Position, the distance along the polyline (a dash pattern's
+        # coordinate), and a colour where there are colours
+        width = 7 if has_colors else 4
         for poly_idx, polyline in enumerate(indices):
             if len(polyline) < 2:
                 continue
             block = np.empty((len(polyline), width), dtype='f')
             block[:, 0:3] = points[polyline]
+            steps = np.linalg.norm(np.diff(block[:, 0:3], axis=0), axis=1)
+            block[:, 3] = np.concatenate([[0.0], np.cumsum(steps)])
             if colors is not None:
                 poly_color_indices = (color_indices[poly_idx]
                                       if poly_idx < len(color_indices)
@@ -316,14 +349,14 @@ class IndexedLineSet(
                 poly_colors = np.array(
                     [colors[min(ci, len(colors) - 1)][:3]
                      for ci in poly_color_indices], dtype='f')
-                block[:, 3:6] = poly_colors
+                block[:, 4:7] = poly_colors
             rows.append(block)
             segments.append((first, len(polyline)))
             first += len(polyline)
 
         data = (np.ascontiguousarray(np.concatenate(rows)) if rows
                 else np.zeros((0, width), dtype='f'))
-        stride = width * 4 if has_colors else 0
+        stride = width * 4
 
         if gpu is None:
             gpu = self._line_gpu = {

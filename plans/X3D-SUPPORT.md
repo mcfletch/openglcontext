@@ -6,9 +6,15 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
 `PhysicalMaterial`, and no script execution. A throwaway spike (described in
 §5) was run to test the central claims; none of it is committed.
 
-**Progress** (worktrees `pyvrml97/.claude/worktrees/x3d` and
-`openglcontext/.claude/worktrees/x3d`, branch `x3d` in each; `[x]` done,
-`[ ]` pending):
+**Progress** (branch `x3d` in pyvrml97 and openglcontext, checked out in
+their main checkouts; the remaining phases on branch `x3d-complete` in the
+worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
+`openglcontext/.claude/worktrees/x3d-complete`; `[x]` done, `[ ]` pending):
+
+- [ ] Nodes without an engine implementation (2026-10-08 audit of
+  `prototypes()` against `vrml.x3d.nodes.CONCRETE_NODES`: 124 of 266). Below,
+  under the phase each belongs to; a grouping node or geometry left to its
+  declaration draws nothing (a `StaticGroup`'s children are not drawn)
 
 - Phase 1, pyvrml97 groundwork (§9.1)
   - [x] `ElevationGrid.xSpacing`/`zSpacing` 1.0, `NavigationInfo.type` `["WALK", "ANY"]`
@@ -211,6 +217,24 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] docs/x3d.rst with the implemented-node list, held to `prototypes()` by a test
   - [x] light scope: `global` false lights only its parent group's descendants (`passes.lightscope`, the per-draw `lightsOff` mask); the engine's DirectionalLight made in code is global; VRML97 dialect default `global FALSE`
   - [ ] the fixed-function pipeline's light scope and radius
+  - [x] content that draws nothing: `StaticGroup` (`x3dgroups`),
+    `InlineGeometry` (`scenegraph.inlinegeometry`, a file's shapes joined by
+    `scenegraph.meshdata.merged_arrays` from each geometry's `meshArrays()`);
+    `CoordinateDouble` was already read wherever `Coordinate` is, and its
+    precision past float32 waits on Geospatial's origin
+  - [x] a shape's bounds followed its geometry's only when the geometry field
+    itself was set: a volume cached as the geometry's own object kept it
+    alive. `boundingvolume.cacheVolume` depends on the cache entry holding a
+    volume it is given (`holdVolume`), so a changed `Coordinate` reaches the
+    shape and its groups
+  - [ ] `MultiTexture` (and `MultiTextureTransform` in use), `RenderedTexture`
+  - [x] `FillProperties`, `LineProperties`, `PointProperties`
+    (`scenegraph.drawproperties`; the wide-line program's geometry stage
+    `vrml97_wide_line.geom`, `_pointsize_inc.glsl`, `_fill_inc.glsl`, and the
+    compatibility profile's line width, line stipple and polygon stipple)
+  - [ ] `AcousticProperties` with Sound
+  - [ ] `ClipPlane`
+  - [ ] `FontLibrary`
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
   - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)
   - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`)
@@ -236,7 +260,28 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] the cascade: a field is reached once per cascade, through handlers and their outputs (`vrml.event`)
   - [x] `Collision`: `enabled` and `proxy` in the walk's collision world; `collideTime` and `isActive` from the avatar's touches (`physics.x3dcollision`)
   - [x] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor (`SensorTimer`; its multiplier is the sensor's `rate`)
+  - [ ] Picking: `LinePickSensor`, `PointPickSensor`, `PrimitivePickSensor`,
+    `VolumePickSensor`
 - Phase 8, engine-mapped components (§9.17)
+  - [x] CADGeometry: `CADFace` (`x3dgroups`), `QuadSet`, `IndexedQuadSet`
+    (`meshgeometry`, two triangles a quad)
+  - [ ] NURBS: the 13 nodes on the NURBS evaluator; the VRML97 extension's
+    nodes kept for the worlds that use them
+  - [ ] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`,
+    `GeneratedCubeMapTexture`
+  - [ ] Texturing3D: `ImageTexture3D`, `ComposedTexture3D`, `PixelTexture3D`,
+    `TextureCoordinate3D`, `TextureCoordinate4D`, `TextureTransform3D`
+  - [ ] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
+  - [ ] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
+    `ProgramShader`, `PackagedShader`, the vertex attributes
+  - [ ] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
+    models
+  - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
+    `HAnimDisplacer`, `HAnimMotion`, `HAnimPose`
+  - [ ] RigidBodyPhysics: the 14 nodes on omi_physics
+  - [ ] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
+    `LayoutGroup`, `LayoutLayer`, `ScreenGroup`, `ScreenFontStyle`
+  - [ ] Sound: the 4.0 audio graph (19 nodes) on omi_audio
 - Phase 9, Fast Infoset reader
   - [x] `vrml.x3d.fastinfoset`: X.891 decoder to XML events, iterative over element depth; values in an algorithm without a decoder arrive `Undecoded`
   - [x] `vrml.x3d.fivocabulary`: tables A.2-A.5 as Web3D's files number them (attribute names one past A.3 from 57, a 1025-entry table, 54-56 unknown); delta-zlib integers in the files' layout at index 34
@@ -266,6 +311,10 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     pyvrml97, used by its own tests and by any program importing them; the
     engine no longer does
 - Phase 10, Geospatial, VolumeRendering, GaussianSplats, `MovieTexture`
+  - [ ] Geospatial: the 11 nodes
+  - [ ] VolumeRendering: the 13 nodes
+  - [ ] GaussianSplats
+  - [ ] `MovieTexture` through the optional decoder
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

@@ -49,8 +49,15 @@ layout(location = 1) out vec4 fragObjectId;
 // X3D's Phong terms, shared with vrml97_lighting.frag and pbr.frag.
 #include "_phong_inc.glsl"
 #include "_x3d_fog_inc.glsl"
+#include "_fill_inc.glsl"
 
 void main() {
+    vec4 hatched;
+    if (x3dHatch(hatched)) {
+        fragColor = hatched;
+        fragObjectId = encodeObjectId(objectId);
+        return;
+    }
     vec3 normal = normalize(vNormal);
 
     // Two-sided lighting: flip the normal toward the viewer on back faces so

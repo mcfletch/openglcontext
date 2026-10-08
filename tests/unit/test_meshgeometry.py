@@ -36,6 +36,9 @@ def read(geometry):
         '1 1 0 -1 1 0', '-1 1 0 1 1 0'), meshgeometry.TriangleStripSet, 6),
     ('<IndexedTriangleStripSet index="0 1 3 2">%s</IndexedTriangleStripSet>' % QUAD,
      meshgeometry.IndexedTriangleStripSet, 6),
+    ('<QuadSet>%s</QuadSet>' % QUAD, meshgeometry.QuadSet, 6),
+    ('<IndexedQuadSet index="0 1 2 3">%s</IndexedQuadSet>' % QUAD,
+     meshgeometry.IndexedQuadSet, 6),
 ])
 def test_each_set_is_read_as_the_engines_and_drawn_as_a_mesh(text, cls, corners):
     geometry = read(text)
@@ -44,6 +47,26 @@ def test_each_set_is_read_as_the_engines_and_drawn_as_a_mesh(text, cls, corners)
     drawn = len(mesh.indices) if mesh.indices is not None else len(mesh.positions)
     assert drawn == corners
     assert np.allclose(mesh.normals, (0, 0, 1))
+
+
+def test_a_quads_colour_is_both_its_triangles():
+    """One colour per quad where colorPerVertex is false"""
+    quads = read('<IndexedQuadSet colorPerVertex="false" index="0 1 2 3 0 1 2 3">%s'
+                 '<Color color="1 0 0 0 1 0"/></IndexedQuadSet>' % QUAD)
+    colours = np.asarray(quads.mesh().colors)[:, :3]
+    assert len(colours) == 12
+    assert np.allclose(colours[:6], (1, 0, 0)) and np.allclose(colours[6:], (0, 1, 0))
+
+
+def test_an_index_short_of_a_quad_is_left_out():
+    quads = read('<IndexedQuadSet index="0 1 2 3 0 1">%s</IndexedQuadSet>' % QUAD)
+    assert len(quads.mesh().indices) == 6
+
+
+def test_double_precision_coordinates_draw():
+    geometry = read('<IndexedTriangleSet index="0 1 2 0 2 3"><CoordinateDouble point='
+                    '"-1 -1 0 1 -1 0 1 1 0 -1 1 0"/></IndexedTriangleSet>')
+    assert len(geometry.mesh().indices) == 6
 
 
 def test_the_mesh_is_as_solid_as_the_set():
@@ -173,3 +196,13 @@ def test_vertex_colours_draw(gl_context):
 def test_a_line_set_draws(gl_context):
     image = _drawn('<LineSet vertexCount="2"><Coordinate point="-1 0 0 1 0 0"/></LineSet>')
     assert (image.sum(axis=2) > 60).sum() > 20
+
+
+def test_a_shapes_bounds_follow_its_sets_points():
+    shape = Loader.loads(('<X3D version="4.0"><Scene><Shape><IndexedTriangleSet index="0 1 2">'
+                          '%s</IndexedTriangleSet></Shape></Scene></X3D>' % QUAD).encode(),
+                         'scene.x3d').children[0]
+    before = shape.boundingVolume(None).getPoints()[:, :3].max(axis=0)
+    shape.geometry.coord.point = [(-5, -5, 0), (5, -5, 0), (5, 5, 0)]
+    after = shape.boundingVolume(None).getPoints()[:, :3].max(axis=0)
+    assert np.allclose(before[:2], 1) and np.allclose(after[:2], 5)

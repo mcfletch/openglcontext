@@ -173,6 +173,13 @@ class Quadric( nodetypes.Geometry, node.Node ):
         """Fields whose change should rebuild the cached instance GPU."""
         return ()
 
+    def meshArrays( self ) -> Any:
+        """The quadric's triangles at its instanced level of detail"""
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        coords, indices = self._instanceArrays()
+        c = np.asarray( coords, dtype='f' ).reshape( -1, 8 )
+        return meshdata.arrays( c[:, 0:3], c[:, 5:8], c[:, 3:5], indices=np.asarray( indices ) )
+
     def instanceGPU( self, mode: Any ) -> Any:
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing.
 

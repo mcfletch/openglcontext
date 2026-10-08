@@ -223,6 +223,10 @@ OpenGLContext/
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── composedgeometry.py  # X3D triangle/line sets and ElevationGrid as
 │   │                 # glTF-shaped arrays -- NumPy only, no GL
+│   ├── meshdata.py   # Any geometry's triangles as arrays (meshArrays()), and
+│   │                 # a scene's shapes joined into one -- no GL
+│   ├── inlinegeometry.py  # X3D's InlineGeometry: a file's triangles as one
+│   │                 # geometry, read as an Inline reads
 │   ├── geometry2d.py # X3D's Geometry2D nodes in the z=0 plane -- docs/x3d.rst
 │   ├── x3druntime.py # X3D's TimeTrigger on the engine clock and KeySensor on
 │   │                 # the context's keys; the other event utilities are
@@ -233,8 +237,9 @@ OpenGLContext/
 │   │                 # context's picked pointer -- no GL
 │   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the
 │   │                 # context to follow its url (Context.OnAnchor)
-│   ├── x3dgroups.py  # X3D's CADAssembly, CADLayer and PickableGroup as
-│   │                 # groups (CADPart is in transform.py)
+│   ├── x3dgroups.py  # X3D's CADAssembly, CADLayer, PickableGroup and
+│   │                 # StaticGroup as groups, CADFace as its shape
+│   │                 # (CADPart is in transform.py)
 │   ├── viewpointgroup.py  # X3D's ViewpointGroup: which viewpoints the
 │   │                 # next-viewpoint key offers
 │   ├── texturebackground.py  # X3D's TextureBackground: the engine's

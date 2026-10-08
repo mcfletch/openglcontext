@@ -200,6 +200,15 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         vertexArray, colorArray, normalArray, textureCoordinateArray = expanded
         return vertexArray, normalArray, textureCoordinateArray, colorArray
 
+    def meshArrays(self) -> Any:
+        """The set's triangles, every three vertices one triangle"""
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        found = self._instanceArrays()
+        if found is None:
+            return None
+        positions, normals, texcoords, colours = found
+        return meshdata.arrays(positions, normals, texcoords, colours)
+
     def instanceContentKey(self) -> Optional[tuple[Any, ...]]:
         """Hashable signature so distinct-but-identical IFS nodes share one draw.
 

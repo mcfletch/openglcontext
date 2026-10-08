@@ -7,7 +7,7 @@ from OpenGL.GL import GL_BACK, GL_FRONT, glUseProgram
 from vrml.vrml97 import basenodes
 from vrml import field
 from OpenGLContext import lighting
-from OpenGLContext.scenegraph import boundingvolume, polygonsort
+from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort
 from OpenGLContext.scenegraph.physicalmaterial import two_sided
 from OpenGLContext.arrays import array
 import traceback
@@ -56,10 +56,43 @@ class Shape(basenodes.Shape):
     #: Another name for `castShadow`, which engine code uses
     castsShadow = field.AliasField('castsShadow', 'castShadow')
 
+    def publishProperties(self, mode: Any) -> None:
+        """Give `mode` the appearance's X3D line, point and fill properties
+
+        Read by the geometry that draws lines, points or polygons, which does
+        not see the appearance (:mod:`~OpenGLContext.scenegraph.drawproperties`).
+        """
+        mode._lineProperties = getattr(self.appearance, 'lineProperties', None)
+        mode._pointProperties = getattr(self.appearance, 'pointProperties', None)
+        mode._fillProperties = getattr(self.appearance, 'fillProperties', None)
+
+    def fillStyle(self) -> drawproperties.FillStyle:
+        """The appearance's FillProperties as drawn; the default for a
+        geometry of lines or points, which it does not apply to"""
+        if getattr(type(self.geometry), 'meshArrays', None) is None:
+            return drawproperties.FillStyle()
+        return drawproperties.fill_style(getattr(self.appearance, 'fillProperties', None))
+
+    def _renderHatchFixed(self, fill: drawproperties.FillStyle, mode: Any) -> None:
+        """Draw the geometry again through `fill`'s hatch, as a polygon stipple"""
+        glPushAttrib(GL_ENABLE_BIT | GL_POLYGON_STIPPLE_BIT | GL_CURRENT_BIT
+                     | GL_DEPTH_BUFFER_BIT)
+        try:
+            glDisable(GL_LIGHTING)
+            glDisable(GL_TEXTURE_2D)
+            glEnable(GL_POLYGON_STIPPLE)
+            glPolygonStipple(drawproperties.hatch_stipple(fill))
+            glDepthFunc(GL_LEQUAL)
+            glColor3f(*fill.color)
+            self.geometry.render(lit=0, textured=0, mode=mode)
+        finally:
+            glPopAttrib()
+
     def Render(self, mode: Any = None) -> Any:
         """Do run-time rendering of the Shape for the given mode"""
         if not self.geometry:
             return
+        self.publishProperties(mode)
 
         # Use shader-based rendering if mode is in shader mode
         if getattr(mode, 'shader_mode', False):
@@ -88,9 +121,13 @@ class Shape(basenodes.Shape):
                     glEnable(GL_LIGHTING)
                 else:
                     glDisable(GL_LIGHTING)
-                self.geometry.render(lit=lit, textured=textured, mode=mode)
+                fill = self.fillStyle()
+                if fill.filled:
+                    self.geometry.render(lit=lit, textured=textured, mode=mode)
                 if textured:
                     self.appearance.renderPost(textureToken, mode=mode)
+                if fill.hatch:
+                    self._renderHatchFixed(fill, mode)
             finally:
                 glPopAttrib()
         else:
@@ -131,6 +168,9 @@ class Shape(basenodes.Shape):
         # to the shape and the geometry node does not see it.
         mode._solid_color = appearance_solid_color(self.appearance,
                                                    lighting.x3d_lit(self.geometry))
+        if hasattr(shader_program, 'set_fill_style'):
+            shader_program.set_fill_style(self.fillStyle())
+
 
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
@@ -256,6 +296,7 @@ class Shape(basenodes.Shape):
     def RenderTransparent(self, mode: Any) -> Any:
         if not self.geometry:
             return False
+        self.publishProperties(mode)
 
         # Use shader-based rendering if mode is in shader mode
         if getattr(mode, 'shader_mode', False):

@@ -405,18 +405,16 @@ def _pack_material_block(material: Any) -> np.ndarray:
 
 
 def _compile_file(vert_name: str, frag_name: str, validate: bool = True,
-                  vertex_defines: Optional[list] = None) -> Any:
+                  vertex_defines: Optional[list] = None,
+                  geom_name: Optional[str] = None) -> Any:
     # preprocess_shader resolves the shared #includes: the auxiliary
     # VRML97 shaders the PBR pass reuses (unlit/point/line/vertex_color) now pull
     # encodeObjectId in via `#include "_objectid_inc.glsl"`, which the GLSL
     # compiler rejects unless spliced here first.
     vert = preprocess_shader(vert_name, vertex_defines)
     frag = preprocess_shader(frag_name)
-    v = GL_shaders.compileShader(vert, GL_VERTEX_SHADER)
-    fr = GL_shaders.compileShader(frag, GL_FRAGMENT_SHADER)
-    prog = GL_shaders.compileProgram(v, fr, validate=validate)
-    _delete_shaders(v, fr)
-    return prog
+    geometry = preprocess_shader(geom_name) if geom_name else None
+    return link_program(vert, frag, validate, geometry_source=geometry)
 
 
 def _delete_shaders(*shaders: Any) -> None:
@@ -537,6 +535,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
                 self.MAX_SHADOW_LIGHTS, self.shadow_cube_array)
             self.point_program = _compile_file('vrml97_point.vert', 'vrml97_point.frag')
             self.line_program = _compile_file('vrml97_line.vert', 'vrml97_line.frag')
+            self.wide_line_program = _compile_file(
+                'vrml97_line.vert', 'vrml97_wide_line.frag',
+                geom_name='vrml97_wide_line.geom')
             # Minimal position-only program for shadow depth passes (22+ per frame
             # with several lights); avoids running the full PBR fragment shader
             # just to write depth.

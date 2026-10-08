@@ -24,7 +24,7 @@ from OpenGL.GL import (
     GL_CURRENT_PROGRAM, GL_TEXTURE_COMPARE_MODE, GL_NONE, GL_NEAREST,
     GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
     glUseProgram, glGetUniformLocation, glGetIntegerv,
-    glUniform1i, glUniform1f, glUniform1ui,
+    glUniform1i, glUniform1f, glUniform1fv, glUniform1ui,
     glUniform2fv, glUniform3fv, glUniform4fv, glUniform4iv,
     glUniformMatrix3fv, glUniformMatrix4fv,
     glActiveTexture, glBindTexture, glGenSamplers, glSamplerParameteri, glBindSampler,
@@ -80,7 +80,8 @@ def _upload_view_list(location: int, indices: tuple[int, ...]) -> None:
 
 def link_program(vert_source: str, frag_source: str, validate: bool = True,
                  views: int = 0, strategy: str = 'geometry',
-                 position: str = 'vPosition') -> int:
+                 position: str = 'vPosition',
+                 geometry_source: Optional[str] = None) -> int:
     """The name of a program compiled and linked from preprocessed sources.
 
     ``views`` of two or more compiles it for a shared draw of that many views,
@@ -94,8 +95,12 @@ def link_program(vert_source: str, frag_source: str, validate: bool = True,
     ``'vertex'`` compiles the vertex stage to route each instanced copy to a
     view in ``viewList`` (see
     :func:`OpenGLContext.passes.shadersource.vertex_routing_source`).
+    ``geometry_source`` is a program's own geometry stage, for a program not
+    compiled for several views.
     """
     shaders = []
+    if geometry_source is not None and not views:
+        shaders.append(GL_shaders.compileShader(geometry_source, GL_GEOMETRY_SHADER))
     if views:
         from OpenGLContext.multiview.strategy import (
             MultiviewCapabilities, VIEW_BLOCK_BINDING,
@@ -207,6 +212,7 @@ class ShaderAppearanceProgram(object):
         self.vertex_color_program = program
         self.point_program = program
         self.line_program = program
+        self.wide_line_program = program
         self.depth_program = program
 
     def use(self, lit: bool = True, vertex_colors: bool = False) -> bool:
@@ -264,6 +270,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self.vertex_color_program: Optional[int] = None  # For per-vertex color geometry
         self.point_program: Optional[int] = None  # For PointSet with per-vertex colors
         self.line_program: Optional[int] = None  # For IndexedLineSet with per-vertex colors
+        #: Lines wider than a pixel or dashed, by X3D's LineProperties
+        self.wide_line_program: Optional[int] = None
         self.depth_program: Optional[int] = None  # Position-only, for shadow depth passes
         # Cache uniform locations per program: {program_id: {uniform_name: location}}
         self._location_cache: dict[int, dict[str, int]] = {}
@@ -460,7 +468,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
     # Every GL program handle the pass may bind; cleared together on failure.
     _PROGRAM_ATTRS: tuple[str, ...] = (
         'program', 'unlit_program', 'vertex_color_program',
-        'point_program', 'line_program', 'depth_program',
+        'point_program', 'line_program', 'wide_line_program', 'depth_program',
     )
 
     #: The vertex shader each of those is compiled from. A geometry about to
@@ -472,6 +480,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         'vertex_color_program': 'vrml97_vertex_color.vert',
         'point_program': 'vrml97_point.vert',
         'line_program': 'vrml97_line.vert',
+        'wide_line_program': 'vrml97_line.vert',
         'depth_program': 'shadow_depth.vert',
     }
 
@@ -549,7 +558,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
     def _compile_one(self, label: str, vert_name: str, frag_name: str,
                      validate: bool = True,
                      shadow_frag: bool = False, views: int = 0,
-                     strategy: str = 'geometry') -> Optional[int]:
+                     strategy: str = 'geometry',
+                     geom_name: Optional[str] = None) -> Optional[int]:
         """Compile one program in isolation; return its handle or None.
 
         A break in any single shader must degrade only that feature, not take
@@ -567,7 +577,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                     frag_name, self.MAX_SHADOW_LIGHTS, self.shadow_cube_array)
             else:
                 frag_source = preprocess_shader(frag_name)
-            return int(link_program(vert_source, frag_source, validate, views, strategy))
+            geometry = preprocess_shader(geom_name) if geom_name else None
+            return int(link_program(vert_source, frag_source, validate, views, strategy,
+                                    geometry_source=geometry))
         except Exception as err:
             log.error("Failed to compile %s shader (%s/%s): %s",
                       label, vert_name, frag_name, err)
@@ -610,6 +622,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             'point', 'vrml97_point.vert', 'vrml97_point.frag')
         self.line_program = self._compile_one(
             'line', 'vrml97_line.vert', 'vrml97_line.frag')
+        self.wide_line_program = self._compile_one(
+            'wide_line', 'vrml97_line.vert', 'vrml97_wide_line.frag',
+            geom_name='vrml97_wide_line.geom')
         # Position-only depth program for the shadow-map pass.
         self.depth_program = self._compile_one(
             'depth', 'shadow_depth.vert', 'shadow_depth.frag', validate=False)
@@ -734,6 +749,36 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                 self._apply_object_id(self.line_program)
             return True
         return False
+
+    def use_wide_line(self) -> Optional[int]:
+        """Activate the program for lines drawn by a LineProperties style; its handle, or None
+
+        The program reads a colour per vertex; a line of one colour gives it
+        as the constant value of `aColor`.
+        """
+        if not self._compiled:
+            self.compile()
+        if not self._ok or not self.wide_line_program:
+            return None
+        self._bind_program(self.wide_line_program)
+        if self._pick_active:
+            self._apply_object_id(self.wide_line_program)
+        return self.wide_line_program
+
+    def set_line_style(self, style: Any, viewport: Any, program: int) -> None:
+        """Draw `program`'s next lines in `style`, a
+        :class:`~OpenGLContext.scenegraph.drawproperties.LineStyle`, on a
+        viewport of (x, y, width, height) pixels"""
+        dashes = list(style.pattern[:MAX_DASHES])
+        if len(dashes) % 2:
+            dashes = dashes[:-1]
+        self._set_uniform1f('lineWidth', style.width, program)
+        self._set_uniform2f('viewportSize', (float(viewport[2]), float(viewport[3])), program)
+        self._set_uniform1i('dashCount', len(dashes), program)
+        self._set_uniform1f('dashPeriod', float(sum(dashes)), program)
+        if dashes:
+            self._set_uniform('dashes', tuple(dashes + [0.0] * (MAX_DASHES - len(dashes))),
+                              program, _UPLOAD_DASHES)
 
     def unuse(self) -> None:
         """Deactivate the shader program."""
@@ -876,14 +921,33 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         values = (('fogMode', int(mode), glUniform1i),
                   ('fogDensity', float(density), glUniform1f),
                   ('fogColor', _as_floats(color), _UPLOAD_3FV))
+        # Set before each draw a LocalFog covers
+        self._set_on_programs((self.program, self.unlit_program, self.vertex_color_program,
+                               self.point_program, self.line_program,
+                               self.wide_line_program), values)
+
+    def set_fill_style(self, style: Any) -> None:
+        """Draw the next polygons in `style`, a
+        :class:`~OpenGLContext.scenegraph.drawproperties.FillStyle`
+        (``_fill_inc.glsl``)"""
+        values = (('hatchStyle', int(style.hatch), glUniform1i),
+                  ('hatchColor', _as_floats(style.color), _UPLOAD_3FV),
+                  ('unfilled', int(not style.filled), glUniform1i))
+        self._set_on_programs((self.program, self.vertex_color_program), values)
+
+    def _set_on_programs(self, programs: Iterable[Optional[int]],
+                         values: Iterable[tuple[str, Any, Upload]]) -> None:
+        """Set `values`, (uniform, value, upload) each, on every one of `programs`
+
+        A program is bound only where a value it holds differs, so setting the
+        same values before each draw costs a comparison.
+        """
+        values = tuple(values)
         drawn: list[int] = []
-        for name in (self.program, self.unlit_program, self.vertex_color_program,
-                     self.point_program, self.line_program):
+        for name in programs:
             if name and not any(name == seen for seen in drawn):
                 drawn.append(name)
         for name in drawn:
-            # A program is bound only where a value it holds differs, as a
-            # LocalFog sets the fog before each of its draws.
             held = self._uniform_value_cache.get(name, {})
             if all(uniform in held and held[uniform] == value for uniform, value, _ in values):
                 continue
@@ -966,6 +1030,14 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         if loc != -1:
             glUniform4fv(loc, 1, array(color, 'f'))
         self._set_uniform1i('fogSolid', int(fogged), self.unlit_program)
+
+    def set_point_size(self, size: Any, program: int) -> None:
+        """Draw `program`'s next points at `size`, a
+        :class:`~OpenGLContext.scenegraph.drawproperties.PointSize`"""
+        self._set_uniform1f('pointSizeScale', size.scale, program)
+        self._set_uniform1f('pointSizeMinimum', size.minimum, program)
+        self._set_uniform1f('pointSizeMaximum', size.maximum, program)
+        self._set_uniform3f('pointSizeAttenuation', size.attenuation, program)
 
     def set_object_id(self, object_id: int, program: Optional[int] = None) -> None:
         """Set object ID for selection buffer (MRT).
@@ -1175,6 +1247,14 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
 
     def _set_uniform4f(self, name: str, value: Vec4, program: Optional[int] = None) -> None:
         self._set_uniform(name, _as_floats(value), program, _UPLOAD_4FV)
+
+
+#: The longest dash pattern the wide-line program takes.
+MAX_DASHES = 8
+
+
+def _UPLOAD_DASHES(location: int, value: Any) -> None:
+    glUniform1fv(location, len(value), np.asarray(value, dtype=np.float32))
 
 
 class ShaderRenderMode:

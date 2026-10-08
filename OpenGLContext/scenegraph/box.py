@@ -1,4 +1,5 @@
 """Box node for use in geometry attribute of Shapes"""
+import numpy as np
 from vrml import cache
 from OpenGLContext.arrays import array
 from OpenGL.arrays import vbo
@@ -113,6 +114,12 @@ class Box( basenodes.Box ):
     def instanceContentKey(self) -> tuple[Any, ...]:
         """Boxes of the same size share geometry, so they batch as instances."""
         return ('Box', tuple(round(float(v), 6) for v in self.size))
+
+    def meshArrays(self) -> Any:
+        """The box's twelve triangles, each face's corners its own vertices"""
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        verts = np.asarray(list(yieldVertices(self.size)), dtype=np.float32)
+        return meshdata.arrays(verts[:, 5:8], verts[:, 2:5], verts[:, 0:2])
 
     def instanceGPU(self, mode: Any) -> Any:
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""

@@ -24,6 +24,7 @@ from OpenGL.GL import (
 )
 from OpenGLContext import renderoptions
 from OpenGLContext.scenegraph import vertexsemantics
+from OpenGLContext.scenegraph import drawproperties
 from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
 from OpenGLContext.scenegraph.texturemapping import texture_mapping
 
@@ -101,6 +102,19 @@ def instance_collapse_is_enabled() -> bool:
     return renderoptions.env_flag_once('OPENGLCONTEXT_INSTANCE_COLLAPSE', True)
 
 
+def styled(appearance: Any) -> bool:
+    """Whether `appearance` draws its lines or polygons by an X3D LineProperties
+    or FillProperties other than the default
+
+    A styled shape is drawn by its own geometry, not in an instanced group:
+    the style is a uniform of the program that draws it.
+    """
+    if not appearance:
+        return False
+    return (not drawproperties.line_style(getattr(appearance, 'lineProperties', None)).plain
+            or not drawproperties.fill_style(getattr(appearance, 'fillProperties', None)).plain)
+
+
 def geometry_instance_key(shape: Any) -> Optional[tuple]:
     """Instance-batch key for a render path, or None if it has no geometry.
 
@@ -118,6 +132,8 @@ def geometry_instance_key(shape: Any) -> Optional[tuple]:
     if geometry is None:
         return None
     appearance = getattr(shape, 'appearance', None)
+    if styled(appearance):
+        return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
     return (id(geometry), id(material), id(texture))
@@ -185,6 +201,8 @@ def geometry_texture_key(shape: Any) -> Optional[tuple]:
     if geometry is None:
         return None
     appearance = getattr(shape, 'appearance', None)
+    if styled(appearance):
+        return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
     tex_key = _material_texture_ids(material)
@@ -248,6 +266,8 @@ def geometry_content_key(shape: Any) -> Optional[tuple]:
     if content is None:
         content = id(geometry)
     appearance = getattr(shape, 'appearance', None)
+    if styled(appearance):
+        return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
     tex_key = _material_texture_ids(material)
@@ -272,6 +292,8 @@ def geometry_content_instance_key(shape: Any) -> Optional[tuple]:
     if content is None:
         content = id(geometry)
     appearance = getattr(shape, 'appearance', None)
+    if styled(appearance):
+        return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
     return (content, id(material), id(texture))

@@ -603,6 +603,22 @@ class PBRMesh(x3d.X3DGeometryNode):
         return pos, nrm, tan, uvs
 
     # -- bounding volume (frustum culling + shadow occluder points) ---------
+    def meshArrays(self) -> Any:
+        """The mesh's triangles as they stand; None for a mesh of lines or points"""
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        from OpenGLContext.scenegraph import composedgeometry  # noqa: PLC0415 beside meshdata
+        if (self.draw_mode not in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN)
+                or self.positions is None):
+            return None
+        corners = (np.arange(len(self.positions), dtype=np.int64) if self.indices is None
+                   else self.indices.astype(np.int64))
+        if self.draw_mode == GL_TRIANGLE_STRIP:
+            corners = corners[composedgeometry.strips([len(corners)])]
+        elif self.draw_mode == GL_TRIANGLE_FAN:
+            corners = corners[composedgeometry.fans([len(corners)])]
+        return meshdata.arrays(self.positions, self.normals, self.texcoords, self.colors,
+                               indices=corners)
+
     def boundingVolume(self, mode: Any = None) -> Any:
         if self._volume is None:
             if self.positions is None or not len(self.positions):

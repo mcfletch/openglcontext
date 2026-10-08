@@ -26,10 +26,11 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 __all__ = ['ComposedArrays', 'arc_close', 'arc_points', 'arc_sweep', 'composed_arrays',
-           'crease_normals', 'disk', 'fans', 'grid_points', 'rectangle', 'triangle_set_2d',
-           'grid_texcoords', 'grid_triangles', 'indexed_fans', 'indexed_strips',
-           'indexed_triangles', 'line_segments', 'per_quad', 'split_index', 'strips',
-           'triangle_set']
+           'crease_normals', 'disk', 'fans', 'grid_points', 'grid_texcoords',
+           'grid_triangles', 'indexed_fans', 'indexed_quads', 'indexed_strips',
+           'indexed_triangles', 'line_segments', 'per_quad', 'quad_set', 'quads',
+           'rectangle', 'split_index', 'strips', 'triangle_set', 'triangle_set_2d',
+           'vertex_normals']
 
 _NO_TRIANGLES = np.zeros((0, 3), np.int64)
 
@@ -44,6 +45,23 @@ def indexed_triangles(index: ArrayLike) -> np.ndarray:
     """An `IndexedTriangleSet`'s triangles: its index three at a time"""
     flat = np.asarray(index, dtype=np.int64).ravel()
     return flat[:(len(flat) // 3) * 3].reshape(-1, 3)
+
+
+def quads(corners: np.ndarray) -> np.ndarray:
+    """Two triangles for each row of four `corners`, split from the first corner"""
+    corners = np.asarray(corners, dtype=np.int64).reshape(-1, 4)
+    return corners[:, [0, 1, 2, 0, 2, 3]].reshape(-1, 3)
+
+
+def quad_set(count: int) -> np.ndarray:
+    """A `QuadSet`'s triangles: its points four at a time, two triangles a quad"""
+    return quads(np.arange((int(count) // 4) * 4, dtype=np.int64))
+
+
+def indexed_quads(index: ArrayLike) -> np.ndarray:
+    """An `IndexedQuadSet`'s triangles: its index four at a time, two triangles a quad"""
+    flat = np.asarray(index, dtype=np.int64).ravel()
+    return quads(flat[:(len(flat) // 4) * 4])
 
 
 def fans(counts: ArrayLike) -> np.ndarray:
@@ -300,7 +318,7 @@ def _face_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
     return normals
 
 
-def _vertex_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+def vertex_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
     """Normals averaged across the triangles that share each point"""
     sums = np.zeros((len(points), 3), np.float64)
     faces = _face_normals(points, triangles)
@@ -363,7 +381,7 @@ def composed_arrays(
             return None
         return array[:len(triangles)][valid]
 
-    vertex_normals = per_vertex(normals, 'normal', 3) if normal_per_vertex else None
+    given_normals = per_vertex(normals, 'normal', 3) if normal_per_vertex else None
     face_normals = per_face(normals, 'normal') if not normal_per_vertex else None
     vertex_colors = per_vertex(colors, 'color') if color_per_vertex else None
     face_colors = per_face(colors, 'color') if not color_per_vertex else None
@@ -374,8 +392,8 @@ def composed_arrays(
                and float(crease_angle) < np.pi)
     if face_colors is None and normal_per_vertex and not creased:
         attributes['POSITION'] = points
-        attributes['NORMAL'] = (vertex_normals if vertex_normals is not None
-                                else _vertex_normals(points, kept))
+        attributes['NORMAL'] = (given_normals if given_normals is not None
+                                else vertex_normals(points, kept))
         if vertex_colors is not None:
             attributes['COLOR_0'] = vertex_colors
         if vertex_tangents is not None:
@@ -385,14 +403,14 @@ def composed_arrays(
     else:
         corners = kept.ravel()
         attributes['POSITION'] = points[corners]
-        if vertex_normals is not None:
-            attributes['NORMAL'] = vertex_normals[corners]
+        if given_normals is not None:
+            attributes['NORMAL'] = given_normals[corners]
         elif face_normals is not None:
             attributes['NORMAL'] = np.repeat(face_normals, 3, axis=0)
         elif creased:
             attributes['NORMAL'] = crease_normals(points, kept, float(crease_angle or 0.0))
         elif normal_per_vertex:
-            attributes['NORMAL'] = _vertex_normals(points, kept)[corners]
+            attributes['NORMAL'] = vertex_normals(points, kept)[corners]
         else:
             attributes['NORMAL'] = np.repeat(_face_normals(points, kept), 3, axis=0)
         if vertex_colors is not None:

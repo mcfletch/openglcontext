@@ -6,9 +6,10 @@
 layout(location = 2) in vec3 aPosition;  // required
 layout(location = 4) in vec3 aColor;     // required: this program is chosen for the colours
 
+#include "_pointsize_inc.glsl"
+
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
-uniform float pointSize;
 
 out vec3 vColor;
 out vec3 vEyePosition;    // for the fog: its length, per fragment
@@ -18,7 +19,5 @@ void main() {
     vEyePosition = eyePosition.xyz;
     gl_Position = projectionMatrix * eyePosition;
     vColor = aColor;
-    // gl_PointSize is set per-vertex; can be used for size attenuation
-    // For now, just use the uniform point size
-    gl_PointSize = pointSize;
+    gl_PointSize = x3dPointSize(length(eyePosition.xyz));
 }

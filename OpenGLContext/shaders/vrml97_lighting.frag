@@ -64,8 +64,15 @@ layout(location = 1) out vec4 fragObjectId;
 // X3D's Phong terms, shared with vrml97_vertex_color.frag and pbr.frag.
 #include "_phong_inc.glsl"
 #include "_x3d_fog_inc.glsl"
+#include "_fill_inc.glsl"
 
 void main() {
+    vec4 hatched;
+    if (x3dHatch(hatched)) {
+        fragColor = hatched;
+        fragObjectId = encodeObjectId(instancingEnabled ? vObjectId : objectId);
+        return;
+    }
     // Normalize interpolated normal
     vec3 normal = normalize(vNormal);
 
