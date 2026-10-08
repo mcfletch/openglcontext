@@ -63,6 +63,7 @@ vec4 layerTexture2D(int slot, vec2 uv) {
     return texture(diffuseTexture, uv);
 }
 #define TEXTURE_LAYER_SAMPLERS 1
+#define TEXTURE_PROJECTORS 1
 #include "_common_inc.glsl"
 #include "_texgen_inc.glsl"
 #include "_layers_inc.glsl"
@@ -84,6 +85,8 @@ layout(location = 1) out vec4 fragObjectId;
 
 // X3D's Phong terms, shared with vrml97_vertex_color.frag and pbr.frag.
 #include "_phong_inc.glsl"
+// X3D's texture projectors, scoped by _phong_inc's lightsOff
+#include "_projectors_inc.glsl"
 #include "_x3d_fog_inc.glsl"
 #include "_fill_inc.glsl"
 
@@ -121,6 +124,9 @@ void main() {
         matDiffuse = layered.rgb;
         alpha = layered.a;
     }
+    // X3D's texture projectors (_projectors_inc.glsl) cast onto the diffuse colour.
+    matDiffuse *= projectedColor((eyeToWorld * vec4(vPosition, 1.0)).xyz,
+                                 mat3(eyeToWorld) * normal);
 
     vec3 finalColor = matDiffuse;
     if (!unlit) {

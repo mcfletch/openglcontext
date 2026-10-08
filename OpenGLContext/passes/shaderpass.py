@@ -456,11 +456,20 @@ class VRML97ShaderProgram(TextureLayersMixin, _ShadowUniformMixin):
         """Where the lit program reads texture layers (:data:`LAYER_UNITS`)"""
         return self.LAYER_UNITS
 
+    #: The unit the texture projectors' pictures are bound on.
+    PROJECTOR_UNIT = 12
+
+    def projector_unit(self) -> Optional[int]:
+        """The unit the lit program reads projectors' pictures from; None for none"""
+        return self.PROJECTOR_UNIT
+
     def _init_lit_layers(self, program: int) -> None:
-        """Point the lit program's layer samplers at their units, once"""
+        """Point the lit program's layer and projector samplers at their units, once"""
         for slot, unit in enumerate(self.LAYER_UNITS.flat[1:], 1):
             self._set_uniform1i('textureLayerMap%d' % slot, unit, program)
         self.init_layer_samplers(program)
+        self._set_uniform1i('projectorImages', self.PROJECTOR_UNIT, program)
+        self._set_uniform1i('projectorCount', 0, program)
 
     def _init_program_set(self) -> None:
         """The one-time setup a newly compiled set of lit programs needs."""

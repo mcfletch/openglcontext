@@ -178,6 +178,8 @@ _EXT_UNITS_MAX = max(PBR_EXT_UNITS.values()) if PBR_EXT_UNITS else 15
 #: least 48 in GL 3.3), and what the stage counts is its samplers.
 LAYER_CUBE_UNIT = 32
 LAYER_VOLUME_UNIT = 33
+#: The unit the texture projectors' pictures are bound on.
+PROJECTOR_UNIT = 34
 #: The samplers the texture layers and the texture projectors add to the
 #: program: a cube map, a 3D texture and the projectors' images.
 LAYER_SAMPLERS_NEEDED = 3
@@ -542,6 +544,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
                 self.MAX_SHADOW_LIGHTS) + LAYER_SAMPLERS_NEEDED <= self.texture_budget
             ext_defines = ['#define TEXTURE_LAYER_SAMPLERS %d'
                            % (1 if self.layer_samplers_supported else 0),
+                           '#define TEXTURE_PROJECTORS %d'
+                           % (1 if self.layer_samplers_supported else 0),
                            '#define PBR_EXT_TEXTURES %d'
                            % (1 if ext_textures_supported(self.texture_budget) else 0),
                            '#define PBR_PLANAR_REFLECTION %d'
@@ -617,12 +621,18 @@ class PBRShaderProgram(VRML97ShaderProgram):
             return LayerUnits(flat)
         return LayerUnits(flat, LAYER_CUBE_UNIT, LAYER_VOLUME_UNIT)
 
+    def projector_unit(self) -> Optional[int]:
+        """The unit the program reads projectors' pictures from; None where it has no sampler"""
+        return PROJECTOR_UNIT if self.layer_samplers_supported else None
+
     def _init_lit_layers(self, program: int) -> None:
-        """Point the program's cube map and 3D layer samplers at their units"""
+        """Point the program's cube map, 3D layer and projector samplers at their units"""
         if self.layer_samplers_supported:
             self.init_layer_samplers(program)
+            self._set_uniform1i('projectorImages', PROJECTOR_UNIT, program)
         else:
             self._set_uniform1i('textureLayerCount', 0, program)
+        self._set_uniform1i('projectorCount', 0, program)
 
     #: Whether zones may have environment probes of their own: the scene's
     #: probe is then a cube-map array, and must be built as one. False until a

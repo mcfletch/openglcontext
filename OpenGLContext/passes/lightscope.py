@@ -26,12 +26,14 @@ def is_global(light: Any) -> bool:
     return bool(getattr(light, 'global', True))
 
 
-def scoped_lights(light_paths: Iterable[Sequence[Any]]) -> Scoped:
+def scoped_lights(light_paths: Iterable[Sequence[Any]], first: int = 0) -> Scoped:
     """The scoped lights among those bound, by slot, with the ancestors they light under
 
-    `light_paths` are the bound lights' paths in slot order.
+    `light_paths` are the bound lights' paths in slot order, the first at
+    slot `first`: texture projectors take the slots from
+    :data:`~OpenGLContext.passes.projectorpass.PROJECTOR_SCOPE_BIT`.
     """
-    return tuple((slot, tuple(path[:-1])) for slot, path in enumerate(light_paths)
+    return tuple((slot, tuple(path[:-1])) for slot, path in enumerate(light_paths, first)
                  if not is_global(path[-1]))
 
 

@@ -8,6 +8,7 @@ from OpenGL.GL import (
 )
 from OpenGLContext.arrays import array 
 from OpenGLContext.scenegraph import polygonsort
+from OpenGLContext.scenegraph.texturelayers import drawn_singly
 
 
 #: The token ``render`` hands back for a material's own base colour map, which
@@ -110,7 +111,6 @@ class Appearance(basenodes.Appearance):
         materialParams = None
         textureToken = []
         # A texture the pass draws is asked for as it is drawn, not as it is sorted
-        from OpenGLContext.scenegraph.texturelayers import drawn_singly  # noqa: PLC0415 texturelayers imports the material modules, which import this one
         if not transparent and self.texture and not drawn_singly( self.texture ):
             tex = self.texture.cached( mode )
             if tex:

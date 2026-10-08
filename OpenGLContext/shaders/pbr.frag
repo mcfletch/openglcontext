@@ -517,6 +517,8 @@ uint effectiveObjectId() {
 #include "_shadow_inc.glsl"
 // X3D's Phong terms per light, for phongMode
 #include "_phong_inc.glsl"
+// X3D's texture projectors, scoped by _phong_inc's lightsOff
+#include "_projectors_inc.glsl"
 
 // sRGB decode alias kept local so callers read as intent ("decode this texel").
 vec3 toLinear(vec3 c) { return sRGBToLinear(c); }
@@ -723,6 +725,10 @@ void main() {
         albedo = layered.rgb;
         alpha = layered.a;
     }
+    // X3D's texture projectors (_projectors_inc.glsl) cast onto the diffuse colour.
+    vec3 projected = projectedColor((eyeToWorld * vec4(vPosition, 1.0)).xyz,
+                                    mat3(eyeToWorld) * (gl_FrontFacing ? vNormal : -vNormal));
+    if (!phongMode) albedo *= sRGBToLinear(projected);
 
     if (alphaMode == 1 && alpha < alphaCutoff) discard;  // MASK
 
@@ -740,9 +746,9 @@ void main() {
     // normal map turns N and the occlusion map scales the lights' sum, and
     // the result is displayed as it is, without the tone map, bloom or not.
     if (phongMode) {
-        vec3 diffuse = hasLayers ? albedo
+        vec3 diffuse = projected * (hasLayers ? albedo
                      : (hasVertexColor ? vColor.rgb : baseColorFactor)
-                       * (hasBaseColor ? baseTex.rgb : vec3(1.0));
+                       * (hasBaseColor ? baseTex.rgb : vec3(1.0)));
         vec3 N = normalize(vNormal);
         if (!gl_FrontFacing) N = -N;
         N = normalMapped(N);

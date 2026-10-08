@@ -102,6 +102,8 @@ from OpenGLContext.passes.flateffects import _FlatEffectsMixin
 from OpenGLContext.passes.multiviewpass import MultiviewPassMixin
 from OpenGLContext.passes.zonepass import ZonesMixin
 from OpenGLContext.passes.generatedtextures import GeneratedTexturesMixin
+from OpenGLContext.passes.projectorpass import ProjectorsMixin
+from OpenGLContext.scenegraph.textureprojector import is_projector
 
 # MRT draw-buffer index carrying the packed object id (attachment 1).
 OBJECT_ID_ATTACHMENT = 1
@@ -542,7 +544,7 @@ def presentFrame( context: Any ) -> Any:
 
 
 class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedTexturesMixin,
-                SelectionMixin, SGObserver ):
+                ProjectorsMixin, SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
     Uses structural scenegraph observations to allow the actual
@@ -796,8 +798,11 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
         for path in light_paths:
             if light_count >= ceiling:
                 break
-            tmatrix = path.transformMatrix()
             light_node = path[-1]
+            # An image-based light or a texture projector is no lamp
+            if isinstance(light_node, x3dnodes.EnvironmentLight) or is_projector(light_node):
+                continue
+            tmatrix = path.transformMatrix()
             if hasattr(light_node, 'on') and light_node.on:
                 # Transform light to eye space (combine light's transform with view matrix)
                 # This matches how fixed-function glLightfv works - it transforms
@@ -808,7 +813,9 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
                 bound_paths.append(path)
                 light_count += 1
         self.boundLights = bound
-        self.lightScopes = self.lightScopes.following(lightscope.scoped_lights(bound_paths))
+        self.setupProjectors(light_paths)
+        self.lightScopes = self.lightScopes.following(
+            lightscope.scoped_lights(bound_paths) + self.projectorScopes())
 
         if self.hasHeadlight(light_count) and light_count < ceiling:
             # Directional along the view, given in eye space.
