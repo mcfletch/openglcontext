@@ -560,8 +560,8 @@ class ZonesMixin(PassResources):
             return ()
         return tuple(int(v) for v in np.floor(np.asarray(camera) / self.CAMERA_CELL))
 
-    #: The scoped lights bound this frame (``lightscope.scoped_lights``).
-    scopedLights: Any = ()
+    #: The scoped lights bound this frame, and each path's bits for them.
+    lightScopes: lightscope.ScopeMasks = lightscope.ScopeMasks()
 
     def applyZones(self, shader: Any, path: Any, tmatrix: Any, bvolume: Any,
                    program: Any = None) -> None:
@@ -573,7 +573,7 @@ class ZonesMixin(PassResources):
         local_fog = getattr(self, 'applyLocalFog', None)
         if local_fog is not None:
             local_fog(shader, path)
-        scope = lightscope.scope_mask(self.scopedLights, path) if self.scopedLights else 0
+        scope = self.lightScopes.mask(path)
         if not self._zones:
             self._applyLightsOff(shader, scope, program)
             return
@@ -615,9 +615,9 @@ class ZonesMixin(PassResources):
             local_fog(shader, members[0][4])
         if not self._zones:
             scope = 0
-            if self.scopedLights:
+            if self.lightScopes:
                 for record in members:
-                    scope |= lightscope.scope_mask(self.scopedLights, record[4])
+                    scope |= self.lightScopes.mask(record[4])
             self._applyLightsOff(shader, scope, program)
             return
         if len(members) == 1:

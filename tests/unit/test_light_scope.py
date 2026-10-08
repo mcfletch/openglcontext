@@ -74,6 +74,55 @@ class TestTheMask:
         assert lightscope.scoped_lights([path(self.root, self.sun)]) == ()
 
 
+class TestTheMasksKept:
+    """A frame's masks are worked out once a path, and kept while the same
+    lights are scoped"""
+
+    def setup_method(self):
+        self.root, self.room, self.hall = basenodes.Group(), basenodes.Group(), basenodes.Group()
+        self.lamp = scoped_light()
+        self.bound = [path(self.root, self.room, self.lamp)]
+
+    def counted(self, monkeypatch):
+        worked = []
+        real = lightscope.scope_mask
+
+        def counting(scoped, at):
+            worked.append(at)
+            return real(scoped, at)
+        monkeypatch.setattr(lightscope, 'scope_mask', counting)
+        return worked
+
+    def test_a_path_is_worked_out_once(self, monkeypatch):
+        worked = self.counted(monkeypatch)
+        masks = lightscope.ScopeMasks().following(lightscope.scoped_lights(self.bound))
+        outside = path(self.root, self.hall, basenodes.Shape())
+        assert [masks.mask(outside) for _draw in range(3)] == [1, 1, 1]
+        assert len(worked) == 1
+
+    def test_the_same_lights_next_frame_keep_the_masks(self, monkeypatch):
+        worked = self.counted(monkeypatch)
+        masks = lightscope.ScopeMasks().following(lightscope.scoped_lights(self.bound))
+        outside = path(self.root, self.hall, basenodes.Shape())
+        masks.mask(outside)
+        again = masks.following(lightscope.scoped_lights(self.bound))
+        assert again is masks
+        assert again.mask(outside) == 1 and len(worked) == 1
+
+    def test_other_lights_work_them_out_again(self):
+        masks = lightscope.ScopeMasks().following(lightscope.scoped_lights(self.bound))
+        inside = path(self.root, self.room, basenodes.Shape())
+        assert masks.mask(inside) == 0
+        other = scoped_light()
+        moved = masks.following(lightscope.scoped_lights([path(self.root, self.hall, other)]))
+        assert moved.mask(inside) == 1
+
+    def test_no_scoped_lights_is_no_mask(self):
+        masks = lightscope.ScopeMasks()
+        assert not masks
+        assert masks.mask(path(self.root, basenodes.Shape())) == 0
+
+
 def _centre(context):
     image = drawn_image(context)
     h, w = image.shape[:2]

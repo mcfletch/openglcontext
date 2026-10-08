@@ -807,7 +807,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                 bound_paths.append(path)
                 light_count += 1
         self.boundLights = bound
-        self.scopedLights = lightscope.scoped_lights(bound_paths)
+        self.lightScopes = self.lightScopes.following(lightscope.scoped_lights(bound_paths))
 
         if self.hasHeadlight(light_count) and light_count < ceiling:
             # Directional along the view, given in eye space.
