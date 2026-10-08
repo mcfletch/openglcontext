@@ -298,7 +298,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - corpus: HumanoidAnimation, the 194 documents of its humanoid folders drawn
     by `oglc-x3d-regression` with none failing; 40 compared with X_ITE renders
   - open: the IFS tessellator is the cost of a large skin's first draw
-    (Lily, 41 000 triangles: 3.4 s); `HAnimPose.isLoaded` routed by
+    (Lily, 41 000 triangles: 1.5 s, the per-polygon walk and the crease
+    normals); `HAnimPose.isLoaded` routed by
     HAnimPoseExample is not an X3D 4.1 field; a `SphereBackground` draws with
     a VAO made each frame
   - [ ] RigidBodyPhysics: the 14 nodes on omi_physics

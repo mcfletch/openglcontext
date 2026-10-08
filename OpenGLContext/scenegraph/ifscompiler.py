@@ -136,8 +136,7 @@ class IFSCompiler(object):
         if polygons is None:
             polygons = self.polygons(sources=sources)
         for poly in polygons:
-            poly.normalise(tessellate)
-            vertices.extend(poly)
+            vertices.extend(poly.normalise(tessellate))
         return vertices
 
     def buildIndexedSources(self) -> list["IndexedValueSource"]:

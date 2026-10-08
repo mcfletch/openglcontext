@@ -347,3 +347,19 @@ def gl(gl_window):
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestDegenerateTriangles:
+    def test_a_collinear_triangle_is_left_out(self):
+        ifs = b.IndexedFaceSet(
+            coord=b.Coordinate(point=[(0, 0, 0), (1, 0, 0), (2, 0, 0), (0, 1, 0)]),
+            coordIndex=[0, 1, 2, -1, 0, 1, 3, -1])
+        vertices, _c, _n, _t = ArrayGeometryCompiler(ifs).expandedArrays()
+        assert len(vertices) == 3
+
+    def test_a_triangle_a_little_off_the_line_is_kept(self):
+        ifs = b.IndexedFaceSet(
+            coord=b.Coordinate(point=[(0, 0, 0), (1, 0, 0), (2, 0.01, 0)]),
+            coordIndex=[0, 1, 2, -1])
+        vertices, _c, _n, _t = ArrayGeometryCompiler(ifs).expandedArrays()
+        assert len(vertices) == 3
