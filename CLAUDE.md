@@ -242,6 +242,11 @@ OpenGLContext/
 │   │                 # context's picked pointer -- no GL
 │   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the
 │   │                 # context to follow its url (Context.OnAnchor)
+│   ├── geospatial.py # X3D's Geospatial nodes: GeoLocation, GeoTransform,
+│   │                 # GeoCoordinate, GeoElevationGrid, GeoViewpoint, GeoLOD
+│   │                 # -- docs/x3d.rst
+│   ├── coordinates.py  # A coordinate node's points in the scene's
+│   │                 # coordinates, which geometry reads -- no GL
 │   ├── x3dgroups.py  # X3D's CADAssembly, CADLayer, PickableGroup and
 │   │                 # StaticGroup as groups, CADFace as its shape
 │   │                 # (CADPart is in transform.py)

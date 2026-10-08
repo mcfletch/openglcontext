@@ -38,7 +38,7 @@ class _Context:
 
 def _pass(paths, field_of_view=60.0):
     rendering = _flat.FlatPass.__new__(_flat.FlatPass)
-    rendering.paths = {lod.LOD: [_Path([node]) for node in paths]}
+    rendering.paths = {lod.Levelled: [_Path([node]) for node in paths]}
     rendering.context = _Context(field_of_view)
     return rendering
 
@@ -109,7 +109,7 @@ class TestWhatTheWindowMakesOfASize:
         node = lod.ScreenCoverageLOD(
             level=_levels(), screenCoverage=[0.5, 0.2, 0.01], radius=1.0)
         rendering = _flat.FlatPass.__new__(_flat.FlatPass)
-        rendering.paths = {lod.LOD: [_Path([node])]}
+        rendering.paths = {lod.Levelled: [_Path([node])]}
         rendering.context = None
 
         rendering.selectLevels(_at(4.0))
@@ -165,7 +165,7 @@ class _MovablePath(list):
 
 def _movable_pass(paths, field_of_view=60.0):
     rendering = _flat.FlatPass.__new__(_flat.FlatPass)
-    rendering.paths = {lod.LOD: list(paths)}
+    rendering.paths = {lod.Levelled: list(paths)}
     rendering.context = _Context(field_of_view)
     return rendering
 

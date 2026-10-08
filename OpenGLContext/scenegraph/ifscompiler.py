@@ -25,7 +25,7 @@ from OpenGL.GL import GL_TRIANGLES
 
 from OpenGLContext import triangleutilities
 from OpenGLContext.debug.logs import getTraceback
-from OpenGLContext.scenegraph import arraygeometry, composedgeometry
+from OpenGLContext.scenegraph import arraygeometry, composedgeometry, coordinates
 from OpenGLContext.scenegraph import (
     polygon,
     vertex,
@@ -64,7 +64,7 @@ class IFSCompiler(object):
         if (
             not len(self.target.coordIndex)
             or not self.target.coord
-            or not len(self.target.coord.point)
+            or not len(coordinates.points(self.target.coord))
         ):
             return None
         holder = self.buildCacheHolder(mode=named["mode"])
@@ -94,8 +94,9 @@ class IFSCompiler(object):
         """(node, field) for every field the compiled arrays are made from:
         each of the face set's own, and the values of its property nodes"""
         found = [(self.target, field) for field in protofunctions.getFields(self.target)]
+        found += [(n, protofunctions.getField(n, attr))
+                  for n, attr in coordinates.fields(self.target.coord)]
         for n, attr in [
-            (self.target.coord, "point"),
             (self.target.color, "color"),
             (self.target.texCoord, "point"),
             (self.target.normal, "vector"),
@@ -126,7 +127,7 @@ class IFSCompiler(object):
         if (
             (not len(self.target.coordIndex))
             or (not self.target.coord)
-            or (not len(self.target.coord.point))
+            or (not len(coordinates.points(self.target.coord)))
         ):
             return []
 
@@ -146,7 +147,7 @@ class IFSCompiler(object):
         not the coord set, as that's the driver for the rest.
         """
         points, colors, normals, textureCoordinates = (
-            getXNull(self.target.coord, "point"),
+            coordinates.points(self.target.coord),
             getXNull(self.target.color, "color"),
             getXNull(self.target.normal, "vector"),
             getXNull(self.target.texCoord, "point"),
@@ -219,7 +220,7 @@ class IFSCompiler(object):
         metaIndex = -1
         polygonIndex = 0
         coordIndices = self.target.coordIndex
-        points = getXNull(self.target.coord, "point")
+        points = coordinates.points(self.target.coord)
         for metaIndex in range(len(coordIndices)):
             point = coordIndices[metaIndex]
             if point >= 0:
@@ -319,7 +320,7 @@ class ArrayGeometryCompiler(IFSCompiler):
             )
         elif not self.target.texCoord:
             textureCoordinateArray = composedgeometry.default_texcoords(
-                vertexArray, self.target.coord.point)
+                vertexArray, coordinates.points(self.target.coord))
         else:
             textureCoordinateArray = None
         return vertexArray, colorArray, normalArray, textureCoordinateArray

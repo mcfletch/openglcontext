@@ -247,6 +247,6 @@ class FlatPass( _flat.FlatPass ):
         """Set our view platform"""
         self.viewPlatform = vp 
         self.projection = vp.viewMatrix().astype('f')
-        self.modelView = vp.modelMatrix().astype('f')
+        self.modelView = vp.modelMatrix().astype('d')
         self.modelproj = dot( self.modelView, self.projection )
         self.matrix = None 

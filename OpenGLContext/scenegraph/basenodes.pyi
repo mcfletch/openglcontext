@@ -45,6 +45,12 @@ from OpenGLContext.scenegraph.geometry2d import Disk2D as Disk2D
 from OpenGLContext.scenegraph.geometry2d import Polypoint2D as Polypoint2D
 from OpenGLContext.scenegraph.geometry2d import Rectangle2D as Rectangle2D
 from OpenGLContext.scenegraph.geometry2d import TriangleSet2D as TriangleSet2D
+from OpenGLContext.scenegraph.geospatial import GeoCoordinate as GeoCoordinate
+from OpenGLContext.scenegraph.geospatial import GeoElevationGrid as GeoElevationGrid
+from OpenGLContext.scenegraph.geospatial import GeoLOD as GeoLOD
+from OpenGLContext.scenegraph.geospatial import GeoLocation as GeoLocation
+from OpenGLContext.scenegraph.geospatial import GeoTransform as GeoTransform
+from OpenGLContext.scenegraph.geospatial import GeoViewpoint as GeoViewpoint
 from OpenGLContext.scenegraph.group import Group as Group
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight as ImageBasedLight
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture as ImageDataTexture
@@ -168,6 +174,7 @@ from OpenGLContext.scenegraph.x3dparticles import SurfaceEmitter as SurfaceEmitt
 from OpenGLContext.scenegraph.x3dparticles import VolumeEmitter as VolumeEmitter
 from OpenGLContext.scenegraph.x3dparticles import WindPhysicsModel as WindPhysicsModel
 from OpenGLContext.scenegraph.x3dpointing import CylinderSensor as CylinderSensor
+from OpenGLContext.scenegraph.x3dpointing import GeoTouchSensor as GeoTouchSensor
 from OpenGLContext.scenegraph.x3dpointing import PlaneSensor as PlaneSensor
 from OpenGLContext.scenegraph.x3dpointing import SphereSensor as SphereSensor
 from OpenGLContext.scenegraph.x3dpointing import TouchSensor as TouchSensor
@@ -208,6 +215,8 @@ from vrml.vrml97.basenodes import WorldInfo as WorldInfo
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
 from vrml.x3d.nodes import CoordinateDouble as CoordinateDouble
 from vrml.x3d.nodes import FillProperties as FillProperties
+from vrml.x3d.nodes import GeoMetadata as GeoMetadata
+from vrml.x3d.nodes import GeoOrigin as GeoOrigin
 from vrml.x3d.nodes import LineProperties as LineProperties
 from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean
 from vrml.x3d.nodes import MetadataDouble as MetadataDouble
@@ -228,6 +237,7 @@ from vrml.x3d.runtime import BooleanToggle as BooleanToggle
 from vrml.x3d.runtime import BooleanTrigger as BooleanTrigger
 from vrml.x3d.runtime import CoordinateInterpolator2D as CoordinateInterpolator2D
 from vrml.x3d.runtime import EaseInEaseOut as EaseInEaseOut
+from vrml.x3d.runtime import GeoPositionInterpolator as GeoPositionInterpolator
 from vrml.x3d.runtime import IntegerSequencer as IntegerSequencer
 from vrml.x3d.runtime import IntegerTrigger as IntegerTrigger
 from vrml.x3d.runtime import PositionInterpolator2D as PositionInterpolator2D
@@ -235,6 +245,7 @@ from vrml.x3d.runtime import SplinePositionInterpolator as SplinePositionInterpo
 from vrml.x3d.runtime import SplinePositionInterpolator2D as SplinePositionInterpolator2D
 from vrml.x3d.runtime import SplineScalarInterpolator as SplineScalarInterpolator
 from vrml.x3d.runtime import SquadOrientationInterpolator as SquadOrientationInterpolator
+from vrml.x3d.sensors import GeoProximitySensor as GeoProximitySensor
 from vrml.x3d.sensors import ProximitySensor as ProximitySensor
 from vrml.x3d.sensors import TransformSensor as TransformSensor
 from vrml.x3d.sensors import VisibilitySensor as VisibilitySensor
@@ -308,6 +319,17 @@ __all__ = [
     'GLSLObject',
     'GLSLShader',
     'Gear',
+    'GeoCoordinate',
+    'GeoElevationGrid',
+    'GeoLOD',
+    'GeoLocation',
+    'GeoMetadata',
+    'GeoOrigin',
+    'GeoPositionInterpolator',
+    'GeoProximitySensor',
+    'GeoTouchSensor',
+    'GeoTransform',
+    'GeoViewpoint',
     'Group',
     'IS',
     'ImageBasedLight',

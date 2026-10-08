@@ -14,6 +14,8 @@ from vrml.x3d import nodes as x3d
 from omi_physics import model
 from omi_physics.world import PhysicsWorld
 
+from OpenGLContext.scenegraph import coordinates
+
 
 def _local_matrix(node: Any) -> np.ndarray:
     """The node's local 4x4 transform (identity if it has no pose or one cannot be built)."""
@@ -31,13 +33,12 @@ def _mesh_positions_indices(geom: Any) -> Optional[tuple[np.ndarray, np.ndarray]
     """Return ``(positions, triangle_indices)`` for a scenegraph geometry, or None if it has none.
 
     ``geom`` is a scenegraph geometry node; positions come from its ``positions``
-    or ``coord.point`` and faces from ``indices`` or a fan-triangulated
+    or its ``coord`` node's points in the scene and faces from ``indices`` or a fan-triangulated
     ``coordIndex``. Triangle indices are an ``(M, 3)`` array.
     """
     pos = getattr(geom, 'positions', None)
     if pos is None:
-        pos = getattr(geom, 'coord', None)
-        pos = getattr(pos, 'point', None)
+        pos = coordinates.points(getattr(geom, 'coord', None))
     if pos is None or not len(pos):
         return None
     pos = np.asarray(pos, dtype='d')
