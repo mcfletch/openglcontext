@@ -260,8 +260,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] the cascade: a field is reached once per cascade, through handlers and their outputs (`vrml.event`)
   - [x] `Collision`: `enabled` and `proxy` in the walk's collision world; `collideTime` and `isActive` from the avatar's touches (`physics.x3dcollision`)
   - [x] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor (`SensorTimer`; its multiplier is the sensor's `rate`)
-  - [ ] Picking: `LinePickSensor`, `PointPickSensor`, `PrimitivePickSensor`,
-    `VolumePickSensor`
+  - [x] Picking: `LinePickSensor`, `PointPickSensor`, `PrimitivePickSensor`,
+    `VolumePickSensor` (`vrml.x3d.picking` events and `sortOrder`;
+    `scenegraph.x3dpicking` once a frame from `multiviewpass.sensePicks`,
+    the arithmetic in `scenegraph.pickgeometry`); `pickedGeometry` is the
+    Shape; shapes need no PickableGroup to be picked; every PickableGroup on
+    the path filters; BOUNDS for a line gives the box entry, its face normal
+    and the place in the box as texture coordinate
 - Phase 8, engine-mapped components (§9.17)
   - [x] CADGeometry: `CADFace` (`x3dgroups`), `QuadSet`, `IndexedQuadSet`
     (`meshgeometry`, two triangles a quad)

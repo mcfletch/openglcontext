@@ -119,7 +119,8 @@ implements these X3D nodes, by component:
 - Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint,
   ViewpointGroup
 - Networking - Anchor, Inline, InlineGeometry, LoadSensor
-- Picking - PickableGroup
+- Picking - LinePickSensor, PickableGroup, PointPickSensor, PrimitivePickSensor,
+  VolumePickSensor
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
 - Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
@@ -461,8 +462,76 @@ Sensors
   for the function, arrow and page keys, and ``shiftKey``, ``controlKey`` and
   ``altKey`` while those are held.
 - A ``StringSensor`` hears every character typed into its window.
+- The pick sensors are told once a frame what their ``pickingGeometry``
+  touches among the shapes under their ``pickTarget`` nodes
+  (:ref:`x3d-pick-sensors`).
 
 ``Context.observeEvents`` is how the sensors listen.
+
+.. _x3d-pick-sensors:
+
+Pick sensors
+~~~~~~~~~~~~
+
+``LinePickSensor``, ``PointPickSensor``, ``PrimitivePickSensor`` and
+``VolumePickSensor`` test their ``pickingGeometry``, in their own coordinate
+system, against every shape under their ``pickTarget`` nodes where the scene
+draws them (``OpenGLContext.scenegraph.x3dpicking``, with the arithmetic in
+``scenegraph.pickgeometry``). The events are pyvrml97's
+(``vrml.x3d.picking``). Each frame, after the views are placed, a sensor
+sends ``isActive TRUE`` when something is picked and ``isActive FALSE`` when
+nothing is, and ``pickedGeometry`` when the shapes chosen change.
+
+- ``pickedGeometry`` holds the picked ``Shape`` nodes. A shape placed twice
+  under the targets is two picks.
+- A shape under a ``PickableGroup`` whose ``pickable`` is false, or whose
+  ``objectType`` the sensor does not accept, is not picked; every
+  ``PickableGroup`` on the shape's path from the scene's root is asked. A
+  shape under none has the label ``ALL``. ``ALL`` on either side always
+  matches and ``NONE`` never does; otherwise ``MATCH_ANY`` wants a label in
+  common, ``MATCH_EVERY`` each of the sensor's labels among the group's, and
+  ``MATCH_ONLY_ONE`` exactly one in common.
+- ``sortOrder`` ``ANY`` sends the first shape found, ``CLOSEST`` (the
+  default) the nearest, ``ALL`` every one as found and ``ALL_SORTED`` every
+  one nearest first.
+- ``intersectionType`` ``BOUNDS`` (the default) tests against each shape's
+  bounding box; ``GEOMETRY`` against its triangles. ``GEOMETRY`` first
+  checks the box, so a shape out of reach costs a box test.
+- ``LinePickSensor`` takes an ``IndexedLineSet`` or ``LineSet``. With
+  ``GEOMETRY``, each crossing of a surface sends a ``pickedPoint``, the
+  surface's ``pickedNormal`` there and its ``pickedTextureCoordinate`` (z
+  0); with ``BOUNDS``, the point each segment enters the box, that face's
+  normal, and where in the box the point is, 0 to 1 on each axis. Distance
+  is measured along the line from its first point, so ``CLOSEST`` is the
+  first surface the line reaches.
+- ``PointPickSensor`` takes a ``PointSet`` and sends the ``pickedPoint`` of
+  those within a shape's box, or, with ``GEOMETRY``, within its triangles.
+- ``PrimitivePickSensor`` takes a ``Box``, ``Sphere``, ``Cylinder`` or
+  ``Cone`` centred on the sensor's origin; ``VolumePickSensor`` any geometry
+  with triangles, as a closed solid. With ``GEOMETRY`` a shape is picked
+  where its triangles meet the solid or it holds the solid within it.
+  Cylinders and cones are tested as solids of 32 sides. Distance is between
+  the centres of the two bounding boxes.
+- Points, normals and texture coordinates are in the sensor's coordinates,
+  in the order of ``pickedGeometry``.
+- Lines, points and text have no triangles: ``GEOMETRY`` does not pick them.
+  "Inside" a mesh is by its winding number, so an open surface has an inside
+  where it winds more than half way round.
+
+A sensor built in code works the same way; this one reports the first wall
+along a guard's line of sight:
+
+.. code-block:: python
+
+   from vrml.x3d import picking
+   from OpenGLContext.scenegraph.basenodes import Coordinate, IndexedLineSet
+
+   sight = picking.LinePickSensor(
+       pickingGeometry=IndexedLineSet(
+           coord=Coordinate(point=[(0, 1.6, 0), (0, 1.6, -50)]), coordIndex=[0, 1]),
+       pickTarget=[walls], intersectionType='GEOMETRY')
+   guard.children.append(sight)      # it looks from where the guard stands
+   # each frame after: sight.isActive, sight.pickedGeometry, sight.pickedPoint
 
 Kept and not drawn
 ~~~~~~~~~~~~~~~~~~

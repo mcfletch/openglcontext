@@ -5,7 +5,8 @@ allocations, uploads and compiles are counted by
 :func:`OpenGLContext.testing.stillframe.check_still_frame`. The scenes are the
 ones a game's still moment is made of: VRML97 primitives through both
 renderers, a field of shapes drawn as one instanced group, a mirror with
-bloom, shadows, text, and X3D's line, point and fill properties.
+bloom, shadows, text, X3D's line, point and fill properties, and X3D's pick
+sensors.
 """
 import pytest
 
@@ -68,6 +69,19 @@ def _styled():
                             appearance=look)]
 
 
+def _picked():
+    """Primitives that a line and a sphere pick each frame"""
+    from vrml.x3d import picking  # noqa: PLC0415 kept with its use
+    group = basenodes.Group(children=_primitives())
+    line = basenodes.IndexedLineSet(coord=basenodes.Coordinate(point=[(-6, 0, -8), (6, 0, -8)]),
+                                    coordIndex=[0, 1])
+    return [group,
+            picking.LinePickSensor(pickingGeometry=line, pickTarget=[group],
+                                   intersectionType='GEOMETRY', sortOrder='ALL'),
+            picking.PrimitivePickSensor(pickingGeometry=basenodes.Sphere(radius=3),
+                                        pickTarget=[group], intersectionType='GEOMETRY')]
+
+
 PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
 
 
@@ -80,6 +94,7 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
     pytest.param(_primitives, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='shadows'),
     pytest.param(_text, PBR, id='text'),
     pytest.param(_styled, PBR, id='line-point-fill-properties'),
+    pytest.param(_picked, PBR, id='pick-sensors'),
 ])
 def test_a_still_frame_asks_nothing_new_of_gl(scene, environment):
     with scene_context(scene(), environment=environment) as context:

@@ -235,6 +235,10 @@ OpenGLContext/
 │   │                 # sense: the viewer, a target, the views -- no GL
 │   ├── x3dpointing.py   # X3D's pointing-device sensors told of each
 │   │                 # context's picked pointer -- no GL
+│   ├── x3dpicking.py # X3D's pick sensors told each frame what their picking
+│   │                 # geometry touches -- no GL -- docs/x3d.rst
+│   ├── pickgeometry.py  # Segments, points, boxes and solids against
+│   │                 # triangles, for the pick sensors -- NumPy only
 │   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the
 │   │                 # context to follow its url (Context.OnAnchor)
 │   ├── x3dgroups.py  # X3D's CADAssembly, CADLayer, PickableGroup and

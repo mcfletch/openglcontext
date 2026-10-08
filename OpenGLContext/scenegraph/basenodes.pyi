@@ -202,6 +202,10 @@ from vrml.x3d.nodes import Tangent as Tangent
 from vrml.x3d.nodes import TextureProperties as TextureProperties
 from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
 from vrml.x3d.nodes import TwoSidedMaterial as TwoSidedMaterial
+from vrml.x3d.picking import LinePickSensor as LinePickSensor
+from vrml.x3d.picking import PointPickSensor as PointPickSensor
+from vrml.x3d.picking import PrimitivePickSensor as PrimitivePickSensor
+from vrml.x3d.picking import VolumePickSensor as VolumePickSensor
 from vrml.x3d.runtime import BooleanFilter as BooleanFilter
 from vrml.x3d.runtime import BooleanSequencer as BooleanSequencer
 from vrml.x3d.runtime import BooleanToggle as BooleanToggle
@@ -305,6 +309,7 @@ __all__ = [
     'IntegerTrigger',
     'KeySensor',
     'LOD',
+    'LinePickSensor',
     'LineProperties',
     'LineSet',
     'LoadSensor',
@@ -340,6 +345,7 @@ __all__ = [
     'PlanarReflector',
     'PlaneSensor',
     'PointLight',
+    'PointPickSensor',
     'PointProperties',
     'PointSet',
     'PolyCone',
@@ -352,6 +358,7 @@ __all__ = [
     'PositionDamper2D',
     'PositionInterpolator',
     'PositionInterpolator2D',
+    'PrimitivePickSensor',
     'ProximitySensor',
     'QuadSet',
     'ROUTE',
@@ -407,6 +414,7 @@ __all__ = [
     'Viewpoint',
     'ViewpointGroup',
     'VisibilitySensor',
+    'VolumePickSensor',
     'WorldInfo',
     'X3DScene',
     'Zone',
