@@ -21,8 +21,14 @@ log = logging.getLogger(__name__)
 __all__ = ['X3DHandler', 'defaultHandler', 'prototypes']
 
 #: X3D nodes whose name the engine's registry gives to another class (the
-#: VRML97 NURBS extension's `Polyline2D`), by name: (module, class).
-X3D_ONLY = {'Polyline2D': ('OpenGLContext.scenegraph.geometry2d', 'Polyline2D')}
+#: VRML97 NURBS extension's `Polyline2D`, `NurbsCurve`, `NurbsCurve2D` and
+#: `Contour2D`), by name: (module, class).
+X3D_ONLY = {
+    'Polyline2D': ('OpenGLContext.scenegraph.geometry2d', 'Polyline2D'),
+    'NurbsCurve': ('OpenGLContext.scenegraph.nurbsx3d', 'NurbsCurve'),
+    'NurbsCurve2D': ('OpenGLContext.scenegraph.nurbsx3d', 'NurbsCurve2D'),
+    'Contour2D': ('OpenGLContext.scenegraph.nurbsx3d', 'Contour2D'),
+}
 
 #: How each problem's severity is logged.
 _LEVELS = {'error': logging.ERROR, 'warning': logging.WARNING, 'info': logging.INFO}

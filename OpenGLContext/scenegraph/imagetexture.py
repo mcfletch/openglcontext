@@ -60,10 +60,15 @@ class _Texture(nodetypes.Texture, node.Node):
         if tex is not None:
             self.components = tex.components
             if getattr(mode, "shader_mode", False):
-                apply_sampler(tex, sampler_of(self))
+                apply_sampler(tex, sampler_of(self, self.imageSize()))
         else:
             self.components = 0
         return tex
+
+    def imageSize(self) -> Optional[tuple[int, int]]:
+        """The image's (width, height) in texels; None where there is no image"""
+        size = getattr(self.image, 'size', None)
+        return (int(size[0]), int(size[1])) if size else None
 
     def createTexture(self, image: Any, mode: Any = None) -> Any:
         """Create a new texture-holding object
@@ -405,6 +410,13 @@ def sfimage_pixels(image: Any, owner: Any = None) -> Optional[tuple[int, int, in
 
 class PixelTexture(_Texture, basenodes.PixelTexture):
     """PixelTexture, in-file node for small textures"""
+
+    def imageSize(self) -> Optional[tuple[int, int]]:
+        """The SFImage's (width, height) in texels; None where it has none"""
+        image = self.image
+        if image is None or len(image) < 3 or not (int(image[0]) and int(image[1])):
+            return None
+        return int(image[0]), int(image[1])
 
     def createTexture(self, image: Any, mode: Any = None) -> Any:
         """Create a new texture-holding object

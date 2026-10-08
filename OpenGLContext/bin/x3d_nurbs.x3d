@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="4.0">
+  <head>
+    <component name="NURBS" level="4"/>
+    <meta name="title" content="X3D NURBS"/>
+    <meta name="creator" content="OpenGLContext"/>
+    <meta name="license" content="BSD-3-Clause"/>
+    <meta name="description" content="The scene oglc-x3d-nurbs opens: a trimmed marble shell, a swung gold vase, a swept brass rail, a brick banner a bead rides over, and a dart flying along a NURBS curve."/>
+  </head>
+  <Scene>
+    <WorldInfo title="X3D NURBS" info='"The scene oglc-x3d-nurbs opens."'/>
+    <NavigationInfo type='"EXAMINE" "ANY"'/>
+    <Background skyColor="0.38 0.52 0.72 0.72 0.80 0.90" skyAngle="1.4" groundColor="0.30 0.27 0.22"/>
+    <Viewpoint description="The NURBS" position="0 2.2 6.5" orientation="1 0 0 -0.12"/>
+    <DirectionalLight global="true" shadows="true" shadowIntensity="0.8"
+                      direction="-0.7 -0.8 -0.4" intensity="2.2" color="1 0.96 0.9"/>
+
+    <!-- The floor: a straight 2 by 2 patch in sandstone, its texture tiled
+         four times by a NurbsTextureCoordinate of its own. -->
+    <Shape>
+      <Appearance>
+        <PhysicalMaterial metallic="0" roughness="1">
+          <ImageTexture containerField="baseTexture" url='"sandstone_base.png"'/>
+          <ImageTexture containerField="metallicRoughnessTexture" url='"sandstone_mr.png"'/>
+          <ImageTexture containerField="normalTexture" url='"sandstone_normal.png"'/>
+        </PhysicalMaterial>
+      </Appearance>
+      <NurbsPatchSurface uDimension="2" vDimension="2" uOrder="2" vOrder="2">
+        <Coordinate containerField="controlPoint" point="-5 0 5  5 0 5  -5 0 -5  5 0 -5"/>
+        <NurbsTextureCoordinate uDimension="2" vDimension="2" uOrder="2" vOrder="2"
+                                controlPoint="0 0  4 0  0 4  4 4"/>
+      </NurbsPatchSurface>
+    </Shape>
+
+    <!-- The shell: a curved marble panel with a round window, trimmed by an
+         outer boundary and a rational circle in its (u, v) range. -->
+    <Shape>
+      <Appearance>
+        <PhysicalMaterial metallic="0" roughness="1">
+          <ImageTexture containerField="baseTexture" url='"marble_base.png"'/>
+          <ImageTexture containerField="metallicRoughnessTexture" url='"marble_mr.png"'/>
+          <ImageTexture containerField="normalTexture" url='"marble_normal.png"'/>
+        </PhysicalMaterial>
+      </Appearance>
+      <NurbsTrimmedSurface DEF="Shell" solid="false" uDimension="4" vDimension="3"
+                           uOrder="3" vOrder="3">
+        <Coordinate containerField="controlPoint"
+                    point="-3.4 0.2 -1.2  -2.65 0.2 -0.767  -1.9 0.2 -0.767  -1.15 0.2 -1.2
+                           -3.4 1.3 -0.95  -2.65 1.3 -0.517  -1.9 1.3 -0.517  -1.15 1.3 -0.95
+                           -3.4 2.4 -1.2  -2.65 2.4 -0.767  -1.9 2.4 -0.767  -1.15 2.4 -1.2"/>
+        <Contour2D>
+          <ContourPolyline2D controlPoint="0 0  1 0  1 1  0 1  0 0"/>
+        </Contour2D>
+        <Contour2D>
+          <!-- A circle: each corner point is given multiplied by its weight. -->
+          <NurbsCurve2D order="3" knot="0 0 0 1 1 2 2 3 3 4 4 4"
+                        weight="1 0.7071 1 0.7071 1 0.7071 1 0.7071 1"
+                        controlPoint="0.72 0.55  0.5091 0.2333  0.5 0.33  0.198 0.2333
+                                      0.28 0.55  0.198 0.5445  0.5 0.77  0.5091 0.5445
+                                      0.72 0.55"/>
+        </Contour2D>
+      </NurbsTrimmedSurface>
+    </Shape>
+
+    <!-- The vase: a profile swung around a rational circle in the xz-plane. -->
+    <Transform translation="-0.2 0 0.4">
+      <Shape>
+        <Appearance>
+          <PhysicalMaterial baseColor="1 0.766 0.336" metallic="1" roughness="0.25"/>
+        </Appearance>
+        <NurbsSwungSurface DEF="Vase" solid="false">
+          <NurbsCurve2D containerField="profileCurve" order="3" tessellation="40"
+                        controlPoint="0 0  0.25 0.02  0.3 0.3  0.12 0.75  0.08 0.95  0.18 1.1"/>
+          <NurbsCurve2D containerField="trajectoryCurve" order="3" closed="true"
+                        tessellation="48" knot="0 0 0 1 1 2 2 3 3 4 4 4"
+                        weight="1 0.7071 1 0.7071 1 0.7071 1 0.7071 1"
+                        controlPoint="0.25 0  0.1768 -0.1768  0 -0.25  -0.1768 -0.1768
+                                      -0.25 0  -0.1768 0.1768  0 0.25  0.1768 0.1768  0.25 0"/>
+        </NurbsSwungSurface>
+      </Shape>
+    </Transform>
+
+    <!-- The rail: a round brass section swept along a curve in space. -->
+    <Shape>
+      <Appearance>
+        <PhysicalMaterial baseColor="0.8 0.55 0.3" metallic="1" roughness="0.35"/>
+      </Appearance>
+      <NurbsSweptSurface DEF="Rail">
+        <NurbsCurve2D containerField="crossSectionCurve" order="3" tessellation="16"
+                      knot="0 0 0 1 1 2 2 3 3 4 4 4"
+                      weight="1 0.7071 1 0.7071 1 0.7071 1 0.7071 1"
+                      controlPoint="0.05 0  0.03536 -0.03536  0 -0.05  -0.03536 -0.03536
+                                    -0.05 0  -0.03536 0.03536  0 0.05  0.03536 0.03536  0.05 0"/>
+        <NurbsCurve containerField="trajectoryCurve" order="4" tessellation="64">
+          <Coordinate containerField="controlPoint"
+                      point="0.9 0.05 1.2  1.4 0.05 0.4  2.6 0.9 0.6  2.9 1.2 -0.6  2 1.6 -1.2"/>
+        </NurbsCurve>
+      </NurbsSweptSurface>
+    </Shape>
+
+    <!-- The banner: a waving brick patch, and a bead riding over it. -->
+    <Shape>
+      <Appearance>
+        <PhysicalMaterial metallic="0" roughness="1">
+          <ImageTexture containerField="baseTexture" url='"brick_base.png"'/>
+          <ImageTexture containerField="normalTexture" url='"brick_normal.png"'/>
+        </PhysicalMaterial>
+      </Appearance>
+      <NurbsPatchSurface DEF="Banner" solid="false" uDimension="5" vDimension="4"
+                         uOrder="4" vOrder="4">
+        <Coordinate DEF="BannerPoints" containerField="controlPoint"
+                    point="1.2 0.3 -1.6  1.65 0.3 -1.452  2.1 0.3 -1.55  2.55 0.3 -1.731  3 0.3 -1.695
+                           1.2 0.75 -1.492  1.65 0.75 -1.479  2.1 0.75 -1.666  2.55 0.75 -1.744  3 0.75 -1.583
+                           1.2 1.2 -1.45  1.65 1.2 -1.579  2.1 1.2 -1.743  2.55 1.2 -1.67  3 1.2 -1.481
+                           1.2 1.65 -1.499  1.65 1.65 -1.692  2.1 1.65 -1.733  2.55 1.65 -1.553  3 1.65 -1.452"/>
+      </NurbsPatchSurface>
+    </Shape>
+    <NurbsSurfaceInterpolator DEF="BannerPoint" uDimension="5" vDimension="4" uOrder="4" vOrder="4">
+      <Coordinate USE="BannerPoints" containerField="controlPoint"/>
+    </NurbsSurfaceInterpolator>
+    <TimeSensor DEF="BeadClock" cycleInterval="6" loop="true"/>
+    <PositionInterpolator2D DEF="BeadRoute" key="0 0.25 0.5 0.75 1"
+                            keyValue="0.1 0.1  0.9 0.1  0.9 0.9  0.1 0.9  0.1 0.1"/>
+    <Transform DEF="Bead">
+      <Shape>
+        <Appearance>
+          <PhysicalMaterial baseColor="0.97 0.96 0.91" metallic="1" roughness="0.15"/>
+        </Appearance>
+        <Sphere radius="0.08"/>
+      </Shape>
+    </Transform>
+
+    <!-- The dart: flies along a NURBS curve, drawn as a line, and turns to
+         follow it. -->
+    <Shape>
+      <Appearance>
+        <Material emissiveColor="1 0.85 0.4"/>
+        <LineProperties linewidthScaleFactor="3" linetype="2"/>
+      </Appearance>
+      <NurbsCurve DEF="Path" order="4" tessellation="96">
+        <Coordinate DEF="PathPoints" containerField="controlPoint"
+                    point="-3 2.9 -0.5  -1.8 3.6 0.2  -0.6 2.4 0.6  0.6 3.6 0.2  1.8 2.4 -0.2  3 3.1 -0.8"/>
+      </NurbsCurve>
+    </Shape>
+    <NurbsPositionInterpolator DEF="DartPlace" order="4">
+      <Coordinate USE="PathPoints" containerField="controlPoint"/>
+    </NurbsPositionInterpolator>
+    <NurbsOrientationInterpolator DEF="DartTurn" order="4">
+      <Coordinate USE="PathPoints" containerField="controlPoint"/>
+    </NurbsOrientationInterpolator>
+    <TimeSensor DEF="Flight" cycleInterval="8" loop="true"/>
+    <Transform DEF="Dart">
+      <Transform rotation="1 0 0 1.5708">
+        <Shape>
+          <Appearance>
+            <PhysicalMaterial baseColor="0.56 0.57 0.58" metallic="1" roughness="0.3"/>
+          </Appearance>
+          <Cone height="0.35" bottomRadius="0.07"/>
+        </Shape>
+      </Transform>
+    </Transform>
+
+    <!-- How finely the curved pieces are tessellated: oglc-x3d-nurbs's t key
+         changes the scale. -->
+    <NurbsSet DEF="Detail" tessellationScale="1">
+      <NurbsTrimmedSurface USE="Shell" containerField="geometry"/>
+      <NurbsSwungSurface USE="Vase" containerField="geometry"/>
+      <NurbsSweptSurface USE="Rail" containerField="geometry"/>
+      <NurbsPatchSurface USE="Banner" containerField="geometry"/>
+      <NurbsCurve USE="Path" containerField="geometry"/>
+    </NurbsSet>
+
+    <ROUTE fromNode="Flight" fromField="fraction_changed" toNode="DartPlace" toField="set_fraction"/>
+    <ROUTE fromNode="Flight" fromField="fraction_changed" toNode="DartTurn" toField="set_fraction"/>
+    <ROUTE fromNode="DartPlace" fromField="value_changed" toNode="Dart" toField="set_translation"/>
+    <ROUTE fromNode="DartTurn" fromField="value_changed" toNode="Dart" toField="set_rotation"/>
+    <ROUTE fromNode="BeadClock" fromField="fraction_changed" toNode="BeadRoute" toField="set_fraction"/>
+    <ROUTE fromNode="BeadRoute" fromField="value_changed" toNode="BannerPoint" toField="set_fraction"/>
+    <ROUTE fromNode="BannerPoint" fromField="position_changed" toNode="Bead" toField="set_translation"/>
+  </Scene>
+</X3D>

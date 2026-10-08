@@ -135,6 +135,11 @@ Installing the package puts these commands on your path:
    surfaces, a lamp that lights only its alcove, shadows, X3D's triangle sets
    and an Inlined glTF model, with keys to switch the lamp, hide a node and
    write the scene back out as X3D. See :doc:`Loading X3D <x3d>`.
+``oglc-x3d-nurbs``
+   X3D's NURBS nodes read from a document: a marble shell with a trimmed
+   window, a swung gold vase, a swept brass rail, a bead riding a brick
+   banner and a dart flying along a curve, with a key to change the
+   ``NurbsSet``'s tessellation scale. See :doc:`NURBS <nurbs>`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and
