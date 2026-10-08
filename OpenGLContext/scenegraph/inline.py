@@ -25,6 +25,7 @@ from OpenGLContext import context
 from OpenGLContext.loaders import background
 from OpenGLContext.scenegraph.switch import CHILDREN_CHANGE_SIGNAL
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
@@ -58,15 +59,22 @@ def read_first(urls: Sequence[str], node: Any) -> Optional[tuple[Any, list[Any]]
     """The scene the first of `urls` that reads gives, and the nodes it is drawn as
 
     Each url is resolved against the document `node` belongs to. None where
-    none reads.
+    none reads. A url naming the document itself, or a document that
+    inlines it, is reported and not read: it would inline itself without end.
     """
     from OpenGLContext.loaders import formats
     from OpenGLContext.loaders.loader import Loader
     root = protofunctions.root(node)
     baseURI = root.baseURI if root else None
+    chain = tuple(getattr(root, '__dict__', {}).get(_CHAIN, ()))
+    if baseURI:
+        chain += (_document_key(baseURI),)
     for u in urls:
         try:
             target = Loader.resolve(u, baseURI)
+            if _document_key(target) in chain:
+                log.warning("url %s includes itself: it is a document inlining it", u)
+                continue
             reader = formats.adapter_for(target)
             native = reader.read(target)
             nodes = reader.nodes(native)
@@ -74,8 +82,22 @@ def read_first(urls: Sequence[str], node: Any) -> Optional[tuple[Any, list[Any]]
             log.info("url %s did not read: %s", u, err)
             continue
         log.info("loaded %s", u)
+        if hasattr(native, '__dict__'):
+            native.__dict__[_CHAIN] = chain
         return native, list(nodes)
     return None
+
+
+#: Where a scene an Inline read records the documents inlining it.
+_CHAIN = '_inlineChain'
+
+
+def _document_key(location: Any) -> str:
+    """A document's location in one form, a local path's made absolute"""
+    text = str(location)
+    if '://' in text or text.startswith('data:'):
+        return text
+    return os.path.realpath(text)
 
 
 def redraw(contexts: Sequence[Any]) -> None:

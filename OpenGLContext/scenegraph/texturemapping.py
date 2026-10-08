@@ -138,7 +138,8 @@ def transform_matrix(transform: Any) -> np.ndarray:
 
     `TextureTransformMatrix3D`: its matrix's rows for s and t, with the
     translation in the last column; `TextureTransform`: X3D's composition of
-    its center, rotation, scale and translation. Any other node is reported
+    its center, rotation, scale and translation; `TextureTransform3D`: its
+    composition's rows for s and t. Any other node is reported
     once and read as no transform.
     """
     if transform is None:
@@ -149,6 +150,11 @@ def transform_matrix(transform: Any) -> np.ndarray:
                          [matrix[1, 0], matrix[1, 1], matrix[1, 3]]], 'f')
     if isinstance(transform, x3d.TextureTransform):
         return texture_transform_matrix(transform)[:2].astype('f')
+    if isinstance(transform, x3d.TextureTransform3D):
+        from OpenGLContext.scenegraph.texturelayers import transform_matrix as deep  # noqa: PLC0415 texturelayers imports this module
+        rows = deep(transform)
+        return np.array([[rows[0, 0], rows[0, 1], rows[0, 3]],
+                         [rows[1, 0], rows[1, 1], rows[1, 3]]], 'f')
     _report('Texture transform %s is drawn untransformed'
             % protofunctions.protoName(transform))
     return _IDENTITY.copy()

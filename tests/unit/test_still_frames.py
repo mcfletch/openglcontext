@@ -68,6 +68,30 @@ def _styled():
                             appearance=look)]
 
 
+def _textured():
+    """A MultiTexture with a cube map, a 3D texture, a generated cube map and a
+    rendered texture drawn once, and a texture projector"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    pixel = b'<PixelTexture image="1 1 3 0xFF8000"/>'
+    sides = b''.join(b'<PixelTexture containerField="%s" image="1 1 3 0x00FF00"/>' % side
+                     for side in (b'frontTexture', b'backTexture', b'leftTexture',
+                                  b'rightTexture', b'topTexture', b'bottomTexture'))
+    square = (b'<IndexedTriangleSet index="0 1 2 0 2 3" solid="false">'
+              b'<Coordinate point="-1 -1 -6 1 -1 -6 1 1 -6 -1 1 -6"/></IndexedTriangleSet>')
+
+    def shape(texture, x):
+        return (b'<Transform translation="%d 0 0"><Shape><Appearance><Material/>%s'
+                b'</Appearance>%s</Shape></Transform>' % (x, texture, square))
+    body = (shape(b"<MultiTexture mode='\"MODULATE\" \"ADD\"'>" + pixel
+                  + b'<ComposedCubeMapTexture>' + sides + b'</ComposedCubeMapTexture>'
+                  + b'<PixelTexture3D image="1 1 1 2 0x40 0xC0"/></MultiTexture>', -3)
+            + shape(b'<GeneratedCubeMapTexture size="8"/>', 0)
+            + shape(b'<RenderedTexture width="8" height="8"/>', 3)
+            + b'<TextureProjector location="0 0 0" direction="0 0 -1">' + pixel
+            + b'</TextureProjector>')
+    return Loader.loads(b'<X3D version="4.0"><Scene>' + body + b'</Scene></X3D>', 'still.x3d')
+
+
 PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
 
 
@@ -80,6 +104,9 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
     pytest.param(_primitives, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='shadows'),
     pytest.param(_text, PBR, id='text'),
     pytest.param(_styled, PBR, id='line-point-fill-properties'),
+    pytest.param(_textured, PBR, id='texture-layers-generated-projected-pbr'),
+    pytest.param(_textured, {'OPENGLCONTEXT_RENDERER': 'flat'},
+                 id='texture-layers-generated-projected-flat'),
 ])
 def test_a_still_frame_asks_nothing_new_of_gl(scene, environment):
     with scene_context(scene(), environment=environment) as context:

@@ -155,3 +155,21 @@ def test_an_inline_in_an_inlined_document_reads_beside_it(tmp_path):
     inner.load = True
     settle()
     assert [type(child) for child in inner.renderedChildren()] == [basenodes.Shape]
+
+
+def test_a_document_inlining_itself_is_not_read_again(tmp_path, caplog):
+    (tmp_path / 'world.x3d').write_bytes(document('world.x3d'))
+    found = inlined(Loader.load(str(tmp_path / 'world.x3d')))
+    assert found.renderedChildren() == []
+    assert 'includes itself' in caplog.text
+
+
+def test_two_documents_inlining_each_other_stop(tmp_path, caplog):
+    (tmp_path / 'a.x3d').write_bytes(document('b.x3d'))
+    (tmp_path / 'b.x3d').write_bytes(document('a.x3d'))
+    first = inlined(Loader.load(str(tmp_path / 'a.x3d')))
+    second = first.renderedChildren()[0]
+    settle()
+    assert isinstance(second, Inline)
+    assert second.renderedChildren() == []
+    assert 'includes itself' in caplog.text
