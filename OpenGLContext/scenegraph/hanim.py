@@ -1,4 +1,4 @@
-"""X3D's HAnim nodes: humanoids drawn, skinned and animated -- docs/characters.rst
+"""X3D's HAnim nodes: humanoids drawn, skinned and animated (docs/characters.rst)
 
 An `HAnimHumanoid` is drawn as a Transform of its `skeleton`, its `skin` and
 those of its `viewpoints` the skeleton does not already place. Each

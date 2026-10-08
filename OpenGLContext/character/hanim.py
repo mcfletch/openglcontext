@@ -1,4 +1,4 @@
-"""HAnim humanoids as arithmetic: names, skin weights, motion channels, poses -- no GL
+"""HAnim humanoids as arithmetic: names, skin weights, motion channels, poses, with no GL
 
 The X3D HAnim nodes (:mod:`OpenGLContext.scenegraph.hanim`) are drawn and
 animated from what this module works out, and it reads no scenegraph:
