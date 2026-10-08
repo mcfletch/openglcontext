@@ -101,6 +101,7 @@ from OpenGLContext.passes.selection import (
 from OpenGLContext.passes.flateffects import _FlatEffectsMixin
 from OpenGLContext.passes.multiviewpass import MultiviewPassMixin
 from OpenGLContext.passes.zonepass import ZonesMixin
+from OpenGLContext.passes.clippass import ClipPlanesMixin
 
 # MRT draw-buffer index carrying the packed object id (attachment 1).
 OBJECT_ID_ATTACHMENT = 1
@@ -540,8 +541,8 @@ def presentFrame( context: Any ) -> Any:
     return context.SwapBuffers()
 
 
-class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixin,
-                SGObserver ):
+class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMixin,
+                SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
     Uses structural scenegraph observations to allow the actual
@@ -913,14 +914,16 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
             from OpenGLContext.passes.instancing import build_instance_groups
             key, instanceable = self.batchingFunctions()
             # One draw has one light mask, so records the scoped lights reach
-            # differently are batched apart.
+            # differently are batched apart, and a clipped record is drawn
+            # by itself.
             scopes = self.lightScopes
             groups, single_recs = build_instance_groups(
                 [rec for (_i, rec) in opaque],
                 min_instances=self.instanceMinimum(),
                 key=key,
                 instanceable=instanceable,
-                apart=(lambda record: scopes.mask(record[4])) if scopes else None,
+                apart=(lambda record: (scopes.mask(record[4]), self.clipApart(record)))
+                if scopes or self.clipPlanes else None,
             )
             for group in groups:
                 try:
@@ -1072,6 +1075,8 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         x3dnodes.X3DPickSensorNode,
         # The fogs scoped to their groups, chosen per draw.
         x3dnodes.LocalFog,
+        # The clip planes scoped to their groups, chosen per draw.
+        x3dnodes.ClipPlane,
         # X3D's image-based light, the scene's when it has no ImageBasedLight.
         x3dnodes.EnvironmentLight,
     ]
@@ -2185,6 +2190,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                     self.matrix = mvmatrix
                     self.renderPath = path
                     glLoadMatrixf( mvmatrix )
+                    self.applyFixedClipPlanes( path, _tmatrix )
                     try:
                         node.RenderTransparent( mode = self )
                         if debugFrustum:
@@ -2193,6 +2199,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                         self.renderFailed( 'transparent', node, err )
         finally:
             self.transparent = False
+            self.endFixedClipPlanes()
             if setup:
                 glDisable( GL_BLEND )
                 glDepthMask( 1 )

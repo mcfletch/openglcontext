@@ -122,7 +122,7 @@ implements these X3D nodes, by component:
 - Picking - LinePickSensor, PickableGroup, PointPickSensor, PrimitivePickSensor,
   VolumePickSensor
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
-- Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
+- Rendering - ClipPlane, Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
   Normal, PointSet, Tangent, TriangleFanSet, TriangleSet, TriangleStripSet
 - Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
@@ -256,7 +256,34 @@ A geometry that is not ``solid`` draws its back faces with
 fields where its ``separateBackColor`` is true, through the PBR program: the
 shape is drawn a side at a time and is not batched with others. The alpha
 mode is the front material's, and the fixed-function path draws both sides
-with the front material.
+with the front material. A ``Box``, ``Sphere``, ``Cone`` or ``Cylinder``
+whose ``solid`` is false draws its inside.
+
+Clip planes
+~~~~~~~~~~~
+
+An enabled ``ClipPlane`` cuts away part of its siblings in their parent group
+and of everything under them: a point is kept where the ``plane`` (a, b, c,
+d) gives a·x + b·y + c·z + d of zero or more, in the ClipPlane's own
+coordinate system, so a plane under a ``Transform`` moves and turns with it.
+ClipPlanes in nested groups all apply; one draw takes the eight whose groups
+are nearest it, and a warning names a draw that more reach
+(``OpenGLContext.passes.clipscope``).
+
+- The planes are handed to each draw in the drawn object's own frame
+  (``passes.clippass``), and every vertex shader that draws the scene's
+  shapes writes ``gl_ClipDistance`` from them (``_clipplane_inc.glsl``), so
+  they clip in each view, mirror and shadow map alike: what a plane cuts
+  away casts no shadow. Wide and dashed lines are clipped in their geometry
+  stage.
+- The compatibility profile clips with ``glClipPlane``, as many planes as
+  the context has (six at least).
+- A clipped shape is drawn by itself rather than in an instanced group.
+- A shape drawn with its own ``Shader`` program, and the engine's terrain,
+  vegetation and particle layers, which draw with programs of their own, are
+  not clipped.
+- Planes only cut: the cut is not capped, so a solid shape is open where a
+  plane passes through it.
 
 Lighting
 ~~~~~~~~

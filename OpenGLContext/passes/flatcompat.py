@@ -213,12 +213,14 @@ class FlatPass( _flat.FlatPass ):
                 self.renderPath = path
                 glMatrixMode(GL_MODELVIEW)
                 glLoadMatrixf( mvmatrix )
+                self.applyFixedClipPlanes( path, _tmatrix )
                 try:
                     node.Render( mode = self )
                     if debugFrustum:
                         bvolume.debugRender( )
                 except Exception as err:
                     self.renderFailed( 'opaque', node, err )
+        self.endFixedClipPlanes()
     def selectRender( self, mode: Any, toRender: Sequence[Any],
                       events: dict[Any, Any] ) -> None:
         """Legacy colour-buffer pick for the compatibility profile.

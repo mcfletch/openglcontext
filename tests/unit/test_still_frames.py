@@ -5,8 +5,8 @@ allocations, uploads and compiles are counted by
 :func:`OpenGLContext.testing.stillframe.check_still_frame`. The scenes are the
 ones a game's still moment is made of: VRML97 primitives through both
 renderers, a field of shapes drawn as one instanced group, a mirror with
-bloom, shadows, text, X3D's line, point and fill properties, and X3D's pick
-sensors.
+bloom, shadows, text, X3D's line, point and fill properties, X3D's pick sensors
+and ClipPlanes.
 """
 import pytest
 
@@ -82,6 +82,13 @@ def _picked():
                                         pickTarget=[group], intersectionType='GEOMETRY')]
 
 
+def _clipped():
+    """Primitives cut by two ClipPlanes"""
+    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+    return [basenodes.Group(children=[x3d.ClipPlane(plane=(0, 1, 0, 0)),
+                                      x3d.ClipPlane(plane=(1, 0, 0, 1)), *_primitives()])]
+
+
 PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
 
 
@@ -95,6 +102,7 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
     pytest.param(_text, PBR, id='text'),
     pytest.param(_styled, PBR, id='line-point-fill-properties'),
     pytest.param(_picked, PBR, id='pick-sensors'),
+    pytest.param(_clipped, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='clip-planes'),
 ])
 def test_a_still_frame_asks_nothing_new_of_gl(scene, environment):
     with scene_context(scene(), environment=environment) as context:

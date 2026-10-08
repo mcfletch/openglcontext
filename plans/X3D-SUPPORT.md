@@ -233,7 +233,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `vrml97_wide_line.geom`, `_pointsize_inc.glsl`, `_fill_inc.glsl`, and the
     compatibility profile's line width, line stipple and polygon stipple)
   - [ ] `AcousticProperties` with Sound
-  - [ ] `ClipPlane`
+  - [x] `ClipPlane` (`passes.clipscope`, `passes.clippass`,
+    `_clipplane_inc.glsl`): planes in the drawn object's frame, so every
+    view, mirror and shadow map; up to 8 a draw, nearest groups first;
+    `glClipPlane` in the compatibility profile; clipped shapes are not
+    instanced; a Shader node's program and the terrain/vegetation/particle
+    layers are not clipped. Found on the way: `Box` and the quadrics ignored
+    `solid FALSE` (now drawn from inside, and kept apart when instancing)
   - [ ] `FontLibrary`
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
   - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)

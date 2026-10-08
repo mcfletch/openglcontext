@@ -191,6 +191,10 @@ OpenGLContext/
 │   ├── renderstats.py # What a frame cost in shapes and draws, for the
 │   │                 # developer overlay -- docs/hud.rst
 │   ├── localfog.py   # Which LocalFog fogs a draw: its scope -- no GL
+│   ├── clipscope.py  # Which ClipPlanes clip a draw, in its own frame -- no GL
+│   │                 # -- docs/x3d.rst
+│   ├── clippass.py   # The pass's side: each draw given its planes, the
+│   │                 # shaders' clip distances or glClipPlane
 │   ├── zonepass.py   # The pass's side of zones: placing them each frame,
 │   │                 # what each draw is given, captures -- docs/zones-internals.rst
 │   ├── zonelayers.py # What zones give a draw, a camera, a listener -- no GL

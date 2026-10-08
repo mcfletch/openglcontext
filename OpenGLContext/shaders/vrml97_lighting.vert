@@ -29,6 +29,8 @@ out vec4 vColor;
 flat out uint vObjectId;
 #include "_multiview_inc.glsl"
 
+#include "_clipplane_inc.glsl"
+
 void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
     // Normal matrix follows the (per-instance) modelview when instancing.
@@ -51,6 +53,7 @@ void main() {
 
     // Final clip-space position
     gl_Position = projectionMatrix * eyePosition;
+    clipByPlanes(aPosition);
 #ifdef MULTIVIEW_VERTEX
     routeToView(vPosition);
 #endif

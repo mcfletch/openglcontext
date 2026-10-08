@@ -185,6 +185,7 @@ from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
 from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
+from vrml.x3d.nodes import ClipPlane as ClipPlane
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
 from vrml.x3d.nodes import CoordinateDouble as CoordinateDouble
 from vrml.x3d.nodes import FillProperties as FillProperties
@@ -243,6 +244,7 @@ __all__ = [
     'CADLayer',
     'CADPart',
     'Circle2D',
+    'ClipPlane',
     'Collision',
     'Color',
     'ColorChaser',

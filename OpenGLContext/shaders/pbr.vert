@@ -80,6 +80,8 @@ vec2 octahedralUV(vec3 direction, bool hemi) {
     return clamp(uv * 0.5 + 0.5, 0.0, 1.0);
 }
 
+#include "_clipplane_inc.glsl"
+
 void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
     // Normal matrix follows the (per-instance) modelview. The uniform path passes
@@ -168,6 +170,7 @@ void main() {
     vObjectId = aInstanceObjectId;
     vMaterialIndex = aInstanceMaterial;
     gl_Position = projectionMatrix * eyePosition;
+    clipByPlanes(position);
     // Point primitives (glTF POINTS mode) default to 1px, which is invisible on a
     // hi-dpi capture. Give them a fixed screen size scaled down with distance so a
     // point cloud reads. Ignored for triangle/line draws (needs GL_PROGRAM_POINT_SIZE).

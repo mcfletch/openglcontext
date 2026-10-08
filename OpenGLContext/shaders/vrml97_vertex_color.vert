@@ -19,6 +19,8 @@ out vec3 vPosition;  // Position in eye/view space
 out vec4 vColor;     // Per-vertex color
 #include "_multiview_inc.glsl"
 
+#include "_clipplane_inc.glsl"
+
 void main() {
     // Transform position to eye space (for lighting calculations)
     vec4 eyePosition = modelViewMatrix * vec4(aPosition, 1.0);
@@ -32,6 +34,7 @@ void main() {
 
     // Final clip-space position
     gl_Position = projectionMatrix * eyePosition;
+    clipByPlanes(aPosition);
 #ifdef MULTIVIEW_VERTEX
     routeToView(vPosition);
 #endif
