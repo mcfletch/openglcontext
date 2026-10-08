@@ -97,6 +97,8 @@ implements these X3D nodes, by component:
 - CADGeometry - CADAssembly, CADFace, CADLayer, CADPart, IndexedQuadSet, QuadSet
 - Core - MetadataBoolean, MetadataDouble, MetadataFloat, MetadataInteger,
   MetadataSet, MetadataString, WorldInfo
+- CubeMapTexturing - ComposedCubeMapTexture, GeneratedCubeMapTexture,
+  ImageCubeMapTexture
 - EnvironmentalEffects - Background, Fog, LocalFog, TextureBackground
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
@@ -128,10 +130,13 @@ implements these X3D nodes, by component:
   PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - AudioClip, Sound
 - Text - FontStyle, Text
-- Texturing - ImageTexture, MovieTexture, MultiTextureCoordinate,
-  MultiTextureTransform, PixelTexture, TextureCoordinate, TextureProperties,
-  TextureTransform
-- Texturing3D - TextureTransformMatrix3D
+- TextureProjection - TextureProjector, TextureProjectorParallel
+- Texturing - ImageTexture, MovieTexture, MultiTexture, MultiTextureCoordinate,
+  MultiTextureTransform, PixelTexture, RenderedTexture, TextureCoordinate,
+  TextureProperties, TextureTransform
+- Texturing3D - ComposedTexture3D, ImageTexture3D, PixelTexture3D,
+  TextureCoordinate3D, TextureCoordinate4D, TextureTransform3D,
+  TextureTransformMatrix3D
 - Time - TimeSensor
 
 .. x3d-implemented-end
@@ -192,8 +197,11 @@ A composed geometry's first texture coordinate set may come from a
 ``TextureCoordinateGenerator``: the PBR vertex shader makes it in the
 generator's ``mode`` (``OpenGLContext.scenegraph.texgen``), from the
 vertex's own or camera-space position or normal. A generator for a later
-set is reported once and not drawn, and the fixed-function and VRML97
-shader paths do not generate coordinates.
+set makes that set where a ``MultiTexture`` layer reads it, per fragment
+(see :ref:`x3d-texturing`), in both renderers; the fixed-function path does not
+generate coordinates. A ``TextureCoordinate3D`` or ``TextureCoordinate4D``
+in a composed geometry's ``MultiTextureCoordinate`` is its 3D texture
+coordinates (the first of them; it takes no 2D set's number).
 
 A grouping node or shape whose ``visible`` is false is not drawn, picked or
 shadowed, nor is anything under it; setting it takes effect on the next frame.
@@ -257,6 +265,128 @@ shape is drawn a side at a time and is not batched with others. The alpha
 mode is the front material's, and the fixed-function path draws both sides
 with the front material.
 
+.. _x3d-texturing:
+
+Texturing
+~~~~~~~~~
+
+An appearance's ``texture`` may be a ``MultiTexture``, a cube map or a 3D
+texture as well as a 2D texture (``OpenGLContext.scenegraph.texturelayers``).
+Any of the three is drawn as a stage chain in place of the base colour map,
+in both renderers: the colour so far starts as the material's diffuse colour
+(a ``PhysicalMaterial``'s base colour, an ``UnlitMaterial``'s emissive
+colour, or the geometry's ``Color``), and each texture in turn combines with
+it by its ``mode``. A cube map or a 3D texture by itself is a chain of one
+that modulates. The chain's result is the surface's colour and alpha, which
+the material's lighting then shades. A shape drawn with a chain is drawn by
+itself, not batched with others.
+
+- ``MultiTexture``: up to four textures. For each, the first argument is the
+  texture's colour, or its ``source`` (``DIFFUSE``, ``SPECULAR`` or
+  ``FACTOR``, the node's ``color`` and ``alpha``), after its ``function``
+  (``COMPLEMENT``, ``ALPHA_REPLICATE``); the second is the colour so far.
+  ``mode`` names the operation, and a second after a comma for the alpha
+  (``"MODULATE,REPLACE"``); without one the alpha takes the same operation.
+  X3D 3's names without underscores (``MODULATEALPHA_ADDCOLOR``,
+  ``BLENDDIFFUSEALPHA``, ``DOTPRODUCT3``) are read as the names with them.
+  A missing mode is ``MODULATE``; an unknown one is reported once and read
+  as ``MODULATE``. Each stage's result is clamped to 0..1. The textures may
+  be cube maps and 3D textures as well as 2D textures, as
+  ``MultiTextureTeapot.x3d`` uses them; a fifth texture and a MultiTexture
+  inside a MultiTexture are reported once and left out.
+- Coordinates: layer i reads the geometry's texture coordinate node at
+  position i of its ``MultiTextureCoordinate`` (the last where there are
+  fewer), and the ``MultiTextureTransform`` entry at position i likewise; a
+  single coordinate node or transform serves every layer. A 2D layer reads
+  coordinate set 0 or 1 (a later set is read as set 0 and reported once), a
+  ``TextureCoordinateGenerator``'s coordinates made per fragment, or a 3D
+  set's s and t.
+- A cube map reads the world-space reflection of the view about the
+  surface, whatever coordinates the geometry gives it: it is an environment
+  the surface reflects. A 3D texture reads the geometry's 3D coordinates, a
+  generator's three coordinates (``COORD``, ``COORD_EYE``, the camera-space
+  modes and the noises), or, without either, its position across the
+  geometry's bounding box: s along x, t along y and r along z, 0 to 1.
+  ``TextureTransform3D`` and ``TextureTransformMatrix3D`` transform s, t and
+  r; a 4D coordinate is divided by its q.
+- The PBR program combines a ``PhysicalMaterial``'s or an
+  ``UnlitMaterial``'s chain in linear light, its textures decoded from sRGB
+  as base colour maps are; a ``Material``'s, drawn by X3D's Phong equation,
+  and the VRML97 renderer's combine the colours as they are given. The PBR
+  program reads a 2D layer through the base colour map's sampler and three
+  of the glTF extension maps' (a material drawn with a chain does not use
+  those maps), and one cube map and one 3D texture a draw, where the
+  driver's fragment stage has samplers left for them
+  (``pbrpass.LAYER_SAMPLERS_NEEDED``: a 32-sampler stage has). A driver
+  with 16 reads one 2D layer; what does not fit is reported once and left
+  out. The VRML97 renderer reads four 2D layers, a cube map and a 3D
+  texture.
+- The compatibility profile draws a MultiTexture's first 2D layer, combined
+  by its mode where the fixed-function texture environment has it
+  (``MODULATE``, ``REPLACE``, ``ADD``, ``ADD_SIGNED``, ``SUBTRACT``), a cube
+  map through the texture unit's reflection-map coordinates turned into world
+  space, and a 3D texture with its coordinates generated across the
+  geometry's bounds.
+
+``ComposedCubeMapTexture`` takes a 2D texture node a face: front is +Z, back
+-Z, left -X, right +X, top +Y and bottom -Y, each image lying on its face as
+a GL cube map face does (upright on the sides seen from outside the cube,
+the top's upper edge toward the back, the bottom's toward the front). Faces
+of different sizes are resampled to the largest, and the cube is drawn once
+all six have images. ``ImageCubeMapTexture`` reads a DDS cube map
+(uncompressed, or BC1 to BC3), a KTX 1.1 cube map (bytes, or S3TC), or one
+picture of the six faces: a horizontal cross (4:3, -X +Z +X -Z across the
+middle, +Y over +Z and -Y under it), a vertical cross (3:4, -Z under -Y and
+upside down), a strip of six in GL's order across or down, or 3x2
+(``OpenGLContext.loaders.textureimages``). KTX 2 and HDR cube maps are not
+read.
+
+``GeneratedCubeMapTexture`` is the scene drawn into a cube of ``size``
+texels a side from the local origin of the shape wearing it, along the world
+axes (``OpenGLContext.passes.generatedtextures``); ``RenderedTexture`` is
+the scene drawn into a ``width`` by ``height`` picture. Each frame draws,
+before any view, the ones the shapes drawn in the frame before wore, leaving
+those shapes out of the drawing, so a texture first shows the frame after
+its shape does (the pass asks for that frame). ``update`` ``NONE`` draws one
+once, the first time it is wanted, and keeps that drawing;
+``NEXT_FRAME_ONLY`` draws it once more and sets ``update`` to ``NONE``;
+``ALWAYS`` draws it with every frame the scene is drawn. A RenderedTexture
+draws from its ``viewpoint``, or without one from the camera's place; its
+``scene`` in place of the world, and its ``background`` and ``fog`` in place
+of the bound ones, where it has them; and with ``depthMap`` true it is the
+depth drawn, as grey, rather than the colour. X3D 4.1 declares
+RenderedTexture's file-output fields, which are kept and not acted on, and
+not these: ``update``, ``viewpoint``, ``scene``, ``background`` and ``fog``
+are the engine's, carried in a document in an ``OpenGLContext`` metadata
+set. Neither is drawn in the compatibility profile. A RenderedTexture is an
+ordinary 2D texture once drawn, and goes wherever one does.
+
+``ImageTexture3D`` reads a DDS or KTX volume, an NRRD volume of one to four
+components (raw, gzip, bzip2 or text, with a detached data file read beside
+its header; samples wider than a byte scaled from their range to 0..255), or
+one picture, a volume a slice deep, and sends ``width``, ``height``,
+``depth`` and ``colorDepth`` once read. ``ComposedTexture3D`` stacks its 2D
+textures as slices, resampled to the first's size; ``PixelTexture3D`` is
+its ``image``: components, width, height and depth, then the pixels s
+first, then t, then r (``OpenGLContext.scenegraph.texture3d``). The
+VolumeRendering documents' volumes load; volume rendering itself is a later
+component.
+
+A ``TextureProjector`` casts its ``texture`` from ``location`` along
+``direction`` through a perspective of ``fieldOfView`` (the smaller of the
+picture's two angles), and a ``TextureProjectorParallel`` straight along it
+across its ``fieldOfView`` rectangle; ``upVector`` turns the picture, and
+``nearDistance`` and ``farDistance``, where positive, bound its reach
+(``OpenGLContext.scenegraph.textureprojector``). Where it falls, on faces
+turned toward it, it modulates the surface's diffuse colour by its picture
+times its ``color``, weighted by the texel's alpha times ``intensity``, as
+X3D browsers draw it. Its ``global`` and scope are a light's, it lights
+nothing itself, and it sends ``aspectRatio`` when its picture is known. The
+first four that are on cast, each picture resampled to 512 texels a side
+(``OpenGLContext.passes.projectorpass``); the rest are reported once.
+``shadows`` is kept and not acted on, and the compatibility profile casts
+none.
+
 Lighting
 ~~~~~~~~
 
@@ -273,10 +403,16 @@ An ``EnvironmentLight`` with ``diffuseCoefficients`` (glTF's
 ``irradianceCoefficients``: nine RGB spherical-harmonic coefficients,
 multiplied by its ``color``) lights the scene as its image-based light, where
 the scene has no glTF image-based light of its own, with its ``intensity``
-and ``rotation`` (``OpenGLContext.scenegraph.environmentlight``). Its one
-specular level is made from the same coefficients, so smooth surfaces
-reflect a blurred environment; the cube-map textures, ``origin`` and
-``global`` are not read. It needs full image-based lighting
+and ``rotation`` (``OpenGLContext.scenegraph.environmentlight``). Its
+``specularTexture``, a ``ComposedCubeMapTexture`` or ``ImageCubeMapTexture``,
+is the environment smooth surfaces reflect, decoded from sRGB to linear
+light, each rougher level its faces averaged down by half; its
+``diffuseTexture`` is the irradiance over pi, read as its spherical-harmonic
+fit. The irradiance is the ``diffuseCoefficients`` where there are nine,
+else the diffuse cube map's, else the specular cube map convolved; without
+a specular cube map the one specular level is made from the irradiance, so
+smooth surfaces reflect a blurred environment. A ``GeneratedCubeMapTexture``,
+``origin`` and ``global`` are not read. It needs full image-based lighting
 (``ContextDefinition.ibl``).
 
 A document is lit by its own lights and its headlight: the PBR pass's

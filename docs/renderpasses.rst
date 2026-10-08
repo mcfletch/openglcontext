@@ -155,10 +155,15 @@ already use:
    * - 12, 13
      - ``JOINTS_0``, ``WEIGHTS_0``
      - ``aJoints``, ``aWeights`` (vec4 each, skinning)
+   * - 15
+     - ``TEXCOORD_3D``
+     - ``aTexCoord3D`` (vec4: an X3D 3D texture's s, t, r, q)
 
-A shader of your own can use location 15 and above
+A shader of your own can use location 16 and above
 (``vertexsemantics.FIRST_FREE_LOCATION``) for inputs that have no name in this
-table.
+table, where the driver has more than the 16 locations GL guarantees. Location
+15 is fed only by a geometry with 3D texture coordinates, so a shader drawing
+other geometry may take it for an input of its own.
 
 .. rst-class:: technical
 
