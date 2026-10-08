@@ -21,6 +21,19 @@ def test_every_mode_has_a_number_the_shader_knows(mode):
     assert texgen.MODES[mode] > 0
 
 
+def test_the_shader_numbers_the_modes_as_texgen_does():
+    import os  # noqa: PLC0415 kept with its use
+    import re  # noqa: PLC0415 kept with its use
+
+    from OpenGLContext.passes.shadersource import SHADER_DIR  # noqa: PLC0415 kept with its use
+    with open(os.path.join(SHADER_DIR, '_texgen_inc.glsl'), encoding='utf-8') as stream:
+        source = stream.read()
+    found = {name: int(number) for name, number in
+             re.findall(r'#define TEXGEN_([A-Z_]+)\s+(\d+)', source)}
+    assert found == texgen.MODES
+    assert not re.search(r'texGenMode == \d', source)
+
+
 def test_a_generator_gives_its_mode_and_parameters():
     generator = x3d.TextureCoordinateGenerator(mode='NOISE', parameter=[2, 2, 2, 0.5, 0, 0])
     found = texgen.texgen_of(generator)
@@ -72,3 +85,21 @@ def test_a_camera_space_mode_draws_the_texture(gl_context):
     image = drawn(b'CAMERA_SPACE_POSITION', eye=b'0 0.5 2')
     # Lit by the headlight: each colour of the texture appears somewhere.
     assert image.reshape(-1, 3).max(axis=0)[:2].min() > 100
+
+
+def test_the_local_modes_are_given_the_camera_in_the_shapes_space(gl_context):
+    """Worked out once a draw from its model-view, as the camera at the
+    origin taken back into the shape's own space"""
+    import ctypes  # noqa: PLC0415 kept with its use
+
+    from OpenGL.GL import glGetUniformfv, glGetUniformLocation, glUseProgram  # noqa: PLC0415 GL
+    from OpenGLContext.passes.pbrpass import PBRShaderProgram  # noqa: PLC0415 GL
+    shader = PBRShaderProgram()
+    assert shader.compile()
+    glUseProgram(shader.program)
+    modelview = np.identity(4)
+    modelview[3, :3] = (1.0, -2.0, -5.0)          # the shape 5 ahead, 1 right, 2 down
+    shader.set_texgen(texgen.TexGen(texgen.MODES['SPHERE_LOCAL'], (0.0,) * 8), modelview)
+    value = (ctypes.c_float * 3)()
+    glGetUniformfv(shader.program, glGetUniformLocation(shader.program, 'texGenLocalEye'), value)
+    assert list(value) == pytest.approx([-1.0, 2.0, 5.0])

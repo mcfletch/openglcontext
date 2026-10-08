@@ -1,7 +1,19 @@
 // X3D's TextureCoordinateGenerator: the first texture coordinate set made
 // from the vertex rather than read from aTexCoord. The mode numbers are
 // OpenGLContext.scenegraph.texgen.MODES.
+#define TEXGEN_SPHERE                          1
+#define TEXGEN_CAMERA_SPACE_NORMAL             2
+#define TEXGEN_CAMERA_SPACE_POSITION           3
+#define TEXGEN_CAMERA_SPACE_REFLECTION_VECTOR  4
+#define TEXGEN_SPHERE_LOCAL                    5
+#define TEXGEN_COORD                           6
+#define TEXGEN_COORD_EYE                       7
+#define TEXGEN_NOISE                           8
+#define TEXGEN_NOISE_EYE                       9
+#define TEXGEN_SPHERE_REFLECT                 10
+#define TEXGEN_SPHERE_REFLECT_LOCAL           11
 uniform int texGenMode;            // optional: 0 reads aTexCoord
+uniform vec3 texGenLocalEye;       // optional: the camera in the shape's own space, per draw
 uniform float texGenParameter[8];  // optional: the generator's parameters
 
 // A sphere map of `direction`, a view reflected or refracted at the surface.
@@ -48,16 +60,22 @@ vec2 generatedTexCoord(vec3 localPosition, vec3 localNormal, vec3 eyePosition,
                        vec3 eyeNormal, vec3 localEye) {
     vec3 view = normalize(eyePosition);
     vec3 localView = normalize(localPosition - localEye);
-    if (texGenMode == 1) return texGenSphere(reflect(view, eyeNormal));
-    if (texGenMode == 2) return eyeNormal.xy;
-    if (texGenMode == 3) return eyePosition.xy;
-    if (texGenMode == 4) return reflect(view, eyeNormal).xy;
-    if (texGenMode == 5) return texGenSphere(reflect(localView, normalize(localNormal)));
-    if (texGenMode == 6) return localPosition.xy;
-    if (texGenMode == 7) return eyePosition.xy;
-    if (texGenMode == 8) return texGenNoiseAt(localPosition);
-    if (texGenMode == 9) return texGenNoiseAt(eyePosition);
-    if (texGenMode == 10) return texGenSphere(texGenRefracted(view, eyeNormal));
-    if (texGenMode == 11) return texGenSphere(texGenRefracted(localView, normalize(localNormal)));
+    if (texGenMode == TEXGEN_SPHERE) return texGenSphere(reflect(view, eyeNormal));
+    if (texGenMode == TEXGEN_CAMERA_SPACE_NORMAL) return eyeNormal.xy;
+    // CAMERA_SPACE_POSITION and COORD_EYE are both the vertex in camera space
+    if (texGenMode == TEXGEN_CAMERA_SPACE_POSITION || texGenMode == TEXGEN_COORD_EYE) {
+        return eyePosition.xy;
+    }
+    if (texGenMode == TEXGEN_CAMERA_SPACE_REFLECTION_VECTOR) return reflect(view, eyeNormal).xy;
+    if (texGenMode == TEXGEN_SPHERE_LOCAL) {
+        return texGenSphere(reflect(localView, normalize(localNormal)));
+    }
+    if (texGenMode == TEXGEN_COORD) return localPosition.xy;
+    if (texGenMode == TEXGEN_NOISE) return texGenNoiseAt(localPosition);
+    if (texGenMode == TEXGEN_NOISE_EYE) return texGenNoiseAt(eyePosition);
+    if (texGenMode == TEXGEN_SPHERE_REFLECT) return texGenSphere(texGenRefracted(view, eyeNormal));
+    if (texGenMode == TEXGEN_SPHERE_REFLECT_LOCAL) {
+        return texGenSphere(texGenRefracted(localView, normalize(localNormal)));
+    }
     return vec2(0.0);
 }

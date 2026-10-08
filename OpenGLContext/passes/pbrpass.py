@@ -833,17 +833,24 @@ class PBRShaderProgram(VRML97ShaderProgram):
     #: What :meth:`set_texgen` last set, and on which program.
     _texgen: tuple[Optional[int], int, tuple[float, ...]] = (None, 0, ())
 
-    def set_texgen(self, generator: Optional[TexGen]) -> None:
+    def set_texgen(self, generator: Optional[TexGen], modelview: Any = None) -> None:
         """Make the first texture coordinate set with `generator`, or read it from the arrays
 
         X3D's TextureCoordinateGenerator, as :mod:`OpenGLContext.scenegraph.texgen`
-        numbers its modes; None reads ``aTexCoord``. Called for every shape
+        numbers its modes; None reads ``aTexCoord``. `modelview` is the
+        draw's, which places the camera in the shape's own space for the
+        local modes; an instanced draw leaves it None. Called for every shape
         drawn, since the uniform outlives the draw that set it.
         """
         if generator is None:
             state: tuple[Optional[int], int, tuple[float, ...]] = (self.program, 0, ())
         else:
             state = (self.program, generator.mode, generator.parameters)
+            if modelview is not None:
+                # Row vectors: the eye at the origin, taken back through the model-view
+                eye = np.linalg.inv(np.asarray(modelview, dtype=np.float64))[3, :3]
+                self._set_uniform3f('texGenLocalEye', tuple(float(v) for v in eye),
+                                    self.program)
         if state == self._texgen:
             return
         self._set_uniform1i('texGenMode', state[1], self.program)

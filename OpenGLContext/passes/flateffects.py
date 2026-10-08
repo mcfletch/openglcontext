@@ -211,7 +211,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
     def fogSetup(self) -> None:
         """Hand this frame's fog to the program, whichever pass draws: the bound
         Fog node the pass has already collected. A scene with none is left
-        pixel-identical, which is nearly every scene."""
+        pixel-identical."""
         shader = self.shader_program
         if shader is not None and hasattr(shader, 'set_fog'):
             self.applyFog(shader)

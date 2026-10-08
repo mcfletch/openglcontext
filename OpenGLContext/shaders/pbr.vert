@@ -153,7 +153,9 @@ void main() {
         ? impostorOrigin + aTexCoord * impostorSpan
         : aTexCoord;
     if (texGenMode > 0 && impostorGrid == 0) {
-        vec3 localEye = (inverse(mv) * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        // An instance has a model-view of its own; a single draw is given it
+        vec3 localEye = instancingEnabled
+            ? (inverse(mv) * vec4(0.0, 0.0, 0.0, 1.0)).xyz : texGenLocalEye;
         vTexCoord = generatedTexCoord(position, normal, vPosition, vNormal, localEye);
     }
     vTexCoord1 = aTexCoord1;
