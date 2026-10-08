@@ -428,15 +428,17 @@ def _text(message: Any) -> str:
 
 
 def link(sources: Sequence[tuple[str, str]], layout: Sequence[tuple[str, int]],
-         max_lights: int) -> LinkedProgram:
+         max_lights: int, translate: bool = True) -> LinkedProgram:
     """A program linked from `sources`, (stage, text) each, reading `layout`'s attributes
 
-    Each text is made ready for the compiler (:func:`x3dglsl.prepare_source`);
-    the engine's and X3D's vertex input names are bound to the engine's
-    locations, and each attribute of `layout` to its own. Raises
-    RuntimeError with the compiler's or linker's log.
+    Each text is made ready for the compiler (:func:`x3dglsl.prepare_source`,
+    GLSL 1.x translated where `translate`); the engine's and X3D's vertex
+    input names are bound to the engine's locations, and each attribute of
+    `layout` to its own. Raises RuntimeError with the compiler's or
+    linker's log.
     """
-    prepared = [x3dglsl.prepare_source(text, stage, max_lights) for stage, text in sources]
+    prepared = [x3dglsl.prepare_source(text, stage, max_lights, translate=translate)
+                for stage, text in sources]
     shaders: list[int] = []
     program = int(GL.glCreateProgram())
     try:
@@ -578,8 +580,11 @@ class X3DShader:
         """(state, program) for drawing `layout`'s attributes in the current context
 
         READY with the program; LOADING while a source is still being read;
-        FAILED where the sources cannot be had or do not link.
+        FAILED where the sources cannot be had or do not link. A pass of the
+        compatibility profile (no ``mode.shader_mode``) runs GLSL 1.x as
+        written and nothing else.
         """
+        variant = (tuple(layout), bool(getattr(mode, 'shader_mode', False)))
         entries = _STATES.entries(self)
         if entries is None:
             return FAILED, None
@@ -592,28 +597,32 @@ class X3DShader:
             state.schedule.activate()
         found, sources = self.stageSources()
         max_lights = int(getattr(getattr(mode, 'shader_program', None), 'MAX_LIGHTS', 8) or 8)
+        if not variant[1] and found == READY and not all(
+                x3dglsl.is_legacy(text) for _stage, text in sources):
+            return FAILED, None
         if found == READY and state.schedule.due(sources):
-            self._relink(state, sources, layout, max_lights)
+            self._relink(state, sources, variant, max_lights)
         if state.sources is None:
             return (LOADING if found == LOADING else FAILED), None
-        if layout not in state.programs:
-            state.programs[layout] = self._link(state, state.sources, layout, max_lights)
-        linked = state.programs[layout]
+        if variant not in state.programs:
+            state.programs[variant] = self._link(state, state.sources, variant, max_lights)
+        linked = state.programs[variant]
         return (READY, linked) if linked is not None else (FAILED, None)
 
-    def _relink(self, state: ShaderState, sources: Any, layout: Any, max_lights: int) -> None:
+    def _relink(self, state: ShaderState, sources: Any, variant: Any, max_lights: int) -> None:
         """Link `sources` in place of whatever the state was running"""
-        linked = self._link(state, sources, layout, max_lights)
+        linked = self._link(state, sources, variant, max_lights)
         state.drop()
         state.schedule.linked(sources, linked is not None)
         state.sources = sources if linked is not None else None
         if linked is not None:
-            state.programs[layout] = linked
+            state.programs[variant] = linked
 
-    def _link(self, state: ShaderState, sources: Any, layout: Any,
+    def _link(self, state: ShaderState, sources: Any, variant: Any,
               max_lights: int) -> Optional[LinkedProgram]:
+        layout, translate = variant
         try:
-            return link(sources, layout, max_lights)
+            return link(sources, layout, max_lights, translate=translate)
         except RuntimeError as err:
             state.log = str(err)
             log.warning('%s does not link: %s', self, err)
@@ -830,6 +839,13 @@ class X3DShaderDraw(ShaderAppearanceProgram):
         if linked.patches:
             GL.glPatchParameteri(GL.GL_PATCH_VERTICES, 3)
             mode.patchVertices = 3
+        appearance = getattr(self.shape, 'appearance', None)
+        if not getattr(mode, 'shader_mode', False):
+            # The compatibility profile: a 1.x program's built-ins read the
+            # matrices, lights and material the pass has set.
+            self._userValues()
+            self._bindTextures(appearance)
+            return
         pass_program = getattr(mode, 'shader_program', None)
         linked.set(x3dglsl.OBJECT_ID_UNIFORM,
                    [int(getattr(pass_program, '_current_object_id', 0) or 0)])
@@ -844,7 +860,6 @@ class X3DShaderDraw(ShaderAppearanceProgram):
                 linked.set('x3d_CameraSpaceMatrix', np.linalg.inv(np.asarray(view, np.float64)))
         if linked.location('x3d_Viewport') != -1:
             linked.set('x3d_Viewport', [int(v) for v in mode.getViewport()])
-        appearance = getattr(self.shape, 'appearance', None)
         self._material(getattr(appearance, 'material', None))
         self._lights(pass_program)
         self._userValues()

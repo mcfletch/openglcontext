@@ -36,7 +36,7 @@ from OpenGLContext.scenegraph import vertexsemantics
 __all__ = [
     'STAGES', 'LANGUAGES', 'MAX_TEXTURES', 'LEGACY_OUTPUT', 'OBJECT_ID_OUTPUT',
     'OBJECT_ID_UNIFORM', 'Prepared', 'Uniform', 'LinkSchedule', 'stage_of',
-    'stage_macro', 'speaks_glsl', 'inline_source', 'glsl_version',
+    'stage_macro', 'speaks_glsl', 'inline_source', 'glsl_version', 'is_legacy',
     'prepare_source', 'packaged_stages', 'uniform_values', 'convert_uniform',
     'attribute_locations', 'attribute_layout', 'vertex_attribute', 'vertex_attributes',
     'per_vertex',
@@ -221,8 +221,13 @@ class Prepared:
     outputs: "list[str]" = field(default_factory=list)
 
 
+def is_legacy(text: str) -> bool:
+    """Whether `text` is GLSL 1.x: no `#version`, or 1.00 to 1.30"""
+    return glsl_version(text)[0] in _LEGACY_VERSIONS
+
+
 def prepare_source(text: str, stage: str, max_lights: int = 8,
-                   object_id: bool = True) -> Prepared:
+                   object_id: bool = True, translate: bool = True) -> Prepared:
     """`text`, one part of a shader's `stage`, as a 3.30 core compiler takes it
 
     After the part's `#version` and `#extension` lines come the X3D
@@ -233,6 +238,10 @@ def prepare_source(text: str, stage: str, max_lights: int = 8,
     the desktop version of the same language. With `object_id`, the fragment
     part holding `main` also writes the pass's object id to location 1:
     its `main` is renamed and called from one that does.
+
+    With `translate` false a 1.x part keeps its own language, for a
+    compatibility-profile context whose fixed-function state its built-ins
+    read; it is given the X3D definitions alone.
     """
     lines = text.splitlines(keepends=True)
     if lines and not lines[-1].endswith('\n'):
@@ -244,7 +253,11 @@ def prepare_source(text: str, stage: str, max_lights: int = 8,
     legacy = version in _LEGACY_VERSIONS
     renamed: "dict[str, str]" = {}
     declarations = ''
-    if legacy:
+    if legacy and not translate:
+        object_id = False
+        compiled = int(version or 110)
+        version_line = '#version %d\n' % (version,) if version else ''
+    elif legacy:
         body, declarations, renamed = _translate_legacy(body, stage)
         version_line, compiled = '#version 330 core\n', 330
     elif profile == 'es' and version in _ES_VERSIONS:

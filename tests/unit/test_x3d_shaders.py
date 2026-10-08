@@ -764,3 +764,39 @@ def test_the_batching_memo_follows_an_appearances_shaders(monkeypatch):
             shape.appearance, 'shaders', [x3dshaders.ComposedShader()])),
         ('appearance.shaders, cleared', lambda: setattr(shape.appearance, 'shaders', [])),
     ], fresh=fresh)
+
+
+@pytest.fixture
+def compatibility():
+    refused = profile_unavailable('compatibility')
+    if refused:
+        pytest.skip(refused)
+    return {'OPENGLCONTEXT_PROFILE': 'compatibility'}
+
+
+class TestTheCompatibilityProfile:
+    """GLSL 1.x reads the fixed-function state the compatibility pass sets"""
+
+    def _centre(self, scene, environment):
+        with scene_context(scene, size=(64, 64), environment=environment) as context:
+            drawn_image(context)
+            return drawn_image(context)[32, 32].astype(int)
+
+    def test_a_glsl_1_shader_runs_as_written(self, compatibility):
+        vertex = '<![CDATA[void main() { gl_Position = ftransform(); }]]>'
+        fragment = ('<![CDATA[uniform vec3 colour;\n'
+                    'void main() { gl_FragColor = vec4(colour, 1.0) * gl_FrontMaterial.diffuse; }]]>')
+        scene = load(document(composed(
+            fragment, vertex=vertex,
+            fields='<field name="colour" type="SFColor" accessType="inputOutput" value="0 1 0"/>'),
+            material='<Material diffuseColor="1 1 1"/>'))
+        assert greenish(self._centre(scene, compatibility))
+        assert named(scene, 'S').isSelected is True
+
+    def test_a_shader_of_x3d_names_is_passed_over_for_the_material(self, compatibility):
+        scene = load(document(
+            composed(fields='<field name="colour" type="SFColor" accessType="inputOutput" '
+                     'value="0 1 0"/>'),
+            material='<Material diffuseColor="0 0 1" emissiveColor="0 0 1"/>'))
+        assert bluish(self._centre(scene, compatibility))
+        assert named(scene, 'S').isSelected is False

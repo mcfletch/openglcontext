@@ -73,6 +73,23 @@ class Shape(basenodes.Shape):
             return drawproperties.FillStyle()
         return drawproperties.fill_style(getattr(self.appearance, 'fillProperties', None))
 
+    def _renderFilledFixed(self, lit: Any, textured: Any, mode: Any) -> None:
+        """Draw the geometry by the fixed-function state, or by the X3D shader that reads it
+
+        In the compatibility profile an appearance's X3D shader of GLSL 1.x
+        runs as written, its built-ins reading the material, lights,
+        matrices and arrays this pass has set (:mod:`~OpenGLContext.scenegraph.x3dshaders`).
+        """
+        drawn = None
+        if getattr(self.appearance, 'shaders', None):
+            drawn = self.appearance.drawProgram(mode, self)
+        try:
+            self.geometry.render(lit=lit, textured=textured, mode=mode)
+        finally:
+            if drawn is not None:
+                self.appearance.releaseProgram(drawn, mode)
+                glUseProgram(0)
+
     def _renderHatchFixed(self, fill: drawproperties.FillStyle, mode: Any) -> None:
         """Draw the geometry again through `fill`'s hatch, as a polygon stipple"""
         glPushAttrib(GL_ENABLE_BIT | GL_POLYGON_STIPPLE_BIT | GL_CURRENT_BIT
@@ -123,7 +140,7 @@ class Shape(basenodes.Shape):
                     glDisable(GL_LIGHTING)
                 fill = self.fillStyle()
                 if fill.filled:
-                    self.geometry.render(lit=lit, textured=textured, mode=mode)
+                    self._renderFilledFixed(lit, textured, mode)
                 if textured:
                     self.appearance.renderPost(textureToken, mode=mode)
                 if fill.hatch:
