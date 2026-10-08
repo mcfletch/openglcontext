@@ -360,6 +360,14 @@ each enabled group around it, and ``isActive FALSE`` when the touch ends
 Rigid bodies
 ~~~~~~~~~~~~
 
+.. figure:: images/x3d/x3d_rigidbody.jpg
+   :alt: Brick crates, a marble ball, a brass door, a steel chain and wheel,
+         a cardan shaft and a dumbbell in a sandstone workshop
+
+   ``oglc-x3d-rigidbody``: every RigidBodyPhysics node in one document,
+   ``OpenGLContext/bin/x3d_rigidbody.x3d``. The p key pauses the collection
+   and r reads the document again.
+
 The RigidBodyPhysics component runs on omi_physics (:ref:`physics-x3d`). Each
 ``RigidBodyCollection`` is a world of its own, stepped once a frame on the
 engine's clock in steps of 1/120 s (1/240 s where ``preferAccuracy`` is
