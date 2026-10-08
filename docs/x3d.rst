@@ -128,6 +128,9 @@ implements these X3D nodes, by component:
   NurbsOrientationInterpolator, NurbsPatchSurface, NurbsPositionInterpolator,
   NurbsSet, NurbsSurfaceInterpolator, NurbsSweptSurface, NurbsSwungSurface,
   NurbsTextureCoordinate, NurbsTrimmedSurface
+- ParticleSystems - BoundedPhysicsModel, ConeEmitter, ExplosionEmitter,
+  ForcePhysicsModel, ParticleSystem, PointEmitter, PolylineEmitter,
+  SurfaceEmitter, VolumeEmitter, WindPhysicsModel
 - Picking - PickableGroup
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
 - Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
@@ -370,6 +373,15 @@ sites and segments, their skin is posed by the joints through the engine's
 skinning, displacers morph it, and ``HAnimMotion`` and ``HAnimPose`` move the
 joints, as do interpolators routed to them. :ref:`characters-hanim` describes
 what is drawn and how each field is read.
+Particle systems
+~~~~~~~~~~~~~~~~
+
+``ParticleSystem``, its six emitters and its three physics models are drawn by
+the engine's particles: every ``geometryType``, colour and texture-coordinate
+ramps keyed by a particle's age in seconds, and the physics models applied in
+order. A ``GEOMETRY`` system is lit as a shape is; the other types are unlit.
+The :ref:`particle systems page <x3d-particles>` says how each field is read,
+and ``oglc-x3d-particles`` opens a document using every node.
 
 Inline
 ~~~~~~

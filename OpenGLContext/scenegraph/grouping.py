@@ -35,6 +35,21 @@ class ChildrenSensitiveField( node.MFNode ):
         client.sensitive = 0
         return value
 
+def of_types( child: Any, types: Any ) -> bool:
+    """Whether ``child`` is one of ``types``, an instance of a prototype by its body
+
+    A prototype instance's class derives from ``PrototypedNode`` alone; it
+    stands for the first node of its body, whose class its prototype records
+    as ``nodeType``. An instance of a prototype whose body is not yet known
+    (an EXTERNPROTO not read) is none of them.
+    """
+    if isinstance( child, types ):
+        return True
+    if isinstance( child, node.PrototypedNode ):
+        stands = getattr( type(child), 'nodeType', None )
+        return isinstance( stands, type ) and issubclass( stands, types )
+    return False
+
 def _cacheClear( signal: Any, sender: Any, subsignal: Any = None,
                  subvalue: Any = None ) -> None:
     """Drop the typed views of ``field``, so the next reader rebuilds them.
@@ -81,8 +96,8 @@ class ChildrenTypedField( ChildrenSensitiveField ):
         new = cache.get( types )
         if new is None:
             new = [
-                x for x in self.fget( client ) 
-                if isinstance(x,types)
+                x for x in self.fget( client )
+                if of_types( x, types )
             ]
             cache[ types ] = new 
         return new

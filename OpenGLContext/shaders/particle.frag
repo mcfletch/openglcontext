@@ -1,30 +1,33 @@
 #version 330 core
-/* One particle sprite.
+/* One particle.
  *
- * Without a texture the sprite is a soft round dot computed here: a radial
+ * With a texture the particle is the texture, multiplied by its colour, so a
+ * smoke puff or a flame frame drops in with no change here.
+ *
+ * Without one, a round particle (uRound) is a soft dot computed here: a radial
  * falloff over the quad, squared so the core reads bright and the edge fades
  * out rather than ending on a visible circle.  That is enough for sparks,
  * embers, glows and explosions, and it means a particle system needs no asset
- * at all -- which is what lets an effect be one line of code.
- *
- * With a texture the sprite is the texture, multiplied by the life colour, so
- * a smoke puff or a flame frame drops in with no change here.
+ * at all.  A particle that is not round is its colour, edge to edge.
  */
 
 in vec2 vCorner;
+in vec2 vTexCoord;
 in vec4 vColor;
 in float vRandom;
 
 uniform sampler2D uTexture;
 uniform bool uHasTexture;
+uniform bool uRound;
+uniform float uCutoff;                    // fragments at or below this alpha are discarded
 
 out vec4 fragColor;
 
 void main() {
-    vec4 sprite;
+    vec4 sprite = vec4(1.0);
     if (uHasTexture) {
-        sprite = texture(uTexture, vCorner + 0.5);
-    } else {
+        sprite = texture(uTexture, vTexCoord);
+    } else if (uRound) {
         /* length() of the corner is 0 at the centre and 0.5 at the edge
          * midpoints; scaling by 2 puts the falloff's zero on the inscribed
          * circle, so the quad's corners are fully transparent and the sprite
@@ -35,8 +38,9 @@ void main() {
     fragColor = sprite * vColor;
     /* A fully transparent fragment still costs a blend and, in an alpha-blended
      * system, still writes nothing useful; discarding it is measurably cheaper
-     * on the heavy overdraw a particle cloud produces. */
-    if (fragColor.a <= 0.002) {
+     * on the heavy overdraw a particle cloud produces. An opaque system cuts
+     * its texture's transparent parts out at one half. */
+    if (fragColor.a <= uCutoff) {
         discard;
     }
 }

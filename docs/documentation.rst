@@ -149,6 +149,12 @@ Installing the package puts these commands on your path:
    ``GeoElevationGrid`` under a ``GeoLOD`` of finer tiles, a hamlet of
    ``GeoLocation`` huts, a balloon on a ``GeoPositionInterpolator`` and three
    ``GeoViewpoint`` nodes, one in UTM. See :ref:`x3d-geospatial`.
+``oglc-x3d-particles``
+   X3D's particle systems read from a document: a brazier, a fountain, a
+   firework, snow in gusting wind, a sphere shedding sparks and gold beads
+   bouncing in a glass case, one for each emitter and physics model, with
+   keys to set the firework off and switch the wind. See :ref:`X3D particle
+   systems <x3d-particles>`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

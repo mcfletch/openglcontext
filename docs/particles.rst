@@ -6,8 +6,10 @@ Particle systems
 A particle system draws many small quads that face the camera, from a single
 ``ParticleEmitter`` node. Use it for fire, smoke, sparks, explosions, impacts
 and trails. Each system is drawn with one instanced draw call, however many
-particles it has. The simulation is numpy arrays stepped as whole arrays and
-uses no OpenGL, so it can be driven and tested without a window.
+particles it has. The simulation (``OpenGLContext.scenegraph.particlesim``)
+is numpy arrays stepped as whole arrays and uses no OpenGL, so it can be
+driven and tested without a window. X3D's ParticleSystems component is drawn
+by the same simulation and renderer (:ref:`x3d-particles`).
 
 .. figure:: images/demos/particles_effects.jpg
    :alt: Fire, smoke, sparks and an explosion burning side by side in the dark
@@ -82,6 +84,88 @@ it off for bursts too.
 Adding a node per effect would change the scenegraph as often as things
 happen, and the render pass discards what it has gathered each time the
 scenegraph changes.
+
+.. _particle-sources:
+
+Sources, forces and colour ramps
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An emitter's particles start at its origin and are thrown within ``spread`` of
+``direction``. ``source`` puts them somewhere else: one of X3D's emitter nodes,
+in the emitter's own frame. ``physics`` is a list of X3D's physics-model nodes,
+applied after ``gravity`` and ``drag``, in order:
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph import particles, x3dparticles
+   from OpenGLContext.scenegraph.basenodes import Box, Coordinate, ColorRGBA
+
+   sparks = particles.preset('sparks', rate=80.0, burst=0, shape='line',
+       # along the edge of a workbench
+       source=x3dparticles.PolylineEmitter(
+           coord=Coordinate(point=[(-1, 0.9, 0), (1, 0.9, 0)])),
+       physics=[x3dparticles.BoundedPhysicsModel(geometry=Box(size=(4, 2, 4)))],
+       # white, then orange, then gone, by the fraction of each particle's life
+       colorKey=[0.0, 0.3, 1.0],
+       colorRamp=ColorRGBA(color=[(1, 1, 1, 1), (1, 0.5, 0.1, 1), (0.5, 0.1, 0, 0)]))
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Source
+     - Where particles start, and which way they go
+   * - ``PointEmitter``
+     - One point, along ``direction``; a zero direction throws every way.
+   * - ``ConeEmitter``
+     - One point, within ``angle`` radians of ``direction``, spread evenly
+       over the cone's cap.
+   * - ``ExplosionEmitter``
+     - One point, every way.
+   * - ``PolylineEmitter``
+     - Along the lines ``coordIndex`` draws through ``coord``, chosen by
+       length; ``coordIndex`` with no vertex joins the points in order.
+   * - ``SurfaceEmitter``
+     - On the triangles of the ``surface`` geometry, chosen by area, thrown
+       along the surface normal (from either face where the geometry is not
+       ``solid``).
+   * - ``VolumeEmitter``
+     - Inside the closed faces ``coordIndex`` draws through ``coord``; on
+       them where ``internal`` is FALSE.
+
+Each source's ``speed`` and ``variation`` are not read by ``ParticleEmitter``,
+which throws at its own ``speed`` and ``speedVariation``. The models act on a
+particle of the emitter's ``mass`` (kilograms) and ``surfaceArea`` (square
+metres):
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Model
+     - What it does
+   * - ``ForcePhysicsModel``
+     - ``force`` newtons divided by the mass; with a mass of 0 the force is
+       taken as an acceleration, so the default ``(0, -9.8, 0)`` is the
+       Earth's gravity.
+   * - ``WindPhysicsModel``
+     - A pressure of 0.64615 times the square of ``speed`` (pascals) on the
+       surface area, along ``direction``. ``gustiness`` scatters the speed by
+       up to that fraction each step; ``turbulence`` (0 to 1) turns each
+       particle's push off the wind's direction by up to that fraction of half
+       a turn.
+   * - ``BoundedPhysicsModel``
+     - The triangles of ``geometry``, which particles bounce off from either
+       side: a particle whose step crosses one is put back on the side it came
+       from with its velocity reflected. The test is every moving particle
+       against every triangle the particle's step could reach, so a mesh of a
+       few hundred triangles is the size to keep to.
+
+A model with ``enabled`` FALSE does nothing. The same classes, without the
+nodes, are in ``particlesim``: ``PointSource``, ``ConeSource``,
+``SphereSource``, ``PolylineSource``, ``SurfaceSource``, ``VolumeSource``,
+``ConstantForce``, ``Wind`` and ``Bounds``, for ``ParticlePool.spawn`` and
+``ParticlePool.step(models=...)``.
 
 .. _authored-particles:
 
@@ -190,6 +274,10 @@ the base value, either way.
    * - ``burstOnStart``
      - True
      - Whether the first ``burst`` is released as soon as the emitter is drawn.
+   * - ``source``
+     - NULL
+     - An X3D emitter node: where particles start and which way they are
+       thrown, in the emitter's own frame. NULL starts them at the origin.
    * - ``direction``
      - (0, 1, 0)
      - Which way particles are thrown, in the emitter's own frame.
@@ -206,6 +294,13 @@ the base value, either way.
    * - ``drag``
      - 0.0
      - Rate at which velocity decays, per second.
+   * - ``physics``
+     - empty
+     - X3D physics-model nodes, applied after gravity and drag, in order.
+   * - ``mass``, ``surfaceArea``
+     - 0.0, 0.0
+     - A particle's mass in kilograms and area in square metres, which the
+       physics models act on.
    * - ``size``, ``endSize``, ``sizeVariation``
      - 0.3, 0.0, 0.3
      - Size at birth and at death, in world units.
@@ -218,6 +313,15 @@ the base value, either way.
    * - ``alpha``, ``endAlpha``
      - 1.0, 0.0
      - Opacity at birth and at death.
+   * - ``colorKey``, ``colorRamp``
+     - empty, NULL
+     - A colour ramp in place of the two ends: the colours of a ``Color`` or
+       ``ColorRGBA`` node at fractions of the life, interpolated between and
+       held past either end. Each particle carries its own colour.
+   * - ``shape``
+     - ``sprite``
+     - ``sprite`` for a quad facing the camera, ``line`` for a streak along
+       the particle's velocity as long as its size.
    * - ``texture``
      - empty
      - A sprite image for each particle. Without one, a particle is a soft
@@ -319,17 +423,21 @@ A particle stores only what differs between particles:
    * - position, velocity
      - gravity, drag
    * - age, lifetime
-     - —
+     - physics models
    * - size *factor* (mean 1.0)
      - size at birth and at death
    * - rotation, spin
      - —
    * - one random number
      - colour and alpha at birth and at death
+   * - a colour, from the ramp (white without)
+     - texture-coordinate frames
 
-The data sent per instance is therefore seven floats rather than twenty.
-Colour and size over a particle's life are two uniforms, not a gradient
-texture with its own texture unit. Because the absolute size is a uniform,
+The data sent per instance is sixteen floats: position, size, rotation, age,
+the random number, a texture frame, the colour and the velocity. Colour and
+size over a particle's life are two uniforms, not a gradient texture with its
+own texture unit; a colour ramp is evaluated on the CPU, one interpolation
+per channel over the whole pool. Because the absolute size is a uniform,
 changing ``size`` on a running emitter also resizes the particles already in
 the air.
 
@@ -395,7 +503,14 @@ are never drawn into a shadow map.
 
 Blending is additive by default, which suits effects that give off light:
 fire, sparks, explosions, muzzle flashes. ``blending='alpha'`` suits effects
-that block light: smoke, dust, steam.
+that block light: smoke, dust, steam. After its draw a system puts back the
+blending and depth writes of the phase it drew in.
+
+``ParticleRenderer`` draws a pool in a ``ParticleLook``, as sprites, quads in
+the system's XY plane, lines along each particle's velocity, or points of a
+size in pixels. An opaque look (X3D's, where nothing is translucent) blends
+nothing, writes depth and cuts its texture out where alpha is below one half.
+Particles are unlit.
 
 .. rst-class:: technical
 
@@ -409,11 +524,10 @@ the node's ``drawn`` to False leaves it undrawn while its simulation goes on.
 Bounding volume
 ---------------
 
-A particle system's extent changes every frame, and a tight box would have to
-be recomputed from the pool each time. Instead, the node reports a box sized
-by how far its fastest particle could travel in its lifetime. This costs
-nothing to compute and is never too small, so an effect that is on screen is
-never culled.
+A system reports a box over its living particles, widened by their size, and
+over where new ones start and how far the fastest of them could travel in its
+lifetime, so a system with nothing out yet is still drawn and still steps. The
+box is asked for each frame and is one pass of numpy over the packed pool.
 
 .. _particles-testing:
 
@@ -432,13 +546,16 @@ The pool is plain numpy, so a test checks it directly:
 The suite covers birth, motion under gravity and drag, ageing, death,
 compaction that keeps the survivors' state intact, the budget, fractional
 emission, the long-frame clamp, repeatability from a seed, and that a full
-pool stepped thirty times allocates almost nothing. Rendering is covered by
-the demo's reference image.
+pool stepped thirty times allocates almost nothing
+(``tests/unit/test_particles.py``); each source, model and ramp
+(``test_particle_simulation.py``); X3D's nodes (``test_x3d_particles.py``);
+and each shape drawn by both renderers and the compatibility profile, with a
+frame that makes and compiles nothing (``test_x3d_particles_gl.py``).
 
 .. _particles-demos:
 
-Demo
-----
+Demos
+-----
 
 :doc:`tests/particles_effects.py <tutorials/particles_effects>` shows five
 presets, continuous and burst, side by side over a floor, so you can compare
@@ -449,3 +566,80 @@ already in the air.
 .. code-block:: bash
 
    python tests/particles_effects.py
+
+``oglc-x3d-particles`` opens an X3D document with one system for each emitter
+and physics model (:ref:`x3d-particles`); ``f`` sets the firework off again
+and ``w`` switches the wind over the snow.
+
+.. _x3d-particles:
+
+X3D particle systems
+--------------------
+
+.. figure:: images/demos/x3d_particles.jpg
+   :alt: A brazier, a fountain, a firework, snow on the wind, a sphere shedding sparks and gold beads in a glass case
+
+   ``oglc-x3d-particles``: a brazier of sprites from a ``PointEmitter``, a
+   fountain of lines from a ``ConeEmitter``, a firework from an
+   ``ExplosionEmitter``, snow as points from a ``PolylineEmitter`` in a
+   ``WindPhysicsModel``, two-frame sparks off a ``SurfaceEmitter``, and gold
+   beads (``GEOMETRY``) a ``VolumeEmitter`` makes and a
+   ``BoundedPhysicsModel`` keeps in.
+
+X3D's ``ParticleSystem`` (ISO/IEC 19775-1, 40) is
+``OpenGLContext.scenegraph.x3dparticles.ParticleSystem``, drawn by the same
+simulation and renderer:
+
+- A system makes ``maxParticles / particleLifetime`` particles a second, so a
+  full system holds about ``maxParticles``. Each lives ``particleLifetime``
+  seconds give or take ``lifetimeVariation`` of it, and leaves its emitter at
+  the emitter's ``speed`` give or take ``variation`` of it.
+- An ``ExplosionEmitter`` makes the whole ``maxParticles`` at once when the
+  system starts creating, and again each time ``createParticles``,
+  ``enabled`` or the emitter's ``on`` is switched back on.
+- ``createParticles`` FALSE (or the emitter's ``on`` FALSE) makes no more;
+  those out live on. ``enabled`` FALSE removes every particle.
+- ``isActive`` is TRUE while the system is enabled and has particles alive or
+  is still making them.
+- Particles live in the system's own coordinates: a transform above it
+  carries the ones already made.
+- A system steps once a frame on the engine's clock, through the render queue
+  of each context it is drawn in, while it is active; it asks for frames
+  while it does.
+- With no emitter, particles stay at the origin.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - ``geometryType``
+     - Each particle is drawn as
+   * - ``QUAD``, ``TRIANGLE``
+     - A quad of ``particleSize`` (width, height) in the system's XY plane,
+       facing +Z, seen from both sides.
+   * - ``SPRITE``
+     - A quad of ``particleSize`` facing the camera.
+   * - ``LINE``
+     - A line along the particle's velocity, ``particleSize``'s height long.
+   * - ``POINT``
+     - A point, sized by the appearance's ``PointProperties`` (1 pixel
+       without).
+   * - ``GEOMETRY``
+     - A copy of ``geometry`` in the appearance, lit as any shape is; the
+       copies are drawn in one instanced draw.
+
+Every type but ``GEOMETRY`` is unlit. A particle is the colour ramp's colour
+where there is one, and otherwise the material's colour (its emissive colour
+where it has one, its diffuse or base colour where not), with the material's
+transparency, times the appearance's first texture. ``colorKey`` and
+``texCoordKey`` are a particle's age in seconds: colours are interpolated
+between keys and held past either end; texture coordinates, four to a key for
+the quad types, are stepped from frame to frame, at most 16 frames. A system
+is blended where its material is transparent, its ramp has an alpha below 1
+or its texture has an alpha channel, and opaque otherwise. The texture
+transform is not applied to particles, and a line is one pixel wide.
+
+The emitter nodes and the physics models are the ones in
+:ref:`Sources, forces and colour ramps <particle-sources>`. A ``BoundedPhysicsModel``'s
+``geometry`` is in the system's coordinates.
+

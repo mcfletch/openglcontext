@@ -170,6 +170,16 @@ from OpenGLContext.scenegraph.x3dgroups import CADFace as CADFace
 from OpenGLContext.scenegraph.x3dgroups import CADLayer as CADLayer
 from OpenGLContext.scenegraph.x3dgroups import PickableGroup as PickableGroup
 from OpenGLContext.scenegraph.x3dgroups import StaticGroup as StaticGroup
+from OpenGLContext.scenegraph.x3dparticles import BoundedPhysicsModel as BoundedPhysicsModel
+from OpenGLContext.scenegraph.x3dparticles import ConeEmitter as ConeEmitter
+from OpenGLContext.scenegraph.x3dparticles import ExplosionEmitter as ExplosionEmitter
+from OpenGLContext.scenegraph.x3dparticles import ForcePhysicsModel as ForcePhysicsModel
+from OpenGLContext.scenegraph.x3dparticles import ParticleSystem as ParticleSystem
+from OpenGLContext.scenegraph.x3dparticles import PointEmitter as PointEmitter
+from OpenGLContext.scenegraph.x3dparticles import PolylineEmitter as PolylineEmitter
+from OpenGLContext.scenegraph.x3dparticles import SurfaceEmitter as SurfaceEmitter
+from OpenGLContext.scenegraph.x3dparticles import VolumeEmitter as VolumeEmitter
+from OpenGLContext.scenegraph.x3dparticles import WindPhysicsModel as WindPhysicsModel
 from OpenGLContext.scenegraph.x3dpointing import CylinderSensor as CylinderSensor
 from OpenGLContext.scenegraph.x3dpointing import GeoTouchSensor as GeoTouchSensor
 from OpenGLContext.scenegraph.x3dpointing import PlaneSensor as PlaneSensor
@@ -269,6 +279,7 @@ __all__ = [
     'BooleanSequencer',
     'BooleanToggle',
     'BooleanTrigger',
+    'BoundedPhysicsModel',
     'Box',
     'CADAssembly',
     'CADFace',
@@ -283,6 +294,7 @@ __all__ = [
     'ColorRGBA',
     'ComposedShader',
     'Cone',
+    'ConeEmitter',
     'Contour2D',
     'ContourPolyline2D',
     'Coordinate',
@@ -299,6 +311,7 @@ __all__ = [
     'EaseInEaseOut',
     'ElevationGrid',
     'EnvironmentLight',
+    'ExplosionEmitter',
     'Extrusion',
     'FillProperties',
     'FloatUniform1f',
@@ -318,6 +331,7 @@ __all__ = [
     'Fog',
     'FontStyle',
     'FontStyle3D',
+    'ForcePhysicsModel',
     'GLSLImport',
     'GLSLObject',
     'GLSLShader',
@@ -403,17 +417,20 @@ __all__ = [
     'OrthoViewpoint',
     'PackagedShader',
     'ParticleEmitter',
+    'ParticleSystem',
     'PhysicalMaterial',
     'PickableGroup',
     'PixelTexture',
     'PlanarReflector',
     'PlaneSensor',
+    'PointEmitter',
     'PointLight',
     'PointProperties',
     'PointSet',
     'PolyCone',
     'PolyCylinder',
     'Polyline2D',
+    'PolylineEmitter',
     'Polypoint2D',
     'PositionChaser',
     'PositionChaser2D',
@@ -451,6 +468,7 @@ __all__ = [
     'SquadOrientationInterpolator',
     'StaticGroup',
     'StringSensor',
+    'SurfaceEmitter',
     'Switch',
     'Tangent',
     'Teapot',
@@ -479,6 +497,8 @@ __all__ = [
     'Viewpoint',
     'ViewpointGroup',
     'VisibilitySensor',
+    'VolumeEmitter',
+    'WindPhysicsModel',
     'WorldInfo',
     'X3DScene',
     'Zone',

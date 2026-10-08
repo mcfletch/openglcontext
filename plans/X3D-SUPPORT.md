@@ -300,8 +300,6 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `.x3dv`/`.wrl` copies write `language GLSL` unquoted and do not read;
     `TestDiagnosticOverloadedChildNodes` fails on `GeneratedCubeMapTexture`
     (CubeMapTexturing)
-  - [ ] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
-    models
   - [x] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
     `HAnimDisplacer`, `HAnimMotion`, `HAnimPose` (`scenegraph.hanim`; the
     arithmetic in `character.hanim`, no GL): joints, sites and the humanoid
@@ -328,6 +326,23 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     normals); `HAnimPose.isLoaded` routed by
     HAnimPoseExample is not an X3D 4.1 field; a `SphereBackground` draws with
     a VAO made each frame
+  - [x] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
+    models (`x3dparticles`, on `particlesim` and `particles.ParticleRenderer`);
+    LINE/POINT/QUAD/SPRITE/TRIANGLE through one instanced draw in both
+    renderers and the compatibility profile, GEOMETRY as instanced copies;
+    keys in seconds of age; stepped through the render queue (`Ticked`).
+    The engine's `ParticleEmitter` takes the emitters (`source`) and models
+    (`physics`) and has a colour ramp and line shape. `oglc-x3d-particles`
+    - read differently from X_ITE: keys are seconds (X_ITE: fractions of the
+      life); a massless particle takes a force as an acceleration (X_ITE
+      applies none); VolumeEmitter `internal` FALSE emits from the boundary
+    - not drawn: lighting of the non-GEOMETRY types, the texture transform,
+      line width
+  - [x] prototype instances drawn: `grouping.of_types` passes an instance by
+    its body's first node type (scene, groups, Switch, LOD, CADFace); before,
+    an X3D document's ProtoInstance was never drawn
+  - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
+    `HAnimDisplacer`, `HAnimMotion`, `HAnimPose`
   - [ ] RigidBodyPhysics: the 14 nodes on omi_physics
   - [ ] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
     `LayoutGroup`, `LayoutLayer`, `ScreenGroup`, `ScreenFontStyle`
