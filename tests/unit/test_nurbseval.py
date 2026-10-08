@@ -102,6 +102,16 @@ class TestCurve:
         end = found.tangent_at([1.0])[0]
         assert np.allclose(start / np.linalg.norm(start), end / np.linalg.norm(end), atol=1e-6)
 
+    def test_a_closed_curve_with_clamped_knots_is_evaluated_as_given(self):
+        root = math.sqrt(0.5)
+        circle = [(1, 0, 0), (root, -root, 0), (0, -1, 0), (-root, -root, 0), (-1, 0, 0),
+                  (-root, root, 0), (0, 1, 0), (root, root, 0), (1, 0, 0)]
+        found = nurbseval.curve(circle, [0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4], 3,
+                                weight=[1, root] * 4 + [1], closed=True)
+        points = found.sample(32)
+        assert np.allclose(np.linalg.norm(points, axis=1), 1.0)
+        assert np.allclose(points[0], points[-1])
+
     def test_closed_is_ignored_where_the_ends_differ(self):
         found = nurbseval.curve([(0, 0, 0), (1, 1, 0), (2, 0, 0), (3, 1, 0)], [], 3, closed=True)
         assert not found.closed
@@ -219,6 +229,15 @@ class TestTrimming:
         patch = surface.tessellate(6, 6, contours=[outer, hole])
         positions, _ = surface.at(patch.fractions)
         assert np.allclose(positions, patch.positions)
+
+    def test_a_trimmed_surface_is_sampled_as_finely_as_its_lattice_each_way(self):
+        """Twenty segments along u and one along v give triangles a twentieth wide"""
+        surface = _plane(u_knot=[0, 0, 0, 0, 1, 1, 1, 1], v_knot=[0, 0, 0, 0, 1, 1, 1, 1])
+        notch = np.array([(0, 0), (1, 0), (0.75, 0.5), (1, 1), (0, 1)], float)
+        patch = surface.tessellate(20, 1, contours=[notch])
+        corners = patch.fractions[patch.triangles]
+        widths = corners[:, :, 0].max(axis=1) - corners[:, :, 0].min(axis=1)
+        assert widths.max() <= 1.5 / 20
 
     def test_trimming_everything_away_is_empty(self):
         surface = _plane()

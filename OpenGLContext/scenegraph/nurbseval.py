@@ -76,9 +76,10 @@ def knot_vector(knot: Any, order: int, dimension: int, closed: bool = False) -> 
     `knot` is kept where it has ``dimension + order`` values that do not
     decrease and never repeat one value more than `order` times; otherwise the
     knots are uniform over 0..1, clamped (`order` equal knots at each end), or
-    for a closed direction evenly spaced throughout. A closed direction's
-    vector then runs ``order - 2`` knots further at the spacing it starts with,
-    for the control points :func:`curve` and :func:`surface` repeat.
+    for a closed direction evenly spaced throughout. A closed direction whose
+    vector is not clamped then runs ``order - 2`` knots further at the spacing
+    it starts with, for the control points :func:`curve` and :func:`surface`
+    repeat; a clamped one already ends where it starts.
     """
     length = dimension + order
     found = np.asarray(knot, dtype=np.float64).ravel()
@@ -90,7 +91,7 @@ def knot_vector(knot: Any, order: int, dimension: int, closed: bool = False) -> 
             found = np.concatenate([np.zeros(order), inner,
                                     np.full(order, dimension - order + 1.0)])
         found = found / found[-1]
-    if closed:
+    if closed and not (np.all(found[:order] == found[0]) and np.all(found[-order:] == found[-1])):
         extra = [found[-1]]
         for index in range(1, order - 1):
             extra.append(extra[-1] + (found[index] - found[index - 1]))
@@ -240,7 +241,7 @@ def curve(points: Any, knot: Any, order: int, weight: Any = (),
     knots = knot_vector(knot, order, count, closed)
     if weight_values is not None:
         control = control / weight_values[:, None]
-    if closed:
+    if len(knots) > count + order:
         control = np.concatenate([control, control[1:order - 1]])
         if weight_values is not None:
             weight_values = np.concatenate([weight_values, weight_values[1:order - 1]])
@@ -368,7 +369,7 @@ class Surface(Net):
 
         Contours, each ``(N, 2)`` in the surface's own knot range, keep the
         part of the domain inside an odd number of them; that part is
-        triangulated about as finely as the lattice and the surface is
+        triangulated in triangles about a lattice cell across and the surface is
         evaluated at the vertices that come out.
         """
         u_segments, v_segments = max(int(u_segments), 1), max(int(v_segments), 1)
@@ -383,11 +384,17 @@ class Surface(Net):
             return _empty_patch()
         if not rings:
             return self._lattice(u_segments, v_segments)
-        cell = ((u1 - u0) / u_segments) * ((v1 - v0) / v_segments)
-        domain = tessellate_domain(rings, winding=TRIM_WINDING, max_area=cell)
+        # Triangulated in lattice units, one unit a segment each way, with the
+        # outlines divided at every unit, so the triangles are about a cell
+        # across in both directions however differently the two are divided.
+        units = np.array([u_segments / (u1 - u0), v_segments / (v1 - v0)])
+        scaled = [_divided(ring * units) for ring in rings]
+        domain = tessellate_domain(scaled, winding=TRIM_WINDING, max_area=0.5,
+                                   max_points=4 * (u_segments + 1) * (v_segments + 1)
+                                   + sum(len(ring) for ring in scaled))
         if not len(domain.triangles):
             return _empty_patch()
-        uv = np.asarray(domain.points, dtype=np.float64)
+        uv = np.asarray(domain.points, dtype=np.float64) / units
         return Patch(
             positions=surface_at(*self.args, uv, weights=self.weights).astype(np.float32),
             normals=normals_at(*self.args, uv, weights=self.weights).astype(np.float32),
@@ -424,7 +431,8 @@ class Surface(Net):
         if found.ndim != 2 or len(found) < count:
             return None
         control = found[:count].reshape(self.v_dimension, self.u_dimension, -1).transpose(1, 0, 2)
-        control = _close(control, self.u_closed, self.v_closed, self.u_degree + 1,
+        control = _close(control, self.control.shape[0] > self.u_dimension,
+                         self.control.shape[1] > self.v_dimension, self.u_degree + 1,
                          self.v_degree + 1)
         return Net(control, self.u_knots, self.v_knots, self.u_degree, self.v_degree, None)
 
@@ -478,13 +486,16 @@ def surface(points: Any, u_dimension: int, v_dimension: int, u_knot: Any, v_knot
         for u in range(u_dimension))
     if net_weights is not None:
         control = control / net_weights[..., None]
-    control = _close(control, u_closed, v_closed, u_order, v_order)
+    u_knots = knot_vector(u_knot, u_order, u_dimension, u_closed)
+    v_knots = knot_vector(v_knot, v_order, v_dimension, v_closed)
+    u_periodic = len(u_knots) > u_dimension + u_order
+    v_periodic = len(v_knots) > v_dimension + v_order
+    control = _close(control, u_periodic, v_periodic, u_order, v_order)
     if net_weights is not None:
-        net_weights = _close(net_weights[..., None], u_closed, v_closed, u_order, v_order)[..., 0]
-    return Surface(control, knot_vector(u_knot, u_order, u_dimension, u_closed),
-                   knot_vector(v_knot, v_order, v_dimension, v_closed),
-                   u_order - 1, v_order - 1, net_weights, u_closed, v_closed,
-                   u_dimension, v_dimension)
+        net_weights = _close(net_weights[..., None], u_periodic, v_periodic, u_order,
+                             v_order)[..., 0]
+    return Surface(control, u_knots, v_knots, u_order - 1, v_order - 1, net_weights,
+                   u_closed, v_closed, u_dimension, v_dimension)
 
 
 def texture_net(points: Any, u_dimension: int, v_dimension: int, u_knot: Any, v_knot: Any,
@@ -505,6 +516,15 @@ def texture_net(points: Any, u_dimension: int, v_dimension: int, u_knot: Any, v_
     return Net(control, knot_vector(u_knot, u_order, u_dimension),
                knot_vector(v_knot, v_order, v_dimension), u_order - 1, v_order - 1,
                net_weights)
+
+
+def _divided(ring: np.ndarray) -> np.ndarray:
+    """A closed ring with each edge divided into pieces no longer than 1"""
+    ends = np.roll(ring, -1, axis=0)
+    counts = np.maximum(1, np.ceil(np.linalg.norm(ends - ring, axis=1))).astype(int)
+    pieces = [start + (end - start) * (np.arange(count)[:, None] / count)
+              for start, end, count in zip(ring, ends, counts)]
+    return np.concatenate(pieces)
 
 
 def clip_ring(ring: np.ndarray, low: Sequence[float], high: Sequence[float]) -> np.ndarray:
