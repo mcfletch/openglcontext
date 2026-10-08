@@ -272,6 +272,10 @@ class SGObserver( object ):
             if hasattr(next, 'renderedChildren'):
                 # watch for next's changes...
                 for child in next.renderedChildren( ):
+                    if any( child is ancestor for ancestor in path ):
+                        # A document can put a node among its own descendants
+                        log.warning( '%s is inside itself; it is drawn once', child )
+                        continue
                     todo.append( (child,path) )
     def npFor( self, node: Any ) -> list[Any]:
         """The paths ending at ``node``, a record made for it if it has none."""
