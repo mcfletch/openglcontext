@@ -111,3 +111,18 @@ def test_a_running_system_makes_and_compiles_nothing_more():
         # do not move, upload nothing.
         work = check_still_frame(frame, uploads=4, warmup=4)
     assert work.allocations == work.compiles == 0, work
+
+
+@pytest.mark.parametrize('shape', ['sprite', 'line'])
+def test_the_engines_emitter_draws_its_colour_ramp_as_sprites_or_streaks(shape):
+    from OpenGLContext.scenegraph.particles import ParticleEmitter
+    refused = profile_unavailable('core')
+    if refused:
+        pytest.skip(refused)
+    emitter = ParticleEmitter(rate=0.0, burst=60, lifetime=100.0, lifetimeVariation=0.0,
+                              speed=0.01, spread=3.1, gravity=(0, 0, 0), size=3.0, endSize=3.0,
+                              sizeVariation=0.0, shape=shape, blending='alpha', seed=4,
+                              colorKey=[0, 1], colorRamp=basenodes.Color(
+                                  color=[(0, 1, 0), (0, 1, 0)]))
+    centre = _centre(_drawn(emitter, {'OPENGLCONTEXT_RENDERER': 'pbr'})).astype(int)
+    assert (centre[:, 1] > 100).any() and (centre[:, 0] < 40).all(), centre

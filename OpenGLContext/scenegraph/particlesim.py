@@ -444,8 +444,8 @@ class PolylineSource(ParticleSource):
 def _weighted(rng: Any, cumulative: np.ndarray, count: int) -> np.ndarray:
     """``count`` indices, each chosen in proportion to its share of ``cumulative``"""
     picks = rng.random(count) * cumulative[-1]
-    return np.minimum(np.searchsorted(cumulative, picks, side='right'),
-                      len(cumulative) - 1)
+    return np.asarray(np.minimum(np.searchsorted(cumulative, picks, side='right'),
+                                 len(cumulative) - 1))
 
 
 class _Triangles:

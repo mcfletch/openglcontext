@@ -597,7 +597,8 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
         """A particle's colour ``fraction`` of the way through its life."""
         ramp = self.colorRampAt()
         if ramp:
-            return tuple(float(value) for value in ramp.at(np.array([fraction]))[0, :3])
+            red, green, blue = (float(value) for value in ramp.at(np.array([fraction]))[0, :3])
+            return red, green, blue
         start = np.asarray(self.color, dtype='d')
         end = np.asarray(self.endColor, dtype='d')
         return tuple(start + (end - start) * fraction)

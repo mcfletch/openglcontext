@@ -468,3 +468,80 @@ class TestTicking:
         assert len(context.renderQueue) == 0
         emitter.on = True
         assert len(context.renderQueue) == 1
+
+
+class TestTheEnginesEmitter:
+    """The engine's ParticleEmitter takes the same emitters and physics models"""
+
+    def test_a_source_node_says_where_particles_start(self):
+        from OpenGLContext.scenegraph.particles import ParticleEmitter
+        emitter = ParticleEmitter(worldSpace=False, rate=0.0, burst=50, seed=3, speed=0.0,
+                                  gravity=(0, 0, 0), source=PolylineEmitter(coord=basenodes.Coordinate(
+                                      point=[(0, 0, 0), (4, 0, 0)])))
+        emitter.simulate(0.01)
+        positions = emitter.pool.position[:emitter.pool.live]
+        assert len(positions) == 50
+        assert np.allclose(positions[:, 1:], 0) and positions[:, 0].max() > 2
+
+    def test_a_world_space_source_is_turned_and_moved_by_the_frame(self):
+        from OpenGLContext.scenegraph.particles import ParticleEmitter
+        emitter = ParticleEmitter(rate=0.0, burst=10, seed=3, speed=1.0, speedVariation=0.0,
+                                  gravity=(0, 0, 0),
+                                  source=PointEmitter(position=(1, 0, 0), direction=(1, 0, 0)))
+        frame = np.identity(4)
+        frame[:3, :3] = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]]
+        frame[3, :3] = (5, 0, 0)
+        emitter.simulate(0.0, origin=(5, 0, 0), frame=frame)
+        assert np.allclose(emitter.pool.position[0], (5, 1, 0))
+        assert np.allclose(emitter.pool.velocity[0], (0, 1, 0))
+
+    def test_an_empty_source_emits_nothing(self):
+        from OpenGLContext.scenegraph.particles import ParticleEmitter
+        emitter = ParticleEmitter(rate=0.0, burst=10, source=SurfaceEmitter())
+        emitter.simulate(0.01)
+        assert emitter.particleCount == 0
+
+    def test_physics_nodes_act_after_gravity_and_drag(self):
+        from OpenGLContext.scenegraph.particles import ParticleEmitter
+        emitter = ParticleEmitter(rate=0.0, burst=1, speed=0.0, gravity=(0, 0, 0), mass=2.0,
+                                  physics=[ForcePhysicsModel(force=(4, 0, 0))])
+        emitter.simulate(0.05)
+        assert emitter.pool.velocity[0] == pytest.approx((0.1, 0, 0))
+
+    def test_a_colour_ramp_replaces_the_two_ends(self):
+        from OpenGLContext.scenegraph.particles import ParticleEmitter
+        emitter = ParticleEmitter(colorKey=[0, 0.5, 1], colorRamp=x3d.ColorRGBA(
+            color=[(1, 0, 0, 1), (0, 1, 0, 0.5), (0, 0, 1, 0)]))
+        assert emitter.colorAt(0.5) == pytest.approx((0, 1, 0))
+        assert emitter.alphaAt(0.25) == pytest.approx(0.75)
+        assert emitter.lifeUniforms()['startColor'] == (1, 1, 1, 1)
+
+    def test_its_bounds_cover_where_its_source_starts_particles(self):
+        from OpenGLContext.scenegraph.particles import ParticleEmitter
+        emitter = ParticleEmitter(source=PointEmitter(position=(20, 0, 0)))
+        volume = emitter.boundingVolume(None)
+        assert np.asarray(volume.center)[0] + np.asarray(volume.size)[0] / 2 > 20
+
+    def test_its_look_is_a_sprite_or_a_streak(self):
+        from OpenGLContext.scenegraph.particles import ParticleEmitter
+        assert ParticleEmitter(shape='line').look().shape == 'line'
+        assert ParticleEmitter(shape='quad').look().shape == 'sprite'
+        assert ParticleEmitter(blending='opaque').look().blending == 'additive'
+
+
+class TestWriting:
+    def test_a_system_writes_and_reads_back(self):
+        from vrml import x3d as vrml_x3d
+        from OpenGLContext.loaders.x3d import prototypes
+        from OpenGLContext.scenegraph.scenegraph import X3DScene
+        system = ParticleSystem(geometryType='LINE', maxParticles=7, colorKey=[0, 1],
+                                color=basenodes.Color(color=[(1, 0, 0), (0, 1, 0)]),
+                                emitter=ConeEmitter(angle=0.25),
+                                physics=[WindPhysicsModel(speed=2.0)], pickable=False)
+        scene = vrml_x3d.loads(vrml_x3d.dumps(X3DScene(children=[system])),
+                               name='a.x3d', prototypes=prototypes())
+        found = scene.children[0]
+        assert isinstance(found, ParticleSystem)
+        assert (found.geometryType, found.maxParticles, found.pickable) == ('LINE', 7, False)
+        assert found.emitter.angle == pytest.approx(0.25)
+        assert isinstance(found.physics[0], WindPhysicsModel)

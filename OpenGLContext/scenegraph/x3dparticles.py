@@ -219,6 +219,9 @@ class ExplosionEmitter(X3DEmitter, x3d.ExplosionEmitter):
 class _Reindexed(X3DEmitter):
     """An emitter whose `set_coordIndex` event sets its `coordIndex`"""
 
+    set_coordIndex: Any
+    coordIndex: Any
+
     def __init__(self, *args: Any, **named: Any) -> None:
         super().__init__(*args, **named)
         dispatcher.connect(self._onSetIndex, signal=('set', type(self).set_coordIndex),
@@ -348,6 +351,13 @@ class ParticleSystem(Ticked, Shape, x3d.ParticleSystem, GLLayer):
     them. ``isActive`` is TRUE while the system is enabled and has particles
     alive or is still making them.
     """
+
+    PROTO = x3d.ParticleSystem.PROTO
+    COMPONENT = x3d.ParticleSystem.COMPONENT
+    CONTAINER_FIELD = x3d.ParticleSystem.CONTAINER_FIELD
+    #: The engine's `pickable`, which a shape has and X3D's ParticleSystem does
+    #: not, is written as the engine's extension.
+    x3dExtension = 'OpenGLContext'
 
     def __init__(self, *args: Any, **named: Any) -> None:
         super().__init__(*args, **named)
