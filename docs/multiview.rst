@@ -281,7 +281,8 @@ frames.
 
 A node that draws differently in each view reads ``mode.view`` during its
 render. It holds the :class:`~OpenGLContext.multiview.views.View` being
-drawn.
+drawn. A ``Billboard`` is turned once a frame, toward the first view's
+camera, and is seen turned that way in every view.
 
 .. _multiview-grid:
 

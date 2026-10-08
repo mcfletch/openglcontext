@@ -458,6 +458,8 @@ Limits
 - A moving object's reflection lags by its tile's age, up to its ``interval``
   frames. ``interval=1`` on a reflector where that shows.
 - Transparent shapes are not drawn into any reflection.
+- A ``Billboard`` faces the main camera in a reflection too, as it is turned
+  once a frame, toward the first view.
 - Where a mirror reflects nothing, it shows the environment probe. The probe is
   the scene's HDR or cubemap sky where it has one, and a procedural one
   otherwise, which a VRML97 ``Background``'s colours do not change.
