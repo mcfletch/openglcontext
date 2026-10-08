@@ -320,6 +320,11 @@ alt = "A toon-shaded copper sphere, a marble column, a gold sphere split along i
 caption = "Shapes drawn by the GLSL their X3D document carries"
 producer = "script"
 module = "x3d_shaders"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
 id = "demos/x3d_geospatial"
 out = "images/demos/x3d_geospatial.jpg"
 size = [1100, 680]
