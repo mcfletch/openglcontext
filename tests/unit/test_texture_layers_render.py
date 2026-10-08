@@ -151,3 +151,32 @@ def test_a_generator_makes_a_layers_coordinates(gl_context, renderer):
     # above 0.5 on the right (green).
     assert close(tuple(image[32, 12]), (255, 0, 0))
     assert close(tuple(image[32, 54]), (0, 255, 0))
+
+
+def drawn_fixed(body, size=32):
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b'<X3D version="4.0"><Scene><Background skyColor="0 0 0"/>'
+                         b'<Viewpoint position="0 0 2.4"/>' + body + b'</Scene></X3D>',
+                         'scene.x3d')
+    with scene_context(scene, size=(size, size),
+                       environment={'OPENGLCONTEXT_PROFILE': 'compatibility'}) as context:
+        context.OnDraw(force=1)
+        return drawn_image(context).astype(int)
+
+
+def test_the_compatibility_profile_draws_a_multitextures_first_layer(gl_context):
+    texture = (b'<MultiTexture mode=\'"REPLACE" "MODULATE"\'>' + pixel(b'0x00FF00')
+               + pixel(b'0xFF0000') + b'</MultiTexture>')
+    found = centre(drawn_fixed(square(texture, material=b'')))
+    assert close(found, (0, 255, 0)), found
+
+
+def test_the_compatibility_profile_reflects_a_cube_map(gl_context):
+    found = centre(drawn_fixed(square(cube(), material=b'')))
+    assert close(found, (255, 0, 0)), found
+
+
+def test_the_compatibility_profile_spans_a_3d_texture_across_the_bounds(gl_context):
+    found = centre(drawn_fixed(square(VOLUME, material=b'')))
+    assert close(found, (255, 0, 0)), found

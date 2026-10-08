@@ -135,6 +135,48 @@ class _Texture3D(node.Node):
         return tex
 
 
+    def render(self, visible: int = 1, lit: int = 1, mode: Any = None) -> Optional[int]:
+        """Bind the volume for the fixed-function pipeline, spanning the geometry's bounds
+
+        The texture unit generates s, t and r from the point's position
+        across the bounds of the geometry the shape draws. Returns 1 for a
+        volume with alpha, 0 otherwise, or None with nothing to draw.
+        """
+        if not visible:
+            return None
+        tex = self.cached(mode)
+        if tex is None:
+            return None
+        from OpenGL import GL  # noqa: PLC0415 only the fixed-function pipeline draws this way
+        from OpenGLContext.passes.texturelayerpass import box_of  # noqa: PLC0415 GL module
+        low, size = box_of(getattr(mode, '_texturedGeometry', None), mode)
+        GL.glBindTexture(GL.GL_TEXTURE_3D, tex.texture)
+        GL.glEnable(GL.GL_TEXTURE_3D)
+        for axis, (coordinate, switch) in enumerate(_GENERATORS):
+            plane = [0.0, 0.0, 0.0, 0.0]
+            scale = 1.0 / size[axis] if size[axis] > 1e-9 else 0.0
+            plane[axis] = scale
+            plane[3] = -low[axis] * scale
+            GL.glTexGeni(getattr(GL, coordinate), GL.GL_TEXTURE_GEN_MODE, GL.GL_OBJECT_LINEAR)
+            GL.glTexGenfv(getattr(GL, coordinate), GL.GL_OBJECT_PLANE,
+                          np.asarray(plane, np.float32))
+            GL.glEnable(getattr(GL, switch))
+        GL.glTexEnvi(GL.GL_TEXTURE_ENV, GL.GL_TEXTURE_ENV_MODE, GL.GL_MODULATE)
+        return 1 if self.hasAlpha() else 0
+
+    def renderPost(self, mode: Any = None) -> None:
+        """Switch the fixed-function 3D unit and its generators off again"""
+        from OpenGL import GL  # noqa: PLC0415 only the fixed-function pipeline draws this way
+        for _coordinate, switch in _GENERATORS:
+            GL.glDisable(getattr(GL, switch))
+        GL.glDisable(GL.GL_TEXTURE_3D)
+
+
+#: The fixed-function texture coordinate generators, and their switches.
+_GENERATORS = (('GL_S', 'GL_TEXTURE_GEN_S'), ('GL_T', 'GL_TEXTURE_GEN_T'),
+               ('GL_R', 'GL_TEXTURE_GEN_R'))
+
+
 class PixelTexture3D(_Texture3D, x3d.PixelTexture3D):
     """X3D's PixelTexture3D: a volume given in the document"""
 

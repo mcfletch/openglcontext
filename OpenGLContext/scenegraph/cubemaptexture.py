@@ -134,6 +134,50 @@ class CubeMapTexture(node.Node):
         return tex
 
 
+    def render(self, visible: int = 1, lit: int = 1, mode: Any = None) -> Optional[int]:
+        """Bind the cube for the fixed-function pipeline, read by the reflected view
+
+        The compatibility profile's texture unit generates the eye-space
+        reflection, and the texture matrix turns it into the world's, as the
+        shaders read it. Returns 0 (opaque), or None with nothing to draw.
+        """
+        if not visible:
+            return None
+        tex = self.cached(mode)
+        if tex is None:
+            return None
+        from OpenGL import GL  # noqa: PLC0415 only the fixed-function pipeline draws this way
+        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, tex.texture)
+        GL.glEnable(GL.GL_TEXTURE_CUBE_MAP)
+        for coordinate, switch in _GENERATORS:
+            GL.glTexGeni(getattr(GL, coordinate), GL.GL_TEXTURE_GEN_MODE, GL.GL_REFLECTION_MAP)
+            GL.glEnable(getattr(GL, switch))
+        GL.glTexEnvi(GL.GL_TEXTURE_ENV, GL.GL_TEXTURE_ENV_MODE, GL.GL_MODULATE)
+        view = getattr(mode, 'modelView', None)
+        if view is not None:
+            turn = np.linalg.inv(np.asarray(view, np.float64))
+            turn[3, :3] = 0.0
+            GL.glMatrixMode(GL.GL_TEXTURE)
+            GL.glLoadMatrixf(turn.astype(np.float32))
+            GL.glMatrixMode(GL.GL_MODELVIEW)
+        return 0
+
+    def renderPost(self, mode: Any = None) -> None:
+        """Switch the fixed-function cube unit and its generators off again"""
+        from OpenGL import GL  # noqa: PLC0415 only the fixed-function pipeline draws this way
+        for _coordinate, switch in _GENERATORS:
+            GL.glDisable(getattr(GL, switch))
+        GL.glDisable(GL.GL_TEXTURE_CUBE_MAP)
+        GL.glMatrixMode(GL.GL_TEXTURE)
+        GL.glLoadIdentity()
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+
+
+#: The fixed-function texture coordinate generators, and their switches.
+_GENERATORS = (('GL_S', 'GL_TEXTURE_GEN_S'), ('GL_T', 'GL_TEXTURE_GEN_T'),
+               ('GL_R', 'GL_TEXTURE_GEN_R'))
+
+
 class ComposedCubeMapTexture(CubeMapTexture, x3d.ComposedCubeMapTexture):
     """X3D's ComposedCubeMapTexture: a 2D texture node on each face"""
 

@@ -66,6 +66,8 @@ class Shape(basenodes.Shape):
         mode._lineProperties = getattr(self.appearance, 'lineProperties', None)
         mode._pointProperties = getattr(self.appearance, 'pointProperties', None)
         mode._fillProperties = getattr(self.appearance, 'fillProperties', None)
+        # The geometry a 3D texture spans in the compatibility profile
+        mode._texturedGeometry = self.geometry
 
     def fillStyle(self) -> drawproperties.FillStyle:
         """The appearance's FillProperties as drawn; the default for a
