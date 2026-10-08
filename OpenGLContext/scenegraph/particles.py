@@ -1,8 +1,8 @@
 """Particles: an emitter node, and one instanced draw per system.
 
 A particle system is a **simulation with a renderer bolted on**, and keeping
-those two apart is most of the design. The simulation -- the pool, where
-particles start, what moves them, how they look over a life -- is
+those two apart is most of the design. The simulation (the pool, where
+particles start, what moves them, how they look over a life) is
 :mod:`~OpenGLContext.scenegraph.particlesim`, which uses no GL. This module
 draws it:
 
@@ -131,8 +131,8 @@ class ParticleLook:
     texture name, 0 for none; a particle with no texture is a soft dot where
     ``round`` and its flat colour otherwise. ``frames`` holds four texture
     coordinates per frame, at most :data:`MAX_FRAMES` frames. ``blending`` is
-    a key of :data:`BLEND_MODES`. A point is ``point_size`` pixels -- scale,
-    least and most -- divided by ``point_attenuation`` (constant, linear and
+    a key of :data:`BLEND_MODES`. A point is ``point_size`` pixels (scale,
+    least and most) divided by ``point_attenuation`` (constant, linear and
     quadratic in the distance from the eye).
     """
 

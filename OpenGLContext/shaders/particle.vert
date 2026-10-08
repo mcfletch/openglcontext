@@ -4,8 +4,8 @@
  * uShape chooses what each particle is drawn as:
  *
  *   0  a sprite: a quad facing the camera, turned by the particle's rotation.
- *      The billboard is built in eye space -- the centre goes through
- *      uModelView and the corner is then added to its x and y -- so the quad
+ *      The billboard is built in eye space: the centre goes through
+ *      uModelView and the corner is then added to its x and y, so the quad
  *      faces the camera at any camera orientation with no per-particle matrix.
  *   1  a quad in the system's own XY plane, facing +Z.
  *   2  a line along the particle's velocity, as long as the size's height.
