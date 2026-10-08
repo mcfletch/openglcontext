@@ -262,15 +262,22 @@ def brushed_metal(size: int = 256, colour: Colour = STEEL, roughness: float = 0.
                 np.ones((size, size)), np.full((size, size), 0.5))
 
 
-def normal_map(height: np.ndarray, strength: float = 2.0) -> np.ndarray:
-    """A tangent-space normal map from a height map, encoded 0 to 1.
+def normal_map(height: np.ndarray, strength: float = 2.0, wrap: bool = True) -> np.ndarray:
+    """A tangent-space normal map from a height map, its top row first, encoded 0 to 1.
 
-    Slopes are taken with the edges wrapped, so a tileable height gives a
-    tileable normal map. ``strength`` scales the relief.
+    With ``wrap`` the slopes are taken with the edges wrapped, so a tileable
+    height gives a tileable normal map; without, the edge slopes are taken
+    one-sided, for a height map that ends at its edges (a terrain tile).
+    ``strength`` scales the relief: a height in texels gives the true slope
+    at 1.
     """
     rise = np.asarray(height, 'd')
-    dx = 0.5 * (np.roll(rise, -1, axis=1) - np.roll(rise, 1, axis=1)) * strength
-    dy = 0.5 * (np.roll(rise, 1, axis=0) - np.roll(rise, -1, axis=0)) * strength
+    if wrap:
+        dx = 0.5 * (np.roll(rise, -1, axis=1) - np.roll(rise, 1, axis=1)) * strength
+        dy = 0.5 * (np.roll(rise, 1, axis=0) - np.roll(rise, -1, axis=0)) * strength
+    else:
+        down, across = np.gradient(rise)
+        dx, dy = across * strength, -down * strength
     normal = np.stack([-dx, -dy, np.ones_like(rise)], axis=-1)
     normal /= np.linalg.norm(normal, axis=-1, keepdims=True)
     encoded: np.ndarray = normal * 0.5 + 0.5

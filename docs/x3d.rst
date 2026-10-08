@@ -484,8 +484,26 @@ Sensors
 
 ``Context.observeEvents`` is how the sensors listen.
 
+.. _x3d-geospatial:
+
 Geospatial
 ~~~~~~~~~~
+
+.. figure:: images/demos/x3d_geospatial.jpg
+   :alt: A green alpine valley between grey rock slopes under a pale sky, a hamlet of red-roofed huts on its floor
+
+   ``oglc-x3d-geospatial``: an X3D valley placed by latitude, longitude and height.
+
+``oglc-x3d-geospatial`` writes and opens ``x3d_geospatial.x3d``, and
+:doc:`tests/x3d_geospatial.py <tutorials/x3d_geospatial>` is the same scene
+as a tutorial: a valley near 46.55 N 7.98 E drawn as a ``GeoElevationGrid``,
+which a ``GeoLOD`` replaces with four finer tiles read from their own files
+within two and a half kilometres, a hamlet of huts each placed by a
+``GeoLocation``, a balloon on a ``GeoPositionInterpolator``'s loop, and
+three ``GeoViewpoint`` nodes, one given in UTM. Its keys: ``g`` prints where
+the viewer is, from a ``GeoProximitySensor``, and ``w`` writes the scene
+back as X3D in each encoding; clicking the ground prints its latitude,
+longitude and height, from a ``GeoTouchSensor``.
 
 The Geospatial nodes place content on the Earth. Each reads its coordinates
 in its ``geoSystem``: ``"GD"`` latitude, longitude and height in degrees and

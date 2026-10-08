@@ -154,6 +154,7 @@ PATHS = [
         [
             'x3d_demo',
             'x3d_shaders',
+            'x3d_geospatial',
             'zones_demo',
             'mirrors_room',
             'water_demo',

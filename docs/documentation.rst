@@ -144,6 +144,11 @@ Installing the package puts these commands on your path:
    An X3D document whose shapes are drawn by their own GLSL: a toon-shaded
    sphere, a GLSL 1.20 marble column, a geometry stage, a packaged shader, a
    vertex-attribute heat bar and a rippling pool. See :ref:`x3d-shaders`.
+``oglc-x3d-geospatial``
+   An alpine valley placed by latitude, longitude and height: a
+   ``GeoElevationGrid`` under a ``GeoLOD`` of finer tiles, a hamlet of
+   ``GeoLocation`` huts, a balloon on a ``GeoPositionInterpolator`` and three
+   ``GeoViewpoint`` nodes, one in UTM. See :ref:`x3d-geospatial`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and
