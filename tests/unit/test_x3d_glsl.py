@@ -219,7 +219,10 @@ class TestTheTextsCompile:
 
     def test_a_modern_part_compiles_with_the_structures(self):
         shader = _compile(x3dglsl.prepare_source(MODERN_VERTEX, 'VERTEX').text, 'VERTEX')
-        GL.glDeleteShader(shader)
+        try:
+            assert GL.glGetShaderiv(shader, GL.GL_COMPILE_STATUS) == GL.GL_TRUE
+        finally:
+            GL.glDeleteShader(shader)
 
     def test_every_built_in_the_translation_names_compiles(self):
         vertex = ('void main() {\n'
@@ -235,8 +238,12 @@ class TestTheTextsCompile:
                     ' * shadow2D(s, vec3(0.0)).r; }\n')
         shaders = [_compile(x3dglsl.prepare_source(vertex, 'VERTEX').text, 'VERTEX'),
                    _compile(x3dglsl.prepare_source(fragment, 'FRAGMENT').text, 'FRAGMENT')]
-        for shader in shaders:
-            GL.glDeleteShader(shader)
+        try:
+            assert all(GL.glGetShaderiv(shader, GL.GL_COMPILE_STATUS) == GL.GL_TRUE
+                       for shader in shaders)
+        finally:
+            for shader in shaders:
+                GL.glDeleteShader(shader)
 
     def test_a_compile_error_names_the_line_in_the_part(self):
         broken = '#version 330 core\nin vec4 x3d_Vertex;\n\nvoid main() { oops; }\n'
