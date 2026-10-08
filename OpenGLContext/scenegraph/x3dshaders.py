@@ -58,7 +58,7 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     'ComposedShader', 'ProgramShader', 'PackagedShader', 'ShaderPart', 'ShaderProgram',
-    'X3DShaderDraw', 'LinkedProgram', 'draw_program', 'SHADER_CHANGE_SIGNAL',
+    'X3DShaderDraw', 'LinkedProgram', 'declare_field', 'draw_program', 'SHADER_CHANGE_SIGNAL',
 ]
 
 #: Sent with a shader node as sender when what it draws with may have changed:
@@ -488,6 +488,33 @@ def user_fields(node: Any) -> "list[Any]":
     found.extend(entry for entry in protofunctions.getFields(node, events=1)
                  if entry.name not in known and not entry.direction)
     return found
+
+
+def declare_field(node: Any, name: str, type_name: str, value: Any = None,
+                  accessType: str = 'inputOutput') -> Any:
+    """Declare a field on a shader node built in code, as a document's ``<field>`` does
+
+    `type_name` is an X3D field type ('SFColor', 'MFFloat', 'SFNode', ...);
+    `accessType` 'inputOutput', 'initializeOnly', or 'inputOnly' for an event
+    a route sends to. The field is the uniform of its name, and `value` its
+    first value (an event has none until one is sent). Returns the field.
+    """
+    from vrml import field as vrml_field  # noqa: PLC0415 kept with its use
+    if type_name not in vrml_field.baseFieldTypes:
+        raise ValueError('%s is not an X3D field type' % (type_name,))
+    own = type(node)
+    if not own.__dict__.get(' declares', False):
+        own = type(own.__name__, (own,), {'PROTO': protofunctions.protoName(node),
+                                          ' declares': True})
+        node.__class__ = own
+    if accessType == 'inputOnly':
+        declared = vrml_field.newEvent(name, type_name, 0)
+    else:
+        declared = vrml_field.newField(name, type_name, int(accessType == 'inputOutput'))
+    protofunctions.addField(own, declared)
+    if value is not None and accessType != 'inputOnly':
+        setattr(node, name, value)
+    return declared
 
 
 #: The key a node's user values are kept under in vrml's cache.

@@ -800,3 +800,22 @@ class TestTheCompatibilityProfile:
             material='<Material diffuseColor="0 0 1" emissiveColor="0 0 1"/>'))
         assert bluish(self._centre(scene, compatibility))
         assert named(scene, 'S').isSelected is False
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+def test_a_shader_built_in_code_declares_its_fields(renderer):
+    """What a document's <field> does, from Python"""
+    from OpenGLContext.scenegraph import basenodes, x3dshaders
+    from OpenGLContext.scenegraph.x3dshaders import ComposedShader, ShaderPart
+    strip = lambda text: text.replace('<![CDATA[', '').replace(']]>', '')  # noqa: E731 a one-line helper
+    shader = ComposedShader(language='GLSL', parts=[
+        ShaderPart(type='VERTEX', sourceCode=strip(VERTEX)),
+        ShaderPart(type='FRAGMENT', sourceCode=strip(FLAT))])
+    x3dshaders.declare_field(shader, 'colour', 'SFColor', (1, 0, 0))
+    assert shader.colour.tolist() == [1, 0, 0]
+    shape = basenodes.Shape(geometry=basenodes.Box(size=(4, 4, 4)),
+                            appearance=basenodes.Appearance(shaders=[shader]))
+    scene = [basenodes.Viewpoint(position=(0, 0, 10)), shape]
+    assert reddish(centre(scene, renderer))
+    shader.colour = (0, 1, 0)
+    assert greenish(centre(scene, renderer))
