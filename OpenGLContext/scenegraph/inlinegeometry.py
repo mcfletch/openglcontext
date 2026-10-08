@@ -10,8 +10,8 @@ appearance of the `Shape` holding this node; the file's own materials are not
 used. `smooth` false draws each triangle with its own normal. `solid` culls
 back faces, as on the other geometry nodes.
 
-The file is read on the loader pool, and the mesh it makes is put in place on
-the render thread of an open context (straight away where none is open). X3D's
+The file is read on the loader pool, which sets the mesh it makes, as an
+ImageTexture's image is set, and asks the open contexts to draw again. X3D's
 `load` false leaves the geometry empty; setting `url` or `load` reads again.
 """
 from __future__ import annotations
@@ -89,15 +89,6 @@ class InlineGeometry(MeshDrawn, x3d.InlineGeometry):
             log.warning('InlineGeometry %s: no triangles read from %s',
                         self.DEF or '', ' '.join(url))
         mesh = mesh_from_primitive(found) if found is not None else None
-        self._deliver(contexts, mesh, generation)
-
-    def _deliver(self, contexts: Sequence[Any], mesh: Optional[Any], generation: Any) -> None:
-        """Put `mesh` in place on an open context's render thread, or here where none is open"""
-        for reference in contexts:
-            found = reference()
-            if found is not None:
-                found.renderQueue.call(self._place, mesh, generation, contexts)
-                return
         self._place(mesh, generation, contexts)
 
     def _place(self, mesh: Optional[Any], generation: Any, contexts: Sequence[Any] = ()) -> None:

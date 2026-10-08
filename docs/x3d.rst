@@ -246,6 +246,12 @@ appearance's ``texture`` is the base colour map. In the same way it is a
 ``UnlitMaterial``'s emissive map without an ``emissiveTexture``, in drawing
 and in a glTF written from the scene. ``ambientTexture``,
 ``shininessTexture`` and ``specularTexture`` are kept and not drawn.
+A texture is sampled with its ``TextureProperties`` filters where it has
+one. Without, a document's image smaller than 16 texels on its longer side
+(``sampler.SMALL_IMAGE``) is sampled from its nearest texel, so a small
+``PixelTexture`` is drawn as crisp squares; larger images, and textures made
+in code, are filtered trilinearly. An ``UnlitMaterial`` is drawn as its
+``emissiveColor`` and ``transparency``, times its texture, in both renderers.
 A geometry that is not ``solid`` draws its back faces with
 ``Appearance.backMaterial``, or with a ``TwoSidedMaterial``'s ``back...``
 fields where its ``separateBackColor`` is true, through the PBR program: the
