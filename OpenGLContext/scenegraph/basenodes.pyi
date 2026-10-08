@@ -45,6 +45,12 @@ from OpenGLContext.scenegraph.geometry2d import Disk2D as Disk2D
 from OpenGLContext.scenegraph.geometry2d import Polypoint2D as Polypoint2D
 from OpenGLContext.scenegraph.geometry2d import Rectangle2D as Rectangle2D
 from OpenGLContext.scenegraph.geometry2d import TriangleSet2D as TriangleSet2D
+from OpenGLContext.scenegraph.geospatial import GeoCoordinate as GeoCoordinate
+from OpenGLContext.scenegraph.geospatial import GeoElevationGrid as GeoElevationGrid
+from OpenGLContext.scenegraph.geospatial import GeoLOD as GeoLOD
+from OpenGLContext.scenegraph.geospatial import GeoLocation as GeoLocation
+from OpenGLContext.scenegraph.geospatial import GeoTransform as GeoTransform
+from OpenGLContext.scenegraph.geospatial import GeoViewpoint as GeoViewpoint
 from OpenGLContext.scenegraph.group import Group as Group
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight as ImageBasedLight
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture as ImageDataTexture
@@ -88,6 +94,16 @@ from OpenGLContext.scenegraph.nurbs import NurbsSurface as NurbsSurface
 from OpenGLContext.scenegraph.nurbs import NurbsToleranceSample as NurbsToleranceSample
 from OpenGLContext.scenegraph.nurbs import Polyline2D as Polyline2D
 from OpenGLContext.scenegraph.nurbs import TrimmedSurface as TrimmedSurface
+from OpenGLContext.scenegraph.nurbsinterpolators import NurbsOrientationInterpolator as NurbsOrientationInterpolator
+from OpenGLContext.scenegraph.nurbsinterpolators import NurbsPositionInterpolator as NurbsPositionInterpolator
+from OpenGLContext.scenegraph.nurbsinterpolators import NurbsSurfaceInterpolator as NurbsSurfaceInterpolator
+from OpenGLContext.scenegraph.nurbsx3d import ContourPolyline2D as ContourPolyline2D
+from OpenGLContext.scenegraph.nurbsx3d import NurbsPatchSurface as NurbsPatchSurface
+from OpenGLContext.scenegraph.nurbsx3d import NurbsSet as NurbsSet
+from OpenGLContext.scenegraph.nurbsx3d import NurbsSweptSurface as NurbsSweptSurface
+from OpenGLContext.scenegraph.nurbsx3d import NurbsSwungSurface as NurbsSwungSurface
+from OpenGLContext.scenegraph.nurbsx3d import NurbsTextureCoordinate as NurbsTextureCoordinate
+from OpenGLContext.scenegraph.nurbsx3d import NurbsTrimmedSurface as NurbsTrimmedSurface
 from OpenGLContext.scenegraph.particles import ParticleEmitter as ParticleEmitter
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial as PhysicalMaterial
 from OpenGLContext.scenegraph.pointset import PointSet as PointSet
@@ -149,6 +165,7 @@ from OpenGLContext.scenegraph.x3dgroups import CADLayer as CADLayer
 from OpenGLContext.scenegraph.x3dgroups import PickableGroup as PickableGroup
 from OpenGLContext.scenegraph.x3dgroups import StaticGroup as StaticGroup
 from OpenGLContext.scenegraph.x3dpointing import CylinderSensor as CylinderSensor
+from OpenGLContext.scenegraph.x3dpointing import GeoTouchSensor as GeoTouchSensor
 from OpenGLContext.scenegraph.x3dpointing import PlaneSensor as PlaneSensor
 from OpenGLContext.scenegraph.x3dpointing import SphereSensor as SphereSensor
 from OpenGLContext.scenegraph.x3dpointing import TouchSensor as TouchSensor
@@ -190,6 +207,8 @@ from vrml.x3d.nodes import ClipPlane as ClipPlane
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
 from vrml.x3d.nodes import CoordinateDouble as CoordinateDouble
 from vrml.x3d.nodes import FillProperties as FillProperties
+from vrml.x3d.nodes import GeoMetadata as GeoMetadata
+from vrml.x3d.nodes import GeoOrigin as GeoOrigin
 from vrml.x3d.nodes import LineProperties as LineProperties
 from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean
 from vrml.x3d.nodes import MetadataDouble as MetadataDouble
@@ -214,6 +233,7 @@ from vrml.x3d.runtime import BooleanToggle as BooleanToggle
 from vrml.x3d.runtime import BooleanTrigger as BooleanTrigger
 from vrml.x3d.runtime import CoordinateInterpolator2D as CoordinateInterpolator2D
 from vrml.x3d.runtime import EaseInEaseOut as EaseInEaseOut
+from vrml.x3d.runtime import GeoPositionInterpolator as GeoPositionInterpolator
 from vrml.x3d.runtime import IntegerSequencer as IntegerSequencer
 from vrml.x3d.runtime import IntegerTrigger as IntegerTrigger
 from vrml.x3d.runtime import PositionInterpolator2D as PositionInterpolator2D
@@ -221,6 +241,7 @@ from vrml.x3d.runtime import SplinePositionInterpolator as SplinePositionInterpo
 from vrml.x3d.runtime import SplinePositionInterpolator2D as SplinePositionInterpolator2D
 from vrml.x3d.runtime import SplineScalarInterpolator as SplineScalarInterpolator
 from vrml.x3d.runtime import SquadOrientationInterpolator as SquadOrientationInterpolator
+from vrml.x3d.sensors import GeoProximitySensor as GeoProximitySensor
 from vrml.x3d.sensors import ProximitySensor as ProximitySensor
 from vrml.x3d.sensors import TransformSensor as TransformSensor
 from vrml.x3d.sensors import VisibilitySensor as VisibilitySensor
@@ -254,6 +275,7 @@ __all__ = [
     'ColorRGBA',
     'Cone',
     'Contour2D',
+    'ContourPolyline2D',
     'Coordinate',
     'CoordinateChaser',
     'CoordinateDamper',
@@ -291,6 +313,17 @@ __all__ = [
     'GLSLObject',
     'GLSLShader',
     'Gear',
+    'GeoCoordinate',
+    'GeoElevationGrid',
+    'GeoLOD',
+    'GeoLocation',
+    'GeoMetadata',
+    'GeoOrigin',
+    'GeoPositionInterpolator',
+    'GeoProximitySensor',
+    'GeoTouchSensor',
+    'GeoTransform',
+    'GeoViewpoint',
     'Group',
     'IS',
     'ImageBasedLight',
@@ -336,8 +369,17 @@ __all__ = [
     'NurbsCurve',
     'NurbsCurve2D',
     'NurbsDomainDistanceSample',
+    'NurbsOrientationInterpolator',
+    'NurbsPatchSurface',
+    'NurbsPositionInterpolator',
+    'NurbsSet',
     'NurbsSurface',
+    'NurbsSurfaceInterpolator',
+    'NurbsSweptSurface',
+    'NurbsSwungSurface',
+    'NurbsTextureCoordinate',
     'NurbsToleranceSample',
+    'NurbsTrimmedSurface',
     'OrientationChaser',
     'OrientationDamper',
     'OrientationInterpolator',

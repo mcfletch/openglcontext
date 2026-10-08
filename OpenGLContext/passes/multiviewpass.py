@@ -145,8 +145,8 @@ class MultiviewPassMixin( PassResources ):
         if not found:
             return {}
         entries = list( found.values() )
-        worlds = asarray( [ record[2] for record, _mask in entries ], 'f' )
-        modelviews = worlds @ asarray( reference.modelView, 'f' )
+        worlds = asarray( [ record[2] for record, _mask in entries ], 'd' )
+        modelviews = ( worlds @ asarray( reference.modelView, 'd' ) ).astype( 'f' )
         groups: dict[int, list[Any]] = {}
         for (record, mask), modelview in zip( entries, modelviews ):
             key, _mv, tmatrix, bvolume, path, node = record
@@ -486,8 +486,8 @@ class MultiviewPassMixin( PassResources ):
                 with tile_of( frame.view, frame.camera, window ):
                     frame.projection = frame.camera.viewMatrix( frame.maxDepth )
                 # The frustum stays the one the view was culled with.
-                frame.modelproj = dot( asarray( frame.modelView, 'f' ),
-                                       asarray( frame.projection, 'f' ) )
+                frame.modelproj = dot( asarray( frame.modelView, 'd' ),
+                                       asarray( frame.projection, 'd' ) )
         active = self.activeFrame if self.activeFrame is not None else frames[0]
         self.applyViewFrame( active, gl=False )
         self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )

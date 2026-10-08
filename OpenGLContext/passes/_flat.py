@@ -1055,10 +1055,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         nodetypes.Viewpoint,
         nodetypes.NavigationInfo,
         nodetypes.Auditory,
-        # Not a nodetype but a node class: an LOD has to be found again each
-        # frame so it can be told where the viewer is, and the same path
-        # bookkeeping that finds the lights will find it.
-        lod.LOD,
+        # Not a nodetype but a node class: an LOD or GeoLOD has to be found
+        # again each frame so it can be told where the viewer is, and the same
+        # path bookkeeping that finds the lights will find it.
+        lod.Levelled,
         # And each Billboard, turned toward the camera once a frame.
         billboard.Billboard,
         # Likewise: the baked irradiance grid is looked up once a frame and
@@ -1337,7 +1337,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         is that node's own: which of its thresholds the answer falls in, and
         whether that is a change the flattened scenegraph has to be told about.
         """
-        if self.paths.get( lod.LOD ):
+        if self.paths.get( lod.Levelled ):
             self.chooseLevels( [
                 lod.Viewer( matrix, lod.viewer_tangent( self.fieldOfView() ) ) ] )
 
@@ -1352,7 +1352,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         Each viewer costs one product of the stacked world matrices and two
         array expressions, as a single camera does.
         """
-        paths = self.paths.get( lod.LOD, () )
+        paths = self.paths.get( lod.Levelled, () )
         if not paths or not viewers:
             return
         placed = []
@@ -1508,8 +1508,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
             return []
         kept = matrices[keep]
         # One product for the whole surviving set. `matrix` is the camera's, so
-        # this is the only place the frame's viewpoint enters the gather.
-        modelviews = kept @ asarray( matrix, 'f' )
+        # this is the only place the frame's viewpoint enters the gather. Both
+        # are double precision and only the product, relative to the camera,
+        # is single, so a scene far from the origin keeps its millimetres.
+        modelviews = ( kept @ asarray( matrix, 'd' ) ).astype( 'f' )
         toRender = []
         seen = self.visiblePlacements = {}
         hidden = self._zoneHidden
@@ -1626,7 +1628,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
             points = self._pointsBuffer = zeros( (count, 8, 4), 'f' )
         matrices = self._matrixBuffer
         if matrices is None or len(matrices) != count:
-            matrices = self._matrixBuffer = zeros( (count, 4, 4), 'f' )
+            matrices = self._matrixBuffer = zeros( (count, 4, 4), 'd' )
         nodes: list[Any] = []
         own: list[Any] = []
         volumes: list[Any] = []
@@ -1674,7 +1676,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         makes one shape at a time, made for the whole scene by
         :func:`OpenGLContext.frustum.boxes_outside`.
         """
-        planes = asarray( self.frustum.planes, 'f' )
+        planes = asarray( self.frustum.planes, 'd' )
         if not len(planes):
             return flatnonzero( drawing )
         # Reduced over the corners as the leading axis: numpy reduces a short
@@ -2336,7 +2338,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         """Set our view platform"""
         self.viewPlatform = vp
         self.projection = vp.viewMatrix().astype('f')
-        self.modelView = vp.modelMatrix().astype('f')
+        self.modelView = vp.modelMatrix().astype('d')
         self.modelproj = dot( self.modelView, self.projection )
         self.matrix = None
 

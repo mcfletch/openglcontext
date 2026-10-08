@@ -14,7 +14,7 @@ from OpenGL.GL import *
 from OpenGL.GL import glDeleteVertexArrays
 from OpenGL.arrays import vbo
 from OpenGLContext import displaylist
-from OpenGLContext.scenegraph import coordinatebounded, drawproperties
+from OpenGLContext.scenegraph import coordinatebounded, coordinates, drawproperties
 from OpenGLContext.scenegraph.vertexsemantics import (
     LOC_COLOR, LOC_POSITION, LOC_TEXCOORD,
 )
@@ -51,14 +51,14 @@ class IndexedLineSet(
         Debug collision proxies share one unit box / unit sphere wireframe, so
         every box proxy collapses to a single instanced line draw, ditto spheres.
         """
-        pts = np.asarray(self.coord.point, dtype='f').tobytes() if self.coord else b''
+        pts = np.asarray(coordinates.points(self.coord), dtype='f').tobytes() if self.coord else b''
         idx = np.asarray(self.coordIndex, dtype='i').tobytes()
         col = np.asarray(self.color.color, dtype='f').tobytes() if self.color else b''
         return ('IndexedLineSet', pts, idx, col, bool(self.colorPerVertex))
 
     def _expand_line_vertices(self) -> tuple[Any, Any]:
         """Expand the polylines to flat ``GL_LINES`` vertex/colour pairs (M, 3)."""
-        points = np.asarray(self.coord.point, dtype='f')
+        points = np.asarray(coordinates.points(self.coord), dtype='f')
         indices = expandIndices(self.coordIndex)
         colors = (np.asarray(self.color.color, dtype='f')
                   if self.color and len(self.color.color) else None)
@@ -98,25 +98,24 @@ class IndexedLineSet(
         holder = mode.cache.holder(self, gpu, key='line_instance_gpu')
         for attr in ('coord', 'coordIndex', 'color', 'colorIndex'):
             holder.depend(self, attr)
+        for source, name in coordinates.fields(self.coord):
+            holder.depend(source, name)
         return gpu
 
     def compile( self, mode: Any = None ) -> Any:
         """Compile the IndexedLineSet into a display-list
         """
-        if self.coord and len(self.coord.point) and len(self.coordIndex):
+        if self.coord and len(coordinates.points(self.coord)) and len(self.coordIndex):
             dl = displaylist.DisplayList()
             holder = mode.cache.holder(self, dl)
             for field in protofunctions.getFields( self ):
                 # change to any field requires a recompile
                 holder.depend( self, field )
-            for (n, attr) in [
-                (self.coord, 'point'),
-                (self.color, 'color'),
-            ]:
+            for (n, attr) in [*coordinates.fields(self.coord), (self.color, 'color')]:
                 if n:
                     holder.depend( n, protofunctions.getField(n,attr) )
-                
-            points = self.coord.point
+
+            points = coordinates.points(self.coord)
             indices = expandIndices( self.coordIndex )
             #XXX should do sanity checks here...
             if self.color and len(self.color.color):
@@ -234,7 +233,7 @@ class IndexedLineSet(
         a single cached VAO, instead of generating/uploading/deleting a VBO per
         polyline per frame.
         """
-        if not self.coord or not len(self.coord.point) or not len(self.coordIndex):
+        if not self.coord or not len(coordinates.points(self.coord)) or not len(self.coordIndex):
             return 1
 
         shader_program = getattr(mode, 'shader_program', None)
@@ -314,7 +313,7 @@ class IndexedLineSet(
         if gpu is not None and clean is not None and gpu['has_colors'] == has_colors:
             return gpu['vbo'], gpu['stride'], gpu['segments']
 
-        points = np.asarray(self.coord.point, dtype='f')
+        points = np.asarray(coordinates.points(self.coord), dtype='f')
         indices = expandIndices(self.coordIndex)
         colors: Optional[Any] = None
         color_indices: list[Any] = []
@@ -383,8 +382,8 @@ class IndexedLineSet(
         holder.depend(self, 'coord')
         holder.depend(self, 'coordIndex')
         holder.depend(self, 'colorIndex')
-        if self.coord:
-            holder.depend(self.coord, 'point')
+        for source, name in coordinates.fields(self.coord):
+            holder.depend(source, name)
         if self.color:
             holder.depend(self.color, 'color')
         return gpu['vbo'], gpu['stride'], gpu['segments']
@@ -392,8 +391,8 @@ class IndexedLineSet(
     def yeildVertices( self ) -> Iterator[Any]:
         """Yield set of vertices to be rendered..."""
         # this is an unfinished start to getting OpenGL 3.1 operation
-        if self.coord and len(self.coord.point) and len(self.coordIndex):
-            points = self.coord.point
+        if self.coord and len(coordinates.points(self.coord)) and len(self.coordIndex):
+            points = coordinates.points(self.coord)
             indices = expandIndices( self.coordIndex )
             currentColor = None
             #XXX should do sanity checks here...

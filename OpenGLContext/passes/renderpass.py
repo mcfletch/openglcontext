@@ -159,7 +159,8 @@ class _defaultRenderPasses( object ):
         # Both passes take their camera from the view platform
         viewpointbinding.bind_scene_viewpoint( context )
         navigationinfo.apply( context, pass_.currentNavigation(),
-                              document=isinstance( getattr( pass_, 'scene', None ), X3DScene ) )
+                              document=isinstance( getattr( pass_, 'scene', None ), X3DScene ),
+                              scale=viewpointbinding.speed_scale( context ) )
         return pass_( context )
 defaultRenderPasses = _defaultRenderPasses()
 

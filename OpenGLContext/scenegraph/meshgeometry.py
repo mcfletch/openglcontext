@@ -28,12 +28,14 @@ from vrml import cache, protofunctions
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.scenegraph import boundingvolume, composedgeometry, texgen
+from OpenGLContext.scenegraph.coordinates import fields as point_fields
+from OpenGLContext.scenegraph.coordinates import points as scene_points
 from OpenGLContext.scenegraph.texturemapping import label_set
 
 log = logging.getLogger(__name__)
 
-__all__ = ['DRAWN_KEY', 'DrawnAs', 'ElevationGrid', 'IndexedQuadSet', 'IndexedTriangleFanSet',
-           'IndexedTriangleSet', 'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
+__all__ = ['DRAWN_KEY', 'DrawnAs', 'ElevationGrid', 'GridDrawn', 'IndexedQuadSet',
+           'IndexedTriangleFanSet', 'IndexedTriangleSet', 'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
            'MeshGeometry', 'polylines', 'QuadSet',
            'TriangleFanSet', 'TriangleSet', 'TriangleStripSet']
 
@@ -67,6 +69,8 @@ def _depend_on_fields(holder: Any, target: Any) -> None:
         for declared in protofunctions.getFields(source):
             if not declared.name.startswith(' '):
                 holder.depend(source, declared)
+    for source, name in point_fields(getattr(target, 'coord', None)):
+        holder.depend(source, name)
 
 
 def _values(child: Any, name: str) -> Any:
@@ -216,7 +220,7 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
 
     def buildMesh(self) -> Optional[Any]:
         """The mesh of the set's triangles, or None for a set with no coordinates"""
-        points = _values(self.coord, 'point')
+        points = scene_points(self.coord)
         if points is None or not len(points):
             return None
         return self.meshFrom(composedgeometry.composed_arrays(
@@ -230,24 +234,43 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
             solid=bool(self.solid))
 
 
-class ElevationGrid(MeshDrawn, x3d.ElevationGrid):
+class GridDrawn(MeshDrawn):
     """A grid of heights, `xDimension` across and `zDimension` deep
 
     Colours and normals are one per point, or one per quad where
     `colorPerVertex`/`normalPerVertex` is false. Normals not given are
     smoothed across folds within `creaseAngle`. Without a `texCoord`, the
-    texture spans the grid once.
+    texture spans the grid once. A subclass gives the points
+    (:meth:`gridPoints`).
     """
+
+    #: Whether rows run toward -Z where columns run toward +X, so a triangle
+    #: counter-clockwise from above is clockwise in the grid's own order.
+    MIRRORED = False
+
+    xDimension: int
+    zDimension: int
+    height: Any
+    ccw: bool
+    solid: bool
+    creaseAngle: float
+    color: Any
+    colorPerVertex: bool
+    normal: Any
+    normalPerVertex: bool
+
+    def gridPoints(self, across: int, deep: int) -> np.ndarray:
+        """The grid's points, (across * deep, 3), row by row"""
+        raise NotImplementedError('%s must give its points' % type(self).__name__)
 
     def buildMesh(self) -> Optional[Any]:
         """The mesh of the grid, or None for one smaller than 2 by 2 or short of heights"""
         across, deep = int(self.xDimension), int(self.zDimension)
-        heights = np.asarray(self.height, dtype=np.float32).ravel()
         if across < 2 or deep < 2:
             return None
-        if len(heights) < across * deep:
+        if len(self.height) < across * deep:
             _report(self, 'has %d heights for %d points; it is not drawn'
-                    % (len(heights), across * deep))
+                    % (len(self.height), across * deep))
             return None
         colors = _values(self.color, 'color')
         normals = _values(self.normal, 'vector')
@@ -257,19 +280,30 @@ class ElevationGrid(MeshDrawn, x3d.ElevationGrid):
             normals = composedgeometry.per_quad(normals)
         coordinates = self.coordinates() or [composedgeometry.grid_texcoords(across, deep)]
         return self.meshFrom(composedgeometry.composed_arrays(
-            composedgeometry.grid_points(heights, across, deep, self.xSpacing, self.zSpacing),
-            composedgeometry.grid_triangles(across, deep), ccw=bool(self.ccw),
+            self.gridPoints(across, deep),
+            composedgeometry.grid_triangles(across, deep), ccw=bool(self.ccw) != self.MIRRORED,
             normals=normals, normal_per_vertex=bool(self.normalPerVertex),
             colors=colors, color_per_vertex=bool(self.colorPerVertex),
             texcoords=coordinates, tangents=_values(getattr(self, 'tangent', None), 'vector'),
             crease_angle=float(self.creaseAngle)), solid=bool(self.solid))
 
 
+class ElevationGrid(GridDrawn, x3d.ElevationGrid):
+    """X3D's ElevationGrid: heights above the XZ plane, `xSpacing` and `zSpacing` apart"""
+
+    def gridPoints(self, across: int, deep: int) -> np.ndarray:
+        """The grid's points, (across * deep, 3), row by row"""
+        heights = np.asarray(self.height, dtype=np.float32).ravel()
+        points: np.ndarray = composedgeometry.grid_points(
+            heights, across, deep, self.xSpacing, self.zSpacing)
+        return points
+
+
 class TriangleSet(MeshGeometry, x3d.TriangleSet):
     """Triangles of the points taken three at a time"""
 
     def triangles(self) -> np.ndarray:
-        points = _values(self.coord, 'point')
+        points = scene_points(self.coord)
         return composedgeometry.triangle_set(0 if points is None else len(points))
 
 
@@ -314,7 +348,7 @@ class QuadSet(MeshGeometry, x3d.QuadSet):
     TRIANGLES_PER_FACE = 2
 
     def triangles(self) -> np.ndarray:
-        points = _values(self.coord, 'point')
+        points = scene_points(self.coord)
         return composedgeometry.quad_set(0 if points is None else len(points))
 
 

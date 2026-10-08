@@ -60,7 +60,7 @@ XXX This node needs some serious optimization.  Possible approaches:
 from typing import Any, Optional
 
 import numpy as np
-from OpenGLContext.scenegraph import coordinatebounded
+from OpenGLContext.scenegraph import coordinatebounded, coordinates
 from vrml.vrml97 import basenodes
 
 # The compile pipeline lives in ``ifscompiler``; re-exported here so importers
@@ -182,7 +182,7 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
 
     # -- instancing -------------------------------------------------------
     def _hasGeometry(self) -> bool:
-        return bool(len(self.coordIndex) and self.coord and len(self.coord.point))
+        return bool(len(self.coordIndex) and self.coord and len(coordinates.points(self.coord)))
 
     def _instanceArrays(self) -> Optional[tuple[Any, Any, Any, Any]]:
         """Expanded (positions, normals, texcoords, colours) triangle soup for instancing.
@@ -228,7 +228,7 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
                 h.update(np.ascontiguousarray(arr).tobytes())
 
         feed('coordIndex', self.coordIndex)
-        feed('point', self.coord.point if self.coord else None)
+        feed('point', coordinates.points(self.coord))
         feed('normalIndex', self.normalIndex)
         feed('normal', self.normal.vector if self.normal else None)
         feed('texCoordIndex', self.texCoordIndex)

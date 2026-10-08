@@ -83,7 +83,8 @@ def authored_centre(sg: Any) -> Any:
     view = getattr(sg, 'boundViewpoint', None) if sg is not None else None
     if not view or 'centerOfRotation' not in getattr(view, '__dict__', {}):
         return None
-    local = np.append(np.asarray(view.centerOfRotation, dtype='d')[:3], 1.0)
+    centre = view.localCentre() if hasattr(view, 'localCentre') else view.centerOfRotation
+    local = np.append(np.asarray(centre, dtype='d')[:3], 1.0)
     for path in getattr(sg, 'viewpointPaths', ()):
         if path[-1] is view:
             matrix = path.transformMatrix()
@@ -91,6 +92,16 @@ def authored_centre(sg: Any) -> Any:
                 local = local @ np.asarray(matrix, dtype='d')
             break
     return local
+
+
+def speed_scale(context: Any) -> float:
+    """What the bound viewpoint multiplies navigation speeds by, with the viewer where it is"""
+    sg = context.getSceneGraph()
+    view = getattr(sg, 'boundViewpoint', None) if sg is not None else None
+    platform = getattr(context, 'platform', None)
+    if not view or platform is None or not hasattr(view, 'speedScale'):
+        return 1.0
+    return float(view.speedScale(platform.position))
 
 
 #: Where each viewpoint placed the platform when last bound, for retainUserOffsets.

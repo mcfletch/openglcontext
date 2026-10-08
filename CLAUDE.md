@@ -224,6 +224,11 @@ OpenGLContext/
 │   ├── shape.py      # Binds Appearance to geometry
 │   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.rst
 │   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.rst
+│   ├── nurbsx3d.py   # X3D's NURBS geometry, trims, texture coordinates and
+│   │                 # NurbsSet, drawn as meshes and lines
+│   ├── nurbsinterpolators.py  # X3D's three NURBS interpolators -- no GL
+│   ├── nurbseval.py  # X3D's NURBS field rules; curves, surfaces, trims and
+│   │                 # sweeps evaluated -- no GL
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── composedgeometry.py  # X3D triangle/line sets and ElevationGrid as
 │   │                 # glTF-shaped arrays -- NumPy only, no GL
@@ -245,6 +250,11 @@ OpenGLContext/
 │   │                 # triangles, for the pick sensors -- NumPy only
 │   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the
 │   │                 # context to follow its url (Context.OnAnchor)
+│   ├── geospatial.py # X3D's Geospatial nodes: GeoLocation, GeoTransform,
+│   │                 # GeoCoordinate, GeoElevationGrid, GeoViewpoint, GeoLOD
+│   │                 # -- docs/x3d.rst
+│   ├── coordinates.py  # A coordinate node's points in the scene's
+│   │                 # coordinates, which geometry reads -- no GL
 │   ├── x3dgroups.py  # X3D's CADAssembly, CADLayer, PickableGroup and
 │   │                 # StaticGroup as groups, CADFace as its shape
 │   │                 # (CADPart is in transform.py)

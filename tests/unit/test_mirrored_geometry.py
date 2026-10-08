@@ -33,6 +33,32 @@ def _trimmed_surface():
     return nurbs.TrimmedSurface(surface=_nurbs_surface())
 
 
+def _x3d_patch(cls=basenodes.NurbsPatchSurface, **named):
+    """An X3D NURBS patch: a bump on a 4 by 4 net, cubic each way"""
+    return cls(uDimension=4, vDimension=4, uOrder=4, vOrder=4, controlPoint=basenodes.Coordinate(
+        point=[(u / 3.0 - 0.3, v / 3.0 - 0.5, 0.4 * (0 < u < 3 and 0 < v < 3))
+               for v in range(4) for u in range(4)]), **named)
+
+
+def _x3d_trimmed():
+    from OpenGLContext.scenegraph.nurbsx3d import Contour2D  # noqa: PLC0415 kept with its use
+    notch = Contour2D(children=[basenodes.ContourPolyline2D(
+        controlPoint=[(0, 0), (1, 0), (0.6, 0.5), (1, 1), (0, 1), (0, 0)])])
+    return _x3d_patch(basenodes.NurbsTrimmedSurface, trimmingContour=[notch])
+
+
+def _x3d_sweep(cls, first, second):
+    from OpenGLContext.scenegraph.nurbsx3d import NurbsCurve, NurbsCurve2D  # noqa: PLC0415 kept with its use
+    section = NurbsCurve2D(order=2, controlPoint=[(-0.3, -0.2), (0.3, -0.2), (0.0, 0.4),
+                                                  (-0.3, -0.2)])
+    if cls is basenodes.NurbsSweptSurface:
+        path = NurbsCurve(order=3, controlPoint=basenodes.Coordinate(
+            point=[(-0.8, -0.6, 0), (0.6, -0.2, 0), (0.2, 0.8, 0)]))
+    else:
+        path = NurbsCurve2D(order=3, controlPoint=[(-0.8, 0.2), (0.0, 0.9), (0.8, 0.2)])
+    return cls(**{first: section, second: path})
+
+
 def _inline_geometry():
     """An InlineGeometry holding the mesh a read would give it"""
     from OpenGLContext.scenegraph.inlinegeometry import InlineGeometry  # noqa: PLC0415 kept with its use
@@ -65,6 +91,12 @@ CASES = {
     'PolyCylinder': lambda: basenodes.PolyCylinder(path=[(-1, -1, 0), (1, 0.5, 0)],
                                                   radius=0.4),
     'NurbsSurface': _nurbs_surface,
+    'NurbsPatchSurface': _x3d_patch,
+    'NurbsTrimmedSurface': _x3d_trimmed,
+    'NurbsSweptSurface': lambda: _x3d_sweep(basenodes.NurbsSweptSurface,
+                                            'crossSectionCurve', 'trajectoryCurve'),
+    'NurbsSwungSurface': lambda: _x3d_sweep(basenodes.NurbsSwungSurface,
+                                            'profileCurve', 'trajectoryCurve'),
     'TrimmedSurface': _trimmed_surface,
     'TriangleSet': lambda: basenodes.TriangleSet(coord=basenodes.Coordinate(point=TRIANGLE)),
     'IndexedTriangleSet': lambda: basenodes.IndexedTriangleSet(
@@ -88,6 +120,10 @@ CASES = {
     'ElevationGrid': lambda: basenodes.ElevationGrid(
         xDimension=3, zDimension=3, xSpacing=0.5, zSpacing=0.5,
         height=[0, 0.2, 0, 0.1, 0.5, 0.1, 0, 0.3, 0], solid=False),
+    'GeoElevationGrid': lambda: basenodes.GeoElevationGrid(
+        xDimension=3, zDimension=3, xSpacing=0.0000045, zSpacing=0.0000045,
+        height=[0, 0.2, 0, 0.1, 0.5, 0.1, 0, 0.3, 0], solid=False,
+        geoOrigin=basenodes.GeoOrigin(geoCoords=(0.0, 0.0, 0.0), rotateYUp=True)),
     'PBRMesh': lambda: PBRMesh(
         positions=np.array(TRIANGLE, 'f'), normals=np.array([(0, 0, 1)] * 3, 'f'),
         indices=np.array([0, 1, 2], np.uint32)),

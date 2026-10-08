@@ -32,8 +32,8 @@ from vrml import cache
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.switch import SWITCH_CHANGE_SIGNAL
 
-__all__ = ['LOD', 'ScreenCoverageLOD', 'CULLED', 'Viewer', 'distance_to_viewer',
-           'finest', 'level_generation', 'screen_fraction', 'uniform_scale',
+__all__ = ['LOD', 'Levelled', 'ScreenCoverageLOD', 'CULLED', 'Viewer', 'distance_to_viewer',
+           'finest', 'level_generation', 'watch_level_field', 'screen_fraction', 'uniform_scale',
            'viewer_for', 'viewer_tangent']
 
 #: ``whichLevel`` for a node that is drawing nothing at all, which is what
@@ -202,17 +202,32 @@ def screen_fraction(radius: float, distance: float, tangent: float) -> float:
     return min(1.0, radius / max(distance * float(tangent), _TINY))
 
 
-class LOD(basenodes.LOD):
-    """Level-of-Detail node based on VRML 97 LOD.
+class Levelled:
+    """A node drawing one of several levels, chosen from where the viewer is
 
-    Reference:
-        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#LOD
+    The render pass finds every one and calls :meth:`selectAt` or
+    :meth:`show` once a frame. A subclass gives its levels, finest first
+    (:meth:`levelNodes`), the distances each hands over to the next at
+    (:meth:`thresholds`), the point distance is measured to
+    (:meth:`distanceCentre`) and the fields those come from
+    (:meth:`levelFields`).
     """
 
-    #: The levels, finest first. Declared here rather than inherited so that
-    #: a change to a level-of-detail node's levels is a signal of its own,
-    #: apart from every other grouping node's children.
-    children = basenodes.LOD.children.copy(basenodes.LOD)
+    def levelNodes(self) -> Sequence[Any]:
+        """The levels, finest first"""
+        raise NotImplementedError('%s must give its levels' % type(self).__name__)
+
+    def thresholds(self) -> "Sequence[float] | np.ndarray":
+        """The distances at which each level hands over to the next"""
+        raise NotImplementedError('%s must give its thresholds' % type(self).__name__)
+
+    def distanceCentre(self) -> Any:
+        """The point, in this node's coordinates, a viewer's distance is measured to."""
+        raise NotImplementedError('%s must give its centre' % type(self).__name__)
+
+    def levelFields(self) -> list[tuple[Any, str]]:
+        """(node, field name) for each field the levels and thresholds are read from"""
+        raise NotImplementedError('%s must name its fields' % type(self).__name__)
 
     #: Which level is being drawn. Not a VRML field: the file says what the
     #: levels are and where they change over, and this is what that comes to
@@ -321,11 +336,7 @@ class LOD(basenodes.LOD):
 
     def _rank(self, level: int) -> int:
         """How coarse ``level`` is: its index, with :data:`CULLED` past the last."""
-        return len(self.level) if level == CULLED else level
-
-    def distanceCentre(self) -> Any:
-        """The point, in this node's coordinates, a viewer's distance is measured to."""
-        return self.center
+        return len(self.levelNodes()) if level == CULLED else level
 
     def show(self, level: int) -> bool:
         """Draw level ``level`` from now on; True where that is a change.
@@ -344,10 +355,8 @@ class LOD(basenodes.LOD):
 
     def levelFor(self, distance: float) -> int:
         """The level index a viewer ``distance`` away should be shown."""
-        # ``range`` is an MFFloat, which arrives as an array: its emptiness has
-        # to be asked by length rather than by truth.
-        ranges: Sequence[float] | np.ndarray = self.range if self.range is not None else ()
-        levels = len(self.level)
+        ranges = self.thresholds()
+        levels = len(self.levelNodes())
         if not levels or not len(ranges):
             return 0
         chosen = 0
@@ -360,7 +369,7 @@ class LOD(basenodes.LOD):
     def renderedChildren(self, types: Any = (nodetypes.Children,
                                              nodetypes.Rendering,)) -> list:
         """The level to render, or nothing where this node has no levels."""
-        levels = self.level
+        levels = self.levelNodes()
         if not levels or self.whichLevel < 0:
             return []
         node = levels[min(self.whichLevel, len(levels) - 1)]
@@ -375,7 +384,7 @@ class LOD(basenodes.LOD):
         group it is in stays as small as its contents.
         """
         drawn = self.renderedChildren()
-        return drawn if drawn else list(self.level[:1])
+        return drawn if drawn else list(self.levelNodes()[:1])
 
     def boundingVolume(self, mode: Any = None) -> Any:
         """Bounds of the level being drawn.
@@ -390,7 +399,7 @@ class LOD(basenodes.LOD):
         if current is not None:
             return current
         volumes = []
-        dependencies: list = [(self, 'children'), (self, 'range')]
+        dependencies: list = list(self.levelFields())
         for child in self.boundedChildren():
             if hasattr(child, 'boundingVolume'):
                 child_volume = child.boundingVolume(mode)
@@ -405,6 +414,38 @@ class LOD(basenodes.LOD):
         if holder is not None:
             holder.depend_signal(SWITCH_CHANGE_SIGNAL, self)
         return volume
+
+
+class LOD(Levelled, basenodes.LOD):
+    """Level-of-Detail node based on VRML 97 LOD.
+
+    Reference:
+        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#LOD
+    """
+
+    #: The levels, finest first. Declared here rather than inherited so that
+    #: a change to a level-of-detail node's levels is a signal of its own,
+    #: apart from every other grouping node's children.
+    children = basenodes.LOD.children.copy(basenodes.LOD)
+
+    def levelNodes(self) -> Sequence[Any]:
+        """The levels, finest first"""
+        found: Sequence[Any] = self.level
+        return found
+
+    def thresholds(self) -> "Sequence[float] | np.ndarray":
+        """`range`: the distances at which each level hands over to the next"""
+        # ``range`` is an MFFloat, which arrives as an array: its emptiness has
+        # to be asked by length rather than by truth.
+        return self.range if self.range is not None else ()
+
+    def distanceCentre(self) -> Any:
+        """The point, in this node's coordinates, a viewer's distance is measured to."""
+        return self.center
+
+    def levelFields(self) -> list[tuple[Any, str]]:
+        """(node, field name) for each field the levels and thresholds are read from"""
+        return [(self, 'children'), (self, 'range')]
 
 
 class ScreenCoverageLOD(LOD):
@@ -532,12 +573,16 @@ def _levels_changed(*_args: Any, **_named: Any) -> None:
     _level_changes += 1
 
 
+def watch_level_field(owner: type, name: str) -> None:
+    """Move :func:`level_generation` whenever field `name` of any `owner` is set"""
+    dispatcher.connect(_levels_changed, signal=('set', getattr(owner, name)), weak=False)
+
+
 def _watch_level_fields() -> None:
     for owner, name in ((LOD, 'children'), (LOD, 'range'), (LOD, 'center'),
                         (ScreenCoverageLOD, 'screenCoverage'),
                         (ScreenCoverageLOD, 'radius')):
-        dispatcher.connect(_levels_changed, signal=('set', getattr(owner, name)),
-                           weak=False)
+        watch_level_field(owner, name)
 
 
 _watch_level_fields()

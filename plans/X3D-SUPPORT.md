@@ -281,8 +281,15 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
 - Phase 8, engine-mapped components (§9.17)
   - [x] CADGeometry: `CADFace` (`x3dgroups`), `QuadSet`, `IndexedQuadSet`
     (`meshgeometry`, two triangles a quad)
-  - [ ] NURBS: the 13 nodes on the NURBS evaluator; the VRML97 extension's
-    nodes kept for the worlds that use them
+  - [x] NURBS: the 13 nodes (`nurbsx3d`, `nurbsinterpolators`) on
+    `nurbseval` (X3D's knot/closure/weight/tessellation rules over
+    `opengl_extrusions.nurbs`); surfaces as `MeshDrawn` meshes with LOD and
+    `NurbsSet` scale, `NurbsCurve` as an `IndexedLineSet`, trims by the
+    even-odd rule, swept/swung as open Extrusions; weighted control points
+    read as homogeneous (the corpus's and X_ITE's reading); `NurbsCurve`,
+    `NurbsCurve2D`, `Contour2D` by `X3D_ONLY`, the registry keeping the
+    VRML97 extension's nodes unchanged; `oglc-x3d-nurbs`. Open: the
+    pre-standard `Basic/NURBS/originals` (controlPoint as MFVec3f) draw nothing
   - [ ] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`,
     `GeneratedCubeMapTexture`
   - [ ] Texturing3D: `ImageTexture3D`, `ComposedTexture3D`, `PixelTexture3D`,
@@ -327,7 +334,22 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     pyvrml97, used by its own tests and by any program importing them; the
     engine no longer does
 - Phase 10, Geospatial, VolumeRendering, GaussianSplats, `MovieTexture`
-  - [ ] Geospatial: the 11 nodes
+  - [x] Geospatial: the 11 nodes (2026-10-08, branch x3d-geo).
+    `vrml.x3d.geospatial` converts GD/UTM/GC on X3D's ellipsoids in float64;
+    pyvrml97's transform matrices and the engine's matrix stack, pass and
+    view platform compose in float64, single precision only relative to the
+    camera. `GeoLocation`/`GeoTransform` place children exactly;
+    `GeoCoordinate` reaches all geometry through
+    `scenegraph.coordinates.points`; `GeoElevationGrid` shares
+    `meshgeometry.GridDrawn` with `ElevationGrid`; `GeoViewpoint` places
+    through `viewpoint.Placing.placement` and scales navigation
+    (`navigationinfo.apply(scale=)`); `GeoLOD` is a `lod.Levelled`, the
+    level machinery split out of `LOD`; the two Geo sensors are pyvrml97's
+  - [ ] follow-up: a GeoCoordinate or GeoElevationGrid with no GeoOrigin is
+    single precision at the Earth's radius (about 0.5 m); a per-mesh origin
+    (points relative to their own centre, placed by a float64 translation)
+    would make it exact. Same mechanism would give `CoordinateDouble` its
+    precision
   - [ ] VolumeRendering: the 13 nodes
   - [ ] GaussianSplats
   - [ ] `MovieTexture` through the optional decoder
