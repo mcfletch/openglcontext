@@ -312,6 +312,19 @@ frames = 60
 timeout = 600
 
 [[image]]
+id = "demos/x3d_shaders"
+out = "images/demos/x3d_shaders.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "A toon-shaded copper sphere, a marble column, a gold sphere split along its faces and a striped block standing in a rippling pool, under a bar shading from violet to pale yellow"
+caption = "Shapes drawn by the GLSL their X3D document carries"
+producer = "script"
+module = "x3d_shaders"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
 id = "demos/crowd_demo"
 out = "images/demos/crowd_demo.jpg"
 size = [1100, 680]

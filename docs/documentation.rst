@@ -140,6 +140,10 @@ Installing the package puts these commands on your path:
    window, a swung gold vase, a swept brass rail, a bead riding a brick
    banner and a dart flying along a curve, with a key to change the
    ``NurbsSet``'s tessellation scale. See :doc:`NURBS <nurbs>`.
+``oglc-x3d-shaders``
+   An X3D document whose shapes are drawn by their own GLSL: a toon-shaded
+   sphere, a GLSL 1.20 marble column, a geometry stage, a packaged shader, a
+   vertex-attribute heat bar and a rippling pool. See :ref:`x3d-shaders`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

@@ -40,6 +40,23 @@ class Appearance(basenodes.Appearance):
     Reference:
         http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Appearance
     """
+    @property
+    def bringsProgram(self) -> bool:
+        """Whether the appearance lists X3D shaders, one of which may draw its shape"""
+        return bool(self.shaders)
+
+    def drawProgram(self, mode: Any, shape: Any) -> Any:
+        """The first of `shaders` that runs, bound for `shape`; None where none does
+
+        See :func:`OpenGLContext.scenegraph.x3dshaders.draw_program`.
+        """
+        from OpenGLContext.scenegraph import x3dshaders  # noqa: PLC0415 imports the passes
+        return x3dshaders.draw_program(self, mode, shape)
+
+    def releaseProgram(self, drawn: Any, mode: Any) -> None:
+        """Undo what :meth:`drawProgram` bound for its shape"""
+        drawn.end()
+
     def render (self, mode: Any = None) -> tuple[Any, ...]:
         """Render Appearance, return (lit, textured, alpha, textureToken)
 

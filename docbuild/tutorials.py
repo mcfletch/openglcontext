@@ -153,6 +153,7 @@ PATHS = [
         one from X3D, and recording a session or a video of one.""",
         [
             'x3d_demo',
+            'x3d_shaders',
             'zones_demo',
             'mirrors_room',
             'water_demo',

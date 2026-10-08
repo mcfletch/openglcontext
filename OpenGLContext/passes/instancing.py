@@ -115,6 +115,16 @@ def styled(appearance: Any) -> bool:
             or not drawproperties.fill_style(getattr(appearance, 'fillProperties', None)).plain)
 
 
+def drawn_alone(appearance: Any) -> bool:
+    """Whether a shape of `appearance` is drawn by itself rather than in an instanced group
+
+    A styled one (:func:`styled`), and one bringing a program of its own (an
+    X3D shader, the engine's `Shader`): the instanced draw is the pass's
+    program.
+    """
+    return styled(appearance) or bool(getattr(appearance, 'bringsProgram', False))
+
+
 def geometry_instance_key(shape: Any) -> Optional[tuple]:
     """Instance-batch key for a render path, or None if it has no geometry.
 
@@ -132,7 +142,7 @@ def geometry_instance_key(shape: Any) -> Optional[tuple]:
     if geometry is None:
         return None
     appearance = getattr(shape, 'appearance', None)
-    if styled(appearance):
+    if drawn_alone(appearance):
         return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
@@ -201,7 +211,7 @@ def geometry_texture_key(shape: Any) -> Optional[tuple]:
     if geometry is None:
         return None
     appearance = getattr(shape, 'appearance', None)
-    if styled(appearance):
+    if drawn_alone(appearance):
         return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
@@ -266,7 +276,7 @@ def geometry_content_key(shape: Any) -> Optional[tuple]:
     if content is None:
         content = id(geometry)
     appearance = getattr(shape, 'appearance', None)
-    if styled(appearance):
+    if drawn_alone(appearance):
         return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
@@ -292,7 +302,7 @@ def geometry_content_instance_key(shape: Any) -> Optional[tuple]:
     if content is None:
         content = id(geometry)
     appearance = getattr(shape, 'appearance', None)
-    if styled(appearance):
+    if drawn_alone(appearance):
         return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None

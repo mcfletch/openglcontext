@@ -14,8 +14,9 @@ label names it for a material's `...TextureMapping`
 A `LineSet` is drawn as the engine's `IndexedLineSet` of the same points
 (:meth:`LineSet.lines`).
 
-`TextureCoordinateGenerator`, `FogCoordinate` and the `attrib` vertex
-attributes are kept and not drawn; a set using a generator is reported once.
+The `attrib` vertex attributes, one per coordinate, are drawn with the mesh
+for a shader to read by name (:mod:`~OpenGLContext.scenegraph.x3dshaders`).
+`FogCoordinate` is kept and not drawn.
 """
 from __future__ import annotations
 
@@ -27,7 +28,7 @@ import numpy as np
 from vrml import cache, protofunctions
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.scenegraph import boundingvolume, composedgeometry, texgen
+from OpenGLContext.scenegraph import boundingvolume, composedgeometry, texgen, x3dglsl
 from OpenGLContext.scenegraph.coordinates import fields as point_fields
 from OpenGLContext.scenegraph.coordinates import points as scene_points
 from OpenGLContext.scenegraph.texturemapping import label_set
@@ -62,6 +63,7 @@ def _sources(target: Any) -> Iterator[Any]:
             yield child
             if isinstance(child, x3d.MultiTextureCoordinate):
                 yield from (entry for entry in child.texCoord if entry)
+    yield from (entry for entry in getattr(target, 'attrib', None) or () if entry)
 
 
 def _depend_on_fields(holder: Any, target: Any) -> None:
@@ -146,12 +148,15 @@ class MeshDrawn:
                     % arrays.dropped)
         for name in arrays.short:
             _report(self, 'has fewer %s values than it indexes; they are left out' % name)
+        for name in arrays.short_attributes:
+            _report(self, 'has fewer %s values than coordinates; the rest read as zero' % name)
         attributes = arrays.attributes
         if 'TANGENT' not in attributes and 'TEXCOORD_0' in attributes:
             attributes['TANGENT'] = estimate_tangents(
                 attributes['POSITION'], attributes['NORMAL'], attributes['TEXCOORD_0'],
                 arrays.indices)
-        return mesh_from_primitive(arrays, solid=solid)
+        return mesh_from_primitive(arrays, solid=solid,
+                                   vertex_attributes=arrays.vertex_attributes)
 
     def dependOn(self, holder: Any) -> None:
         """Make `holder` depend on every field the mesh is built from"""
@@ -230,7 +235,8 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
             colors=self.perFace(_values(self.color, 'color'), bool(self.colorPerVertex)),
             color_per_vertex=bool(self.colorPerVertex),
             texcoords=self.coordinates() or [composedgeometry.default_texcoords(points)],
-            tangents=_values(self.tangent, 'vector')),
+            tangents=_values(self.tangent, 'vector'),
+            vertex_attributes=x3dglsl.vertex_attributes(self.attrib)),
             solid=bool(self.solid))
 
 
@@ -285,7 +291,9 @@ class GridDrawn(MeshDrawn):
             normals=normals, normal_per_vertex=bool(self.normalPerVertex),
             colors=colors, color_per_vertex=bool(self.colorPerVertex),
             texcoords=coordinates, tangents=_values(getattr(self, 'tangent', None), 'vector'),
-            crease_angle=float(self.creaseAngle)), solid=bool(self.solid))
+            crease_angle=float(self.creaseAngle),
+            vertex_attributes=x3dglsl.vertex_attributes(getattr(self, 'attrib', ()))),
+            solid=bool(self.solid))
 
 
 class ElevationGrid(GridDrawn, x3d.ElevationGrid):
