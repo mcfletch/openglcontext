@@ -510,3 +510,143 @@ def test_a_document_draws_its_bodies_where_they_are(gl_context):
         image = drawn_image(context)
     assert image[32, 32].max() < 64
     assert image[32, 48].max() > 128
+
+
+def _shape_facts(shape):
+    if shape is None:
+        return None
+    return (shape.type, tuple(shape.size), shape.radius, shape.height, shape.radiusBottom,
+            shape.radiusTop, None if shape.points is None else shape.points.tobytes(),
+            None if shape.indices is None else shape.indices.tobytes())
+
+
+@pytest.mark.parametrize('geometry, edits', [
+    (b'<Box size="1 2 3"/>', [('size', lambda node: setattr(node, 'size', (2, 2, 2)))]),
+    (b'<Sphere radius="2"/>', [('radius', lambda node: setattr(node, 'radius', 3.0))]),
+    (b'<Cylinder height="2" radius="1"/>', [
+        ('height', lambda node: setattr(node, 'height', 3.0)),
+        ('radius', lambda node: setattr(node, 'radius', 0.5))]),
+    (b'<Cone height="2" bottomRadius="1"/>', [
+        ('height', lambda node: setattr(node, 'height', 3.0)),
+        ('bottomRadius', lambda node: setattr(node, 'bottomRadius', 0.5))]),
+    (b'<IndexedFaceSet coordIndex="0 1 2 -1"><Coordinate point="0 0 0 1 0 0 0 1 0 0 0 1"/>'
+     b'</IndexedFaceSet>', [
+        ('coord.point', lambda node: setattr(node.coord, 'point', [
+            (0, 0, 0), (2, 0, 0), (0, 2, 0), (0, 0, 1)])),
+        ('coordIndex', lambda node: setattr(node, 'coordIndex', [0, 1, 3, -1]))]),
+])
+@pytest.mark.parametrize('moving', [False, True])
+def test_a_geometrys_shape_follows_its_fields(geometry, edits, moving, check_memo_inputs):
+    graph = scene(b'<CollidableShape DEF="G"><Shape containerField="shape">' + geometry
+                  + b'</Shape></CollidableShape>')
+    node = graph.getDEF('G').shape.geometry
+    check_memo_inputs(
+        lambda: _shape_facts(x3drigid.geometry_shape(node, moving)),
+        [(name, lambda edit=edit: edit(node)) for name, edit in edits],
+        fresh=lambda: _shape_facts(x3drigid.shape_of_geometry(node, moving)))
+
+
+def _world_facts(system):
+    world = system.world
+    count = world.body_count
+    return (count, tuple(np.round(world.mass[:count], 6)),
+            tuple(np.round(world.inv_inertia[:count].ravel(), 6)),
+            tuple(np.round(world.position[:count].ravel(), 6)),
+            tuple(np.round((world.aabb_max - world.aabb_min)[:count].ravel(), 6)),
+            tuple(world.motion_type[:count]), len(world.row_joints),
+            tuple(sorted(str(shape.type) for shape in world.shapes)))
+
+
+def test_a_collections_world_follows_what_it_is_built_from(check_memo_inputs):
+    graph = scene(BALL + b'''<CollidableShape DEF="OTHER"><Shape containerField="shape">
+        <Box size="0.2 0.2 0.2"/></Shape></CollidableShape>
+      <RigidBodyCollection DEF="C">
+        <CollisionCollection DEF="CC" containerField="collider">
+          <CollidableShape USE="BALL-GEOM"/></CollisionCollection>
+        <RigidBody DEF="B" containerField="bodies" position="0 2 0">
+          <CollidableShape USE="BALL-GEOM" containerField="geometry"/></RigidBody>
+        <RigidBody DEF="B2" containerField="bodies" position="1 2 0"/>
+      </RigidBodyCollection>''')
+    collection, body = graph.getDEF('C'), graph.getDEF('B')
+
+    def ask():
+        collection.advance(0.0)
+        return _world_facts(collection.system)
+
+    def fresh():
+        system = x3drigid.RigidSystem(collection)
+        system.advance(0.0)
+        return _world_facts(system)
+
+    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+    check_memo_inputs(ask, [
+        ('mass', lambda: setattr(body, 'mass', 3.0)),
+        ('centerOfMass', lambda: setattr(body, 'centerOfMass', (0.0, 0.5, 0.0))),
+        ('massDensityModel', lambda: setattr(body, 'massDensityModel', x3d.Box())),
+        ('inertia', lambda: setattr(body, 'inertia', (5, 0, 0, 0, 5, 0, 0, 0, 5))),
+        ('geometry', lambda: setattr(body, 'geometry', [graph.getDEF('OTHER')])),
+        ('the geometry\'s size', lambda: setattr(
+            graph.getDEF('OTHER').shape.geometry, 'size', (1, 1, 1))),
+        ('enabled', lambda: setattr(graph.getDEF('B2'), 'enabled', False)),
+        ('joints', lambda: setattr(collection, 'joints', [x3d.BallJoint(body1=body)])),
+        ('collider', lambda: setattr(graph.getDEF('CC'), 'collidables',
+                                     [graph.getDEF('GROUND-GEOM')])),
+        ('fixed', lambda: setattr(body, 'fixed', True)),
+        ('bodies', lambda: setattr(collection, 'bodies', [])),
+    ], fresh=fresh)
+
+
+@pytest.mark.serial
+def test_a_frame_costs_what_the_collection_holds(check_scaling):
+    """A frame's work, read in, stepped and sent, grows with the bodies and no faster"""
+    def prepare(count):
+        bodies = b''.join(b'''<RigidBody containerField="bodies" position="%d 0 0"
+            useGlobalGravity="false" linearVelocity="0 1 0">
+            <Sphere containerField="massDensityModel"/></RigidBody>''' % index
+                          for index in range(count))
+        graph = scene(b'<RigidBodyCollection DEF="C">' + bodies + b'</RigidBodyCollection>')
+        collection = graph.getDEF('C')
+        collection.advance(FRAME)
+        return lambda: collection.advance(FRAME)
+
+    check_scaling(prepare, n=50, most=6.0)
+
+
+def test_a_bodys_settings_follow_its_fields(check_memo_inputs):
+    graph = falling()
+    collection, body = graph.getDEF('C'), graph.getDEF('B')
+
+    def facts(system):
+        world, index = system.world, system.bodies[0].index
+        return (tuple(world.force[index]), tuple(world.torque[index]),
+                float(world.gravity_factor[index]), float(world.linear_damping[index]),
+                float(world.angular_damping[index]),
+                bool(world._exact_rotation[index]),  # noqa: SLF001 the flag set_exact_rotation sets
+                float(world._sleep_linear[index]),  # noqa: SLF001 the thresholds set_sleep sets
+                float(world._sleep_angular[index]),  # noqa: SLF001 the thresholds set_sleep sets
+                float(world._sleep_after[index]))  # noqa: SLF001 the thresholds set_sleep sets
+
+    def ask():
+        collection.advance(0.0)
+        return facts(collection.system)
+
+    def fresh():
+        system = x3drigid.RigidSystem(collection)
+        system.advance(0.0)
+        return facts(system)
+
+    check_memo_inputs(ask, [
+        ('forces', lambda: setattr(body, 'forces', [(1, 0, 0)])),
+        ('torques', lambda: setattr(body, 'torques', [(0, 1, 0)])),
+        ('useGlobalGravity', lambda: setattr(body, 'useGlobalGravity', False)),
+        ('autoDamp', lambda: setattr(body, 'autoDamp', True)),
+        ('linearDampingFactor', lambda: setattr(body, 'linearDampingFactor', 0.1)),
+        ('angularDampingFactor', lambda: setattr(body, 'angularDampingFactor', 0.2)),
+        ('useFiniteRotation', lambda: setattr(body, 'useFiniteRotation', True)),
+        ('the collection\'s autoDisable', lambda: setattr(collection, 'autoDisable', True)),
+        ('the collection\'s disableTime', lambda: setattr(collection, 'disableTime', 2.0)),
+        ('autoDisable', lambda: setattr(body, 'autoDisable', True)),
+        ('disableLinearSpeed', lambda: setattr(body, 'disableLinearSpeed', 0.3)),
+        ('disableAngularSpeed', lambda: setattr(body, 'disableAngularSpeed', 0.4)),
+        ('disableTime', lambda: setattr(body, 'disableTime', 1.5)),
+    ], fresh=fresh)

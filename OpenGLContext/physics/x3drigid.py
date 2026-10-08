@@ -56,8 +56,9 @@ from vrml import cache, protofunctions
 from vrml import node as vrml_node
 from vrml.x3d import interpolation
 
-__all__ = ['ACCURATE_STEP', 'MAX_FRAME', 'NOMINAL_STEP', 'STEP', 'RigidSystem', 'Touch',
-           'collidable_parts', 'contact_parameters', 'detect', 'geometry_shape', 'members']
+__all__ = ['ACCURATE_STEP', 'MAX_FRAME', 'MIN_SURFACE_THICKNESS', 'NOMINAL_STEP', 'STEP', 'RigidSystem', 'Touch',
+           'collidable_parts', 'contact_parameters', 'detect', 'geometry_shape', 'members',
+           'shape_of_geometry']
 
 #: The fixed step a collection is simulated in, in seconds.
 STEP = 1.0 / 120.0
@@ -65,6 +66,10 @@ STEP = 1.0 / 120.0
 ACCURATE_STEP = 1.0 / 240.0
 #: The most time one frame advances a collection by, in seconds.
 MAX_FRAME = 0.25
+#: The least overlap, in metres, a resting contact keeps. A contact pushed
+#: fully apart each step parts, falls back and meets again on the next, so a
+#: `contactSurfaceThickness` below this is read as this.
+MIN_SURFACE_THICKNESS = 0.005
 #: The step X3D's per-step quantities are read against: the damping factors
 #: and a suspension's force mixing and error correction.
 NOMINAL_STEP = 1.0 / 60.0
@@ -124,7 +129,7 @@ def geometry_shape(geometry: Any, moving: bool) -> Optional[model.Shape]:
     if holder is not None and holder.data is not None:
         found: model.Shape = holder.data[0]
         return found
-    shape = _build_shape(geometry, moving)
+    shape = shape_of_geometry(geometry, moving)
     holder = cache.CACHE.holder(geometry, (shape,), key=key)
     _depend_on_fields(holder, geometry)
     return shape
@@ -140,8 +145,8 @@ def _depend_on_fields(holder: Any, node: Any) -> None:
                 _depend_on_fields(holder, child)
 
 
-def _build_shape(geometry: Any, moving: bool) -> Optional[model.Shape]:
-    """:func:`geometry_shape`'s answer, worked out"""
+def shape_of_geometry(geometry: Any, moving: bool) -> Optional[model.Shape]:
+    """The collision shape of an X3D geometry node, worked out afresh (:func:`geometry_shape`)"""
     kind = _kind(geometry)
     if kind == 'Box':
         return model.Shape.box(tuple(float(value) for value in geometry.size))
@@ -203,6 +208,20 @@ def collidable_parts(collidable: Any, moving: bool,
         return [model.ShapePart(model.Shape.box(tuple(high - low)),
                                 tuple(0.5 * (low + high)))]
     return [model.ShapePart(shape)]
+
+
+def single_shape(parts: Sequence[model.ShapePart]) -> Optional[model.Shape]:
+    """One shape made of `parts`: the part's own where there is one, unmoved; None for none
+
+    A lone shape at its body's origin stays itself rather than becoming a
+    compound, so a box or a sphere keeps the narrow phase's direct tests.
+    """
+    if not parts:
+        return None
+    if len(parts) == 1 and not np.any(parts[0].position) \
+            and np.allclose(parts[0].orientation, _LEVEL):
+        return parts[0].shape
+    return model.Shape.compound(parts)
 
 
 def _inner_collidables(collidable: Any) -> list[Any]:
@@ -357,8 +376,8 @@ def detect(collection: Any, kept: Optional[dict[Any, _Placed]] = None) -> list[T
         if not parts:
             continue
         position, turn = pose_of(collidable)
-        shape = parts[0].shape if len(parts) == 1 and not np.any(parts[0].position) \
-            and np.allclose(parts[0].orientation, _LEVEL) else model.Shape.compound(parts)
+        shape = single_shape(parts)
+        assert shape is not None
         pose = tuple(float(value) for value in (*position, *turn))
         entry = kept.get(collidable)
         if entry is None or entry.shape is not shape or entry.pose != pose:
@@ -401,8 +420,15 @@ class _Body:
     collidables: set[Any] = field(default_factory=set)
     #: The top-level collidables, drawn where the body is.
     carried: list[Any] = field(default_factory=list)
-    #: The values last sent on the body's fields, by name.
-    sent: dict[str, Any] = field(default_factory=dict)
+    #: The values last sent on the body's fields, by name, as the fields hold them.
+    sent: dict[str, np.ndarray] = field(default_factory=dict)
+    #: Whether the body's collidables are to be moved to it on the next send.
+    moved: bool = True
+    #: Whether the body was asleep when it was last sent, and so sends nothing
+    #: more until it wakes.
+    resting: bool = False
+    #: The fields :meth:`RigidSystem._body_settings` last applied.
+    settings: Any = None
 
 
 @dataclass
@@ -427,6 +453,38 @@ JOINT_OUTPUTS = {
     'MotorJoint': ('motor1Angle', 'motor1AngleRate', 'motor2Angle', 'motor2AngleRate',
                    'motor3Angle', 'motor3AngleRate'),
 }
+
+
+#: A body's outputs, each also an input.
+_BODY_OUTPUTS = ('position', 'orientation', 'linearVelocity', 'angularVelocity')
+
+
+def _kept(value: Any) -> np.ndarray:
+    """A copy of a field's value, as a single-precision field holds it"""
+    return np.array(value, dtype=np.float32).ravel()
+
+
+def _same(value: Any, kept: np.ndarray) -> bool:
+    """Whether a value is what :func:`_kept` kept"""
+    return bool(np.array_equal(np.asarray(value, dtype=np.float32).ravel(), kept))
+
+
+def _rotations(turns: np.ndarray) -> np.ndarray:
+    """Unit quaternions (n, 4) as X3D rotations (n, 4), each angle in [0, pi]"""
+    turns = turns / np.linalg.norm(turns, axis=1, keepdims=True)
+    turns = np.where(turns[:, 3:4] < 0.0, -turns, turns)
+    angle = 2.0 * np.arccos(np.clip(turns[:, 3], -1.0, 1.0))
+    length = np.linalg.norm(turns[:, :3], axis=1)
+    axis = np.divide(turns[:, :3], length[:, None], out=np.zeros((len(turns), 3)),
+                     where=length[:, None] >= 1e-12)
+    axis[length < 1e-12] = (0.0, 0.0, 1.0)
+    angle[length < 1e-12] = 0.0
+    return np.concatenate([axis, angle[:, None]], axis=1)
+
+
+def _key(value: Any) -> bytes:
+    """A field's value as bytes, to compare with what it was"""
+    return np.asarray(value, dtype=np.float32).tobytes()
 
 
 def _floats(values: Any) -> tuple[float, ...]:
@@ -497,8 +555,8 @@ class RigidSystem:
         if kind == 'CollidableOffset':
             inner = collidable.collidable
             return (collidable, collidable.enabled, inner,
-                    None if not inner else _floats(inner.translation),
-                    None if not inner else _floats(inner.rotation),
+                    None if not inner else _key(inner.translation),
+                    None if not inner else _key(inner.rotation),
                     None if not inner else self._collidable_signature(inner, moving))
         shape = getattr(collidable, 'shape', None)
         geometry = getattr(shape, 'geometry', None)
@@ -511,8 +569,8 @@ class RigidSystem:
         for body in self._bodies():
             density = body.massDensityModel
             moving = not body.fixed
-            bodies.append((body, body.fixed, float(body.mass), _floats(body.centerOfMass),
-                           _floats(body.inertia), density,
+            bodies.append((body, body.fixed, float(body.mass), _key(body.centerOfMass),
+                           _key(body.inertia), density,
                            None if not density else geometry_shape(density, True),
                            tuple(self._collidable_signature(collidable, moving)
                                  for collidable in body.geometry if collidable)))
@@ -521,7 +579,7 @@ class RigidSystem:
             if not joint:
                 continue
             joints.append((joint, joint.body1, joint.body2,
-                           *(_floats(getattr(joint, name)) for name in
+                           *(_key(getattr(joint, name)) for name in
                              ('anchorPoint', 'axis', 'axis1', 'axis2', 'motor1Axis',
                               'motor2Axis', 'motor3Axis') if hasattr(joint, name)),
                            getattr(joint, 'enabledAxes', None)))
@@ -567,7 +625,7 @@ class RigidSystem:
                 parts.append(model.ShapePart(part.shape,
                                              tuple(np.asarray(part.position) - com),
                                              part.orientation))
-        shape = model.Shape.compound(parts) if parts else None
+        shape = single_shape(parts)
         motion = model.Motion(type=model.DYNAMIC if moving else model.STATIC,
                               mass=max(float(node.mass), 1e-9),
                               inertiaDiagonal=self._inertia(node, shape))
@@ -581,10 +639,7 @@ class RigidSystem:
                                      orientation=turn, handle=node)
         self._set_velocity(entry, np.asarray(node.linearVelocity, dtype='d'),
                            np.asarray(node.angularVelocity, dtype='d'))
-        entry.sent = {'position': _floats(node.position),
-                      'orientation': _floats(node.orientation),
-                      'linearVelocity': _floats(node.linearVelocity),
-                      'angularVelocity': _floats(node.angularVelocity)}
+        entry.sent = {name: _kept(getattr(node, name)) for name in _BODY_OUTPUTS}
         self.held[entry.index] = set(entry.collidables)
         self.bodies.append(entry)
 
@@ -624,7 +679,7 @@ class RigidSystem:
         world = self.world
         position, turn = pose_of(collidable)
         index = world.add_body(model.Motion(type=model.STATIC), collider=model.Collider(
-            shape=world.add_shape(model.Shape.compound(parts))),
+            shape=world.add_shape(single_shape(parts))),
             position=position, orientation=turn, handle=collidable)
         self.free[collidable] = index
         self.held[index] = set(_inner_collidables(collidable))
@@ -726,18 +781,22 @@ class RigidSystem:
         world.gravity = model.Gravity(gravity=strength, direction=tuple(
             gravity / strength if strength > 0.0 else (0.0, -1.0, 0.0)))
         for entry in self.bodies:
-            node, index = entry.node, entry.index
-            position, turn = _floats(node.position), _floats(node.orientation)
-            if position != entry.sent['position'] or turn != entry.sent['orientation']:
+            node, index, sent = entry.node, entry.index, entry.sent
+            position, turn = node.position, node.orientation
+            if not _same(position, sent['position']) or not _same(turn, sent['orientation']):
                 quat = quaternion(turn)
-                world.place_body(index, np.asarray(position)
+                world.place_body(index, np.asarray(position, dtype='d')
                                  + mathutil.quat_to_matrix(quat) @ entry.com, quat)
-                entry.sent['position'], entry.sent['orientation'] = position, turn
+                sent['position'], sent['orientation'] = _kept(position), _kept(turn)
                 world.wake(index)
-            linear, angular = _floats(node.linearVelocity), _floats(node.angularVelocity)
-            if linear != entry.sent['linearVelocity'] or angular != entry.sent['angularVelocity']:
-                self._set_velocity(entry, np.asarray(linear), np.asarray(angular))
-                entry.sent['linearVelocity'], entry.sent['angularVelocity'] = linear, angular
+                entry.moved, entry.resting = True, False
+            linear, angular = node.linearVelocity, node.angularVelocity
+            if not _same(linear, sent['linearVelocity']) or \
+                    not _same(angular, sent['angularVelocity']):
+                self._set_velocity(entry, np.asarray(linear, dtype='d'),
+                                   np.asarray(angular, dtype='d'))
+                sent['linearVelocity'], sent['angularVelocity'] = _kept(linear), _kept(angular)
+                entry.resting = False
             self._body_settings(entry)
         for collidable, index in self.free.items():
             placed, facing = pose_of(collidable)
@@ -753,6 +812,15 @@ class RigidSystem:
         assert world is not None
         if node.fixed:
             return
+        source = node if node.autoDisable else self.collection
+        settings = (_key(node.forces), _key(node.torques), node.useGlobalGravity,
+                    node.autoDamp, float(node.linearDampingFactor),
+                    float(node.angularDampingFactor), node.useFiniteRotation,
+                    source.autoDisable, float(source.disableLinearSpeed),
+                    float(source.disableAngularSpeed), float(source.disableTime))
+        if settings == entry.settings:
+            return
+        entry.settings = settings
         force = np.asarray(node.forces, dtype='d').reshape(-1, 3).sum(axis=0)
         torque = np.asarray(node.torques, dtype='d').reshape(-1, 3).sum(axis=0)
         # Set only when changed: setting one wakes the body.
@@ -765,7 +833,6 @@ class RigidSystem:
         world.linear_damping[index] = _damping(node.linearDampingFactor) if damped else 0.0
         world.angular_damping[index] = _damping(node.angularDampingFactor) if damped else 0.0
         world.set_exact_rotation(index, bool(node.useFiniteRotation))
-        source = node if node.autoDisable else self.collection
         if source.autoDisable:
             world.set_sleep(index, float(source.disableLinearSpeed),
                             float(source.disableAngularSpeed), float(source.disableTime))
@@ -782,7 +849,7 @@ class RigidSystem:
         world.joint_iterations = iterations
         solver.correction = float(collection.errorCorrection)
         solver.softness = max(float(collection.constantForceMix), 0.0)
-        solver.slop = max(float(collection.contactSurfaceThickness), 0.0)
+        solver.slop = max(float(collection.contactSurfaceThickness), MIN_SURFACE_THICKNESS)
         speed = float(collection.maxCorrectionSpeed)
         solver.max_correction = speed * step if speed > 0.0 else math.inf
 
@@ -891,38 +958,46 @@ class RigidSystem:
 
     # -- what is sent -----------------------------------------------------
     def _send(self) -> None:
-        """Set each body's and joint's outputs where they changed"""
+        """Set each body's and joint's outputs where they changed
+
+        A body asleep since it was last sent sends nothing. The values are
+        worked out for every moving body at once; a field is set only where
+        its value differs from what it holds.
+        """
         world = self.world
         assert world is not None
+        awake = world.awake
+        movers = [entry for entry in self.bodies
+                  if not entry.node.fixed and not (entry.resting and not awake[entry.index])]
+        if movers:
+            rows = np.array([entry.index for entry in movers], dtype=np.intp)
+            turns = np.asarray(world.orientation[rows], dtype='d')
+            arms = np.einsum('nij,nj->ni', mathutil.quat_to_matrix(turns),
+                             np.array([entry.com for entry in movers], dtype='d'))
+            values = {
+                'position': np.asarray(world.position[rows], dtype='d') - arms,
+                'orientation': _rotations(turns),
+                'linearVelocity': np.asarray(world.linear_velocity[rows], dtype='d'),
+                'angularVelocity': np.asarray(world.angular_velocity[rows], dtype='d'),
+            }
+            for row, entry in enumerate(movers):
+                node, sent = entry.node, entry.sent
+                for name in _BODY_OUTPUTS:
+                    value = values[name][row]
+                    if not _same(value, sent[name]):
+                        setattr(node, name, value)
+                        sent[name] = _kept(getattr(node, name))
+                        if name in ('position', 'orientation'):
+                            entry.moved = True
+                entry.resting = not awake[entry.index]
         for entry in self.bodies:
-            node = entry.node
-            if not node.fixed:
-                self._send_body(entry)
-            for collidable in entry.carried:
-                if _floats(collidable.translation) != entry.sent['position']:
-                    collidable.translation = node.position
-                if _floats(collidable.rotation) != entry.sent['orientation']:
-                    collidable.rotation = node.orientation
+            if entry.moved:
+                for collidable in entry.carried:
+                    collidable.translation = entry.node.position
+                    collidable.rotation = entry.node.orientation
+                entry.moved = False
         for joint in self.joints:
             self._send_joint(joint)
-
-    def _send_body(self, entry: _Body) -> None:
-        """Set a moving body's position, orientation and velocities where they changed"""
-        world, node, index = self.world, entry.node, entry.index
-        assert world is not None
-        turn = np.asarray(world.orientation[index], dtype='d')
-        arm = mathutil.quat_to_matrix(turn) @ entry.com
-        spin = np.asarray(world.angular_velocity[index], dtype='d')
-        values = {
-            'position': np.asarray(world.position[index], dtype='d') - arm,
-            'orientation': rotation(turn),
-            'linearVelocity': np.asarray(world.linear_velocity[index], dtype='d'),
-            'angularVelocity': spin,
-        }
-        for name, value in values.items():
-            if _floats(value) != entry.sent[name]:
-                setattr(node, name, value)
-                entry.sent[name] = _floats(getattr(node, name))
 
     def _send_joint(self, entry: _Joint) -> None:
         """Set a joint's outputs that its `forceOutput` names"""

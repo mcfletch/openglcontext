@@ -103,3 +103,37 @@ def test_a_still_frame_asks_nothing_new_of_gl(scene, environment):
         work = check_still_frame(lambda: context.OnDraw(force=1),
                                  warmup=SETTLE_FRAMES + 2)
     assert work.allocations == work.uploads == work.compiles == 0
+
+
+def _rigid_bodies():
+    """Boxes falling onto a floor through an X3D RigidBodyCollection"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    boxes = b''.join(b'''<CollidableShape DEF="G%d"><Shape containerField="shape">
+        <Appearance><Material diffuseColor="1 0.5 0"/></Appearance><Box size="0.5 0.5 0.5"/>
+        </Shape></CollidableShape>''' % index for index in range(4))
+    bodies = b''.join(b'''<RigidBody containerField="bodies" position="%d 2 -6">
+        <CollidableShape USE="G%d" containerField="geometry"/></RigidBody>''' % (index - 2, index)
+                      for index in range(4))
+    collected = b''.join(b'<CollidableShape USE="G%d"/>' % index for index in range(4))
+    return Loader.loads(b'''<X3D version="4.0"><Scene>''' + boxes + b'''
+      <CollidableShape DEF="FLOOR" translation="0 -1 -6"><Shape containerField="shape">
+        <Box size="10 0.2 10"/></Shape></CollidableShape>
+      <RigidBodyCollection DEF="C" autoDisable="true" disableTime="0.2" disableLinearSpeed="0.05"
+        disableAngularSpeed="0.05"><CollisionCollection containerField="collider">''' + collected
+                        + b'''<CollidableShape USE="FLOOR"/></CollisionCollection>''' + bodies
+                        + b'''</RigidBodyCollection></Scene></X3D>''', 'falling.x3d')
+
+
+def test_resting_rigid_bodies_ask_nothing_new_of_gl():
+    """Bodies come to rest, and the frames stepping them make and fill nothing"""
+    scene = _rigid_bodies()
+    collection = scene.getDEF('C')
+    for _ in range(240):
+        collection.advance(1.0 / 60.0)
+    assert not collection.awake()
+    with scene_context(scene, environment=PBR) as context:
+        def frame():
+            context.renderQueue.run()
+            context.OnDraw(force=1)
+        work = check_still_frame(frame, warmup=SETTLE_FRAMES + 2)
+    assert work.allocations == work.uploads == work.compiles == 0
