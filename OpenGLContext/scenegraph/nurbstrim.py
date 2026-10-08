@@ -67,28 +67,33 @@ class Contour2D(nurbs.Contour2D):
     """
 
     def contour(self, steps: int = 0) -> np.ndarray:
-        """The whole loop as ``(N, 2)`` points, children joined in order.
+        """The whole loop as ``(N, 2)`` points, children joined in order (:func:`join_loop`)."""
+        return join_loop(self.children, steps)
 
-        Where one child ends on the point the next begins with, the point is
-        kept once; the loop closes from the last point back to the first, so a
-        contour that repeats its start at the end is no different from one that
-        does not.
-        """
-        pieces: list[Any] = []
-        for child in self.children:
-            points = getattr(child, 'points', None)
-            if points is None:
-                continue
-            piece = np.asarray(points(steps), dtype=np.float64).reshape(-1, 2)
-            if not len(piece):
-                continue
-            if pieces and np.allclose(pieces[-1][-1], piece[0]):
-                piece = piece[1:]
-            if len(piece):
-                pieces.append(piece)
-        if not pieces:
-            return np.zeros((0, 2), dtype=np.float64)
-        loop = np.concatenate(pieces)
-        if len(loop) > 1 and np.allclose(loop[0], loop[-1]):
-            loop = loop[:-1]
-        return loop
+
+def join_loop(children: Any, steps: int = 0) -> np.ndarray:
+    """Contour pieces joined end to end into one loop, ``(N, 2)``
+
+    Each child with a ``points(steps)`` method gives a piece. Where one piece
+    ends on the point the next begins with, the point is kept once; the loop
+    closes from the last point back to the first, so a contour that repeats
+    its start at the end is no different from one that does not.
+    """
+    pieces: list[Any] = []
+    for child in children:
+        points = getattr(child, 'points', None)
+        if points is None:
+            continue
+        piece = np.asarray(points(steps), dtype=np.float64).reshape(-1, 2)
+        if not len(piece):
+            continue
+        if pieces and np.allclose(pieces[-1][-1], piece[0]):
+            piece = piece[1:]
+        if len(piece):
+            pieces.append(piece)
+    if not pieces:
+        return np.zeros((0, 2), dtype=np.float64)
+    loop = np.concatenate(pieces)
+    if len(loop) > 1 and np.allclose(loop[0], loop[-1]):
+        loop = loop[:-1]
+    return loop
