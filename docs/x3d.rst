@@ -212,7 +212,9 @@ the descendants of its parent grouping node; point and spot lights, global by
 default, light everything. A light casts shadows where its ``shadows`` is
 true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
-The engine's lights made in code are global and cast shadows by default.
+A light in an X3D 3 or VRML97 document, whose version has no ``shadows``
+field, casts none. The engine's lights made in code are global and cast
+shadows by default.
 
 An ``EnvironmentLight`` with ``diffuseCoefficients`` (glTF's
 ``irradianceCoefficients``: nine RGB spherical-harmonic coefficients,

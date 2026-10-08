@@ -61,9 +61,9 @@ class TestCastsShadow:
 
 
 class TestADocumentsLights:
-    """An X3D 4 document's lights cast shadows only where `shadows` is TRUE
-    (19775-1, 17.2.1); the engine's lights made in code, and those of a
-    version without the field, cast them by default"""
+    """A document's lights cast shadows only where `shadows` is TRUE
+    (19775-1, 17.2.1), and a version without the field casts none; the
+    engine's lights made in code cast them by default"""
 
     def setup_method(self):
         self.mixin = ShadowMapMixin()
@@ -77,10 +77,15 @@ class TestADocumentsLights:
     def test_one_without_shadows_casts_none(self):
         assert self.mixin._castsShadow(self.light(), CAPS) is False
 
-    def test_a_version_without_the_field_keeps_the_engines_shadows(self):
-        """X3D 3 and VRML97 have no shadows field; their lights cast the
-        engine's shadows"""
-        assert self.mixin._castsShadow(self.light(version=b'3.3'), CAPS) is True
+    @pytest.mark.parametrize('version', [b'3.3', b'3.0'])
+    def test_a_version_without_the_field_casts_none(self, version):
+        """X3D 3 has no shadows field, and no shadows"""
+        assert self.mixin._castsShadow(self.light(version=version), CAPS) is False
+
+    def test_a_vrml97_worlds_light_casts_none(self):
+        from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+        scene = Loader.loads(b'#VRML V2.0 utf8\nDirectionalLight { }\n', 'world.wrl')
+        assert self.mixin._castsShadow(scene.children[0], CAPS) is False
 
     def test_one_with_shadows_casts_them(self):
         assert self.mixin._castsShadow(self.light(b'shadows="true"'), CAPS) is True

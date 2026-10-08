@@ -1809,10 +1809,13 @@ Corpus renders that differ from X_ITE by more than 10%, looked at 2026-10-08:
   lines are `size` x `spacing` apart.
 - [x] Viewpoint framing, Figure20_17a: a Viewpoint under a rotated
   Transform turned with it (`NodePath.quaternion` from the path's matrix).
-- Figure20_17a's floor shows shadows: a light in a version without the
-  `shadows` field keeps the engine's default, so a VRML97 or X3D 3 world is
-  shadowed (pyvrml97 `24ad6c5`); X_ITE draws none.
+- [x] Figure20_17a's floor and the dungeons' ceilings: a light in a version
+  without the `shadows` field kept the engine's default, so a VRML97 or X3D 3
+  world was shadowed, and a torch's light was shadowed by the torch. A field
+  the version lacks takes X3D's default now (pyvrml97 builder and VRML97
+  parser), so those lights cast none.
 - StopWatch and the other animated documents are captured at another time
   than X_ITE's; `children500` is a WALK view with nothing below it, which
   X_ITE lets fall before its capture.
-- [ ] The dungeon corridors: not yet compared.
+- The dungeon rooms match apart from the shadows above; X_ITE's
+  Figure25_12 viewer has fallen below the floor.
