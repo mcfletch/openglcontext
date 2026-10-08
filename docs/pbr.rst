@@ -55,9 +55,11 @@ equation (ISO/IEC 19775-1, 17.2.2.5): the emissive colour, plus for each light
 its ``ambientIntensity`` times the Material's ``ambientIntensity`` and diffuse
 colour, its diffuse and its Blinn-Phong specular terms, on the colour values as
 given and without the tone map, bloom on or off. A ``Color`` node replaces the
-diffuse colour, a texture multiplies it, and fog is X3D's. Image-based
-lighting, normal and occlusion maps, lightmaps and planar reflections are not
-read for such a shape. A ``Material`` built in code is converted instead: its diffuse colour
+diffuse colour, a texture multiplies it, a normal map turns the normal, an
+occlusion map scales the lights' sum, and fog is X3D's. Image-based lighting,
+lightmaps and planar reflections are not read for such a shape. An appearance
+with no ``Material`` is unlit: white, times its texture or a ``Color`` node.
+A ``Material`` built in code is converted instead: its diffuse colour
 becomes the base colour and its shininess sets the roughness, lit in linear
 light with a flat ambient term.
 
@@ -749,9 +751,9 @@ the one it covered (:ref:`X3D binding <x3d-binding>`).
 Both curves follow X3D's equation (ISO/IEC 19775-1, 17.2.2.3): the colour as
 displayed, after tone mapping, is mixed with the fog colour, so a ``LINEAR``
 fog leaves an object ``(visibilityRange - distance) / visibilityRange`` of its
-own colour. The PBR shader fogs unlit surfaces as it does lit ones. The VRML97
-pass fogs lit and vertex-coloured shapes, textured unlit shapes, points and
-lines; an untextured unlit shape and text are not fogged there. X3D's
+own colour, at its distance from the viewer. Both passes fog lit, unlit and
+vertex-coloured shapes, points and lines; text and the overlay are not
+fogged. X3D's
 ``LocalFog`` fogs only its own group (:doc:`X3D <x3d>`).
 
 Choosing a fog curve

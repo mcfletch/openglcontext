@@ -78,9 +78,11 @@ class TestShaderSource:
         assert 'ambDiffuse += gridLight * albedo' in source
 
     def test_a_zone_can_switch_a_light_off_for_a_draw(self):
-        source = _source('pbr.frag')
-        assert 'uniform int lightsOff;' in source
-        assert re.search(r'if \(\(lightsOff & \(1 << i\)\) != 0\) continue;', source)
+        from OpenGLContext.passes.shadersource import preprocess_shader  # noqa: PLC0415 kept with its use
+        source = preprocess_shader('pbr.frag')
+        assert source.count('uniform int lightsOff;') == 1
+        # the PBR loop and the Phong one (_phong_inc.phongLights)
+        assert len(re.findall(r'if \(\(lightsOff & \(1 << i\)\) != 0\) continue;', source)) == 2
 
     def test_the_include_and_the_arithmetic_agree_on_the_shapes(self):
         source = _source('_zone_inc.glsl')

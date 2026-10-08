@@ -606,7 +606,7 @@ class NurbsCurve(nurbs.NurbsCurve):
             shader_program.use(lit=False)
             program = shader_program.unlit_program
             shader_program.set_solid_color(
-                getattr(mode, '_solid_color', None) or (1.0, 1.0, 1.0, 1.0))
+                getattr(mode, '_solid_color', None) or (1.0, 1.0, 1.0, 1.0), fogged=True)
         shader_program.set_matrices(mode.matrix, mode.getProjection(), program=program)
 
         if has_colors:

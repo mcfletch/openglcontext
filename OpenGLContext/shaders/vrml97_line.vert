@@ -16,12 +16,12 @@ uniform mat4 projectionMatrix;
 uniform bool instancingEnabled;
 
 out vec3 vColor;
-out float vEyeDistance;   // for the fog
+out vec3 vEyePosition;    // for the fog: its length, per fragment
 
 void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
     vec4 eyePosition = mv * vec4(aPosition, 1.0);
-    vEyeDistance = length(eyePosition.xyz);
+    vEyePosition = eyePosition.xyz;
     gl_Position = projectionMatrix * eyePosition;
     vColor = aColor;
 }

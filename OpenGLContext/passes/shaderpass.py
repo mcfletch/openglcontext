@@ -835,6 +835,14 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self._set_uniform1f('ambientIntensity', ambient_intensity)
         self._set_uniform1f('shininess', shininess)
         self._set_uniform1f('transparency', transparency)
+        self._set_uniform1i('unlit', 0)
+
+    def set_unlit_material(self) -> None:
+        """Draw the next shapes unlit: white, times a texture or a Color node,
+        as X3D draws an appearance with no material"""
+        self.set_material(diffuse=(1.0, 1.0, 1.0), specular=(0.0, 0.0, 0.0),
+                          ambient_intensity=0.0, shininess=0.0)
+        self._set_uniform1i('unlit', 1)
 
     def set_default_material(self) -> None:
         """Set VRML97 default material values."""
@@ -865,16 +873,23 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         The shaders apply X3D's fog to the colour as it is displayed
         (``_x3d_fog_inc.glsl``).
         """
+        values = (('fogMode', int(mode), glUniform1i),
+                  ('fogDensity', float(density), glUniform1f),
+                  ('fogColor', _as_floats(color), _UPLOAD_3FV))
         drawn: list[int] = []
         for name in (self.program, self.unlit_program, self.vertex_color_program,
                      self.point_program, self.line_program):
             if name and not any(name == seen for seen in drawn):
                 drawn.append(name)
         for name in drawn:
+            # A program is bound only where a value it holds differs, as a
+            # LocalFog sets the fog before each of its draws.
+            held = self._uniform_value_cache.get(name, {})
+            if all(uniform in held and held[uniform] == value for uniform, value, _ in values):
+                continue
             with glstate.program(name):
-                self._set_uniform1i('fogMode', int(mode), name)
-                self._set_uniform1f('fogDensity', float(density), name)
-                self._set_uniform3f('fogColor', color, name)
+                for uniform, value, upload in values:
+                    self._set_uniform(uniform, value, name, upload)
 
     def set_num_lights(self, count: int, program: Optional[int] = None) -> None:
         """Set the number of active lights."""
@@ -944,11 +959,13 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         if enabled:
             self._set_uniform1i('diffuseTexture', texture_unit)
 
-    def set_solid_color(self, color: Color4) -> None:
-        """Set solid color for unlit shader (used for picking)."""
+    def set_solid_color(self, color: Color4, fogged: bool = False) -> None:
+        """Draw the unlit program's next shapes in one colour; `fogged` for a
+        shape of the scene, which the frame's fog is over"""
         loc = self._get_location('solidColor', self.unlit_program)
         if loc != -1:
             glUniform4fv(loc, 1, array(color, 'f'))
+        self._set_uniform1i('fogSolid', int(fogged), self.unlit_program)
 
     def set_object_id(self, object_id: int, program: Optional[int] = None) -> None:
         """Set object ID for selection buffer (MRT).
@@ -1387,21 +1404,23 @@ def configure_light_from_node(
         )
 
 
-def appearance_solid_color(appearance: Any) -> Color4:
+def appearance_solid_color(appearance: Any, x3d: bool = False) -> Color4:
     """The one colour an appearance draws geometry that carries no colour of
     its own -- a line, an unlit point cloud.
 
-    A material that emits takes its emissive colour, because that is what an
-    unlit surface of it looks like; anything else takes its base/diffuse
-    colour. White where there is no material at all, which is what a caller
-    who gave the geometry no appearance is asking for.
+    Under X3D's rules (`x3d`) the material's emissive colour, as 19775-1
+    gives it for lines and points. Under the engine's, a material that emits
+    takes its emissive colour, because that is what an unlit surface of it
+    looks like, and anything else its base/diffuse colour. White where there
+    is no material at all, which is what a caller who gave the geometry no
+    appearance is asking for.
     """
     material = getattr(appearance, 'material', None) if appearance else None
     if material is None:
         return (1.0, 1.0, 1.0, 1.0)
     alpha = 1.0 - float(getattr(material, 'transparency', 0.0) or 0.0)
     emissive = getattr(material, 'emissiveColor', None)
-    if emissive is not None and any(float(part) > 0.0 for part in emissive):
+    if emissive is not None and (x3d or any(float(part) > 0.0 for part in emissive)):
         return (float(emissive[0]), float(emissive[1]), float(emissive[2]),
                 alpha)
     base = getattr(material, 'baseColor', None)

@@ -6,6 +6,7 @@ from OpenGL.GL import *
 from OpenGL.GL import GL_BACK, GL_FRONT, glUseProgram
 from vrml.vrml97 import basenodes
 from vrml import field
+from OpenGLContext import lighting
 from OpenGLContext.scenegraph import boundingvolume, polygonsort
 from OpenGLContext.scenegraph.physicalmaterial import two_sided
 from OpenGLContext.arrays import array
@@ -128,7 +129,8 @@ class Shape(basenodes.Shape):
         # The one colour geometry with no material of its own is drawn in --
         # a line, a point cloud. Published here because the appearance belongs
         # to the shape and the geometry node does not see it.
-        mode._solid_color = appearance_solid_color(self.appearance)
+        mode._solid_color = appearance_solid_color(self.appearance,
+                                                   lighting.x3d_lit(self.geometry))
 
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
@@ -161,6 +163,8 @@ class Shape(basenodes.Shape):
             # Set up material properties
             if self.appearance and self.appearance.material:
                 configure_material_from_node(shader_program, self.appearance.material)
+            elif lighting.x3d_lit(self.geometry):
+                shader_program.set_unlit_material()
             else:
                 shader_program.set_default_material()
 

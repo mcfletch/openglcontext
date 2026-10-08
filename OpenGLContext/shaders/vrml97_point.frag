@@ -7,7 +7,7 @@
 #include "_x3d_fog_inc.glsl"
 
 in vec3 vColor;
-in float vEyeDistance;
+in vec3 vEyePosition;
 
 uniform bool hasTexture;
 uniform sampler2D pointTexture;
@@ -31,7 +31,7 @@ void main() {
         color = color * texColor;
     }
 
-    fragColor = vec4(x3dFogged(color.rgb, vEyeDistance), color.a);
+    fragColor = vec4(x3dFogged(color.rgb, length(vEyePosition)), color.a);
 
     // Output object ID to selection buffer (encode as RGBA8)
     fragObjectId = encodeObjectId(objectId);

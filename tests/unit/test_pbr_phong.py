@@ -114,3 +114,64 @@ def test_a_glTF_light_has_no_ambient():
     configure_light_from_node(program, 0, scene._light_node({'type': 'point'}, np.identity(4)),  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
                               np.identity(4))
     assert program.lights[0]['ambient_intensity'] == 0.0
+
+
+DOCUMENT4 = (b"<X3D version='4.0'><Scene><Viewpoint position='0 0 0'/><Shape><Appearance>%s"
+             b"</Appearance><IndexedFaceSet coordIndex='0 1 2 3' texCoordIndex='0 1 2 3'>"
+             b"<Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/>"
+             b"<TextureCoordinate point='0 0 1 0 1 1 0 1'/></IndexedFaceSet></Shape></Scene></X3D>")
+
+
+def test_the_occlusion_map_scales_the_lights_sum(gl_context):
+    """X3D 4 (17.2.2.5): emissive + occlusion x the lights' sum"""
+    plain = b"<Material diffuseColor='1 1 1' emissiveColor='0.25 0 0'/>"
+    occluded = (b"<Material diffuseColor='1 1 1' emissiveColor='0.25 0 0'>"
+                b"<PixelTexture containerField='occlusionTexture' image='1 1 1 0x80'/></Material>")
+    assert centre(DOCUMENT4 % plain) == pytest.approx((255, 255, 255), abs=3)
+    assert centre(DOCUMENT4 % occluded) == pytest.approx((64 + 128, 128, 128), abs=4)
+
+
+TRIANGLES = (b"<X3D version='4.0'><Scene><Viewpoint position='0 0 0'/><Shape><Appearance>%s"
+             b"</Appearance><%s><Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/>"
+             b"<TextureCoordinate point='0 0 1 0 1 1 0 1'/></%s></Shape></Scene></X3D>")
+
+
+@pytest.mark.parametrize('geometry', [
+    b"IndexedTriangleSet index='0 1 2 0 2 3'",
+    b"IndexedFaceSet coordIndex='0 1 2 3' texCoordIndex='0 1 2 3'",
+])
+def test_the_normal_map_turns_the_normal(gl_context, geometry):
+    """A normal map tilted 60 degrees off the surface leaves cos 60 of the
+    headlight's diffuse light"""
+    tilted = (b"<Material diffuseColor='1 1 1'>"
+              b"<PixelTexture containerField='normalTexture' image='1 1 3 0xEE7FC0'/></Material>")
+    name = geometry.split(b' ')[0]
+    assert centre(TRIANGLES % (tilted, geometry, name))[0] == pytest.approx(255 * 0.5, abs=12)
+
+
+TILTED_MAPS = {
+    b'Material': (b"<Material diffuseColor='1 1 1'>"
+                  b"<PixelTexture containerField='normalTexture' image='1 1 3 0xEE7FC0'/></Material>"),
+    b'PhysicalMaterial': (b"<PhysicalMaterial baseColor='1 1 1' metallic='0' roughness='1'>"
+                          b"<PixelTexture containerField='normalTexture' image='1 1 3 0xEE7FC0'/>"
+                          b"</PhysicalMaterial>"),
+}
+
+
+FACE_SET = (b"<X3D version='4.0'><Scene><Viewpoint position='0 0 0'/><Shape><Appearance>%s"
+            b"</Appearance><IndexedFaceSet coordIndex='0 1 2 3' texCoordIndex='0 1 2 3' %s>"
+            b"<Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/>"
+            b"<TextureCoordinate point='0 0 1 0 1 1 0 1'/>%s</IndexedFaceSet></Shape></Scene></X3D>")
+
+
+@pytest.mark.parametrize('material', sorted(TILTED_MAPS))
+@pytest.mark.parametrize('normals', [(b'', b''),
+                                     (b"normalIndex='0 0 0 0'", b"<Normal vector='0 0 1'/>")],
+                         ids=['made', 'given'])
+def test_a_face_sets_normal_map_darkens_a_face_lit_straight_on(gl_context, material, normals):
+    """The face set's tangents come from its texture coordinates, whether its
+    normals are made or given with indices of their own"""
+    flat = TILTED_MAPS[material].replace(b'0xEE7FC0', b'0x7F7FFF')
+    tilted = centre(FACE_SET % ((TILTED_MAPS[material],) + normals))[0]
+    straight = centre(FACE_SET % ((flat,) + normals))[0]
+    assert tilted < straight - 40

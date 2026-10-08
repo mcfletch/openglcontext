@@ -94,16 +94,18 @@ struct Material {
     vec3  emissiveFactor;       float roughnessFactor;
     vec3  specularColorFactor;  float occlusionStrength;   // KHR_materials_specular color
     vec3  sheenColorFactor;     float normalScale;         // KHR_materials_sheen color
-    vec3  attenuationColor;     float reserved19;          // KHR_materials_volume color; a reserved word
+    vec3  attenuationColor;     float reserved19;          // KHR_materials_volume color; unused
     float emissiveStrength;     float specularFactor;      // KHR_materials_emissive_strength / _specular
     float clearcoatFactor;      float clearcoatRoughness;  // KHR_materials_clearcoat
     float sheenRoughnessFactor; float ior;                 // KHR_materials_sheen / _ior
     float thicknessFactor;      float attenuationDistance; // KHR_materials_volume
     bool  unlitMode;                                       // KHR_materials_unlit
-    int   materialFlags;   // 64: the vertex colours are baked light
+    int   materialFlags;   // 64: the vertex colours are baked light; 128: X3D's Phong
     float anisotropyStrengthM; // KHR_materials_anisotropy (fill the pre-mat3 pad slots)
     float dispersionM;         // KHR_materials_dispersion
-    mat3  reservedTransform;                               // reserved
+    vec4  phongM;          // X3D Material under phongMode: x ambientIntensity, y shininess
+    vec4  reservedA;       // unused
+    vec4  reservedB;       // unused
     vec4  iridescence;     // KHR_materials_iridescence: factor, ior, thicknessMin, thicknessMax
     vec4  diffuseTransmissionM; // KHR_materials_diffuse_transmission: rgb colour, a factor
     vec4  anisotropyDirM;       // KHR_materials_anisotropy direction: xy = (cos, sin)
@@ -151,13 +153,15 @@ Material _M;
 #define attenuationDistance  _M.attenuationDistance
 #define unlitMode            _M.unlitMode
 #define materialFlags        _M.materialFlags
-// Bit 64 of that mask: the vertex colours are light worked out when the world
-// was built rather than a tint on the surface.
+// Flag 64: the vertex colours are light worked out when the world was built
+// rather than a tint on the surface.
 #define bakedLightMode       ((materialFlags & 64) != 0)
-// Bit 128: an X3D Material drawn by X3D's Phong equation. Its colours are the
-// Material's own, ambientIntensity is in the metallic slot and shininess in
-// the roughness slot (pbrpass.phong_factors).
+// Flag 128: an X3D Material drawn by X3D's Phong equation, its colours the
+// Material's own and its ambientIntensity and shininess in phongM
+// (pbrpass.phong_factors).
 #define phongMode            ((materialFlags & 128) != 0)
+#define phongAmbientIntensity _M.phongM.x
+#define phongShininess       _M.phongM.y
 #define iridescenceFactor    _M.iridescence.x
 #define iridescenceIor       _M.iridescence.y
 #define iridescenceThickMin  _M.iridescence.z
@@ -426,11 +430,6 @@ uniform float prefilterMaxLod;       // highest mip level of prefilterMap
 // The zones this draw reaches; see _zone_inc.glsl.
 #include "_zone_inc.glsl"
 
-// One bit per light, set where that light does not light this draw: a light a
-// zone controls, for an object outside every zone naming it. Nought -- every
-// light on -- for any draw no zone has a say over.
-uniform int lightsOff;
-
 uniform mat4 eyeToWorld;
 
 uniform float exposure;           // camera exposure multiplier (default 1.0)
@@ -475,12 +474,10 @@ vec3 planarReflected(vec3 probe, vec3 N, float rough) {
 #endif
 }
 
-// Fog: aerial perspective over terrain, or a VRML97 Fog node the camera is
-// standing inside.  fogMode 0 (default) disables it, so a scene with no fog in
-// it is unaffected.  See OpenGLContext/scenegraph/fog.py for the modes.
-uniform int fogMode;              // 0 off, 1 density, 2 VRML97 LINEAR, 3 EXPONENTIAL
-uniform float fogDensity;         // mode 1: per eye-space unit.  2/3: 1/visibilityRange
-uniform vec3 fogColor;            // mode 1: linear light.  2/3: X3D's colour, as displayed
+// Fog: aerial perspective over terrain (mode 1, fogColor in linear light), or
+// a Fog node's curve (modes 2 and 3, fogColor as displayed). fogMode 0 is no
+// fog. See OpenGLContext/scenegraph/fog.py for the modes.
+#include "_x3d_fog_inc.glsl"
 
 uniform uint objectId;
 uniform bool instancingEnabled;   // take the id from the per-instance varying
@@ -600,32 +597,13 @@ float spotAttenuation(int i, vec3 L) {
     return t * t;
 }
 
-// A colour faded into the fog colour by this fragment's distance; unchanged
-// where there is no fog. The aerial-perspective curve (mode 1) is applied to
-// linear light, X3D's two curves (modes 2 and 3) to the colour as it is
-// displayed, where X3D's fog equation is written: displayed() and the Phong
-// and unlit branches call it at those two points.
+// A colour faded into the fog colour by this fragment's distance from its
+// viewer. The aerial-perspective curve (mode 1) is applied to linear light,
+// X3D's two curves (modes 2 and 3) to the colour as it is displayed, where
+// X3D's fog equation is written: displayed() and the Phong and unlit branches
+// call it at those two points.
 vec3 fogged(vec3 color) {
-    if (fogMode > 0 && fogDensity > 0.0) {
-        // Eye distance over the visible range for X3D's curves; distance
-        // times density for the aerial-perspective one.
-        float reach = fogDensity * length(toViewer(vPosition));
-        float fog;
-        if (fogMode == 1) {
-            fog = 1.0 - exp(-reach);                    // aerial perspective
-        } else if (fogMode == 2) {
-            fog = reach;                                // VRML97 LINEAR
-        } else {
-            // VRML97 EXPONENTIAL: hangs back, then closes in, and reaches
-            // total obscurity exactly at the visible range rather than only
-            // tending toward it.  Past the range the divisor would go
-            // negative, so it is clamped to fully fogged.
-            float clear = 1.0 - reach;
-            fog = clear > 0.0 ? 1.0 - exp(-reach / clear) : 1.0;
-        }
-        color = mix(color, fogColor, clamp(fog, 0.0, 1.0));
-    }
-    return color;
+    return x3dFogged(color, length(toViewer(vPosition)));
 }
 
 // The linear HDR colour the bloom composite (ACES, then sRGB) turns into
@@ -666,6 +644,28 @@ vec3 displayed(vec3 color) {
     return color;
 }
 
+// `N` turned by the material's tangent-space normal map, where it has one
+// and the mesh has tangents
+vec3 normalMapped(vec3 N) {
+    if (!hasNormal || length(vTangent) == 0.0) {
+        return N;
+    }
+    vec3 T = normalize(vTangent - N * dot(N, vTangent));
+    vec3 B = cross(N, T) * (vTangentW == 0.0 ? 1.0 : vTangentW);
+    vec3 nTex = texture(normalTexture, uvFor(CH_NORMAL)).xyz * 2.0 - 1.0;
+    nTex.xy *= normalScale;
+    return normalize(mat3(T, B, N) * nTex);
+}
+
+// The share of light the occlusion map lets reach the fragment; 1 without one
+float occlusionShare() {
+    if (!hasOcclusion) {
+        return 1.0;
+    }
+    float o = texture(occlusionTexture, uvFor(CH_OCCLUSION)).r;
+    return 1.0 + occlusionStrength * (o - 1.0);
+}
+
 void main() {
     // Fetch this fragment's material ONCE: the per-instance index when instancing,
     // else element 0 (the single bound material). All factor reads below use the
@@ -696,26 +696,25 @@ void main() {
     }
 
     // X3D's Phong equation (19775-1, 17.2.2.5) on the colour values as given:
-    // a Color node replaces the diffuse colour, a texture multiplies it, and
-    // the sum is displayed as it is, without the tone map, bloom or not.
+    // a Color node replaces the diffuse colour, a texture multiplies it, the
+    // normal map turns N and the occlusion map scales the lights' sum, and
+    // the result is displayed as it is, without the tone map, bloom or not.
     if (phongMode) {
         vec3 diffuse = (hasVertexColor ? vColor.rgb : baseColorFactor)
                      * (hasBaseColor ? baseTex.rgb : vec3(1.0));
         vec3 N = normalize(vNormal);
         if (!gl_FrontFacing) N = -N;
+        N = normalMapped(N);
         vec3 V = normalize(toViewer(vPosition));
         float shadows[MAX_LIGHTS];
         resolveShadows(shadows);
         // X3D's ambient light is each light's own (phongLight), not the
         // pass's flat fill
-        vec3 color = emissiveFactor
-                   * (hasEmissive ? texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb : vec3(1.0));
-        for (int i = 0; i < MAX_LIGHTS; i++) {
-            if (i >= numLights) break;
-            if ((lightsOff & (1 << i)) != 0) continue;   // a zone's light, off for this draw
-            color += phongLight(i, N, V, vPosition, diffuse, metallicFactor * diffuse,
-                                specularColorFactor, roughnessFactor, shadows[i]);
-        }
+        vec3 emitted = emissiveFactor
+                     * (hasEmissive ? texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb : vec3(1.0));
+        vec3 color = emitted + occlusionShare()
+                   * phongLights(N, V, vPosition, diffuse, phongAmbientIntensity * diffuse,
+                                 specularColorFactor, phongShininess, shadows);
         fragColor = vec4(shown(fogged(clamp(color, 0.0, 1.0))), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());
         return;
@@ -734,11 +733,7 @@ void main() {
     // Feeding perceptual roughness straight into D/G gives the wrong lobe width.
     float alphaR = roughness * roughness;
 
-    float ao = 1.0;
-    if (hasOcclusion) {
-        float o = texture(occlusionTexture, uvFor(CH_OCCLUSION)).r;
-        ao = 1.0 + occlusionStrength * (o - 1.0);
-    }
+    float ao = occlusionShare();
     // Where the vertex colours are baked light, their fourth channel is how
     // much of the environment still reaches the surface. A tunnel lining is
     // the case: it is a hole in the ground, no sky arrives in the middle of
@@ -779,14 +774,7 @@ void main() {
     if (ripple.x != 0.0 || ripple.y != 0.0) {
         Ngeom = normalize(Ngeom - ripple.x * vSurfX - ripple.y * vSurfZ);
     }
-    vec3 N = Ngeom;
-    if (hasNormal && length(vTangent) > 0.0) {
-        vec3 T = normalize(vTangent - N * dot(N, vTangent));
-        vec3 B = cross(N, T) * (vTangentW == 0.0 ? 1.0 : vTangentW);
-        vec3 nTex = texture(normalTexture, uvFor(CH_NORMAL)).xyz * 2.0 - 1.0;
-        nTex.xy *= normalScale;
-        N = normalize(mat3(T, B, N) * nTex);
-    }
+    vec3 N = normalMapped(Ngeom);
     // KHR_materials_clearcoat normal: the coat is a separate smooth layer, so its
     // lobe must NOT follow the base normal map (a coat over orange-peel would wrongly
     // wobble). Use the geometric normal, perturbed only by clearcoatNormalTexture.

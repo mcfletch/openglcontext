@@ -143,7 +143,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             # The colour the Shape's material asks for; white where the caller
             # gave the points neither per-vertex colours nor a material.
             shader_program.set_solid_color(
-                getattr(mode, '_solid_color', None) or (1.0, 1.0, 1.0, 1.0))
+                getattr(mode, '_solid_color', None) or (1.0, 1.0, 1.0, 1.0), fogged=True)
 
         shader_program.set_matrices(mode.matrix, mode.projection, program=program)
 

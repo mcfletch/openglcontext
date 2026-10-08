@@ -72,3 +72,28 @@ def test_each_shadow_receiver_has_its_samplers_on_distinct_units(compiled):
             'program %r leaves a shadow sampler on unit 0, where the material '
             'texture lives: %r' % (handle, units)
         )
+
+
+def test_the_fog_reaches_every_program_and_binds_none_when_unchanged(compiled, monkeypatch):
+    """A LocalFog sets the frame's fog before each of its draws: a value the
+    programs already hold binds nothing"""
+    from OpenGL.GL import glGetUniformfv  # noqa: PLC0415 kept with its use
+    from OpenGLContext.passes import shaderpass  # noqa: PLC0415 kept with its use
+    compiled.set_fog(0.05, (1.0, 0.5, 0.25), 2)
+    for attribute in ('program', 'unlit_program', 'point_program', 'line_program'):
+        handle = getattr(compiled, attribute)
+        value = (ctypes.c_float * 3)()
+        glGetUniformfv(handle, glGetUniformLocation(handle, 'fogColor'), value)
+        assert list(value) == [1.0, 0.5, 0.25], attribute
+    bound = []
+    real = shaderpass.glstate.program
+
+    def counting(name):
+        bound.append(name)
+        return real(name)
+
+    monkeypatch.setattr(shaderpass.glstate, 'program', counting)
+    compiled.set_fog(0.05, (1.0, 0.5, 0.25), 2)
+    assert bound == []
+    compiled.set_fog(0.05, (1.0, 1.0, 1.0), 2)
+    assert len(bound) == len({getattr(compiled, name) for name in SUB_PROGRAMS[:5]})

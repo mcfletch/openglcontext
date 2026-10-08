@@ -7,6 +7,9 @@
 #include "_x3d_fog_inc.glsl"
 
 uniform vec4 solidColor;
+// A line or point set of the scene in solidColor, which the fog is over; off
+// for the selection pass's colours
+uniform bool fogSolid;
 uniform sampler2D diffuseTexture;
 uniform bool useTexture;
 
@@ -21,7 +24,7 @@ uniform bool textSolidBg;        // When true, render solid background instead o
 uniform uint objectId;
 
 in vec2 vTexCoord;
-in float vEyeDistance;
+in vec3 vEyePosition;
 
 // Output color (attachment 0)
 layout(location = 0) out vec4 fragColor;
@@ -47,10 +50,12 @@ void main() {
         // solid colours of the selection pass are not fogged
         vec4 texel = texture(diffuseTexture, vTexCoord);
         fragColor = texel * solidColor;
-        fragColor.rgb = x3dFogged(fragColor.rgb, vEyeDistance);
+        fragColor.rgb = x3dFogged(fragColor.rgb, length(vEyePosition));
     } else {
-        // Pure solid color mode (for selection rendering)
         fragColor = solidColor;
+        if (fogSolid) {
+            fragColor.rgb = x3dFogged(fragColor.rgb, length(vEyePosition));
+        }
     }
 
     // Text / HUD stays non-pickable (id 0); real unlit geometry writes its id so

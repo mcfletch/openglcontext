@@ -1,8 +1,11 @@
-// X3D's Phong lighting for one light (ISO/IEC 19775-1, 17.2.2.5) -- the
-// attenuation, the spot cone and a light's diffuse and specular terms, on the
+// X3D's Phong lighting (ISO/IEC 19775-1, 17.2.2.5) -- the attenuation, the
+// spot cone and each light's ambient, diffuse and specular terms, on the
 // colour values as given. Shared by the VRML97 pass's lit shaders and the PBR
-// shader's Phong mode. Needs _lights_inc (the light uniforms) and declares no
-// uniform of its own.
+// shader's Phong mode. Needs _lights_inc (the light uniforms) and MAX_LIGHTS.
+
+// One bit per light slot a zone switches off for the draw: set, the light does
+// not light it (OpenGLContext.passes.zonelayers.light_mask).
+uniform int lightsOff;
 
 // X3D's 1 / max(c0 + c1 d + c2 d^2, floor): the floor is 1 for X3D's lights,
 // which never light more than their intensity, and near 0 for glTF's.
@@ -15,9 +18,9 @@ float calcAttenuation(int lightIndex, float distance) {
                      max(lightAttenuationFloor[lightIndex], 1e-4));
 }
 
-// Spot cone falloff: a LINEAR ramp in cos-angle from the outer cutoff to the
-// inner beamWidth -- the VRML97 SpotLight model (pbr.frag's smoothstep cone is
-// glTF/KHR_lights_punctual; the divergence is intentional, do NOT "unify" them).
+// Spot cone falloff: a linear ramp in cos-angle from the outer cutoff to the
+// inner beamWidth, X3D's SpotLight. pbr.frag's own cone is KHR_lights_punctual's,
+// the ramp squared, for the lights a glTF document gives.
 float calcSpotEffect(int lightIndex, vec3 lightDir) {
     vec3 spotDir = normalize(lightDirection[lightIndex]);
     float cosAngle = dot(-lightDir, spotDir);
@@ -82,4 +85,19 @@ vec3 phongLight(int lightIndex, vec3 normal, vec3 viewDir, vec3 position,
     }
 
     return shadowFactor * attenuation * (ambient + diffuse + specular);
+}
+
+// Every light's terms (phongLight) at a fragment, but those `lightsOff` masks,
+// each scaled by its shadow factor in `shadows`.
+vec3 phongLights(vec3 normal, vec3 viewDir, vec3 position, vec3 matDiffuse,
+                 vec3 matAmbient, vec3 matSpecular, float shininess,
+                 float shadows[MAX_LIGHTS]) {
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        if (i >= numLights) break;
+        if ((lightsOff & (1 << i)) != 0) continue;
+        sum += phongLight(i, normal, viewDir, position, matDiffuse, matAmbient,
+                          matSpecular, shininess, shadows[i]);
+    }
+    return sum;
 }

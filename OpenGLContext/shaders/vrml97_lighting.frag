@@ -28,6 +28,9 @@ in vec2 vTexCoord;
 in vec4 vColor;
 // A mesh's per-vertex colours, which replace diffuseColor (X3D 17.2.2.4)
 uniform bool hasVertexColor;
+// No material under X3D's rules: the diffuse colour (white, a Color node's,
+// times the texture) drawn as it is, unlit
+uniform bool unlit;
 
 // Material uniforms (VRML97 Material node properties)
 uniform vec3 diffuseColor;
@@ -58,9 +61,8 @@ layout(location = 0) out vec4 fragColor;
 // Output object ID (attachment 1) - for selection buffer
 layout(location = 1) out vec4 fragObjectId;
 
-// Shared VRML97 lighting math (calcAttenuation / calcSpotEffect / calcLight),
-// also used by vrml97_vertex_color.frag so the two stay in lock-step.
-#include "_vrml97_lighting_inc.glsl"
+// X3D's Phong terms, shared with vrml97_vertex_color.frag and pbr.frag.
+#include "_phong_inc.glsl"
 #include "_x3d_fog_inc.glsl"
 
 void main() {
@@ -85,32 +87,20 @@ void main() {
         alpha *= texColor.a;
     }
 
-    // Ambient contribution
-    // VRML97: ambient = ambientIntensity * diffuseColor * sceneAmbient
-    vec3 ambient = ambientIntensity * matDiffuse * sceneAmbient;
-
-    // Emissive contribution (glow)
-    vec3 emissive = emissiveColor;
-
-    // Resolve a shadow factor per light (shaders/_shadow_inc.glsl).
-    float lightShadow[MAX_LIGHTS];
-    resolveShadows(lightShadow);
-
-    // Accumulate light contributions
-    vec3 lighting = vec3(0.0);
-    for (int i = 0; i < MAX_LIGHTS; i++) {
-        if (i >= numLights) break;
-        if ((lightsOff & (1 << i)) != 0) continue;   // a zone's light, off for this draw
-        lighting += calcLight(i, normal, viewDir, matDiffuse, specularColor, lightShadow[i]);
+    vec3 finalColor = matDiffuse;
+    if (!unlit) {
+        float lightShadow[MAX_LIGHTS];
+        resolveShadows(lightShadow);
+        // The pass's flat ambient fill (sceneAmbient, zero under X3D's rules)
+        // beside each light's own ambient term
+        finalColor = clamp(emissiveColor + ambientIntensity * matDiffuse * sceneAmbient
+                           + phongLights(normal, viewDir, vPosition, matDiffuse,
+                                         ambientIntensity * matDiffuse, specularColor,
+                                         shininess, lightShadow),
+                           0.0, 1.0);
     }
 
-    // Final color
-    vec3 finalColor = emissive + ambient + lighting;
-
-    // Clamp to valid range
-    finalColor = clamp(finalColor, 0.0, 1.0);
-
-    fragColor = vec4(x3dFogged(finalColor, length(vPosition)), alpha);
+    fragColor = vec4(x3dFogged(finalColor, length(toViewer(vPosition))), alpha);
     // Per-instance id when instancing, else the per-draw uniform.
     fragObjectId = encodeObjectId(instancingEnabled ? vObjectId : objectId);
 }

@@ -46,8 +46,8 @@ layout(location = 0) out vec4 fragColor;
 // Output object ID (attachment 1) - for selection buffer
 layout(location = 1) out vec4 fragObjectId;
 
-// Shared calcAttenuation / calcSpotEffect / calcLight.
-#include "_vrml97_lighting_inc.glsl"
+// X3D's Phong terms, shared with vrml97_lighting.frag and pbr.frag.
+#include "_phong_inc.glsl"
 #include "_x3d_fog_inc.glsl"
 
 void main() {
@@ -65,23 +65,14 @@ void main() {
     vec3 matDiffuse = vColor.rgb;
     float alpha = vColor.a * (1.0 - transparency);
 
-    vec3 ambient = ambientIntensity * matDiffuse * sceneAmbient;
-    vec3 emissive = emissiveColor;
-
-    // Resolve a shadow factor per light (shaders/_shadow_inc.glsl).
     float lightShadow[MAX_LIGHTS];
     resolveShadows(lightShadow);
+    vec3 finalColor = clamp(emissiveColor + ambientIntensity * matDiffuse * sceneAmbient
+                            + phongLights(normal, viewDir, vPosition, matDiffuse,
+                                          ambientIntensity * matDiffuse, specularColor,
+                                          shininess, lightShadow),
+                            0.0, 1.0);
 
-    vec3 lighting = vec3(0.0);
-    for (int i = 0; i < MAX_LIGHTS; i++) {
-        if (i >= numLights) break;
-        if ((lightsOff & (1 << i)) != 0) continue;   // a zone's light, off for this draw
-        lighting += calcLight(i, normal, viewDir, matDiffuse, specularColor, lightShadow[i]);
-    }
-
-    vec3 finalColor = emissive + ambient + lighting;
-    finalColor = clamp(finalColor, 0.0, 1.0);
-
-    fragColor = vec4(x3dFogged(finalColor, length(vPosition)), alpha);
+    fragColor = vec4(x3dFogged(finalColor, length(toViewer(vPosition))), alpha);
     fragObjectId = encodeObjectId(objectId);
 }

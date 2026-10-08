@@ -1,7 +1,8 @@
-// X3D's fog (19775-1, 17.2.2.3) applied to a colour as it is displayed: LINEAR
-// leaves an object (range - d) / range of its own colour, EXPONENTIAL
-// exp(-d / (range - d)). fogDensity is 1 / range; fogMode 0 is no fog and 1 the
-// engine's density curve, 1 - exp(-density d).
+// Fog by distance d from the viewer. fogMode 0 is no fog; 1 the engine's
+// aerial-perspective curve, 1 - exp(-fogDensity d), fogDensity per unit; 2 and
+// 3 X3D's (19775-1, 17.2.2.3), applied to a colour as it is displayed, with
+// fogDensity 1 / range: LINEAR leaves an object (range - d) / range of its own
+// colour, EXPONENTIAL exp(-d / (range - d)).
 
 uniform int   fogMode;
 uniform float fogDensity;

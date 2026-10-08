@@ -1,18 +1,17 @@
 """The per-vertex-colour shader shares the lit shader's lighting math
-and now samples shadows.
+and samples shadows.
 
 Two guarantees:
 
-1. Source structure -- ``vrml97_lighting.frag`` and ``vrml97_vertex_color.frag``
-   both pull their attenuation / spot / per-light math from the shared
-   ``_vrml97_lighting_inc.glsl`` (so the two can't silently drift), and the
-   vertex-colour shader now includes the shadow machinery it previously lacked.
+1. Source structure -- ``vrml97_lighting.frag``, ``vrml97_vertex_color.frag``
+   and ``pbr.frag`` take X3D's Phong terms and the light loop from
+   ``_phong_inc.glsl``, and the vertex-colour shader includes the shadow
+   machinery.
 
 2. Behaviour (needs GL) -- a per-vertex-coloured wall rendered through the
    vertex_color program is *darker where a caster shadows it*. We render the wall
    with and without the caster from a pinned viewpoint and compare the mean
-   brightness of the still-visible grey wall pixels; before 2a the vertex-colour
-   shader had no shadow code and the two means matched.
+   brightness of the still-visible grey wall pixels.
 """
 import os
 import subprocess
@@ -33,35 +32,30 @@ def _read(name):
         return fh.read()
 
 
-def test_shared_lighting_include_exists():
-    inc = _read('_vrml97_lighting_inc.glsl')
-    # The shared math must expose calcLight taking a per-light shadow factor.
-    assert 'calcLight' in inc
-    assert 'shadowFactor' in inc
-    # X3D's Phong terms, which the PBR shader's Phong mode draws with too
-    assert '#include "_phong_inc.glsl"' in inc
-    assert '#include "_phong_inc.glsl"' in _read('pbr.frag')
+def test_the_phong_terms_are_written_once():
     phong = _read('_phong_inc.glsl')
     assert 'calcAttenuation' in phong and 'calcSpotEffect' in phong
+    assert 'vec3 phongLights(' in phong and 'shadows[i]' in phong
 
 
-def test_both_lit_shaders_use_shared_include():
-    for name in ('vrml97_lighting.frag', 'vrml97_vertex_color.frag'):
-        src = _read(name)
-        assert '#include "_vrml97_lighting_inc.glsl"' in src, name
-        # Neither shader should still carry its own copy of the math.
-        assert 'float calcAttenuation' not in src, name
-        assert 'vec3 calcLight' not in src, name
+@pytest.mark.parametrize('name', ['vrml97_lighting.frag', 'vrml97_vertex_color.frag', 'pbr.frag'])
+def test_every_phong_shader_sums_the_lights_through_the_include(name):
+    src = _read(name)
+    assert '#include "_phong_inc.glsl"' in src, name
+    assert 'phongLights(' in src, name
+    # Neither shader carries its own copy of the math or of the light loop.
+    assert 'float calcAttenuation' not in src, name
+    assert 'phongLight(i' not in src, name
 
 
 def test_vertex_color_shader_samples_shadows():
     src = _read('vrml97_vertex_color.frag')
-    # The shadow machinery (enums, samplers, resolveShadows) is now wired in.
+    # The shadow machinery (enums, samplers, resolveShadows) is wired in.
     assert '#include "_lights_inc.glsl"' in src
     assert '#include "_shadow_inc.glsl"' in src
-    assert 'resolveShadows(' in src
-    # The shadow factor is threaded into every light contribution.
-    assert 'lightShadow[i]' in src
+    assert 'resolveShadows(lightShadow)' in src
+    # The shadow factors are threaded into the lights' sum.
+    assert 'shininess, lightShadow)' in src
 
 
 DRIVER = r'''

@@ -230,21 +230,21 @@ _DEFAULT_FACTORS: "dict[str, Any]" = dict(
     iridescence_thick_min=100.0, iridescence_thick_max=400.0,
     anisotropy_strength=0.0, anisotropy_rotation=0.0, dispersion=0.0,
     diffuse_transmission=0.0, diffuse_transmission_color=(1.0, 1.0, 1.0),
+    phong_ambient=0.0, phong_shininess=0.0,
 )
 
 
 def phong_factors(material_node: Any) -> dict:
     """The block of an X3D Material drawn by X3D's Phong equation (:data:`PHONG_BIT`)
 
-    The colours are the Material's own, not decoded to linear light; the
-    metallic slot carries its ``ambientIntensity`` and the roughness slot its
-    ``shininess``.
+    The colours are the Material's own, not decoded to linear light, and its
+    ``ambientIntensity`` and ``shininess`` have words of their own.
     """
     f = read_material_fields(material_node)
     return dict(_DEFAULT_FACTORS, base_color=tuple(f.diffuseColor)[:3],
                 emissive=tuple(f.emissiveColor)[:3],
                 specular_color=tuple(f.specularColor)[:3],
-                metallic=float(f.ambientIntensity), roughness=float(f.shininess),
+                phong_ambient=float(f.ambientIntensity), phong_shininess=float(f.shininess),
                 flags=PHONG_BIT)
 
 
@@ -391,7 +391,9 @@ def _pack_material_block(material: Any) -> np.ndarray:
     # them for two per-instance scalars (anisotropy strength + dispersion) for free.
     buf[30] = d.get('anisotropy_strength', 0.0)
     buf[31] = d.get('dispersion', 0.0)
-    # words 32..43 are a reserved mat3: texture transforms are set per draw.
+    # X3D's Phong at words 32..33 (of the 32..35 vec4); 36..43 are unused
+    buf[32] = d['phong_ambient']
+    buf[33] = d['phong_shininess']
     # iridescence vec4 (factor, ior, thicknessMin, thicknessMax) at words 44..47
     buf[44] = d.get('iridescence', 0.0)
     buf[45] = d.get('iridescence_ior', 1.3)
@@ -1050,21 +1052,6 @@ class PBRShaderProgram(VRML97ShaderProgram):
         absolute-unit KHR_lights_punctual lights stop down from here so they don't
         clip to white; everything else stays at 1.0."""
         self._set_uniform1f('exposure', float(exposure), self.program)
-
-    def set_fog(self, density: float = 0.0,
-                color: Sequence[float] = (0.6, 0.7, 0.85),
-                mode: int = 1) -> None:
-        """Set the frame's fog: a curve, its scale, and its colour.
-
-        ``mode`` is one of the codes in :mod:`OpenGLContext.scenegraph.fog` --
-        aerial-perspective density, or either of VRML97's two curves, which are
-        different fades to the same range and not approximations of each other.
-        Density 0 (the default) disables it whatever the mode, leaving a scene
-        with no fog in it unchanged.
-        """
-        self._set_uniform1i('fogMode', int(mode), self.program)
-        self._set_uniform1f('fogDensity', float(density), self.program)
-        self._set_uniform3f('fogColor', (color[0], color[1], color[2]), self.program)
 
     def set_transmission(self, transmission_factor: float, material: Any = None) -> None:
         """Set the frame-gated transmission factor (volume params are in the UBO)."""

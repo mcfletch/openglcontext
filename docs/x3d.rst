@@ -149,7 +149,10 @@ false turns the triangles round. In these and in ``IndexedFaceSet``, a
 both renderers. A ``MultiTextureCoordinate``'s entries are
 ``TEXCOORD_0``, ``TEXCOORD_1`` and so on, and an entry's ``mapping`` label is
 what a material's ``...TextureMapping`` names. The renderer reads two
-coordinate sets. A ``LineSet`` is drawn as an ``IndexedLineSet``.
+coordinate sets. A ``LineSet`` is drawn as an ``IndexedLineSet``. Lines and
+points with no ``Color`` node are drawn unlit in the ``Material``'s
+``emissiveColor``; in a scene built in code, a material that does not emit
+draws them in its diffuse colour instead.
 
 The Geometry2D nodes lie in the z=0 plane facing +z: ``Rectangle2D``,
 ``TriangleSet2D``, ``Disk2D`` and ``ArcClose2D`` as meshes with texture
@@ -181,7 +184,9 @@ labels, ``Appearance.alphaMode`` and ``alphaCutoff``, and
 ``MultiTextureTransform``. A ``Material``'s ``diffuseTexture``,
 ``emissiveTexture``, ``normalTexture`` and ``occlusionTexture`` are its base
 colour, emissive, normal and occlusion maps, and its ``normalScale`` and
-``occlusionStrength`` are read; without a ``diffuseTexture``, the
+``occlusionStrength`` are read. A normal map is read along tangents made from
+the first set of texture coordinates, or along a triangle set's ``Tangent``
+node where it has one. Without a ``diffuseTexture``, the
 appearance's ``texture`` is the base colour map. In the same way it is a
 ``PhysicalMaterial``'s base map without a ``baseTexture``, and an
 ``UnlitMaterial``'s emissive map without an ``emissiveTexture``, in drawing
@@ -219,7 +224,9 @@ built-in studio environment, which lights a scene built in code, is off for it,
 and an environment it supplies is kept (``ibl.scene_mode``). A ``PointLight``
 or ``SpotLight`` falls off by X3D's ``1 / max(attenuation[0] +
 attenuation[1] d + attenuation[2] d², 1)``, so it never lights a surface
-more than its intensity; a glTF light falls off inverse-square.
+more than its intensity. That is VRML97's rule too, so it holds for a
+``PointLight`` or ``SpotLight`` built in code; a glTF light falls off
+inverse-square.
 
 In a document, an ``Appearance`` with no ``material`` is unlit: the shape is
 its texture's colour, or white; a ``Shape`` with no ``appearance`` is unlit
