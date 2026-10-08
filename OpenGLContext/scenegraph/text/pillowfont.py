@@ -16,11 +16,16 @@ from typing import Any, Optional
 import numpy as np
 from OpenGL.arrays import vbo
 from OpenGL.GL import (
-    GL_CLAMP_TO_EDGE, GL_LINEAR, GL_ONE, GL_R8, GL_RED, GL_TEXTURE_2D,
-    GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_SWIZZLE_RGBA,
-    GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_UNPACK_ALIGNMENT, GL_UNSIGNED_BYTE,
-    GL_VIEWPORT, glBindTexture, glDeleteTextures, glGenTextures, glGetIntegerv,
-    glPixelStorei, glTexImage2D, glTexParameteri, glTexParameteriv, glTexSubImage2D,
+    GL_CLAMP_TO_EDGE, GL_COMBINE, GL_COMBINE_ALPHA, GL_COMBINE_RGB, GL_LINEAR,
+    GL_MODELVIEW_MATRIX, GL_MODULATE, GL_ONE, GL_PREVIOUS, GL_PRIMARY_COLOR,
+    GL_PROJECTION_MATRIX, GL_QUADS, GL_R8, GL_RED, GL_REPLACE, GL_SRC0_ALPHA,
+    GL_SRC0_RGB, GL_SRC1_ALPHA, GL_SRC1_RGB, GL_TEXTURE, GL_TEXTURE_2D,
+    GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
+    GL_TEXTURE_SWIZZLE_RGBA, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_UNPACK_ALIGNMENT,
+    GL_UNSIGNED_BYTE, GL_VIEWPORT, glBegin, glBindTexture, glDeleteTextures, glDisable,
+    glEnable, glEnd, glGenTextures, glGetDoublev, glGetIntegerv, glNormal3f,
+    glPixelStorei, glTexCoord2f, glTexEnvi, glTexImage2D, glTexParameteri,
+    glTexParameteriv, glTexSubImage2D, glVertex3f,
 )
 
 from OpenGLContext import contextresources
@@ -36,6 +41,24 @@ PAGE_SIZE = 2048
 
 #: How many drawn layouts each context keeps vertex buffers for.
 KEPT_LAYOUTS = 512
+
+#: The fixed-function texture environment drawing a page: the lit colour,
+#: its alpha times the coverage. GL_MODULATE would keep the fragment's alpha,
+#: since the environment's table goes by the page's base format (red).
+COVERAGE_ENVIRONMENT = (
+    (GL_TEXTURE_ENV_MODE, GL_COMBINE),
+    (GL_COMBINE_RGB, GL_REPLACE), (GL_SRC0_RGB, GL_PRIMARY_COLOR),
+    (GL_COMBINE_ALPHA, GL_MODULATE), (GL_SRC0_ALPHA, GL_PRIMARY_COLOR),
+    (GL_SRC1_ALPHA, GL_TEXTURE),
+)
+
+#: The texture environment's initial values, put back after a page is drawn.
+INITIAL_ENVIRONMENT = (
+    (GL_TEXTURE_ENV_MODE, GL_MODULATE),
+    (GL_COMBINE_RGB, GL_MODULATE), (GL_SRC0_RGB, GL_TEXTURE), (GL_SRC1_RGB, GL_PREVIOUS),
+    (GL_COMBINE_ALPHA, GL_MODULATE), (GL_SRC0_ALPHA, GL_TEXTURE),
+    (GL_SRC1_ALPHA, GL_PREVIOUS),
+)
 
 
 class _Drawn:
@@ -178,7 +201,9 @@ class PillowTextFont(font.Font):
         if mode is None or getattr(mode, 'shadow_pass', False):
             return 1
         shader = getattr(mode, 'shader_program', None)
-        if shader is None or not getattr(shader, 'program', None):
+        if not getattr(mode, 'shader_mode', False):
+            shader = None
+        elif shader is None or not getattr(shader, 'program', None):
             return 1
         atlas = text_atlas()
         frame = getattr(getattr(mode, 'frameState', None), 'number', None)
@@ -192,6 +217,9 @@ class PillowTextFont(font.Font):
         if not placed:
             return 1
         visible = getattr(mode, 'visible', True)
+        if shader is None:
+            self._draw_fixed(atlas, placed, visible)
+            return 1
         for drawn in self._buffers(atlas, placed):
             if visible:
                 shader.bind_coverage(atlas.texture(drawn.page))
@@ -200,11 +228,43 @@ class PillowTextFont(font.Font):
             shader.release_coverage()
         return 1
 
+    def _draw_fixed(self, atlas: TextAtlas, placed: list[tuple[Placement, Any, float, float]],
+                    visible: bool) -> None:
+        """Draw `placed` lines through the fixed-function pipeline, the
+        page's coverage as the lit colour's alpha"""
+        if visible:
+            glEnable(GL_TEXTURE_2D)
+            for name, value in COVERAGE_ENVIRONMENT:
+                glTexEnvi(GL_TEXTURE_ENV, name, value)
+        try:
+            glNormal3f(0.0, 0.0, 1.0)
+            for where, (left, right, bottom, top), x, y in placed:
+                if visible:
+                    glBindTexture(GL_TEXTURE_2D, atlas.texture(where.page))
+                u0, v0, u1, v1 = where.texcoords(atlas.page_size)
+                glBegin(GL_QUADS)
+                for cx, cy, u, v in ((left, bottom, u0, v0), (right, bottom, u1, v0),
+                                     (right, top, u1, v1), (left, top, u0, v1)):
+                    glTexCoord2f(u, v)
+                    glVertex3f(x + cx * self.size, y + cy * self.size, 0.0)
+                glEnd()
+        finally:
+            if visible:
+                for name, value in INITIAL_ENVIRONMENT:
+                    glTexEnvi(GL_TEXTURE_ENV, name, value)
+                glBindTexture(GL_TEXTURE_2D, 0)
+                glDisable(GL_TEXTURE_2D)
+
     def _on_screen(self, mode: Any) -> float:
         """Pixels per unit of the node's coordinates at its origin"""
         viewport = getattr(mode, 'getViewport', None)
         height = float(viewport()[3]) if callable(viewport) else float(glGetIntegerv(GL_VIEWPORT)[3])
-        return pillowtext.pixels_per_unit(mode.matrix, mode.getProjection(), height)
+        if getattr(mode, 'shader_mode', False):
+            return pillowtext.pixels_per_unit(mode.matrix, mode.getProjection(), height)
+        # The fixed-function stacks; read back column by column, which is
+        # the engine's row-vector order
+        return pillowtext.pixels_per_unit(glGetDoublev(GL_MODELVIEW_MATRIX),
+                                          glGetDoublev(GL_PROJECTION_MATRIX), height)
 
     def _buffers(self, atlas: TextAtlas, placed: list[tuple[Placement, Any, float, float]]
                  ) -> list[_Drawn]:

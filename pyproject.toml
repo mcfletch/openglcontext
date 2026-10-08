@@ -401,6 +401,7 @@ open_audit_sanctioned = [
     "OpenGLContext.scenegraph.terrain.ground",
     "OpenGLContext.scenegraph.terrain.heightfield",
     "OpenGLContext.scenegraph.text._toolsfont",
+    "OpenGLContext.scenegraph.text.pillowtext",
     "OpenGLContext.scenegraph.tilesterrain",
     "OpenGLContext.scenegraph.vegetation.clumps",
     "OpenGLContext.scenegraph.vegetation.cover",

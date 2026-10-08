@@ -4,11 +4,11 @@ Text Nodes in OpenGLContext
 .. rst-class:: introduction
 
 VRML97's ``Text`` node draws strings in the scene, and its ``FontStyle`` node
-chooses the face, size, style and layout. OpenGLContext draws text in two
-ways: as flat, screen-aligned bitmap text from a texture atlas, or as
-polygonal text built from a TrueType font's glyph outlines, which can also be
-extruded into solid letters. Both work in the core and the compatibility
-profile.
+chooses the face, size, style and layout. By default OpenGLContext draws
+each line with Pillow from the face the ``FontStyle`` names, anti-aliased and
+kerned, and places it in the scene as a flat textured quad. It can also draw
+text as polygons built from a TrueType font's glyph outlines, which can be
+extruded into solid letters, or as screen-aligned bitmap text.
 
 Text on a HUD or an overlay panel is drawn by the overlay renderer rather
 than by a ``Text`` node; see :doc:`hud` and :doc:`overlayui`.
@@ -110,21 +110,62 @@ A :py:mod:`FontProvider <OpenGLContext.scenegraph.text.fontprovider>` turns a
 ``FontStyle`` into a font that can draw. Each provider serves one geometry
 format:
 
+- ``texture`` - lines drawn by Pillow, in an atlas (below)
 - ``solid`` - filled polygonal glyphs, from FontTools
 - ``outline`` - glyph outlines as lines, from FontTools
 - ``bitmap`` - screen-aligned text, from the texture atlas, PyGame,
   wxPython or GLUT
 
 A ``FontStyle``'s ``format`` field names the format to use, and a provider
-of that format is tried first. If none can serve the style, the others are
-tried in the order ``solid``, ``texture``, ``bitmap``. A provider registers
-itself when its module is imported; importing
+of that format is tried first. Left empty, its default, and where the named
+format has no provider, the formats are tried in the order ``texture``,
+``solid``, ``bitmap``. A ``FontStyle3D``'s ``format`` defaults to ``solid``.
+A provider registers itself when its module is imported; importing
 ``OpenGLContext.scenegraph.text.toolsfont`` registers the FontTools
 providers.
 
 The provider returns a ``Font``. The ``Text`` node's render method calls the
 font with the string to draw. The font builds or looks up each character,
 measures it, and lays the lines out.
+
+Text drawn by Pillow
+--------------------
+
+The ``texture`` format draws each line of a ``Text`` node with Pillow, from
+the face its ``FontStyle`` names, and keeps the drawn lines in an atlas of
+2048 by 2048 texel pages, one atlas for each GL context. Each line is a quad
+over its ink, in the ``Text`` node's own coordinates, so the node's transform
+places, turns and scales it as it does any geometry. All the lines of one
+``Text`` node are one draw for each atlas page they are on, usually one.
+
+- The face is the member of the ``family`` with the weight and slant
+  ``style`` asks for, of normal width where the family also has condensed
+  or expanded faces. Where the family has no italic face, the nearest is
+  sheared by 12 degrees; where its nearest weight is lighter than the bold
+  asked for, the glyphs are stroked.
+- ``size`` is the face's em, and the lines are ``size`` times ``spacing``
+  apart.
+- Where Pillow has libraqm, the line is kerned, ligatures are made and
+  complex scripts are shaped.
+- A line is drawn at a pixel size chosen from the text's size on screen, in
+  steps of the square root of two between 8 and 512 pixels to the em, and
+  drawn again when the text grows or shrinks past a step.
+- The atlas keeps up to four pages. When they are full, the page least
+  recently drawn from is cleared and its lines are drawn again when they are
+  next shown. A page shown in the current frame is not cleared; the atlas
+  takes another page instead.
+- The text is white with its coverage as alpha, bound in place of the
+  appearance's texture, so the ``Material`` colours and lights it in both
+  renderers and in the compatibility profile. A ``Text`` shape is drawn with the blended, transparent shapes,
+  which gives its edges their anti-aliasing.
+- A texture on the ``Text`` shape's appearance is not drawn, and the text
+  casts no shadow.
+
+.. rst-class:: technical
+
+``OpenGLContext.scenegraph.text.pillowtext`` draws and measures a line with
+no GL, ``snippetatlas`` packs the lines, and ``pillowfont`` holds the atlas
+textures and draws.
 
 Bitmap text from the texture atlas
 ----------------------------------
@@ -212,14 +253,16 @@ through it.
 
 Importing ``OpenGLContext.scenegraph.text.toolsfont`` registers the solid
 provider. A ``FontStyle3D`` whose ``format`` is left at its default,
-``"solid"``, then resolves to it.
+``"solid"``, then resolves to it; a ``FontStyle`` asks for it with
+``format = "solid"``.
 
 Colour and anti-aliasing
 ------------------------
 
 Text has no colour fields of its own. As in VRML97, the ``Shape``'s
-appearance is applied to the text geometry. The atlas and PyGame bitmap
-providers draw anti-aliased glyphs.
+appearance is applied to the text geometry. The ``texture`` format, the
+atlas and the PyGame bitmap providers draw anti-aliased glyphs; the polygon
+formats are as smooth as the window's multisampling makes them.
 
 Further reading
 ---------------

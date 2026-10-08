@@ -63,3 +63,14 @@ def test_both_renderers_draw_it(gl_context, renderer):
         drawn_image(context)
         image = drawn_image(context).astype(int)
     assert np.count_nonzero(image[:, :, 0] > 200) > 50
+
+
+def test_the_compatibility_profile_draws_it():
+    scene = [basenodes.Viewpoint(position=(0, 0, 6)), text_shape(['Hello'])]
+    with scene_context(scene, size=(160, 80),
+                       environment={'OPENGLCONTEXT_PROFILE': 'compatibility'}) as context:
+        drawn_image(context)
+        image = drawn_image(context).astype(int)
+    assert np.count_nonzero(image[:, :, 0] > 200) > 50
+    red = image[:, :, 0]
+    assert ((red > 30) & (red < 200)).sum() > 20, 'edges are blended'

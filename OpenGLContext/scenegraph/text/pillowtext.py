@@ -17,6 +17,7 @@ import math
 from typing import Any, NamedTuple, Optional
 
 import numpy as np
+from fontTools.ttLib import TTFont, TTLibError
 from PIL import Image, ImageDraw, ImageFont, features
 
 __all__ = ['Face', 'Line', 'advance', 'draw_line', 'em_pixels', 'face', 'pixels_per_unit']
@@ -30,6 +31,9 @@ PAD = 2
 
 #: The weight at and above which a style is bold.
 BOLD = 600
+
+#: The OS/2 width class of a face neither condensed nor expanded.
+NORMAL_WIDTH = 5
 
 #: How far a sheared line leans: the tangent of 12 degrees.
 OBLIQUE = 0.2126
@@ -70,9 +74,9 @@ class Face(NamedTuple):
 def face(fontStyle: Any = None, mode: Any = None) -> Face:
     """The face a FontStyle's family and style name
 
-    The family's member with the slant asked and the weight nearest it; else
-    the member of the nearest weight, sheared. A face lighter than the bold
-    asked is stroked.
+    The family's member with the slant asked and the weight nearest it, of
+    the width nearest normal; else the member of the nearest weight,
+    sheared. A face lighter than the bold asked is stroked.
     """
     from OpenGLContext.scenegraph.text.fontprovider import TTFFontProvider  # noqa: PLC0415 the provider loads the registry
     registry = TTFFontProvider.getTTFRegistry()
@@ -83,12 +87,23 @@ def face(fontStyle: Any = None, mode: Any = None) -> Face:
         path = registry.fontFile(member)
         found_weight, found_italic = registry.metadata(path).modifiers
         members.append((bool(found_italic) != bool(italic), abs(found_weight - weight),
-                        member, path, found_weight, found_italic))
+                        abs(_width(path) - NORMAL_WIDTH), member, path, found_weight,
+                        found_italic))
     if not members:
         return Face(TTFFontProvider.matchFile(fontStyle, mode)[0])
-    _slant, _distance, _member, path, found_weight, found_italic = min(members)
+    _slant, _distance, _width_distance, _member, path, found_weight, found_italic = min(members)
     return Face(path, embolden=weight >= BOLD > found_weight,
                 oblique=bool(italic) and not found_italic)
+
+
+@functools.lru_cache(maxsize=256)
+def _width(path: str) -> int:
+    """The face's OS/2 width class, 1 (ultra-condensed) to 9 (ultra-expanded)"""
+    try:
+        with TTFont(path, lazy=True) as font:
+            return int(font['OS/2'].usWidthClass)
+    except (OSError, KeyError, TTLibError):
+        return NORMAL_WIDTH
 
 
 @functools.lru_cache(maxsize=64)

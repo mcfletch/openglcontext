@@ -25,6 +25,12 @@ def test_a_style_chooses_the_face(style, suffix):
     assert not found.embolden and not found.oblique
 
 
+def test_a_light_weight_is_the_family_s_own_width():
+    """Open Sans's light faces are a regular and a condensed width"""
+    found = pillowtext.face(basenodes.FontStyle(family=['Open Sans'], style='LIGHT'))
+    assert found.path.endswith('OpenSans-Light.ttf')
+
+
 def test_a_family_without_the_slant_is_sheared():
     """DejaVu Serif has bold but no italic here"""
     found = pillowtext.face(basenodes.FontStyle(family=['DejaVu Serif'], style='BOLDITALIC'))

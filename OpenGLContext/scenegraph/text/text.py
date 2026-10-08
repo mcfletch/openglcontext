@@ -52,6 +52,7 @@ class Text( basenodes.Text ):
         lit: int = 1, # can skip normals if not
         textured: int = 1, # can skip textureCoordinates if not
         mode: Any = None, # the renderpass object
+        transparent: int = 0, # drawn in the blended pass, as text is
     ) -> Any:
         """Render a text-node
 
