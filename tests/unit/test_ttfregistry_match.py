@@ -77,6 +77,34 @@ class TestTheDefaultForAGenericFamily:
             second.defaultFont('SANS')
 
 
+class TestAClassificationTheNameContradicts:
+    """A font's own family class is often wrong: one named a sans face is not
+    taken for SERIF, and the names say where the classes do not"""
+
+    MACHINE = {
+        'families': {'SANS': {'HUMANIST': {'Open Sans Light': 1}},
+                     'SERIF-OLD': {'ANY': {'Open Sans Condensed Light': 1}},
+                     'ANY': {'ANY': {'DejaVu Serif': 1, 'DejaVu Sans Mono': 1}}},
+        'fonts': {'Open Sans Light': 1, 'Open Sans Condensed Light': 1,
+                  'DejaVu Serif': 1, 'DejaVu Sans Mono': 1},
+    }
+
+    @pytest.fixture
+    def machine(self, registry):
+        registry.families = self.MACHINE['families']
+        registry.fonts = self.MACHINE['fonts']
+        return registry
+
+    def test_serif_is_a_face_named_serif(self, machine):
+        assert machine.defaultFont('SERIF') == 'DejaVu Serif'
+
+    def test_typewriter_is_a_face_named_mono(self, machine):
+        assert machine.defaultFont('TYPEWRITER') == 'DejaVu Sans Mono'
+
+    def test_sans_keeps_its_classified_face(self, machine):
+        assert machine.defaultFont('SANS') == 'Open Sans Light'
+
+
 class TestTheFamilyPreferenceList:
     """``fontNameFromStyle`` takes the first name it can resolve."""
 

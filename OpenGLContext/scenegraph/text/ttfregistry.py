@@ -45,6 +45,40 @@ class TTFRegistry( ttffiles.Registry ):
         ],
     }
 
+    #: Words a font's name carries that say it is of a generic family.
+    MONO_WORDS = ('mono', 'courier', 'typewriter', 'console')
+
+    @classmethod
+    def nameContradicts( cls, type: str, name: str ) -> bool:
+        """Whether font `name` says it is not of generic family `type`
+
+        A font's own family class is often wrong, so a SERIF candidate named
+        a sans or monospaced face, a TYPEWRITER one named a sans face that is
+        not monospaced, and a SANS one named a serif face are passed over.
+        """
+        lower = name.lower()
+        mono = any( word in lower for word in cls.MONO_WORDS )
+        if type == 'SERIF':
+            return 'sans' in lower or mono
+        if type == 'TYPEWRITER':
+            return 'sans' in lower and not mono
+        if type == 'SANS':
+            return 'serif' in lower and 'sans' not in lower
+        return False
+
+    @classmethod
+    def nameSays( cls, type: str, name: str ) -> bool:
+        """Whether font `name` names itself of generic family `type`"""
+        lower = name.lower()
+        mono = any( word in lower for word in cls.MONO_WORDS )
+        if type == 'SERIF':
+            return 'serif' in lower and 'sans' not in lower and not mono
+        if type == 'TYPEWRITER':
+            return mono
+        if type == 'SANS':
+            return 'sans' in lower and not mono
+        return False
+
     def __init__( self ) -> None:
         super( TTFRegistry, self ).__init__()
         #: generic family name: the font name chosen for it, memoised per
@@ -77,12 +111,20 @@ class TTFRegistry( ttffiles.Registry ):
                 if configured is not None:
                     self.defaultFontNames[type] = str( configured )
                     return str( configured )
-        # okay, look for fonts of the default families...
+        # The classified fonts the name does not contradict, else those whose
+        # name says the family
         names: list[str] = []
         for (major,minor) in self.DEFAULT_FAMILY_SETS.get( type, ()):
-            names = self.familyMembers( major, minor )
+            names = [
+                name for name in self.familyMembers( major, minor )
+                if not self.nameContradicts( type, name )
+            ]
             if names:
                 break
+        if not names:
+            names = sorted(
+                name for name in getattr( self, 'fonts', {} ) if self.nameSays( type, name )
+            )
         if not names:
             raise RuntimeError( """No default font available of type %r"""%( type,))
         if len(names) > 1:

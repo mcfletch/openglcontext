@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from vrml.vrml97 import basenodes
+from OpenGLContext import lighting
 from OpenGLContext.scenegraph.text import fontprovider
 from vrml import cache
 from vrml import protofunctions
@@ -30,6 +31,16 @@ class Text( basenodes.Text ):
     XXX Do not currently support right-to-left fonts
     XXX Do not currently support vertically-ordered fonts
     """
+    def effectiveFontStyle( self ) -> Any:
+        """The FontStyle the text is drawn with: its own; else, in a VRML97 or
+        X3D document, one with FontStyle's defaults (family SERIF); else
+        None, the engine's default face"""
+        if self.fontStyle:
+            return self.fontStyle
+        if lighting.in_document( self ):
+            return _document_style()
+        return None
+
     def render(
         self,
         visible: int = 1, # can skip normals and textures if not
@@ -49,7 +60,7 @@ class Text( basenodes.Text ):
             dataSet = self.compile( mode=mode )
         provider, font, lines = dataSet
         if provider and font and lines:
-            return font.render( lines, fontStyle=self.fontStyle, mode=mode )
+            return font.render( lines, fontStyle=self.effectiveFontStyle(), mode=mode )
         else:
             return 0
     def compile( self, mode: Any = None ) -> tuple[Any, Any, Any]:
@@ -59,7 +70,7 @@ class Text( basenodes.Text ):
         if ensure is not None:
             ensure()
         provider, font = fontprovider.FontProvider.getProviderFont(
-            self.fontStyle,
+            self.effectiveFontStyle(),
             mode=mode
         )
         dataSet: tuple[Any, Any, Any]
@@ -81,3 +92,14 @@ class Text( basenodes.Text ):
                 if hasattr( self.fontStyle, field ):
                     holder.depend( self.fontStyle, field )
         return dataSet
+
+
+_DOCUMENT_STYLE: list[Any] = []
+
+
+def _document_style() -> Any:
+    """The FontStyle a document's Text without one is drawn with, made once"""
+    if not _DOCUMENT_STYLE:
+        from OpenGLContext.scenegraph.basenodes import FontStyle  # noqa: PLC0415 basenodes imports this module
+        _DOCUMENT_STYLE.append( FontStyle() )
+    return _DOCUMENT_STYLE[0]

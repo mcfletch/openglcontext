@@ -450,9 +450,9 @@ class ToolsFontMixIn( _ToolsHost ):
             log.info( """lists %s(%s)->%s""", self, repr(value), lists)
         return lists
     def lineHeight(self, mode: Any = None ) -> float:
-        """Retrieve normal line-height for this font
-        """
-        return float( self.font.lineHeight/self.getScale() )
+        """The distance between baselines before spacing: the fontStyle's
+        size, as VRML97 and X3D give it, whatever line gap the font keeps"""
+        return float( self.font.charHeight/self.getScale() )
 
     def createChar( self, char: str, mode: Any = None ) -> tuple[Any, font.CharacterMetrics]:
         """Create the single-character display list and metrics

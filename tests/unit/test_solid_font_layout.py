@@ -35,7 +35,7 @@ def font_file():
 def placements(font_file, monkeypatch):
     """Draw a string and report where each line was drawn, by fontStyle."""
     def place(**style):
-        fontStyle = fontstyle3d.FontStyle3D(family=['SANS'], size=1.0, **style)
+        fontStyle = fontstyle3d.FontStyle3D(**dict({'family': ['SANS'], 'size': 1.0}, **style))
         font = toolsfont.ToolsSolidFont(fontStyle, font=font_file)
         drawn = []
         monkeypatch.setattr(
@@ -63,6 +63,15 @@ def test_lines_step_down_by_the_spaced_line_height(placements):
     step = lines[0].height * 2.0
     ys = [translation[1] for _, translation in drawn]
     assert np.allclose(np.diff(ys), -step)
+
+
+@pytest.mark.parametrize('size, spacing', [(1.0, 1.0), (2.5, 1.0), (1.0, 1.5)])
+def test_the_lines_are_size_times_spacing_apart(placements, size, spacing):
+    """VRML97 and X3D: successive baselines are size x spacing apart, the
+    font's own line gap aside"""
+    _, _, _, drawn = placements(spacing=spacing, size=size)
+    ys = [translation[1] for _, translation in drawn]
+    assert np.allclose(np.diff(ys), -size * spacing)
 
 
 def test_minor_justification_moves_the_whole_block(placements):
