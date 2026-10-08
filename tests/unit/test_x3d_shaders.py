@@ -342,10 +342,13 @@ class TestTessellation:
         assert greenish(pixel)
         assert named(scene, 'S').isValid is True
 
-    def test_a_3_3_context_has_no_tessellation_so_the_material_is_drawn(self):
+    def test_a_context_with_no_tessellation_draws_the_material(self, monkeypatch):
+        """A driver without the stage answers GL_INVALID_ENUM for its shaders"""
+        from OpenGLContext.scenegraph import x3dshaders
+        monkeypatch.setitem(x3dshaders.GL_STAGES, 'TESS_CONTROL', 0x1234)
         scene = load(document(
             self._shader(), material='<Material diffuseColor="0 0 1" emissiveColor="0 0 1"/>'))
-        with scene_context(scene, size=(64, 64), version=(3, 3)) as context:
+        with scene_context(scene, size=(64, 64), version=(4, 1)) as context:
             pixel = drawn_image(context)[32, 32]
         assert bluish(pixel)
         assert named(scene, 'S').isValid is False

@@ -47,7 +47,10 @@ from vrml.x3d import nodes as x3d
 
 from OpenGLContext import contextresources
 from OpenGLContext.loaders import background
-from OpenGLContext.passes.shaderpass import ShaderAppearanceProgram, normal_matrix
+from OpenGLContext.passes.shaderpass import (
+    GEOMETRY_STAGE_PROGRAMS, ShaderAppearanceProgram, normal_matrix,
+    release_geometry_stage_hold,
+)
 from OpenGLContext.scenegraph import texturemapping, vertexsemantics, x3dglsl
 from OpenGLContext.scenegraph.shaders import bind_engine_attributes
 
@@ -410,13 +413,22 @@ class ShaderState:
     def drop(self) -> None:
         """Delete the programs, which the context the state is for has current"""
         for name in list(self.names()):
-            GL.glDeleteProgram(name)
+            delete_program(name)
         self.programs = {}
 
 
+def delete_program(name: int) -> None:
+    """Delete a linked program, bound first where it has a geometry stage
+
+    See :func:`~OpenGLContext.passes.shaderpass.release_geometry_stage_hold`.
+    """
+    release_geometry_stage_hold([name])
+    GEOMETRY_STAGE_PROGRAMS.discard(int(name))
+    GL.glDeleteProgram(name)
+
+
 _STATES = contextresources.ContextNames(
-    '_x3dShaderStates', lambda name: GL.glDeleteProgram(name),
-    names=lambda state: list(state.names()))
+    '_x3dShaderStates', delete_program, names=lambda state: list(state.names()))
 
 
 def _compile(stage: str, text: str) -> int:
@@ -474,6 +486,8 @@ def link(sources: Sequence[tuple[str, str]], layout: Sequence[tuple[str, int]],
     finally:
         for shader in shaders:
             GL.glDeleteShader(shader)
+    if any(stage == 'GEOMETRY' for stage, _source in sources):
+        GEOMETRY_STAGE_PROGRAMS.add(program)
     return LinkedProgram(program, prepared, [stage for stage, _ in sources])
 
 
@@ -642,6 +656,21 @@ class X3DShader:
         return READY, drawn
 
 
+def complete(shader: Any, found: "list[tuple[str, str]]") -> "tuple[str, tuple[tuple[str, str], ...]]":
+    """READY with `found` where it has a vertex and a fragment stage; FAILED otherwise
+
+    GL links a program with no fragment stage and leaves its colour
+    undefined, so a shader is held to have both, as WebGL holds every one.
+    """
+    stages = {stage for stage, _text in found}
+    if {'VERTEX', 'FRAGMENT'} <= stages:
+        return READY, tuple(found)
+    if found:
+        log.warning('%s has no %s stage, and is not drawn with', shader,
+                    ' or '.join(sorted({'VERTEX', 'FRAGMENT'} - stages)).lower())
+    return FAILED, ()
+
+
 class ComposedShader(X3DShader, x3d.ComposedShader):
     """A program linked from the `ShaderPart`s in `parts`"""
 
@@ -660,7 +689,7 @@ class ComposedShader(X3DShader, x3d.ComposedShader):
                 log.warning('%s: no %s stage', self, getattr(part, 'type', ''))
                 return FAILED, ()
             found.append((stage, text))
-        return (READY, tuple(found)) if found else (FAILED, ())
+        return complete(self, found)
 
 
 class ProgramShader(X3DShader, x3d.ProgramShader):
@@ -684,7 +713,7 @@ class ProgramShader(X3DShader, x3d.ProgramShader):
                 log.warning('%s: no %s stage', self, program.type)
                 return FAILED, ()
             found.append((stage, text))
-        return (READY, tuple(found)) if found else (FAILED, ())
+        return complete(self, found)
 
     def uniformNodes(self) -> "list[Any]":
         return [program for program in self.programs if program]

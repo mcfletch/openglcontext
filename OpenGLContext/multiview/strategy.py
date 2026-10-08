@@ -51,7 +51,7 @@ from typing import Any, NamedTuple, Optional
 import numpy as np
 
 from OpenGL.GL import (
-    glDrawArrays, glDrawArraysInstanced, glDrawElements, glDrawElementsInstanced,
+    GL_PATCHES, GL_TRIANGLES, glDrawArrays, glDrawArraysInstanced, glDrawElements, glDrawElementsInstanced,
 )
 
 from OpenGLContext import contextresources, renderoptions
@@ -395,6 +395,18 @@ def view_list(mask: int) -> tuple[int, list[int]]:
     return len(indices), indices + [0] * (MAX_VIEWS - len(indices))
 
 
+def drawn_primitive(mode: Any, primitive: int) -> int:
+    """`primitive`, or patches where the bound program tessellates triangles
+
+    ``mode.patchVertices`` is set while a program with tessellation stages
+    draws (an X3D shader's); its triangles go to the tessellator as patches
+    of that many vertices.
+    """
+    if primitive == GL_TRIANGLES and getattr(mode, 'patchVertices', 0):
+        return int(GL_PATCHES)
+    return primitive
+
+
 def draw_arrays(mode: Any, primitive: int, first: int, count: int) -> None:
     """``glDrawArrays``, once for every view the draw in progress serves.
 
@@ -402,6 +414,7 @@ def draw_arrays(mode: Any, primitive: int, first: int, count: int) -> None:
     strategy reaches; the draw is then instanced that many times and the
     vertex stage routes each copy to its view. Otherwise it is one draw.
     """
+    primitive = drawn_primitive(mode, primitive)
     copies = int(getattr(mode, 'viewCopies', 0) or 0)
     if copies:
         glDrawArraysInstanced(primitive, first, count, copies)
@@ -412,6 +425,7 @@ def draw_arrays(mode: Any, primitive: int, first: int, count: int) -> None:
 def draw_elements(mode: Any, primitive: int, count: int, index_type: int,
                   indices: Any) -> None:
     """``glDrawElements``, once for every view; see :func:`draw_arrays`."""
+    primitive = drawn_primitive(mode, primitive)
     copies = int(getattr(mode, 'viewCopies', 0) or 0)
     if copies:
         glDrawElementsInstanced(primitive, count, index_type, indices, copies)
