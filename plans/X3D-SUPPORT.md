@@ -227,7 +227,18 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     alive. `boundingvolume.cacheVolume` depends on the cache entry holding a
     volume it is given (`holdVolume`), so a changed `Coordinate` reaches the
     shape and its groups
-  - [ ] `MultiTexture` (and `MultiTextureTransform` in use), `RenderedTexture`
+  - [x] `MultiTexture` (and `MultiTextureTransform` in use), `RenderedTexture`:
+    the stage chain (`scenegraph.texturelayers`, `shaders/_layers_inc.glsl`,
+    `passes.texturelayerpass`) in place of the base map, in both renderers,
+    up to four layers, coordinates and transforms by position, generators
+    per fragment (`texGenMake`); the PBR program reads 2D layers through the
+    base and three extension samplers, cube and 3D through samplers of their
+    own where the stage has room (`pbr_fragment_samplers`); compatibility
+    profile draws the first 2D layer. `RenderedTexture`
+    (`scenegraph.renderedtexture`, `passes.generatedtextures`) with the
+    engine's `update`, `viewpoint`, `scene`, `background`, `fog` fields
+    (X3D 4.1 declares none of them), `depthMap`; shapes wearing a chain or a
+    rendered texture are not batched
   - [x] `FillProperties`, `LineProperties`, `PointProperties`
     (`scenegraph.drawproperties`; the wide-line program's geometry stage
     `vrml97_wide_line.geom`, `_pointsize_inc.glsl`, `_fill_inc.glsl`, and the
@@ -239,7 +250,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)
   - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`)
   - [x] `LocalFog` (`passes.localfog`, per draw beside the light scope); unlit surfaces are fogged
-  - [x] `EnvironmentLight` from its coefficients as the scene's image-based light (`scenegraph.environmentlight`); its cube maps wait on Phase 8's CubeMapTexturing
+  - [x] `EnvironmentLight` from its coefficients as the scene's image-based light (`scenegraph.environmentlight`); its cube maps: `specularTexture` faces as the reflected environment with
+    halved levels, `diffuseTexture` as the irradiance's SH fit, the specular
+    cube convolved where neither coefficients nor diffuse map are given
   - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture
 - Phase 7, runtime (§9.10, §9.15, §9.16)
   - [x] event utilities, sequencers and `KeySensor` with their behaviour (`vrml.x3d.runtime`); the engine's `TimeTrigger` clock and `KeySensor` keys (`scenegraph/x3druntime.py`, `observeEvents`)
@@ -267,11 +280,24 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (`meshgeometry`, two triangles a quad)
   - [ ] NURBS: the 13 nodes on the NURBS evaluator; the VRML97 extension's
     nodes kept for the worlds that use them
-  - [ ] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`,
-    `GeneratedCubeMapTexture`
-  - [ ] Texturing3D: `ImageTexture3D`, `ComposedTexture3D`, `PixelTexture3D`,
-    `TextureCoordinate3D`, `TextureCoordinate4D`, `TextureTransform3D`
-  - [ ] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
+  - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
+    (DDS, KTX 1.1, crosses and strips: `loaders.textureimages`),
+    `GeneratedCubeMapTexture` (drawn before the views from the shape's
+    origin, update NONE drawn once); sampled with the world reflection
+    vector; compatibility profile through reflection-map texgen
+  - [x] Texturing3D: `ImageTexture3D` (DDS, KTX, NRRD), `ComposedTexture3D`,
+    `PixelTexture3D` (`scenegraph.texture3d`, `texture.VolumeTexture`),
+    `TextureCoordinate3D`/`4D` as `TEXCOORD_3D` at location 15 (composed
+    geometry only; `IndexedFaceSet` reads its bounds), `TextureTransform3D`;
+    bounding-box coordinates by default; compatibility profile through
+    object-linear texgen
+  - [x] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
+    (`scenegraph.textureprojector`, `passes.projectorpass`,
+    `shaders/_projectors_inc.glsl`): up to four, pictures in one array
+    texture, scoped as lights through `lightsOff` bits 16+, modulating the
+    diffuse colour as X_ITE does; `shadows` and the compatibility profile
+    not drawn. Projectors and EnvironmentLight are no longer bound as
+    directional lamps
   - [ ] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
     `ProgramShader`, `PackagedShader`, the vertex attributes
   - [ ] ParticleSystems: `ParticleSystem`, the six emitters, the three physics

@@ -117,6 +117,8 @@ OpenGLContext/
 │   ├── documentvalues.py  # A document's values, checked: JSONObject, a
 │   │                 # default or a bound and one report, or DocumentError
 │   │                 # for a part the document cannot be read without
+│   ├── textureimages.py  # Cube maps and volumes from DDS, KTX, NRRD and
+│   │                 # laid-out pictures -- no GL -- docs/x3d.rst
 │   ├── panorama.py   # Environment panoramas: which sources are (.hdr, .pic,
 │   │                 # .exr) and one decode for all of them -- docs/pbr.rst
 │   ├── notices.py    # A file's copyright and licence notices, as Notice
@@ -176,6 +178,10 @@ OpenGLContext/
 │   │                 # and the baseline a frame starts from -- docs/renderpasses.rst
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
+│   ├── texturelayerpass.py  # A texture layer chain's units and uniforms
+│   ├── generatedtextures.py # GeneratedCubeMapTexture and RenderedTexture
+│   │                 # drawn before the views; when, from where -- docs/x3d.rst
+│   ├── projectorpass.py     # The frame's texture projectors and their pictures
 │   ├── lightscope.py # Which lights light a draw: X3D/VRML97 light scope as
 │   │                 # a per-draw lightsOff mask -- no GL -- docs/x3d.rst
 │   ├── reflection.py # Planar reflections' arithmetic: which surfaces are
@@ -254,6 +260,11 @@ OpenGLContext/
 │   │                 # lighting; KHR_materials_unlit loads as one
 │   ├── imagedata.py  # ImageDataTexture: a texture node for a decoded image
 │   ├── sampler.py    # A texture's wrap modes and filters (TextureProperties)
+│   ├── texturelayers.py  # The stage chain a MultiTexture, cube map or 3D
+│   │                 # texture is drawn as -- no GL -- docs/x3d.rst
+│   ├── multitexture.py, cubemaptexture.py, texture3d.py, renderedtexture.py
+│   │                 # X3D's MultiTexture, cube maps, 3D textures, RenderedTexture
+│   ├── textureprojector.py  # Where a TextureProjector casts -- no GL
 │   ├── texturemapping.py  # Which coordinate set and transform each material
 │   │                 # channel reads, from mapping labels -- no GL -- docs/pbr.rst
 │   ├── reflector.py  # PlanarReflector: a material's surfaces are mirrors

@@ -31,6 +31,9 @@ from OpenGLContext.scenegraph.box import Box as Box
 from OpenGLContext.scenegraph.collision import Collision as Collision
 from OpenGLContext.scenegraph.coordinate import Coordinate as Coordinate
 from OpenGLContext.scenegraph.cubebackground import CubeBackground as CubeBackground
+from OpenGLContext.scenegraph.cubemaptexture import ComposedCubeMapTexture as ComposedCubeMapTexture
+from OpenGLContext.scenegraph.cubemaptexture import GeneratedCubeMapTexture as GeneratedCubeMapTexture
+from OpenGLContext.scenegraph.cubemaptexture import ImageCubeMapTexture as ImageCubeMapTexture
 from OpenGLContext.scenegraph.environmentlight import EnvironmentLight as EnvironmentLight
 from OpenGLContext.scenegraph.extrusions import Extrusion as Extrusion
 from OpenGLContext.scenegraph.extrusions import PolyCone as PolyCone
@@ -80,6 +83,7 @@ from OpenGLContext.scenegraph.meshgeometry import TriangleSet as TriangleSet
 from OpenGLContext.scenegraph.meshgeometry import TriangleStripSet as TriangleStripSet
 from OpenGLContext.scenegraph.mouseover import MouseOver as MouseOver
 from OpenGLContext.scenegraph.movietexture import MovieTexture as MovieTexture
+from OpenGLContext.scenegraph.multitexture import MultiTexture as MultiTexture
 from OpenGLContext.scenegraph.nurbs import Contour2D as Contour2D
 from OpenGLContext.scenegraph.nurbs import NurbsCurve as NurbsCurve
 from OpenGLContext.scenegraph.nurbs import NurbsCurve2D as NurbsCurve2D
@@ -95,6 +99,7 @@ from OpenGLContext.scenegraph.quadrics import Cone as Cone
 from OpenGLContext.scenegraph.quadrics import Cylinder as Cylinder
 from OpenGLContext.scenegraph.quadrics import Sphere as Sphere
 from OpenGLContext.scenegraph.reflector import PlanarReflector as PlanarReflector
+from OpenGLContext.scenegraph.renderedtexture import RenderedTexture as RenderedTexture
 from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
 from OpenGLContext.scenegraph.scenegraph import X3DScene as X3DScene
 class FloatUniform1f(_FloatUniform): ...
@@ -133,7 +138,12 @@ from OpenGLContext.scenegraph.teapot import Teapot as Teapot
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle as FontStyle
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle3D as FontStyle3D
 from OpenGLContext.scenegraph.text.text import Text as Text
+from OpenGLContext.scenegraph.texture3d import ComposedTexture3D as ComposedTexture3D
+from OpenGLContext.scenegraph.texture3d import ImageTexture3D as ImageTexture3D
+from OpenGLContext.scenegraph.texture3d import PixelTexture3D as PixelTexture3D
 from OpenGLContext.scenegraph.texturebackground import TextureBackground as TextureBackground
+from OpenGLContext.scenegraph.textureprojector import TextureProjector as TextureProjector
+from OpenGLContext.scenegraph.textureprojector import TextureProjectorParallel as TextureProjectorParallel
 from OpenGLContext.scenegraph.texturetransform import TextureTransform as TextureTransform
 from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import CADPart as CADPart
@@ -199,7 +209,10 @@ from vrml.x3d.nodes import MultiTextureCoordinate as MultiTextureCoordinate
 from vrml.x3d.nodes import MultiTextureTransform as MultiTextureTransform
 from vrml.x3d.nodes import PointProperties as PointProperties
 from vrml.x3d.nodes import Tangent as Tangent
+from vrml.x3d.nodes import TextureCoordinate3D as TextureCoordinate3D
+from vrml.x3d.nodes import TextureCoordinate4D as TextureCoordinate4D
 from vrml.x3d.nodes import TextureProperties as TextureProperties
+from vrml.x3d.nodes import TextureTransform3D as TextureTransform3D
 from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
 from vrml.x3d.nodes import TwoSidedMaterial as TwoSidedMaterial
 from vrml.x3d.runtime import BooleanFilter as BooleanFilter
@@ -245,6 +258,8 @@ __all__ = [
     'ColorDamper',
     'ColorInterpolator',
     'ColorRGBA',
+    'ComposedCubeMapTexture',
+    'ComposedTexture3D',
     'Cone',
     'Contour2D',
     'Coordinate',
@@ -283,11 +298,14 @@ __all__ = [
     'GLSLObject',
     'GLSLShader',
     'Gear',
+    'GeneratedCubeMapTexture',
     'Group',
     'IS',
     'ImageBasedLight',
+    'ImageCubeMapTexture',
     'ImageDataTexture',
     'ImageTexture',
+    'ImageTexture3D',
     'IndexedFaceSet',
     'IndexedLineSet',
     'IndexedPolygons',
@@ -319,6 +337,7 @@ __all__ = [
     'MetadataString',
     'MouseOver',
     'MovieTexture',
+    'MultiTexture',
     'MultiTextureCoordinate',
     'MultiTextureTransform',
     'NavigationInfo',
@@ -337,6 +356,7 @@ __all__ = [
     'PhysicalMaterial',
     'PickableGroup',
     'PixelTexture',
+    'PixelTexture3D',
     'PlanarReflector',
     'PlaneSensor',
     'PointLight',
@@ -356,6 +376,7 @@ __all__ = [
     'QuadSet',
     'ROUTE',
     'Rectangle2D',
+    'RenderedTexture',
     'ScalarChaser',
     'ScalarDamper',
     'ScalarInterpolator',
@@ -388,8 +409,13 @@ __all__ = [
     'TextureBackground',
     'TextureBufferUniform',
     'TextureCoordinate',
+    'TextureCoordinate3D',
+    'TextureCoordinate4D',
+    'TextureProjector',
+    'TextureProjectorParallel',
     'TextureProperties',
     'TextureTransform',
+    'TextureTransform3D',
     'TextureTransformMatrix3D',
     'TextureUniform',
     'TimeSensor',
