@@ -4,8 +4,15 @@ An X3D 2D texture states its sampler with `repeatS`/`repeatT`, or with a
 `TextureProperties` node that names boundary modes and filters in X3D's
 terms. `sampler_of` reads either into one dictionary; `apply_sampler` sets
 it on a GL texture object.
+
+A document's texture with no `TextureProperties` whose image is smaller than
+:data:`SMALL_IMAGE` texels on its longer side is sampled from its nearest
+texel, magnified or minified, so a `PixelTexture`'s few texels are drawn as
+crisp squares; X3D leaves the default filters to the browser, and this is
+X_ITE's choice too. A texture made in code takes the engine's filters
+whatever its size.
 """
-from typing import Any
+from typing import Any, Optional
 
 from vrml.x3d import nodes as x3d
 
@@ -30,12 +37,17 @@ MINIFICATION = {
 #: X3D magnification filters as GL filters; the rest take GL_LINEAR.
 MAGNIFICATION = {'AVG_PIXEL': 'GL_LINEAR', 'NEAREST_PIXEL': 'GL_NEAREST'}
 
+#: Texels on the longer side below which a document's image with no
+#: TextureProperties is sampled from its nearest texel.
+SMALL_IMAGE = 16
 
-def sampler_of(texture: Any) -> "dict[str, str]":
+
+def sampler_of(texture: Any, size: Optional[tuple[int, int]] = None) -> "dict[str, str]":
     """The X3D boundary modes and filters an X3D 2D texture is sampled with
 
     From its `textureProperties` node where there is one, else from
-    `repeatS`/`repeatT` with the default filters.
+    `repeatS`/`repeatT` with the default filters, or with NEAREST_PIXEL for a
+    document's image `size` (width, height) smaller than :data:`SMALL_IMAGE`.
     """
     properties = getattr(texture, 'textureProperties', None)
     if properties:
@@ -45,11 +57,14 @@ def sampler_of(texture: Any) -> "dict[str, str]":
             'minification': str(properties.minificationFilter),
             'magnification': str(properties.magnificationFilter),
         }
+    from OpenGLContext.lighting import in_document  # noqa: PLC0415 lighting reads the scene classes
+    small = size is not None and max(size) < SMALL_IMAGE and in_document(texture)
+    filter_ = 'NEAREST_PIXEL' if small else 'DEFAULT'
     return {
         'wrap_s': 'REPEAT' if getattr(texture, 'repeatS', True) else 'CLAMP_TO_EDGE',
         'wrap_t': 'REPEAT' if getattr(texture, 'repeatT', True) else 'CLAMP_TO_EDGE',
-        'minification': 'DEFAULT',
-        'magnification': 'DEFAULT',
+        'minification': filter_,
+        'magnification': filter_,
     }
 
 
