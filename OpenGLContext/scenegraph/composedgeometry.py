@@ -334,7 +334,7 @@ def composed_arrays(
     normals: Any = None, normal_per_vertex: bool = True,
     colors: Any = None, color_per_vertex: bool = True,
     texcoords: Sequence[Any] = (), tangents: Any = None,
-    crease_angle: Optional[float] = None,
+    crease_angle: Optional[float] = None, volume_texcoords: Any = None,
 ) -> ComposedArrays:
     """The arrays of a composed set whose triangles index `points`
 
@@ -347,6 +347,8 @@ def composed_arrays(
     crease_angle -- for normals generated per point: the fold, in radians,
         below which they are smoothed across (:func:`crease_normals`); None
         smooths across every fold
+    volume_texcoords -- a 3D texture's coordinates, (s, t, r, q) one per
+        point, as TEXCOORD_3D; or None
 
     The points stay shared, and `indices` names them, where every attribute
     is one per point; where one is per triangle, every corner gets its own
@@ -386,6 +388,7 @@ def composed_arrays(
     vertex_colors = per_vertex(colors, 'color') if color_per_vertex else None
     face_colors = per_face(colors, 'color') if not color_per_vertex else None
     coordinate_sets = [per_vertex(values, 'texCoord', 2) for values in texcoords]
+    volume_set = per_vertex(volume_texcoords, 'texCoord3D', 4)
     vertex_tangents = per_vertex(tangents, 'tangent', 4)
     attributes: "dict[str, np.ndarray]" = {}
     creased = (normals is None and normal_per_vertex and crease_angle is not None
@@ -423,6 +426,8 @@ def composed_arrays(
     for number, values in enumerate(coordinate_sets):
         if values is not None:
             attributes['TEXCOORD_%d' % number] = values if corners is None else values[corners]
+    if volume_set is not None:
+        attributes['TEXCOORD_3D'] = volume_set if corners is None else volume_set[corners]
     return ComposedArrays(
         attributes={name: np.ascontiguousarray(value, dtype=np.float32)
                     for name, value in attributes.items()},

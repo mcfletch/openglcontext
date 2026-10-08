@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from vrml import field
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.scenegraph import texturelayers
@@ -38,7 +39,15 @@ def fixed_function_mode(mode: int) -> str:
 
 
 class MultiTexture(x3d.MultiTexture):
-    """X3D's MultiTexture, drawn as a stage chain"""
+    """X3D's MultiTexture, drawn as a stage chain
+
+    Its ``texture`` takes any texture node: X3D 4 declares it for single
+    textures, and documents (``MultiTextureTeapot``) put cube maps in it,
+    which the chain reads as environment layers.
+    """
+
+    texture = field.newField('texture', 'MFNode', 1, list,
+                             requiredTypes=(x3d.X3DTextureNode,))
 
     def layerTextures(self) -> list[Any]:
         """The texture nodes the chain combines, in order"""

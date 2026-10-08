@@ -63,6 +63,7 @@ class _MeshGPU(object):
         ('tangents', 'TANGENT', 4),
         ('colors', 'COLOR_0', 4),
         ('texcoords1', 'TEXCOORD_1', 2),
+        ('texcoords3d', 'TEXCOORD_3D', 4),
         ('skin_joint_floats', 'JOINTS_0', 4),
         ('skin_weights', 'WEIGHTS_0', 4),
     )
@@ -315,7 +316,7 @@ class PBRMesh(x3d.X3DGeometryNode):
                  solid: bool = True,
                  appearance: Any = None, morph_targets: Any = None,
                  skin_joints: Any = None, skin_weights: Any = None, texcoords1: Any = None,
-                 draw_mode: int = GL_TRIANGLES, **named: Any) -> None:
+                 texcoords3d: Any = None, draw_mode: int = GL_TRIANGLES, **named: Any) -> None:
         super(PBRMesh, self).__init__(solid=solid, **named)
         # GL primitive mode (glTF primitive.mode == the GL enum): GL_TRIANGLES for the
         # common case, or GL_POINTS/GL_LINES/GL_LINE_LOOP/GL_LINE_STRIP.
@@ -326,6 +327,8 @@ class PBRMesh(x3d.X3DGeometryNode):
         self.normals = self._farray(normals, 3)
         self.texcoords = self._farray(texcoords, 2)
         self.texcoords1 = self._farray(texcoords1, 2)
+        #: A 3D texture's coordinates (s, t, r, q), or None.
+        self.texcoords3d = self._farray(texcoords3d, 4)
         self.tangents = self._farray(tangents, 4)
         self.colors = self._rgba(colors)
         self.indices = None if indices is None else np.asarray(indices, dtype=np.uint32).ravel()

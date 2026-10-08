@@ -14,8 +14,12 @@ label names it for a material's `...TextureMapping`
 A `LineSet` is drawn as the engine's `IndexedLineSet` of the same points
 (:meth:`LineSet.lines`).
 
-`TextureCoordinateGenerator`, `FogCoordinate` and the `attrib` vertex
-attributes are kept and not drawn; a set using a generator is reported once.
+The first `TextureCoordinate3D` or `TextureCoordinate4D` entry is the mesh's
+3D texture coordinates, `TEXCOORD_3D` (:meth:`MeshDrawn.volumeCoordinates`);
+it is no 2D set. A `TextureCoordinateGenerator` makes the first set in the
+vertex shader, and a later set in the fragment shader where a
+`MultiTexture` layer reads it (:mod:`~OpenGLContext.scenegraph.texturelayers`).
+`FogCoordinate` and the `attrib` vertex attributes are kept and not drawn.
 """
 from __future__ import annotations
 
@@ -109,20 +113,26 @@ class MeshDrawn:
         return label_set(label)
 
     def coordinates(self) -> "list[Any]":
-        """Each texture coordinate set's points; None for a generator, made in the shader
-
-        A generator after the first set is not drawn, and is reported.
-        """
+        """Each 2D texture coordinate set's points; None for a generator, made in
+        the shader, and for a 3D set, which is :meth:`volumeCoordinates`"""
         found: "list[Any]" = []
-        for number, entry in enumerate(self.coordinateNodes()):
-            if isinstance(entry, x3d.TextureCoordinateGenerator):
-                if number:
-                    _report(self, 'reads a texture coordinate set after the first from a '
-                            'generator, which is not drawn')
+        for entry in self.coordinateNodes():
+            if isinstance(entry, (x3d.TextureCoordinateGenerator, x3d.TextureCoordinate3D,
+                                  x3d.TextureCoordinate4D)):
                 found.append(None)
             else:
                 found.append(_values(entry, 'point'))
         return found
+
+    def volumeCoordinates(self) -> Optional[np.ndarray]:
+        """The first 3D or 4D coordinate set as ``(n, 4)`` (s, t, r, q), or None"""
+        for entry in self.coordinateNodes():
+            if isinstance(entry, x3d.TextureCoordinate4D):
+                return np.asarray(entry.point, np.float32).reshape(-1, 4)
+            if isinstance(entry, x3d.TextureCoordinate3D):
+                points = np.asarray(entry.point, np.float32).reshape(-1, 3)
+                return np.concatenate([points, np.ones((len(points), 1), np.float32)], 1)
+        return None
 
     @property
     def texGen(self) -> Optional[texgen.TexGen]:
@@ -226,7 +236,8 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
             colors=self.perFace(_values(self.color, 'color'), bool(self.colorPerVertex)),
             color_per_vertex=bool(self.colorPerVertex),
             texcoords=self.coordinates() or [composedgeometry.default_texcoords(points)],
-            tangents=_values(self.tangent, 'vector')),
+            tangents=_values(self.tangent, 'vector'),
+            volume_texcoords=self.volumeCoordinates()),
             solid=bool(self.solid))
 
 
@@ -262,7 +273,8 @@ class ElevationGrid(MeshDrawn, x3d.ElevationGrid):
             normals=normals, normal_per_vertex=bool(self.normalPerVertex),
             colors=colors, color_per_vertex=bool(self.colorPerVertex),
             texcoords=coordinates, tangents=_values(getattr(self, 'tangent', None), 'vector'),
-            crease_angle=float(self.creaseAngle)), solid=bool(self.solid))
+            crease_angle=float(self.creaseAngle),
+            volume_texcoords=self.volumeCoordinates()), solid=bool(self.solid))
 
 
 class TriangleSet(MeshGeometry, x3d.TriangleSet):

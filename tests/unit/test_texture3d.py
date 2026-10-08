@@ -147,3 +147,32 @@ def test_a_volume_uploads_as_a_3d_texture(gl_context):
              (GL.GL_TEXTURE_WIDTH, GL.GL_TEXTURE_HEIGHT, GL.GL_TEXTURE_DEPTH)]
     assert found == [4, 3, 2]
     assert texture.target == GL.GL_TEXTURE_3D and texture.components == 1
+
+
+def volume_triangle(coordinate):
+    from OpenGLContext.scenegraph.basenodes import IndexedTriangleSet  # noqa: PLC0415 kept with its use
+    return IndexedTriangleSet(
+        index=[0, 1, 2], coord=x3d.Coordinate(point=[(0, 0, 0), (1, 0, 0), (0, 1, 0)]),
+        texCoord=x3d.MultiTextureCoordinate(texCoord=[
+            x3d.TextureCoordinate(point=[(0, 0), (1, 0), (0, 1)]), coordinate]))
+
+
+def test_a_set_with_3d_coordinates_carries_them_with_q_one():
+    geometry = volume_triangle(x3d.TextureCoordinate3D(point=[(0, 0, 0.5), (1, 0, 0.5),
+                                                               (0, 1, 1)]))
+    mesh = geometry.mesh()
+    assert mesh.texcoords3d.shape == (3, 4)
+    assert tuple(mesh.texcoords3d[2]) == (0, 1, 1, 1)
+    # The 3D set is not a 2D one: the first set stays TEXCOORD_0.
+    assert mesh.texcoords is not None and mesh.texcoords1 is None
+
+
+def test_a_set_with_4d_coordinates_carries_them_as_given():
+    geometry = volume_triangle(x3d.TextureCoordinate4D(point=[(0, 0, 0, 2)] * 3))
+    assert tuple(geometry.mesh().texcoords3d[0]) == (0, 0, 0, 2)
+
+
+def test_the_3d_coordinates_are_read_at_their_own_location():
+    from OpenGLContext.scenegraph import vertexsemantics  # noqa: PLC0415 kept with its use
+    entry = vertexsemantics.BY_SEMANTIC['TEXCOORD_3D']
+    assert (entry.location, entry.components, entry.attribute) == (15, 4, 'aTexCoord3D')
