@@ -408,6 +408,60 @@ not need scipy. Results are cached per vertex array. The
 ``physics_cook_view.py`` demo draws the cooked collider over the render mesh
 so you can compare the fit.
 
+.. _attaching:
+
+Making a node a physics body
+----------------------------
+
+``PhysicsManager.attach(node, motion=None, ...)`` binds a scenegraph node to a
+body whose collision shape is cooked from the geometry the node draws, so what
+is drawn and what is collided with are the same mesh:
+
+.. code-block:: python
+
+   from omi_physics import model
+   from OpenGLContext.scenegraph import surfaces
+
+   wall = surfaces.shape(surfaces.block((6, 3, 0.5)), brick, translation=(0, 1.5, -4))
+   manager.attach(wall, material='wood', strategy='primitive')       # static
+
+   ball = surfaces.shape(surfaces.sphere(0.3), steel, translation=(0, 2, 0))
+   body = manager.attach(ball, model.Motion(type=model.DYNAMIC, mass=5.0),
+                         material='metal', strategy='primitive')
+   manager.world.apply_impulse(body.index, (0, 0, -50))              # kick it
+
+   pad = surfaces.shape(surfaces.block((4, 1, 4)), mark, translation=(0, 0.5, -8))
+   zone = manager.attach(pad, trigger=True, strategy='primitive')    # not drawn
+   manager.events.subscribe(on_landed, body=zone, kinds=('trigger',),
+                            phases=('enter',))
+
+``node`` is a ``Transform`` holding the geometry, where the body starts; the
+world writes its pose back onto it while the body is dynamic. What the body
+collides with is the geometry of the node's descendants, placed by their own
+transforms and the node's ``scale``, but not by the node's own translation and
+rotation, which are the body's pose. A node that draws no triangles raises
+``ValueError``.
+
+- ``motion`` is an ``omi_physics.model.Motion``. Left out, the body is static.
+- ``material`` is a name from ``model.MATERIAL_PRESETS``, a ``model.Material``,
+  or the index of one already in the world. A name is added to the world once.
+- ``strategy`` is one of the :ref:`cooking <cooking>` strategies. ``primitive``
+  fits a box or a sphere, which the solver has exact tests for; ``trimesh``
+  keeps the triangles of a static body; ``auto`` is the triangles for a static
+  body and the convex hull for a dynamic one. ``decompose`` makes several shapes
+  and a body has one, so it raises ``ValueError``.
+- ``trigger=True`` makes the shape a trigger volume: it stops nothing and
+  reports what enters it. A node used only as a trigger is left out of the
+  scene and is not drawn.
+- ``collision_filter`` is the index of a ``model.CollisionFilter``, or -1.
+
+``OpenGLContext.physics.gltf_world.node_mesh(node)`` is the geometry attach
+reads: ``(points, triangle_indices)`` in the node's frame, or None.
+
+The :doc:`cannon game <tutorials/using_physics>` is built this way: towers and
+a ball made with ``attach``, one ``apply_impulse`` to fire, and a trigger over
+the target to say it was hit.
+
 .. _walking:
 
 Walking any scene
