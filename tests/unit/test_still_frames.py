@@ -5,7 +5,8 @@ allocations, uploads and compiles are counted by
 :func:`OpenGLContext.testing.stillframe.check_still_frame`. The scenes are the
 ones a game's still moment is made of: VRML97 primitives through both
 renderers, a field of shapes drawn as one instanced group, a mirror with
-bloom, shadows, text, and X3D's line, point and fill properties.
+bloom, shadows, text, X3D's line, point and fill properties, and X3D's NURBS
+geometry.
 """
 import pytest
 
@@ -92,6 +93,20 @@ def _textured():
     return Loader.loads(b'<X3D version="4.0"><Scene>' + body + b'</Scene></X3D>', 'still.x3d')
 
 
+def _nurbs():
+    """X3D NURBS surfaces, a sweep and a curve, through the mesh and line paths"""
+    from tests.unit.test_mirrored_geometry import _x3d_patch, _x3d_sweep, _x3d_trimmed  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph.nurbsx3d import NurbsCurve  # noqa: PLC0415 kept with its use
+    curve = NurbsCurve(controlPoint=basenodes.Coordinate(
+        point=[(-1, -1, 0), (0, 1, 0), (1, -1, 0)]))
+    geometries = [_x3d_patch(), _x3d_trimmed(),
+                  _x3d_sweep(basenodes.NurbsSweptSurface, 'crossSectionCurve', 'trajectoryCurve'),
+                  curve]
+    return [basenodes.Transform(translation=(2.5 * index - 4, 0, -8), children=[
+        basenodes.Shape(geometry=geometry, appearance=_look((1, index / 4, 0)))])
+        for index, geometry in enumerate(geometries)]
+
+
 PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
 
 
@@ -107,6 +122,8 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
     pytest.param(_textured, PBR, id='texture-layers-generated-projected-pbr'),
     pytest.param(_textured, {'OPENGLCONTEXT_RENDERER': 'flat'},
                  id='texture-layers-generated-projected-flat'),
+    pytest.param(_nurbs, PBR, id='x3d-nurbs-pbr'),
+    pytest.param(_nurbs, {'OPENGLCONTEXT_RENDERER': 'flat'}, id='x3d-nurbs-flat'),
 ])
 def test_a_still_frame_asks_nothing_new_of_gl(scene, environment):
     with scene_context(scene(), environment=environment) as context:

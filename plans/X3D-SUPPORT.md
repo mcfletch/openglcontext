@@ -278,8 +278,15 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
 - Phase 8, engine-mapped components (§9.17)
   - [x] CADGeometry: `CADFace` (`x3dgroups`), `QuadSet`, `IndexedQuadSet`
     (`meshgeometry`, two triangles a quad)
-  - [ ] NURBS: the 13 nodes on the NURBS evaluator; the VRML97 extension's
-    nodes kept for the worlds that use them
+  - [x] NURBS: the 13 nodes (`nurbsx3d`, `nurbsinterpolators`) on
+    `nurbseval` (X3D's knot/closure/weight/tessellation rules over
+    `opengl_extrusions.nurbs`); surfaces as `MeshDrawn` meshes with LOD and
+    `NurbsSet` scale, `NurbsCurve` as an `IndexedLineSet`, trims by the
+    even-odd rule, swept/swung as open Extrusions; weighted control points
+    read as homogeneous (the corpus's and X_ITE's reading); `NurbsCurve`,
+    `NurbsCurve2D`, `Contour2D` by `X3D_ONLY`, the registry keeping the
+    VRML97 extension's nodes unchanged; `oglc-x3d-nurbs`. Open: the
+    pre-standard `Basic/NURBS/originals` (controlPoint as MFVec3f) draw nothing
   - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
     (DDS, KTX 1.1, crosses and strips: `loaders.textureimages`),
     `GeneratedCubeMapTexture` (drawn before the views from the shape's
