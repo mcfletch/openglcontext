@@ -175,3 +175,35 @@ def test_a_face_sets_normal_map_darkens_a_face_lit_straight_on(gl_context, mater
     tilted = centre(FACE_SET % ((TILTED_MAPS[material],) + normals))[0]
     straight = centre(FACE_SET % ((flat,) + normals))[0]
     assert tilted < straight - 40
+
+
+def test_a_transparent_material_blends_over_what_is_behind(gl_context):
+    """X3D's transparency is the Material's alpha: half of the blue quad over
+    the red background"""
+    text = (b"<X3D version='3.3'><Scene><Background skyColor='1 0 0'/>"
+            b"<Viewpoint position='0 0 0'/><Shape><Appearance>"
+            b"<Material diffuseColor='0 0 1' transparency='0.5'/></Appearance>"
+            + QUAD + b"</Shape></Scene></X3D>")
+    assert centre(text) == pytest.approx((128, 0, 128), abs=4)
+
+
+@pytest.mark.parametrize('renderer', ['pbr', 'vrml97'])
+def test_a_light_reaches_no_further_than_its_radius(gl_context, renderer):
+    """The quad is 3 from the light: a radius of 2 leaves it dark, 5 lights it"""
+    light = b"<PointLight location='0 0 0' radius='%s' attenuation='1 0 0'/>"
+    assert lit(light % b'2', b'0', renderer) < 5
+    assert lit(light % b'5', b'0', renderer) > 200
+
+
+def test_a_document_inlined_into_a_scene_built_in_code(gl_context, tmp_path):
+    """The Inline's Material is drawn by X3D's equation, the code's converted"""
+    from OpenGLContext.scenegraph.basenodes import (  # noqa: PLC0415 kept with its use
+        Appearance, Inline, Material, Shape, Sphere, sceneGraph)
+    (tmp_path / 'part.x3d').write_bytes(document(b"<Material diffuseColor='0.5 0.25 0'/>"))
+    inline = Inline(load=False)
+    own = Shape(appearance=Appearance(material=Material()), geometry=Sphere())
+    _scene = sceneGraph(children=[inline, own])
+    inline.loadBackground([str(tmp_path / 'part.x3d')])
+    inlined = [node for node in inline.inlined if hasattr(node, 'appearance')][0]
+    assert flags(inlined.appearance) & PHONG_BIT
+    assert not flags(own.appearance) & PHONG_BIT

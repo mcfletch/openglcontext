@@ -87,3 +87,14 @@ def test_the_sides_are_drawn_over_the_sky(gl_context):
         for side in (b'front', b'back', b'left', b'right', b'top', b'bottom'))
     colour = drawn(b'<TextureBackground skyColor="0 0 1">' + sides + b'</TextureBackground>')
     assert colour[1] > colour[2] + 100
+
+
+@pytest.mark.parametrize('limit', [b'0.5', b'2'])
+def test_the_sides_are_drawn_whatever_the_far_plane(gl_context, limit):
+    """The sides are at the far plane, so a short visibilityLimit keeps them"""
+    sides = b''.join(
+        b'<PixelTexture containerField="%sTexture" image="1 1 3 0x00FF00"/>' % side
+        for side in (b'front', b'back', b'left', b'right', b'top', b'bottom'))
+    colour = drawn(b'<NavigationInfo visibilityLimit="' + limit + b'"/>'
+                   b'<TextureBackground skyColor="0 0 1">' + sides + b'</TextureBackground>')
+    assert colour[1] > colour[2] + 100
