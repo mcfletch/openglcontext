@@ -272,8 +272,27 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [ ] Texturing3D: `ImageTexture3D`, `ComposedTexture3D`, `PixelTexture3D`,
     `TextureCoordinate3D`, `TextureCoordinate4D`, `TextureTransform3D`
   - [ ] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
-  - [ ] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
+  - [x] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
     `ProgramShader`, `PackagedShader`, the vertex attributes
+    (`scenegraph.x3dshaders`, `scenegraph.x3dglsl`): the first alternative
+    that is GLSL and links draws, `isSelected`/`isValid` sent, the material
+    drawn while loading or where none runs; every GL stage (tessellation as
+    patches in a 4.x context); parts read in the background under the
+    document's policy, `data:`, url text and 4.1 `sourceCode`; linked on
+    first completion and on `activate` (I.5); declared fields as uniforms by
+    Table I.3, converted to the declared type, textures as samplers;
+    X_ITE's binding names (`x3d_Vertex`, `x3d_ModelViewMatrix`,
+    `x3d_NormalMatrix`, `x3d_LightSource[]`, `x3d_Material`,
+    `x3d_Texture2D[]`, `x3d_TextureMatrix[]`, ...); `attrib` drawn into the
+    mesh at locations 15+, then the per-instance ones; GLSL 1.x translated to
+    3.30 core, run as written in the compatibility profile; the object id
+    written beside the colour; `PackagedShader` of GLSL as one text with
+    `X3D_<STAGE>_SHADER` macros, other languages passed over;
+    `oglc-x3d-shaders` and `tests/x3d_shaders.py`. Corpus: Basic/Shaders'
+    two `.x3d` have empty `ShaderPart`s and draw their material; their
+    `.x3dv`/`.wrl` copies write `language GLSL` unquoted and do not read;
+    `TestDiagnosticOverloadedChildNodes` fails on `GeneratedCubeMapTexture`
+    (CubeMapTexturing)
   - [ ] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
     models
   - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
