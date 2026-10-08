@@ -281,8 +281,21 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [ ] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
   - [ ] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
     `ProgramShader`, `PackagedShader`, the vertex attributes
-  - [ ] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
-    models
+  - [x] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
+    models (`x3dparticles`, on `particlesim` and `particles.ParticleRenderer`);
+    LINE/POINT/QUAD/SPRITE/TRIANGLE through one instanced draw in both
+    renderers and the compatibility profile, GEOMETRY as instanced copies;
+    keys in seconds of age; stepped through the render queue (`Ticked`).
+    The engine's `ParticleEmitter` takes the emitters (`source`) and models
+    (`physics`) and has a colour ramp and line shape. `oglc-x3d-particles`
+    - read differently from X_ITE: keys are seconds (X_ITE: fractions of the
+      life); a massless particle takes a force as an acceleration (X_ITE
+      applies none); VolumeEmitter `internal` FALSE emits from the boundary
+    - not drawn: lighting of the non-GEOMETRY types, the texture transform,
+      line width
+  - [x] prototype instances drawn: `grouping.of_types` passes an instance by
+    its body's first node type (scene, groups, Switch, LOD, CADFace); before,
+    an X3D document's ProtoInstance was never drawn
   - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
     `HAnimDisplacer`, `HAnimMotion`, `HAnimPose`
   - [ ] RigidBodyPhysics: the 14 nodes on omi_physics

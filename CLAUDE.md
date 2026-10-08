@@ -283,6 +283,10 @@ OpenGLContext/
 │   ├── roadcourse.py # Where something is on a road at run time: along it,
 │   │                 # off it, across it -- no GL -- docs/roads.rst#roadcourse
 │   ├── particles.py  # Emitters, presets, one instanced draw -- docs/particles.rst
+│   ├── particlesim.py  # The particle pool, emission sources, physics models
+│   │                 # and ramps, stepped as arrays -- no GL
+│   ├── x3dparticles.py  # X3D's ParticleSystem, emitters and physics models
+│   │                 # on the engine's particles -- docs/particles.rst
 │   ├── particlehooks.py  # The fire, smoke and sparks OGLC_hook kinds
 │   ├── water/        # Wave field, surface, medium -- docs/water.rst
 │   ├── terrain/      # Height fields and splat materials -- docs/terrain.rst

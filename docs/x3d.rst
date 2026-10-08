@@ -123,6 +123,9 @@ implements these X3D nodes, by component:
   NurbsOrientationInterpolator, NurbsPatchSurface, NurbsPositionInterpolator,
   NurbsSet, NurbsSurfaceInterpolator, NurbsSweptSurface, NurbsSwungSurface,
   NurbsTextureCoordinate, NurbsTrimmedSurface
+- ParticleSystems - BoundedPhysicsModel, ConeEmitter, ExplosionEmitter,
+  ForcePhysicsModel, ParticleSystem, PointEmitter, PolylineEmitter,
+  SurfaceEmitter, VolumeEmitter, WindPhysicsModel
 - Picking - PickableGroup
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
 - Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
@@ -350,6 +353,16 @@ own in the walk's world (``gltf_world.collision_groups``). As the avatar
 touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
 each enabled group around it, and ``isActive FALSE`` when the touch ends
 (``OpenGLContext.physics.x3dcollision``).
+
+Particle systems
+~~~~~~~~~~~~~~~~
+
+``ParticleSystem``, its six emitters and its three physics models are drawn by
+the engine's particles: every ``geometryType``, colour and texture-coordinate
+ramps keyed by a particle's age in seconds, and the physics models applied in
+order. A ``GEOMETRY`` system is lit as a shape is; the other types are unlit.
+The :ref:`particle systems page <x3d-particles>` says how each field is read,
+and ``oglc-x3d-particles`` opens a document using every node.
 
 Inline
 ~~~~~~

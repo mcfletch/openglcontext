@@ -5,6 +5,7 @@ from vrml.vrml97 import scenegraph, nodetypes
 from vrml import field, node
 from vrml.x3d import scene as x3dscene
 from OpenGLContext.events import systemtime
+from OpenGLContext.scenegraph.grouping import of_types
 from OpenGL.GL import *
 
 class SceneGraph(scenegraph.SceneGraph):
@@ -28,7 +29,7 @@ class SceneGraph(scenegraph.SceneGraph):
         """List of all children that are instances of given types"""
         return [
             child for child in self.children
-            if isinstance( child, types)
+            if of_types( child, types )
         ]
     
 

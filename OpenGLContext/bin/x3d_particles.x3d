@@ -10,7 +10,7 @@
   <Scene>
     <WorldInfo title="X3D particle systems" info='"The scene oglc-x3d-particles opens."'/>
     <NavigationInfo type='"EXAMINE" "ANY"'/>
-    <Background skyColor="0.03 0.04 0.08 0.10 0.12 0.20" skyAngle="1.4" groundColor="0.08 0.07 0.06"/>
+    <Background skyColor="0.05 0.07 0.14 0.22 0.25 0.38" skyAngle="1.4" groundColor="0.08 0.07 0.06"/>
     <Viewpoint description="The particles" position="0 3 12" orientation="1 0 0 -0.12"/>
     <DirectionalLight global="true" direction="-0.5 -0.8 -0.4" intensity="1.4" color="1 0.95 0.9"/>
 
@@ -54,28 +54,32 @@
       </ProtoBody>
     </ProtoDeclare>
 
-    <!-- The brazier: a ConeEmitter of sprites rising on a ForcePhysicsModel,
-         yellow to red to nothing over a second and a half. -->
+    <!-- The brazier: soft sprites thrown every way from a PointEmitter with
+         no direction, rising on a ForcePhysicsModel, yellow to red to nothing
+         over a second and a half. -->
     <ProtoInstance name="Plinth"><fieldValue name="translation" value="-7.5 0 0"/></ProtoInstance>
     <Transform translation="-7.5 0.6 0">
       <ParticleSystem DEF="Brazier" geometryType="SPRITE" maxParticles="300"
                       particleLifetime="1.5" lifetimeVariation="0.3" particleSize="0.35 0.35"
-                      colorKey="0 0.4 1.5">
-        <ConeEmitter containerField="emitter" direction="0 1 0" angle="0.35" speed="1.2"
-                     variation="0.4" mass="1"/>
-        <ForcePhysicsModel containerField="physics" force="0 1.5 0"/>
+                      colorKey="0 0.4 1.5" texCoordKey="0">
+        <Appearance><ImageTexture url='"particle_sheet.png"'/></Appearance>
+        <PointEmitter containerField="emitter" direction="0 0 0" speed="0.35"
+                      variation="0.5" mass="1"/>
+        <ForcePhysicsModel containerField="physics" force="0 1.8 0"/>
         <ColorRGBA containerField="color" color="1 0.9 0.4 1  1 0.3 0.05 0.8  0.3 0.05 0 0"/>
+        <TextureCoordinate containerField="texCoord" point="0 0  0.5 0  0.5 1  0 1"/>
       </ParticleSystem>
     </Transform>
 
-    <!-- The fountain: a PointEmitter throwing streaks of water up, pulled back
+    <!-- The fountain: a ConeEmitter throwing streaks of water up, pulled back
          down by the default ForcePhysicsModel, the Earth's gravity. -->
     <ProtoInstance name="Plinth"><fieldValue name="translation" value="-4.5 0 0"/></ProtoInstance>
     <Transform translation="-4.5 0.6 0">
       <ParticleSystem DEF="Fountain" geometryType="LINE" maxParticles="400"
-                      particleLifetime="1.4" lifetimeVariation="0.2" particleSize="0.02 0.25">
+                      particleLifetime="1.1" lifetimeVariation="0.1" particleSize="0.02 0.25">
         <Appearance><Material emissiveColor="0.5 0.75 1"/></Appearance>
-        <PointEmitter containerField="emitter" direction="0 1 0" speed="5.5" variation="0.15"/>
+        <ConeEmitter containerField="emitter" direction="0 1 0" angle="0.25" speed="5.5"
+                     variation="0.15"/>
         <ForcePhysicsModel containerField="physics"/>
       </ParticleSystem>
     </Transform>
@@ -85,8 +89,10 @@
     <ProtoInstance name="Plinth"><fieldValue name="translation" value="-1.5 0 0"/></ProtoInstance>
     <Transform translation="-1.5 3.6 0">
       <ParticleSystem DEF="Firework" geometryType="SPRITE" maxParticles="250"
-                      particleLifetime="2.2" lifetimeVariation="0.3" particleSize="0.12 0.12"
-                      colorKey="0 1 2.2">
+                      particleLifetime="2.2" lifetimeVariation="0.3" particleSize="0.2 0.2"
+                      colorKey="0 1 2.2" texCoordKey="0">
+        <Appearance><ImageTexture url='"particle_sheet.png"'/></Appearance>
+        <TextureCoordinate containerField="texCoord" point="0 0  0.5 0  0.5 1  0 1"/>
         <ExplosionEmitter containerField="emitter" speed="2.2" variation="0.3" mass="1"/>
         <ForcePhysicsModel containerField="physics" force="0 -1.2 0"/>
         <ColorRGBA containerField="color" color="1 1 0.8 1  0.4 0.8 1 1  0.6 0.2 1 0"/>
@@ -126,7 +132,7 @@
     <ProtoInstance name="Plinth"><fieldValue name="translation" value="4.5 0 0"/></ProtoInstance>
     <Transform translation="4.5 1.6 0">
       <Shape>
-        <Appearance><PhysicalMaterial baseColor="1 0.78 0.34" metallic="1" roughness="0.3"/></Appearance>
+        <Appearance><PhysicalMaterial baseColor="1 0.78 0.34" metallic="0.4" roughness="0.35"/></Appearance>
         <Sphere radius="0.6"/>
       </Shape>
       <ParticleSystem DEF="Sparks" geometryType="QUAD" maxParticles="200"
@@ -153,7 +159,7 @@
       </Shape>
       <ParticleSystem DEF="Beads" geometryType="GEOMETRY" maxParticles="60"
                       particleLifetime="12" lifetimeVariation="0.2">
-        <Appearance><PhysicalMaterial baseColor="1 0.78 0.34" metallic="1" roughness="0.25"/></Appearance>
+        <Appearance><PhysicalMaterial baseColor="1 0.78 0.34" metallic="0.4" roughness="0.3"/></Appearance>
         <Sphere radius="0.06"/>
         <VolumeEmitter containerField="emitter" speed="1.5" variation="0.5" mass="1"
                        direction="0 0 0"

@@ -7,7 +7,7 @@
     w      the wind over the snow off and on
 
 The document is ``x3d_particles.x3d``, shipped with this module: a brazier of
-sprites rising from a ConeEmitter, a fountain of streaks from a PointEmitter
+sprites rising from a PointEmitter, a fountain of streaks from a ConeEmitter
 under gravity, a firework from an ExplosionEmitter, snow falling from a
 PolylineEmitter in gusting wind, a gold sphere a SurfaceEmitter sheds
 two-frame sparks from, and a glass case of gold beads a VolumeEmitter makes

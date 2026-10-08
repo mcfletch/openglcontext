@@ -30,6 +30,7 @@ from vrml.vrml97 import basenodes, nodetypes
 from vrml import cache
 
 from OpenGLContext.scenegraph import boundingvolume
+from OpenGLContext.scenegraph.grouping import of_types
 from OpenGLContext.scenegraph.switch import SWITCH_CHANGE_SIGNAL
 
 __all__ = ['LOD', 'ScreenCoverageLOD', 'CULLED', 'Viewer', 'distance_to_viewer',
@@ -364,7 +365,7 @@ class LOD(basenodes.LOD):
         if not levels or self.whichLevel < 0:
             return []
         node = levels[min(self.whichLevel, len(levels) - 1)]
-        return [node] if isinstance(node, types) else []
+        return [node] if of_types(node, types) else []
 
     def boundedChildren(self) -> list:
         """What bounds this node: what it draws, or the finest level if nothing.

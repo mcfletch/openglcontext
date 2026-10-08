@@ -140,6 +140,12 @@ Installing the package puts these commands on your path:
    window, a swung gold vase, a swept brass rail, a bead riding a brick
    banner and a dart flying along a curve, with a key to change the
    ``NurbsSet``'s tessellation scale. See :doc:`NURBS <nurbs>`.
+``oglc-x3d-particles``
+   X3D's particle systems read from a document: a brazier, a fountain, a
+   firework, snow in gusting wind, a sphere shedding sparks and gold beads
+   bouncing in a glass case, one for each emitter and physics model, with
+   keys to set the firework off and switch the wind. See :ref:`X3D particle
+   systems <x3d-particles>`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and
