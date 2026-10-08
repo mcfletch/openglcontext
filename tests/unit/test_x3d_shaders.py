@@ -483,3 +483,153 @@ class TestVertexAttributes:
     def test_a_matrix_attribute_takes_a_location_a_column(self, renderer, geometry):
         scene = _attribute_scene(GEOMETRIES[geometry], GREEN_FRAME, MATRIX_VERTEX)
         assert greenish(centre(scene, renderer))
+
+
+#: Clicks the middle of a document's frame; exits 0 where the click reached the
+#: shape named SHAPE, the way an application's pointer does.
+PICK_DRIVER = r'''
+import os, sys
+try:
+    import glfw
+    from vrml import x3d as vrml_x3d, protofunctions
+    from OpenGLContext.context import Context as Base
+    from OpenGLContext.events.mouseevents import MouseButtonEvent
+    from OpenGLContext.loaders.x3d import prototypes
+    scene = vrml_x3d.loads(sys.argv[1], prototypes=prototypes())
+    target = scene.getDEF('SHAPE')
+    hits = []
+
+    class C(Base):
+        def OnInit(self):
+            self.sg = scene
+            self.contextDefinition.pickAsync = True
+            self.addEventHandler('mousebutton', button=0, state=1, function=self.hit)
+
+        def hit(self, event):
+            paths = event.getObjectPaths()
+            hits.append(bool(paths and paths[0] and paths[0][-1] is target))
+
+    inst = C()
+    inst.deferRedraw = True
+    w, h = inst.getViewPort()
+    for i in range(16):
+        glfw.poll_events()
+        if 3 <= i <= 5:
+            ev = MouseButtonEvent(); ev.button = 0; ev.state = 1
+            ev.modifiers = (0, 0, 0); ev.pickPoint = (w // 2, h // 2)
+            inst.addPickEvent(ev); inst.triggerPick()
+        inst.OnDraw(force=1)
+    inst.flushPendingPicks()
+    sys.stderr.write('HITS=%r\n' % (hits,))
+    os._exit(0 if hits and all(hits) else 2)
+except SystemExit:
+    raise
+except BaseException as e:
+    sys.stderr.write('NOGL %r\n' % (e,))
+    from OpenGLContext.testing.plugin import NO_CONTEXT_STATUS
+    os._exit(NO_CONTEXT_STATUS)
+'''
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+class TestThePassAroundTheShader:
+    def test_a_shape_drawn_by_its_shader_is_picked(self, renderer):
+        """The fragment stage writes the pass's object id beside the colour"""
+        import os
+        import subprocess
+        import sys
+        from OpenGLContext.testing.plugin import skip_if_child_had_no_context
+        environment = dict(os.environ, OPENGLCONTEXT_RENDERER=renderer,
+                           OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_SHADOWS='0',
+                           OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1')
+        process = subprocess.run(
+            [sys.executable, '-c', PICK_DRIVER, document(composed(fields=(
+                '<field name="colour" type="SFColor" accessType="inputOutput" value="1 0 0"/>')))],
+            capture_output=True, text=True, timeout=120, env=environment)
+        skip_if_child_had_no_context(process.returncode, process.stderr)
+        assert process.returncode == 0, process.stderr
+
+    def test_the_next_shape_has_its_own_texture_back(self, renderer):
+        """The shader's samplers take units the pass binds a material's maps on"""
+        fragment = """<![CDATA[#version 330 core
+uniform sampler2D x3d_Texture2D[x3d_MaxTextures];
+uniform sampler2D a, b, d;
+out vec4 c;
+void main() {
+    // a, b and d are given no texture, and read black.
+    c = vec4(texture(x3d_Texture2D[0], vec2(0.5)).rgb + texture(a, vec2(0.5)).rgb
+             + texture(b, vec2(0.5)).rgb + texture(d, vec2(0.5)).rgb, 1.0);
+}
+]]>"""
+        # Drawn front to back: a textured box, the shader's, the same look again.
+        textured = ('<Shape><Appearance DEF="LOOK"><PixelTexture image="1 1 3 0xFF0000"/>'
+                    '</Appearance><Box size="1.5 1.5 1.5"/></Shape>')
+        scene = load(
+            '<X3D profile="Full" version="4.0"><Scene>'
+            '<Viewpoint position="0 0 10"/><NavigationInfo headlight="false"/>'
+            '<Transform translation="-2.5 0 1">%s</Transform>'
+            '<Transform translation="0 0 0"><Shape><Appearance>'
+            '<PixelTexture image="1 1 3 0x00FF00"/>%s</Appearance>'
+            '<Box size="1.5 1.5 1.5"/></Shape></Transform>'
+            '<Transform translation="2.5 0 -1"><Shape><Appearance USE="LOOK"/>'
+            '<Box size="1.5 1.5 1.5"/></Shape></Transform>'
+            '</Scene></X3D>' % (textured, composed(fragment)))
+        with scene_context(scene, size=(96, 64),
+                           environment={'OPENGLCONTEXT_RENDERER': renderer}) as context:
+            for _ in range(3):
+                image = drawn_image(context)
+        left, middle, right = image[32, 29], image[32, 48], image[32, 67]
+        assert reddish(left), left
+        assert greenish(middle), middle
+        assert reddish(right), right
+
+
+class _Mode:
+    """What a shader's draw reads of the pass: matrices, the viewport, a cache"""
+
+    shader_program = None
+
+    def __init__(self):
+        from vrml import cache
+        self.cache = cache.Cache()
+        self.matrix = np.identity(4, dtype='f')
+        self.projection = np.identity(4, dtype='f')
+
+    def getViewport(self):
+        return (0, 0, 64, 64)
+
+
+@pytest.mark.usefixtures('gl_context')
+class TestTheDrawPutsThingsBack:
+    def test_the_units_its_samplers_took_are_bound_as_they_were(self):
+        from OpenGL import GL
+        from OpenGLContext.scenegraph import x3dshaders
+        fragment = ('#version 330 core\nuniform sampler2D a, b, c, d;\nout vec4 o;\n'
+                    'void main() { o = texture(a, vec2(0.5)) + texture(b, vec2(0.5))'
+                    ' + texture(c, vec2(0.5)) + texture(d, vec2(0.5)); }\n')
+        vertex = '#version 330 core\nin vec4 x3d_Vertex;\nvoid main() { gl_Position = x3d_Vertex; }\n'
+        linked = x3dshaders.link([('VERTEX', vertex), ('FRAGMENT', fragment)], (), 8)
+        shader = x3dshaders.ComposedShader()
+        names = [int(name) for name in GL.glGenTextures(4)]
+        try:
+            for unit, name in enumerate(names):
+                GL.glActiveTexture(GL.GL_TEXTURE0 + unit)
+                GL.glBindTexture(GL.GL_TEXTURE_2D, name)
+            drawn = x3dshaders.X3DShaderDraw(linked, shader, _Mode(), None)
+            drawn.begin()
+            during = []
+            for unit in range(4):
+                GL.glActiveTexture(GL.GL_TEXTURE0 + unit)
+                during.append(int(GL.glGetIntegerv(GL.GL_TEXTURE_BINDING_2D)))
+            drawn.end()
+            after = []
+            for unit in range(4):
+                GL.glActiveTexture(GL.GL_TEXTURE0 + unit)
+                after.append(int(GL.glGetIntegerv(GL.GL_TEXTURE_BINDING_2D)))
+        finally:
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glDeleteTextures(names)
+            GL.glUseProgram(0)
+            x3dshaders.delete_program(linked.program)
+        assert during == [0, 0, 0, 0]
+        assert after == names
