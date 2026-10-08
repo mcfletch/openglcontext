@@ -209,8 +209,13 @@ def extract_trimesh(group: Any,
     trading exact collision shape for a much smaller trimesh. ``0`` (default) keeps
     every triangle.
     """
+    return _merged(_buckets(group, min_hull_size))
+
+
+def _merged(buckets: dict[tuple[Any, ...], _Bucket]) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """Every bucket's points and triangles as one mesh, or None for none"""
     whole = _Bucket()
-    for bucket in _buckets(group, min_hull_size).values():
+    for bucket in buckets.values():
         found = bucket.arrays()
         if found is not None:
             _append_mesh(found[0], found[1], whole.points, whole.tris, whole.state, 0.0)
@@ -240,20 +245,19 @@ def node_mesh(node: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
     node that is itself a shape is its geometry.  Returns None where the node
     draws no triangles.
     """
-    points: list[np.ndarray] = []
-    tris: list[np.ndarray] = []
-    state = {'n': 0}
+    buckets: dict[tuple[Any, ...], _Bucket] = {}
     if getattr(node, 'geometry', None) is not None:
-        _collect(node, np.eye(4), points, tris, (), state, 0.0)
+        _collect(node, np.eye(4), buckets, (), (), 0.0)
     for child in getattr(node, 'children', None) or ():
-        _collect(child, np.eye(4), points, tris, (node,), state, 0.0)
-    if not points:
+        _collect(child, np.eye(4), buckets, (), (node,), 0.0)
+    merged = _merged(buckets)
+    if merged is None:
         return None
-    found = np.vstack(points)
+    found, tris = merged
     scale = getattr(node, 'scale', None)
     if scale is not None:
         found = found * np.asarray(scale, dtype='d')
-    return found, (np.vstack(tris) if tris else np.zeros((0, 3), dtype='i'))
+    return found, tris
 
 
 def collision_world_from_scene(

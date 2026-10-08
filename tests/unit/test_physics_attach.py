@@ -11,9 +11,9 @@ from OpenGLContext.physics.gltf_world import node_mesh
 from OpenGLContext.physics.manager import PhysicsManager
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.basenodes import Transform
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
-LOOK = PBRMaterial(baseColor=(0.5, 0.5, 0.5))
+LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
 
 def block(size, at=(0, 0, 0)):

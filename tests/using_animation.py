@@ -44,7 +44,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Appearance, Coordinate, DirectionalLight, IndexedLineSet, Material,
     Shape, Transform, sceneGraph,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.ui.hudwidgets import HUDLayer, TextBlock
 from OpenGLContext.viewer.environment import sky_background
 
@@ -376,9 +376,9 @@ class TestContext(BaseContext):
         brick = surfaces.pbr_material(surfaces.brick(256))
         marble = surfaces.pbr_material(surfaces.checkered_marble(256, tiles=2))
         sand = surfaces.pbr_material(surfaces.sandstone(256))
-        steel = PBRMaterial(baseColor=surfaces.STEEL, metallic=1.0, roughness=0.25)
-        bronze = PBRMaterial(baseColor=surfaces.BRONZE, metallic=1.0, roughness=0.35)
-        bullseye = PBRMaterial(baseColor=(0.8, 0.08, 0.06), metallic=0.0, roughness=0.5)
+        steel = PhysicalMaterial(baseColor=surfaces.STEEL, metallic=1.0, roughness=0.25)
+        bronze = PhysicalMaterial(baseColor=surfaces.BRONZE, metallic=1.0, roughness=0.35)
+        bullseye = PhysicalMaterial(baseColor=(0.8, 0.08, 0.06), metallic=0.0, roughness=0.5)
         self.materials = (brick, marble, bullseye)
         ground = Transform(translation=(0, 0, 0), rotation=(1, 0, 0, -math.pi / 2), children=[
             surfaces.shape(surfaces.panel(160, 80, repeat=4.0), sand),

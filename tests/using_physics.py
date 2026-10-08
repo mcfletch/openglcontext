@@ -66,7 +66,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Appearance, Coordinate, DirectionalLight, IndexedLineSet, Material,
     Shape, Transform, Viewpoint, sceneGraph,
 )
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.nodepath import NodePath
 from OpenGLContext.scenegraph.physicsbody import PhysicsBody
 from OpenGLContext.ui.hudwidgets import HUDLayer, ScreenWash, TextBlock
@@ -145,9 +145,9 @@ def looks() -> dict[str, Any]:
         'ground': surfaces.pbr_material(surfaces.sandstone(256)),
         'cannon': surfaces.pbr_material(surfaces.brick(256)),
         'target': surfaces.pbr_material(surfaces.checkered_marble(256, tiles=2)),
-        'mark': PBRMaterial(baseColor=(0.8, 0.08, 0.06), metallic=0.0, roughness=0.5),
-        'steel': PBRMaterial(baseColor=surfaces.STEEL, metallic=1.0, roughness=0.25),
-        'bronze': PBRMaterial(baseColor=surfaces.BRONZE, metallic=1.0, roughness=0.35),
+        'mark': PhysicalMaterial(baseColor=(0.8, 0.08, 0.06), metallic=0.0, roughness=0.5),
+        'steel': PhysicalMaterial(baseColor=surfaces.STEEL, metallic=1.0, roughness=0.25),
+        'bronze': PhysicalMaterial(baseColor=surfaces.BRONZE, metallic=1.0, roughness=0.35),
     }
 
 '''Model a single platform as to where it is and how large it is.'''

@@ -345,7 +345,7 @@ class TestTheCannonsFrames:
             def setOrientation(self, orientation):
                 self.orientation = tuple(orientation)
 
-            def setFrustum(self, *arguments):
+            def setFrustum(self, *arguments, **named):
                 pass
 
         class Context:
