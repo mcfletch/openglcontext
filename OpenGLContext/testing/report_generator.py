@@ -467,15 +467,17 @@ class TestReportGenerator:
     def _generate_images_section(self, test: dict[str, Any], embed_images: bool) -> str:
         """Generate the images comparison section.
 
-        Renders up to four columns. When an ``upstream_image`` (the tertiary
-        Khronos reference) is present the primary ``reference_image`` is labelled
-        "Our Reference" and the Khronos shot is shown as a fourth column;
+        Renders up to four columns. When an ``upstream_image`` (another
+        renderer's picture of the same scene) is present the primary
+        ``reference_image`` is labelled "Our Reference" and the upstream image
+        is a fourth column, headed by the row's ``upstream_label`` (Khronos,
+        X_ITE) or "Upstream";
         otherwise the classic three-column Reference/Result/Difference layout is
         produced unchanged. Every image is wrapped in a ``.zoomable`` link so the
         report's lightbox can open it full size.
         """
         has_upstream = bool(test.get('upstream_image'))
-        # The real images (our reference, the new result, and the Khronos upstream)
+        # The real images (our reference, the new result, and the upstream)
         # stay visible; the amplified difference heatmap is the least-interesting of
         # the four for a passing scene, so it collapses behind a click to give the
         # real images more room.
@@ -484,7 +486,7 @@ class TestReportGenerator:
             ('Result', 'result_image'),
         ]
         if has_upstream:
-            columns.append(('Upstream (Khronos)', 'upstream_image'))
+            columns.append((str(test.get('upstream_label') or 'Upstream'), 'upstream_image'))
 
         def _image_box(label: str, path: str | None) -> str:
             src = _image_ref(path, embed_images, getattr(self, '_base_dir', None))

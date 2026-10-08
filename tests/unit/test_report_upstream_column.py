@@ -1,6 +1,6 @@
-"""The regression report shows a 4th 'Upstream (Khronos)' column when an
-upstream_image is present, plus an expand-all control and a click-to-zoom
-lightbox -- without breaking the classic 3-column reports."""
+"""The regression report shows a 4th column, named for the reference it holds,
+when an upstream_image is present, plus an expand-all control and a
+click-to-zoom lightbox -- without breaking the classic 3-column reports."""
 from OpenGLContext.testing.report_generator import (
     TestReportGenerator as _ReportGenerator,
 )
@@ -16,9 +16,11 @@ class TestUpstreamColumn:
     def test_four_columns_when_upstream_present(self):
         h = _html({'test_name': 'x', 'status': 'pass',
                    'reference_image': 'r.png', 'result_image': 's.png',
-                   'diff_image': 'd.png', 'upstream_image': 'u.png'})
+                   'diff_image': 'd.png', 'upstream_image': 'u.png',
+                   'upstream_label': 'X_ITE 16.4.3'})
         assert 'Our Reference' in h        # primary relabelled
-        assert 'Upstream (Khronos)' in h   # the 4th column
+        assert '<h4>X_ITE 16.4.3</h4>' in h   # the 4th column, named for its reference
+        assert 'Khronos' not in h
         assert 'href="u.png"' in h         # the upstream image is rendered
 
     def test_three_column_report_unchanged(self):
@@ -27,7 +29,11 @@ class TestUpstreamColumn:
                    'diff_image': 'd.png'})
         assert '>Reference<' in h           # plain label, not "Our Reference"
         assert 'Our Reference' not in h
-        assert 'Upstream (Khronos)' not in h
+        assert 'Upstream' not in h
+
+    def test_an_unnamed_upstream_is_called_upstream(self):
+        h = _html({'test_name': 'x', 'status': 'pass', 'upstream_image': 'u.png'})
+        assert '<h4>Upstream</h4>' in h
 
 
 class TestReportControls:

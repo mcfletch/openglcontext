@@ -431,7 +431,7 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
         title='glTF Demo Regression -- our reference vs new',
         upstream=lambda meta, slug: gltf.cache_reference_screenshot(
             meta.get('scene', slug.split('__')[0])),
-        drawn=drawn)
+        drawn=drawn, upstream_label=lambda _meta: 'Khronos')
 
 
 def run(args: argparse.Namespace) -> int:

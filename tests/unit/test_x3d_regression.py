@@ -381,3 +381,17 @@ def test_the_backend_a_document_is_drawn_on():
     assert args.backend == 'egl'
     assert R._render_environment('out.png', 4, 'pbr', args.backend)['OPENGLCONTEXT_BACKEND'] == 'egl'
     assert R.build_parser().parse_args([]).backend == 'glfw'
+
+
+def test_the_reference_column_is_named_for_its_reference(tmp_path):
+    out_dir = tmp_path / 'renders'
+    out_dir.mkdir()
+    reference = tmp_path / 'xite.png'
+    Image.new('RGB', (8, 8)).save(reference)
+    Image.new('RGB', (8, 8)).save(out_dir / 'A.b.png')
+    (out_dir / 'A.b.json').write_text(json.dumps(
+        {'scene': 'A/b', 'reference': 'X_ITE 16.4.3', 'upstream': str(reference)}))
+    report = tmp_path / 'report.html'
+    R.build_report(str(out_dir), str(tmp_path / 'baselines'), str(report), 2.0, 5)
+    html = report.read_text()
+    assert '<h4>X_ITE 16.4.3</h4>' in html and 'Khronos' not in html

@@ -358,7 +358,8 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
         out_dir, baseline_root, report_path, tolerance, diff_threshold,
         title='X3D Example Regression -- our reference vs new',
         upstream=lambda meta, _slug: meta.get('upstream'),
-        describe=_describe, drawn=drawn)
+        describe=_describe, drawn=drawn,
+        upstream_label=lambda meta: str(meta.get('reference') or 'Upstream'))
 
 
 def _describe(meta: dict[str, Any]) -> str:

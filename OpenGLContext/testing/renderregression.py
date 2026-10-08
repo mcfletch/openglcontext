@@ -291,12 +291,14 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
                  upstream: Callable[[dict[str, Any], str], Optional[str]] = lambda _meta, _slug: None,
                  describe: Callable[[dict[str, Any]], str] = lambda meta: meta.get('description', ''),
                  drawn: Optional[Collection[str]] = None,
+                 upstream_label: Callable[[dict[str, Any]], str] = lambda _meta: 'Upstream',
                  ) -> ReportCounts:
     """Write the HTML report of the renders in `out_dir`; the rows that fail
 
     Each ``<slug>.json`` in `out_dir` is a row: its ``<slug>.png`` against the
     baseline of that name in `baseline_root`, with the difference image, and
-    the image `upstream` gives for the row's record and slug (None for none). A row
+    the image `upstream` gives for the row's record and slug (None for none),
+    headed by what `upstream_label` gives for the record. A row
     whose record has an ``error``, or with no render, is an error, and one with
     no baseline is skipped until blessed. Where `drawn` names the slugs this run
     drew, every other row is shown as not drawn and counts for nothing. Images
@@ -360,6 +362,7 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
             'result_image': new_path if os.path.exists(new_path) else None,
             'diff_image': diff_path if (stats and os.path.exists(diff_path)) else None,
             'upstream_image': stage(upstream_path, slug + '_upstream.png'),
+            'upstream_label': upstream_label(meta),
             'comparison_stats': stats,
             'metadata': meta,
             'stderr': stderr,
