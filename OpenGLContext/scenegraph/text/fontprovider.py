@@ -58,7 +58,7 @@ class FontProvider(object):
         providers -- the set of registered font providers
     """
 
-    PROVIDER_SEARCH_ORDER = ["solid", "texture", "bitmap"]
+    PROVIDER_SEARCH_ORDER = ["texture", "solid", "bitmap"]
     providers: dict[str, list[FontProvider]] = {}
     #: The format this provider serves; a concrete provider names its own.
     format = ""

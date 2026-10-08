@@ -917,6 +917,30 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1f('alphaValue', float(alpha), self.program)
         self._set_uniform1i('alphaMode', int(alpha_mode), self.program)
         self._set_uniform1f('alphaCutoff', float(cutoff), self.program)
+        self._alpha = (float(alpha), float(cutoff))
+
+    #: The opacity and cutoff :meth:`set_alpha` last set.
+    _alpha: tuple[float, float] = (1.0, 0.5)
+
+    def bind_coverage(self, texture: int) -> None:
+        """Draw the next shapes through `texture`, white with the coverage of
+        text in its alpha, as their only map, blended
+
+        The material's own maps are put back when the next shape is set up.
+        """
+        glActiveTexture(GL_TEXTURE0 + PBR_UNITS['baseColor'])
+        glBindTexture(GL_TEXTURE_2D, texture)
+        glActiveTexture(GL_TEXTURE0)
+        self._set_uniform1i('materialTextures', PBR_TEXTURE_BITS['baseColor'], self.program)
+        alpha, cutoff = self._alpha
+        self.set_alpha(alpha, _ALPHA_MODES['BLEND'], cutoff)
+        self._boundTextures = None
+        self.reset_appearance_cache()
+
+    def release_coverage(self) -> None:
+        """Have the next shape set its material and maps up again"""
+        self._boundTextures = None
+        self.reset_appearance_cache()
 
     def bind_pbr_textures(self, material: Any, mode: Any) -> None:
         """Put ``material``'s images on the texture units the shaders read.

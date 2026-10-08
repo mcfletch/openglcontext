@@ -25,7 +25,7 @@ def _core_profile():
 
 def _drawn():
     """What a context draws of one line of text, and the font that drew it"""
-    text = basenodes.Text(string=['still'])
+    text = basenodes.Text(string=['still'], fontStyle=basenodes.FontStyle(format='solid'))
     scene = [basenodes.Transform(translation=(-1, 0, 0), children=[
         basenodes.Shape(
             geometry=text,

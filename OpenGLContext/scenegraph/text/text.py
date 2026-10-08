@@ -9,8 +9,9 @@ from OpenGLContext.scenegraph.text import fontprovider
 from vrml import cache
 from vrml import protofunctions
 
-# Import shaderfont to ensure it auto-registers as a provider
-# This is needed for core profile contexts where glutfont won't work
+# Imported to register their providers: Pillow's texture text, and the
+# pre-drawn bitmap atlas
+from OpenGLContext.scenegraph.text import pillowfont  # noqa: F401 registers the texture provider
 try:
     from OpenGLContext.scenegraph.text import shaderfont
 except ImportError:
@@ -31,6 +32,10 @@ class Text( basenodes.Text ):
     XXX Do not currently support right-to-left fonts
     XXX Do not currently support vertically-ordered fonts
     """
+    #: Text is drawn with anti-aliased edges, so its shape is blended
+    #: (:meth:`OpenGLContext.scenegraph.shape.Shape.sortKey`).
+    softEdges = True
+
     def effectiveFontStyle( self ) -> Any:
         """The FontStyle the text is drawn with: its own; else, in a VRML97 or
         X3D document, one with FontStyle's defaults (family SERIF); else

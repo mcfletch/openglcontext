@@ -302,6 +302,10 @@ class Shape(basenodes.Shape):
             key = self.appearance.sortKey(mode, matrix)
         else:
             key = (False, [], None)
+        if not key[0] and getattr(self.geometry, 'softEdges', False):
+            # Drawn with anti-aliased edges, as text is: blended with the
+            # transparent shapes
+            key = (True,) + tuple(key[1:])
         # Only transparent shapes need a real back-to-front distance. Opaque
         # geometry is depth-buffer-correct in any order and every render pass
         # re-sorts by eye-space z anyway, so skip the per-shape projection for

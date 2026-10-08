@@ -1084,6 +1084,18 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         # Tell shader we have a texture
         self.set_texture_enabled(True, texture_unit)
 
+    def bind_coverage(self, texture: int) -> None:
+        """Draw the next shapes through `texture`, white with the coverage of
+        text in its alpha, in place of the appearance's texture"""
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, texture)
+        self.set_texture_enabled(True, 0)
+        self.set_default_texture_transform()
+
+    def release_coverage(self) -> None:
+        """Stop drawing through the texture :meth:`bind_coverage` bound"""
+        self.unbind_texture(0)
+
     def unbind_texture(self, texture_unit: int = 0) -> None:
         """Unbind texture and disable texture sampling."""
         glActiveTexture(GL_TEXTURE0 + texture_unit)

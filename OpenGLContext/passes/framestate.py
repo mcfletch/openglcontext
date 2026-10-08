@@ -12,6 +12,8 @@ frame; ``frameState`` on the pass is the open one, or None between frames.
 """
 from __future__ import annotations
 
+import itertools
+
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -22,12 +24,18 @@ if TYPE_CHECKING:
 __all__ = ('FrameState',)
 
 
+#: Numbers each FrameState as it is made.
+_NUMBERS = itertools.count(1)
+
+
 class FrameState:
     """The state one frame shares among its stages."""
 
-    __slots__ = ('gathered', 'reach', 'refusesShare')
+    __slots__ = ('gathered', 'number', 'reach', 'refusesShare')
 
     def __init__(self) -> None:
+        #: This frame's place in the process's frames, counting from 1.
+        self.number = next(_NUMBERS)
         #: This frame's walk of the scene, once it has been made.
         self.gathered: Optional['GatheredPaths'] = None
         #: Where each shape of the walk is and how far it reaches, the world

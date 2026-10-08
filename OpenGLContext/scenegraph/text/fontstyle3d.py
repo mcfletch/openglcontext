@@ -15,11 +15,16 @@ class FontStyle( basenodes.FontStyle ):
 ##	spacing = field.newField( 'spacing', 'SFFloat', 0, 1.0)
 ##	leftToRight = field.newField( 'leftToRight', 'SFBool', 0, 1)
 ##	size = field.newField( 'size', 'SFFloat', 0, 1.0)
-    format = field.newField( 'format', 'SFString', 1, "solid")
+    #: The provider format to draw with (``texture``, ``solid``, ``outline``,
+    #: ``bitmap``); empty takes the first of FontProvider.PROVIDER_SEARCH_ORDER
+    #: that has a font.
+    format = field.newField( 'format', 'SFString', 1, "")
 
 class FontStyle3D( FontStyle ):
     """FontStyle with ability to specify 3D extrusion properties"""
     PROTO = 'FontStyle3D'
+    #: The extrusion is a polygon font's.
+    format = field.newField( 'format', 'SFString', 1, "solid")
     quality = field.newField( 'quality', 'SFInt32', 1, 3)
     renderFront = field.newField( 'renderFront', 'SFBool', 1, 1)
     renderSides = field.newField( 'renderSides', 'SFBool', 1, 0)
