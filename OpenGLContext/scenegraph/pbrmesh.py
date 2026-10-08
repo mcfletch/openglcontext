@@ -30,7 +30,7 @@ from vrml.x3d import nodes as x3d
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph import vertexsemantics
 from OpenGLContext.scenegraph.geometryarrays import (
-    GeometryArrays, VertexArray, report_missing_inputs,
+    GeometryArrays, NamedArray, VertexArray, bind_named, report_missing_inputs,
 )
 
 
@@ -114,6 +114,11 @@ class _MeshGPU(object):
                 # never do, and re-uploading them every frame is pure waste.
                 self.dyn[name] = buf
 
+        #: The vertex attributes a shader reads by name, each in a buffer of its own.
+        self.named = tuple(
+            NamedArray(name, VBO(values), values.shape[1], locations)
+            for name, values, locations in getattr(mesh, 'vertex_attributes', ()))
+
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
         self._bind_attributes()
@@ -156,6 +161,7 @@ class _MeshGPU(object):
             buf.bind()
             glEnableVertexAttribArray(loc)
             glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, 0, None)
+        bind_named(self.named)
 
     def _draw_elements(self, mode: Any = None) -> None:
         from OpenGLContext.multiview.strategy import draw_arrays, draw_elements
@@ -315,8 +321,14 @@ class PBRMesh(x3d.X3DGeometryNode):
                  solid: bool = True,
                  appearance: Any = None, morph_targets: Any = None,
                  skin_joints: Any = None, skin_weights: Any = None, texcoords1: Any = None,
-                 draw_mode: int = GL_TRIANGLES, **named: Any) -> None:
+                 draw_mode: int = GL_TRIANGLES,
+                 vertex_attributes: Any = (), **named: Any) -> None:
         super(PBRMesh, self).__init__(solid=solid, **named)
+        #: Vertex attributes a shader reads by name -- X3D's `attrib` nodes --
+        #: as (name, one row a vertex, locations it takes) each.
+        self.vertex_attributes: tuple[tuple[str, np.ndarray, int], ...] = tuple(
+            (str(name), np.ascontiguousarray(values, dtype=np.float32), int(locations))
+            for name, values, locations in vertex_attributes)
         # GL primitive mode (glTF primitive.mode == the GL enum): GL_TRIANGLES for the
         # common case, or GL_POINTS/GL_LINES/GL_LINE_LOOP/GL_LINE_STRIP.
         self.draw_mode = int(draw_mode)

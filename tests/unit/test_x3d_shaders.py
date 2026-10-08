@@ -416,3 +416,70 @@ class TestSourceFiles:
         scene, pixel = self._draw(path)
         assert bluish(pixel)
         assert named(scene, 'S').isValid is False
+
+
+ATTRIBUTE_VERTEX = """<![CDATA[#version 330 core
+in vec4 x3d_Vertex;
+in vec3 heat;
+uniform mat4 x3d_ModelViewMatrix;
+uniform mat4 x3d_ProjectionMatrix;
+out vec3 tint;
+void main() {
+    tint = heat;
+    gl_Position = x3d_ProjectionMatrix * x3d_ModelViewMatrix * x3d_Vertex;
+}
+]]>"""
+
+MATRIX_VERTEX = """<![CDATA[#version 330 core
+in vec4 x3d_Vertex;
+in mat4 frame;
+uniform mat4 x3d_ModelViewMatrix;
+uniform mat4 x3d_ProjectionMatrix;
+out vec3 tint;
+void main() {
+    tint = frame[1].xyz;
+    gl_Position = x3d_ProjectionMatrix * x3d_ModelViewMatrix * x3d_Vertex;
+}
+]]>"""
+
+QUAD = '-2 -2 0 2 -2 0 2 2 0 -2 2 0'
+GREEN_HEAT = ('<FloatVertexAttribute name="heat" numComponents="3" '
+              'value="0 1 0 0 1 0 0 1 0 0 1 0"/>')
+# Column 1 of each matrix is green; X3D gives a matrix's values column by column.
+GREEN_FRAME = ('<Matrix4VertexAttribute name="frame" value="%s"/>'
+               % ' '.join(['0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0'] * 4))
+GEOMETRIES = {
+    'IndexedFaceSet': ('<IndexedFaceSet solid="false" coordIndex="0 1 2 3 -1">'
+                       '<Coordinate point="%s"/>%%s</IndexedFaceSet>' % QUAD),
+    'IndexedTriangleSet': ('<IndexedTriangleSet solid="false" index="0 1 2 0 2 3">'
+                           '<Coordinate point="%s"/>%%s</IndexedTriangleSet>' % QUAD),
+    'TriangleSet (normal per face)': (
+        '<IndexedTriangleSet solid="false" index="0 1 2 0 2 3" normalPerVertex="false">'
+        '<Coordinate point="%s"/><Normal vector="0 0 1 0 0 1"/>%%s</IndexedTriangleSet>' % QUAD),
+    'ElevationGrid': ('<Transform rotation="1 0 0 -1.5708" translation="-2 -2 0">'
+                      '<Shape><Appearance>%(look)s</Appearance><ElevationGrid solid="false" '
+                      'xDimension="2" zDimension="2" xSpacing="4" zSpacing="4" height="0 0 0 0">'
+                      '%%s</ElevationGrid></Shape></Transform>'),
+}
+
+
+def _attribute_scene(geometry, attribute, vertex):
+    shader = ('<ComposedShader language="GLSL"><ShaderPart type="VERTEX">%s</ShaderPart>'
+              '<ShaderPart type="FRAGMENT">%s</ShaderPart></ComposedShader>' % (vertex, TINTED))
+    if geometry.startswith('<Transform'):
+        body = geometry % {'look': shader}
+        return load('<X3D profile="Full" version="4.0"><Scene>'
+                    '<Viewpoint position="0 0 10"/>%s</Scene></X3D>' % (body % attribute,))
+    return load(document(shader, geometry=geometry % attribute))
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+@pytest.mark.parametrize('geometry', sorted(GEOMETRIES))
+class TestVertexAttributes:
+    def test_a_float_attribute_is_the_input_of_its_name(self, renderer, geometry):
+        scene = _attribute_scene(GEOMETRIES[geometry], GREEN_HEAT, ATTRIBUTE_VERTEX)
+        assert greenish(centre(scene, renderer))
+
+    def test_a_matrix_attribute_takes_a_location_a_column(self, renderer, geometry):
+        scene = _attribute_scene(GEOMETRIES[geometry], GREEN_FRAME, MATRIX_VERTEX)
+        assert greenish(centre(scene, renderer))

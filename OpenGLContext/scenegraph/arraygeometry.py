@@ -48,6 +48,7 @@ class ArrayGeometry(object):
         ccw: int = 1, # determines winding direction
         solid: int = 1, # whether backspace culling may be enabled
         tangentArray: Any = None, # optional (x, y, z, w) tangents, for a normal map
+        vertexAttributes: Any = (), # (name, one row a vertex, locations) a shader reads by name
     ) -> None:
         """Initialize the ArrayGeometry
 
@@ -75,6 +76,9 @@ class ArrayGeometry(object):
         tangentArray = None -- optional tangents, xyz and the bitangent's
             sign, which a material's normal map is read along; the shader
             path only
+        vertexAttributes = () -- X3D's `attrib` vertex attributes, as
+            (name, one row a vertex, locations it takes), for a shader that
+            reads them by name; the shader path only
         """
         log.debug( 'New array geometry node' )
         if FORCE_CONTIGUOUS:
@@ -105,6 +109,10 @@ class ArrayGeometry(object):
                 textureCoordinateArray = VBO( textureCoordinateArray )
             if tangentArray is not None and len(tangentArray):
                 tangentArray = VBO( ascontiguousarray( tangentArray, 'f' ) )
+        from .geometryarrays import NamedArray
+        self.named = tuple(
+            NamedArray(name, VBO(ascontiguousarray(values, 'f')), values.shape[1], locations)
+            for name, values, locations in vertexAttributes)
         if count < 0:
             count = len (vertexArray)
         self.vertices = vertexArray
@@ -227,6 +235,7 @@ class ArrayGeometry(object):
             texcoords=self.textures,
             tangents=self.tangents,
             colors=colours,
+            named=self.named,
         ), owner=self, where='ArrayGeometry', ccw=self.ccw == GL_CCW,
             solid=bool(self.solid))
     def draw( self ) -> None:

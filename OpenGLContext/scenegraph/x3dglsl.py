@@ -38,7 +38,8 @@ __all__ = [
     'OBJECT_ID_UNIFORM', 'Prepared', 'Uniform', 'LinkSchedule', 'stage_of',
     'stage_macro', 'speaks_glsl', 'inline_source', 'glsl_version',
     'prepare_source', 'packaged_stages', 'uniform_values', 'convert_uniform',
-    'attribute_locations', 'attribute_layout', 'vertex_attribute',
+    'attribute_locations', 'attribute_layout', 'vertex_attribute', 'vertex_attributes',
+    'per_vertex',
     'light_parameters', 'headlight_parameters', 'legacy_light_parameters',
     'material_parameters', 'legacy_material_parameters', 'X3D_INPUTS',
 ]
@@ -604,6 +605,31 @@ def vertex_attribute(node: Any) -> "Optional[tuple[str, np.ndarray, int]]":
     if rows < 1:
         return None
     return name, values[:rows * width].reshape(rows, width), locations
+
+
+def vertex_attributes(nodes: Any) -> "list[tuple[str, np.ndarray, int]]":
+    """Each of a geometry's `attrib` nodes as :func:`vertex_attribute` describes it, in order"""
+    found = (vertex_attribute(entry) for entry in (nodes or ()) if entry)
+    return [entry for entry in found if entry is not None]
+
+
+def per_vertex(attributes: Sequence["tuple[str, np.ndarray, int]"], index: np.ndarray,
+               ) -> "tuple[list[tuple[str, np.ndarray, int]], list[str]]":
+    """The attributes taken at `index`, one row per drawn vertex, and the names left out
+
+    `index` gives the coordinate each drawn vertex is: the attributes have one
+    row per coordinate. One with fewer rows than `index` reaches is left out.
+    """
+    index = np.asarray(index, dtype=np.int64)
+    found: "list[tuple[str, np.ndarray, int]]" = []
+    short: "list[str]" = []
+    reach = int(index.max()) + 1 if len(index) else 0
+    for name, values, locations in attributes:
+        if len(values) < reach:
+            short.append(name)
+            continue
+        found.append((name, np.ascontiguousarray(values[index], dtype=np.float32), locations))
+    return found, short
 
 
 # -- lights and materials ---------------------------------------------------------

@@ -25,6 +25,8 @@ from typing import Any, Optional
 import numpy as np
 from numpy.typing import ArrayLike
 
+from OpenGLContext.scenegraph import x3dglsl
+
 __all__ = ['ComposedArrays', 'arc_close', 'arc_points', 'arc_sweep', 'composed_arrays',
            'crease_normals', 'disk', 'fans', 'grid_points', 'grid_texcoords',
            'grid_triangles', 'indexed_fans', 'indexed_quads', 'indexed_strips',
@@ -306,6 +308,9 @@ class ComposedArrays:
     short: "list[str]" = field(default_factory=list)
     #: The glTF primitive mode: triangles.
     mode: int = 4
+    #: X3D's `attrib` vertex attributes, (name, one row a vertex, locations)
+    #: each, for a shader reading them by name.
+    vertex_attributes: "list[tuple[str, np.ndarray, int]]" = field(default_factory=list)
 
 
 def _face_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
@@ -335,6 +340,7 @@ def composed_arrays(
     colors: Any = None, color_per_vertex: bool = True,
     texcoords: Sequence[Any] = (), tangents: Any = None,
     crease_angle: Optional[float] = None,
+    vertex_attributes: Sequence["tuple[str, np.ndarray, int]"] = (),
 ) -> ComposedArrays:
     """The arrays of a composed set whose triangles index `points`
 
@@ -347,6 +353,9 @@ def composed_arrays(
     crease_angle -- for normals generated per point: the fold, in radians,
         below which they are smoothed across (:func:`crease_normals`); None
         smooths across every fold
+    vertex_attributes -- X3D's `attrib` nodes as
+        :func:`~OpenGLContext.scenegraph.x3dglsl.vertex_attributes` gives
+        them, one row per point
 
     The points stay shared, and `indices` names them, where every attribute
     is one per point; where one is per triangle, every corner gets its own
@@ -423,7 +432,11 @@ def composed_arrays(
     for number, values in enumerate(coordinate_sets):
         if values is not None:
             attributes['TEXCOORD_%d' % number] = values if corners is None else values[corners]
+    named, missing = x3dglsl.per_vertex(
+        vertex_attributes, np.arange(count) if corners is None else corners)
+    short.extend(missing)
     return ComposedArrays(
         attributes={name: np.ascontiguousarray(value, dtype=np.float32)
                     for name, value in attributes.items()},
-        indices=indices, dropped=int((~valid).sum()), short=short)
+        indices=indices, dropped=int((~valid).sum()), short=short,
+        vertex_attributes=named)

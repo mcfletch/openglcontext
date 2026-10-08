@@ -51,7 +51,7 @@ from OpenGLContext.passes.shaderpass import (
     GEOMETRY_STAGE_PROGRAMS, ShaderAppearanceProgram, normal_matrix,
     release_geometry_stage_hold,
 )
-from OpenGLContext.scenegraph import texturemapping, vertexsemantics, x3dglsl
+from OpenGLContext.scenegraph import geometryarrays, texturemapping, vertexsemantics, x3dglsl
 from OpenGLContext.scenegraph.shaders import bind_engine_attributes
 
 log = logging.getLogger(__name__)
@@ -363,33 +363,11 @@ class LinkedProgram:
             self.set(name, converted)
 
 
-def _attribute_widths(geometry: Any) -> "list[tuple[str, int]]":
-    """The geometry's `attrib` vertex attributes, as (name, locations) in order"""
-    found: "list[tuple[str, int]]" = []
-    for entry in getattr(geometry, 'attrib', None) or ():
-        described = x3dglsl.vertex_attribute(entry)
-        if described is not None:
-            found.append((described[0], described[2]))
-    return found
-
-
-def _max_attributes() -> int:
-    found = _MAX_ATTRIBUTES.get(contextresources.context_key())
-    if found is None:
-        found = _MAX_ATTRIBUTES[contextresources.context_key()] = int(
-            GL.glGetIntegerv(GL.GL_MAX_VERTEX_ATTRIBS))
-    return found
-
-
-_MAX_ATTRIBUTES: dict[Any, int] = {}
-
-
 def geometry_layout(geometry: Any) -> "tuple[tuple[str, int], ...]":
-    """Where `geometry`'s vertex attributes are read in this context"""
-    widths = _attribute_widths(geometry)
-    if not widths:
-        return ()
-    return x3dglsl.attribute_layout(widths, _max_attributes())
+    """Where `geometry`'s `attrib` vertex attributes are read in this context"""
+    return geometryarrays.named_layout(
+        (name, locations) for name, _values, locations in x3dglsl.vertex_attributes(
+            getattr(geometry, 'attrib', None)))
 
 
 class ShaderState:

@@ -20,12 +20,13 @@ from itertools import zip_longest
 from collections.abc import Iterator
 from typing import Any, Optional
 
+import numpy as np
 from numpy import add, arccos, array, asarray, divide, dot, ones, repeat
 from OpenGL.GL import GL_TRIANGLES
 
 from OpenGLContext import triangleutilities
 from OpenGLContext.debug.logs import getTraceback
-from OpenGLContext.scenegraph import arraygeometry, composedgeometry
+from OpenGLContext.scenegraph import arraygeometry, composedgeometry, x3dglsl
 from OpenGLContext.scenegraph import (
     polygon,
     vertex,
@@ -102,6 +103,9 @@ class IFSCompiler(object):
         ]:
             if n:
                 found.append((n, protofunctions.getField(n, attr)))
+        for entry in getattr(self.target, 'attrib', None) or ():
+            if entry:
+                found.extend((entry, declared) for declared in protofunctions.getFields(entry))
         return found
 
     def buildCacheHolder(self, key: str = "", mode: Any = None) -> Any:
@@ -275,6 +279,8 @@ class ArrayGeometryCompiler(IFSCompiler):
         # if so, we can possibly use IndexedPolygons instead
         # of IndexedFaceSet for rendering...
         vertices = self.tessellate()
+        #: The coordinate each drawn vertex is, which X3D's `attrib` values are indexed by.
+        self.coordinateIndex = np.array([vertex.coordIndex for vertex in vertices], np.int64)
 
         # vertices is now a list of vertices such that
         # every three vertices represents a single triangle
@@ -352,11 +358,12 @@ class ArrayGeometryCompiler(IFSCompiler):
         if expanded is None:
             return DUMMY_RENDER
         vertexArray, colorArray, normalArray, textureCoordinateArray = expanded
-        log.debug(
-            "Arrays: \nvertex -- %s\nnormal -- %s",
-            vertexArray,
-            normalArray,
-        )
+        named, short = x3dglsl.per_vertex(
+            x3dglsl.vertex_attributes(getattr(self.target, 'attrib', None)),
+            self.coordinateIndex)
+        for name in short:
+            log.warning('%s: vertex attribute %s has fewer values than coordinates; '
+                        'it is left out', self.target, name)
         return arraygeometry.ArrayGeometry(
             vertexArray,
             colorArray,
@@ -366,6 +373,7 @@ class ArrayGeometryCompiler(IFSCompiler):
             ccw=self.target.ccw,
             solid=self.target.solid,
             tangentArray=surface_tangents(vertexArray, normalArray, textureCoordinateArray),
+            vertexAttributes=named,
         )
 
 
@@ -378,6 +386,9 @@ class IndexedPolygonsCompiler(IFSCompiler):
     @classmethod
     def weight(cls, target: Any) -> float:
         """Determine weighting for the target for this style of compilation"""
+        if getattr(target, 'attrib', None):
+            # Vertex attributes are drawn by the array compiler.
+            return False
         if (
             # we have per-vertex normals...
             target.normalPerVertex
