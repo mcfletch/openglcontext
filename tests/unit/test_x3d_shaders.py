@@ -872,3 +872,43 @@ def test_a_short_attribute_does_not_move_the_others(renderer, geometry):
         'tint = heat;', 'tint = heat + cold.xyz * 0.0;')
     scene = _attribute_scene(GEOMETRIES[geometry], short + GREEN_HEAT, vertex)
     assert greenish(centre(scene, renderer))
+
+
+class TestAPartsLoadState:
+    """A ShaderPart says where its read has got to, for a LoadSensor"""
+
+    def _scene(self, directory, url):
+        (directory / 'part.frag').write_text('void main() {}\n')
+        path = directory / 'scene.x3d'
+        path.write_text(
+            '<X3D profile="Full" version="4.0"><Scene>'
+            '<Shape><Appearance><ComposedShader>'
+            '<ShaderPart DEF="PART" type="FRAGMENT" url=\'"%s"\'/>'
+            '</ComposedShader></Appearance></Shape></Scene></X3D>' % (url,))
+        return path
+
+    def test_a_part_that_reads_is_loaded(self, tmp_path):
+        from vrml.x3d import loadsensor
+        from OpenGLContext.loaders.loader import Loader
+        scene = Loader.load(str(self._scene(tmp_path, 'part.frag')))
+        background.wait_for_idle(10.0)
+        part = named(scene, 'PART')
+        assert loadsensor.load_state(part) == loadsensor.LOADED
+        assert part.source() == ('ready', 'void main() {}\n')
+
+    def test_a_part_that_does_not_read_has_failed(self, tmp_path):
+        from vrml.x3d import loadsensor
+        from OpenGLContext.loaders.loader import Loader
+        scene = Loader.load(str(self._scene(tmp_path, 'missing.frag')))
+        background.wait_for_idle(10.0)
+        part = named(scene, 'PART')
+        assert loadsensor.load_state(part) == loadsensor.FAILED
+        assert part.source() == ('failed', None)
+
+    def test_load_false_leaves_the_url_unread(self, tmp_path):
+        from OpenGLContext.loaders.loader import Loader
+        scene = Loader.load(str(self._scene(tmp_path, 'part.frag')))
+        background.wait_for_idle(10.0)
+        part = named(scene, 'PART')
+        part.load = False
+        assert part.source() == (None, None)
