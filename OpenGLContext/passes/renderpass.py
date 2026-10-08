@@ -156,11 +156,8 @@ class _defaultRenderPasses( object ):
 
         pass_ = cached_pass( sg, build )
         viewpointbinding.publish_viewpoints( context, pass_ )
-        if context.contextDefinition.profile == 'core':
-            # The core FlatPass takes its camera from the view platform only, so
-            # bind the scene's active Viewpoint into the platform here (the legacy
-            # path does this inside its scenegraph traversal instead).
-            viewpointbinding.bind_scene_viewpoint( context )
+        # Both passes take their camera from the view platform
+        viewpointbinding.bind_scene_viewpoint( context )
         navigationinfo.apply( context, pass_.currentNavigation(),
                               document=isinstance( getattr( pass_, 'scene', None ), X3DScene ) )
         return pass_( context )

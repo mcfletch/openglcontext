@@ -998,13 +998,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         if id_map is not None:
             disable_object_id_blend()   # don't blend the picking id
         # Straight (non-premultiplied) alpha src-over: src*srcA + dst*(1-srcA).
-        # This is coupled to the shader's alpha output: both the
-        # VRML97 (vrml97_lighting.frag: `alpha = 1.0 - transparency`) and PBR
-        # fragment shaders emit alpha as *opacity*, so these are the correct
-        # factors. The legacy fixed-function path (renderTransparent below) emits
-        # alpha as *transparency* and therefore uses the reversed factors -- do not
-        # unify the two blindly; changing one side without the other inverts every
-        # transparent surface. Locked by tests/test_transparent_blend.py.
+        # The VRML97 (vrml97_lighting.frag: `alpha = 1.0 - transparency`) and
+        # PBR fragment shaders emit alpha as opacity, as the fixed-function
+        # Material does (renderTransparent below uses the same factors).
+        # tests/unit/test_transparent_blend.py holds both profiles to it.
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glDepthMask(0)
         glDepthFunc(GL_LEQUAL)
@@ -2179,7 +2176,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                     if not setup:
                         setup = True
                         glEnable(GL_BLEND)
-                        glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
+                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
                         glDepthMask( 0 )
                         glDepthFunc( GL_LEQUAL )
 
@@ -2225,7 +2222,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
             return
         self.transparent = True
         glEnable( GL_BLEND )
-        glBlendFunc( GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA )
+        glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA )
         glDepthMask( 0 )
         glDepthFunc( GL_LEQUAL )
         try:

@@ -1,7 +1,8 @@
-"""Unit tests for Viewpoint near/far and the core-profile viewpoint bridge (no GL).
+"""Tests for Viewpoint near/far and for binding the scene's Viewpoint to the
+view platform
 
-These use lightweight fakes for the platform/context/scenegraph so the binding
-logic is exercised directly without a render context.
+Most use fakes for the platform, context and scenegraph; the ones asking for
+a scene_context draw.
 """
 import pytest
 import numpy as np
@@ -203,3 +204,12 @@ class TestAViewpointUnderATransform:
         platform = self.place(Transform(rotation=(0, 1, 0, 0.4)), Transform(rotation=(0, 1, 0, 0.3)))
         alone = self.place(Transform(rotation=(0, 1, 0, 0.7)))
         assert self.looking(platform) == pytest.approx(self.looking(alone), abs=1e-5)
+
+
+@pytest.mark.parametrize('profile', ['core', 'compatibility'])
+def test_the_scenes_viewpoint_is_bound_in_either_profile(profile):
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    with scene_context([Viewpoint(position=(0, 0, 6))], size=(32, 32),
+                       environment={'OPENGLCONTEXT_PROFILE': profile}) as context:
+        drawn_image(context)
+        assert context.platform.position[:3] == pytest.approx((0, 0, 6))

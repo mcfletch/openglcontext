@@ -219,40 +219,6 @@ class FlatPass( _flat.FlatPass ):
                         bvolume.debugRender( )
                 except Exception as err:
                     self.renderFailed( 'opaque', node, err )
-    def renderTransparent( self, toRender: Sequence[Any] ) -> None:
-        """Render the transparent geometry from toRender (in forward order)"""
-        self.transparent = True
-        setup = False
-        debugFrustum = self.context.contextDefinition.debugBBox
-        try:
-            for key,mvmatrix,_tmatrix,bvolume,path,node in toRender:
-                if key[0]:
-                    if not setup:
-                        setup = True
-                        glEnable(GL_BLEND)
-                        glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
-                        glDepthMask( 0 )
-                        glDepthFunc( GL_LEQUAL )
-
-                    self.matrix = mvmatrix
-                    self.renderPath = path
-                    glLoadMatrixf( mvmatrix )
-                    try:
-                        node.RenderTransparent( mode = self )
-                        if debugFrustum:
-                            bvolume.debugRender( )
-                    except Exception as err:
-                        self.renderFailed( 'transparent', node, err )
-        finally:
-            self.transparent = False
-            if setup:
-                glDisable( GL_BLEND )
-                glDepthMask( 1 )
-                glDepthFunc( GL_LEQUAL )
-                glEnable( GL_DEPTH_TEST )
-        # Draw shapes deferred from the opaque pass.
-        self._renderDeferredTransparent()
-
     def selectRender( self, mode: Any, toRender: Sequence[Any],
                       events: dict[Any, Any] ) -> None:
         """Legacy colour-buffer pick for the compatibility profile.

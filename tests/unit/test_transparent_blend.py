@@ -1,7 +1,5 @@
-"""The transparent blend factors are coupled to the fragment
-shader's alpha-output semantics. A partial revert / stale shader that changes one
-side without the other silently inverts every transparent VRML97 surface. These
-lock the two sides together so such a drift fails a test.
+"""Tests for the transparent blend, which takes a material's alpha as its
+opacity in the shaders and in the fixed-function Material alike.
 """
 import inspect
 import os
@@ -11,6 +9,8 @@ import pytest
 
 from OpenGLContext.passes import _flat
 from OpenGLContext.passes.shaderpass import SHADER_DIR
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.testing.scenes import drawn_image, scene_context
 
 
 def _frag(name):
@@ -30,12 +30,21 @@ class TestShaderBlendFactors:
             "lit shader must output alpha as opacity (1 - transparency)"
 
 
-class TestLegacyBlendContrast:
-    def test_legacy_path_uses_reversed_factors(self):
-        # the fixed-function path emits alpha as transparency and so intentionally
-        # uses the *reversed* factors -- documents why the two must not be unified
-        src = inspect.getsource(_flat.FlatPass.renderTransparent)
-        assert 'glBlendFunc(GL_ONE_MINUS_SRC_ALPHA' in src
+@pytest.mark.parametrize('profile', ['core', 'compatibility'])
+def test_a_quarter_transparent_shape_is_three_quarters_its_colour(profile):
+    """The material's alpha is its opacity in both profiles
+
+    Drawn by the VRML97 renderer, which applies no tone mapping.
+    """
+    scene = [basenodes.Shape(
+        geometry=basenodes.Box(size=(40, 40, 0.1)),
+        appearance=basenodes.Appearance(material=basenodes.Material(
+            diffuseColor=(0, 0, 0), emissiveColor=(1, 0, 0), transparency=0.25)))]
+    with scene_context(scene, size=(32, 32), renderer='vrml97',
+                       environment={'OPENGLCONTEXT_PROFILE': profile}) as context:
+        drawn_image(context)
+        red = int(drawn_image(context)[16, 16, 0])
+    assert abs(red - 191) <= 4, red
 
 
 class TestSrcOverCompositing:

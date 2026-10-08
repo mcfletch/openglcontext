@@ -23,7 +23,8 @@ The current system in `_flat.py` and `flatcompat.py`:
 2. **Two-Pass Rendering**:
    - First pass: Render opaque geometry with depth write enabled
    - Second pass: Render transparent geometry back-to-front with depth write disabled
-3. **Simple Blending**: Uses `GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA` blending
+3. **Simple Blending**: Uses straight-alpha `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA`
+   blending, the material's alpha being its opacity in both profiles
 
 ### Limitations
 

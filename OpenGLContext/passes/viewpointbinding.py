@@ -7,9 +7,9 @@ paths to the scenegraph each frame as ``SceneGraph.viewpointPaths``, which is
 where anything outside the pass reads the scene's cameras from, and tells the
 context when the set has changed.
 
-:func:`bind_scene_viewpoint` moves the view platform to the viewpoint X3D's
-bind stack has bound, for the core-profile pass, which takes its camera from
-the view platform only; :func:`next_viewpoint` binds the next.
+:func:`bind_scene_viewpoint` moves the view platform, which the pass takes
+its camera from, to the viewpoint X3D's bind stack has bound;
+:func:`next_viewpoint` binds the next.
 """
 
 from collections.abc import Sequence
@@ -105,7 +105,6 @@ _moving: 'weakref.WeakKeyDictionary[Any, ViewpointTransition]' = weakref.WeakKey
 def bind_scene_viewpoint(context: Any) -> None:
     """Move ``context``'s platform to the scene's bound Viewpoint.
 
-    The core-profile FlatPass drives the camera from the view platform alone.
     This moves the platform to the viewpoint X3D's bind stack has on top
     (:func:`vrml.x3d.binding.current_path`, which binds the first where none
     is), and only when that changes, so it never fights ordinary navigation.
