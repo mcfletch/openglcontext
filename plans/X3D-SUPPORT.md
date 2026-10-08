@@ -276,8 +276,31 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `ProgramShader`, `PackagedShader`, the vertex attributes
   - [ ] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
     models
-  - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
-    `HAnimDisplacer`, `HAnimMotion`, `HAnimPose`
+  - [x] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
+    `HAnimDisplacer`, `HAnimMotion`, `HAnimPose` (`scenegraph.hanim`; the
+    arithmetic in `character.hanim`, no GL): joints, sites and the humanoid
+    transforms (pyvrml97 `Transforming` + `LocalMatrices`); the skin a skinned
+    PBRMesh per geometry reading `skinCoord` (`scenegraph.coordinatedeform`),
+    X3D's `v + sum(w (M v - v))` as four influences with the rest joint at
+    palette 0, `jointBinding*` matrices, `skinBindingCoords`/`Normals`, joint,
+    humanoid and segment displacers as morph targets; bounds from joint
+    spheres; motion (BVH channels, loop, frame range and increment,
+    next/previous, `channelsEnabled`, `motionsEnabled`) and pose transitions
+    polled on the engine clock; names, aliases and LOA from the X3DUOM
+    (pyvrml97 `vrml.x3d.hanimnames`); `HAnimJoint.limitedRotation()`
+  - landed with it: a morphed mesh the shader skins is no longer posed twice;
+    IFS generated normals follow `ccw` false; an IFS value index past every
+    value reads the last; crease-angle arccos clipped; a light aimed nowhere
+    is off; EXTERNPROTO files read through the resolver
+    (`loaders.x3d.ContainedPrototypes`); pyvrml97: joints hold sites and
+    markers, `HAnimPose.set_fraction` an SFFloat, prototype event fields,
+    looping TimeSensors counted rather than stepped
+  - corpus: HumanoidAnimation, the 194 documents of its humanoid folders drawn
+    by `oglc-x3d-regression` with none failing; 40 compared with X_ITE renders
+  - open: the IFS tessellator is the cost of a large skin's first draw
+    (Lily, 41 000 triangles: 3.4 s); `HAnimPose.isLoaded` routed by
+    HAnimPoseExample is not an X3D 4.1 field; a `SphereBackground` draws with
+    a VAO made each frame
   - [ ] RigidBodyPhysics: the 14 nodes on omi_physics
   - [ ] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
     `LayoutGroup`, `LayoutLayer`, `ScreenGroup`, `ScreenFontStyle`

@@ -374,6 +374,16 @@ def test_the_skin_is_drawn_where_the_pose_puts_it(gl_context, renderer, profile,
     assert height > 3 * width
 
 
+def test_a_drawn_humanoid_plays_its_motion(gl_context):
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = load(arm(extra=MOTION % 'loop="true"'))
+    with scene_context(scene, size=(32, 32)) as context:
+        for _frame in range(4):
+            drawn_image(context)
+        assert scene.getDEF('M').elapsedTime > 0
+    assert scene.getDEF('SHOULDER').rotation[3] > 0
+
+
 def test_a_still_humanoid_does_no_gl_work(gl_context, check_still_frame):
     from OpenGLContext.testing.scenes import scene_context  # noqa: PLC0415 GL
     scene = load(arm().replace(b'<Background skyColor="0 0 0"/>', b''))
