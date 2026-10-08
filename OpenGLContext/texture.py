@@ -252,13 +252,14 @@ class Texture(object):
         return image.tobytes("raw", image.mode, 0, 1 if topFirst else -1)
 
     def ensureRGB(self, image: Any) -> Any:
-        """Ensure that the PIL image is in RGB mode
+        """The PIL image in a mode the texture stores: a palette image as RGB,
+        and an image with a transparent colour (a PNG's tRNS chunk) with an
+        alpha channel, LA for greyscale and RGBA otherwise
 
-        Note:
-            This method will create a _new_ PIL image if
-            the image is in Paletted mode, otherwise just
-            returns the same image object.
+        Any other image is answered as it is.
         """
+        if 'transparency' in image.info and image.mode in ("L", "RGB", "P"):
+            return image.convert("LA" if image.mode == "L" else "RGBA")
         if image.mode == "P":
             log.info("Paletted image found, converting: %s", image.info)
             image = image.convert("RGB")
