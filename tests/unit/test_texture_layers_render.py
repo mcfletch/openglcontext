@@ -209,3 +209,13 @@ def test_the_compatibility_profile_reads_x3ds_transform_nodes(gl_context, transf
     # Moved half the texture: green on the left, red on the right.
     assert close(tuple(image[32, 20]), (0, 255, 0)), tuple(image[32, 20])
     assert close(tuple(image[32, 44]), (255, 0, 0)), tuple(image[32, 44])
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+def test_a_lit_material_shades_the_chains_colour(gl_context, renderer):
+    texture = (b'<MultiTexture mode=\'"MODULATE" "MODULATE"\'>' + pixel(b'0xFF00FF')
+               + pixel(b'0xFFFF00') + b'</MultiTexture>')
+    lit = b'<Material diffuseColor="1 1 1"/>'
+    found = centre(drawn(square(texture, material=lit), renderer))
+    # The headlight full on the square: the chain's red, shaded.
+    assert found[0] > 200 and found[1] < 40 and found[2] < 40, found
