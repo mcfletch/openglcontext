@@ -22,6 +22,10 @@ from typing import Any
 #: the accelerated and the pure-Python class it loaded.
 VBO: Any = vbo.VBO
 
+#: The longitude the sides start at, the back (-Z) for points (sin, cos) of
+#: it: where VRML97 puts the texture's seam, u 0 and 1 (19775-1, 13.3).
+SEAM = pi
+
 
 # Distance-LOD tuning (Option B: dense base + gentle steps). A UV quadric's
 # silhouette is its slice count, so *any* visible drop in slices reads as the
@@ -244,13 +248,14 @@ class Sphere( basenodes.Sphere, Quadric ):
         """Create arrays for rendering a unit-sphere
         
         phi -- angle between points on the sphere (stacks/slices)
-        
-        Note: creates 'H' type indices...
-        
+
+        The longitude starts at the back, -Z, where VRML97's texture seam is
+        (:data:`SEAM`).
+
         returns coordarray, indexarray
         """
         latsteps = arange( 0,latAngle+0.000003, phi )
-        longsteps = arange( 0,longAngle+0.000003, phi )
+        longsteps = SEAM + arange( 0,longAngle+0.000003, phi )
         return cls._partialSphere( latsteps,longsteps )
 
     @classmethod
@@ -265,8 +270,10 @@ class Sphere( basenodes.Sphere, Quadric ):
         coords[:,:,0] = sin(longsteps)
         coords[:,:,1] = cos(latsteps).reshape( (-1,1))
         coords[:,:,2] = cos(longsteps)
-        coords[:,:,3] = longsteps/(2*pi)
-        coords[:,:,4] = latsteps.reshape( (-1,1))/ pi
+        # VRML97: u from 0 at the seam, anticlockwise seen from above; v
+        # from 0 at the bottom to 1 at the top
+        coords[:,:,3] = (longsteps - SEAM)/(2*pi)
+        coords[:,:,4] = 1.0 - latsteps.reshape( (-1,1))/ pi
         
         # now scale by sin of y's 
         scale = sin(latsteps).reshape( (-1,1))
@@ -348,9 +355,13 @@ class Cone( basenodes.Cone, Quadric ):
         side: bool = True, phi: float = pi/16, longAngle: float = (pi*2),
         top: bool = False, cylinder: bool = False
     ) -> tuple[Any, Any]:
-        """Generate a VBO data-set to render a cone"""
-        (0,height/2.0,0)
-        longsteps = arange( 0,longAngle+0.000003, phi )
+        """Generate a VBO data-set to render a cone
+
+        Texture coordinates are VRML97's: the side wraps from the seam at the
+        back (:data:`SEAM`) with v 0 at the bottom; the top cap's image is
+        upright with its top toward -Z, the bottom cap's toward +Z.
+        """
+        longsteps = SEAM + arange( 0,longAngle+0.000003, phi )
         ystep = len(longsteps)
         zstep = 0
         if top and cylinder:
@@ -363,9 +374,9 @@ class Cone( basenodes.Cone, Quadric ):
         coords = zeros( (zstep,ystep,8), 'f')
         coords[:,:,0] = sin(longsteps) * radius
         coords[:,:,2] = cos(longsteps) * radius
-        coords[:,:,3] = longsteps/(2*pi)
+        coords[:,:,3] = (longsteps - SEAM)/(2*pi)
         def fill_disk( area: Any, ycoord: float, normal: Any = (0,-1,0),
-                       degenerate: int = 1 ) -> None:
+                       degenerate: int = 1, towards: float = 1.0 ) -> None:
             """fill in disk elements for given area"""
             # Use integer index, not boolean (numpy boolean indexing differs!)
             other = 1 - degenerate
@@ -376,7 +387,7 @@ class Cone( basenodes.Cone, Quadric ):
             area[degenerate,:,2] = 0.0
             # Set texture coords for the outer ring (non-degenerate row)
             area[other,:,3] = sin( longsteps ) / 2.0 + .5
-            area[other,:,4] = cos( longsteps ) / 2.0 + .5
+            area[other,:,4] = towards * cos( longsteps ) / 2.0 + .5
             area[degenerate,:,3:5] = .5
             # normal for the disk is all the same...
             area[:,:,5:8] = normal
@@ -387,8 +398,8 @@ class Cone( basenodes.Cone, Quadric ):
             else:
                 area[0,:,1] = height/2.0
             area[1,:,1] = -height/2.0
-            area[0,:,4] = 0
-            area[1,:,4] = 1.0
+            area[0,:,4] = 1.0
+            area[1,:,4] = 0.0
             # normals for the sides...
             area[0:2,:-1,5:8] = vectorutilities.normalise(
                 vectorutilities.crossProduct( 
@@ -401,7 +412,8 @@ class Cone( basenodes.Cone, Quadric ):
         offset = 0
         tocompress = {}
         if top and cylinder:
-            fill_disk( coords[offset:offset+2],height/2.0,(0,1,0), degenerate=0 )
+            fill_disk( coords[offset:offset+2],height/2.0,(0,1,0), degenerate=0,
+                       towards=-1.0 )
             tocompress[offset] = 0
             offset += 2
         if side:
