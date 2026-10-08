@@ -1,8 +1,8 @@
 """X3D's TextureBackground: a background whose six sides are texture nodes.
 
 Drawn as the engine's Background is: the sky and ground colours on a sphere,
-and the six sides as a cube over it once every side has its image. It binds
-as any background does.
+and each side that has an image on a cube over it. It binds as any background
+does.
 """
 import pytest
 from vrml.x3d import binding
@@ -34,6 +34,33 @@ def test_its_cache_depends_on_its_texture_fields():
     background = TextureBackground(frontTexture=front)
     names = {(node is background, name) for node, name in background.sideDependencies()}
     assert (True, 'frontTexture') in names and (True, 'backTexture') in names
+
+
+def test_a_pixel_texture_side_is_decoded_once_until_its_image_changes(monkeypatch):
+    from OpenGLContext.scenegraph import texturebackground  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.memo import check_memo_inputs  # noqa: PLC0415 kept with its use
+    decoded = []
+    real = texturebackground.sfimage_pixels
+
+    def counting(*args):
+        decoded.append(args)
+        return real(*args)
+
+    monkeypatch.setattr(texturebackground, 'sfimage_pixels', counting)
+    side = x3d.PixelTexture(image=[1, 1, 3, 0xFF0000])
+    background = TextureBackground(frontTexture=side)
+    for _frame in range(3):
+        assert background.hasImages()
+    assert len(decoded) == 1
+
+    def ask():
+        return background.front.image.getpixel((0, 0))
+
+    check_memo_inputs(ask, [
+        ('pixels.image', lambda: setattr(side, 'image', [1, 1, 3, 0x00FF00])),
+        ('frontTexture', lambda: setattr(
+            background, 'frontTexture', x3d.PixelTexture(image=[1, 1, 3, 0x0000FF]))),
+    ], fresh=lambda: texturebackground.decode_side(background.frontTexture).image.getpixel((0, 0)))
 
 
 SIDES = ' '.join('%sTexture' % side for side in ('front', 'back', 'left', 'right', 'top', 'bottom'))
