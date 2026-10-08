@@ -715,3 +715,52 @@ class TestTheMemosFollowTheirInputs:
             ('attrib.name', lambda: setattr(heat, 'name', 'cold')),
             ('geometry.attrib', lambda: setattr(node, 'attrib', [])),
         ], fresh=lambda: answer(ArrayGeometryCompiler(node).compile(mode=mode)))
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+def test_shapes_sharing_a_shader_and_geometry_are_each_drawn_by_it(renderer):
+    """Shapes the pass would draw as one instanced group are drawn by their shader"""
+    shader = composed(
+        fields='<field name="colour" type="SFColor" accessType="inputOutput" value="0 1 0"/>')
+    boxes = ''.join(
+        '<Transform translation="%d 0 0"><Shape>%s<Box %s size="0.8 0.8 0.8"/></Shape></Transform>'
+        % (x, '<Appearance DEF="LOOK"><Material diffuseColor="1 0 0" emissiveColor="1 0 0"/>%s'
+              '</Appearance>' % shader if x == -3 else '<Appearance USE="LOOK"/>',
+           'DEF="BOX"' if x == -3 else '')
+        for x in range(-3, 4))
+    boxes = boxes.replace('<Box  size="0.8 0.8 0.8"/>', '<Box USE="BOX"/>')
+    scene = load('<X3D profile="Full" version="4.0"><Scene><Viewpoint position="0 0 10"/>'
+                 '<NavigationInfo headlight="false"/>%s</Scene></X3D>' % boxes)
+    with scene_context(scene, size=(128, 64),
+                       environment={'OPENGLCONTEXT_RENDERER': renderer,
+                                    'OPENGLCONTEXT_INSTANCING': '1'}) as context:
+        image = drawn_image(context)
+    row = image[32]
+    lit = [pixel for pixel in row if pixel.max() > 100]
+    assert lit and all(greenish(pixel.astype(int)) for pixel in lit)
+
+
+def test_the_batching_memo_follows_an_appearances_shaders(monkeypatch):
+    """A shape whose appearance lists shaders is drawn alone, not in a group"""
+    from OpenGLContext.passes.pbrpass import PBRPass, instance_collapse_is_enabled
+    from OpenGLContext.scenegraph import basenodes, x3dshaders
+    from OpenGLContext.testing.memo import check_memo_inputs
+    monkeypatch.delenv('OPENGLCONTEXT_INSTANCE_COLLAPSE', raising=False)
+    passing = PBRPass.__new__(PBRPass)
+    from tests.unit.test_memo_inputs import _mesh
+    shape = basenodes.Shape(geometry=_mesh(),
+                            appearance=basenodes.Appearance(material=basenodes.Material()))
+
+    def ask():
+        key, instanceable = passing.batchers()
+        return key(shape), instanceable(shape)
+
+    def fresh():
+        key = passing._keyFor(shape, instance_collapse_is_enabled())  # noqa: SLF001 the batching memo's key, which this test holds to its inputs
+        return key, key is not None and bool(passing._instanceable(shape))  # noqa: SLF001 the batching memo's key, which this test holds to its inputs
+
+    check_memo_inputs(ask, [
+        ('appearance.shaders', lambda: setattr(
+            shape.appearance, 'shaders', [x3dshaders.ComposedShader()])),
+        ('appearance.shaders, cleared', lambda: setattr(shape.appearance, 'shaders', [])),
+    ], fresh=fresh)
