@@ -1774,3 +1774,9 @@ Review findings not taken as written, recorded 2026-10-07:
   parse: 0.014 ms and 0.031 ms against 0.25 ms for the smallest document's
   parse, once per load. A memo would need invalidating on writes an
   application makes to the registries directly.
+- `invalidate_material_ubo(None)` repacks every context's blocks. The packed
+  block is kept per material in vrml's cache, the same for every context, so
+  a counter per context would leave the other contexts' copies stale.
+- The engine's callers of `Texture(image)` were checked against the row-order
+  default: atlas pages hold `ImageTexture` images, bottom row first, and the
+  font atlases are arrays, stored as they are.

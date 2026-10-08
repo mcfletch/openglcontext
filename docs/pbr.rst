@@ -337,7 +337,10 @@ them by channel). A texture is an ``ImageTexture`` for an image file, or an
 image as its ``image`` attribute. Either takes a ``TextureProperties`` for its
 wrap modes and filters. Texture coordinate (0, 0) is an ``ImageTexture``'s
 lower left, as in VRML97 and X3D, and an ``ImageDataTexture``'s upper left, as
-in glTF, whose images the loader decodes into them. The shader reads base colour, emissive, specular
+in glTF, whose images the loader decodes into them. Code that makes an
+``OpenGLContext.texture.Texture`` from a PIL image gets the same: the bottom
+row first, at t=0, or the top row with ``topFirst=True``; an array is stored
+as it is. The shader reads base colour, emissive, specular
 colour, sheen colour and diffuse transmission colour as sRGB, and the other
 channels as linear. ``material.textures`` is a read-only view of the textures
 by channel name, and ``material.setTexture(channel, texture)`` sets one by
