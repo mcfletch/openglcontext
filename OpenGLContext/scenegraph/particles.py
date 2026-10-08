@@ -1,34 +1,35 @@
-"""Particles: a numpy pool, an emitter node, and one instanced draw.
+"""Particles: an emitter node, and one instanced draw per system.
 
 A particle system is a **simulation with a renderer bolted on**, and keeping
-those two apart is most of the design:
+those two apart is most of the design. The simulation -- the pool, where
+particles start, what moves them, how they look over a life -- is
+:mod:`~OpenGLContext.scenegraph.particlesim`, which uses no GL. This module
+draws it:
 
-:class:`ParticlePool`
-    Fixed-capacity arrays of position, velocity, age and the rest, stepped as
-    whole arrays.  No GL, no scenegraph, no node -- so the interesting behaviour
-    (birth, motion, death, compaction, budget) is testable with nothing but
-    numpy, and a bug in it is found in milliseconds rather than by watching.
+:class:`ParticleRenderer`
+    The GL for one system: a program, the quad every particle reuses, and an
+    instance buffer, drawn in one ``glDrawArraysInstanced`` as sprites, quads,
+    lines or points (:class:`ParticleLook`).
 :class:`ParticleEmitter`
-    A scenegraph node holding a pool, the shape of what comes out of it, and the
-    GL to draw it: one camera-facing quad per particle, all in a single
-    instanced draw.
+    A scenegraph node holding a pool, the shape of what comes out of it, and a
+    renderer.
 
 **What varies per particle is state; what is shared is a curve.**  A particle
-carries a position, a velocity, an age, a base size, a rotation and one random
-number.  Its colour and its size *over its life* are the emitter's, evaluated in
-the shader from the normalised age.  That split is why the per-instance data is
-seven floats rather than twenty, and why changing an effect's colour costs a
-uniform rather than a rewrite of the pool.
+carries a position, a velocity, an age, a base size, a rotation, one random
+number and, where the system has a colour ramp, a colour.  Its size over its
+life, and the two ends of its colour, are the system's, evaluated in the shader
+from the normalised age, so changing an effect's colour costs a uniform rather
+than a rewrite of the pool.
 
-The pool keeps its living particles **packed at the front** of its arrays.  A
-dead particle is not a hole to skip; the survivors are compacted down over it, so
+The pool keeps its living particles **packed at the front** of its arrays, so
 the live set is always ``[0:live]`` and the GPU upload is one contiguous slice.
 That is what makes a thousand particles one ``glBufferSubData`` and one
 ``glDrawArraysInstanced``.
 
-Everything is additive or alpha-blended and unlit: a particle effect is light
-and smoke, not a surface, so it draws in the transparent pass with depth writes
-off and never enters a shadow map.
+Particles are unlit: a particle effect is light and smoke, not a surface. A
+blended system draws in the transparent pass with depth writes off; an opaque
+one (X3D's, where nothing is translucent) draws with the opaque geometry and
+writes depth. Neither enters a shadow map.
 """
 
 from __future__ import annotations
@@ -36,243 +37,285 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Sequence
-from typing import Any, Optional, Union
+from dataclasses import dataclass
+from typing import Any, Optional
 
 import numpy as np
 from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_BLEND, GL_DEPTH_TEST, GL_FALSE, GL_FLOAT, GL_ONE,
-    GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_STATIC_DRAW, GL_TEXTURE0,
-    GL_TEXTURE_2D, GL_TRIANGLE_STRIP, GL_CCW,
+    GL_ARRAY_BUFFER, GL_BLEND, GL_CCW, GL_DEPTH_TEST, GL_FALSE, GL_FLOAT, GL_LINES,
+    GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_POINTS, GL_PROGRAM_POINT_SIZE, GL_SRC_ALPHA,
+    GL_STATIC_DRAW, GL_TEXTURE0, GL_TEXTURE_2D, GL_TRIANGLE_STRIP, GL_TRUE,
     glActiveTexture, glBindBuffer, glBindTexture, glBindVertexArray, glBlendFunc,
-    glBufferData, glDepthMask, glDrawArraysInstanced, glEnable,
-    glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays, glGetUniformLocation, glUniform1i, glUniform2f, glUniform4f,
+    glBufferData, glDepthMask, glDisable, glDrawArraysInstanced, glEnable,
+    glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays, glGetUniformLocation,
+    glUniform1f, glUniform1i, glUniform2f, glUniform2fv, glUniform3f, glUniform4f,
     glUniformMatrix4fv, glUseProgram, glVertexAttribDivisor, glVertexAttribPointer,
 )
 from vrml import field, node
 from vrml.vrml97 import nodetypes
 
-from OpenGLContext import entropy
 from OpenGLContext.events import systemtime
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
     GLLayer, InstanceBuffer, delete_gl, load_program, texture_rgba,
 )
+from OpenGLContext.scenegraph.particlesim import (
+    INSTANCE_COLOR, INSTANCE_FLOATS, INSTANCE_FRAME, INSTANCE_LIFE, INSTANCE_POSITION,
+    INSTANCE_RANDOM, INSTANCE_ROTATION, INSTANCE_SIZE, INSTANCE_VELOCITY,
+    MAX_STEP, MIN_LIFETIME, ColorRamp, Emission, ParticleModel, ParticlePool,
+    StepClock, launch,
+)
+
+__all__ = [
+    'BLEND_MODES', 'SHAPES', 'MAX_FRAMES', 'ParticleLook', 'ParticleRenderer',
+    'ParticleEmitter', 'ParticlePool', 'PRESETS', 'preset', 'ramp_colors',
+    'MAX_STEP', 'MIN_LIFETIME', 'INSTANCE_POSITION', 'INSTANCE_SIZE',
+    'INSTANCE_ROTATION', 'INSTANCE_LIFE', 'INSTANCE_RANDOM', 'INSTANCE_FRAME',
+    'INSTANCE_COLOR', 'INSTANCE_VELOCITY', 'INSTANCE_FLOATS',
+]
 
 log = logging.getLogger(__name__)
 
 #: Anything three numbers long: a tuple, a VRML field, or a numpy row.
 Vector = Sequence[float] | np.ndarray
 
-#: Layout of one instance row, in floats.  Position, base size, rotation,
-#: normalised age and a per-particle random number -- seven floats, 28 bytes.
-INSTANCE_POSITION = 0
-INSTANCE_SIZE = 3
-INSTANCE_ROTATION = 4
-INSTANCE_LIFE = 5
-INSTANCE_RANDOM = 6
-INSTANCE_FLOATS = 7
-
 #: Blend factors by name.  Additive is the default because most effects are
 #: light -- fire, sparks, explosions, muzzle flashes -- and light adds.  Alpha is
-#: for the things that block light instead: smoke, dust, steam.
-BLEND_MODES: dict[str, tuple[int, int]] = {
+#: for the things that block light instead: smoke, dust, steam.  An opaque
+#: system blends nothing and writes depth.
+BLEND_MODES: dict[str, Optional[tuple[int, int]]] = {
     'additive': (GL_SRC_ALPHA, GL_ONE),
     'alpha': (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA),
+    'opaque': None,
 }
 
-#: Longest frame the simulation will accept, in seconds.  A window dragged, a
-#: breakpoint hit or a texture upload stalling gives a frame of seconds rather
-#: than milliseconds; integrating it honestly teleports every particle out of
-#: sight.  Losing that time is the lesser artefact, and it is the same clamp a
-#: fixed-timestep physics loop applies for the same reason.
-MAX_STEP = 0.1
+#: What a particle can be drawn as, by name, each the shader's ``uShape``: a
+#: quad facing the camera, a quad in the system's XY plane, a line along its
+#: velocity, a point.
+SHAPES: dict[str, int] = {'sprite': 0, 'quad': 1, 'line': 2, 'point': 3}
 
-#: A particle with no life left is one that never appears; the pool substitutes
-#: this rather than dividing by zero when it works out an age fraction.
-MIN_LIFETIME = 1e-3
+#: The most texture-coordinate frames a system steps through; the shader's
+#: ``MAX_FRAMES``.
+MAX_FRAMES = 16
+
+#: The fragments an opaque system cuts out of its texture, and the ones a
+#: blended system does not bother to blend: those with no more alpha than this.
+OPAQUE_CUTOFF = 0.5
+BLENDED_CUTOFF = 0.002
+
+#: The vertices every particle is drawn from: the four corners of the quad as a
+#: triangle strip, the two ends of a line, and a point.
+_CORNERS = np.array([[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5],
+                     [0.0, -0.5], [0.0, 0.5], [0.0, 0.0]], dtype=np.float32)
+#: (primitive, first vertex, vertex count) for each shape.
+_DRAWS: dict[int, tuple[int, int, int]] = {
+    0: (GL_TRIANGLE_STRIP, 0, 4), 1: (GL_TRIANGLE_STRIP, 0, 4),
+    2: (GL_LINES, 4, 2), 3: (GL_POINTS, 6, 1),
+}
+
+_UNIFORMS = ('uModelView', 'uProjection', 'uShape', 'uSize', 'uSizeRange',
+             'uStartColor', 'uEndColor', 'uFrameCount', 'uFrames', 'uPointSize',
+             'uPointAttenuation', 'uTexture', 'uHasTexture', 'uRound', 'uCutoff')
+
+Color4 = tuple[float, float, float, float]
 
 
-def _unit(vector: Vector) -> np.ndarray:
-    """``vector`` at unit length; a zero vector comes back unchanged."""
-    array = np.asarray(vector, dtype=np.float64)[:3]
-    length = float(np.linalg.norm(array))
-    return array if length == 0.0 else np.asarray(array / length)
+@dataclass(frozen=True)
+class ParticleLook:
+    """How a system's particles are drawn, shared by all of them.
 
-
-class ParticlePool:
-    """Fixed-capacity particle state, stepped as whole arrays.
-
-    Every array is allocated once, at construction, and the living particles are
-    kept packed in ``[0:live]``.  Emission writes at the end of that prefix;
-    death compacts the survivors down over the gaps.  Nothing here allocates
-    per particle and nothing here loops in Python over particles -- a thousand
-    particles cost one pass of numpy arithmetic, not a thousand of anything.
+    ``shape`` is a key of :data:`SHAPES`. ``size`` is the width and height in
+    world units, multiplied over a particle's life from ``size_range[0]`` to
+    ``size_range[1]``; the colour likewise goes from ``start_color`` to
+    ``end_color``, multiplied by each particle's own. ``texture`` is a GL
+    texture name, 0 for none; a particle with no texture is a soft dot where
+    ``round`` and its flat colour otherwise. ``frames`` holds four texture
+    coordinates per frame, at most :data:`MAX_FRAMES` frames. ``blending`` is
+    a key of :data:`BLEND_MODES`. A point is ``point_size`` pixels -- scale,
+    least and most -- divided by ``point_attenuation`` (constant, linear and
+    quadratic in the distance from the eye).
     """
 
-    def __init__(self, capacity: int = 1000, seed: Optional[int] = None) -> None:
-        self.capacity = int(max(0, capacity))
-        self.live = 0
-        # No seed of its own means the session's particle stream rather than
-        # nowhere in particular: an emitter still looks different every time
-        # the game is played, and a recorded session replays with the same
-        # sparks it had. See OpenGLContext.entropy.
-        self._random = (np.random.default_rng(seed) if seed is not None
-                        else entropy.generator('particles'))
-        size = self.capacity
-        self.position = np.zeros((size, 3), dtype=np.float32)
-        self.velocity = np.zeros((size, 3), dtype=np.float32)
-        self.age = np.zeros(size, dtype=np.float32)
-        self.lifetime = np.ones(size, dtype=np.float32)
-        self.size = np.ones(size, dtype=np.float32)
-        self.rotation = np.zeros(size, dtype=np.float32)
-        self.spin = np.zeros(size, dtype=np.float32)
-        #: One number per particle, so a shader can vary them without the
-        #: simulation having to store what it varied.
-        self.random = np.zeros(size, dtype=np.float32)
-        self._instances = np.zeros((size, INSTANCE_FLOATS), dtype=np.float32)
+    shape: str = 'sprite'
+    size: tuple[float, float] = (1.0, 1.0)
+    size_range: tuple[float, float] = (1.0, 1.0)
+    start_color: Color4 = (1.0, 1.0, 1.0, 1.0)
+    end_color: Color4 = (1.0, 1.0, 1.0, 1.0)
+    texture: int = 0
+    round: bool = True
+    frames: Optional[np.ndarray] = None
+    blending: str = 'additive'
+    point_size: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    point_attenuation: tuple[float, float, float] = (1.0, 0.0, 0.0)
 
-    def __len__(self) -> int:
-        return self.live
-
-    def clear(self) -> None:
-        """Kill every particle at once."""
-        self.live = 0
-
-    def emit(self, count: int, position: Vector = (0.0, 0.0, 0.0),
-             velocity: Vector = (0.0, 1.0, 0.0),
-             spread: float = 0.0, speed_variation: float = 0.0,
-             lifetime: float = 1.0, lifetime_variation: float = 0.0,
-             size: float = 1.0, size_variation: float = 0.0,
-             spin: float = 0.0, spin_variation: float = 0.0) -> int:
-        """Bring up to ``count`` new particles into being; return how many.
-
-        Fewer than asked for means the pool is full.  It is not an error and it
-        is not reported: a pool is a *budget*, and the budget being reached is
-        the system working.  Size it from the emission rate times the lifetime,
-        which is how many can be alive at once.
-
-        ``spread`` is the half-angle of a cone about ``velocity``, in radians;
-        zero gives a perfectly straight jet.  ``*_variation`` values are
-        fractions -- 0.5 means "plus or minus half".
-        """
-        count = min(int(count), self.capacity - self.live)
-        if count <= 0:
-            return 0
-        start, end = self.live, self.live + count
-        rng = self._random
-
-        self.position[start:end] = np.asarray(position, dtype=np.float32)[:3]
-        self.velocity[start:end] = _scatter(rng, velocity, spread, speed_variation,
-                                            count)
-        self.age[start:end] = 0.0
-        self.lifetime[start:end] = np.maximum(
-            _vary(rng, lifetime, lifetime_variation, count), MIN_LIFETIME)
-        self.size[start:end] = _vary(rng, size, size_variation, count)
-        self.rotation[start:end] = rng.uniform(0.0, 2.0 * math.pi, count)
-        self.spin[start:end] = _vary(rng, spin, spin_variation, count)
-        self.random[start:end] = rng.random(count)
-        self.live = end
-        return count
-
-    def step(self, dt: float, gravity: Vector = (0.0, 0.0, 0.0),
-             drag: float = 0.0) -> None:
-        """Advance every living particle by ``dt`` seconds, and bury the dead.
-
-        ``drag`` is a per-second fraction of the velocity lost.  It is applied
-        as an exponential decay rather than as ``v -= v * drag * dt``, which
-        would overshoot into a *reversal* on a long frame -- the classic
-        explicit-Euler damping bug, and one that shows up as particles that
-        suddenly fly backwards when the frame rate drops.
-        """
-        if dt <= 0.0 or self.live == 0:
-            return
-        live = self.live
-        velocity = self.velocity[:live]
-        if drag > 0.0:
-            velocity *= math.exp(-drag * dt)
-        if any(gravity):
-            velocity += np.asarray(gravity, dtype=np.float32)[:3] * dt
-        self.position[:live] += velocity * dt
-        self.rotation[:live] += self.spin[:live] * dt
-        self.age[:live] += dt
-        self._bury()
-
-    def _bury(self) -> None:
-        """Compact the survivors to the front of the arrays."""
-        live = self.live
-        keep = self.age[:live] < self.lifetime[:live]
-        survivors = int(np.count_nonzero(keep))
-        if survivors == live:
-            return
-        if survivors == 0:
-            self.live = 0
-            return
-        index = np.flatnonzero(keep)
-        for array in (self.position, self.velocity, self.age, self.lifetime,
-                      self.size, self.rotation, self.spin, self.random):
-            array[:survivors] = array[index]
-        self.live = survivors
-
-    def life_fraction(self) -> np.ndarray:
-        """How far through its life each living particle is, from 0 to 1."""
-        live = self.live
-        return np.asarray(self.age[:live] / self.lifetime[:live])
-
-    def instances(self) -> np.ndarray:
-        """One row per living particle, ready for the instance buffer.
-
-        A view of the pool's own array, rewritten in place, so following a
-        thousand particles costs no allocation per frame.
-        """
-        live = self.live
-        rows = self._instances[:live]
-        rows[:, INSTANCE_POSITION:INSTANCE_POSITION + 3] = self.position[:live]
-        rows[:, INSTANCE_SIZE] = self.size[:live]
-        rows[:, INSTANCE_ROTATION] = self.rotation[:live]
-        rows[:, INSTANCE_LIFE] = self.life_fraction()
-        rows[:, INSTANCE_RANDOM] = self.random[:live]
-        return np.asarray(rows)
+    @property
+    def opaque(self) -> bool:
+        """Whether the system draws with the opaque geometry, writing depth"""
+        return self.blending == 'opaque'
 
 
-def _vary(rng: Any, value: float, variation: float, count: int) -> np.ndarray:
-    """``count`` samples of ``value`` scattered by a fraction of itself."""
-    if variation <= 0.0:
-        return np.full(count, value, dtype=np.float32)
-    spread = abs(value) * variation
-    return np.asarray(rng.uniform(value - spread, value + spread,
-                                  count).astype(np.float32))
+def blend_factors(name: str) -> Optional[tuple[int, int]]:
+    """The GL blend factors for a blending name; None for an opaque system.
 
-
-def _scatter(rng: Any, velocity: Vector, spread: float,
-             speed_variation: float, count: int) -> np.ndarray:
-    """``count`` velocities in a cone of half-angle ``spread`` about ``velocity``.
-
-    Directions are drawn so that they are **uniform over the spherical cap**
-    rather than uniform in the angle: sampling the angle directly crowds the
-    particles towards the axis and gives a jet with a bright core and a thin
-    skirt, which is a distinctive and wrong look.
+    An unrecognised name falls back to additive rather than raising: a
+    misspelled string in a scene file should cost the effect its look, not
+    the whole frame.
     """
-    speed = float(np.linalg.norm(np.asarray(velocity, dtype=np.float64)[:3]))
-    speeds = _vary(rng, speed, speed_variation, count)
-    if speed == 0.0:
-        return np.zeros((count, 3), dtype=np.float32)
-    axis = _unit(velocity)
-    if spread <= 0.0:
-        return np.asarray((axis[None, :] * speeds[:, None]).astype(np.float32))
+    if name not in BLEND_MODES:
+        log.warning('unknown particle blending %r; using additive', name)
+        return BLEND_MODES['additive']
+    return BLEND_MODES[name]
 
-    cosines = rng.uniform(math.cos(min(spread, math.pi)), 1.0, count)
-    sines = np.sqrt(np.maximum(0.0, 1.0 - cosines * cosines))
-    angles = rng.uniform(0.0, 2.0 * math.pi, count)
-    # Any two vectors at right angles to the axis will do for the cone's own
-    # frame; picking the world axis the direction leans on least keeps the
-    # cross product well conditioned.
-    helper = np.array([1.0, 0.0, 0.0]) if abs(axis[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-    right = _unit(np.cross(axis, helper))
-    up = np.cross(axis, right)
-    directions = (axis[None, :] * cosines[:, None]
-                  + right[None, :] * (sines * np.cos(angles))[:, None]
-                  + up[None, :] * (sines * np.sin(angles))[:, None])
-    return np.asarray((directions * speeds[:, None]).astype(np.float32))
+
+def ramp_colors(keys: Any, colorNode: Any) -> ColorRamp:
+    """A ramp of the colours of a ``Color`` or ``ColorRGBA`` node at ``keys``
+
+    An empty ramp where there is no node or no colours.
+    """
+    values = getattr(colorNode, 'color', None) if colorNode else None
+    if values is None or not len(values):
+        return ColorRamp([], [])
+    return ColorRamp(np.asarray(keys, dtype=np.float64), np.asarray(values, dtype=np.float64))
+
+
+class ParticleRenderer:
+    """The GL objects that draw one particle system, made with a context current.
+
+    :meth:`draw` uploads the instance rows (:meth:`ParticlePool.instances`)
+    and draws them all in one call, in the look given. The pass's program, its
+    phase's blending and depth writes, and the face culling are put back as the
+    pass keeps them.
+    """
+
+    def __init__(self) -> None:
+        self.program = load_program('particle.vert', 'particle.frag')
+        self.uniforms = {name: int(glGetUniformLocation(self.program, name))
+                         for name in _UNIFORMS}
+        self.vao = int(glGenVertexArrays(1))
+        glBindVertexArray(self.vao)
+        self.corners = int(glGenBuffers(1))
+        glBindBuffer(GL_ARRAY_BUFFER, self.corners)
+        glBufferData(GL_ARRAY_BUFFER, _CORNERS.nbytes, _CORNERS, GL_STATIC_DRAW)
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 8, None)
+        glEnableVertexAttribArray(0)
+        self.instances = InstanceBuffer()
+        glBindBuffer(GL_ARRAY_BUFFER, self.instances.id)
+        stride = INSTANCE_FLOATS * 4
+        _instance_attribute(1, 4, stride, INSTANCE_POSITION * 4)   # position, size
+        _instance_attribute(2, 4, stride, INSTANCE_ROTATION * 4)   # spin, life, random, frame
+        _instance_attribute(3, 4, stride, INSTANCE_COLOR * 4)
+        _instance_attribute(4, 3, stride, INSTANCE_VELOCITY * 4)
+        glBindVertexArray(0)
+
+    def dispose(self) -> None:
+        """Delete the GL objects, with their context current"""
+        self.instances.delete()
+        delete_gl(vaos=[self.vao], buffers=[self.corners], programs=[self.program])
+
+    def draw(self, rows: np.ndarray, look: ParticleLook, mode: Any,
+             modelview: Any) -> None:
+        """Draw ``rows`` in ``look``, placed by ``modelview``"""
+        from OpenGLContext.passes.instancing import set_cull_state
+        uniforms = self.uniforms
+        shape = SHAPES.get(look.shape, 0)
+        previous = mode.current_program() if hasattr(mode, 'current_program') else 0
+        glUseProgram(self.program)
+        glBindVertexArray(self.vao)
+        self.instances.upload(rows)
+        glUniformMatrix4fv(uniforms['uModelView'], 1, GL_FALSE,
+                           np.ascontiguousarray(modelview, np.float32))
+        glUniformMatrix4fv(uniforms['uProjection'], 1, GL_FALSE,
+                           np.ascontiguousarray(mode.projection, np.float32))
+        glUniform1i(uniforms['uShape'], shape)
+        glUniform2f(uniforms['uSize'], *look.size)
+        glUniform2f(uniforms['uSizeRange'], *look.size_range)
+        glUniform4f(uniforms['uStartColor'], *look.start_color)
+        glUniform4f(uniforms['uEndColor'], *look.end_color)
+        frames = look.frames if shape in (0, 1) else None
+        count = 0 if frames is None else min(len(frames), MAX_FRAMES)
+        glUniform1i(uniforms['uFrameCount'], count)
+        if count:
+            corners = np.ascontiguousarray(np.asarray(frames, np.float32)[:count]
+                                           .reshape(-1, 2))
+            glUniform2fv(uniforms['uFrames'], len(corners), corners)
+        glUniform3f(uniforms['uPointSize'], *look.point_size)
+        glUniform3f(uniforms['uPointAttenuation'], *look.point_attenuation)
+        glUniform1i(uniforms['uRound'], 1 if look.round else 0)
+        glUniform1i(uniforms['uHasTexture'], 1 if look.texture else 0)
+        if look.texture:
+            glActiveTexture(GL_TEXTURE0)
+            glBindTexture(GL_TEXTURE_2D, look.texture)
+            glUniform1i(uniforms['uTexture'], 0)
+        factors = blend_factors(look.blending)
+        glUniform1f(uniforms['uCutoff'], OPAQUE_CUTOFF if factors is None else BLENDED_CUTOFF)
+        glEnable(GL_DEPTH_TEST)
+        if factors is not None:
+            # Depth *tested* so particles disappear behind walls, depth *writes*
+            # off so they never occlude each other -- which is what makes a
+            # cloud read as a cloud instead of as a pile of squares.
+            glEnable(GL_BLEND)
+            glBlendFunc(*factors)
+            glDepthMask(GL_FALSE)
+        else:
+            glDisable(GL_BLEND)
+            glDepthMask(GL_TRUE)
+        # Only the cull disable is ours, so it goes through the pass's cull memo
+        # (a particle quad is seen from both sides) rather than a glGet snapshot.
+        set_cull_state(mode, False, GL_CCW)
+        primitive, first, vertices = _DRAWS[shape]
+        if shape == 3:
+            glEnable(GL_PROGRAM_POINT_SIZE)
+        try:
+            glDrawArraysInstanced(primitive, first, vertices, self.instances.count)
+        finally:
+            if shape == 3:
+                glDisable(GL_PROGRAM_POINT_SIZE)
+            _restore_phase(mode)
+            glBindVertexArray(0)
+            glUseProgram(previous)
+
+
+def _restore_phase(mode: Any) -> None:
+    """Put back the blending and depth writes of the phase ``mode`` is drawing
+
+    The transparent phase blends straight alpha over without writing depth;
+    the opaque phase does neither. A particle system draws in its own blend
+    and leaves the shapes after it the phase's.
+    """
+    if getattr(mode, 'transparent', False):
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glDepthMask(GL_FALSE)
+    else:
+        glDisable(GL_BLEND)
+        glDepthMask(GL_TRUE)
+
+
+def _instance_attribute(location: int, size: int, stride: int, offset: int) -> None:
+    """One per-instance vertex attribute on the bound VAO."""
+    import ctypes
+
+    glVertexAttribPointer(location, size, GL_FLOAT, GL_FALSE, stride,
+                          ctypes.c_void_p(offset))
+    glEnableVertexAttribArray(location)
+    glVertexAttribDivisor(location, 1)
+
+
+def models_of(nodes: Any, **named: Any) -> list[ParticleModel]:
+    """The simulation models of physics-model nodes, in order
+
+    Each node answers ``particleModel(**named)``; a node without one, or one
+    switched off (its ``enabled`` False), contributes nothing.
+    """
+    found: list[ParticleModel] = []
+    for entry in nodes or ():
+        answer = getattr(entry, 'particleModel', None)
+        if answer is None or not getattr(entry, 'enabled', True):
+            continue
+        model = answer(**named)
+        if model is not None:
+            found.append(model)
+    return found
 
 
 class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLayer):
@@ -285,9 +328,10 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
 
     The fields divide into three groups, and it helps to read them that way:
     **how many and how often** (``rate``, ``burst``, ``maxParticles``,
-    ``lifetime``), **which way and how fast** (``direction``, ``speed``,
-    ``spread``, ``gravity``, ``drag``), and **what it looks like** (``size``,
-    ``color``, ``alpha``, their ``end*`` counterparts, ``texture``,
+    ``lifetime``), **where from, which way and how fast** (``source``,
+    ``direction``, ``speed``, ``spread``, ``gravity``, ``drag``, ``physics``),
+    and **what it looks like** (``size``, ``color``, ``alpha``, their ``end*``
+    counterparts, ``colorKey`` and ``colorRamp``, ``texture``, ``shape``,
     ``blending``).
     """
 
@@ -306,6 +350,11 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
     lifetime = field.newField('lifetime', 'SFFloat', 1, 1.5)
     lifetimeVariation = field.newField('lifetimeVariation', 'SFFloat', 1, 0.3)
 
+    #: Where particles start and which way they are thrown, in the emitter's own
+    #: frame: one of X3D's emitter nodes (``ConeEmitter``, ``PolylineEmitter``,
+    #: ``SurfaceEmitter``, ...). Without one they start at the emitter's origin
+    #: and are thrown within ``spread`` of ``direction``.
+    source = field.newField('source', 'SFNode', 1, node.NULL)
     #: Which way particles are thrown, in the emitter's own frame.
     direction = field.newField('direction', 'SFVec3f', 1, [0.0, 1.0, 0.0])
     #: How fast, in units per second, and the fraction that is scattered.
@@ -318,6 +367,15 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
     gravity = field.newField('gravity', 'SFVec3f', 1, [0.0, -1.0, 0.0])
     #: Fraction of velocity lost per second.  Air.
     drag = field.newField('drag', 'SFFloat', 1, 0.0)
+    #: Physics-model nodes acting on the particles after gravity and drag, in
+    #: order: X3D's ``ForcePhysicsModel``, ``WindPhysicsModel`` and
+    #: ``BoundedPhysicsModel``. Their geometry is in the frame the particles
+    #: live in.
+    physics = field.newField('physics', 'MFNode', 1, list)
+    #: The mass and surface area of a particle, which a force and the wind act
+    #: on; a mass of 0 takes a force as an acceleration.
+    mass = field.newField('mass', 'SFFloat', 1, 0.0)
+    surfaceArea = field.newField('surfaceArea', 'SFFloat', 1, 0.0)
 
     #: Size at birth and at death, in world units.
     size = field.newField('size', 'SFFloat', 1, 0.3)
@@ -332,11 +390,19 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
     endColor = field.newField('endColor', 'SFColor', 1, [0.6, 0.1, 0.0])
     alpha = field.newField('alpha', 'SFFloat', 1, 1.0)
     endAlpha = field.newField('endAlpha', 'SFFloat', 1, 0.0)
+    #: A colour ramp over a particle's life, in place of the two ends: the
+    #: colours of a ``Color`` or ``ColorRGBA`` node, each at the fraction of
+    #: the life in ``colorKey`` of the same index.
+    colorKey = field.newField('colorKey', 'MFFloat', 1, list)
+    colorRamp = field.newField('colorRamp', 'SFNode', 1, node.NULL)
 
     #: A sprite for each particle.  Without one, particles are soft round dots
     #: computed in the shader, which is enough for sparks, glows and embers and
     #: costs no asset.
     texture = field.newField('texture', 'SFString', 1, '')
+    #: ``sprite`` for a quad facing the camera, ``line`` for a streak along the
+    #: particle's velocity as long as its size.
+    shape = field.newField('shape', 'SFString', 1, 'sprite')
     #: ``additive`` for light, ``alpha`` for smoke.
     blending = field.newField('blending', 'SFString', 1, 'additive')
 
@@ -371,6 +437,8 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
                  'step': 0.05},
         'endSize': {'label': 'Size at death', 'minimum': 0.0, 'maximum': 20.0,
                     'step': 0.05},
+        'shape': {'label': 'Drawn as', 'options': ('sprite', 'line'),
+                  'optionLabels': ('Sprites', 'Streaks')},
         'blending': {'label': 'Blending', 'options': ('additive', 'alpha'),
                      'optionLabels': ('Light (additive)', 'Smoke (alpha)')},
         'enabled': {'label': 'Emitting'},
@@ -380,9 +448,12 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
     def __init__(self, **named: Any) -> None:
         super(ParticleEmitter, self).__init__(**named)
         self._pool: Optional[ParticlePool] = None
-        self._pending = float(self.burst) if self.burstOnStart else 0.0
-        self._stepped: Optional[float] = None
+        self._emission = Emission()
+        if self.burstOnStart:
+            self._emission.burst(self.burst)
+        self._clock = StepClock(longest=math.inf)
         self._gl: Any = None
+        self._texture = 0
 
     # ------------------------------------------------------------------
     # Simulation
@@ -403,7 +474,7 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
 
     def fire(self) -> None:
         """Release another burst on the next step.  An explosion, a muzzle flash."""
-        self._pending += float(self.burst)
+        self._emission.burst(self.burst)
 
     def burst_at(self, position: Vector, direction: Optional[Vector] = None,
                  count: Optional[int] = None) -> int:
@@ -433,55 +504,72 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
         return self._emit(wanted, position, direction)
 
     def _emit(self, count: int, position: Vector,
-              direction: Optional[Vector]) -> int:
+              direction: Optional[Vector], frame: Optional[np.ndarray] = None) -> int:
         """Bring ``count`` particles into being, styled by this emitter.
 
         The one place the node's fields are read into a pool emission, so
         :meth:`simulate` and :meth:`burst_at` cannot drift apart about what a
-        particle of this emitter looks like when it is born.
+        particle of this emitter looks like when it is born. A ``source``
+        node's positions are about ``position``, and turned by the rotation of
+        ``frame`` where one is given.
         """
-        return self.pool.emit(
-            count,
-            position=position,
-            velocity=np.asarray(
-                direction if direction is not None else self.direction,
-                dtype=np.float64)[:3] * self.speed,
-            spread=self.spread, speed_variation=self.speedVariation,
-            lifetime=self.lifetime,
-            lifetime_variation=self.lifetimeVariation,
-            # A particle's own size is the *deviation* from the emitter's,
-            # mean 1.0.  The absolute size, and how it changes over a life,
-            # are the emitter's two uniforms -- so editing `size` on a live
-            # emitter resizes the particles already in the air rather than
-            # only the next ones.
-            size=1.0, size_variation=self.sizeVariation,
-            spin=self.spin, spin_variation=self.spinVariation)
+        # A particle's own size is the *deviation* from the emitter's, mean
+        # 1.0.  The absolute size, and how it changes over a life, are the
+        # emitter's two uniforms -- so editing `size` on a live emitter resizes
+        # the particles already in the air rather than only the next ones.
+        style = dict(lifetime=self.lifetime, lifetime_variation=self.lifetimeVariation,
+                     size=1.0, size_variation=self.sizeVariation,
+                     spin=self.spin, spin_variation=self.spinVariation)
+        sampler = getattr(self.source, 'particleSource', None) if self.source else None
+        source = sampler() if sampler is not None else None
+        if source is None:
+            return self.pool.emit(
+                count, position=position,
+                velocity=np.asarray(direction if direction is not None else self.direction,
+                                    dtype=np.float64)[:3] * self.speed,
+                spread=self.spread, speed_variation=self.speedVariation, **style)
+        if source.empty:
+            return 0
+        pool = self.pool
+        count = min(count, pool.capacity - pool.live)
+        positions, velocities = launch(source, pool.rng, count, self.speed, self.speedVariation)
+        if frame is not None:
+            turn = _rotation(frame)
+            positions = positions @ turn
+            velocities = velocities @ turn
+        return pool.spawn(positions + np.asarray(position, dtype=np.float64)[:3],
+                          velocities, **style)
+
+    def models(self) -> list[ParticleModel]:
+        """The simulation models of the :attr:`physics` nodes, in order"""
+        return models_of(self.physics, mass=float(self.mass),
+                         surfaceArea=float(self.surfaceArea))
 
     def simulate(self, dt: float, origin: Vector = (0.0, 0.0, 0.0),
-                 direction: Optional[Vector] = None) -> None:
+                 direction: Optional[Vector] = None,
+                 frame: Optional[np.ndarray] = None) -> None:
         """Emit, then advance, by ``dt`` seconds.
 
         ``origin`` and ``direction`` are where the emitter is in the frame the
         particles live in -- world space when ``worldSpace`` is set, and the
-        emitter's own local origin when it is not.  The render pass supplies
-        them from the node's accumulated transform.
+        emitter's own local origin when it is not; ``frame`` is the emitter's
+        world matrix, which turns a ``source`` node's positions into world
+        space.  The render pass supplies them from the node's accumulated
+        transform.
         """
         if dt < 0.0:
             return
         dt = min(dt, MAX_STEP)
         pool = self.pool
-        if self.enabled:
-            self._pending += float(self.rate) * dt
-            count = int(self._pending)
-            if count > 0:
-                self._pending -= count
-                self._emit(count,
-                           origin if self.worldSpace else (0.0, 0.0, 0.0),
-                           direction)
-        pool.step(dt, gravity=self.gravity, drag=self.drag)
+        self._emission.rate = float(self.rate)
+        count = self._emission.due(dt)
+        if self.enabled and count > 0:
+            self._emit(count, origin if self.worldSpace else (0.0, 0.0, 0.0),
+                       direction, frame if self.worldSpace else None)
+        pool.step(dt, gravity=self.gravity, drag=self.drag, models=self.models())
 
-    def _advance(self, origin: Vector,
-                 direction: Optional[Vector]) -> None:
+    def _advance(self, origin: Vector, direction: Optional[Vector],
+                 frame: Optional[np.ndarray] = None) -> None:
         """Step the simulation by however long it is since the last frame.
 
         Driven from the draw rather than from a clock of its own, because the
@@ -494,10 +582,8 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
         simulation that read real time would be the one thing in the scene not
         following.  See OpenGLContext.events.systemtime.
         """
-        now = systemtime.systemTime()
-        elapsed = 0.0 if self._stepped is None else now - self._stepped
-        self._stepped = now
-        self.simulate(elapsed, origin=origin, direction=direction)
+        elapsed = self._clock.step(systemtime.systemTime())
+        self.simulate(elapsed, origin=origin, direction=direction, frame=frame)
 
     # ------------------------------------------------------------------
     # Appearance over a particle's life
@@ -509,21 +595,36 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
 
     def colorAt(self, fraction: float) -> tuple[float, float, float]:
         """A particle's colour ``fraction`` of the way through its life."""
+        ramp = self.colorRampAt()
+        if ramp:
+            return tuple(float(value) for value in ramp.at(np.array([fraction]))[0, :3])
         start = np.asarray(self.color, dtype='d')
         end = np.asarray(self.endColor, dtype='d')
         return tuple(start + (end - start) * fraction)
 
     def alphaAt(self, fraction: float) -> float:
         """A particle's opacity ``fraction`` of the way through its life."""
+        ramp = self.colorRampAt()
+        if ramp:
+            return float(ramp.at(np.array([fraction]))[0, 3])
         return float(self.alpha + (self.endAlpha - self.alpha) * fraction)
+
+    def colorRampAt(self) -> ColorRamp:
+        """The colour ramp of :attr:`colorKey` and :attr:`colorRamp`; empty without"""
+        return ramp_colors(self.colorKey, self.colorRamp)
 
     def lifeUniforms(self) -> dict[str, Any]:
         """The life curves as the two ends the shader interpolates between.
 
         Two ends and a lerp rather than a gradient texture: it covers every
         effect this system is for, it costs two uniforms instead of a texture
-        unit, and it can be edited from a settings screen.
+        unit, and it can be edited from a settings screen. With a colour ramp
+        the ends are white and each particle carries its colour from the ramp.
         """
+        if self.colorRampAt():
+            white = (1.0, 1.0, 1.0, 1.0)
+            return {'sizeRange': (float(self.size), float(self.endSize)),
+                    'startColor': white, 'endColor': white}
         return {
             'sizeRange': (float(self.size), float(self.endSize)),
             'startColor': tuple(self.color) + (float(self.alpha),),
@@ -533,16 +634,23 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
     def blendMode(self) -> tuple[int, int]:
         """The GL blend factors for this emitter's ``blending``.
 
-        An unrecognised name falls back to additive rather than raising: a
-        misspelled string in a scene file should cost the effect its look, not
-        the whole frame.
+        An unrecognised name, or ``opaque``, which an effect does not take,
+        falls back to additive rather than raising: a misspelled string in a
+        scene file should cost the effect its look, not the whole frame.
         """
-        mode = BLEND_MODES.get(self.blending)
-        if mode is None:
-            log.warning('unknown particle blending %r; using additive',
-                        self.blending)
-            mode = BLEND_MODES['additive']
-        return mode
+        factors = blend_factors(self.blending)
+        if factors is None:
+            return BLEND_MODES['additive'] or (GL_SRC_ALPHA, GL_ONE)
+        return factors
+
+    def look(self) -> ParticleLook:
+        """How this emitter's particles are drawn"""
+        life = self.lifeUniforms()
+        shape = self.shape if self.shape in ('sprite', 'line') else 'sprite'
+        blending = self.blending if self.blending in ('additive', 'alpha') else 'additive'
+        return ParticleLook(shape=shape, size_range=life['sizeRange'],
+                            start_color=life['startColor'], end_color=life['endColor'],
+                            texture=self._texture, blending=blending)
 
     # ------------------------------------------------------------------
     # Rendering
@@ -577,14 +685,19 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
         reach = max(reach, float(self.size)) + float(self.size)
         low = np.full(3, -reach)
         high = np.full(3, reach)
-        pool = self.pool
-        if pool.live:
+        sampler = getattr(self.source, 'particleSource', None) if self.source else None
+        source = sampler() if sampler is not None else None
+        if source is not None and not source.empty:
+            start, stop = source.extent()
+            low = np.minimum(low, start - reach)
+            high = np.maximum(high, stop + reach)
+        extent = self.pool.extent()
+        if extent is not None:
             # The particles' own size counts: a sprite is drawn about its
             # centre, so a burst exactly on the frustum edge is still visible.
             margin = max(float(self.size), float(self.endSize))
-            live = pool.position[:pool.live]
-            low = np.minimum(low, live.min(axis=0) - margin)
-            high = np.maximum(high, live.max(axis=0) + margin)
+            low = np.minimum(low, extent[0] - margin)
+            high = np.maximum(high, extent[1] + margin)
         return boundingvolume.AABoundingBox(
             size=tuple(float(value) for value in (high - low)),
             center=tuple(float(value) for value in (low + high) * 0.5))
@@ -598,7 +711,8 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
         if getattr(mode, 'shadow_pass', False) or not getattr(mode, 'visible', True):
             return 1
         origin, direction = self._pose(mode)
-        self._advance(origin, direction)
+        frame = self._worldMatrix(mode) if self.worldSpace else None
+        self._advance(origin, direction, frame)
         if not self.pool.live or not self.ensure_gl():
             return 1
         self._draw(mode)
@@ -641,100 +755,44 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
         return matrix[3, :3], direction
 
     def _init_gl(self) -> None:
-        """Compile the program and build the one quad every particle reuses."""
-        program = load_program('particle.vert', 'particle.frag')
-        uniforms = {name: int(glGetUniformLocation(program, name)) for name in (
-            'uModelView', 'uProjection', 'uSizeRange', 'uStartColor',
-            'uEndColor', 'uTexture', 'uHasTexture')}
-        vao = int(glGenVertexArrays(1))
-        glBindVertexArray(vao)
-        # One unit quad as a triangle strip, in the corner coordinates the
-        # vertex shader billboards and the fragment shader reads as a sprite.
-        corners = np.array([[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]],
-                           dtype=np.float32)
-        quad = int(glGenBuffers(1))
-        glBindBuffer(GL_ARRAY_BUFFER, quad)
-        glBufferData(GL_ARRAY_BUFFER, corners.nbytes, corners, GL_STATIC_DRAW)
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 8, None)
-        glEnableVertexAttribArray(0)
-        instances = InstanceBuffer()
-        glBindBuffer(GL_ARRAY_BUFFER, instances.id)
-        stride = INSTANCE_FLOATS * 4
-        _instance_attribute(1, 4, stride, 0)                    # position + size
-        _instance_attribute(2, 3, stride, INSTANCE_ROTATION * 4)  # spin, life, random
-        glBindVertexArray(0)
+        """Make the renderer, and load the sprite texture where there is one."""
+        renderer = ParticleRenderer()
         texture = 0
         if self.texture:
             try:
                 texture = int(texture_rgba(self.texture, clamp=True))
             except Exception as error:
                 log.warning('particle texture %r not loaded: %s', self.texture, error)
-        self._gl = {'program': program, 'uniforms': uniforms, 'vao': vao,
-                    'quad': quad, 'instances': instances, 'texture': texture}
+        self._texture = texture
+        self._gl = renderer
 
     def _draw(self, mode: Any) -> None:
         """Upload this frame's particles and issue the instanced draw."""
-        gl = self._gl
-        uniforms = gl['uniforms']
-        rows = self.pool.instances()
-        from OpenGLContext.passes.instancing import set_cull_state
-        previous = mode.current_program() if hasattr(mode, "current_program") else 0
-        glUseProgram(gl['program'])
-        glBindVertexArray(gl['vao'])
-        gl['instances'].upload(rows)
-
-        life = self.lifeUniforms()
+        pool = self.pool
+        ramp = self.colorRampAt()
+        colors = ramp.at(pool.life_fraction()) if ramp else None
         # World-space particles already carry the emitter's transform in their
         # positions, so only the camera part may be applied to them; local-space
         # ones have not, and want the whole model-view. Choosing the matrix here
         # keeps the shader free of a branch it would take per vertex.
         view = mode.getModelView() if self.worldSpace else mode.matrix
-        glUniformMatrix4fv(uniforms['uModelView'], 1, GL_FALSE,
-                           np.ascontiguousarray(view, np.float32))
-        glUniformMatrix4fv(uniforms['uProjection'], 1, GL_FALSE,
-                           np.ascontiguousarray(mode.projection, np.float32))
-        glUniform2f(uniforms['uSizeRange'], *life['sizeRange'])
-        glUniform4f(uniforms['uStartColor'], *life['startColor'])
-        glUniform4f(uniforms['uEndColor'], *life['endColor'])
-        glUniform1i(uniforms['uHasTexture'], 1 if gl['texture'] else 0)
-        if gl['texture']:
-            glActiveTexture(GL_TEXTURE0)
-            glBindTexture(GL_TEXTURE_2D, gl['texture'])
-            glUniform1i(uniforms['uTexture'], 0)
-
-        glEnable(GL_BLEND)
-        glBlendFunc(*self.blendMode())
-        glEnable(GL_DEPTH_TEST)
-        # Depth *tested* so particles disappear behind walls, depth *writes* off
-        # so they never occlude each other -- which is what makes a cloud read as
-        # a cloud instead of as a pile of squares. Blend and depth-write are the
-        # transparent pass's own phase state, restored by it at phase end; only the
-        # cull disable is ours, so it goes through the pass's cull memo (a quad has
-        # no back face) rather than a glGet snapshot.
-        glDepthMask(GL_FALSE)
-        set_cull_state(mode, False, GL_CCW)
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, gl['instances'].count)
-        glBindVertexArray(0)
-        glUseProgram(previous)
+        self._gl.draw(pool.instances(colors=colors), self.look(), mode, view)
 
     def dispose(self) -> None:
         """Release the GL objects this emitter owns."""
-        gl, self._gl = self._gl, None
-        if gl:
-            gl['instances'].delete()
-            delete_gl(vaos=[gl['vao']], buffers=[gl['quad']],
-                      textures=[gl['texture']] if gl['texture'] else [],
-                      programs=[gl['program']])
+        renderer, self._gl = self._gl, None
+        if renderer is not None:
+            renderer.dispose()
+        if self._texture:
+            delete_gl(textures=[self._texture])
+            self._texture = 0
 
 
-def _instance_attribute(location: int, size: int, stride: int, offset: int) -> None:
-    """One per-instance vertex attribute on the bound VAO."""
-    import ctypes
-
-    glVertexAttribPointer(location, size, GL_FLOAT, GL_FALSE, stride,
-                          ctypes.c_void_p(offset))
-    glEnableVertexAttribArray(location)
-    glVertexAttribDivisor(location, 1)
+def _rotation(matrix: np.ndarray) -> np.ndarray:
+    """The rotation of a row-vector matrix, with its scale divided out"""
+    turn = np.asarray(matrix, dtype=np.float64)[:3, :3]
+    lengths = np.linalg.norm(turn, axis=1, keepdims=True)
+    return np.asarray(turn / np.where(lengths > 0.0, lengths, 1.0))
 
 
 #: Starting points for the effects this system exists to draw.  A preset is a
