@@ -912,7 +912,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         White is how X3D draws an appearance with no material; an
         UnlitMaterial gives its emissiveColor and transparency.
         """
-        self.set_material(diffuse=tuple(color), specular=(0.0, 0.0, 0.0),
+        red, green, blue = (float(part) for part in color)
+        self.set_material(diffuse=(red, green, blue), specular=(0.0, 0.0, 0.0),
                           ambient_intensity=0.0, shininess=0.0, transparency=transparency)
         self._set_uniform1i('unlit', 1)
 
