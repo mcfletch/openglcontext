@@ -20,7 +20,7 @@ from itertools import zip_longest
 from collections.abc import Iterator
 from typing import Any, Optional
 
-from numpy import add, arccos, array, divide, dot, ones, repeat
+from numpy import add, arccos, array, asarray, divide, dot, ones, repeat
 from OpenGL.GL import GL_TRIANGLES
 
 from OpenGLContext import triangleutilities
@@ -357,7 +357,7 @@ class ArrayGeometryCompiler(IFSCompiler):
             vertexArray,
             normalArray,
         )
-        ag = arraygeometry.ArrayGeometry(
+        return arraygeometry.ArrayGeometry(
             vertexArray,
             colorArray,
             normalArray,
@@ -365,8 +365,8 @@ class ArrayGeometryCompiler(IFSCompiler):
             objectType=GL_TRIANGLES,
             ccw=self.target.ccw,
             solid=self.target.solid,
+            tangentArray=surface_tangents(vertexArray, normalArray, textureCoordinateArray),
         )
-        return ag
 
 
 COMPILER_CLASSES.append(ArrayGeometryCompiler)
@@ -462,6 +462,24 @@ class IndexedPolygonsCompiler(IFSCompiler):
 
 
 COMPILER_CLASSES.append(IndexedPolygonsCompiler)
+
+
+def surface_tangents(points: Any, normals: Any, texcoords: Any,
+                     indices: Any = None) -> Any:
+    """Per-vertex tangents for a normal map, from the texture coordinates;
+    None where there are no coordinates or normals to make them from
+
+    `indices` names the triangles, three to one; None reads the points as
+    triangles in order.
+    """
+    from OpenGLContext.loaders.gltf.meshes import estimate_tangents  # noqa: PLC0415 the loader package imports GL
+    if texcoords is None or normals is None or not len(texcoords) or not len(normals):
+        return None
+    if len(texcoords) != len(points) or len(normals) != len(points):
+        return None
+    return estimate_tangents(asarray(points, 'f'), asarray(normals, 'f'),
+                             asarray(texcoords, 'f')[:, :2],
+                             None if indices is None else asarray(indices, 'I'))
 
 
 def getXNull(node: Any, attr: str) -> Any:

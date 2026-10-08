@@ -47,6 +47,7 @@ class ArrayGeometry(object):
         count: int = -1, # by default, render the whole array (len(vertexArray)), see glDrawArrays
         ccw: int = 1, # determines winding direction
         solid: int = 1, # whether backspace culling may be enabled
+        tangentArray: Any = None, # optional (x, y, z, w) tangents, for a normal map
     ) -> None:
         """Initialize the ArrayGeometry
 
@@ -71,6 +72,9 @@ class ArrayGeometry(object):
             see glFrontFace
         solid = 1 -- whether backspace culling should be enabled
             see glEnable( GL_CULL_FACE )
+        tangentArray = None -- optional tangents, xyz and the bitangent's
+            sign, which a material's normal map is read along; the shader
+            path only
         """
         log.debug( 'New array geometry node' )
         if FORCE_CONTIGUOUS:
@@ -99,12 +103,15 @@ class ArrayGeometry(object):
                 normalArray = VBO( normalArray )
             if textureCoordinateArray is not None and len(textureCoordinateArray):
                 textureCoordinateArray = VBO( textureCoordinateArray )
+            if tangentArray is not None and len(tangentArray):
+                tangentArray = VBO( ascontiguousarray( tangentArray, 'f' ) )
         if count < 0:
             count = len (vertexArray)
         self.vertices = vertexArray
         self.colours = colorArray
         self.normals = normalArray
         self.textures = textureCoordinateArray
+        self.tangents = tangentArray
         self.arguments = (objectType, startIndex,count)
         log.debug( '  array geometry: %s, %s', self.arguments, len(self.vertices) )
         if ccw:
@@ -218,6 +225,7 @@ class ArrayGeometry(object):
             positions=self.vertices,
             normals=self.normals,
             texcoords=self.textures,
+            tangents=self.tangents,
             colors=colours,
         ), owner=self, where='ArrayGeometry', ccw=self.ccw == GL_CCW,
             solid=bool(self.solid))

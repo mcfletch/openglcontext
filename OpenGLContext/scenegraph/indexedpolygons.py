@@ -74,6 +74,8 @@ class Holder(object):
     normal: Any = None
     color: Any = None
     texCoord: Any = None
+    #: Tangents a normal map is read along, made from the texture coordinates
+    tangent: Any = None
 
     def _enableColors(self, node: Any) -> int:
         """Enable the colour array if possible"""
@@ -360,6 +362,7 @@ class IndexedPolygons(
             positions=vbos.coord,
             normals=vbos.normal if lit else None,
             texcoords=vbos.texCoord if textured else None,
+            tangents=vbos.tangent if textured else None,
         ), owner=self, where='IndexedPolygons', ccw=bool(self.ccw),
             solid=bool(self.solid))
         return 1
@@ -439,4 +442,11 @@ class IndexedPolygons(
                     holder.depend(fieldNode, attr)
                     holder.depend(self, fieldName)
             holder.depend(self, "index")
+            holder.depend(self, "polygonSides")
+            from OpenGLContext.scenegraph.ifscompiler import surface_tangents  # noqa: PLC0415 ifscompiler imports this module
+            tangents = surface_tangents(
+                getattr(self.coord, 'point', None), getattr(self.normal, 'vector', None),
+                getattr(self.texCoord, 'point', None), self._triangle_index(mode))
+            if tangents is not None:
+                vbos.tangent = VBO(tangents)
         return vbos
