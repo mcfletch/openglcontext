@@ -180,3 +180,18 @@ def test_the_compatibility_profile_reflects_a_cube_map(gl_context):
 def test_the_compatibility_profile_spans_a_3d_texture_across_the_bounds(gl_context):
     found = centre(drawn_fixed(square(VOLUME, material=b'')))
     assert close(found, (255, 0, 0)), found
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+def test_a_face_set_with_a_multitexture_coordinate_draws(gl_context, renderer):
+    two = b'<PixelTexture repeatS="false" image="2 1 3 0xFF0000 0x00FF00"/>'
+    texture = b'<MultiTexture mode=\'"REPLACE"\'>' + two + b'</MultiTexture>'
+    body = (b'<Shape><Appearance><UnlitMaterial emissiveColor="1 1 1"/>' + texture
+            + b'</Appearance><IndexedFaceSet coordIndex="0 1 2 3 -1" solid="false">'
+            b'<Coordinate point="-1 -1 0 1 -1 0 1 1 0 -1 1 0"/>'
+            b'<MultiTextureCoordinate><TextureCoordinateGenerator mode="COORD"/>'
+            b'<TextureCoordinate point="0 0 1 0 1 1 0 1"/></MultiTextureCoordinate>'
+            b'</IndexedFaceSet></Shape>')
+    image = drawn(body, renderer, size=64)
+    assert close(tuple(image[32, 12]), (255, 0, 0)), tuple(image[32, 12])
+    assert close(tuple(image[32, 54]), (0, 255, 0)), tuple(image[32, 54])

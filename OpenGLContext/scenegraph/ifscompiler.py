@@ -32,6 +32,7 @@ from OpenGLContext.scenegraph import (
     polygontessellator,
     indexedpolygons,
 )
+from vrml.x3d import nodes as x3d
 from vrml import protofunctions
 
 log = logging.getLogger(__name__)
@@ -97,12 +98,21 @@ class IFSCompiler(object):
         for n, attr in [
             (self.target.coord, "point"),
             (self.target.color, "color"),
-            (self.target.texCoord, "point"),
+            (self._planeCoordinates(), "point"),
             (self.target.normal, "vector"),
         ]:
             if n:
                 found.append((n, protofunctions.getField(n, attr)))
+        coordinates = self.target.texCoord
+        if isinstance(coordinates, x3d.MultiTextureCoordinate):
+            # Which entry is read follows the list
+            found.append((coordinates, protofunctions.getField(coordinates, 'texCoord')))
         return found
+
+    def _planeCoordinates(self) -> Any:
+        """The TextureCoordinate node the face set's 2D coordinates come from, or None"""
+        found = getattr(self.target, 'planeCoordinates', None)
+        return found() if found is not None else self.target.texCoord
 
     def buildCacheHolder(self, key: str = "", mode: Any = None) -> Any:
         """Get a cache holder with all dependencies set"""
@@ -149,7 +159,7 @@ class IFSCompiler(object):
             getXNull(self.target.coord, "point"),
             getXNull(self.target.color, "color"),
             getXNull(self.target.normal, "vector"),
-            getXNull(self.target.texCoord, "point"),
+            getXNull(self._planeCoordinates(), "point"),
         )
 
         return [
@@ -291,6 +301,9 @@ class ArrayGeometryCompiler(IFSCompiler):
             else:
                 normalArray = triangleutilities.normalPerFace(vertexArray)
                 normalArray = repeat(normalArray, [3] * len(normalArray), 0)
+            if not self.target.ccw:
+                # Faces wound clockwise face the other way from their winding
+                normalArray = -normalArray
         else:
             normalArray = []
             for vertex in vertices:
@@ -313,11 +326,12 @@ class ArrayGeometryCompiler(IFSCompiler):
                 )
         else:
             colorArray = None
-        if self.target.texCoord and len(self.target.texCoord.point):
+        flat = self._planeCoordinates()
+        if flat and len(flat.point):
             textureCoordinateArray = array(
                 [vertex.textureCoordinate for vertex in vertices], "f"
             )
-        elif not self.target.texCoord:
+        elif not flat:
             textureCoordinateArray = composedgeometry.default_texcoords(
                 vertexArray, self.target.coord.point)
         else:
