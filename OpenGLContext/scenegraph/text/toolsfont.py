@@ -812,35 +812,13 @@ class _ToolsFontProvider( fontprovider.TTFFontProvider):
         
     def create( self, fontStyle: Any, mode: Any = None ) -> Any:
         """Create a new font for the given fontStyle and mode"""
-        file, weight, italics = key = self.match(fontStyle, mode)
+        file, weight, italics = key = self.matchFile(fontStyle, mode)
         # do we already have this filename + size established?
         bitmapFont = self.fontClass( fontStyle, font = file )
         self.addFont( fontStyle, bitmapFont )
         self.fonts[ key ] = bitmapFont
         return bitmapFont
 
-    def match( self, fontStyle: Any = None, mode: Any = None ) -> tuple[str, int, int]:
-        """Attempt to find matching font-file for our fontstyle
-
-        Should match any name passed into addFontFile,
-        as well as the short filename for the font.
-        """
-        registry = self.getTTFRegistry()
-        fontName = registry.fontNameFromStyle( fontStyle, mode=mode )
-        weight, italics = registry.modifiersFromStyle( fontStyle, mode=mode )
-        specificFonts = registry.fontMembers( fontName, weight, italics )
-        if not specificFonts:
-            # broaden to any weight
-            specificFonts = registry.fontMembers( fontName, None, italics )
-            if not specificFonts:
-                # broaden to every sub-font...
-                specificFonts = registry.fontMembers( fontName )
-                if not specificFonts:
-                    raise RuntimeError( """No concrete fonts found for general font %r (somehow)"""%( fontName, ))
-        # okay, just arbitrarily choose the first item, normally will only be one anyway
-        specificFont = specificFonts[0]
-        fontFile = registry.fontFile( specificFont )
-        return fontFile, weight, italics
 
 ToolsSolidFontProvider = _ToolsFontProvider(ToolsSolidFont)
 ToolsSolidFontProvider.registerProvider( ToolsSolidFontProvider )

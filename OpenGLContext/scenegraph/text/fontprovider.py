@@ -234,6 +234,23 @@ class TTFFontProvider(FontProvider):
             ContextConfigMixin.getTTFFiles()
         return cls.TTFRegistry
 
+    @classmethod
+    def matchFile(cls, fontStyle: Any = None, mode: Any = None) -> tuple[str, int, int]:
+        """The font file for `fontStyle`, with the weight and italic flag asked
+
+        The family's face of that weight and slant; else of any weight; else
+        any of the family's faces.
+        """
+        registry = cls.getTTFRegistry()
+        fontName = registry.fontNameFromStyle(fontStyle, mode=mode)
+        weight, italics = registry.modifiersFromStyle(fontStyle, mode=mode)
+        specificFonts = (registry.fontMembers(fontName, weight, italics)
+                         or registry.fontMembers(fontName, None, italics)
+                         or registry.fontMembers(fontName))
+        if not specificFonts:
+            raise RuntimeError('No concrete fonts found for general font %r' % (fontName,))
+        return registry.fontFile(specificFonts[0]), weight, italics
+
 
 
 getProviders = FontProvider.getProviders
