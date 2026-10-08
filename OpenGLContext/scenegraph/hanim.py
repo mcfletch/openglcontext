@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from pydispatch import dispatcher
-from vrml import cache, protofunctions
+from vrml import cache, node, protofunctions
 from vrml.vrml97 import nodetypes
 from vrml.x3d import nodes as x3d
 
@@ -55,6 +55,10 @@ MESH_KEY = 'hanim-deformed-mesh'
 CHANNELS_KEY = 'hanim-channels'
 
 
+#: What a joint draws of its children (ISO/IEC 19775-1, 26.3.3).
+_JOINT_CHILDREN = (x3d.HAnimJoint, x3d.HAnimSegment, x3d.HAnimSite)
+
+
 def _rig() -> Any:
     """:mod:`OpenGLContext.character.hanim`, imported when first used
 
@@ -78,7 +82,30 @@ class HAnimDisplacer(x3d.HAnimDisplacer):
 
 
 class Placed(Transforming):
-    """A Transform whose matrix is the one its path is placed by"""
+    """A Transform whose matrix is the one its path is placed by, bounding what it draws"""
+
+    #: The fields what it draws is read from.
+    DRAWN: tuple[str, ...] = ('children',)
+
+    def boundingVolume(self, mode: Any = None) -> Any:
+        """The union of what it draws, in its own coordinates"""
+        current = boundingvolume.getCachedVolume(self)
+        if current is not None:
+            return current
+        volumes: list[Any] = []
+        dependencies: list[tuple[Any, Optional[str]]] = [
+            (self, name) for name in self.DRAWN + PLACING]
+        try:
+            for child in self.renderedChildren():  # type: ignore[attr-defined]  # Grouping's
+                if not hasattr(child, 'boundingVolume'):
+                    raise boundingvolume.UnboundedObject(child)
+                volume = child.boundingVolume(mode)
+                volumes.append(volume)
+                dependencies.append((volume, None))
+            volume = boundingvolume.BoundingBox.union(volumes, self.localMatrix(mode))
+        except boundingvolume.UnboundedObject:
+            volume = boundingvolume.UnboundedVolume()
+        return boundingvolume.cacheVolume(self, volume, dependencies)
 
     def localMatrix(self, mode: Any = None) -> Any:
         """The forward matrix of its own fields, kept in vrml's cache"""
@@ -89,10 +116,17 @@ class Placed(Transforming):
 class HAnimJoint(Placed, x3d.HAnimJoint):
     """X3D's HAnimJoint: a Transform of the joints, segments and sites it holds
 
+    Other nodes among its children (an exporter's marker boxes) are kept and
+    not drawn: X3D lists only joints, segments and sites there.
     `llimit`, `ulimit` and `limitOrientation` are kept; :meth:`limitedRotation`
     holds a rotation to them for an application that wants its joints held,
     and nothing applies them by itself.
     """
+
+    def renderedChildren(self, types: Any = (nodetypes.Children, nodetypes.Rendering)) -> list:
+        """The joints, segments and sites it holds"""
+        return [item for item in super().renderedChildren(types)
+                if isinstance(item, (*_JOINT_CHILDREN, node.PrototypedNode))]
 
     def limitedRotation(self, rotation: Any = None) -> tuple[float, float, float, float]:
         """`rotation` (the joint's own where None) held within the joint's limits"""
@@ -510,6 +544,8 @@ class HAnimHumanoid(Placed, x3d.HAnimHumanoid):
     def _onDrawnChange(self, value: Any = None) -> None:
         dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)
 
+    DRAWN = ('skeleton', 'skin', 'viewpoints')
+
     def renderedChildren(self, types: Any = (nodetypes.Children, nodetypes.Rendering)) -> list:
         """The skeleton, the viewpoints it does not place, and the skin"""
         held = self.rig()
@@ -518,26 +554,6 @@ class HAnimHumanoid(Placed, x3d.HAnimHumanoid):
                      if isinstance(item, types) and item not in held.placed)
         found.extend(item for item in self.skin if isinstance(item, types))
         return found
-
-    def boundingVolume(self, mode: Any = None) -> Any:
-        """The union of what it draws, in its own coordinates"""
-        current = boundingvolume.getCachedVolume(self)
-        if current is not None:
-            return current
-        volumes: list[Any] = []
-        dependencies: list[tuple[Any, Optional[str]]] = [
-            (self, name) for name in ('skeleton', 'skin', 'viewpoints') + PLACING]
-        try:
-            for child in self.renderedChildren():
-                if not hasattr(child, 'boundingVolume'):
-                    raise boundingvolume.UnboundedObject(child)
-                volume = child.boundingVolume(mode)
-                volumes.append(volume)
-                dependencies.append((volume, None))
-            volume = boundingvolume.BoundingBox.union(volumes, self.localMatrix(mode))
-        except boundingvolume.UnboundedObject:
-            volume = boundingvolume.UnboundedVolume()
-        return boundingvolume.cacheVolume(self, volume, dependencies)
 
     # -- the rig -------------------------------------------------------------
     def rig(self) -> Rig:

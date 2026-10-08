@@ -78,6 +78,8 @@ OpenGLContext/
 │   └── mirrorhall.py # The room oglc-mirrors hangs its mirrors in; scenery,
 │                     # not a command
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
+│   └── hanim.py      # X3D HAnim's arithmetic: names and levels, skin weights,
+│                     # BVH channels, poses, limits -- no GL -- docs/characters.rst#characters-hanim
 ├── contentpacks/     # Data an application fetches rather than ships: the
 │                     # registry, the store, safe extraction and the polled
 │                     # download job -- docs/contentpacks.rst
@@ -237,6 +239,10 @@ OpenGLContext/
 │   │                 # context's picked pointer -- no GL
 │   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the
 │   │                 # context to follow its url (Context.OnAnchor)
+│   ├── hanim.py      # X3D's HAnim nodes: humanoids drawn, skinned, posed and
+│   │                 # animated -- docs/characters.rst#characters-hanim
+│   ├── coordinatedeform.py  # Which Coordinate nodes something deforms; the
+│   │                 # geometry reading one is drawn through its deformer
 │   ├── x3dgroups.py  # X3D's CADAssembly, CADLayer, PickableGroup and
 │   │                 # StaticGroup as groups, CADFace as its shape
 │   │                 # (CADPart is in transform.py)

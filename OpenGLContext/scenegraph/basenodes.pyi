@@ -46,6 +46,13 @@ from OpenGLContext.scenegraph.geometry2d import Polypoint2D as Polypoint2D
 from OpenGLContext.scenegraph.geometry2d import Rectangle2D as Rectangle2D
 from OpenGLContext.scenegraph.geometry2d import TriangleSet2D as TriangleSet2D
 from OpenGLContext.scenegraph.group import Group as Group
+from OpenGLContext.scenegraph.hanim import HAnimDisplacer as HAnimDisplacer
+from OpenGLContext.scenegraph.hanim import HAnimHumanoid as HAnimHumanoid
+from OpenGLContext.scenegraph.hanim import HAnimJoint as HAnimJoint
+from OpenGLContext.scenegraph.hanim import HAnimMotion as HAnimMotion
+from OpenGLContext.scenegraph.hanim import HAnimPose as HAnimPose
+from OpenGLContext.scenegraph.hanim import HAnimSegment as HAnimSegment
+from OpenGLContext.scenegraph.hanim import HAnimSite as HAnimSite
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight as ImageBasedLight
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture as ImageDataTexture
 from OpenGLContext.scenegraph.imagetexture import ImageTexture as ImageTexture
@@ -284,6 +291,13 @@ __all__ = [
     'GLSLShader',
     'Gear',
     'Group',
+    'HAnimDisplacer',
+    'HAnimHumanoid',
+    'HAnimJoint',
+    'HAnimMotion',
+    'HAnimPose',
+    'HAnimSegment',
+    'HAnimSite',
     'IS',
     'ImageBasedLight',
     'ImageDataTexture',

@@ -74,6 +74,13 @@ class TestTheHumanoid:
         found = scene.getDEF('H').renderedChildren()
         assert scene.getDEF('VIEW') in found and scene.getDEF('TIP') not in found
 
+    def test_a_joint_draws_its_joints_segments_and_sites(self):
+        scene = load(arm().replace(b'<HAnimSegment DEF="UPPER"',
+                                   b'<Transform DEF="MARKER"/><HAnimSegment DEF="UPPER"'))
+        shoulder = scene.getDEF('SHOULDER')
+        assert scene.getDEF('MARKER') in shoulder.children
+        assert shoulder.renderedChildren() == [scene.getDEF('UPPER'), scene.getDEF('TIP')]
+
     def test_its_joints_are_found_by_name_and_alias(self):
         scene = load(arm())
         humanoid = scene.getDEF('H')

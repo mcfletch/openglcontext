@@ -140,6 +140,14 @@ class TestExpandedArrays:
         assert len(normals) == 6         # repeated 3x per face
         assert np.allclose(np.abs(normals[0]), [0, 0, 1], atol=1e-5)
 
+    @pytest.mark.parametrize('per_vertex', [1, 0])
+    def test_generated_normals_face_the_clockwise_side_where_ccw_is_false(self, per_vertex):
+        """ccw false says the faces are wound clockwise seen from their front."""
+        _v, _c, front, _t = ArrayGeometryCompiler(_quad(normalPerVertex=per_vertex)).expandedArrays()
+        _v, _c, back, _t = ArrayGeometryCompiler(
+            _quad(normalPerVertex=per_vertex, ccw=False)).expandedArrays()
+        assert np.allclose(np.asarray(back), -np.asarray(front), atol=1e-5)
+
     def test_explicit_normals_are_used(self):
         ifs = _quad(normal=b.Normal(vector=[(0, 0, 1)] * 4),
                     normalIndex=[0, 1, 2, -1, 0, 2, 3, -1])

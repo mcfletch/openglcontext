@@ -301,6 +301,10 @@ class ArrayGeometryCompiler(IFSCompiler):
             else:
                 normalArray = triangleutilities.normalPerFace(vertexArray)
                 normalArray = repeat(normalArray, [3] * len(normalArray), 0)
+            if not self.target.ccw:
+                # The faces are wound clockwise seen from their front, so the
+                # counter-clockwise normals point out of their back.
+                normalArray = -asarray(normalArray)
         else:
             normalArray = []
             for vertex in vertices:
