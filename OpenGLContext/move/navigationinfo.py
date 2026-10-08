@@ -180,7 +180,7 @@ def clip(platform: Any, info: Any) -> None:
         platform.setClipping(far=float(info.visibilityLimit))
 
 
-def apply(context: Any, info: Any, document: bool = False) -> None:
+def apply(context: Any, info: Any, document: bool = False, scale: float = 1.0) -> None:
     """Apply `info` to `context` as it is bound, and as its fields change
 
     The far clipping distance of the context's ``platform`` (:func:`clip`),
@@ -188,13 +188,15 @@ def apply(context: Any, info: Any, document: bool = False) -> None:
     time one of those fields has changed; and the movement mode `info` asks
     for, when it is bound or its ``type`` changes. `info` is None where the
     scene binds none, and `document` says the scene was read from a VRML97 or
-    X3D document, which then has X3D's default NavigationInfo. `context`
+    X3D document, which then has X3D's default NavigationInfo. `scale`
+    multiplies the speeds further: the bound viewpoint's
+    (:meth:`~OpenGLContext.scenegraph.viewpoint.Placing.speedScale`). `context`
     answers ``getNavigation()``: its navigation manager, or None where it
     declares no movement modes.
     """
     if info is None and document:
         info = document_default()
-    values = None if info is None else _values(info)
+    values = None if info is None else _values(info) + (float(scale),)
     last = _applied.get(context)
     if last is not None and last[0] is info and last[1] == values:
         return
@@ -206,7 +208,7 @@ def apply(context: Any, info: Any, document: bool = False) -> None:
     manager = context.getNavigation()
     if manager is None or info is None or values is None:
         return
-    _scale_speeds(manager, speed_factor(info))
+    _scale_speeds(manager, speed_factor(info) * float(scale))
     if last is not None and last[0] is info and last[1] is not None and last[1][3] == values[3]:
         return
     name = chosen_mode(info, [mode.name for mode in manager.selectable()])

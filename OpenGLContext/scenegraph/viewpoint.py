@@ -11,14 +11,29 @@ from OpenGLContext import arrays
 class Placing:
     """A viewpoint that places a context's view platform when it is bound
 
-    Its position and orientation where `jump` is true, its projection
-    (:meth:`project`), and the clip planes `nearDistance` and `farDistance`
-    where each is positive.
+    Its position and orientation (:meth:`placement`) where `jump` is true,
+    its projection (:meth:`project`), and the clip planes `nearDistance` and
+    `farDistance` where each is positive.
     """
 
     nearDistance: Any
     farDistance: Any
     fieldOfView: Any
+    position: Any
+    orientation: Any
+    centerOfRotation: Any
+
+    def placement( self ) -> "tuple[Any, quaternion.Quaternion]":
+        """(position, orientation) in the viewpoint's own coordinates"""
+        return self.position, quaternion.fromXYZR( *self.orientation )
+
+    def localCentre( self ) -> Any:
+        """`centerOfRotation` in the viewpoint's own coordinates"""
+        return self.centerOfRotation
+
+    def speedScale( self, position: Any ) -> float:
+        """What navigation speeds are multiplied by with the viewer at `position`"""
+        return 1.0
 
     def moveTo( cls, path: Any, context: Any ) -> None:
         """Given a node-path to a viewpoint, move context's platform there"""
@@ -28,12 +43,10 @@ class Placing:
         if not platform:
             platform = context.platform = context.getViewPlatform()
         if node.jump:
-            position = list(node.position)+[1]
+            local, turned = node.placement()
+            position = list(local)+[1]
             newPosition = arrays.dot( position, matrix )
-            newOrientation = (
-                path.quaternion() *
-                quaternion.fromXYZR( *node.orientation )
-            ).XYZR()
+            newOrientation = ( path.quaternion() * turned ).XYZR()
             platform.setOrientation( newOrientation )
             if getattr( node, 'viewAll', False ):
                 framed = node.framing( context, platform )

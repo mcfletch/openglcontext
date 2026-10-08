@@ -27,7 +27,7 @@ class _Path(list):
 
 def _pass(nodes):
     rendering = _flat.FlatPass.__new__(_flat.FlatPass)
-    rendering.paths = {lod.LOD: [_Path([node]) for node in nodes]}
+    rendering.paths = {lod.Levelled: [_Path([node]) for node in nodes]}
     rendering.context = None
     return rendering
 

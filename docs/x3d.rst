@@ -104,6 +104,9 @@ implements these X3D nodes, by component:
 - Geometry2D - Arc2D, ArcClose2D, Circle2D, Disk2D, Polyline2D, Polypoint2D,
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
+- Geospatial - GeoCoordinate, GeoElevationGrid, GeoLOD, GeoLocation, GeoMetadata,
+  GeoOrigin, GeoPositionInterpolator, GeoProximitySensor, GeoTouchSensor,
+  GeoTransform, GeoViewpoint
 - Grouping - Group, StaticGroup, Switch, Transform
 - Followers - ColorChaser, ColorDamper, CoordinateChaser, CoordinateDamper,
   OrientationChaser, OrientationDamper, PositionChaser, PositionChaser2D,
@@ -443,12 +446,12 @@ Sensors
 ~~~~~~~
 
 - The environmental sensors are told once a frame what they sense
-  (``OpenGLContext.scenegraph.x3dsensors``): a ``ProximitySensor`` the
-  active view's camera, a ``TransformSensor`` its ``targetObject`` where the
+  (``OpenGLContext.scenegraph.x3dsensors``): a ``ProximitySensor`` or
+  ``GeoProximitySensor`` the active view's camera, a ``TransformSensor`` its ``targetObject`` where the
   scene draws it, and a ``VisibilitySensor`` whether its box is within any
   view's frustum.
-- The pointing-device sensors (``TouchSensor``, ``PlaneSensor``,
-  ``CylinderSensor``, ``SphereSensor``) are told of their context's picked
+- The pointing-device sensors (``TouchSensor``, ``GeoTouchSensor``,
+  ``PlaneSensor``, ``CylinderSensor``, ``SphereSensor``) are told of their context's picked
   pointer (``OpenGLContext.scenegraph.x3dpointing``). The sensors reached are
   the enabled ones beside the geometry under the pointer, in the lowest group
   on its path that has any; the primary button presses them, and a drag
@@ -463,6 +466,48 @@ Sensors
 - A ``StringSensor`` hears every character typed into its window.
 
 ``Context.observeEvents`` is how the sensors listen.
+
+Geospatial
+~~~~~~~~~~
+
+The Geospatial nodes place content on the Earth. Each reads its coordinates
+in its ``geoSystem``: ``"GD"`` latitude, longitude and height in degrees and
+metres (longitude first with ``"longitude_first"``), ``"UTM"`` northing,
+easting and height in a zone such as ``"Z17"`` (``"S"`` for the southern
+hemisphere, easting first with ``"easting_first"``), or ``"GC"`` geocentric
+metres, on any of X3D's ellipsoids (``"WE"``, WGS84, by default). The
+conversions are ``vrml.x3d.geospatial``'s, in double precision.
+
+The scene's coordinates are geocentric metres less the node's ``GeoOrigin``,
+turned so the origin's up is +Y where its ``rotateYUp`` is true. A frame on
+the Earth has +Y up along the ellipsoid's normal, +X east and -Z north.
+
+- ``GeoLocation`` places its children in the frame at ``geoCoords``;
+  ``GeoTransform`` transforms them about the frame at ``geoCenter``.
+  Transforms and the camera are composed in double precision, and converted
+  to single precision only relative to the camera, so these place their
+  children to the millimetre anywhere on the Earth.
+- ``GeoCoordinate`` gives any coordinate-based geometry its points, and
+  ``GeoElevationGrid`` raises heights times ``yScale`` along the normal over
+  a grid stepping ``xSpacing`` along the longitude or easting and
+  ``zSpacing`` along the latitude or northing. Their points are single
+  precision relative to their ``GeoOrigin``: content within a few kilometres
+  of its origin is placed to the millimetre, and content with no origin to
+  about half a metre.
+- ``GeoViewpoint`` places the camera at ``position``, turned by
+  ``orientation`` from the frame there. Navigation is ``speedFactor`` times
+  faster ten metres above the ellipsoid than at its surface, and faster
+  again in proportion to the viewer's height above that.
+- ``GeoLOD`` draws ``rootNode`` and the scene ``rootUrl`` names from afar,
+  and within ``range`` metres of ``center`` the scenes ``child1Url`` to
+  ``child4Url`` name, read the first time the viewer comes that close.
+- ``GeoProximitySensor`` senses the viewer in a box about ``geoCenter`` and
+  sends its position in its ``geoSystem`` as ``geoCoord_changed``;
+  ``GeoTouchSensor`` sends the hit's as ``hitGeoCoord_changed``.
+- ``GeoPositionInterpolator`` interpolates along the globe between its
+  ``keyValue`` coordinates and sends the result as ``geovalue_changed`` and,
+  in the scene's coordinates, ``value_changed``.
+- ``GeoMetadata`` is kept and not drawn.
 
 Kept and not drawn
 ~~~~~~~~~~~~~~~~~~

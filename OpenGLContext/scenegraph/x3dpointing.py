@@ -30,7 +30,7 @@ from vrml.x3d.nodes import X3DPointingDeviceSensorNode
 
 from OpenGLContext.scenegraph.anchor import Anchor
 
-__all__ = ['CylinderSensor', 'PlaneSensor', 'PointerSensing', 'SphereSensor', 'TouchSensor',
+__all__ = ['CylinderSensor', 'GeoTouchSensor', 'PlaneSensor', 'PointerSensing', 'SphereSensor', 'TouchSensor',
            'pointer_ray', 'sensing', 'sensors_for', 'unprojected']
 
 #: The button that presses a sensor.
@@ -206,6 +206,10 @@ class Pointed:
 
 class TouchSensor(Pointed, pointing.TouchSensor):
     """X3D's TouchSensor, told of the pointer"""
+
+
+class GeoTouchSensor(Pointed, pointing.GeoTouchSensor):
+    """X3D's GeoTouchSensor, told of the pointer"""
 
 
 class PlaneSensor(Pointed, pointing.PlaneSensor):

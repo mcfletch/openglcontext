@@ -31,6 +31,7 @@ from OpenGLContext.arrays import *
 from OpenGL.GL import *
 from vrml import node, field, protofunctions, cache
 from OpenGLContext import frustum
+from OpenGLContext.scenegraph import coordinates
 import logging
 
 log = logging.getLogger(__name__)
@@ -405,17 +406,13 @@ def volumeFromCoordinate(node: Any) -> BoundingVolume:
     current = getCachedVolume(node)
     if current:
         return current
-    if (not node) or (not len(node.point)):
+    points = coordinates.points(node)
+    if points is None or not len(points):
         volume = BoundingVolume()
     else:
-        volume = AABoundingBox.fromPoints(node.point)
-    if node:
-        # note that even if not node.point, we
-        # are dependent on that NULL node.point value
-        dependencies = [(node, "point")]
-    else:
-        dependencies = []
-    return cacheVolume(node, volume, dependencies)
+        volume = AABoundingBox.fromPoints(points)
+    # An empty point list is a value the volume depends on too.
+    return cacheVolume(node, volume, coordinates.fields(node))
 
 
 ### Abstraction/indirection for caching bounding volumes

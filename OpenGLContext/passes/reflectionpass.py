@@ -413,9 +413,9 @@ class ReflectionsMixin(PassResources):
             return []
         gathered = self.frameGather()
         keep = self._survivorsThrough(frame.modelproj, frame, among=indices)
-        modelview = np.asarray(frame.modelView, 'f')
+        modelview = np.asarray(frame.modelView, 'd')
         return [(gathered.nodes[index].sortKey(self, gathered.own[index]),
-                 gathered.matrices[index] @ modelview, gathered.own[index],
+                 (gathered.matrices[index] @ modelview).astype('f'), gathered.own[index],
                  gathered.volumes[index], gathered.paths[index], gathered.nodes[index])
                 for index in keep]
 
