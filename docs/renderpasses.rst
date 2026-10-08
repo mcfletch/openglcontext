@@ -489,6 +489,13 @@ left behind reaches it. The ``OGC151`` rule of :doc:`openglcontext-checks
 <checks>` holds the engine's draw code to these managers or a
 ``try``/``finally``.
 
+In the compatibility profile, ``glstate.load_matrix(matrix)`` and
+``glstate.multiply_matrix(matrix)`` set the fixed-function matrix through
+``glLoadMatrixd`` and ``glMultMatrixd`` for a float64 matrix, and through
+``glLoadMatrixf`` and ``glMultMatrixf`` for a float32 one. Path and modelview
+matrices are float64, so they reach GL without a copy, and a program that sets
+PyOpenGL's ``ERROR_ON_COPY`` runs.
+
 .. _passes:
 
 The passes package
