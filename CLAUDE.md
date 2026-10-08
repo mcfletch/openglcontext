@@ -220,6 +220,11 @@ OpenGLContext/
 │   ├── shape.py      # Binds Appearance to geometry
 │   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.rst
 │   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.rst
+│   ├── nurbsx3d.py   # X3D's NURBS geometry, trims, texture coordinates and
+│   │                 # NurbsSet, drawn as meshes and lines
+│   ├── nurbsinterpolators.py  # X3D's three NURBS interpolators -- no GL
+│   ├── nurbseval.py  # X3D's NURBS field rules; curves, surfaces, trims and
+│   │                 # sweeps evaluated -- no GL
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── composedgeometry.py  # X3D triangle/line sets and ElevationGrid as
 │   │                 # glTF-shaped arrays -- NumPy only, no GL
