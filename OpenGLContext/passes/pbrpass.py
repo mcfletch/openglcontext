@@ -849,8 +849,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
             if modelview is not None:
                 # Row vectors: the eye at the origin, taken back through the model-view
                 eye = np.linalg.inv(np.asarray(modelview, dtype=np.float64))[3, :3]
-                self._set_uniform3f('texGenLocalEye', tuple(float(v) for v in eye),
-                                    self.program)
+                self._set_uniform3f('texGenLocalEye',
+                                    (float(eye[0]), float(eye[1]), float(eye[2])), self.program)
         if state == self._texgen:
             return
         self._set_uniform1i('texGenMode', state[1], self.program)
