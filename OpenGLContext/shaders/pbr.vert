@@ -21,6 +21,7 @@ layout(location = 5) in mat4 aInstanceModelView;
 layout(location = 9) in uint aInstanceObjectId;
 layout(location = 10) in uint aInstanceMaterial;   // index into the material array
 layout(location = 11) in vec2 aTexCoord1;          // optional: second UV set (glTF TEXCOORD_1)
+layout(location = 15) in vec4 aTexCoord3D;         // optional: a 3D texture's (s, t, r, q), read where a layer says the geometry has them
 
 #include "_skinning_inc.glsl"
 #include "_wave_inc.glsl"
@@ -56,6 +57,13 @@ out vec2 vTexCoord1;     // second UV set
 out vec3 vTangent;       // eye space
 out float vTangentW;
 out vec4 vColor;
+// The point, its normal and the camera in the shape's own space, and its 3D
+// texture coordinates: what a texture layer's coordinates are made from
+// per fragment (_layers_inc.glsl).
+out vec3 vLocalPosition;
+out vec3 vLocalNormal;
+flat out vec3 vLocalEye;
+out vec4 vTexCoord3D;
 out float vModelScale;   // world-space object scale, for KHR_materials_volume thickness
 flat out uint vObjectId;       // per-instance picking id (used only when instancing)
 flat out uint vMaterialIndex;  // per-instance material-array index
@@ -159,6 +167,11 @@ void main() {
         vTexCoord = generatedTexCoord(position, normal, vPosition, vNormal, localEye);
     }
     vTexCoord1 = aTexCoord1;
+    vLocalPosition = position;
+    vLocalNormal = normal;
+    vLocalEye = instancingEnabled ? (inverse(mv) * vec4(0.0, 0.0, 0.0, 1.0)).xyz
+                                  : texGenLocalEye;
+    vTexCoord3D = aTexCoord3D;
     vColor = aColor;
     // The view is rigid (no scale), so the modelview upper-3x3 column lengths are the
     // MODEL scale. KHR_materials_volume thickness is authored in local units; scaling

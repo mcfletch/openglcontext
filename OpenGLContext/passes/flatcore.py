@@ -11,6 +11,7 @@ profile and renderer.  Shadow mapping comes from
 from typing import Any, Optional
 
 from OpenGLContext import renderoptions
+from OpenGLContext.scenegraph.texturelayers import is_layered
 from . import _flat
 from .shadowmixin import ShadowMapMixin
 import logging
@@ -114,7 +115,10 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
 
     def _instanceable(self, shape: Any) -> bool:
         """Geometry drawable through the shared instanced path -- anything exposing
-        an ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...)."""
+        an ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...), and not drawn
+        with texture layers, whose coordinates are its own geometry's."""
+        if is_layered(getattr(getattr(shape, 'appearance', None), 'texture', None)):
+            return False
         return hasattr(getattr(shape, 'geometry', None), 'instanceGPU')
 
     def _instanceKey(self, shape: Any) -> Any:

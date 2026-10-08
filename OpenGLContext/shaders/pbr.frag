@@ -78,6 +78,10 @@ in vec3 vTangent;
 in float vTangentW;
 in vec4 vColor;
 in float vModelScale;   // world-space object scale for KHR_materials_volume thickness
+in vec3 vLocalPosition;  // the point, its normal and the camera in the shape's own space
+in vec3 vLocalNormal;
+flat in vec3 vLocalEye;
+in vec4 vTexCoord3D;     // a 3D texture's coordinates (s, t, r, q)
 
 uniform bool hasVertexColor;        // glTF COLOR_0 present
 
@@ -432,6 +436,21 @@ uniform float prefilterMaxLod;       // highest mip level of prefilterMap
 
 uniform mat4 eyeToWorld;
 
+// A texture layer's 2D texture (_layers_inc.glsl): the first on the base
+// colour map's unit, the rest on the extension maps' units, which a material
+// drawn with layers does not use.
+vec4 layerTexture2D(int slot, vec2 uv) {
+    if (slot == 0) return texture(baseColorTexture, uv);
+#if PBR_EXT_TEXTURES
+    if (slot == 1) return texture(transmissionMap, uv);
+    if (slot == 2) return texture(iridescenceThicknessMap, uv);
+    if (slot == 3) return texture(clearcoatMap, uv);
+#endif
+    return vec4(1.0);
+}
+#include "_texgen_inc.glsl"
+#include "_layers_inc.glsl"
+
 uniform float exposure;           // camera exposure multiplier (default 1.0)
 
 // The mirrored scene at this fragment, with alpha 0 where there was nothing
@@ -692,6 +711,19 @@ void main() {
         alpha *= vColor.a;
     }
 
+    // X3D's MultiTexture, or a cube map or 3D texture, in place of the base
+    // map (_layers_inc.glsl): it starts from the diffuse colour as Phong
+    // reads it, or as the metallic/roughness model does in linear light.
+    vec4 layered;
+    bool hasLayers = textureLayered(
+        phongMode ? (hasVertexColor ? vColor.rgb : baseColorFactor) : albedo, alpha,
+        phongMode ? specularColorFactor : vec3(1.0), !phongMode,
+        gl_FrontFacing ? normalize(vNormal) : -normalize(vNormal), layered);
+    if (hasLayers) {
+        albedo = layered.rgb;
+        alpha = layered.a;
+    }
+
     if (alphaMode == 1 && alpha < alphaCutoff) discard;  // MASK
 
     // KHR_materials_unlit: emit base color directly (no lighting)
@@ -708,8 +740,9 @@ void main() {
     // normal map turns N and the occlusion map scales the lights' sum, and
     // the result is displayed as it is, without the tone map, bloom or not.
     if (phongMode) {
-        vec3 diffuse = (hasVertexColor ? vColor.rgb : baseColorFactor)
-                     * (hasBaseColor ? baseTex.rgb : vec3(1.0));
+        vec3 diffuse = hasLayers ? albedo
+                     : (hasVertexColor ? vColor.rgb : baseColorFactor)
+                       * (hasBaseColor ? baseTex.rgb : vec3(1.0));
         vec3 N = normalize(vNormal);
         if (!gl_FrontFacing) N = -N;
         N = normalMapped(N);

@@ -70,6 +70,7 @@ from OpenGLContext.passes.shadersource import (
     vertex_routing_source,
 )
 from OpenGLContext.passes.shaderpass_shadow import _ShadowUniformMixin
+from OpenGLContext.passes.texturelayerpass import LayerUnits, TextureLayersMixin
 from OpenGLContext.scenegraph.texturemapping import texture_transform_matrix
 
 
@@ -275,7 +276,7 @@ class ShaderAppearanceProgram(object):
         raise AttributeError(name)
 
 
-class VRML97ShaderProgram(_ShadowUniformMixin):
+class VRML97ShaderProgram(TextureLayersMixin, _ShadowUniformMixin):
     """Manages the VRML97 lighting shader program and uniforms.
 
     This class encapsulates shader compilation, uniform management,
@@ -447,6 +448,20 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                 validate=False, shadow_frag=True, views=views, strategy=strategy),
         }
 
+    #: Where the lit program reads texture layers: the diffuse texture's unit
+    #: and three more, and a unit each for a cube map and a 3D texture.
+    LAYER_UNITS = LayerUnits((0, 1, 2, 3), cube=10, volume=11)
+
+    def layer_units(self) -> LayerUnits:
+        """Where the lit program reads texture layers (:data:`LAYER_UNITS`)"""
+        return self.LAYER_UNITS
+
+    def _init_lit_layers(self, program: int) -> None:
+        """Point the lit program's layer samplers at their units, once"""
+        for slot, unit in enumerate(self.LAYER_UNITS.flat[1:], 1):
+            self._set_uniform1i('textureLayerMap%d' % slot, unit, program)
+        self.init_layer_samplers(program)
+
     def _init_program_set(self) -> None:
         """The one-time setup a newly compiled set of lit programs needs."""
         try:
@@ -454,6 +469,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                 self._shadow_program = prog
                 self._bind_program(prog)
                 self.init_shadow_samplers()
+            if self.program is not None:
+                self._bind_program(self.program)
+                self._init_lit_layers(self.program)
         finally:
             self._shadow_program = None
             self._bind_program(0)

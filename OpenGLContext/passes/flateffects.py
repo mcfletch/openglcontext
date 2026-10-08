@@ -158,11 +158,17 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
 
         ``prepared`` is this frame's :meth:`iblPrepare`, asked for here where
         it is not given. Binds the probe textures and the camera's eye-to-world
-        transform, and sets ``iblMode``. No-op unless the bound program is the
-        PBR program. Returns the effective mode string.
+        transform, and sets ``iblMode``. The VRML97 program is given the
+        camera's transform alone: its cube map textures are world-oriented.
+        Returns the effective mode string.
         """
         shader = self.shader_program
-        if shader is None or not hasattr(shader, 'set_ibl_mode'):
+        if shader is None:
+            return 'off'
+        if not hasattr(shader, 'set_ibl_mode'):
+            if hasattr(shader, 'set_eye_to_world') and shader.use(lit=True):
+                shader.set_eye_to_world(
+                    np.linalg.inv(np.asarray(matrix, dtype='d')).astype('f'))
             return 'off'
         from OpenGLContext.passes import ibl
         mode, probe = prepared if prepared is not None else self.iblPrepare()
