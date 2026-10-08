@@ -495,19 +495,15 @@ def user_fields(node: Any) -> "list[Any]":
 VALUES_KEY = 'x3d-shader-values'
 
 
-def user_values(node: Any) -> "tuple[list[tuple[str, x3dglsl.Uniform]], list[tuple[str, Any]]]":
-    """`node`'s field values as uniforms, and its texture fields, by name
+def field_values(node: Any) -> "tuple[list[tuple[str, x3dglsl.Uniform]], list[tuple[str, Any]]]":
+    """`node`'s declared field values as uniforms, and its texture fields, by name
 
-    Kept in vrml's cache until one of the fields is set or sent an event, so
-    a still scene computes them once.
+    A field or event with no value yet is left out; a node in an SFNode or
+    MFNode field is a texture (``name[i]`` for an MFNode's).
     """
-    held = cache.CACHE.getData(node, VALUES_KEY)
-    if held is not None:
-        return held  # type: ignore[no-any-return]  # what the holder below was given
     uniforms: list[tuple[str, x3dglsl.Uniform]] = []
     textures: list[tuple[str, Any]] = []
-    fields = user_fields(node)
-    for declared in fields:
+    for declared in user_fields(node):
         try:
             value = getattr(node, declared.name)
         except AttributeError:
@@ -524,9 +520,17 @@ def user_values(node: Any) -> "tuple[list[tuple[str, x3dglsl.Uniform]], list[tup
         found = x3dglsl.uniform_values(type_name, value)
         if found is not None:
             uniforms.append((declared.name, found))
-    held = (uniforms, textures)
+    return uniforms, textures
+
+
+def user_values(node: Any) -> "tuple[list[tuple[str, x3dglsl.Uniform]], list[tuple[str, Any]]]":
+    """:func:`field_values`, kept in vrml's cache until a declared field is set or sent an event"""
+    held = cache.CACHE.getData(node, VALUES_KEY)
+    if held is not None:
+        return held  # type: ignore[no-any-return]  # what the holder below was given
+    held = field_values(node)
     holder = cache.CACHE.holder(node, held, VALUES_KEY)
-    for declared in fields:
+    for declared in user_fields(node):
         holder.depend(node, declared)
     return held
 

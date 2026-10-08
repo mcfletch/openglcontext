@@ -68,6 +68,24 @@ def _styled():
                             appearance=look)]
 
 
+def _shaded():
+    """A box drawn by an X3D shader with a field, a light, a texture and an attribute"""
+    from tests.unit.test_x3d_shaders import GEOMETRIES, GREEN_HEAT, composed, document, load
+    fragment = """<![CDATA[#version 330 core
+uniform vec3 colour;
+uniform x3d_LightSourceParameters x3d_LightSource[x3d_MaxLights];
+uniform sampler2D x3d_Texture2D[x3d_MaxTextures];
+out vec4 c;
+void main() { c = vec4(colour * x3d_LightSource[0].color, 1.0) * texture(x3d_Texture2D[0], vec2(0.5)); }
+]]>"""
+    return load(document(
+        composed(fragment, fields='<field name="colour" type="SFColor" '
+                 'accessType="inputOutput" value="1 0 0"/>'),
+        geometry=GEOMETRIES['IndexedTriangleSet'] % GREEN_HEAT,
+        texture='<PixelTexture image="1 1 3 0xFFFFFF"/>',
+        scene='<DirectionalLight direction="0 0 -1"/>'))
+
+
 PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
 
 
@@ -80,6 +98,8 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
     pytest.param(_primitives, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='shadows'),
     pytest.param(_text, PBR, id='text'),
     pytest.param(_styled, PBR, id='line-point-fill-properties'),
+    pytest.param(_shaded, PBR, id='x3d-shader-pbr'),
+    pytest.param(_shaded, {'OPENGLCONTEXT_RENDERER': 'flat'}, id='x3d-shader-flat'),
 ])
 def test_a_still_frame_asks_nothing_new_of_gl(scene, environment):
     with scene_context(scene(), environment=environment) as context:

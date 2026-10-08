@@ -633,3 +633,85 @@ class TestTheDrawPutsThingsBack:
             x3dshaders.delete_program(linked.program)
         assert during == [0, 0, 0, 0]
         assert after == names
+
+
+class TestTheMemosFollowTheirInputs:
+    def test_a_shaders_values_follow_every_field_it_declares(self):
+        from OpenGLContext.scenegraph import x3dshaders
+        from OpenGLContext.testing.memo import check_memo_inputs
+        scene = load(document(composed(fields=(
+            '<field name="colour" type="SFColor" accessType="inputOutput" value="1 0 0"/>'
+            '<field name="scale" type="SFFloat" accessType="initializeOnly" value="1"/>'
+            '<field name="pulse" type="SFTime" accessType="inputOnly"/>'
+            '<field name="picture" type="SFNode" accessType="inputOutput"/>'))))
+        shader = named(scene, 'S')
+
+        def answer(values):
+            uniforms, textures = values
+            return (tuple((name, tuple(found.values.tolist())) for name, found in uniforms),
+                    tuple((name, id(texture)) for name, texture in textures))
+
+        def fresh():
+            return answer(x3dshaders.field_values(shader))
+
+        picture = vrml_x3d.nodes.PixelTexture()
+        check_memo_inputs(lambda: answer(x3dshaders.user_values(shader)), [
+            ('colour', lambda: setattr(shader, 'colour', (0, 1, 0))),
+            ('scale', lambda: setattr(shader, 'scale', 2.0)),
+            ('pulse, an event', lambda: setattr(shader, 'pulse', 3.0)),
+            ('picture', lambda: setattr(shader, 'picture', picture)),
+        ], fresh=fresh)
+
+    @pytest.mark.parametrize('geometry', ['IndexedTriangleSet', 'ElevationGrid'])
+    def test_a_meshs_vertex_attributes_follow_their_nodes(self, geometry):
+        from vrml.x3d import nodes as x3d
+        from OpenGLContext.loaders.x3d import prototypes
+        from OpenGLContext.testing.memo import check_memo_inputs
+        built = prototypes()
+        heat = x3d.FloatVertexAttribute(name='heat', numComponents=1, value=[0, 1, 2, 3])
+        if geometry == 'ElevationGrid':
+            node = built['ElevationGrid'](xDimension=2, zDimension=2, height=[0, 0, 0, 0],
+                                          attrib=[heat])
+        else:
+            node = built['IndexedTriangleSet'](
+                index=[0, 1, 2, 0, 2, 3], attrib=[heat],
+                coord=x3d.Coordinate(point=[(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]))
+
+        def answer(mesh):
+            return tuple((name, values.tolist()) for name, values, _ in mesh.vertex_attributes)
+
+        def fresh():
+            return answer(node.buildMesh())
+
+        check_memo_inputs(lambda: answer(node.mesh()), [
+            ('attrib.value', lambda: setattr(heat, 'value', [3, 2, 1, 0])),
+            ('attrib.name', lambda: setattr(heat, 'name', 'cold')),
+            ('attrib.numComponents', lambda: (setattr(heat, 'numComponents', 2),
+                                              setattr(heat, 'value', list(range(8))))),
+            ('geometry.attrib', lambda: setattr(node, 'attrib', [])),
+        ], fresh=fresh)
+
+    def test_a_face_sets_compiled_attributes_follow_their_nodes(self):
+        from vrml.x3d import nodes as x3d
+        from OpenGLContext.scenegraph.basenodes import Coordinate, IndexedFaceSet
+        from OpenGLContext.scenegraph.ifscompiler import ArrayGeometryCompiler
+        from OpenGLContext.testing.memo import check_memo_inputs
+        heat = x3d.FloatVertexAttribute(name='heat', numComponents=1, value=[0, 1, 2, 3])
+        node = IndexedFaceSet(coordIndex=[0, 1, 2, 3, -1], attrib=[heat], coord=Coordinate(
+            point=[(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]))
+        mode = _Mode()
+
+        def answer(renderer):
+            return tuple((entry.name, entry.buffer.data.tolist()) for entry in renderer.named)
+
+        def ask():
+            renderer = mode.cache.getData(node)
+            if renderer is None:
+                renderer = node.compile(mode=mode)
+            return answer(renderer)
+
+        check_memo_inputs(ask, [
+            ('attrib.value', lambda: setattr(heat, 'value', [3, 2, 1, 0])),
+            ('attrib.name', lambda: setattr(heat, 'name', 'cold')),
+            ('geometry.attrib', lambda: setattr(node, 'attrib', [])),
+        ], fresh=lambda: answer(ArrayGeometryCompiler(node).compile(mode=mode)))
