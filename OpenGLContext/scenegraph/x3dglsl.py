@@ -423,8 +423,9 @@ _DECLARATIONS = (
 
 
 def _replace(text: str, pairs: Iterable["tuple[str, str]"]) -> str:
+    """`text` with each whole-word name replaced, the replacement taken literally"""
     for name, replacement in pairs:
-        text = re.sub(r'\b%s\b' % name, lambda _match, r=replacement: r, text)
+        text = re.sub(r'\b%s\b' % name, replacement.replace('\\', r'\\'), text)
     return text
 
 
@@ -635,7 +636,8 @@ def per_vertex(attributes: Sequence["tuple[str, np.ndarray, int]"], index: np.nd
 # -- lights and materials ---------------------------------------------------------
 
 def _row(vector: Sequence[float], matrix: np.ndarray) -> np.ndarray:
-    return np.asarray(vector, dtype=np.float64) @ matrix
+    found: np.ndarray = np.asarray(vector, dtype=np.float64) @ matrix
+    return found
 
 
 def _unit(vector: np.ndarray) -> np.ndarray:
@@ -747,7 +749,7 @@ def material_parameters(material: Any) -> "dict[str, Any]":
     white. A shader declares the structure that matches its material, and the
     members it does not declare are not set.
     """
-    found = dict(_UNLIT)
+    found: "dict[str, Any]" = dict(_UNLIT)
     if material:
         for name in found:
             value = getattr(material, name, None)

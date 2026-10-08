@@ -402,7 +402,7 @@ def drawn_primitive(mode: Any, primitive: int) -> int:
     draws (an X3D shader's); its triangles go to the tessellator as patches
     of that many vertices.
     """
-    if primitive == GL_TRIANGLES and getattr(mode, 'patchVertices', 0):
+    if primitive == GL_TRIANGLES and getattr(mode, 'patchVertices', None):
         return int(GL_PATCHES)
     return primitive
 

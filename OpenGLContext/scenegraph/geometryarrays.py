@@ -110,8 +110,11 @@ def max_vertex_attributes() -> int:
     return found
 
 
-contextresources.on_context_lost(
-    lambda: _MAX_ATTRIBUTES.pop(contextresources.context_key(), None))
+def _forget_context() -> None:
+    _MAX_ATTRIBUTES.pop(contextresources.context_key(), None)
+
+
+contextresources.on_context_lost(_forget_context)
 
 
 def named_layout(entries: Iterable[tuple[str, int]]) -> tuple[tuple[str, int], ...]:

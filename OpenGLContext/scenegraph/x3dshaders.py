@@ -330,11 +330,8 @@ class LinkedProgram:
         if shape is None:
             return
         width, kind = shape
-        array = np.asarray(values)
-        if kind in ('i', 'u'):
-            data = np.ascontiguousarray(array, dtype=np.int32 if kind == 'i' else np.uint32).ravel()
-        else:
-            data = np.ascontiguousarray(array, dtype=np.float32).ravel()
+        dtype = {'i': np.int32, 'u': np.uint32}.get(kind, np.float32)
+        data: np.ndarray = np.ascontiguousarray(values, dtype=dtype).ravel()
         elements = min(len(data) // width, size)
         if elements < 1:
             return
@@ -443,7 +440,7 @@ def link(sources: Sequence[tuple[str, str]], layout: Sequence[tuple[str, int]],
     shaders: list[int] = []
     program = int(GL.glCreateProgram())
     try:
-        for (stage, _text_), ready in zip(sources, prepared):
+        for (stage, _source), ready in zip(sources, prepared):
             shaders.append(_compile(stage, ready.text))
         for shader in shaders:
             GL.glAttachShader(program, shader)
