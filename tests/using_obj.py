@@ -128,8 +128,8 @@ class TestContext(BaseContext):
         self.model = Transform(children=list(loaded.children))
         self.sg.children = list(self.sg.children) + [self.model]
         '''Nothing in the file moves, so the movement is this program's:
-        a turntable, from a ``Timer``, as in
-        :doc:`Animating a transform <using_animation>`.'''
+        a turntable, from a ``Timer``, as in the cannon-ball game of
+        :doc:`Animating a cannon-ball <using_animation>`.'''
         self.timer = Timer(duration=PERIOD, repeating=1)
         self.timer.addEventHandler('fraction', self.OnFraction)
         self.timer.register(self)

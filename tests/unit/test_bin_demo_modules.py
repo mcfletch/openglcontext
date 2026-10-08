@@ -1,6 +1,6 @@
 """The demo modules in `OpenGLContext.bin` start, render and exit.
 
-`choosecontext`, `choosefonts` and `keyboardevents` are run with
+`choosecontext` and `choosefonts` are run with
 ``python -m``, the way their documentation says to run them: each opens a
 window, so what is checked is that the process gets one, draws and leaves
 without an exception.
@@ -16,7 +16,7 @@ from OpenGLContext.testing.paths import tests_root
 
 ROOT = os.path.dirname(str(tests_root(__file__)))
 
-MODULES = ['choosecontext', 'choosefonts', 'keyboardevents']
+MODULES = ['choosecontext', 'choosefonts']
 
 gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
 

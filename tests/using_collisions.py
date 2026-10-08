@@ -71,7 +71,7 @@ class TestContext(BaseContext):
         self.build()
         self.triggerRedraw(1)
 
-    def OnIdle(self, *arguments):
+    def OnIdle(self, *arguments) -> int:
         now = systemTime()
         step = min(now - self.last, 0.05)
         self.last = now
@@ -81,6 +81,8 @@ class TestContext(BaseContext):
         self.respond(step)
         if active:
             self.triggerRedraw(1)
+            return 1
+        return 0
 
     def respond(self, step):
         '''``impact_on`` answers the heaviest blow a body took in the step just
