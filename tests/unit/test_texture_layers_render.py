@@ -195,3 +195,17 @@ def test_a_face_set_with_a_multitexture_coordinate_draws(gl_context, renderer):
     image = drawn(body, renderer, size=64)
     assert close(tuple(image[32, 12]), (255, 0, 0)), tuple(image[32, 12])
     assert close(tuple(image[32, 54]), (0, 255, 0)), tuple(image[32, 54])
+
+
+@pytest.mark.parametrize('transform', [
+    b'<MultiTextureTransform><TextureTransform translation="0.5 0"/></MultiTextureTransform>',
+    b'<TextureTransform3D translation="0.5 0 0"/>',
+    b'<TextureTransformMatrix3D matrix="1 0 0 0.5 0 1 0 0 0 0 1 0 0 0 0 1"/>',
+])
+def test_the_compatibility_profile_reads_x3ds_transform_nodes(gl_context, transform):
+    two = b'<PixelTexture repeatS="true" image="2 1 3 0xFF0000 0x00FF00"/>'
+    coordinates = b'<TextureCoordinate point="0 0 1 0 1 1 0 1"/>'
+    image = drawn_fixed(square(two, coordinates, material=b'', transform=transform), size=64)
+    # Moved half the texture: green on the left, red on the right.
+    assert close(tuple(image[32, 20]), (0, 255, 0)), tuple(image[32, 20])
+    assert close(tuple(image[32, 44]), (255, 0, 0)), tuple(image[32, 44])
