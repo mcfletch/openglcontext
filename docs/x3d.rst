@@ -108,6 +108,8 @@ implements these X3D nodes, by component:
   GeoOrigin, GeoPositionInterpolator, GeoProximitySensor, GeoTouchSensor,
   GeoTransform, GeoViewpoint
 - Grouping - Group, StaticGroup, Switch, Transform
+- HAnim - HAnimDisplacer, HAnimHumanoid, HAnimJoint, HAnimMotion, HAnimPose,
+  HAnimSegment, HAnimSite
 - Followers - ColorChaser, ColorDamper, CoordinateChaser, CoordinateDamper,
   OrientationChaser, OrientationDamper, PositionChaser, PositionChaser2D,
   PositionDamper, PositionDamper2D, ScalarChaser, ScalarDamper,
@@ -302,6 +304,9 @@ more than its intensity. That is VRML97's rule too, so it holds for a
 ``PointLight`` or ``SpotLight`` built in code; a glTF light falls off
 inverse-square.
 
+A ``DirectionalLight`` or ``SpotLight`` whose ``direction`` is ``0 0 0``
+lights nothing.
+
 In a document, an ``Appearance`` with no ``material`` is unlit: the shape is
 its texture's colour, or white; a ``Shape`` with no ``appearance`` is unlit
 white. A scene built in code draws either in a lit neutral grey. A
@@ -356,6 +361,15 @@ own in the walk's world (``gltf_world.collision_groups``). As the avatar
 touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
 each enabled group around it, and ``isActive FALSE`` when the touch ends
 (``OpenGLContext.physics.x3dcollision``).
+
+Humanoids
+~~~~~~~~~
+
+The HAnim component's humanoids are drawn as transforms of their joints,
+sites and segments, their skin is posed by the joints through the engine's
+skinning, displacers morph it, and ``HAnimMotion`` and ``HAnimPose`` move the
+joints, as do interpolators routed to them. :ref:`characters-hanim` describes
+what is drawn and how each field is read.
 
 Inline
 ~~~~~~

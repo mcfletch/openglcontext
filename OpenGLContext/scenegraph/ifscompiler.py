@@ -140,8 +140,7 @@ class IFSCompiler(object):
         if polygons is None:
             polygons = self.polygons(sources=sources)
         for poly in polygons:
-            poly.normalise(tessellate)
-            vertices.extend(poly)
+            vertices.extend(poly.normalise(tessellate))
         return vertices
 
     def buildIndexedSources(self) -> list["IndexedValueSource"]:
@@ -279,6 +278,15 @@ class ArrayGeometryCompiler(IFSCompiler):
         # XXX check to see if we are all using the same indices,
         # if so, we can possibly use IndexedPolygons instead
         # of IndexedFaceSet for rendering...
+        found = self.expandedArraysAndSources()
+        return None if found is None else found[0]
+
+    def expandedArraysAndSources(self) -> Optional[tuple[tuple[Any, Any, Any, Any], Any]]:
+        """:meth:`expandedArrays`, and the coordinate index each vertex was read from
+
+        A vertex the tessellator made where polygon edges cross has the
+        index of the nearest coordinate.
+        """
         vertices = self.tessellate()
         #: The coordinate each drawn vertex is, which X3D's `attrib` values are indexed by.
         self.coordinateIndex = np.array([vertex.coordIndex for vertex in vertices], np.int64)
@@ -298,6 +306,10 @@ class ArrayGeometryCompiler(IFSCompiler):
             else:
                 normalArray = triangleutilities.normalPerFace(vertexArray)
                 normalArray = repeat(normalArray, [3] * len(normalArray), 0)
+            if not self.target.ccw:
+                # The faces are wound clockwise seen from their front, so the
+                # counter-clockwise normals point out of their back.
+                normalArray = -asarray(normalArray)
         else:
             normalArray = []
             for vertex in vertices:
@@ -329,7 +341,21 @@ class ArrayGeometryCompiler(IFSCompiler):
                 vertexArray, coordinates.points(self.target.coord))
         else:
             textureCoordinateArray = None
-        return vertexArray, colorArray, normalArray, textureCoordinateArray
+        return ((vertexArray, colorArray, normalArray, textureCoordinateArray),
+                self._sources(vertices, vertexArray))
+
+    def _sources(self, vertices: Any, vertexArray: Any) -> Any:
+        """The coordinate index of each tessellated vertex"""
+        sources = np.array([
+            -1 if getattr(vertex, 'coordIndex', None) is None else int(vertex.coordIndex)
+            for vertex in vertices], dtype=np.int64)
+        made = np.flatnonzero(sources < 0)
+        if len(made):
+            points = np.asarray(self.target.coord.point, dtype=np.float64)
+            for index in made:
+                distance = np.sum((points - vertexArray[index]) ** 2, axis=1)
+                sources[index] = int(np.argmin(distance))
+        return sources
 
     def compile(
         self,
@@ -542,10 +568,8 @@ def build_normalPerVertex(vertices: Any, creaseAngle: float, vertexArray: Any = 
                 secondaryNormal = faceNormals[vertexSet[innerindex]]
                 # if angle < creaseAngle... should calculate
                 # cos(creaseAngle) instead of using arccos each time
-                try:
-                    angle = arccos(dot(primaryNormal, secondaryNormal))
-                except ValueError:  # pragma: no cover - numpy arccos returns nan for
-                    angle = 0        # out-of-domain dot products, it never raises here
+                # Unit normals' rounding can carry their product just past one.
+                angle = arccos(min(max(float(dot(primaryNormal, secondaryNormal)), -1.0), 1.0))
                 if angle < creaseAngle:
                     # add to each other's cummulative total (in place)
                     add(
@@ -632,11 +656,13 @@ class IndexedValueSource(object):
                     )
                     return None, -1
                 elif finalIndex >= len(self.values):
-                    # XXX should be the last *index* not the last value!
+                    # The last index listed, or the last value where that is
+                    # past the values too.
                     finalIndex = self.lastNonNullIndex()
                     if finalIndex is None:  # pragma: no cover - reaching here needs
                         # every index == -1, but then indices[index] < 0 above wins first
                         return None, -1
+                    finalIndex = min(int(finalIndex), len(self.values) - 1)
                 return self.values[finalIndex], finalIndex
             else:
                 log.warning(

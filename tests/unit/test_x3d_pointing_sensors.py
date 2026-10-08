@@ -187,10 +187,13 @@ def test_a_documents_touch_sensor_is_clicked(gl_context):
         ):
             synthetic.dispatch(context, record)
             context.OnDraw(force=1)
-        # A pick is read back a frame or two after it is drawn.
-        for _ in range(2):
+        # A pick is read back once its fence signals: a frame or two after
+        # it is drawn on an idle machine, more on a busy one.
+        touch = scene.getDEF('T')
+        for _ in range(120):
+            if 'touchTime' in touch.__dict__:
+                break
             context.OnDraw(force=1)
-    touch = scene.getDEF('T')
     assert touch.isOver is True
     assert tuple(touch.hitPoint_changed)[2] == pytest.approx(1.5, abs=0.05)
     assert 'touchTime' in touch.__dict__

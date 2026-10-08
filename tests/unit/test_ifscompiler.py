@@ -140,6 +140,24 @@ class TestExpandedArrays:
         assert len(normals) == 6         # repeated 3x per face
         assert np.allclose(np.abs(normals[0]), [0, 0, 1], atol=1e-5)
 
+    @pytest.mark.parametrize('per_vertex', [1, 0])
+    def test_generated_normals_face_the_clockwise_side_where_ccw_is_false(self, per_vertex):
+        """ccw false says the faces are wound clockwise seen from their front."""
+        _v, _c, front, _t = ArrayGeometryCompiler(_quad(normalPerVertex=per_vertex)).expandedArrays()
+        _v, _c, back, _t = ArrayGeometryCompiler(
+            _quad(normalPerVertex=per_vertex, ccw=False)).expandedArrays()
+        assert np.allclose(np.asarray(back), -np.asarray(front), atol=1e-5)
+
+    def test_parallel_faces_rounding_past_one_smooth_together(self):
+        """Two faces whose unit normals' product rounds just past one."""
+        tilted = [(0, 0, 0), (0.17992142840489828, 0, 0.5381433132192782),
+                  (0.17992142840489828, 2.285188015156939, 0.5381433132192782),
+                  (0, 2.285188015156939, 0)]
+        ifs = _quad(coord=b.Coordinate(point=tilted), creaseAngle=0.5)
+        with np.errstate(invalid='raise'):
+            _v, _c, normals, _t = ArrayGeometryCompiler(ifs).expandedArrays()
+        assert np.isfinite(normals).all()
+
     def test_explicit_normals_are_used(self):
         ifs = _quad(normal=b.Normal(vector=[(0, 0, 1)] * 4),
                     normalIndex=[0, 1, 2, -1, 0, 2, 3, -1])
@@ -239,6 +257,12 @@ class TestIndexedValueSource:
         val, idx = src(0, 0)
         assert idx == 1 and val == ('b',)
 
+    def test_overflow_past_every_value_uses_the_last_value(self):
+        """Coordinate indices read for four texture coordinates (JoeKick.x3d):
+        the last index listed is past the values too, so the last value is used."""
+        src = IndexedValueSource([0, 386], [], [('a',), ('b',), ('c',), ('d',)], False)
+        assert src(1, 0) == (('d',), 3)
+
     def test_overflow_with_no_valid_index_returns_none(self):
         src = IndexedValueSource([0], [-1, -1], [('a',), ('b',)], False)
         # metaIndex maps to index -1 -> warned/None before overflow branch
@@ -323,3 +347,19 @@ def gl(gl_window):
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestDegenerateTriangles:
+    def test_a_collinear_triangle_is_left_out(self):
+        ifs = b.IndexedFaceSet(
+            coord=b.Coordinate(point=[(0, 0, 0), (1, 0, 0), (2, 0, 0), (0, 1, 0)]),
+            coordIndex=[0, 1, 2, -1, 0, 1, 3, -1])
+        vertices, _c, _n, _t = ArrayGeometryCompiler(ifs).expandedArrays()
+        assert len(vertices) == 3
+
+    def test_a_triangle_a_little_off_the_line_is_kept(self):
+        ifs = b.IndexedFaceSet(
+            coord=b.Coordinate(point=[(0, 0, 0), (1, 0, 0), (2, 0.01, 0)]),
+            coordIndex=[0, 1, 2, -1])
+        vertices, _c, _n, _t = ArrayGeometryCompiler(ifs).expandedArrays()
+        assert len(vertices) == 3

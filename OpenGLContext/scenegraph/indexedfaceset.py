@@ -60,7 +60,7 @@ XXX This node needs some serious optimization.  Possible approaches:
 from typing import Any, Optional
 
 import numpy as np
-from OpenGLContext.scenegraph import coordinatebounded, coordinates
+from OpenGLContext.scenegraph import coordinatebounded, coordinatedeform, coordinates
 from vrml.vrml97 import basenodes
 
 # The compile pipeline lives in ``ifscompiler``; re-exported here so importers
@@ -146,6 +146,9 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         textured -- can skip textureCoordinates if not
         transparent -- need to sort triangle geometry...
         """
+        deformer = coordinatedeform.deformer_for(self)
+        if deformer is not None:
+            return deformer.render(self, visible, lit, textured, transparent, mode)
         renderer = mode.cache.getData(self)
         if renderer is None:
             renderer = self.compile(visible, lit, textured, transparent, mode=mode)
@@ -180,6 +183,13 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
             mode=mode,
         )
 
+    def boundingVolume(self, mode: Any) -> Any:
+        """The coordinates' bounds; where they are deformed, the deformed set's"""
+        deformer = coordinatedeform.deformer_for(self)
+        if deformer is not None:
+            return deformer.boundingVolume(self, mode)
+        return super().boundingVolume(mode)
+
     # -- instancing -------------------------------------------------------
     def _hasGeometry(self) -> bool:
         return bool(len(self.coordIndex) and self.coord and len(coordinates.points(self.coord)))
@@ -208,6 +218,28 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
             return None
         positions, normals, texcoords, colours = found
         return meshdata.arrays(positions, normals, texcoords, colours)
+
+    def composedArrays(self) -> Any:
+        """:meth:`meshArrays` with the coordinate index each vertex was read from
+
+        None where there is nothing to draw.
+        """
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        if not self._hasGeometry():
+            return None
+        found = ArrayGeometryCompiler(self).expandedArraysAndSources()
+        if found is None:
+            return None
+        (positions, colours, normals, texcoords), sources = found
+        if not self.ccw:
+            # The tessellation keeps the faces' own winding, which ccw false
+            # says is clockwise: turn each triangle round.
+            turned = np.arange(len(positions)).reshape(-1, 3)[:, [0, 2, 1]].ravel()
+            positions, sources = positions[turned], sources[turned]
+            normals = None if normals is None else np.asarray(normals)[turned]
+            texcoords = None if texcoords is None else np.asarray(texcoords)[turned]
+            colours = None if colours is None else np.asarray(colours)[turned]
+        return meshdata.arrays(positions, normals, texcoords, colours, sources=sources)
 
     def instanceContentKey(self) -> Optional[tuple[Any, ...]]:
         """Hashable signature so distinct-but-identical IFS nodes share one draw.

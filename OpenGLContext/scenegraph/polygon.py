@@ -103,8 +103,7 @@ class Polygon( list ):
             # now check to see if the three vertices are co-linear.
             # lengths will cancel out if collinear...
             if len(currentVertices) == 3:
-                a,b,c = [asarray(x.point,'f') for x in currentVertices]
-                if not vectorutilities.colinear( (a,b,c) ):
+                if not _collinear( *[x.point for x in currentVertices] ):
                     #that's it, I think, no other sanity checks?
                     result.extend( currentVertices )
                 else:
@@ -132,6 +131,18 @@ class Polygon( list ):
             "\n\t".join([repr(child) for child in self]),
             self.node,
         )
+
+def _collinear( a: Any, b: Any, c: Any ) -> bool:
+    """Whether three points lie on one line, as ``vectorutilities.colinear`` says
+
+    In plain arithmetic: it is asked once a triangle, where an array call
+    costs more than the sum.
+    """
+    ux, uy, uz = float(b[0]) - float(a[0]), float(b[1]) - float(a[1]), float(b[2]) - float(a[2])
+    vx, vy, vz = float(a[0]) - float(c[0]), float(a[1]) - float(c[1]), float(a[2]) - float(c[2])
+    cx, cy, cz = uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx
+    return (cx * cx + cy * cy + cz * cz) < 1e-12
+
 
 class DegeneratePolygon(object):
     """Class encapsulated a degenerate triangle definition

@@ -28,15 +28,18 @@ import numpy as np
 from vrml import cache, protofunctions
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.scenegraph import boundingvolume, composedgeometry, texgen, x3dglsl
+from OpenGLContext.scenegraph import (
+    boundingvolume, composedgeometry, coordinatedeform, texgen, x3dglsl,
+)
 from OpenGLContext.scenegraph.coordinates import fields as point_fields
 from OpenGLContext.scenegraph.coordinates import points as scene_points
 from OpenGLContext.scenegraph.texturemapping import label_set
 
 log = logging.getLogger(__name__)
 
-__all__ = ['DRAWN_KEY', 'DrawnAs', 'ElevationGrid', 'GridDrawn', 'IndexedQuadSet',
-           'IndexedTriangleFanSet', 'IndexedTriangleSet', 'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
+__all__ = ['DRAWN_KEY', 'DrawnAs', 'depend_on_fields', 'ElevationGrid', 'GridDrawn',
+           'IndexedQuadSet', 'IndexedTriangleFanSet', 'IndexedTriangleSet',
+           'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
            'MeshGeometry', 'polylines', 'QuadSet',
            'TriangleFanSet', 'TriangleSet', 'TriangleStripSet']
 
@@ -66,7 +69,8 @@ def _sources(target: Any) -> Iterator[Any]:
     yield from (entry for entry in getattr(target, 'attrib', None) or () if entry)
 
 
-def _depend_on_fields(holder: Any, target: Any) -> None:
+def depend_on_fields(holder: Any, target: Any) -> None:
+    """Make `holder` depend on every field of `target` and of the nodes its arrays are read from"""
     for source in _sources(target):
         for declared in protofunctions.getFields(source):
             if not declared.name.startswith(' '):
@@ -160,7 +164,7 @@ class MeshDrawn:
 
     def dependOn(self, holder: Any) -> None:
         """Make `holder` depend on every field the mesh is built from"""
-        _depend_on_fields(holder, self)
+        depend_on_fields(holder, self)
 
     def mesh(self) -> Optional[Any]:
         """The mesh drawn for this set, kept in vrml's cache under :data:`MESH_KEY`"""
@@ -179,6 +183,9 @@ class MeshDrawn:
     def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
                transparent: int = 0, mode: Any = None) -> int:
         """Draw the mesh, in whichever profile is in use"""
+        deformer = coordinatedeform.deformer_for(self)
+        if deformer is not None:
+            return deformer.render(self, visible, lit, textured, transparent, mode)
         found = self.mesh()
         if found is None:
             return 0
@@ -186,7 +193,12 @@ class MeshDrawn:
                                 transparent=transparent, mode=mode))
 
     def depthDraw(self, mode: Any) -> bool:
-        """Draw the mesh's positions into a depth map, as `PBRMesh.depthDraw` does"""
+        """Draw the mesh's positions into a depth map, as `PBRMesh.depthDraw` does
+
+        False for a deformed set, which is drawn by :meth:`render`.
+        """
+        if coordinatedeform.deformer_for(self) is not None:
+            return False
         found = self.mesh()
         return True if found is None else bool(found.depthDraw(mode))
 
@@ -196,6 +208,9 @@ class MeshDrawn:
         Kept until a field the mesh is built from is set, so a shape's
         bounds, which depend on this volume, follow its geometry.
         """
+        deformer = coordinatedeform.deformer_for(self)
+        if deformer is not None:
+            return deformer.boundingVolume(self, mode)
         current = boundingvolume.getCachedVolume(self)
         if current is not None:
             return current
@@ -225,10 +240,18 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
 
     def buildMesh(self) -> Optional[Any]:
         """The mesh of the set's triangles, or None for a set with no coordinates"""
+        arrays = self.composedArrays()
+        return None if arrays is None else self.meshFrom(arrays, solid=bool(self.solid))
+
+    def composedArrays(self) -> Optional[composedgeometry.ComposedArrays]:
+        """The set's arrays, naming the coordinate each vertex was read from
+
+        None for a set with no coordinates.
+        """
         points = scene_points(self.coord)
         if points is None or not len(points):
             return None
-        return self.meshFrom(composedgeometry.composed_arrays(
+        return composedgeometry.composed_arrays(
             points, self.triangles(), ccw=bool(self.ccw),
             normals=self.perFace(_values(self.normal, 'vector'), bool(self.normalPerVertex)),
             normal_per_vertex=bool(self.normalPerVertex),
@@ -236,8 +259,7 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
             color_per_vertex=bool(self.colorPerVertex),
             texcoords=self.coordinates() or [composedgeometry.default_texcoords(points)],
             tangents=_values(self.tangent, 'vector'),
-            vertex_attributes=x3dglsl.vertex_attributes(self.attrib)),
-            solid=bool(self.solid))
+            vertex_attributes=x3dglsl.vertex_attributes(self.attrib))
 
 
 class GridDrawn(MeshDrawn):

@@ -29,7 +29,7 @@ WHITE = (1.0, 1.0, 1.0, 1.0)
 
 
 def arrays(positions: Any, normals: Any, texcoords: Any = None, colors: Any = None,
-           indices: Any = None) -> Optional[ComposedArrays]:
+           indices: Any = None, sources: Any = None) -> Optional[ComposedArrays]:
     """Arrays of one geometry; None where there are no triangles
 
     positions -- one row of three per vertex
@@ -38,6 +38,7 @@ def arrays(positions: Any, normals: Any, texcoords: Any = None, colors: Any = No
     texcoords -- one row of two per vertex, or None
     colors -- one row of three or four per vertex, or None
     indices -- the triangle corners, or None for every three vertices a triangle
+    sources -- the coordinate each vertex was read from, or None
     """
     if positions is None or not len(positions):
         return None
@@ -56,7 +57,9 @@ def arrays(positions: Any, normals: Any, texcoords: Any = None, colors: Any = No
     corners = None if indices is None else np.ascontiguousarray(indices, dtype=np.uint32).ravel()
     if corners is not None and not len(corners):
         return None
-    return ComposedArrays(attributes=found, indices=corners)
+    return ComposedArrays(attributes=found, indices=corners,
+                          sources=None if sources is None
+                          else np.asarray(sources, dtype=np.int64).ravel())
 
 
 def geometry_arrays(geometry: Any) -> Optional[ComposedArrays]:
