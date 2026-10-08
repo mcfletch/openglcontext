@@ -905,11 +905,15 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self._set_uniform1f('transparency', transparency)
         self._set_uniform1i('unlit', 0)
 
-    def set_unlit_material(self) -> None:
-        """Draw the next shapes unlit: white, times a texture or a Color node,
-        as X3D draws an appearance with no material"""
-        self.set_material(diffuse=(1.0, 1.0, 1.0), specular=(0.0, 0.0, 0.0),
-                          ambient_intensity=0.0, shininess=0.0)
+    def set_unlit_material(self, color: Color3 = (1.0, 1.0, 1.0),
+                           transparency: float = 0.0) -> None:
+        """Draw the next shapes unlit: `color`, times a texture or a Color node
+
+        White is how X3D draws an appearance with no material; an
+        UnlitMaterial gives its emissiveColor and transparency.
+        """
+        self.set_material(diffuse=tuple(color), specular=(0.0, 0.0, 0.0),
+                          ambient_intensity=0.0, shininess=0.0, transparency=transparency)
         self._set_uniform1i('unlit', 1)
 
     def set_default_material(self) -> None:
@@ -1558,6 +1562,11 @@ def configure_material_from_node(
     """
     if material_node is None:
         shader_program.set_default_material()
+        return
+    from vrml.x3d import nodes as x3dnodes  # noqa: PLC0415 kept with its use
+    if isinstance(material_node, x3dnodes.UnlitMaterial):
+        shader_program.set_unlit_material(tuple(material_node.emissiveColor),
+                                          float(material_node.transparency))
         return
 
     from OpenGLContext.scenegraph.material_fields import read_material_fields
