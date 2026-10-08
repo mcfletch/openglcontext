@@ -38,7 +38,8 @@ __all__ = [
     'OBJECT_ID_UNIFORM', 'Prepared', 'Uniform', 'LinkSchedule', 'stage_of',
     'stage_macro', 'speaks_glsl', 'inline_source', 'glsl_version', 'is_legacy',
     'prepare_source', 'packaged_stages', 'uniform_values', 'convert_uniform',
-    'attribute_locations', 'attribute_layout', 'vertex_attribute', 'vertex_attributes',
+    'attribute_locations', 'attribute_layout', 'attribute_widths', 'vertex_attribute',
+    'vertex_attributes',
     'per_vertex',
     'light_parameters', 'headlight_parameters', 'legacy_light_parameters',
     'material_parameters', 'legacy_material_parameters', 'X3D_INPUTS',
@@ -602,13 +603,13 @@ def vertex_attribute(node: Any) -> "Optional[tuple[str, np.ndarray, int]]":
 
     `FloatVertexAttribute` has `numComponents` values a vertex and takes one
     location; `Matrix3VertexAttribute` nine (a column a location) and
-    `Matrix4VertexAttribute` sixteen. None for a node with no name or no
-    values.
+    `Matrix4VertexAttribute` sixteen. A node with no values has no rows;
+    one with no name is None, since nothing can read it.
     """
     name = str(getattr(node, 'name', '') or '')
-    values = np.asarray(getattr(node, 'value', ()), dtype=np.float32).ravel()
-    if not name or not len(values):
+    if not name:
         return None
+    values = np.asarray(getattr(node, 'value', ()), dtype=np.float32).ravel()
     if hasattr(node, 'numComponents'):
         width = min(max(int(node.numComponents), 1), 4)
         locations = 1
@@ -616,8 +617,6 @@ def vertex_attribute(node: Any) -> "Optional[tuple[str, np.ndarray, int]]":
         width = 9 if 'Matrix3' in type(node).__name__ else 16
         locations = 3 if width == 9 else 4
     rows = len(values) // width
-    if rows < 1:
-        return None
     return name, values[:rows * width].reshape(rows, width), locations
 
 
@@ -627,12 +626,30 @@ def vertex_attributes(nodes: Any) -> "list[tuple[str, np.ndarray, int]]":
     return [entry for entry in found if entry is not None]
 
 
+def attribute_widths(nodes: Any) -> "list[tuple[str, int]]":
+    """(name, locations) of each attribute :func:`vertex_attributes` gives, without its values
+
+    The list a program's attribute places are worked out from, which is the
+    list the geometry's are (:func:`attribute_layout`).
+    """
+    found: "list[tuple[str, int]]" = []
+    for node in nodes or ():
+        name = str(getattr(node, 'name', '') or '') if node else ''
+        if name:
+            locations = 1 if hasattr(node, 'numComponents') else (
+                3 if 'Matrix3' in type(node).__name__ else 4)
+            found.append((name, locations))
+    return found
+
+
 def per_vertex(attributes: Sequence["tuple[str, np.ndarray, int]"], index: np.ndarray,
                ) -> "tuple[list[tuple[str, np.ndarray, int]], list[str]]":
-    """The attributes taken at `index`, one row per drawn vertex, and the names left out
+    """The attributes taken at `index`, one row per drawn vertex, and the names short of values
 
     `index` gives the coordinate each drawn vertex is: the attributes have one
-    row per coordinate. One with fewer rows than `index` reaches is left out.
+    row per coordinate. One with fewer rows than `index` reaches reads zero
+    for the coordinates past them (ISO/IEC 19775-1, 31.2.2.4 leaves the
+    result to the browser), and is named in the second list.
     """
     index = np.asarray(index, dtype=np.int64)
     found: "list[tuple[str, np.ndarray, int]]" = []
@@ -641,7 +658,9 @@ def per_vertex(attributes: Sequence["tuple[str, np.ndarray, int]"], index: np.nd
     for name, values, locations in attributes:
         if len(values) < reach:
             short.append(name)
-            continue
+            padded = np.zeros((reach, values.shape[1]), np.float32)
+            padded[:len(values)] = values
+            values = padded
         found.append((name, np.ascontiguousarray(values[index], dtype=np.float32), locations))
     return found, short
 

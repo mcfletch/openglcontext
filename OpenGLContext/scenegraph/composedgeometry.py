@@ -311,6 +311,9 @@ class ComposedArrays:
     #: X3D's `attrib` vertex attributes, (name, one row a vertex, locations)
     #: each, for a shader reading them by name.
     vertex_attributes: "list[tuple[str, np.ndarray, int]]" = field(default_factory=list)
+    #: Vertex attributes holding fewer values than coordinates, which read
+    #: zero past them.
+    short_attributes: "list[str]" = field(default_factory=list)
 
 
 def _face_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
@@ -434,9 +437,8 @@ def composed_arrays(
             attributes['TEXCOORD_%d' % number] = values if corners is None else values[corners]
     named, missing = x3dglsl.per_vertex(
         vertex_attributes, np.arange(count) if corners is None else corners)
-    short.extend(missing)
     return ComposedArrays(
         attributes={name: np.ascontiguousarray(value, dtype=np.float32)
                     for name, value in attributes.items()},
         indices=indices, dropped=int((~valid).sum()), short=short,
-        vertex_attributes=named)
+        vertex_attributes=named, short_attributes=missing)

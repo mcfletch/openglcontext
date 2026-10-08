@@ -363,7 +363,7 @@ class ArrayGeometryCompiler(IFSCompiler):
             self.coordinateIndex)
         for name in short:
             log.warning('%s: vertex attribute %s has fewer values than coordinates; '
-                        'it is left out', self.target, name)
+                        'the rest read as zero', self.target, name)
         return arraygeometry.ArrayGeometry(
             vertexArray,
             colorArray,

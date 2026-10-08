@@ -144,6 +144,8 @@ class MeshDrawn:
                     % arrays.dropped)
         for name in arrays.short:
             _report(self, 'has fewer %s values than it indexes; they are left out' % name)
+        for name in arrays.short_attributes:
+            _report(self, 'has fewer %s values than coordinates; the rest read as zero' % name)
         attributes = arrays.attributes
         if 'TANGENT' not in attributes and 'TEXCOORD_0' in attributes:
             attributes['TANGENT'] = estimate_tangents(

@@ -819,3 +819,56 @@ def test_a_shader_built_in_code_declares_its_fields(renderer):
     assert reddish(centre(scene, renderer))
     shader.colour = (0, 1, 0)
     assert greenish(centre(scene, renderer))
+
+
+NORMAL_SHADED = """#version 330 core
+in vec3 normal;
+out vec4 c;
+void main() { c = vec4(vec3(0.2, 0.6, 1.0) * max(normalize(normal).z, 0.0), 1.0); }
+"""
+
+NORMAL_VERTEX = """#version 330 core
+in vec4 x3d_Vertex;
+in vec3 x3d_Normal;
+uniform mat4 x3d_ModelViewMatrix;
+uniform mat4 x3d_ProjectionMatrix;
+uniform mat3 x3d_NormalMatrix;
+out vec3 normal;
+void main() {
+    normal = x3d_NormalMatrix * x3d_Normal;
+    gl_Position = x3d_ProjectionMatrix * x3d_ModelViewMatrix * x3d_Vertex;
+}
+"""
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+@pytest.mark.parametrize('geometry', ['Box', 'Sphere', 'IndexedTriangleSet'])
+def test_a_shader_drawn_shape_mirrors(renderer, geometry):
+    """Under a mirroring transform the shape shows its outside, lit as its mirror image"""
+    from OpenGLContext.loaders.x3d import prototypes
+    from OpenGLContext.scenegraph import basenodes
+    from OpenGLContext.scenegraph.x3dshaders import ComposedShader, ShaderPart
+    from OpenGLContext.testing.mirrored import check_mirrored_render
+    from vrml.x3d import nodes as x3d
+    made = {
+        'Box': lambda: basenodes.Box(size=(1.5, 1, 1)),
+        'Sphere': lambda: basenodes.Sphere(),
+        'IndexedTriangleSet': lambda: prototypes()['IndexedTriangleSet'](
+            index=[0, 1, 2], coord=x3d.Coordinate(point=[(-1, -1, 0), (1, -1, 0), (0.5, 1, 0)])),
+    }[geometry]()
+    shader = ComposedShader(language='GLSL', parts=[
+        ShaderPart(type='VERTEX', sourceCode=NORMAL_VERTEX),
+        ShaderPart(type='FRAGMENT', sourceCode=NORMAL_SHADED)])
+    check_mirrored_render(made, appearance=basenodes.Appearance(shaders=[shader]),
+                          environment={'OPENGLCONTEXT_RENDERER': renderer})
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+@pytest.mark.parametrize('geometry', ['IndexedFaceSet', 'IndexedTriangleSet'])
+def test_a_short_attribute_does_not_move_the_others(renderer, geometry):
+    """One with fewer values than coordinates reads zero past them; the next is where it was"""
+    short = '<FloatVertexAttribute name="cold" numComponents="4" value="1 1 1 1"/>'
+    vertex = ATTRIBUTE_VERTEX.replace('in vec3 heat;', 'in vec4 cold;\nin vec3 heat;').replace(
+        'tint = heat;', 'tint = heat + cold.xyz * 0.0;')
+    scene = _attribute_scene(GEOMETRIES[geometry], short + GREEN_HEAT, vertex)
+    assert greenish(centre(scene, renderer))

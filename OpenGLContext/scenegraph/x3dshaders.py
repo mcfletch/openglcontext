@@ -33,14 +33,13 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import weakref
 from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from OpenGL import GL
 from OpenGL import error as gl_error
-from OpenGL.GL import shaders as GL_shaders
-from pydispatch import dispatcher
 from vrml import cache, fieldtypes, protofunctions
 from vrml.x3d import loadsensor
 from vrml.x3d import nodes as x3d
@@ -58,12 +57,8 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     'ComposedShader', 'ProgramShader', 'PackagedShader', 'ShaderPart', 'ShaderProgram',
-    'X3DShaderDraw', 'LinkedProgram', 'declare_field', 'draw_program', 'SHADER_CHANGE_SIGNAL',
+    'X3DShaderDraw', 'LinkedProgram', 'declare_field', 'draw_program',
 ]
-
-#: Sent with a shader node as sender when what it draws with may have changed:
-#: a part's source arrived, or a link was asked for.
-SHADER_CHANGE_SIGNAL = 'x3d-shader-changed'
 
 #: The GL stage each X3D stage is compiled as.
 GL_STAGES = {
@@ -154,7 +149,6 @@ class Sourced:
         self.__dict__['_urlText'] = text
         self.__dict__['_urlState'] = READY
         loadsensor.set_load_state(self, loadsensor.LOADED)
-        dispatcher.send(signal=SHADER_CHANGE_SIGNAL, sender=self)
 
     def loadBackground(self, urls: Sequence[str], contexts: Sequence[Any] = (),
                        generation: Any = None) -> None:
@@ -181,7 +175,6 @@ class Sourced:
         self.__dict__['_urlState'] = FAILED
         loadsensor.set_load_state(self, loadsensor.FAILED)
         log.warning('%s: none of the urls %s could be read', self, list(urls))
-        dispatcher.send(signal=SHADER_CHANGE_SIGNAL, sender=self)
         _redraw(contexts)
 
     def source(self) -> "tuple[Optional[str], Optional[str]]":
@@ -278,7 +271,7 @@ class LinkedProgram:
         self._locations: dict[str, int] = {}
         self._uploaded: dict[int, bytes] = {}
         #: The user values last uploaded, by the node they came from.
-        self.user_values: dict[int, Any] = {}
+        self.user_values: 'weakref.WeakKeyDictionary[Any, Any]' = weakref.WeakKeyDictionary()
         #: sampler name -> (texture unit, target), every sampler its own unit.
         self.samplers: dict[str, tuple[int, int]] = {}
         count = int(GL.glGetProgramiv(self.program, GL.GL_ACTIVE_UNIFORMS) or 0)
@@ -363,8 +356,7 @@ class LinkedProgram:
 def geometry_layout(geometry: Any) -> "tuple[tuple[str, int], ...]":
     """Where `geometry`'s `attrib` vertex attributes are read in this context"""
     return geometryarrays.named_layout(
-        (name, locations) for name, _values, locations in x3dglsl.vertex_attributes(
-            getattr(geometry, 'attrib', None)))
+        x3dglsl.attribute_widths(getattr(geometry, 'attrib', None)))
 
 
 class ShaderState:
@@ -578,8 +570,7 @@ class X3DShader:
         """`activate` TRUE links the program again, in every context, at its next draw"""
         if value:
             self.__dict__['_activations'] = self.__dict__.get('_activations', 0) + 1
-            dispatcher.send(signal=SHADER_CHANGE_SIGNAL, sender=self)
-
+    
     def runs(self) -> bool:
         """Whether the shader's language is one the engine runs"""
         return x3dglsl.speaks_glsl(getattr(self, 'language', ''))
@@ -965,11 +956,10 @@ class X3DShaderDraw(ShaderAppearanceProgram):
     def _userValues(self) -> None:
         linked = self.linked
         for owner in self.shader.uniformNodes():
-            uniforms, _textures_ = user_values(owner)
-            key = id(owner)
-            if linked.user_values.get(key) is uniforms:
+            uniforms, _textures = user_values(owner)
+            if linked.user_values.get(owner) is uniforms:
                 continue
-            linked.user_values[key] = uniforms
+            linked.user_values[owner] = uniforms
             for name, found in uniforms:
                 linked.set_field(name, found)
 

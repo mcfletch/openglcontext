@@ -338,9 +338,26 @@ class TestAttributeLayout:
         node = x3d.Matrix4VertexAttribute(name='m', value=[np.eye(4)])
         assert x3dglsl.vertex_attribute(node)[1:] == (pytest.approx(np.eye(4).reshape(1, 16)), 4)
 
-    def test_an_attribute_without_a_name_or_values_is_none(self):
+    def test_an_attribute_without_a_name_is_none(self):
         assert x3dglsl.vertex_attribute(x3d.FloatVertexAttribute(value=[1.0])) is None
-        assert x3dglsl.vertex_attribute(x3d.FloatVertexAttribute(name='a')) is None
+
+    def test_an_attribute_without_values_has_no_rows(self):
+        name, values, locations = x3dglsl.vertex_attribute(
+            x3d.FloatVertexAttribute(name='a', numComponents=3))
+        assert (name, values.shape, locations) == ('a', (0, 3), 1)
+
+    def test_the_widths_are_those_of_the_attributes_with_names(self):
+        nodes = [x3d.FloatVertexAttribute(name='a'), x3d.FloatVertexAttribute(value=[1.0]),
+                 x3d.Matrix3VertexAttribute(name='m'), x3d.Matrix4VertexAttribute(name='n')]
+        assert x3dglsl.attribute_widths(nodes) == [('a', 1), ('m', 3), ('n', 4)]
+        assert x3dglsl.attribute_widths(nodes) == [
+            (name, locations) for name, _values, locations in x3dglsl.vertex_attributes(nodes)]
+
+    def test_an_attribute_short_of_values_reads_zero_past_them(self):
+        found, short = x3dglsl.per_vertex(
+            [('a', np.array([[1.0], [2.0]], np.float32), 1)], np.array([0, 1, 2, 2]))
+        assert short == ['a']
+        assert found[0][1].ravel().tolist() == [1.0, 2.0, 0.0, 0.0]
 
 
 class TestLightsAndMaterials:
