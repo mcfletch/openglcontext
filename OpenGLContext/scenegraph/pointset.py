@@ -53,6 +53,32 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
     maxSize = field.newField('maxSize', 'SFFloat', 1, 1.0)
     attenuation = field.newField('attenuation', 'SFVec3f', 1, [1.0, 0.0, 0.0])
 
+    def pointColours(self) -> Any:
+        """One colour per point, `(n, 3)`, or None
+
+        The first of the Color node's values where it holds as many as there
+        are points or more (X3D 19775-1, 11.4.11); None where there is no
+        Color node, or it holds fewer, which is reported once.
+        """
+        if not self.hasPointColours():
+            return None
+        count = len(self.coord.point)
+        return np.asarray(self.color.color, dtype='f').reshape(-1, 3)[:count]
+
+    def hasPointColours(self) -> bool:
+        """Whether each point has a colour (:meth:`pointColours`), without
+        building the array"""
+        if not self.color or not self.coord:
+            return False
+        count, colours = len(self.coord.point), len(self.color.color)
+        if colours < count:
+            if not self.__dict__.get('_fewerReported'):
+                self.__dict__['_fewerReported'] = True
+                log.warning('PointSet %s has fewer colours (%s) than points (%s); '
+                            'drawn in its appearance\'s colour', self, colours, count)
+            return False
+        return True
+
     def render(
         self,
         visible: int = 1,  # can skip normals and textures if not
@@ -63,9 +89,8 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
     ) -> int:
         """Render the point-set, requires coord attribute be present
 
-        if color is present (and has the same length as coord), will
-        render using colors mapped 1:1, otherwise will use the current
-        color.color
+        Each point is drawn in its colour (:meth:`pointColours`) where there
+        are colours enough, otherwise in the current colour.
         """
         if not self.coord:
             # can't render nothing
@@ -84,22 +109,12 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         glVertexPointer(3, GL_FLOAT, 0, points)
         glEnableClientState(GL_VERTEX_ARRAY)
 
-        if visible and self.color:
-            colors = self.color.color
-            if len(colors) != len(points):
-                # egads, a content error
-                if __debug__:
-                    log.warning(
-                        """PointSet %s has different number of point (%s) and color (%s) values""",
-                        str(self),
-                        len(points),
-                        len(colors),
-                    )
-            else:
-                glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE)
-                glEnable(GL_COLOR_MATERIAL)
-                glColorPointer(3, GL_FLOAT, 0, colors)
-                glEnableClientState(GL_COLOR_ARRAY)
+        colors = self.pointColours() if visible else None
+        if colors is not None:
+            glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE)
+            glEnable(GL_COLOR_MATERIAL)
+            glColorPointer(3, GL_FLOAT, 0, colors)
+            glEnableClientState(GL_COLOR_ARRAY)
         glDisable(GL_LIGHTING)
         if textured:
             # TODO: check for version/extension first!
@@ -132,7 +147,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             return 1
 
         # Use point shader for colored points, unlit for simple points
-        has_colors = self.color and len(self.color.color) == len(points)
+        has_colors = self.hasPointColours()
 
         if has_colors:
             shader_program.use_point()
@@ -244,7 +259,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         if has_colors:
             interleaved = np.empty((len(points), 6), dtype='f')
             interleaved[:, 0:3] = points_array
-            interleaved[:, 3:6] = np.asarray(self.color.color, dtype='f')
+            interleaved[:, 3:6] = self.pointColours()
             interleaved = np.ascontiguousarray(interleaved)
             stride = 6 * 4
         else:
