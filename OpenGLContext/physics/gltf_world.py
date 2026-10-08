@@ -231,6 +231,31 @@ def collision_groups(world: PhysicsWorld) -> dict[int, list[Any]]:
     return dict(_GROUPS.get(world, {}))
 
 
+def node_mesh(node: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """Return ``(points, indices)`` of the triangles a node draws, in its own frame.
+
+    What a physics body bound to ``node`` collides with: the geometry of the
+    node's descendants, placed by their own transforms but not by ``node``'s,
+    since the body's pose is the node's.  The node's ``scale`` is applied.  A
+    node that is itself a shape is its geometry.  Returns None where the node
+    draws no triangles.
+    """
+    points: list[np.ndarray] = []
+    tris: list[np.ndarray] = []
+    state = {'n': 0}
+    if getattr(node, 'geometry', None) is not None:
+        _collect(node, np.eye(4), points, tris, (), state, 0.0)
+    for child in getattr(node, 'children', None) or ():
+        _collect(child, np.eye(4), points, tris, (node,), state, 0.0)
+    if not points:
+        return None
+    found = np.vstack(points)
+    scale = getattr(node, 'scale', None)
+    if scale is not None:
+        found = found * np.asarray(scale, dtype='d')
+    return found, (np.vstack(tris) if tris else np.zeros((0, 3), dtype='i'))
+
+
 def collision_world_from_scene(
         group: Any, gravity: float = 9.81, ground_pad: float = 0.0,
         min_hull_size: float = 0.0

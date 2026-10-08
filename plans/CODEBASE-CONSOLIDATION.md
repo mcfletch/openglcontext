@@ -490,7 +490,8 @@ copies of the environment-variable preamble become one.
   supported backends and `choosefonts` the font providers, which is exactly the
   sort of thing the platform commitment wants demonstrable.)
 * [bin/keyboardevents.py](../OpenGLContext/bin/keyboardevents.py) (93) — likewise a
-  demo; move to `tests/`.
+  demo; move to `tests/`. **Done:** it is `tests/keyboardevents.py`, showing the
+  events in a HUD `TextBlock` rather than in-scene `Text` nodes.
 * **`OpenGLContext/tests/`** (255 lines: `test_atlas`, `test_configs`,
   `test_polygonsort`, `test_utilities`, `test_viewplatform`, `sample.ini`) — a
   second test root, listed in `pyproject.toml`'s `testpaths`, that **ships inside

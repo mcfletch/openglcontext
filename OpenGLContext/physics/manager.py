@@ -11,9 +11,12 @@ from collections import OrderedDict
 from collections.abc import Hashable
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, Optional
+import typing
 
 from omi_physics.contactevents import BodyRef
 from omi_physics.world import PhysicsWorld
+if typing.TYPE_CHECKING:
+    from OpenGLContext.scenegraph.physicsbody import PhysicsBody
 
 from .events import CollisionEvents
 
@@ -58,6 +61,8 @@ class PhysicsManager:
                                  default_angular_damping=default_angular_damping,
                                  **world_kw)
         self.world = world
+        #: World material indices for the presets :meth:`attach` has been given by name.
+        self._presets: dict[str, int] = {}
         # The world's event log is the manager's to drain, and it is wanted
         # only once something subscribes (CollisionEvents switches it on);
         # until then listeners are called and nothing is kept.
@@ -75,7 +80,7 @@ class PhysicsManager:
         self._retired: "OrderedDict[BodyRef, Any]" = OrderedDict()
 
     @property
-    def bodies(self) -> list[Any]:
+    def bodies(self) -> list['PhysicsBody']:
         """The registered ``PhysicsBody`` handles, in the order they were added."""
         return list(self._bodies)
 
@@ -89,14 +94,82 @@ class PhysicsManager:
         """
         return nullcontext()
 
-    def add(self, body: Any) -> Any:
+    def add(self, body: 'PhysicsBody') -> 'PhysicsBody':
         """Register a scenegraph ``PhysicsBody`` handle into the world and track it; returns the body."""
         body.register(self.world)
         self._bodies[body] = None
         self._by_transform[body.transform] = body
         return body
 
-    def remove(self, body: Any) -> None:
+    def attach(self, node: Any, motion: Any = None, *, material: Any = None,
+               strategy: str = 'auto', trigger: bool = False,
+               collision_filter: int = -1) -> 'PhysicsBody':
+        """Make a scenegraph node a physics body; returns its ``PhysicsBody``.
+
+        The collision shape is cooked from the geometry the node draws
+        (:func:`~OpenGLContext.physics.gltf_world.node_mesh`), so what is drawn
+        and what is collided with cannot disagree, and the body is bound to the
+        node: the world moves the node while the body is dynamic.  ``node`` is
+        a ``Transform`` holding the geometry, placed where the body starts.
+
+        ``motion`` is an ``omi_physics.model.Motion``; left out the body is
+        static, which is what scenery is.  ``material`` is a preset name from
+        ``model.MATERIAL_PRESETS``, a ``model.Material``, or the index of one
+        already in the world.  ``strategy`` is one of
+        :func:`omi_physics.cookery.cook_shape`'s: ``primitive`` fits a box or
+        a sphere, ``convex`` the hull, ``trimesh`` the triangles of a static
+        body, and ``auto`` is the triangles for a static body and the hull
+        for a dynamic one.  ``decompose`` makes several shapes and a body has
+        one.  ``trigger=True`` makes the shape a
+        trigger volume that reports what enters it and stops nothing.
+
+        Raises ``ValueError`` for a node that draws no triangles, and for a
+        strategy that makes several shapes.
+        """
+        from omi_physics import model
+        from omi_physics.cookery import cook_shape
+
+        from OpenGLContext.scenegraph.physicsbody import PhysicsBody
+
+        from .gltf_world import node_mesh
+
+        found = node_mesh(node)
+        if found is None:
+            raise ValueError('%r draws no triangles to make a collision shape from' % (node,))
+        points, indices = found
+        motion = motion if motion is not None else model.Motion(type=model.STATIC)
+        dynamic = motion.type == model.DYNAMIC
+        if strategy == 'auto' and dynamic:
+            strategy = 'convex'
+        shape = cook_shape(points, indices, strategy, dynamic)
+        if isinstance(shape, list):
+            raise ValueError('strategy %r makes several shapes and a body has one' % strategy)
+        with self.with_world():
+            shape_index = self.world.add_shape(shape)
+            if trigger:
+                body = PhysicsBody(node, motion, trigger=model.Trigger(
+                    shape=shape_index, collisionFilter=collision_filter))
+            else:
+                body = PhysicsBody(node, motion, model.Collider(
+                    shape=shape_index, physicsMaterial=self._material_index(material),
+                    collisionFilter=collision_filter))
+            return self.add(body)
+
+    def _material_index(self, material: Any) -> int:
+        """The world's index for a preset name, a ``Material`` or an index; -1 for none."""
+        from omi_physics import model
+        if material is None:
+            return -1
+        if isinstance(material, int):
+            return material
+        if isinstance(material, str):
+            if material not in self._presets:
+                self._presets[material] = self.world.add_material(
+                    model.MATERIAL_PRESETS[material])
+            return self._presets[material]
+        return int(self.world.add_material(material))
+
+    def remove(self, body: 'PhysicsBody') -> None:
         """Take ``body`` out of the world and stop writing its pose.
 
         The pairs it was touching end with ``reason='removed'``, and the
@@ -114,7 +187,7 @@ class PhysicsManager:
         self._forget(body)
         body.index = None
 
-    def _forget(self, body: Any) -> None:
+    def _forget(self, body: 'PhysicsBody') -> None:
         """Stop tracking ``body``."""
         self._bodies.pop(body, None)
         transform = body.transform
