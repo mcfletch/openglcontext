@@ -130,6 +130,7 @@ from OpenGLContext.scenegraph.simplebackground import SimpleBackground as Simple
 from OpenGLContext.scenegraph.spherebackground import SphereBackground as SphereBackground
 from OpenGLContext.scenegraph.switch import Switch as Switch
 from OpenGLContext.scenegraph.teapot import Teapot as Teapot
+from OpenGLContext.scenegraph.text.fontlibrary import FontLibrary as FontLibrary
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle as FontStyle
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle3D as FontStyle3D
 from OpenGLContext.scenegraph.text.text import Text as Text
@@ -283,6 +284,7 @@ __all__ = [
     'FloatUniformm4x2',
     'FloatUniformm4x3',
     'Fog',
+    'FontLibrary',
     'FontStyle',
     'FontStyle3D',
     'GLSLImport',

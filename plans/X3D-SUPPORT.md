@@ -240,7 +240,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     instanced; a Shader node's program and the terrain/vegetation/particle
     layers are not clipped. Found on the way: `Box` and the quadrics ignored
     `solid FALSE` (now drawn from inside, and kept apart when instancing)
-  - [ ] `FontLibrary`
+  - [x] `FontLibrary` (`scenegraph.text.fontlibrary`): the first url that is a
+    font, read on the loader pool under the document's url policy (http
+    fetched to the asset cache); a family of the document by `family` and
+    by the file's own name; `pillowtext.face` and `TTFFontProvider.matchFile`
+    take it in FontStyle.family order; provider keys and the Text cache
+    follow the document's `DocumentFonts.generation`
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
   - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)
   - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`)

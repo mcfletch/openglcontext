@@ -128,7 +128,7 @@ implements these X3D nodes, by component:
 - Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
   PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - AudioClip, Sound
-- Text - FontStyle, Text
+- Text - FontLibrary, FontStyle, Text
 - Texturing - ImageTexture, MovieTexture, MultiTextureCoordinate,
   MultiTextureTransform, PixelTexture, TextureCoordinate, TextureProperties,
   TextureTransform
@@ -258,6 +258,10 @@ shape is drawn a side at a time and is not batched with others. The alpha
 mode is the front material's, and the fixed-function path draws both sides
 with the front material. A ``Box``, ``Sphere``, ``Cone`` or ``Cylinder``
 whose ``solid`` is false draws its inside.
+
+A ``FontLibrary`` reads a TrueType or OpenType file, under the document's url
+policy, as a font family its ``FontStyle`` nodes may name
+(:ref:`text-font-library`).
 
 Clip planes
 ~~~~~~~~~~~

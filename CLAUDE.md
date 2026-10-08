@@ -291,6 +291,8 @@ OpenGLContext/
 │   ├── terrain/      # Height fields and splat materials -- docs/terrain.rst
 │   ├── vegetation/   # Instanced cover and fields -- docs/vegetation.rst
 │   └── text/         # Text rendering and font providers -- docs/text.rst
+│       └── fontlibrary.py  # X3D's FontLibrary: a document's own font files,
+│                     # by family -- docs/text.rst#text-font-library
 ├── shaders/          # GLSL sources (.vert/.frag plus shared _*.glsl includes)
 ├── telemetry/        # A whole session to one file, and back -- docs/telemetry.rst
 ├── testing/          # The shipped test machinery conftest.py imports

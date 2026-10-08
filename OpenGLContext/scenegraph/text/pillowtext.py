@@ -1,8 +1,8 @@
 """Draws lines of text with Pillow, sized in a Text node's units; no GL
 
-A FontStyle names a face (:func:`face`, from the TrueType registry the
-polygon fonts use): the family's member nearest the weight with the slant
-asked. Where the family has no such slant the line is sheared, and where its
+A FontStyle names a face (:func:`face`, from its document's FontLibrary
+fonts or the TrueType registry the polygon fonts use): the family's member
+nearest the weight with the slant asked. Where the family has no such slant the line is sheared, and where its
 nearest weight is lighter than the bold asked the glyphs are stroked. A line
 is drawn anti-aliased from that face at a
 pixel size (:func:`draw_line`) and placed by its ink box about the line's
@@ -78,20 +78,27 @@ def face(fontStyle: Any = None, mode: Any = None) -> Face:
     the width nearest normal; else the member of the nearest weight,
     sheared. A face lighter than the bold asked is stroked.
     """
-    from OpenGLContext.scenegraph.text.fontprovider import TTFFontProvider  # noqa: PLC0415 the provider loads the registry
+    from OpenGLContext.scenegraph.text.fontprovider import TTFFontProvider, library_faces  # noqa: PLC0415 the provider loads the registry
     registry = TTFFontProvider.getTTFRegistry()
-    name = registry.fontNameFromStyle(fontStyle, mode=mode)
     weight, italic = registry.modifiersFromStyle(fontStyle, mode=mode)
     members = []
-    for member in registry.fontMembers(name):
-        path = registry.fontFile(member)
-        found_weight, found_italic = registry.metadata(path).modifiers
+    library = library_faces(fontStyle, registry, mode)
+    if library:
+        styles = [(each.path, each.weight, each.italic) for each in library]
+    else:
+        name = registry.fontNameFromStyle(fontStyle, mode=mode)
+        styles = []
+        for member in registry.fontMembers(name):
+            path = registry.fontFile(member)
+            found_weight, found_italic = registry.metadata(path).modifiers
+            styles.append((path, found_weight, found_italic))
+    for path, found_weight, found_italic in styles:
         members.append((bool(found_italic) != bool(italic), abs(found_weight - weight),
-                        abs(_width(path) - NORMAL_WIDTH), member, path, found_weight,
+                        abs(_width(path) - NORMAL_WIDTH), path, found_weight,
                         found_italic))
     if not members:
         return Face(TTFFontProvider.matchFile(fontStyle, mode)[0])
-    _slant, _distance, _width_distance, _member, path, found_weight, found_italic = min(members)
+    _slant, _distance, _width_distance, path, found_weight, found_italic = min(members)
     return Face(path, embolden=weight >= BOLD > found_weight,
                 oblique=bool(italic) and not found_italic)
 
