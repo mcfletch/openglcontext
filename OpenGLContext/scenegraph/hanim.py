@@ -96,7 +96,7 @@ class Placed(Transforming):
         dependencies: list[tuple[Any, Optional[str]]] = [
             (self, name) for name in self.DRAWN + PLACING]
         try:
-            for child in self.renderedChildren():  # type: ignore[attr-defined]  # Grouping's
+            for child in self.renderedChildren():
                 if not hasattr(child, 'boundingVolume'):
                     raise boundingvolume.UnboundedObject(child)
                 volume = child.boundingVolume(mode)

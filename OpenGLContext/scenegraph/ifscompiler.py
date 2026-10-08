@@ -558,10 +558,8 @@ def build_normalPerVertex(vertices: Any, creaseAngle: float, vertexArray: Any = 
                 secondaryNormal = faceNormals[vertexSet[innerindex]]
                 # if angle < creaseAngle... should calculate
                 # cos(creaseAngle) instead of using arccos each time
-                try:
-                    angle = arccos(dot(primaryNormal, secondaryNormal))
-                except ValueError:  # pragma: no cover - numpy arccos returns nan for
-                    angle = 0        # out-of-domain dot products, it never raises here
+                # Unit normals' rounding can carry their product just past one.
+                angle = arccos(min(max(float(dot(primaryNormal, secondaryNormal)), -1.0), 1.0))
                 if angle < creaseAngle:
                     # add to each other's cummulative total (in place)
                     add(

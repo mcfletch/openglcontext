@@ -148,6 +148,16 @@ class TestExpandedArrays:
             _quad(normalPerVertex=per_vertex, ccw=False)).expandedArrays()
         assert np.allclose(np.asarray(back), -np.asarray(front), atol=1e-5)
 
+    def test_parallel_faces_rounding_past_one_smooth_together(self):
+        """Two faces whose unit normals' product rounds just past one."""
+        tilted = [(0, 0, 0), (0.17992142840489828, 0, 0.5381433132192782),
+                  (0.17992142840489828, 2.285188015156939, 0.5381433132192782),
+                  (0, 2.285188015156939, 0)]
+        ifs = _quad(coord=b.Coordinate(point=tilted), creaseAngle=0.5)
+        with np.errstate(invalid='raise'):
+            _v, _c, normals, _t = ArrayGeometryCompiler(ifs).expandedArrays()
+        assert np.isfinite(normals).all()
+
     def test_explicit_normals_are_used(self):
         ifs = _quad(normal=b.Normal(vector=[(0, 0, 1)] * 4),
                     normalIndex=[0, 1, 2, -1, 0, 2, 3, -1])

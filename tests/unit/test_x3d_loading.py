@@ -12,6 +12,7 @@ import struct
 
 import numpy as np
 import pytest
+from vrml import protofunctions
 from vrml import x3d as vrml_x3d
 from vrml.x3d import nodes as x3d
 
@@ -216,3 +217,34 @@ Shape { appearance Paint { tint 0 0 1 } geometry Box { size 3 3 3 } }
         image = drawn_image(context)
     red, _green, blue = (int(value) for value in image[16, 16, :3])
     assert blue > 150 and red < 80, (red, blue)
+
+
+EXTERN = b'''<X3D version="4.0"><Scene>
+  <ExternProtoDeclare name="Joint" url='"%s#Joint"'>
+    <field name="size" type="SFFloat" accessType="initializeOnly"/>
+  </ExternProtoDeclare>
+  <ProtoInstance DEF="J" name="Joint"><fieldValue name="size" value="2"/></ProtoInstance>
+</Scene></X3D>'''
+DEFINITION = b'''<X3D version="4.0"><Scene>
+  <ProtoDeclare name="Joint"><ProtoInterface>
+    <field name="size" type="SFFloat" accessType="initializeOnly" value="1"/>
+  </ProtoInterface><ProtoBody><Group/></ProtoBody></ProtoDeclare>
+</Scene></X3D>'''
+
+
+def test_an_external_prototype_beside_the_document_is_read(tmp_path):
+    (tmp_path / 'joint.x3d').write_bytes(DEFINITION)
+    (tmp_path / 'world.x3d').write_bytes(EXTERN % b'joint.x3d')
+    scene = Loader.load(str(tmp_path / 'world.x3d'))
+    assert len(protofunctions.getSceneGraph(scene.getDEF('J')).children) == 1
+    assert scene.getDEF('J').size == 2.0
+
+
+def test_an_external_prototype_outside_the_documents_folder_is_not_read(tmp_path, caplog):
+    (tmp_path / 'joint.x3d').write_bytes(DEFINITION)
+    (tmp_path / 'inner').mkdir()
+    (tmp_path / 'inner' / 'world.x3d').write_bytes(EXTERN % b'../joint.x3d')
+    with caplog.at_level(logging.WARNING):
+        scene = Loader.load(str(tmp_path / 'inner' / 'world.x3d'))
+    assert not protofunctions.getSceneGraph(scene.getDEF('J')).children
+    assert 'joint.x3d' in caplog.text

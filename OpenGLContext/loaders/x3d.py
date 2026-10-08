@@ -9,16 +9,21 @@ as it draws a VRML97 world. What the read found wrong is in the scene's
 `problems` and in the log, once per problem, at its severity.
 """
 import logging
-from typing import Any, ClassVar
+import os
+from collections.abc import Mapping, Sequence
+from typing import Any, ClassVar, Optional
 
+from vrml import node
 from vrml import x3d as vrml_x3d
+from vrml.x3d import files, readers
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.loaders import base
+from OpenGLContext.loaders.resolver import Resolver, is_url
 
 log = logging.getLogger(__name__)
 
-__all__ = ['X3DHandler', 'defaultHandler', 'prototypes']
+__all__ = ['ContainedPrototypes', 'X3DHandler', 'defaultHandler', 'prototypes']
 
 #: X3D nodes whose name the engine's registry gives to another class (the
 #: VRML97 NURBS extension's `Polyline2D`), by name: (module, class).
@@ -50,6 +55,60 @@ def prototypes() -> "dict[str, type]":
     return found
 
 
+class ContainedPrototypes:
+    """Reads the files a document's EXTERNPROTO URLs name, as the document's other references are read
+
+    A document read from a file reads prototypes from files under its own
+    folder (or a content root); one read from a URL, from its own origin
+    (:class:`~OpenGLContext.loaders.resolver.Resolver`). Each file is read
+    once per load, and a file naming prototypes in others is read the same
+    way, to :data:`vrml.x3d.files.MAX_PROTOTYPE_DEPTH` files deep. A URL the
+    policy refuses, or a file that cannot be read, is logged and the next URL
+    is tried.
+    """
+
+    def __init__(self, prototypes: Mapping[str, type], depth: int = 0,
+                 scenes: Optional[dict[str, Any]] = None) -> None:
+        self.prototypes = prototypes
+        self.depth = depth
+        self.scenes: dict[str, Any] = {} if scenes is None else scenes
+
+    def __call__(self, urls: Sequence[str], baseURL: str, name: str) -> Optional[type]:
+        if self.depth >= files.MAX_PROTOTYPE_DEPTH or not baseURL:
+            return None
+        resolver = (Resolver(base_url=baseURL) if is_url(baseURL)
+                    else Resolver(base_dir=os.path.dirname(os.path.abspath(baseURL))))
+        for url in urls:
+            reference, _, fragment = str(url).partition('#')
+            if not reference:
+                continue
+            scene = self._scene(resolver, reference, baseURL)
+            if scene is None:
+                continue
+            found = scene.getProto(fragment or name)
+            if found is not None and found not in node.PENDING_PROTOTYPES:
+                return found  # type: ignore[no-any-return]  # a prototype class the scene declared
+        return None
+
+    def _scene(self, resolver: Resolver, reference: str, baseURL: str) -> Any:
+        try:
+            location = str(resolver.resolve(reference))
+        except IOError as err:
+            log.warning('%s: EXTERNPROTO %s is not read: %s', baseURL, reference, err)
+            return None
+        if location not in self.scenes:
+            self.scenes[location] = None
+            try:
+                data = resolver.fetch(reference)
+            except (IOError, ValueError) as err:
+                log.warning('%s: EXTERNPROTO %s is not read: %s', baseURL, reference, err)
+                return None
+            self.scenes[location] = readers.read(
+                data, name=location, prototypes=self.prototypes,
+                extern_resolver=ContainedPrototypes(self.prototypes, self.depth + 1, self.scenes))
+        return self.scenes[location]
+
+
 class X3DHandler(base.BaseHandler):
     """Reads an X3D document of any encoding into the engine's nodes"""
 
@@ -60,7 +119,9 @@ class X3DHandler(base.BaseHandler):
     def parse(self, data: Any, baseURL: str, *args: Any, **named: Any) -> "tuple[bool, Any]":
         """The scene the document builds; raises ValueError for one that cannot be read"""
         try:
-            scene = vrml_x3d.loads(data, name=baseURL or '', prototypes=self.vocabulary())
+            vocabulary = self.vocabulary()
+            scene = vrml_x3d.loads(data, name=baseURL or '', prototypes=vocabulary,
+                                   extern_resolver=ContainedPrototypes(vocabulary))
         except (ValueError, SyntaxError) as err:
             raise ValueError('%s is not a readable X3D document: %s' % (baseURL, err)) from err
         for problem in scene.problems:
