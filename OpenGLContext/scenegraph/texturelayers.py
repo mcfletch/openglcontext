@@ -62,7 +62,7 @@ log = logging.getLogger(__name__)
 __all__ = [
     'COORD_BOX', 'COORD_GENERATED', 'COORD_REFLECTION', 'COORD_SET', 'COORD_VOLUME',
     'FUNCTIONS', 'KIND_2D', 'KIND_3D', 'KIND_CUBE', 'Layer', 'LayerTable', 'MAX_LAYERS',
-    'MODES', 'SOURCES', 'compute_layers', 'is_layered', 'layer_kind', 'parse_function',
+    'MODES', 'SOURCES', 'compute_layers', 'drawn_singly', 'is_layered', 'layer_kind', 'parse_function',
     'parse_mode', 'parse_source', 'texture_layers', 'transform_matrix',
 ]
 
@@ -163,6 +163,15 @@ def is_layered(texture: Any) -> bool:
     """Whether a texture node is drawn as a stage chain rather than a base colour map"""
     return isinstance(texture, (x3d.MultiTexture, x3d.X3DEnvironmentTextureNode,
                                 x3d.X3DTexture3DNode))
+
+
+def drawn_singly(texture: Any) -> bool:
+    """Whether a shape wearing ``texture`` is drawn by itself, never batched
+
+    A stage chain reads its own geometry's coordinates, and a rendered
+    texture is drawn from the shape that wears it.
+    """
+    return is_layered(texture) or isinstance(texture, x3d.RenderedTexture)
 
 
 class Layer(NamedTuple):

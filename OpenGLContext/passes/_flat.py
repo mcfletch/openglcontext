@@ -101,6 +101,7 @@ from OpenGLContext.passes.selection import (
 from OpenGLContext.passes.flateffects import _FlatEffectsMixin
 from OpenGLContext.passes.multiviewpass import MultiviewPassMixin
 from OpenGLContext.passes.zonepass import ZonesMixin
+from OpenGLContext.passes.generatedtextures import GeneratedTexturesMixin
 
 # MRT draw-buffer index carrying the packed object id (attachment 1).
 OBJECT_ID_ATTACHMENT = 1
@@ -540,8 +541,8 @@ def presentFrame( context: Any ) -> Any:
     return context.SwapBuffers()
 
 
-class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixin,
-                SGObserver ):
+class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedTexturesMixin,
+                SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
     Uses structural scenegraph observations to allow the actual
@@ -1565,7 +1566,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
             return state.gathered
         return self.gatherPaths()
 
-    def _walkPaths( self ) -> GatheredPaths:
+    def _walkPaths( self, fresh: bool = False ) -> GatheredPaths:
         """Everything this frame needs to know about every renderable path.
 
         One walk of the scene, because everything in it is asked for more than
@@ -1611,15 +1612,22 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         moved" straight off the identity. A row of the stack carries the same
         numbers but is a new object every frame, and every such memo keyed on it
         would miss every time.
+
+        ``fresh`` walks into arrays of its own rather than the frame's, for a
+        walk of paths other than the frame's (a RenderedTexture's scene).
         """
         paths = self.paths.get( nodetypes.Rendering, ())
         count = len(paths)
-        points = self._pointsBuffer
+        points = None if fresh else self._pointsBuffer
         if points is None or len(points) != count:
-            points = self._pointsBuffer = zeros( (count, 8, 4), 'f' )
-        matrices = self._matrixBuffer
+            points = zeros( (count, 8, 4), 'f' )
+            if not fresh:
+                self._pointsBuffer = points
+        matrices = None if fresh else self._matrixBuffer
         if matrices is None or len(matrices) != count:
-            matrices = self._matrixBuffer = zeros( (count, 4, 4), 'f' )
+            matrices = zeros( (count, 4, 4), 'f' )
+            if not fresh:
+                self._matrixBuffer = matrices
         nodes: list[Any] = []
         own: list[Any] = []
         volumes: list[Any] = []
@@ -1867,6 +1875,9 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                 # The zone probes this frame's share of captures is for, drawn
                 # before anything is drawn that reads them.
                 self.renderZoneProbes(frames, lighting)
+                # The generated cube maps and rendered textures the last
+                # frame's shapes wore, before anything reads them.
+                self.renderGeneratedTextures(frames, lighting)
                 # Every mirror's reflection, for every view, before any view
                 # is drawn: they are views of their own, drawn into the
                 # reflection atlas, and a view reads them as it shades.

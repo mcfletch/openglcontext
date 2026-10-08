@@ -262,6 +262,7 @@ Node( 'MetadataInteger', 'vrml.x3d.nodes.MetadataInteger' )
 Node( 'MetadataSet', 'vrml.x3d.nodes.MetadataSet' )
 Node( 'MetadataString', 'vrml.x3d.nodes.MetadataString' )
 # X3D's MultiTexture, CubeMapTexturing and Texturing3D.
+Node( 'RenderedTexture', 'OpenGLContext.scenegraph.renderedtexture.RenderedTexture' )
 Node( 'MultiTexture', 'OpenGLContext.scenegraph.multitexture.MultiTexture' )
 Node( 'ComposedCubeMapTexture', 'OpenGLContext.scenegraph.cubemaptexture.ComposedCubeMapTexture' )
 Node( 'ImageCubeMapTexture', 'OpenGLContext.scenegraph.cubemaptexture.ImageCubeMapTexture' )

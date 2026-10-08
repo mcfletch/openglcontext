@@ -49,7 +49,7 @@ from OpenGLContext.scenegraph.physicalmaterial import (
 from OpenGLContext.scenegraph.material_fields import read_material_fields
 from OpenGLContext.scenegraph.texgen import TexGen
 from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
-from OpenGLContext.scenegraph.texturelayers import is_layered, texture_layers
+from OpenGLContext.scenegraph.texturelayers import drawn_singly, is_layered, texture_layers
 from OpenGLContext.passes.texturelayerpass import LayerUnits
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext import lighting
@@ -1280,8 +1280,8 @@ class PBRPass(flatcore.FlatPass):
         # So is a surface with a back material: it is drawn a side at a time.
         if two_sided(getattr(shape, 'appearance', None)):
             return False
-        # And a surface of texture layers: its coordinates are its own geometry's.
-        if is_layered(getattr(getattr(shape, 'appearance', None), 'texture', None)):
+        # And a surface of texture layers, or wearing a rendered texture.
+        if drawn_singly(getattr(getattr(shape, 'appearance', None), 'texture', None)):
             return False
         return hasattr(geometry, 'instanceGPU')
 

@@ -109,7 +109,9 @@ class Appearance(basenodes.Appearance):
         transparent = appearance_alpha(self)[0] == 'BLEND'
         materialParams = None
         textureToken = []
-        if not transparent and self.texture:
+        # A texture the pass draws is asked for as it is drawn, not as it is sorted
+        from OpenGLContext.scenegraph.texturelayers import drawn_singly  # noqa: PLC0415 texturelayers imports the material modules, which import this one
+        if not transparent and self.texture and not drawn_singly( self.texture ):
             tex = self.texture.cached( mode )
             if tex:
                 textureToken = [tex.texture]
