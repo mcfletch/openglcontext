@@ -169,6 +169,11 @@ from OpenGLContext.scenegraph.x3druntime import StringSensor as StringSensor
 from OpenGLContext.scenegraph.x3druntime import TexCoordChaser2D as TexCoordChaser2D
 from OpenGLContext.scenegraph.x3druntime import TexCoordDamper2D as TexCoordDamper2D
 from OpenGLContext.scenegraph.x3druntime import TimeTrigger as TimeTrigger
+from OpenGLContext.scenegraph.x3dshaders import ComposedShader as ComposedShader
+from OpenGLContext.scenegraph.x3dshaders import PackagedShader as PackagedShader
+from OpenGLContext.scenegraph.x3dshaders import ProgramShader as ProgramShader
+from OpenGLContext.scenegraph.x3dshaders import ShaderPart as ShaderPart
+from OpenGLContext.scenegraph.x3dshaders import ShaderProgram as ShaderProgram
 from OpenGLContext.scenegraph.zone import Zone as Zone
 from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
 from OpenGLContext.scenegraph.zone import ZoneEnvironment as ZoneEnvironment
@@ -188,7 +193,10 @@ from vrml.vrml97.basenodes import WorldInfo as WorldInfo
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
 from vrml.x3d.nodes import CoordinateDouble as CoordinateDouble
 from vrml.x3d.nodes import FillProperties as FillProperties
+from vrml.x3d.nodes import FloatVertexAttribute as FloatVertexAttribute
 from vrml.x3d.nodes import LineProperties as LineProperties
+from vrml.x3d.nodes import Matrix3VertexAttribute as Matrix3VertexAttribute
+from vrml.x3d.nodes import Matrix4VertexAttribute as Matrix4VertexAttribute
 from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean
 from vrml.x3d.nodes import MetadataDouble as MetadataDouble
 from vrml.x3d.nodes import MetadataFloat as MetadataFloat
@@ -245,6 +253,7 @@ __all__ = [
     'ColorDamper',
     'ColorInterpolator',
     'ColorRGBA',
+    'ComposedShader',
     'Cone',
     'Contour2D',
     'Coordinate',
@@ -276,6 +285,7 @@ __all__ = [
     'FloatUniformm4',
     'FloatUniformm4x2',
     'FloatUniformm4x3',
+    'FloatVertexAttribute',
     'Fog',
     'FontStyle',
     'FontStyle3D',
@@ -311,6 +321,8 @@ __all__ = [
     'LocalFog',
     'MMImageTexture',
     'Material',
+    'Matrix3VertexAttribute',
+    'Matrix4VertexAttribute',
     'MetadataBoolean',
     'MetadataDouble',
     'MetadataFloat',
@@ -333,6 +345,7 @@ __all__ = [
     'OrientationDamper',
     'OrientationInterpolator',
     'OrthoViewpoint',
+    'PackagedShader',
     'ParticleEmitter',
     'PhysicalMaterial',
     'PickableGroup',
@@ -352,6 +365,7 @@ __all__ = [
     'PositionDamper2D',
     'PositionInterpolator',
     'PositionInterpolator2D',
+    'ProgramShader',
     'ProximitySensor',
     'QuadSet',
     'ROUTE',
@@ -365,6 +379,8 @@ __all__ = [
     'ShaderBuffer',
     'ShaderGeometry',
     'ShaderIndexBuffer',
+    'ShaderPart',
+    'ShaderProgram',
     'ShaderSlice',
     'Shape',
     'SimpleBackground',
