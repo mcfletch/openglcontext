@@ -135,6 +135,10 @@ Installing the package puts these commands on your path:
    surfaces, a lamp that lights only its alcove, shadows, X3D's triangle sets
    and an Inlined glTF model, with keys to switch the lamp, hide a node and
    write the scene back out as X3D. See :doc:`Loading X3D <x3d>`.
+``oglc-x3d-shaders``
+   An X3D document whose shapes are drawn by their own GLSL: a toon-shaded
+   sphere, a GLSL 1.20 marble column, a geometry stage, a packaged shader, a
+   vertex-attribute heat bar and a rippling pool. See :ref:`x3d-shaders`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

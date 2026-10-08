@@ -124,6 +124,9 @@ implements these X3D nodes, by component:
 - Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
   Normal, PointSet, Tangent, TriangleFanSet, TriangleSet, TriangleStripSet
+- Shaders - ComposedShader, FloatVertexAttribute, Matrix3VertexAttribute,
+  Matrix4VertexAttribute, PackagedShader, ProgramShader, ShaderPart,
+  ShaderProgram
 - Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
   PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - AudioClip, Sound
@@ -470,13 +473,197 @@ Sensors
 
 ``Context.observeEvents`` is how the sensors listen.
 
+.. _x3d-shaders:
+
+Programmable shaders
+~~~~~~~~~~~~~~~~~~~~
+
+.. figure:: images/demos/x3d_shaders.jpg
+   :alt: A toon-shaded copper sphere, a marble column, a gold sphere split along its faces and a striped block standing in a rippling pool, under a bar shading from violet to pale yellow
+
+   ``oglc-x3d-shaders``: shapes drawn by the GLSL their document carries.
+
+``oglc-x3d-shaders`` opens ``OpenGLContext/bin/x3d_shaders.x3d``, and
+:doc:`tests/x3d_shaders.py <tutorials/x3d_shaders>` is the same scene as a
+tutorial: a ``ComposedShader`` drawing a copper sphere in bands of light, a
+``ProgramShader`` written in GLSL 1.20 drawing a marble column, a gold sphere
+coming apart in a geometry stage, a ``PackagedShader`` striping a block, a
+bar coloured by a ``FloatVertexAttribute`` and a pool whose vertex stage moves
+its surface. Its keys: ``b`` steps the sphere's bands, ``a`` sends every
+shader ``activate``, and ``w`` writes the scene back as X3D.
+
+Choosing a shader
+   An ``Appearance``'s ``shaders`` lists alternatives in order of preference.
+   The first whose ``language`` is ``GLSL`` (or names none) and whose program
+   links draws the shape; it is sent ``isSelected TRUE``, each one passed over
+   ``isSelected FALSE``, and each that tried to link ``isValid``. While the
+   first that can run is still reading its sources, and where none runs, the
+   shape is drawn with its material and texture as if it listed no shaders.
+   ``Cg``, ``HLSL`` and a ``PackagedShader`` of any language but GLSL are
+   passed over. A shape drawn by its own shader is drawn alone, not in an
+   :doc:`instanced <instancing>` group.
+
+The nodes
+   A ``ComposedShader`` links its ``ShaderPart`` nodes, any number to a
+   stage. A part's ``type`` is ``VERTEX``, ``FRAGMENT``, ``GEOMETRY``,
+   ``TESS_CONTROL`` or ``TESS_EVALUATION``, in any case; a shader needs a
+   vertex and a fragment stage, and a part with no source is passed over. The
+   tessellation stages need a GL 4.0 context (``ContextDefinition.version``),
+   and a shape drawn with them is drawn as patches of three vertices. A
+   ``ProgramShader`` links its ``ShaderProgram`` nodes, a stage each, into one
+   program, and sets the fields each declares on it. A ``PackagedShader`` of
+   GLSL is one text compiled once for each stage whose macro it tests --
+   ``X3D_VERTEX_SHADER``, ``X3D_FRAGMENT_SHADER``, ``X3D_GEOMETRY_SHADER``,
+   ``X3D_TESS_CONTROL_SHADER``, ``X3D_TESS_EVALUATION_SHADER`` -- with that
+   macro defined; a text testing none holds a vertex and a fragment stage.
+
+Sources
+   A part's ``url`` is read on the :ref:`background load pool <background-loading>`,
+   resolved against its document under the document's
+   :doc:`policy <untrusted>`; the first url that reads is the source. A
+   ``data:`` URI, and shader text written into the url itself as some
+   authoring tools do, is read at once. X3D 4.1's ``sourceCode`` -- the text
+   inside the element, in the XML encoding -- is the source where there is no
+   url or none reads. ``load`` false leaves the url unread. A part records
+   its load state for a ``LoadSensor``.
+
+Linking (ISO/IEC 19775-1, I.5)
+   A program is linked once every part's source is to hand. A source that
+   changes after that is read and the running program is kept until the
+   shader is sent ``activate TRUE``, which links it again; a shader whose
+   first link failed is tried again when a source changes. A program is
+   linked for each arrangement of vertex attributes the shader's shapes have.
+
+Fields are uniforms
+   Each field a ``ComposedShader``, ``PackagedShader`` or ``ShaderProgram``
+   declares is the uniform of the same name, set again whenever the field is
+   set or routed to; an ``inputOnly`` field is the last event sent to it.
+   Values follow Annex I's Table I.3: ``SFBool`` and ``SFInt32`` are integers
+   (``bool``, ``int``), the float, double and time types ``float``, vectors
+   and colours ``vec2`` to ``vec4``, ``SFRotation`` a ``vec4``, ``SFMatrix3f``
+   and ``SFMatrix4f`` a ``mat3`` and ``mat4`` in X3D's column order, an
+   ``SFImage`` its integers, and each ``MF`` type an array. A value is
+   converted to the type the program declares, and an array cut to its
+   length. Strings are not set. A texture node in an ``SFNode`` field is the
+   sampler of the field's name; an ``MFNode`` field's are ``name[0]``,
+   ``name[1]``, .... A shader built in code declares its fields with
+   ``x3dshaders.declare_field(shader, 'colour', 'SFColor', (1, 0, 0))``.
+
+The browser's state
+   The program is given these where it declares them. They are the names X3D
+   browsers share; Annex I leaves naming them to the browser.
+
+   .. list-table::
+      :header-rows: 1
+      :widths: auto
+
+      * - Name
+        - Type
+        - What it is
+      * - ``x3d_Vertex``
+        - ``in vec4``
+        - the position (``w`` 1)
+      * - ``x3d_Normal``, ``x3d_Tangent``, ``x3d_Color``
+        - ``in vec3``, ``in vec4``, ``in vec4``
+        - the normal, the tangent, the colour (unset: ``(0, 0, 0, 1)``)
+      * - ``x3d_TexCoord`` (or ``x3d_TexCoord0``), ``x3d_TexCoord1``
+        - ``in vec4``
+        - the first and second texture coordinate sets
+      * - ``x3d_ModelViewMatrix``, ``x3d_ProjectionMatrix``, ``x3d_ModelViewProjectionMatrix``
+        - ``mat4``
+        - the shape's matrices
+      * - ``x3d_NormalMatrix``
+        - ``mat3``
+        - the inverse transpose of the model-view matrix's rotation
+      * - ``x3d_ViewMatrix``, ``x3d_CameraSpaceMatrix``
+        - ``mat4``
+        - world to eye, and eye to world
+      * - ``x3d_Viewport``
+        - ``ivec4``
+        - x, y, width, height
+      * - ``x3d_Material``
+        - ``x3d_MaterialParameters``, ``x3d_PhysicalMaterialParameters`` or ``x3d_UnlitMaterialParameters``
+        - the appearance's material; with none, unlit white
+      * - ``x3d_LightSource[x3d_MaxLights]``
+        - ``x3d_LightSourceParameters``
+        - the lights lighting the shape, in eye space; a slot with none is
+          ``type == x3d_NoneLight``
+      * - ``x3d_Texture2D[i]``, ``x3d_TextureCube[i]``, ``x3d_Texture3D[i]``
+        - ``sampler2D``, ``samplerCube``, ``sampler3D``
+        - the appearance's textures, in order (``x3d_MaxTextures`` is 4)
+      * - ``x3d_TextureMatrix[i]``
+        - ``mat4``
+        - each texture's transform
+
+   ``x3d_LightSourceParameters`` has ``int type`` (``x3d_DirectionalLight``,
+   ``x3d_PointLight``, ``x3d_SpotLight``), ``vec3 color``, ``float
+   intensity``, ``float ambientIntensity``, ``vec3 attenuation``, ``vec3
+   location``, ``vec3 direction``, ``float radius`` (-1 for a directional
+   light), ``float beamWidth``, ``float cutOffAngle`` (radians) and ``mat3
+   matrix``, which turns an eye-space vector into the light's own space,
+   where its radius is measured. ``x3d_MaterialParameters`` has
+   ``ambientIntensity``, ``diffuseColor``, ``specularColor``,
+   ``emissiveColor``, ``shininess``, ``occlusionStrength``, ``normalScale``
+   and ``transparency``; the physical one ``baseColor``, ``metallic`` and
+   ``roughness`` in place of the first four. The engine defines a structure
+   for a part that names it and does not define it, after the part's
+   ``#version``, with ``x3d_MaxLights`` (the renderer's light count),
+   ``x3d_MaxTextures`` and the light type numbers.
+
+   The engine's own input names (``aPosition``, ``aNormal``, ...,
+   :ref:`fixed-attribute-locations`) are bound as well.
+
+Vertex attributes
+   The ``attrib`` nodes of an ``IndexedFaceSet``, the triangle and quad sets
+   and an ``ElevationGrid`` are vertex inputs of their ``name``: a
+   ``FloatVertexAttribute`` of 1 to 4 ``numComponents`` a ``float`` to
+   ``vec4``, a ``Matrix3VertexAttribute`` a ``mat3`` and a
+   ``Matrix4VertexAttribute`` a ``mat4``. They hold one value for each
+   coordinate and are indexed as the coordinates are; one with fewer values
+   is left out and reported. They are read at the locations the engine's own
+   arrays leave free: 15 and above, then 5 to 10 and 14, which the engine's
+   programs read only while drawing instances. A driver with 16 attribute
+   locations has eight for them, a matrix taking a run of three or four; an
+   attribute that does not fit is left out.
+
+GLSL 1.x
+   A part with no ``#version``, or 1.00 to 1.30, is translated for a 3.30
+   core context: ``attribute`` and ``varying`` become ``in`` and ``out``;
+   ``texture2D`` and its relatives ``texture``; ``ftransform()``,
+   ``gl_Vertex``, ``gl_Normal``, ``gl_Color``, ``gl_MultiTexCoord0`` and the
+   built-in matrices (with their ``Inverse`` and ``Transpose`` forms) the X3D
+   names above; ``gl_TexCoord[]``, ``gl_FrontColor`` and ``gl_FogFragCoord``
+   outputs the next stage reads; ``gl_FragColor`` and ``gl_FragData[0]`` the
+   output at location 0; and ``gl_LightSource[]``, ``gl_FrontMaterial``,
+   ``gl_LightModel`` and ``gl_FrontLightProduct[]`` structures of the same
+   members the engine fills from the same lights and material. An identifier
+   3.30 reserves -- ``texture``, ``sample``, ``flat``, ... -- is renamed, and
+   a field of its name sets the renamed uniform. An ``#version 300 es`` part
+   is compiled as 3.30. A built-in with no translation fails to compile, and
+   the shader is passed over. GLSL 1.x geometry stages
+   (``GL_EXT_geometry_shader4``) are not translated.
+
+The compatibility profile
+   In a :doc:`compatibility profile <profiles>` a shader whose parts are all
+   GLSL 1.x runs as it is written, its built-ins reading the matrices,
+   lights, material and arrays the fixed-function pass has set; its fields
+   and texture fields are set as above. A shader using X3D's names is not
+   selected there, and the shape is drawn with its material.
+
+What a shader leaves alone
+   As 31.2.3.3 allows, the engine knows the shape's geometry as the document
+   gives it: its bounds, collisions and shadows are those of the undisplaced
+   geometry. The fragment stage writes the shape's object id beside its
+   colour, so picking finds the shape where it is drawn. Fog is not applied
+   (I.3.2), and the shape is blended and sorted by its material's
+   transparency.
+
 Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
 - ``CoordinateDouble`` is kept and not drawn.
-- ``FogCoordinate`` and the ``attrib`` vertex attributes are kept and not
-  drawn.
+- ``FogCoordinate`` is kept and not drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
 

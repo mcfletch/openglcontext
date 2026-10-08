@@ -246,6 +246,11 @@ OpenGLContext/
 │   │                 # sky-and-cube background with texture-node sides
 │   ├── texgen.py     # X3D's TextureCoordinateGenerator as the vertex
 │   │                 # shader's texture-coordinate mode -- no GL
+│   ├── x3dshaders.py # X3D's ComposedShader, ProgramShader, PackagedShader:
+│   │                 # an Appearance's shaders, linked and drawn with X3D's
+│   │                 # bindings -- docs/x3d.rst#x3d-shaders
+│   ├── x3dglsl.py    # ...and their text, values and attribute places:
+│   │                 # GLSL 1.x translated, Table I.3 -- no GL
 │   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
 │   │                 # drawn as the PBRMesh their fields build -- docs/x3d.rst
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material
