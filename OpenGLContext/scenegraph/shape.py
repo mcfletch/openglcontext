@@ -171,6 +171,14 @@ class Shape(basenodes.Shape):
         if hasattr(shader_program, 'set_fill_style'):
             shader_program.set_fill_style(self.fillStyle())
 
+        if self.appearance and getattr(self.appearance, 'bringsProgram', False):
+            if not getattr(mode, 'visible', True):
+                # Selection paints every shape in its own id colour with the
+                # pass's own program; the appearance's would paint its own.
+                return self.geometry.render(textured=False, mode=mode)
+            if self._render_shader_appearance(mode):
+                return None
+            # No program of its own runs: drawn with its material and texture.
 
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
@@ -188,13 +196,6 @@ class Shape(basenodes.Shape):
                 return
             self._render_pbr(mode, shader_program, back=False)
             return
-
-        if self.appearance and getattr(self.appearance, 'bringsProgram', False):
-            if getattr(mode, 'visible', True):
-                return self._render_shader_appearance(mode)
-            # Selection paints every shape in its own id colour with the pass's
-            # own program; the appearance's shader would paint whatever it likes.
-            return self.geometry.render(textured=False, mode=mode)
 
         # Skip material/texture setup during selection rendering (mode.visible=False)
         # Selection uses solid colors with unlit shader, not materials
@@ -264,34 +265,42 @@ class Shape(basenodes.Shape):
                 float(getattr(self.geometry, 'wave_time', 0.0) or 0.0))
         self.geometry.render(textured=True, mode=mode)
 
-    def _render_shader_appearance(self, mode: Any) -> Any:
-        """Draw the geometry through the GLSL program the appearance carries.
+    def _render_shader_appearance(self, mode: Any) -> bool:
+        """Draw the geometry through the GLSL program the appearance brings; whether it did
 
-        A `Shader` appearance is an `Appearance` that brings its own program
-        instead of a material and a texture. The program is bound and given the
-        uniforms it names, then the geometry draws into it exactly as it would
-        into the pass's own: the vertex arrays go to the locations
-        `OpenGLContext.scenegraph.vertexsemantics` declares, and
-        `GLSLObject.compile` has bound the shader's inputs to match.
+        A `Shader` appearance carries a program instead of a material and a
+        texture; an X3D `Appearance` lists shaders, the first that runs
+        drawing in place of its material. The appearance's `drawProgram` binds
+        the program and gives it its uniforms, and answers what the geometry
+        draws into in place of the pass's programs, or None where no program
+        of its own runs. The vertex arrays go to the locations
+        `OpenGLContext.scenegraph.vertexsemantics` declares, which the
+        program's inputs are bound to.
         """
-        from OpenGLContext.passes.shaderpass import ShaderAppearanceProgram
-
         # What the pass expects bound for the shapes that follow this one; the
         # appearance's program replaces it for one draw and is put back after,
         # the same discipline the raw-GL layers follow.
         previous = mode.current_program() if hasattr(mode, 'current_program') else 0
-        _lit, _textured, _alpha, token = self.appearance.render(mode=mode)
-        if not token:
-            return
         pass_program = mode.shader_program
-        mode.shader_program = ShaderAppearanceProgram(token)
+        drawn = self.appearance.drawProgram(mode, self)
+        if drawn is None:
+            return False
+        mode.shader_program = drawn
         try:
             self.geometry.render(textured=True, mode=mode)
         finally:
             mode.shader_program = pass_program
-            self.appearance.renderPost(token, mode=mode)
+            self.appearance.releaseProgram(drawn, mode)
             if previous:
                 glUseProgram(previous)
+            # The program may have replaced the textures on the pass's units;
+            # the next shape binds its material's again.
+            forget = getattr(pass_program, 'release_coverage', None)
+            if forget is not None:
+                forget()
+            elif hasattr(pass_program, '_boundTextures'):
+                pass_program._boundTextures = None
+        return True
 
     def RenderTransparent(self, mode: Any) -> Any:
         if not self.geometry:
