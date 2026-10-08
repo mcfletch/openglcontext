@@ -7,11 +7,12 @@ viewer's up (X3D 19775-1, Navigation, Billboard).
 
 The render pass turns each Billboard once a frame, from the first view's
 camera, before the frame's paths are gathered
-(:meth:`OpenGLContext.passes._flat.FlatPass.faceBillboards`): it hands
-:meth:`Billboard.face` the eye and the up direction in the Billboard's
-parent coordinates. The rotation is held in a field the Billboard's matrices
-depend on, so the cached matrices of the paths through it are worked out
-again only when it turns.
+(:meth:`OpenGLContext.passes._flat.FlatPass.faceBillboards`, through a
+:class:`Facing`): it hands :meth:`Billboard.face` the eye and the up direction
+in the Billboard's parent coordinates. A Billboard whose camera, parent
+matrix and axis are those of the last frame is not worked out again. The
+rotation is held in a field the Billboard's matrices depend on, so the cached
+matrices of the paths through it are worked out again only when it turns.
 """
 import math
 from typing import Any, Optional
@@ -23,7 +24,7 @@ from vrml.vrml97 import basenodes, transformmatrix
 
 from OpenGLContext.scenegraph import grouping
 
-__all__ = ['Billboard', 'billboard_rotation', 'viewer_in']
+__all__ = ['Billboard', 'Facing', 'billboard_rotation', 'viewer_in']
 
 #: Where a Billboard keeps the matrices a path through it reads, in vrml's cache.
 MATRICES_KEY = 'billboard-local'
@@ -101,6 +102,51 @@ def viewer_in(parent: Any, modelview: Any) -> Optional[tuple[np.ndarray, np.ndar
     eye = np.array((0.0, 0.0, 0.0, 1.0)) @ from_eye
     up = np.array((0.0, 1.0, 0.0, 0.0)) @ from_eye
     return eye[:3] / eye[3], up[:3]
+
+
+def parent_matrix(path: Any) -> Any:
+    """The world matrix of the coordinates the Billboard at the end of `path`
+    turns in: its parent path's own, kept by the cache, where the path was
+    built from it; else the path's own with the Billboard's turn taken out"""
+    parent = getattr(path, 'parent', None)
+    if parent is not None and len(parent) == len(path) - 1:
+        return parent.transformMatrix()
+    inverse = path[-1].localMatrices().data[1]
+    world = path.transformMatrix()
+    return world if inverse is None else inverse @ world
+
+
+class Facing:
+    """Turns a frame's Billboards toward its camera -- no GL
+
+    Each frame :meth:`face` is given the Billboards' paths, outermost first,
+    and the camera's modelview. A Billboard is worked out again where the
+    camera, its parent's matrix (the cache's array, compared by identity) or
+    its axis differs from the last frame's.
+    """
+
+    def __init__(self) -> None:
+        self._seen: dict[int, tuple[Any, Any, bytes, tuple[float, ...]]] = {}
+
+    def face(self, paths: Any, modelview: Any) -> int:
+        """Turn each Billboard at the end of `paths`; how many were worked out"""
+        camera = np.asarray(modelview, float).tobytes()
+        seen: dict[int, tuple[Any, Any, bytes, tuple[float, ...]]] = {}
+        worked = 0
+        for path in paths:
+            node = path[-1]
+            parent = parent_matrix(path)
+            axis = tuple(float(value) for value in node.axisOfRotation)
+            held = self._seen.get(id(path))
+            if (held is None or held[0] is not path or held[1] is not parent
+                    or held[2] != camera or held[3] != axis):
+                viewer = viewer_in(parent, modelview)
+                if viewer is not None:
+                    node.face(*viewer)
+                worked += 1
+            seen[id(path)] = (path, parent, camera, axis)  # noqa: OGC131 the entry holds the path, so its id is not reused while kept
+        self._seen = seen
+        return worked
 
 
 class Billboard(grouping.Grouping, basenodes.Billboard):

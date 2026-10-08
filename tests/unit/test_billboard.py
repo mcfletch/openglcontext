@@ -127,3 +127,69 @@ def test_drawn_facing_the_viewer(gl_context):
 def test_a_billboard_scaled_to_nothing_is_left_unturned():
     from OpenGLContext.scenegraph.billboard import viewer_in  # noqa: PLC0415 kept with its use
     assert viewer_in(np.diag((0.0, 0.0, 0.0, 1.0)), np.identity(4)) is None
+
+
+def billboards(count, spacing=3.0):
+    """`count` Billboards each under a Transform of its own, as their paths"""
+    graph = sceneGraph()
+    paths = []
+    for index in range(count):
+        billboard = Billboard(children=[Shape(geometry=Sphere())])
+        moved = Transform(translation=(spacing * index, 0, 0), children=[billboard])
+        graph.children = list(graph.children) + [moved]
+        paths.append(nodepath.NodePath([]) + graph + moved + billboard)
+    return paths
+
+
+def camera_at(x):
+    from vrml.vrml97 import transformmatrix  # noqa: PLC0415 kept with its use
+    return transformmatrix.localMatrices(translation=(x, 0, 10))[1]
+
+
+class TestFacing:
+    """A frame's Billboards turned toward its camera: those whose camera,
+    parent or axis moved since the last frame are worked out"""
+
+    def test_each_faces_the_camera_in_its_parents_coordinates(self):
+        from OpenGLContext.scenegraph.billboard import Facing  # noqa: PLC0415 kept with its use
+        paths = billboards(3)
+        assert Facing().face(paths, camera_at(3.0)) == 3
+        for index, path in enumerate(paths):
+            expected = billboard_rotation((0, 1, 0), (3.0 - 3.0 * index, 0, 10))
+            assert path[-1].facing == pytest.approx(expected)
+
+    def test_a_still_frame_works_out_none(self):
+        from OpenGLContext.scenegraph.billboard import Facing  # noqa: PLC0415 kept with its use
+        paths, facing = billboards(4), Facing()
+        facing.face(paths, camera_at(1.0))
+        assert facing.face(paths, camera_at(1.0)) == 0
+
+    def test_a_parent_or_an_axis_that_moved_is_worked_out_again(self):
+        from OpenGLContext.scenegraph.billboard import Facing  # noqa: PLC0415 kept with its use
+        paths, facing = billboards(4), Facing()
+        facing.face(paths, camera_at(1.0))
+        paths[1][1].translation = (50, 0, 0)
+        paths[2][-1].axisOfRotation = (1, 0, 0)
+        assert facing.face(paths, camera_at(1.0)) == 2
+        assert paths[1][-1].facing == pytest.approx(
+            billboard_rotation((0, 1, 0), (-49.0, 0, 10)))
+
+    def test_a_billboard_inside_another_follows_its_turn(self):
+        from OpenGLContext.scenegraph.billboard import Facing  # noqa: PLC0415 kept with its use
+        inner = Billboard(axisOfRotation=(0, 0, 0), children=[Shape(geometry=Sphere())])
+        outer = Billboard(children=[inner])
+        graph = sceneGraph(children=[outer])
+        outer_path = nodepath.NodePath([]) + graph + outer
+        paths = [outer_path, outer_path + inner]
+        facing = Facing()
+        facing.face(paths, camera_at(4.0))
+        assert facing.face(paths, camera_at(-4.0)) == 2
+
+    def test_the_work_grows_with_the_billboards(self, check_scaling):
+        from OpenGLContext.scenegraph.billboard import Facing  # noqa: PLC0415 kept with its use
+
+        def prepare(n):
+            paths, facing = billboards(n), Facing()
+            cameras = iter(range(1000000))
+            return lambda: facing.face(paths, camera_at(float(next(cameras))))
+        check_scaling(prepare, n=50, most=5.0, measure='count')

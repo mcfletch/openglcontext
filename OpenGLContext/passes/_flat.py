@@ -1387,14 +1387,14 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         first, so a Billboard inside another is turned in its parent's new
         coordinates.
         """
-        for path in self.paths.get( billboard.Billboard, () ):
-            node = path[-1]
-            inverse = node.localMatrices().data[1]
-            world = path.transformMatrix()
-            parent = world if inverse is None else dot( inverse, world )
-            viewer = billboard.viewer_in( parent, modelview )
-            if viewer is not None:
-                node.face( *viewer )
+        paths = self.paths.get( billboard.Billboard, () )
+        if paths:
+            if self._facing is None:
+                self._facing = billboard.Facing()
+            self._facing.face( paths, modelview )
+
+    #: What turns the Billboards, holding what each was last turned for.
+    _facing: Optional[billboard.Facing] = None
 
     #: The level-of-detail nodes already reported as unable to choose a level.
     _levelsFailed: Optional['weakref.WeakSet[Any]'] = None

@@ -381,7 +381,9 @@ Binding, viewpoints and navigation
 - A ``Billboard`` is turned toward the camera of a frame's first view once a
   frame, before the frame is drawn (``FlatPass.faceBillboards``): about its
   ``axisOfRotation``, or with ``0 0 0`` facing the camera with its +Y along the
-  camera's up. Shadows are cast as it faces the camera.
+  camera's up. Shadows are cast as it faces the camera. A frame whose camera,
+  and the Billboard's parent and axis, are the last frame's leaves it as it
+  is without working it out (``billboard.Facing``).
 
 Sensors
 ~~~~~~~
