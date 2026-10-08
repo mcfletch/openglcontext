@@ -5,7 +5,9 @@ the engine's nodes are held to them and drawn.
 """
 import numpy as np
 import pytest
+from vrml import protofunctions
 from vrml.x3d import geospatial as frames
+from vrml.x3d import nodes as x3d
 
 from OpenGLContext.loaders.loader import Loader
 from OpenGLContext.scenegraph import basenodes, coordinates, nodepath
@@ -354,3 +356,24 @@ def test_a_geo_lods_centre_follows_its_fields_and_origin():
          ('origin geoCoords', lambda: setattr(origin, 'geoCoords', (0, 0, 2))),
          ('rotateYUp', lambda: setattr(origin, 'rotateYUp', True)),
          ('geoSystem', lambda: setattr(node, 'geoSystem', ['GC']))])
+
+
+def fields_of(cls):
+    """Each field's X3D type by name, the engine's own space-named fields left out"""
+    return {field.name: field.typeName() for field in protofunctions.getFields(cls)
+            if not field.name.startswith(' ')}
+
+
+@pytest.mark.parametrize('name', ['GeoCoordinate', 'GeoElevationGrid', 'GeoLOD', 'GeoLocation',
+                                  'GeoProximitySensor', 'GeoTouchSensor', 'GeoTransform',
+                                  'GeoViewpoint'])
+def test_each_geo_node_is_its_own_x3d_node(name):
+    """Its name, and its own fields: a GeoViewpoint's position is double precision"""
+    cls = getattr(basenodes, name)
+    assert cls.PROTO == name
+    assert fields_of(cls) == fields_of(x3d.CONCRETE_NODES[name])
+
+
+def test_a_geo_viewpoints_position_keeps_double_precision():
+    view = read('<GeoViewpoint position="46.533 7.9805 1450"/>').children[0]
+    assert view.position[0] == 46.533

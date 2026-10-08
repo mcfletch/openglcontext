@@ -140,6 +140,11 @@ Installing the package puts these commands on your path:
    window, a swung gold vase, a swept brass rail, a bead riding a brick
    banner and a dart flying along a curve, with a key to change the
    ``NurbsSet``'s tessellation scale. See :doc:`NURBS <nurbs>`.
+``oglc-x3d-geospatial``
+   An alpine valley placed by latitude, longitude and height: a
+   ``GeoElevationGrid`` under a ``GeoLOD`` of finer tiles, a hamlet of
+   ``GeoLocation`` huts, a balloon on a ``GeoPositionInterpolator`` and three
+   ``GeoViewpoint`` nodes, one in UTM. See :ref:`x3d-geospatial`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

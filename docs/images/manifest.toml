@@ -312,6 +312,19 @@ frames = 60
 timeout = 600
 
 [[image]]
+id = "demos/x3d_geospatial"
+out = "images/demos/x3d_geospatial.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "A green alpine valley between grey rock slopes under a pale sky, a hamlet of red-roofed huts on its floor"
+caption = "An X3D valley placed by latitude, longitude and height"
+producer = "script"
+module = "x3d_geospatial"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
 id = "demos/crowd_demo"
 out = "images/demos/crowd_demo.jpg"
 size = [1100, 680]
