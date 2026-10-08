@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
+import numpy
 from vrml.vrml97 import nodepath, nodetypes
 from vrml.cache import CACHE
 from OpenGLContext import quaternion
@@ -44,19 +45,18 @@ class _NodePath( object ):
             matrix
         )
     def quaternion( self ) -> quaternion.Quaternion:
-        """Get summary quaternion for all rotations in stack"""
-        nodes = [
-            node
-            for node in self
-            if (
-                isinstance(node, nodetypes.Transforming) and
-                hasattr( node, "orientation")
-            )
-        ]
-        q = quaternion.Quaternion()
-        for node in nodes:
-            q = q * quaternion.fromXYZR( *node.orientation )
-        return q
+        """The rotation the path's transforms turn by, with their scale taken out
+
+        Read from :meth:`transformMatrix`, so every transforming node on the
+        path counts (Transform, MatrixTransform, a turned Billboard); the
+        nearest rotation to a scaled or sheared matrix is used.
+        """
+        matrix = numpy.asarray( self.transformMatrix(), dtype='d' )[:3, :3]
+        left, _scale, right = numpy.linalg.svd( matrix )
+        rotation = left @ right
+        if numpy.linalg.det( rotation ) < 0:
+            rotation = -rotation
+        return quaternion.fromMatrix( rotation )
         
 
 class NodePath( _NodePath, nodepath.NodePath ):

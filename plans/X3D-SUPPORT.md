@@ -1807,5 +1807,12 @@ Corpus renders that differ from X_ITE by more than 10%, looked at 2026-10-08:
 - [x] Text: a document's Text with no FontStyle is SERIF, SERIF and
   TYPEWRITER are found by name where the fonts' classes are wrong, and the
   lines are `size` x `spacing` apart.
-- [ ] Viewpoint framing: StopWatch, Figure20_17a, Collision `children500`,
-  the dungeon corridors.
+- [x] Viewpoint framing, Figure20_17a: a Viewpoint under a rotated
+  Transform turned with it (`NodePath.quaternion` from the path's matrix).
+- Figure20_17a's floor shows shadows: a light in a version without the
+  `shadows` field keeps the engine's default, so a VRML97 or X3D 3 world is
+  shadowed (pyvrml97 `24ad6c5`); X_ITE draws none.
+- StopWatch and the other animated documents are captured at another time
+  than X_ITE's; `children500` is a WALK view with nothing below it, which
+  X_ITE lets fall before its capture.
+- [ ] The dungeon corridors: not yet compared.

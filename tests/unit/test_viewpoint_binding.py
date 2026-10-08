@@ -156,3 +156,50 @@ class _Path(tuple):
 
     def quaternion(self):
         return quaternion.fromXYZR(0, 1, 0, 0)
+
+
+class TestAViewpointUnderATransform:
+    """The Viewpoint's position and orientation are both taken through the
+    transforms above it (X3D 19775-1, 23.4.7)"""
+
+    def place(self, *transforms):
+        from OpenGLContext.scenegraph.nodepath import NodePath  # noqa: PLC0415 kept with its use
+        view = Viewpoint(position=(0, 0, 10), orientation=(1, 0, 0, -0.5))
+        graph = sceneGraph()
+        path = NodePath([]) + graph
+        for transform in transforms:
+            path = path + transform
+        path = path + view
+        context = FakeContext(graph)
+        Viewpoint.moveTo(view, path, context)
+        return context.platform
+
+    def looking(self, platform):
+        turned = quaternion.fromXYZR(*platform.orientation)
+        return np.asarray(turned * [0.0, 0.0, -1.0, 0.0])[:3]
+
+    def test_a_rotation_turns_where_it_looks(self, gl_context):
+        """A Viewpoint 10 out along +Z, turned a quarter about Y with its
+        Transform, stands on +X and looks back at the box at the origin"""
+        from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+        from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+        scene = Loader.loads(
+            b'<X3D version="3.3"><Scene><Transform rotation="0 1 0 1.5708">'
+            b'<Viewpoint position="0 0 10"/></Transform><Shape><Appearance>'
+            b'<Material diffuseColor="0 0 0" emissiveColor="1 0 0"/></Appearance><Box/>'
+            b'</Shape></Scene></X3D>', 'a.x3d')
+        with scene_context(scene, size=(32, 32)) as context:
+            drawn_image(context)
+            centre = drawn_image(context)[16, 16].astype(int)
+            assert context.platform.position[:3] == pytest.approx((10, 0, 0), abs=1e-4)
+        assert centre[0] > 200 and centre[1] < 40, centre
+
+    def test_a_scale_does_not_change_where_it_looks(self):
+        plain = self.place(Transform(rotation=(0, 1, 0, 0.7)))
+        scaled = self.place(Transform(rotation=(0, 1, 0, 0.7), scale=(2, 3, 2)))
+        assert self.looking(scaled) == pytest.approx(self.looking(plain), abs=1e-5)
+
+    def test_nested_rotations_compose(self):
+        platform = self.place(Transform(rotation=(0, 1, 0, 0.4)), Transform(rotation=(0, 1, 0, 0.3)))
+        alone = self.place(Transform(rotation=(0, 1, 0, 0.7)))
+        assert self.looking(platform) == pytest.approx(self.looking(alone), abs=1e-5)

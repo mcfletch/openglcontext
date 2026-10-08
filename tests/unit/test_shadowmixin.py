@@ -60,6 +60,35 @@ class TestCastsShadow:
         assert self.mixin._castsShadow(s, CAPS) is False
 
 
+class TestADocumentsLights:
+    """An X3D 4 document's lights cast shadows only where `shadows` is TRUE
+    (19775-1, 17.2.1); the engine's lights made in code, and those of a
+    version without the field, cast them by default"""
+
+    def setup_method(self):
+        self.mixin = ShadowMapMixin()
+
+    def light(self, attributes=b'', version=b'4.0'):
+        from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+        scene = Loader.loads(b'<X3D version="' + version + b'"><Scene><DirectionalLight '
+                             + attributes + b'/></Scene></X3D>', 'a.x3d')
+        return scene.children[0]
+
+    def test_one_without_shadows_casts_none(self):
+        assert self.mixin._castsShadow(self.light(), CAPS) is False
+
+    def test_a_version_without_the_field_keeps_the_engines_shadows(self):
+        """X3D 3 and VRML97 have no shadows field; their lights cast the
+        engine's shadows"""
+        assert self.mixin._castsShadow(self.light(version=b'3.3'), CAPS) is True
+
+    def test_one_with_shadows_casts_them(self):
+        assert self.mixin._castsShadow(self.light(b'shadows="true"'), CAPS) is True
+
+    def test_one_built_in_code_casts_them(self):
+        assert self.mixin._castsShadow(DirectionalLight(), CAPS) is True
+
+
 class TestWideSpotLights:
     """X3D's default SpotLight cone is a half-angle of pi/2: no one perspective
     map covers it, so a wide spot is shadowed as a point light is."""
