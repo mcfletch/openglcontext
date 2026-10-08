@@ -88,6 +88,16 @@ from OpenGLContext.scenegraph.nurbs import NurbsSurface as NurbsSurface
 from OpenGLContext.scenegraph.nurbs import NurbsToleranceSample as NurbsToleranceSample
 from OpenGLContext.scenegraph.nurbs import Polyline2D as Polyline2D
 from OpenGLContext.scenegraph.nurbs import TrimmedSurface as TrimmedSurface
+from OpenGLContext.scenegraph.nurbsinterpolators import NurbsOrientationInterpolator as NurbsOrientationInterpolator
+from OpenGLContext.scenegraph.nurbsinterpolators import NurbsPositionInterpolator as NurbsPositionInterpolator
+from OpenGLContext.scenegraph.nurbsinterpolators import NurbsSurfaceInterpolator as NurbsSurfaceInterpolator
+from OpenGLContext.scenegraph.nurbsx3d import ContourPolyline2D as ContourPolyline2D
+from OpenGLContext.scenegraph.nurbsx3d import NurbsPatchSurface as NurbsPatchSurface
+from OpenGLContext.scenegraph.nurbsx3d import NurbsSet as NurbsSet
+from OpenGLContext.scenegraph.nurbsx3d import NurbsSweptSurface as NurbsSweptSurface
+from OpenGLContext.scenegraph.nurbsx3d import NurbsSwungSurface as NurbsSwungSurface
+from OpenGLContext.scenegraph.nurbsx3d import NurbsTextureCoordinate as NurbsTextureCoordinate
+from OpenGLContext.scenegraph.nurbsx3d import NurbsTrimmedSurface as NurbsTrimmedSurface
 from OpenGLContext.scenegraph.particles import ParticleEmitter as ParticleEmitter
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial as PhysicalMaterial
 from OpenGLContext.scenegraph.pointset import PointSet as PointSet
@@ -256,6 +266,7 @@ __all__ = [
     'ComposedShader',
     'Cone',
     'Contour2D',
+    'ContourPolyline2D',
     'Coordinate',
     'CoordinateChaser',
     'CoordinateDamper',
@@ -339,8 +350,17 @@ __all__ = [
     'NurbsCurve',
     'NurbsCurve2D',
     'NurbsDomainDistanceSample',
+    'NurbsOrientationInterpolator',
+    'NurbsPatchSurface',
+    'NurbsPositionInterpolator',
+    'NurbsSet',
     'NurbsSurface',
+    'NurbsSurfaceInterpolator',
+    'NurbsSweptSurface',
+    'NurbsSwungSurface',
+    'NurbsTextureCoordinate',
     'NurbsToleranceSample',
+    'NurbsTrimmedSurface',
     'OrientationChaser',
     'OrientationDamper',
     'OrientationInterpolator',

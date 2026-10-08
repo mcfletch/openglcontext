@@ -119,6 +119,10 @@ implements these X3D nodes, by component:
 - Navigation - Billboard, Collision, LOD, NavigationInfo, OrthoViewpoint, Viewpoint,
   ViewpointGroup
 - Networking - Anchor, Inline, InlineGeometry, LoadSensor
+- NURBS - Contour2D, ContourPolyline2D, NurbsCurve, NurbsCurve2D,
+  NurbsOrientationInterpolator, NurbsPatchSurface, NurbsPositionInterpolator,
+  NurbsSet, NurbsSurfaceInterpolator, NurbsSweptSurface, NurbsSwungSurface,
+  NurbsTextureCoordinate, NurbsTrimmedSurface
 - Picking - PickableGroup
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
 - Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
@@ -182,6 +186,10 @@ the file is placed by its transforms and joined into one mesh
 materials are not used. ``smooth`` false gives each triangle its own normal.
 The file is read in the background and the geometry is empty until it
 arrives; ``load`` and ``url`` behave as on ``Inline``.
+
+The NURBS surfaces are drawn as the mesh their fields evaluate to and a
+``NurbsCurve`` as a line through it, so ``LineProperties`` style it; the
+rules each field follows are on the :doc:`NURBS page <nurbs>`.
 
 A ``StaticGroup`` draws its children as a ``Group`` does, and a ``CADFace``
 draws its ``shape``.
