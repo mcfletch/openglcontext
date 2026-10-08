@@ -207,6 +207,8 @@ OpenGLContext/
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
+│   ├── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics
+│   │                 # world, a sensor's touches, the joints -- no GL
 │   └── events.py     # Collision subscriptions: a callback per body, delivered
 │                     # once a frame, and a trigger's occupancy
 │                     # -- docs/physics.rst#physics-collisions
@@ -238,6 +240,8 @@ OpenGLContext/
 │   │                 # vrml.x3d.runtime's -- docs/x3d.rst
 │   ├── x3dsensors.py # X3D's environmental sensors told each frame what they
 │   │                 # sense: the viewer, a target, the views -- no GL
+│   ├── x3drigidbody.py  # X3D's RigidBodyCollection and CollisionSensor on the
+│   │                 # engine clock; collidables drawn where they are
 │   ├── x3dpointing.py   # X3D's pointing-device sensors told of each
 │   │                 # context's picked pointer -- no GL
 │   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the

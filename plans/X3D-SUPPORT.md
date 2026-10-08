@@ -285,7 +285,10 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     models
   - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
     `HAnimDisplacer`, `HAnimMotion`, `HAnimPose`
-  - [ ] RigidBodyPhysics: the 14 nodes on omi_physics
+  - [x] RigidBodyPhysics: the 14 nodes on omi_physics (`physics.x3drigid`, `scenegraph.x3drigidbody`); a collection a world stepped once a frame on the engine clock; collider and `set_contacts` pairs, a NULL side against the world; `CollisionSensor` contacts and intersections; the six joints and their `forceOutput`s
+    - omi_physics: compound shapes and flat-ended cylinders and cones; ball, hinge, slider, universal, two-axis hinge and motor joints from rows (compiled `solve_rows`); pair rules and `ContactParameters`; steady forces, exact rotation, per-body sleep
+    - not read: `finiteRotationAxis` (the whole turn is integrated exactly), `UniversalJoint` stop bounce and correction (X3D gives it no stops), the inertia's products off the diagonal
+    - Basic archive: the documents whose contacts pass through a `Script` (`BallBounce`, `BounceTrimesh`, `CarDemoMain`) do not collide
   - [ ] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
     `LayoutGroup`, `LayoutLayer`, `ScreenGroup`, `ScreenFontStyle`
   - [ ] Sound: the 4.0 audio graph (19 nodes) on omi_audio

@@ -161,6 +161,10 @@ from OpenGLContext.scenegraph.x3dpointing import CylinderSensor as CylinderSenso
 from OpenGLContext.scenegraph.x3dpointing import PlaneSensor as PlaneSensor
 from OpenGLContext.scenegraph.x3dpointing import SphereSensor as SphereSensor
 from OpenGLContext.scenegraph.x3dpointing import TouchSensor as TouchSensor
+from OpenGLContext.scenegraph.x3drigidbody import CollidableOffset as CollidableOffset
+from OpenGLContext.scenegraph.x3drigidbody import CollidableShape as CollidableShape
+from OpenGLContext.scenegraph.x3drigidbody import CollisionSensor as CollisionSensor
+from OpenGLContext.scenegraph.x3drigidbody import RigidBodyCollection as RigidBodyCollection
 from OpenGLContext.scenegraph.x3druntime import ColorChaser as ColorChaser
 from OpenGLContext.scenegraph.x3druntime import ColorDamper as ColorDamper
 from OpenGLContext.scenegraph.x3druntime import CoordinateChaser as CoordinateChaser
@@ -195,8 +199,13 @@ from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
 from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
+from vrml.x3d.nodes import BallJoint as BallJoint
+from vrml.x3d.nodes import CollisionCollection as CollisionCollection
+from vrml.x3d.nodes import CollisionSpace as CollisionSpace
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
+from vrml.x3d.nodes import Contact as Contact
 from vrml.x3d.nodes import CoordinateDouble as CoordinateDouble
+from vrml.x3d.nodes import DoubleAxisHingeJoint as DoubleAxisHingeJoint
 from vrml.x3d.nodes import FillProperties as FillProperties
 from vrml.x3d.nodes import LineProperties as LineProperties
 from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean
@@ -205,13 +214,18 @@ from vrml.x3d.nodes import MetadataFloat as MetadataFloat
 from vrml.x3d.nodes import MetadataInteger as MetadataInteger
 from vrml.x3d.nodes import MetadataSet as MetadataSet
 from vrml.x3d.nodes import MetadataString as MetadataString
+from vrml.x3d.nodes import MotorJoint as MotorJoint
 from vrml.x3d.nodes import MultiTextureCoordinate as MultiTextureCoordinate
 from vrml.x3d.nodes import MultiTextureTransform as MultiTextureTransform
 from vrml.x3d.nodes import PointProperties as PointProperties
+from vrml.x3d.nodes import RigidBody as RigidBody
+from vrml.x3d.nodes import SingleAxisHingeJoint as SingleAxisHingeJoint
+from vrml.x3d.nodes import SliderJoint as SliderJoint
 from vrml.x3d.nodes import Tangent as Tangent
 from vrml.x3d.nodes import TextureProperties as TextureProperties
 from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
 from vrml.x3d.nodes import TwoSidedMaterial as TwoSidedMaterial
+from vrml.x3d.nodes import UniversalJoint as UniversalJoint
 from vrml.x3d.runtime import BooleanFilter as BooleanFilter
 from vrml.x3d.runtime import BooleanSequencer as BooleanSequencer
 from vrml.x3d.runtime import BooleanToggle as BooleanToggle
@@ -238,6 +252,7 @@ __all__ = [
     'AudioEmitter',
     'AudioSource',
     'Background',
+    'BallJoint',
     'Billboard',
     'BooleanFilter',
     'BooleanSequencer',
@@ -249,13 +264,19 @@ __all__ = [
     'CADLayer',
     'CADPart',
     'Circle2D',
+    'CollidableOffset',
+    'CollidableShape',
     'Collision',
+    'CollisionCollection',
+    'CollisionSensor',
+    'CollisionSpace',
     'Color',
     'ColorChaser',
     'ColorDamper',
     'ColorInterpolator',
     'ColorRGBA',
     'Cone',
+    'Contact',
     'Contour2D',
     'ContourPolyline2D',
     'Coordinate',
@@ -269,6 +290,7 @@ __all__ = [
     'CylinderSensor',
     'DirectionalLight',
     'Disk2D',
+    'DoubleAxisHingeJoint',
     'EaseInEaseOut',
     'ElevationGrid',
     'EnvironmentLight',
@@ -328,6 +350,7 @@ __all__ = [
     'MetadataInteger',
     'MetadataSet',
     'MetadataString',
+    'MotorJoint',
     'MouseOver',
     'MovieTexture',
     'MultiTextureCoordinate',
@@ -376,6 +399,8 @@ __all__ = [
     'QuadSet',
     'ROUTE',
     'Rectangle2D',
+    'RigidBody',
+    'RigidBodyCollection',
     'ScalarChaser',
     'ScalarDamper',
     'ScalarInterpolator',
@@ -388,6 +413,8 @@ __all__ = [
     'ShaderSlice',
     'Shape',
     'SimpleBackground',
+    'SingleAxisHingeJoint',
+    'SliderJoint',
     'Sound',
     'Sphere',
     'SphereBackground',
@@ -423,6 +450,7 @@ __all__ = [
     'TriangleStripSet',
     'TrimmedSurface',
     'TwoSidedMaterial',
+    'UniversalJoint',
     'UnlitMaterial',
     'Viewpoint',
     'ViewpointGroup',
