@@ -340,7 +340,9 @@ lower left, as in VRML97 and X3D, and an ``ImageDataTexture``'s upper left, as
 in glTF, whose images the loader decodes into them. Code that makes an
 ``OpenGLContext.texture.Texture`` from a PIL image gets the same: the bottom
 row first, at t=0, or the top row with ``topFirst=True``; an array is stored
-as it is. The shader reads base colour, emissive, specular
+as it is. An image whose transparency is a single colour (a PNG's ``tRNS``
+chunk, a palette's transparent entry) is stored with an alpha channel. The
+shader reads base colour, emissive, specular
 colour, sheen colour and diffuse transmission colour as sRGB, and the other
 channels as linear. ``material.textures`` is a read-only view of the textures
 by channel name, and ``material.setTexture(channel, texture)`` sets one by

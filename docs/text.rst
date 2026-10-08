@@ -65,7 +65,14 @@ The FontStyle fields
    Any platform font name can also be given. With FontTools installed,
    OpenGLContext reads the installed font files for their face and family
    names. Matching by name is then more accurate, and the generic families
-   above are matched against the fonts actually installed.
+   above are matched against the fonts actually installed: a font whose
+   name says it is sans or monospaced is not taken for ``SERIF``, and where
+   the fonts' own classifications name nothing, a face named ``Serif``,
+   ``Sans`` or ``Mono`` is.
+
+   A ``Text`` read from a VRML97 or X3D document with no ``fontStyle`` is
+   drawn with FontStyle's defaults, family ``SERIF``; one built in code
+   without a ``fontStyle`` gets the provider's default face.
 
 ``style``
    Weight and slant. Any of these values, in any order; within each set,
@@ -84,7 +91,8 @@ The FontStyle fields
    baseline on the origin.
 
 ``spacing``
-   Multiplies the distance between baselines.
+   Multiplies the distance between baselines, which is ``size``: the lines
+   are ``size`` times ``spacing`` apart, whatever line gap the font keeps.
 
 ``topToBottom``
    Reverses the line order, as VRML97 specifies.

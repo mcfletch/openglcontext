@@ -149,7 +149,12 @@ false turns the triangles round. In these and in ``IndexedFaceSet``, a
 both renderers. A ``MultiTextureCoordinate``'s entries are
 ``TEXCOORD_0``, ``TEXCOORD_1`` and so on, and an entry's ``mapping`` label is
 what a material's ``...TextureMapping`` names. The renderer reads two
-coordinate sets. A ``LineSet`` is drawn as an ``IndexedLineSet``. Lines and
+coordinate sets. A ``LineSet`` is drawn as an ``IndexedLineSet``. A
+``Sphere``'s texture, and a ``Cylinder``'s or ``Cone``'s side, wraps
+anticlockwise seen from above from a seam at the back (-Z), with v 0 at the
+bottom; a cylinder's top cap shows its image with the image's top toward -Z,
+and the bottom caps with it toward +Z. A ``PointSet`` whose ``Color`` holds
+more values than it has points uses the first of them. Lines and
 points with no ``Color`` node are drawn unlit in the ``Material``'s
 ``emissiveColor``; in a scene built in code, a material that does not emit
 draws them in its diffuse colour instead.

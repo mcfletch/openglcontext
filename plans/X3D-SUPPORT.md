@@ -171,7 +171,11 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   re-bless them in the main checkout when this merges
   - `simplerotate`, `nehe6_multi`, `nehe6_timer`, `multitexture_1`,
     `saveimage`, `pbodemo`, `shader_instanced`, `shader_instanced_mapped`,
-    `transparentsorted`: an `ImageTexture` is drawn the right way up
+    `transparentsorted`: an `ImageTexture` is drawn the right way up;
+    `shader_instanced` and `shader_instanced_mapped` also turn each sphere's
+    facets, which start at the texture seam at the back (2026-10-08)
+  - `pygame_font`: its SERIF and TYPEWRITER faces are a serif and a
+    monospaced font; the font classes had given both as a sans face
   - `node_modify`: as `timesensorobject`, below
   - `roads_demo`: its LINEAR Fog fades the displayed colour, as X3D says
   - `cubeback_rot`, `cubebackgroundobject`: the teapot is drawn with its own
@@ -1800,6 +1804,8 @@ Corpus renders that differ from X_ITE by more than 10%, looked at 2026-10-08:
 - WALK documents: X_ITE drops a walking viewer to the floor at load, before
   the first frame; the engine's capture shows the viewer where the
   Viewpoint places it.
-- [ ] Text: smaller and fainter than X_ITE's in the NIST Text tests.
+- [x] Text: a document's Text with no FontStyle is SERIF, SERIF and
+  TYPEWRITER are found by name where the fonts' classes are wrong, and the
+  lines are `size` x `spacing` apart.
 - [ ] Viewpoint framing: StopWatch, Figure20_17a, Collision `children500`,
   the dungeon corridors.
