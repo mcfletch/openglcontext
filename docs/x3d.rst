@@ -128,6 +128,10 @@ implements these X3D nodes, by component:
 - Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
   Normal, PointSet, Tangent, TriangleFanSet, TriangleSet, TriangleStripSet
+- RigidBodyPhysics - BallJoint, CollidableOffset, CollidableShape,
+  CollisionCollection, CollisionSensor, CollisionSpace, Contact,
+  DoubleAxisHingeJoint, MotorJoint, RigidBody, RigidBodyCollection,
+  SingleAxisHingeJoint, SliderJoint, UniversalJoint
 - Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
   PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - AudioClip, Sound
@@ -350,6 +354,139 @@ own in the walk's world (``gltf_world.collision_groups``). As the avatar
 touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
 each enabled group around it, and ``isActive FALSE`` when the touch ends
 (``OpenGLContext.physics.x3dcollision``).
+
+.. _x3d-rigid-bodies:
+
+Rigid bodies
+~~~~~~~~~~~~
+
+The RigidBodyPhysics component runs on omi_physics (:ref:`physics-x3d`). Each
+``RigidBodyCollection`` is a world of its own, stepped once a frame on the
+engine's clock in steps of 1/120 s (1/240 s where ``preferAccuracy`` is
+true), and at most 0.25 s a frame. A capture, whose clock advances a fixed
+step a frame, steps it the same way every run.
+
+- A ``RigidBody`` moves under the collection's ``gravity`` (unless
+  ``useGlobalGravity`` is false), its ``forces`` and ``torques`` (summed,
+  applied every step), and its contacts and joints. A ``fixed`` body does not
+  move and others meet it. A disabled body is left out of the collection.
+- ``position`` and ``orientation`` place the body's origin and
+  ``centerOfMass`` is where its mass is in its own frame; the body turns
+  about its mass. ``linearVelocity`` is the velocity of the centre of mass and
+  ``angularVelocity`` is in radians a second about world axes. Each is sent
+  as it changes, and a value sent to the body sets it.
+- ``mass`` is in kilograms. An ``inertia`` left at X3D's default, the
+  identity, is worked out from the ``massDensityModel``'s geometry, or else
+  from the body's collidables, at uniform density; any other ``inertia`` is
+  used as given, its diagonal (the products of inertia are not used).
+- ``autoDamp`` takes ``linearDampingFactor`` and ``angularDampingFactor`` of
+  the velocities each 1/60 s. ``useFiniteRotation`` turns the body through the
+  whole angle of its spin each step rather than to first order;
+  ``finiteRotationAxis`` is kept and not read, since the whole turn is
+  integrated exactly.
+- ``autoDisable`` (the body's, or else the collection's) lets a body rest
+  once it has been slower than ``disableLinearSpeed`` m/s and
+  ``disableAngularSpeed`` rad/s for ``disableTime`` seconds; a resting body
+  sends nothing until something wakes it. Without it a body never rests,
+  and the scene is drawn every frame.
+- The collection's ``iterations`` are the solver's, for contacts and joints;
+  ``errorCorrection`` is the fraction of an overlap or a joint's drift taken
+  out each step; ``constantForceMix`` the softness of every contact and
+  joint; ``contactSurfaceThickness`` the overlap a resting contact keeps
+  (at least 5 mm); ``maxCorrectionSpeed`` bounds how fast an overlap is
+  corrected (-1, the default, does not).
+
+Collidables:
+
+- A ``CollidableShape`` draws its ``shape`` where its ``translation`` and
+  ``rotation`` put it. Carried by a body (in its ``geometry``) its
+  ``translation`` and ``rotation`` are the body's, set as the body moves. A
+  ``CollidableOffset`` places the collidable it holds by that collidable's
+  own ``translation`` and ``rotation``, within the body.
+- A ``Box``, ``Sphere``, ``Cylinder`` and ``Cone`` collide as themselves, the
+  cylinder and cone with flat ends. Any other geometry with triangles
+  (``IndexedFaceSet``, the triangle sets, ``ElevationGrid``, ``Extrusion``)
+  collides as its triangles where it does not move and as their convex hull
+  where it does. A ``Transform`` routed from a body's ``position_changed``
+  and ``orientation_changed`` follows it, as documents do.
+
+What collides:
+
+- The collidables of the collection's ``collider`` collide with each other
+  at every step, with that ``CollisionCollection``'s parameters.
+- The ``Contact`` nodes sent to ``set_contacts`` (from a ``CollisionSensor``,
+  or made by a program) say which pairs collide over the next frame, and
+  how. The contact points are found again at each step. A contact whose
+  ``body2`` and ``geometry2`` are both NULL (or ``body1`` and ``geometry1``)
+  is against the world: a fixed surface through its ``position``, across its
+  ``contactNormal``.
+- Nothing else collides: two bodies that neither names pass through each
+  other. A body's own collidables, and two bodies a joint holds, never
+  collide.
+- A ``CollisionCollection``'s ``appliedParameters`` say which of its fields
+  apply: ``BOUNCE`` (``bounce``, the restitution, above ``minBounceSpeed``
+  m/s), ``FRICTION_COEFFICIENT-2`` (the second of ``frictionCoefficients``
+  across the first, else the first both ways; Coulomb coefficients, so X3D's
+  default of 0 is frictionless), ``USER_FRICTION`` (a ``Contact``'s
+  ``frictionDirection``), ``SPEED-1`` and ``SPEED-2`` (``surfaceSpeed``, a
+  surface that carries what touches it), ``SLIP-1`` and ``SLIP-2``
+  (``slipFactors``), ``ERROR_REDUCTION`` and ``CONSTANT_FORCE``
+  (``softnessErrorCorrection`` and ``softnessConstantForceMix``, else the
+  collection's own).
+- A ``CollisionSpace`` groups collidables in a collection; one whose
+  ``useGeometry`` is false collides its collidables as the boxes that bound
+  them.
+
+A ``CollisionSensor`` finds the touches among its collider's collidables
+each frame, where they stand, and sends a ``Contact`` per touching point in
+``contacts`` (``position``, ``contactNormal`` from ``geometry1`` toward
+``geometry2``, ``depth``, the bodies and the collider's parameters), the
+collidables touching in ``intersections``, and ``isActive``. An empty
+``contacts`` is sent once when the touching stops.
+
+Joints hold bodies of their collection; a joint whose ``body1`` or ``body2``
+is NULL holds the other body to the world. Anchors and axes are in world
+coordinates as the bodies stand when the collection is built, and angles in
+radians from there. Each sends the outputs its ``forceOutput`` names
+(``ALL``, or the fields by name; ``NONE``, the default, sends none), each
+frame they change:
+
+- ``BallJoint`` - a shared point; ``body1AnchorPoint`` and
+  ``body2AnchorPoint`` are where each body carries it, in world coordinates.
+- ``SingleAxisHingeJoint`` - turns about ``axis``; ``minAngle`` and
+  ``maxAngle`` stop it (the default -π to π is no stop), ``stopBounce`` and
+  ``stopErrorCorrection`` say how. ``angle`` and ``angleRate``.
+- ``DoubleAxisHingeJoint`` - a steered wheel: ``axis1`` on ``body1`` (stopped
+  by ``minAngle1`` and ``maxAngle1``, equal stops locking it) and ``axis2``
+  on ``body2``, each driven at ``desiredAngularVelocity1`` and ``2`` with at
+  most ``maxTorque1`` and ``2`` newton-metres. ``suspensionForce`` and
+  ``suspensionErrorCorrection`` make the anchor a spring along ``axis1``,
+  read as force mixing and error correction over 1/60 s; a
+  ``suspensionForce`` of 0 holds it rigid. ``hinge1Angle``,
+  ``hinge1AngleRate``, ``hinge2Angle``, ``hinge2AngleRate``, the anchors and
+  ``body1Axis`` and ``body2Axis``.
+- ``SliderJoint`` - slides along ``axis``; ``separation`` is how far
+  ``body2`` has slid since the collection was built, stopped at
+  ``minSeparation`` and ``maxSeparation`` metres; ``sliderForce`` pushes the
+  bodies apart along it each step. ``separation`` and ``separationRate``.
+- ``UniversalJoint`` - ``axis1`` on ``body1`` and ``axis2`` on ``body2`` stay
+  at the angle they start at, so a spin across both is carried through. The
+  anchors and axes. Its ``stop1Bounce`` and ``stop2Bounce`` are kept and not
+  read: X3D gives the joint no stops.
+- ``MotorJoint`` - turns ``body2`` against ``body1`` by ``axis1Torque`` to
+  ``axis3Torque`` about the first ``enabledAxes`` of ``motor1Axis`` to
+  ``motor3Axis``, which ``body1`` carries. ``motor1Angle`` to ``motor3Angle``
+  are worked out where ``autoCalc`` is true and are the ``axis1Angle`` to
+  ``axis3Angle`` given otherwise; ``motor1AngleRate`` to ``motor3AngleRate``.
+
+What a collection is built from is read again whenever it changes: its
+bodies, their mass, inertia, centre of mass and collidables, the joints and
+their anchors and axes, the collider. What changes from frame to frame --
+positions and velocities sent in, forces, gravity, motors, stops and the
+collision parameters -- is read every frame. Of the Basic archive's
+examples, the ones whose contacts pass through a ``Script`` (``BallBounce``,
+``BounceTrimesh``, ``CarDemoMain``) do not collide, since scripts are not
+run; the rest simulate as written.
 
 Inline
 ~~~~~~

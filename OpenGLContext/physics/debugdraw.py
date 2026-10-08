@@ -16,6 +16,8 @@ import numpy as np
 from OpenGLContext.scenegraph import basenodes as _basenodes
 from omi_physics.body import (make_proxy, SphereProxy, BoxProxy, CapsuleProxy, ConvexProxy,
                    TriangleMeshProxy, Proxy)
+from omi_physics.body import CompoundProxy, CylinderProxy
+from omi_physics.jointrows import RowJoint
 from omi_physics import hull
 
 if TYPE_CHECKING:
@@ -216,6 +218,19 @@ class PhysicsDebugDraw:
         b = getattr(jc, 'b', None)
         if a is None or b is None:
             return
+        if isinstance(jc, RowJoint):
+            # A row joint answers where each body carries its anchor; one
+            # with no anchor (a slider) has nothing to draw on the world's side.
+            ends = []
+            for body, anchor in ((a, 'anchor_a'), (b, 'anchor_b')):
+                if body >= 0:
+                    ends.append(np.asarray(w.position[body], dtype='d'))
+                elif hasattr(jc, 'local_a'):
+                    ends.append(np.asarray(getattr(jc, anchor)(w), dtype='d'))
+                else:
+                    return
+            idx.append(self._seg(pts, cols, list(ends[0]), list(ends[1]), C_JOINT))
+            return
         pa = np.asarray(getattr(jc, 'anchor', getattr(jc, 'anchor_a', (0, 0, 0)))) \
             if a < 0 else w.position[a]
         pb = w.position[b] if b >= 0 else np.asarray(
@@ -309,6 +324,10 @@ def proxy_edges(proxy: Proxy) -> list[_Edge]:
         return _hull_edges(proxy.world)
     if isinstance(proxy, TriangleMeshProxy):
         return _mesh_edges(proxy)
+    if isinstance(proxy, CylinderProxy):
+        return _cylinder_edges(proxy)
+    if isinstance(proxy, CompoundProxy):
+        return [edge for part in proxy.parts for edge in proxy_edges(part)]
     return []
 
 
@@ -343,6 +362,19 @@ def _capsule_edges(proxy: CapsuleProxy) -> list[_Edge]:
     for d in (u, -u, v, -v):
         edges.append((proxy.p0 + d * r, proxy.p1 + d * r))
     edges += _ring(0.5 * (proxy.p0 + proxy.p1), r, u, axis)
+    return edges
+
+
+def _cylinder_edges(proxy: CylinderProxy) -> list[_Edge]:
+    """The end rings and four side lines of a cylinder; a cone's tip has no ring."""
+    u = proxy.R @ np.array([1.0, 0, 0])
+    v = proxy.R @ np.array([0, 0, 1.0])
+    edges: list[_Edge] = []
+    for centre, radius in ((proxy.bottom, proxy.radius_bottom), (proxy.top, proxy.radius_top)):
+        if radius > 0.0:
+            edges += _ring(centre, radius, u, v)
+    for d in (u, -u, v, -v):
+        edges.append((proxy.bottom + d * proxy.radius_bottom, proxy.top + d * proxy.radius_top))
     return edges
 
 
