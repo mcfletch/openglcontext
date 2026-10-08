@@ -713,6 +713,7 @@ def build_instance_groups(
     min_instances: int = 2,
     key: Callable = geometry_instance_key,
     instanceable: Optional[Callable] = None,
+    apart: Optional[Callable[[tuple], Any]] = None,
 ) -> tuple[list[InstanceGroup], list[tuple]]:
     """Partition render records into instanced groups and leftover singles.
 
@@ -728,6 +729,9 @@ def build_instance_groups(
         instanceable: predicate(node) -> bool; records whose geometry cannot be
             drawn instanced are always singles. Defaults to "everything with a
             key is instanceable".
+        apart: record -> hashable, or None; records it answers differently for
+            are never in one group (the lights a record is outside the scope
+            of, which one draw cannot vary).
 
     Returns:
         (groups, singles). Every input record appears exactly once across the two.
@@ -765,7 +769,7 @@ def build_instance_groups(
     # (from members[0]) then sets the correct winding for all of it.
     signs = winding_signs([record[1] for record, _k in batched])
     for (record, k), sign in zip(batched, signs):
-        k = (k, sign)
+        k = (k, sign) if apart is None else (k, sign, apart(record))
         if k not in buckets:
             buckets[k] = []
             order.append(k)

@@ -912,11 +912,15 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         if getattr(self, 'instancing_enabled', False):
             from OpenGLContext.passes.instancing import build_instance_groups
             key, instanceable = self.batchingFunctions()
+            # One draw has one light mask, so records the scoped lights reach
+            # differently are batched apart.
+            scopes = self.lightScopes
             groups, single_recs = build_instance_groups(
                 [rec for (_i, rec) in opaque],
                 min_instances=self.instanceMinimum(),
                 key=key,
                 instanceable=instanceable,
+                apart=(lambda record: scopes.mask(record[4])) if scopes else None,
             )
             for group in groups:
                 try:

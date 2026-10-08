@@ -144,3 +144,22 @@ def test_a_scoped_light_lights_only_its_siblings(gl_context, inside, lit):
         context.OnDraw(force=1)
         brightness = _centre(context).sum()
     assert bool(brightness > 150) == lit
+
+
+def test_shapes_batched_under_different_scoped_lights_are_each_lit(gl_context):
+    """One Shape USEd under two groups, each with its own scoped light: the
+    copies are drawn in separate batches, each lit by its own light"""
+    scene = Loader.loads(b'''<X3D version="4.0"><Scene><Viewpoint position="0 0 30"/>
+      <NavigationInfo headlight="false"/>
+      <Transform translation="-5 0 0"><DirectionalLight direction="0 0 -1"/>
+        <Transform DEF="Row"><Shape DEF="Ball"><Appearance><Material/></Appearance><Sphere/>
+          </Shape><Transform translation="0 3 0"><Shape USE="Ball"/></Transform>
+          <Transform translation="0 -3 0"><Shape USE="Ball"/></Transform></Transform></Transform>
+      <Transform translation="5 0 0"><DirectionalLight direction="0 0 -1"/>
+        <Transform USE="Row"/></Transform>
+    </Scene></X3D>''', 'scene.x3d')
+    with scene_context(scene, size=(96, 64)) as context:
+        drawn_image(context)
+        image = drawn_image(context).astype(int)
+    columns = image[:, :, 0].max(axis=0)
+    assert columns[:48].max() > 150 and columns[48:].max() > 150, columns

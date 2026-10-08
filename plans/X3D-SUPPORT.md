@@ -1819,3 +1819,12 @@ Corpus renders that differ from X_ITE by more than 10%, looked at 2026-10-08:
   X_ITE lets fall before its capture.
 - The dungeon rooms match apart from the shadows above; X_ITE's
   Figure25_12 viewer has fallen below the floor.
+- [x] Instanced batches mixed shapes under different scoped lights and ORed
+  their light masks, so a batch spanning two scopes was unlit
+  (Figure20_12); records the scoped lights reach differently are batched
+  apart (`build_instance_groups(apart=)`).
+- X3D 3.0 has no `global` field, so its DirectionalLights are scoped as in
+  VRML97. NIST's expected image for `DirectionalLight/test_on` has the
+  sphere beside the switched-off light dark, as drawn here; X_ITE and
+  Web3D's render light it, and light Figure20_12's two groups with both
+  lights.

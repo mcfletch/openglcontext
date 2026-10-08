@@ -183,3 +183,28 @@ class TestOneShapeIsKeyedOnce:
             records, min_instances=2, key=counting, instanceable=instanceable)
         assert groups == [] and len(singles) == 6
         assert len(asked) == 1
+
+
+class TestKeptApart:
+    """Records `apart` answers differently for never share a group"""
+
+    def test_records_apart_are_grouped_separately(self):
+        g, m = FakeGeometry('g'), object()
+        records = [rec(FakeShape(g, m)) for _ in range(4)]
+
+        def side(record):
+            return next(index for index, each in enumerate(records) if each is record) % 2
+        groups, singles = build_instance_groups(
+            records, min_instances=2, key=geometry_instance_key, instanceable=instanceable,
+            apart=side)
+        assert singles == []
+        assert sorted(len(group.members) for group in groups) == [2, 2]
+        for group in groups:
+            assert len({side(member) for member in group.members}) == 1
+
+    def test_without_it_they_share_one(self):
+        g, m = FakeGeometry('g'), object()
+        records = [rec(FakeShape(g, m)) for _ in range(4)]
+        groups, _singles = build_instance_groups(
+            records, min_instances=2, key=geometry_instance_key, instanceable=instanceable)
+        assert [len(group.members) for group in groups] == [4]
