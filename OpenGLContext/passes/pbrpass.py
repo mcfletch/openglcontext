@@ -203,13 +203,6 @@ def _upload_rows(location: int, rows: "tuple[float, ...]") -> None:
     glUniform4fv(location, len(rows) // 4, np.asarray(rows, np.float32))
 
 
-def _transform_rows(mapping: TextureMapping) -> "tuple[float, ...]":
-    """A mapping's transforms as the shader's vec4 rows: (a, b, c, 0) each"""
-    rows = np.zeros((len(mapping.transforms) * 2, 4), np.float32)
-    rows[:, :3] = mapping.transforms.reshape(-1, 3)
-    return tuple(float(value) for value in rows.ravel())
-
-
 #: The shader's code for each alpha mode.
 _ALPHA_MODES = {'OPAQUE': 0, 'MASK': 1, 'BLEND': 2}
 
@@ -975,7 +968,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
     def set_texture_mapping(self, mapping: TextureMapping) -> None:
         """Each material channel's texture coordinates and transform, for the next draw"""
         self._set_uniform('channelCodes', mapping.codes, self.program, _upload_codes)
-        self._set_uniform('uvTransformRows', _transform_rows(mapping), self.program,
+        self._set_uniform('uvTransformRows', mapping.rows, self.program,
                           _upload_rows)
 
     def configure_appearance(self, appearance: Any, mode: Any, geometry: Any = None,
@@ -1009,7 +1002,6 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # textures are already live; skip the re-box entirely. Identity compare is
         # safe within a frame (materials aren't mutated mid-frame) and the cache is
         # cleared each frame, so per-frame edits still take effect.
-        alpha_mode, cutoff = appearance_alpha(appearance)
         if (material is self._appearance_material
                 and appearance is self._appearance_seen
                 and self.transmission_mode == self._appearance_tmode):
@@ -1020,6 +1012,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # Static factors (base color, metallic/roughness, KHR extensions, volume)
         # come from the material's cached UBO -- one bind, no per-shape re-box.
         self.bind_material_block(material)
+        alpha_mode, cutoff = appearance_alpha(appearance)
         code = _ALPHA_MODES[alpha_mode]
         alpha = 1.0 - float(getattr(material, 'transparency', 0.0) or 0.0)
         if isinstance(source_of(material), ChannelMaterial):

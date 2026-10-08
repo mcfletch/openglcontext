@@ -68,16 +68,25 @@ class TextureMapping(NamedTuple):
     codes: "tuple[int, ...]"
     #: The transforms, `MAX_TRANSFORMS` 2x3 matrices, identity where unused.
     transforms: np.ndarray
+    #: The transforms as the shader's vec4 rows, (a, b, c, 0) each.
+    rows: "tuple[float, ...]"
+
+    @classmethod
+    def of(cls, codes: "tuple[int, ...]", transforms: np.ndarray) -> 'TextureMapping':
+        """The mapping of `codes` and `transforms`, with its rows packed"""
+        rows = np.zeros((len(transforms) * 2, 4), np.float32)
+        rows[:, :3] = transforms.reshape(-1, 3)
+        return cls(codes, transforms, tuple(float(value) for value in rows.ravel()))
 
     @property
     def key(self) -> tuple:
         """A value equal for two mappings that draw alike"""
-        return (self.codes, self.transforms.tobytes())
+        return (self.codes, self.rows)
 
 
 #: A draw with no texture coordinates to choose: every channel reads the first
 #: set, untransformed.
-IDENTITY = TextureMapping((0,) * WORDS, np.repeat(_IDENTITY[None], MAX_TRANSFORMS, axis=0))
+IDENTITY = TextureMapping.of((0,) * WORDS, np.repeat(_IDENTITY[None], MAX_TRANSFORMS, axis=0))
 
 
 def coordinate_set(geometry: Any, label: str) -> int:
@@ -298,4 +307,4 @@ def _compute(appearance: Any, geometry: Any, back: bool = False) -> TextureMappi
     table = np.repeat(_IDENTITY[None], MAX_TRANSFORMS, axis=0)
     for slot, matrix in enumerate(transforms[1:]):
         table[slot] = matrix
-    return TextureMapping(tuple(codes), table)
+    return TextureMapping.of(tuple(codes), table)
