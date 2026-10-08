@@ -673,13 +673,13 @@ class RigidSystem:
         if found is not None:
             return found
         assert self.world is not None
-        parts = collidable_parts(collidable, False, bounds)
-        if not parts:
+        shape = single_shape(collidable_parts(collidable, False, bounds))
+        if shape is None:
             return None
         world = self.world
         position, turn = pose_of(collidable)
         index = world.add_body(model.Motion(type=model.STATIC), collider=model.Collider(
-            shape=world.add_shape(single_shape(parts))),
+            shape=world.add_shape(shape)),
             position=position, orientation=turn, handle=collidable)
         self.free[collidable] = index
         self.held[index] = set(_inner_collidables(collidable))
