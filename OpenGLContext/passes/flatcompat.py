@@ -10,7 +10,7 @@ renders a given context is decided in
 :mod:`OpenGLContext.passes.renderpass`, not chosen by the caller.
 """
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Optional
 
 from . import _flat
 from OpenGLContext.move import navigationinfo
@@ -276,7 +276,7 @@ class FlatPass( _flat.FlatPass ):
                     self.renderFailed( 'opaque', node, err )
         self.endFixedClipPlanes()
     def selectRender( self, mode: Any, toRender: Sequence[Any],
-                      events: dict[Any, Any] ) -> None:
+                      events: dict[Any, Any], missed: Optional[list[Any]] = None ) -> None:
         """Legacy colour-buffer pick for the compatibility profile.
 
         Packs the id unshifted into RGB and toggles the fixed-function lighting
@@ -285,7 +285,7 @@ class FlatPass( _flat.FlatPass ):
         _flat._color_select_render(
             self, mode, toRender, events,
             id_shift=0, read_format=GL_RGB,
-            setup_fixed_function=True, require_pick_enabled=True)
+            setup_fixed_function=True, require_pick_enabled=True, missed=missed)
 
     MAX_LIGHTS = -1
 

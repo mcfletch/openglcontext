@@ -88,7 +88,7 @@ class MultiviewPassMixin( PassResources ):
                                          events: dict,
                                          missed: Optional[list] = None ) -> None: ...
         def selectRender( self, mode: Any, toRender: Sequence[Any],
-                          events: dict[Any, Any] ) -> None: ...
+                          events: dict[Any, Any], missed: Optional[list[Any]] = None ) -> None: ...
         @staticmethod
         def _dispatchPickEvent( mode: Any, event: Any, object_paths: list,
                                 x: float, y: float, depth: float,
@@ -98,6 +98,8 @@ class MultiviewPassMixin( PassResources ):
         def stackLayers( self, frames: Sequence['ViewFrame'] ) -> list['ViewFrame']: ...
         def setDrawingFrame( self, frame: 'ViewFrame' ) -> None: ...
         def placeLayouts( self, frames: Sequence['ViewFrame'] ) -> int: ...
+        frameState: Any
+        def frameGather( self ) -> 'GatheredPaths': ...
         def faceLayerBillboards( self, frames: Sequence['ViewFrame'] ) -> None: ...
         def layerMask( self, gathered: 'GatheredPaths',
                        frame: Optional['ViewFrame'] = None ) -> Any: ...
@@ -291,7 +293,7 @@ class MultiviewPassMixin( PassResources ):
         the selection render on screen in place of the frame, so every view
         draws it whether or not it has an event to resolve.
         """
-        if self.layered and self.use_shaders and not debugSelection:
+        if self.layered and not debugSelection:
             try:
                 self.selectRenderLayers( mode, events )
             finally:
@@ -339,7 +341,10 @@ class MultiviewPassMixin( PassResources ):
                     continue
                 missed: list[Any] = []
                 self.applyViewFrame( frame )
-                self.shaderSelectRenderOptimized( mode, frame.toRender, here, missed )
+                if self.use_shaders:
+                    self.shaderSelectRenderOptimized( mode, frame.toRender, here, missed )
+                else:
+                    self.selectRender( mode, frame.toRender, here, missed )
                 for key, event in here.items():
                     if not any( event is other for other in missed ):
                         del pending[key]
@@ -531,14 +536,40 @@ class MultiviewPassMixin( PassResources ):
             self.faceLayerBillboards( frames )
         elif frames:
             self.faceBillboards( frames[0].modelView )
-        # Before the walk: a placed group moves the paths through it.
-        self.placeLayouts( frames )
         self.senseEnvironment( frames )
         self.sensePicks()
         self.refreshClipPlanes()
-        # Kept for the frame: the shadow casters, each mirror view and each
-        # zone capture read the same walk.
-        gathered = self.gatherPaths()
+        active = self.activeFrame if self.activeFrame is not None else frames[0]
+        for view, viewFrames in self.framesByView( frames, active ):
+            # Before the walk: a placed group moves the paths through it, for
+            # this view's camera and rectangle. The walk is made again for a
+            # view whose placement differs from the last one's; the active
+            # view's, walked last, is kept for the frame: the shadow casters,
+            # each mirror view and each zone capture read it.
+            moved = self.placeLayouts( viewFrames )
+            if moved or self.frameState is None or self.frameState.gathered is None:
+                gathered = self.gatherPaths()
+            else:
+                gathered = self.frameGather()
+            self.cullViewFrames( viewFrames, gathered, window )
+        self.applyViewFrame( active, gl=False )
+        self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )
+        return frames
+
+    @staticmethod
+    def framesByView( frames: Sequence['ViewFrame'], active: 'ViewFrame'
+                      ) -> list[tuple[Any, list['ViewFrame']]]:
+        """``frames`` grouped by view, in draw order with the active frame's view last"""
+        grouped: dict[int, tuple[Any, list['ViewFrame']]] = {}
+        for frame in frames:
+            grouped.setdefault( id( frame.view ), ( frame.view, [] ) )[1].append( frame )
+        ordered = [ group for group in grouped.values() if group[0] is not active.view ]
+        ordered += [ group for group in grouped.values() if group[0] is active.view ]
+        return ordered
+
+    def cullViewFrames( self, frames: Sequence['ViewFrame'], gathered: Any,
+                        window: tuple[int, int] ) -> None:
+        """Cull and sort ``gathered`` for each of ``frames``, trimming its projection"""
         for frame in frames:
             self.applyViewFrame( frame, gl=False )
             # Nodes the zones hide from this view's camera are left out of its
@@ -554,10 +585,6 @@ class MultiviewPassMixin( PassResources ):
                 # The frustum stays the one the view was culled with.
                 frame.modelproj = dot( asarray( frame.modelView, 'd' ),
                                        asarray( frame.projection, 'd' ) )
-        active = self.activeFrame if self.activeFrame is not None else frames[0]
-        self.applyViewFrame( active, gl=False )
-        self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )
-        return frames
 
     @staticmethod
     def cameraFor( frame: 'ViewFrame', window: tuple[int, int] ) -> Any:

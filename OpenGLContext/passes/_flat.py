@@ -457,8 +457,13 @@ def _color_select_render(pass_obj: 'FlatPass', mode: Any, toRender: Sequence[Any
                          events: dict[Any, Any], *,
                          id_shift: int, read_format: int,
                          setup_fixed_function: bool,
-                         require_pick_enabled: bool) -> None:
+                         require_pick_enabled: bool,
+                         missed: Optional[list[Any]] = None) -> None:
     """Shared legacy colour-buffer pick.
+
+    ``missed``, where given, takes the events that hit nothing rather than
+    their being dispatched, for a layer beneath to resolve; an event that
+    hits is dispatched with the layer being drawn.
 
     Draws every renderable path in a unique colour-encoded id, reads back the id
     under each pick point and resolves it to a path. The compatibility and
@@ -480,6 +485,8 @@ def _color_select_render(pass_obj: 'FlatPass', mode: Any, toRender: Sequence[Any
     self.textured = False
 
     matrix = self.matrix
+    drawing = getattr(self, 'drawingLayer', None)
+    layer = drawing() if drawing is not None and getattr(self, 'layered', False) else None
     id_map: dict[int, Any] = {}
 
     pick_points: dict[tuple[int, int], list[Any]] = {}
@@ -526,13 +533,12 @@ def _color_select_render(pass_obj: 'FlatPass', mode: Any, toRender: Sequence[Any
             paths = id_map.get(lpixel, [])
             glReadPixels(px, py, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, depth_pixel)
             for event in event_set:
-                event.setObjectPaths([paths])
-                event.viewCoordinate = point[0], point[1], depth_pixel[0][0]
-                event.modelViewMatrix = matrix
-                event.projectionMatrix = self.projection
-                event.viewport = self.viewport
-                if hasattr(mode.context, 'ProcessEvent'):
-                    mode.context.ProcessEvent(event)
+                if missed is not None and not paths:
+                    missed.append(event)
+                    continue
+                self._dispatchPickEvent(
+                    mode, event, [paths], point[0], point[1], depth_pixel[0][0],
+                    matrix, self.projection, self.viewport, layer=layer)
     finally:
         glColor4f(1.0, 1.0, 1.0, 1.0)
         glDisable(GL_COLOR_MATERIAL)
@@ -2366,16 +2372,16 @@ class FlatPass( _FlatEffectsMixin, LayeringPassMixin, MultiviewPassMixin, ZonesM
             self.transparent = False
 
     def selectRender( self, mode: Any, toRender: Sequence[Any],
-                      events: dict[Any, Any] ) -> None:
+                      events: dict[Any, Any], missed: Optional[list[Any]] = None ) -> None:
         """Legacy colour-buffer pick fallback for the core/shader FlatPass.
 
         Packs the id shifted 12 bits into RGBA (no fixed-function lighting).
-        Shared body in :func:`_color_select_render`.
+        Shared body in :func:`_color_select_render`; ``missed`` as there.
         """
         _color_select_render(
             self, mode, toRender, events,
             id_shift=12, read_format=GL_RGBA,
-            setup_fixed_function=False, require_pick_enabled=False)
+            setup_fixed_function=False, require_pick_enabled=False, missed=missed)
 
     MAX_LIGHTS = -1
 

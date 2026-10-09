@@ -970,12 +970,13 @@ bottom first, each number once; a number naming no layer, and a layer whose
   through. Shadows are cast and received in the layer navigation drives.
 - A pick is resolved through the topmost layer whose geometry is under the
   pointer, with that layer's camera, so a ``TouchSensor`` on a panel and one
-  in the world beneath both work. A layer whose ``pickable`` is false is
-  clicked through. Where a layer above cleared the depth under a hit, the
+  in the world beneath both work, in the core and compatibility profiles.
+  A layer whose ``pickable`` is false is clicked through. Where a layer above cleared the depth under a hit, the
   hit point is measured on the shape's triangles; a shape with none (text,
   lines, points) is measured at its origin.
-- Several views (:doc:`multiview`) each draw the whole stack; the Layout
-  nodes are placed for the first view.
+- Several views (:doc:`multiview`) each draw the whole stack, and the Layout
+  nodes are placed for each view's camera and rectangle in turn: the scene
+  is walked again for each view they move in.
 
 A ``Layout`` places a rectangle in its parent's and gives the children of
 its ``LayoutGroup`` or ``LayoutLayer`` a coordinate system centred on it

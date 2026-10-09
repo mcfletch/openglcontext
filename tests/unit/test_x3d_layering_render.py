@@ -163,6 +163,26 @@ class TestLayout:
         column = [at(image, 32, y) == BLUE for y in range(64)]
         assert sum(column) == 10
 
+    def test_a_screen_group_is_placed_for_each_view(self):
+        """Four views, three orthographic along the axes and one perspective:
+        the square faces each camera, six pixels a side in every view"""
+        from OpenGLContext.context import MultiViewContext  # noqa: PLC0415 GL
+        from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+
+        class Quad(MultiViewContext):
+            def setupViews(self):
+                self.startViews(arrangement='quad', chrome=False)
+
+        scene = document('<Viewpoint position="0 0 10"/><ScreenGroup>%s</ScreenGroup>'
+                         % glowing(BLUE, '<Rectangle2D size="6 6"/>'))
+        with scene_context(scene, base=Quad, size=(128, 128)) as context:
+            for _ in range(2):
+                context.OnDraw(force=1)
+            image = drawn_image(context)
+        blue = (image[:, :, 2] > 128) & (image[:, :, 0] < 64)
+        quarters = [blue[:64, :64], blue[:64, 64:], blue[64:, :64], blue[64:, 64:]]
+        assert [int(quarter.sum()) for quarter in quarters] == [36] * 4
+
     def test_screen_text_is_its_point_size_in_pixels(self):
         text = ('<Shape><Appearance><Material diffuseColor="0 0 0" emissiveColor="1 1 1"/>'
                 '</Appearance><Text string="H"><ScreenFontStyle pointSize="30" '
@@ -179,8 +199,9 @@ class TestLayout:
 
 
 #: The ways a pick is resolved: the object-id buffer read a frame later or
-#: at once, and the selection render drawn for each pick point.
-PICKING = ['deferred', 'immediate', 'drawn']
+#: at once, the selection render drawn for each pick point, and the
+#: compatibility profile's colour-buffer selection render.
+PICKING = ['deferred', 'immediate', 'drawn', 'compatibility']
 
 
 @pytest.mark.usefixtures('gl_context')
@@ -190,7 +211,10 @@ class TestPicking:
         from OpenGLContext.events import synthetic  # noqa: PLC0415 kept with its use
         from OpenGLContext.passes import renderpass  # noqa: PLC0415 GL
         from OpenGLContext.testing.scenes import scene_context  # noqa: PLC0415 GL
-        with scene_context(scene, size=SIZE, pickAsync=picking == 'deferred') as context:
+        environment = ({'OPENGLCONTEXT_PROFILE': 'compatibility'} if picking == 'compatibility'
+                       else None)
+        with scene_context(scene, size=SIZE, pickAsync=picking == 'deferred',
+                           environment=environment) as context:
             context.OnDraw(force=1)
             renderpass.FLAT.use_mrt_selection = picking != 'drawn'
             # The immediate read is of the frame before, so the first move

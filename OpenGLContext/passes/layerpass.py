@@ -23,10 +23,11 @@ sequence of :class:`~OpenGLContext.multiview.strategy.ViewFrame`, one per
 - A layer whose ``pickable`` is false writes no object ids, so a pick passes
   through it to the layers beneath; a pick is resolved through the layer that
   drew what it hit (:func:`~OpenGLContext.multiview.layers.resolve_pick`).
-- Each frame, before the scene is walked, the ``LayoutLayer``,
+- Each frame, before the scene is walked for a view, the ``LayoutLayer``,
   ``LayoutGroup`` and ``ScreenGroup`` nodes are placed for the camera and
-  rectangle they are drawn through
-  (:func:`~OpenGLContext.scenegraph.layout.place_layouts`).
+  rectangle they are drawn through in that view
+  (:func:`~OpenGLContext.scenegraph.layout.place_layouts`); with several
+  views the scene is walked again for each view they move in.
 
 A scene with none of these draws as it would without this mixin: every
 method here answers the pass's own paths and frames unchanged.
@@ -260,7 +261,11 @@ class LayeringPassMixin:
     # -- before the walk --------------------------------------------------
     def placeLayouts(self, frames: Sequence['ViewFrame']) -> int:
         """Place the scene's LayoutLayer, LayoutGroup and ScreenGroup nodes for
-        the first view's frames; how many moved"""
+        the view of the first of `frames`; how many moved
+
+        The pass places them once for each view before culling that view's
+        frames (``MultiviewPassMixin.prepareViews``).
+        """
         paths = self.paths.get(Placed, ())
         if not paths or not frames:
             return 0

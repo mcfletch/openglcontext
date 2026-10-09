@@ -472,8 +472,11 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
       pyvrml97's builder refused a Script field holding a node the Script
       is inside (`ECMAScriptAnnexExample2`)
     - Billboards turned toward their own layer's camera
-    - not done: Layout nodes are placed for the first view only; the
-      compatibility profile resolves picks through the navigated layer
+    - [x] Layout nodes placed for each view (2026-10-09, x3d-gaps:
+      `prepareViews` places and culls a view at a time, the active view last,
+      walking again for a view whose placement moved); the compatibility
+      profile's colour selection resolves through the layers top down
+      (`_color_select_render(missed=)`, `selectRenderLayers`)
   - [x] Sound: all 21 nodes on omi_audio's processing graph (2026-10-09,
     branch x3d-sound). `scenegraph.x3dsound` makes each node's
     `omi_audio.graph` node and writes its fields; `audio.x3dgraph.SoundGraph`
