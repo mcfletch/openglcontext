@@ -183,6 +183,16 @@ class TestExpandedArrays:
         assert colors is not None and colors.shape == (6, 3)
         assert tex is not None and tex.shape == (6, 2)
 
+    def test_each_face_takes_its_colour_in_order(self):
+        """colorPerVertex FALSE with no colorIndex: face i is colour i
+        (ConformanceNist convexTRUE and 31 other documents)"""
+        ifs = _quad(color=b.Color(color=[(1, 0, 0), (0, 0, 1)]), colorPerVertex=False,
+                    coordIndex=[1, 2, 3, -1, 1, 3, 0, -1])
+        vertices, colours, _normals, _texcoords = ArrayGeometryCompiler(ifs).expandedArrays()
+        assert colours is not None
+        np.testing.assert_allclose(colours[:3], [(1, 0, 0)] * 3)
+        np.testing.assert_allclose(colours[3:], [(0, 0, 1)] * 3)
+
     def test_compile_returns_dummy_for_empty(self):
         empty = b.IndexedFaceSet(coord=b.Coordinate(point=[]), coordIndex=[])
         assert ArrayGeometryCompiler(empty).compile(mode=_mode()) is DUMMY_RENDER
@@ -239,6 +249,15 @@ class TestIndexedValueSource:
         # indices were replaced by the coord indices
         assert list(src.indices) == [0, 1, 2]
         assert src(0, 0) == ((1, 0, 0), 0)
+
+    def test_per_face_with_no_indices_takes_the_values_in_order(self):
+        """X3D 13.3.6: colorPerVertex FALSE and an empty colorIndex give the
+        i-th face the i-th colour"""
+        src = IndexedValueSource([1, 2, 3, -1, 1, 3, 0, -1], [],
+                                 [('a',), ('b',)], True, name='color')
+        assert src(0, 0) == (('a',), 0)
+        assert src(4, 1) == (('b',), 1)
+        assert src.vertexIndex(4, 1) == 1
 
     def test_per_face_uses_face_index(self):
         # perFace -> indexed by faceIndex, ignoring metaIndex.
@@ -329,6 +348,13 @@ class TestExpandedArraysDefensive:
         assert result is not None
         _va, colorArray, _na, _ta = result
         assert colorArray is None            # invalid colour -> dropped
+
+    def test_a_vertex_with_no_colour_drops_color_array(self):
+        """More faces than colours leaves a face with none: drawn uncoloured"""
+        ifs = _quad(color=b.Color(color=[(1, 0, 0)]), colorPerVertex=False,
+                    colorIndex=[0])
+        _va, colorArray, _na, _ta = ArrayGeometryCompiler(ifs).expandedArrays()
+        assert colorArray is None
 
     def test_unhashable_coord_index_reraises(self):
         # build_normalPerVertex keys vertices by coordIndex; a non-hashable
