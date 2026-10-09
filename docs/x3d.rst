@@ -907,7 +907,7 @@ Binding, viewpoints and navigation
   avatar in the world's own units. These are applied again whenever they
   change.
 - In a context with no declared modes, a document whose NavigationInfo has
-  ``WALK`` as its first type keeps its viewer on the ground
+  ``WALK`` (in capitals) as its first type keeps its viewer on the ground
   (``OpenGLContext.move.terrainfollow``), as X_ITE does. Down is the bound
   viewpoint's -Y axis. When a viewpoint is bound the viewer is put on the
   ground below it, its eye ``avatarSize[1]`` above it; after that it falls

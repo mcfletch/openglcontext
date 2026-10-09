@@ -50,9 +50,9 @@ SETTLED = 0.01
 
 
 def walking(info: Any) -> bool:
-    """Whether `info`'s first navigation type is WALK"""
+    """Whether `info`'s first navigation type is WALK, spelled as X3D spells it"""
     for value in getattr(info, 'type', ()) or ():
-        return str(value).strip().strip('"').upper() == 'WALK'
+        return str(value).strip().strip('"') == 'WALK'
     return False
 
 

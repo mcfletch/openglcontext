@@ -91,9 +91,11 @@ def test_a_viewer_not_yet_landed_is_placed_on_the_ground():
 
 
 @pytest.mark.parametrize('types, walks', [
-    (['WALK', 'ANY'], True), (['"WALK"'], True), (['walk'], True),
+    (['WALK', 'ANY'], True), (['"WALK"'], True), (['walk'], False),
     (['EXAMINE', 'WALK'], False), (['ANY', 'WALK'], False), ([], False)])
 def test_walking_is_the_first_type(types, walks):
+    """The type names are X3D's, in capitals; X_ITE takes 'walk' for none
+    (X3dForAdvancedModeling SanCarlosCathedral/originals/gen6)"""
     from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
     assert terrainfollow.walking(x3d.NavigationInfo(type=types)) is walks
 
