@@ -15,7 +15,14 @@ from OpenGLContext.passes import _flat
 from OpenGLContext.passes._flat import FlatPass
 
 _GL_NOOPS = ('glEnable', 'glDisable', 'glBlendFunc', 'glDepthMask',
-             'glDepthFunc', 'glLoadMatrixf')
+             'glDepthFunc')
+
+
+def _no_gl(monkeypatch):
+    """The drain's GL calls made no-ops, the matrix load among them"""
+    for name in _GL_NOOPS:
+        monkeypatch.setattr(_flat, name, lambda *_args, **_named: None, raising=False)
+    monkeypatch.setattr(_flat.glstate, 'load_matrix', lambda _matrix: None)
 
 
 def _bare_pass():
@@ -43,8 +50,7 @@ class TestAddTransparent:
 
 class TestDrain:
     def test_replays_each_deferred_shape_then_clears(self, monkeypatch):
-        for name in _GL_NOOPS:
-            monkeypatch.setattr(_flat, name, lambda *_args, **_named: None, raising=False)
+        _no_gl(monkeypatch)
 
         calls = []
 
@@ -63,15 +69,13 @@ class TestDrain:
         assert fp._deferredTransparent == [], "deferred list must be cleared after draining"
 
     def test_empty_drain_is_noop(self, monkeypatch):
-        for name in _GL_NOOPS:
-            monkeypatch.setattr(_flat, name, lambda *_args, **_named: None, raising=False)
+        _no_gl(monkeypatch)
         fp = _bare_pass()
         fp._renderDeferredTransparent()   # must not raise
         assert fp._deferredTransparent == []
 
     def test_one_failing_shape_does_not_abort_the_rest(self, monkeypatch):
-        for name in _GL_NOOPS:
-            monkeypatch.setattr(_flat, name, lambda *_args, **_named: None, raising=False)
+        _no_gl(monkeypatch)
 
         drawn = []
 

@@ -30,7 +30,7 @@ from vrml.x3d import nodes as x3d
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph import vertexsemantics
 from OpenGLContext.scenegraph.geometryarrays import (
-    GeometryArrays, VertexArray, report_missing_inputs,
+    GeometryArrays, NamedArray, VertexArray, bind_named, report_missing_inputs,
 )
 
 
@@ -115,6 +115,11 @@ class _MeshGPU(object):
                 # never do, and re-uploading them every frame is pure waste.
                 self.dyn[name] = buf
 
+        #: The vertex attributes a shader reads by name, each in a buffer of its own.
+        self.named = tuple(
+            NamedArray(name, VBO(values), values.shape[1], locations)
+            for name, values, locations in getattr(mesh, 'vertex_attributes', ()))
+
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
         self._bind_attributes()
@@ -157,6 +162,7 @@ class _MeshGPU(object):
             buf.bind()
             glEnableVertexAttribArray(loc)
             glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, 0, None)
+        bind_named(self.named)
 
     def _draw_elements(self, mode: Any = None) -> None:
         from OpenGLContext.multiview.strategy import draw_arrays, draw_elements
@@ -316,8 +322,14 @@ class PBRMesh(x3d.X3DGeometryNode):
                  solid: bool = True,
                  appearance: Any = None, morph_targets: Any = None,
                  skin_joints: Any = None, skin_weights: Any = None, texcoords1: Any = None,
-                 texcoords3d: Any = None, draw_mode: int = GL_TRIANGLES, **named: Any) -> None:
+                 texcoords3d: Any = None, draw_mode: int = GL_TRIANGLES,
+                 vertex_attributes: Any = (), **named: Any) -> None:
         super(PBRMesh, self).__init__(solid=solid, **named)
+        #: Vertex attributes a shader reads by name -- X3D's `attrib` nodes --
+        #: as (name, one row a vertex, locations it takes) each.
+        self.vertex_attributes: tuple[tuple[str, np.ndarray, int], ...] = tuple(
+            (str(name), np.ascontiguousarray(values, dtype=np.float32), int(locations))
+            for name, values, locations in vertex_attributes)
         # GL primitive mode (glTF primitive.mode == the GL enum): GL_TRIANGLES for the
         # common case, or GL_POINTS/GL_LINES/GL_LINE_LOOP/GL_LINE_STRIP.
         self.draw_mode = int(draw_mode)
@@ -537,8 +549,12 @@ class PBRMesh(x3d.X3DGeometryNode):
         self._apply_deform()
 
     def _apply_deform(self) -> None:
-        """Recompute positions/normals/tangents = skin(morph(base))."""
-        pos, nrm, tan, uvs = self._deformed()
+        """Recompute positions/normals/tangents = skin(morph(base)).
+
+        A mesh the vertex shader skins keeps the morphed rest pose in its
+        arrays, which the shader then poses.
+        """
+        pos, nrm, tan, uvs = self._deformed(skin=not self.skin_on_gpu)
         self.positions = None if pos is None else np.ascontiguousarray(pos, dtype=np.float32)
         self.normals = None if nrm is None else np.ascontiguousarray(nrm, dtype=np.float32)
         self.tangents = tan
@@ -561,8 +577,11 @@ class PBRMesh(x3d.X3DGeometryNode):
             return self.positions
         return self._deformed()[0]
 
-    def _deformed(self) -> tuple:
-        """(positions, normals, tangents, texcoords) = surface(skin(morph(base)))."""
+    def _deformed(self, skin: bool = True) -> tuple:
+        """(positions, normals, tangents, texcoords) = surface(skin(morph(base))).
+
+        ``skin`` false leaves the skin out: what the shader is handed to pose.
+        """
         pos = None if self._base_positions is None else self._base_positions.astype(np.float64)
         nrm = None if self._base_normals is None else self._base_normals.astype(np.float64)
         tan = None if self._base_tangents is None else self._base_tangents.copy()
@@ -578,7 +597,8 @@ class PBRMesh(x3d.X3DGeometryNode):
                 if tan is not None and 'tangents' in tgt:
                     tan[:, :3] += wi * tgt['tangents']
         # 2) skin: linear blend of the per-vertex weighted joint matrices
-        if self._skin_matrices is not None and self.skin_joints is not None and pos is not None:
+        if (skin and self._skin_matrices is not None and self.skin_joints is not None
+                and pos is not None):
             mats = self._skin_matrices                      # (J,4,4) row-vector
             per_vertex = np.einsum(
                 'nk,nkij->nij', self.skin_weights, mats[self.skin_joints])  # (N,4,4)

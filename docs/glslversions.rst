@@ -87,6 +87,15 @@ shader:
 
 ``tests/shaderobjects.py`` uses it for three of its shaders.
 
+X3D shaders
+~~~~~~~~~~~
+
+A shader in an X3D document reads the engine's state through X3D's names --
+``x3d_Vertex``, ``x3d_ModelViewMatrix``, ``x3d_LightSource[i]``,
+``x3d_Material`` -- as well as the engine's own. One written for GLSL 1.10
+or 1.20, reading ``gl_Vertex``, ``gl_LightSource`` and ``gl_FragColor``, is
+translated to 330 as it is compiled. :ref:`x3d-shaders` lists both.
+
 Moving a GLSL 1.20 shader to 330
 --------------------------------
 

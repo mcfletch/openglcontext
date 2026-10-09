@@ -545,3 +545,107 @@ A model does need:
 twig-bb's ``CHARACTER-RIG.md`` is an example of such a contract, and
 ``grass-clumps/character.py`` in the OpenGL-dev workspace generates a model
 that meets it.
+
+.. _characters-hanim:
+
+X3D humanoids (HAnim)
+---------------------
+
+An X3D document's ``HAnimHumanoid`` (ISO/IEC 19774, HAnim 1 and 2) is drawn,
+skinned and animated by the engine's skinning, with no code of its own:
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.loader import Loader
+
+   scene = Loader.load('JoeKick.x3d')
+   humanoid = scene.getDEF('Joe_Kick')
+   humanoid.joint('l_shoulder').rotation = (0, 0, 1, 1.2)   # the skin follows
+   humanoid.joint('l_ankle')       # aliases and HumanoidRoot resolve too
+
+The skeleton is a hierarchy of transforms. An ``HAnimJoint`` or ``HAnimSite``
+is drawn as a ``Transform`` of its children (``center``, ``rotation``,
+``translation``, ``scale`` and ``scaleOrientation`` as a Transform reads
+them), and an ``HAnimSegment`` as a group of the shapes that make that part of
+the body. A joint's children may also hold sites and other nodes, such as the
+marker boxes some exported humanoids carry; all of them are drawn. The
+humanoid's own fields place the whole figure. Its ``joints``, ``segments`` and
+``sites`` lists name nodes the skeleton holds and draw nothing again;
+``viewpoints`` that the skeleton does not already place are drawn at the
+humanoid's origin.
+
+The skin is every shape whose ``IndexedFaceSet`` (or triangle or quad set)
+reads the humanoid's ``skinCoord``. Each is drawn as a skinned
+:class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh`
+(:mod:`OpenGLContext.scenegraph.hanim`, through
+:mod:`OpenGLContext.scenegraph.coordinatedeform`), in the vertex shader where
+the renderer skins there and on the CPU otherwise (:ref:`characters-skinning`).
+The document's points are not rewritten.
+
+- Each joint moves the points its ``skinCoordIndex`` lists by its
+  ``skinCoordWeight``, as X3D says: a point is posed at
+  ``v + sum(weight * (M v - v))``, where ``M`` is the joint's binding matrix
+  times its transform in the humanoid's coordinates. The weights need not sum
+  to one; what they leave out keeps the point where it is. An index with no
+  weight beside it moves its point wholly.
+- The renderer reads four influences a vertex, the part left at rest counting
+  as one. Where more joints reach a point, the four heaviest are kept and
+  scaled to the whole. Weights within 0.5% of one are read as one
+  (``character.hanim.WEIGHT_TOLERANCE``).
+- ``jointBindingPositions``, ``jointBindingRotations`` and
+  ``jointBindingScales`` give each joint (in ``joints`` order) a binding matrix
+  that scales, turns and then moves a point before the joint does; a joint
+  past the end of the lists binds at the identity. ``skinBindingCoords`` and
+  ``skinBindingNormals``, where they hold one value per skin point, are the
+  rest pose the joints pose instead of ``skinCoord``'s own points.
+  ``skeletalConfiguration`` is kept; every configuration is skinned by these
+  rules.
+- An ``HAnimDisplacer`` on a joint or the humanoid adds its ``displacements``
+  times its ``weight`` to the skin points its ``coordIndex`` lists, before the
+  joints pose them; one on a segment moves the points of that segment's
+  ``coord`` in the shapes reading it.
+- The skin's bounds follow the pose: the culling and the bounds of the
+  humanoid are worked out again whenever a joint or a displacer weight
+  changes, from a sphere about each joint's own points carried by the joint.
+- A skinned shape is drawn by itself, not in an instanced group.
+
+Joints are fields, so the ``OrientationInterpolator`` and
+``PositionInterpolator`` routes most HAnim documents animate with work as they
+do on a ``Transform``. Two nodes animate a humanoid themselves, polled on the
+engine's clock in each context the humanoid is drawn in:
+
+- ``HAnimMotion``, in the humanoid's ``motions`` and enabled by
+  ``motionsEnabled``, plays BVH-style data: ``joints`` names a joint for each
+  group of ``channels`` (``Xposition`` to ``Zrotation``, ``Xscale`` to
+  ``Zscale``; rotations in degrees, composed in the order listed), and
+  ``values`` holds every channel of every joint frame by frame. It plays while
+  ``enabled``, ``frameIncrement`` frames each ``frameDuration`` seconds, from
+  ``startFrame`` to ``endFrame`` (the last frame where ``endFrame`` is not after
+  ``startFrame``), again from the start where ``loop`` is true; between frames
+  the joints are interpolated. ``next`` and ``previous`` step by
+  ``frameIncrement``, and setting ``frameIndex`` moves there. ``frameIndex``,
+  ``frameCount``, ``cycleTime`` and ``elapsedTime`` are sent as it plays. A
+  group whose ``channelsEnabled`` entry is false, or named ``IGNORED``, drives
+  nothing.
+- ``HAnimPose``, in the humanoid's ``children``: ``commencePose`` or
+  ``set_startTime`` moves each joint the pose holds (by ``name``) to the pose
+  joint's translation, rotation and scale over ``transitionDuration`` seconds,
+  sending ``isActive``; ``set_fraction`` sets how far along that move the
+  joints are; ``resetAllJoints`` moves every joint back to the values it had
+  when the humanoid was first read. A pose with no joints resets them all.
+
+Names are read as the HAnim standard gives them, through the aliases X3D's
+object model lists (``l_ankle`` is ``l_talocrural``; BVH's ``HumanoidRoot`` is
+``humanoid_root``). A motion or pose whose ``loa`` is 0 to 4 moves only the
+joints the standard puts at that level of articulation or below
+(``character.hanim.joint_level``); ``-1`` moves every joint.
+``HAnimJoint.limitedRotation()`` holds a rotation within the joint's
+``llimit``, ``ulimit`` and ``limitOrientation`` (angles about the limit
+frame's X, Y and Z, an axis whose two limits are equal being free); nothing
+applies the limits by itself, since many documents leave them at zero.
+``stiffness``, ``mass``, ``centerOfMass`` and ``momentsOfInertia`` are kept.
+
+The arithmetic is :mod:`OpenGLContext.character.hanim`, which reads no
+scenegraph: ``skin_influences``, ``binding_matrices``, ``MotionChannels``,
+``motion_frame``, ``blend_values`` and ``limited_rotation`` can drive a rig of
+another origin the same way.

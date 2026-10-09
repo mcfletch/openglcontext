@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext.passes.shaderpass import configure_light_from_node
-from OpenGLContext.scenegraph.basenodes import PointLight, SpotLight
+from OpenGLContext.scenegraph.basenodes import DirectionalLight, PointLight, SpotLight
 
 
 class Recording:
@@ -60,3 +60,21 @@ def test_close_to_an_x3d_light_it_is_its_intensity(gl_context):
     """Half a metre from a light falling off as 1/d, the wall is lit as by one
     that does not fall off"""
     assert lit(b'0 1 0') == pytest.approx(lit(b'1 0 0'), abs=3)
+
+
+@pytest.mark.parametrize('kind', [SpotLight, DirectionalLight])
+def test_a_light_aimed_nowhere_is_off(kind):
+    """A direction of 0 0 0 lights nothing (JoeKick.x3d's SpotLight), rather
+    than handing the shader a direction it cannot normalise."""
+    program = Recording()
+    configure_light_from_node(program, 0, kind(direction=(0, 0, 0)), np.identity(4))
+    assert program.lights[0]['light_type'] == 'off'
+
+
+def test_a_document_with_a_light_aimed_nowhere_draws_by_its_other_lights(gl_context):
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    document = WALL.replace(b'<PointLight', b'<SpotLight direction="0 0 0"/><PointLight')
+    with scene_context(Loader.loads(document % b'1 0 0', 'a.x3d'), size=(32, 32)) as context:
+        drawn_image(context)
+        assert drawn_image(context)[16, 16].max() > 50

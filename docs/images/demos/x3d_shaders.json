@@ -1,0 +1,12 @@
+{
+  "frames": 60,
+  "git": "x3d-shaders",
+  "id": "demos/x3d_shaders",
+  "licence": "BSD-3-Clause",
+  "module": "x3d_shaders",
+  "producer": "script",
+  "size": [
+    1100,
+    680
+  ]
+}

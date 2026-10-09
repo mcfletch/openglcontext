@@ -1306,7 +1306,8 @@ class PBRPass(flatcore.FlatPass):
         :meth:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial.batchingVersion`,
         :func:`~OpenGLContext.passes.reflection.mirror_generation`, which
         moves when any shape may have become a mirror or stopped being one,
-        and the appearance's alpha mode and cutoff. A
+        the appearance's alpha mode and cutoff, and whether it brings a program
+        of its own (lists X3D shaders). A
         geometry that computes its own content key from its fields is asked
         every time. Whether content collapse is on is read once for the
         grouping.
@@ -1329,7 +1330,8 @@ class PBRPass(flatcore.FlatPass):
                          getattr(appearance, 'texture', None))
             stamps = (version() if version is not None
                       else getattr(drawn_as, 'factorVersion', 0), collapse, mirrors,
-                      appearance_alpha(appearance))
+                      appearance_alpha(appearance),
+                      bool(getattr(appearance, 'bringsProgram', False)))
             held = memo.get(shape)
             if held is not None and held[1] == stamps and all(
                     was is now for was, now in zip(held[0], made_from, strict=True)):

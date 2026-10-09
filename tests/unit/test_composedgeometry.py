@@ -64,6 +64,16 @@ class TestArrays:
         assert made.attributes['COLOR_0'].tolist() == [[1, 0, 0]] * 3 + [[0, 1, 0]] * 3
         assert len(made.attributes['POSITION']) == 6
 
+    def test_shared_points_are_their_own_sources(self):
+        made = cg.composed_arrays(SQUARE, cg.indexed_triangles([0, 1, 2, 0, 2, 3]))
+        assert made.sources.tolist() == [0, 1, 2, 3]
+
+    def test_split_corners_name_the_point_each_was_read_from(self):
+        colours = np.array([(1, 0, 0), (0, 1, 0)], 'f')
+        made = cg.composed_arrays(SQUARE, cg.indexed_triangles([0, 1, 2, 0, 2, 3]),
+                                  colors=colours, color_per_vertex=False)
+        assert made.sources.tolist() == [0, 1, 2, 0, 2, 3]
+
     def test_per_face_normals_are_flat(self):
         made = cg.composed_arrays(SQUARE, cg.indexed_triangles([0, 1, 2]),
                                   normal_per_vertex=False)

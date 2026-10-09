@@ -4,7 +4,7 @@ from typing import Any
 
 from vrml.vrml97 import nodetypes
 from vrml import node, field, protofunctions
-from OpenGLContext.scenegraph import coordinatebounded
+from OpenGLContext.scenegraph import coordinatebounded, coordinates
 from OpenGLContext import triangleutilities
 from OpenGLContext.scenegraph import polygonsort
 from OpenGLContext.scenegraph.winding import apply_winding_cull
@@ -376,7 +376,7 @@ class IndexedPolygons(
         centers = mode.cache.getData(self, key="centers")
         if centers is None:
             ## cache centers for future rendering passes...
-            ordered_points = take(self.coord.point, self.index.astype("i"), 0)
+            ordered_points = take(self._values("coord", "point"), self.index.astype("i"), 0)
             centers = triangleutilities.centers(
                 ordered_points,
                 vertexCount=self.polygonSides,
@@ -385,11 +385,8 @@ class IndexedPolygons(
             holder = mode.cache.holder(self, key="centers", data=centers)
             for name in ("polygonSides", "index", "coord"):
                 holder.depend(self, protofunctions.getField(self, name))
-            for n, attr in [
-                (self.coord, "point"),
-            ]:
-                if n:
-                    holder.depend(n, protofunctions.getField(n, attr))
+            for n, attr in coordinates.fields(self.coord):
+                holder.depend(n, protofunctions.getField(n, attr))
         assert centers is not None
 
         # get distances to the viewer
@@ -411,6 +408,13 @@ class IndexedPolygons(
         ("texCoord", "point"),
     ]
 
+    def _values(self, fieldName: str, attr: str) -> Any:
+        """The array `attr` of the node in `fieldName`; the points in the scene's coordinates"""
+        if fieldName == 'coord':
+            points = coordinates.points(self.coord)
+            return None if points is None else asarray(points, 'f')
+        return getattr(getattr(self, fieldName), attr, None)
+
     def get_vbos(self, mode: Any) -> Holder:
         """The holder carrying this node's vertex arrays for the pointer calls
 
@@ -422,7 +426,7 @@ class IndexedPolygons(
         if not vbo.get_implementation():
             vbos = Holder()
             for fieldName, attr in self.NODE_FIELDS:
-                value = getattr(getattr(self, fieldName), attr, None)
+                value = self._values(fieldName, attr)
                 if value is not None:
                     setattr(vbos, fieldName, value)
             return vbos
@@ -433,19 +437,22 @@ class IndexedPolygons(
             holder = mode.cache.holder(self, key="vbos", data=vbos)
             for fieldName, attr in self.NODE_FIELDS:
                 fieldNode = getattr(self, fieldName)
-                value = getattr(fieldNode, attr, None)
+                value = self._values(fieldName, attr)
                 if value is not None:
                     setattr(vbos, fieldName, VBO(value))
                     # TODO: this is *way* too general, as it will
                     # cause the *entire* set of VBOs to be discarded
                     # and recreated whenever *anything* changes!
-                    holder.depend(fieldNode, attr)
+                    sources = (coordinates.fields(fieldNode) if fieldName == 'coord'
+                               else [(fieldNode, attr)])
+                    for source, name in sources:
+                        holder.depend(source, name)
                     holder.depend(self, fieldName)
             holder.depend(self, "index")
             holder.depend(self, "polygonSides")
             from OpenGLContext.scenegraph.ifscompiler import surface_tangents  # noqa: PLC0415 ifscompiler imports this module
             tangents = surface_tangents(
-                getattr(self.coord, 'point', None), getattr(self.normal, 'vector', None),
+                self._values('coord', 'point'), getattr(self.normal, 'vector', None),
                 getattr(self.texCoord, 'point', None), self._triangle_index(mode))
             if tangents is not None:
                 vbos.tangent = VBO(tangents)

@@ -8,7 +8,7 @@ the pointer's ray in their own coordinates.
 """
 import numpy as np
 import pytest
-from vrml.x3d import pointing
+from vrml.x3d import geospatial, pointing
 
 from OpenGLContext.loaders.x3d import prototypes
 from OpenGLContext.move.viewplatform import ViewPlatform
@@ -16,7 +16,8 @@ from OpenGLContext.scenegraph import nodepath, x3dpointing
 from OpenGLContext.scenegraph.basenodes import Box, Group, Shape, Transform, sceneGraph
 
 
-@pytest.mark.parametrize('name', ['TouchSensor', 'PlaneSensor', 'CylinderSensor', 'SphereSensor'])
+@pytest.mark.parametrize('name', ['TouchSensor', 'PlaneSensor', 'CylinderSensor', 'SphereSensor',
+                                  'GeoTouchSensor'])
 def test_each_is_the_engines(name):
     found = prototypes()[name]
     assert issubclass(found, pointing.POINTING[name])
@@ -186,10 +187,34 @@ def test_a_documents_touch_sensor_is_clicked(gl_context):
         ):
             synthetic.dispatch(context, record)
             context.OnDraw(force=1)
-        # A pick is read back a frame or two after it is drawn.
-        for _ in range(2):
+        # A pick is read back once its fence signals: a frame or two after
+        # it is drawn on an idle machine, more on a busy one.
+        touch = scene.getDEF('T')
+        for _ in range(120):
+            if 'touchTime' in touch.__dict__:
+                break
             context.OnDraw(force=1)
-    touch = scene.getDEF('T')
     assert touch.isOver is True
     assert tuple(touch.hitPoint_changed)[2] == pytest.approx(1.5, abs=0.05)
     assert 'touchTime' in touch.__dict__
+
+
+def test_a_documents_geo_touch_sensor_sends_the_hit_in_its_geo_system(gl_context):
+    from OpenGLContext.events import synthetic  # noqa: PLC0415 kept with its use
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b'''<X3D version="4.0"><Scene>
+      <Viewpoint position="0 0 5"/>
+      <Group><Shape><Box size="3 3 3"/></Shape><GeoTouchSensor DEF="T"><GeoOrigin
+        containerField="geoOrigin" geoCoords="0 0 0"/></GeoTouchSensor></Group>
+    </Scene></X3D>''', 'scene.x3d')
+    with scene_context(scene, size=(64, 64)) as context:
+        context.OnDraw(force=1)
+        synthetic.dispatch(context, {'type': 'mousemove', 'buttons': [], 'x': 32, 'y': 32,
+                                     'pick': True})
+        for _ in range(3):
+            context.OnDraw(force=1)
+    touch = scene.getDEF('T')
+    expected = geospatial.geo_coordinates(touch, touch.hitPoint_changed)[0]
+    assert tuple(touch.hitGeoCoord_changed) == pytest.approx(tuple(expected))
+    assert tuple(touch.hitPoint_changed)[2] == pytest.approx(1.5, abs=0.05)

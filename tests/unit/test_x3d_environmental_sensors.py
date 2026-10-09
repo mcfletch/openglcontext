@@ -43,7 +43,8 @@ def test_a_turned_sensor_turns_the_viewers_pose():
         np.allclose(rotation, (0, -1, 0, math.pi / 2), atol=1e-5)
 
 
-@pytest.mark.parametrize('name', ['ProximitySensor', 'TransformSensor', 'VisibilitySensor'])
+@pytest.mark.parametrize('name', ['GeoProximitySensor', 'ProximitySensor', 'TransformSensor',
+                                  'VisibilitySensor'])
 def test_each_is_pyvrml97s(name):
     assert issubclass(prototypes()[name], sensors.SENSORS[name])
 
@@ -102,3 +103,14 @@ def test_a_proximity_sensors_route_moves_a_transform(gl_context):
       <ROUTE fromNode="P" fromField="position_changed" toNode="FOLLOW" toField="set_translation"/>''')
     drawn(scene)
     assert tuple(scene.getDEF('FOLLOW').translation) == pytest.approx((0, 0, 3))
+
+
+def test_a_geo_proximity_sensor_sees_the_viewer(gl_context):
+    scene = document(b'''<GeoViewpoint position="0 0 100"><GeoOrigin DEF="O"
+        containerField="geoOrigin" geoCoords="0 0 0"/></GeoViewpoint>
+      <GeoProximitySensor DEF="P" geoCenter="0 0 98" size="10 10 10"><GeoOrigin USE="O"
+        containerField="geoOrigin"/></GeoProximitySensor>''')
+    drawn(scene)
+    sensor = scene.getDEF('P')
+    assert sensor.isActive is True
+    assert tuple(sensor.geoCoord_changed) == pytest.approx((0, 0, 100), abs=1e-3)

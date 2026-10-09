@@ -38,6 +38,7 @@ from typing import Any, NamedTuple, Optional
 import numpy as np
 from numpy.typing import ArrayLike
 
+from OpenGLContext.scenegraph import coordinates
 from OpenGLContext.scenegraph.reflector import WATER, WATER_DISTORTION, PlanarReflector
 
 log = logging.getLogger(__name__)
@@ -275,7 +276,8 @@ def _geometry_points(geometry: Any) -> tuple[Any, Any, bool]:
     """A geometry's vertex positions, what its faces are indexed by, and
     whether those are polygons.
 
-    ``positions`` and its triangles' ``indices`` for a mesh, ``coord.point``
+    ``positions`` and its triangles' ``indices`` for a mesh, the ``coord``
+    node's points in the scene (:mod:`~OpenGLContext.scenegraph.coordinates`)
     and the ``coordIndex`` polygons for an ``IndexedFaceSet``, and
     ``(None, None, False)`` for neither.
     """
@@ -283,8 +285,7 @@ def _geometry_points(geometry: Any) -> tuple[Any, Any, bool]:
     if positions is not None and len(positions):
         indices = getattr(geometry, 'indices', None)
         return positions, (indices if indices is not None and len(indices) else None), False
-    coord = getattr(geometry, 'coord', None)
-    points = getattr(coord, 'point', None)
+    points = coordinates.points(getattr(geometry, 'coord', None))
     if points is None or not len(points):
         return None, None, False
     return points, getattr(geometry, 'coordIndex', None), True

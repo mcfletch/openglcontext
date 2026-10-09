@@ -11,6 +11,7 @@ from typing import Any
 
 from . import _flat
 from OpenGLContext.move import navigationinfo
+from OpenGLContext.passes import glstate
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot, allclose
@@ -112,7 +113,7 @@ class FlatPass( _flat.FlatPass ):
         super( FlatPass, self ).applyViewFrame( frame, gl )
         if gl:
             glMatrixMode( GL_PROJECTION )
-            glLoadMatrixf( self.getProjection() )
+            glstate.load_matrix( self.getProjection() )
             glMatrixMode( GL_MODELVIEW )
             glLoadIdentity()
 
@@ -190,7 +191,7 @@ class FlatPass( _flat.FlatPass ):
             localMatrix = dot(tmatrix,matrix)
             self.matrix = localMatrix
             self.renderPath = path
-            glLoadMatrixf( localMatrix )
+            glstate.load_matrix( localMatrix )
 
             path[-1].Light( GL_LIGHT0+bound, mode=self )
             bound += 1
@@ -199,7 +200,7 @@ class FlatPass( _flat.FlatPass ):
         if self.hasHeadlight( bound ):
             from OpenGLContext.scenegraph import light
             l = light.DirectionalLight( direction = (0,0,-1.0))
-            glLoadMatrixf( matrix )
+            glstate.load_matrix( matrix )
             l.Light( GL_LIGHT0 + bound, mode = self )
         self.matrix = matrix
     
@@ -212,7 +213,7 @@ class FlatPass( _flat.FlatPass ):
                 self.matrix = mvmatrix
                 self.renderPath = path
                 glMatrixMode(GL_MODELVIEW)
-                glLoadMatrixf( mvmatrix )
+                glstate.load_matrix( mvmatrix )
                 try:
                     node.Render( mode = self )
                     if debugFrustum:
@@ -247,6 +248,6 @@ class FlatPass( _flat.FlatPass ):
         """Set our view platform"""
         self.viewPlatform = vp 
         self.projection = vp.viewMatrix().astype('f')
-        self.modelView = vp.modelMatrix().astype('f')
+        self.modelView = vp.modelMatrix().astype('d')
         self.modelproj = dot( self.modelView, self.projection )
         self.matrix = None 

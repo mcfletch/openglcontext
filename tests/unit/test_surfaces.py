@@ -332,3 +332,13 @@ def test_placing_agrees_with_a_transform_turning_it():
     expected = (np.c_[block.positions, np.ones(len(block.positions))] @ matrix)[:, :3]
     placed = surfaces.placed(block, (1.0, -2.0, 0.5), rotation)
     assert np.allclose(placed.positions, expected, atol=1e-5)
+
+
+def test_a_normal_map_of_a_ramp_unwrapped_leans_the_same_at_its_edges():
+    ramp = np.tile(np.arange(8, dtype='d'), (8, 1))       # rising to the east
+    unwrapped = surfaces.normal_map(ramp, 1.0, wrap=False)
+    assert np.allclose(unwrapped[:, 0], unwrapped[:, 4])
+    assert np.allclose(unwrapped[:, -1], unwrapped[:, 4])
+    assert unwrapped[0, 4, 0] < 0.5                        # leans west, away from the rise
+    wrapped = surfaces.normal_map(ramp, 1.0)
+    assert not np.allclose(wrapped[:, 0], wrapped[:, 4])

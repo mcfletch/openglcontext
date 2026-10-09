@@ -527,6 +527,17 @@ class GLSLShader(shaders.GLSLShader):
         return True
 
 
+def bind_engine_attributes(program: Any) -> None:
+    """Bind the engine's vertex input names to their locations in `program`, before it links
+
+    ``aPosition``, ``aNormal`` and the rest, at the locations
+    :mod:`OpenGLContext.scenegraph.vertexsemantics` declares, which is where
+    every geometry node writes its arrays.
+    """
+    for entry in vertexsemantics.SEMANTICS:
+        glBindAttribLocation(program, entry.location, as_8_bit(entry.attribute))
+
+
 class ShaderInput(node.Node):
     """Which of the engine's vertex arrays one of a shader's inputs reads.
 
@@ -691,8 +702,7 @@ class GLSLObject(shaders.GLSLObject):
         (GLSL 3.30 4.3.8.2), so a shader that states its own locations keeps
         them.
         """
-        for entry in vertexsemantics.SEMANTICS:
-            glBindAttribLocation(program, entry.location, as_8_bit(entry.attribute))
+        bind_engine_attributes(program)
         for declared in self.attributes:
             name = as_str(declared.name)
             if not name:
@@ -797,6 +807,22 @@ class Shader(shaders.Shader):
         if self.current:
             return self.current.renderPost(textureToken, mode)
         return None
+
+    def drawProgram(self, mode: Any, shape: Any) -> Any:
+        """The program a shape is drawn with, bound and given its uniforms
+
+        A :class:`~OpenGLContext.passes.shaderpass.ShaderAppearanceProgram`
+        the geometry draws into, or None while the program is not linked.
+        """
+        from OpenGLContext.passes.shaderpass import ShaderAppearanceProgram
+        _lit, _textured, _alpha, token = self.render(mode)
+        if not token:
+            return None
+        return ShaderAppearanceProgram(token)
+
+    def releaseProgram(self, drawn: Any, mode: Any) -> None:
+        """Undo what :meth:`drawProgram` bound for its shape"""
+        self.renderPost(drawn.program, mode)
 
     def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""

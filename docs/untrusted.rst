@@ -185,6 +185,12 @@ Rules for each loader
        ``baseURI`` through the ``Resolver``. The *top-level* document a user chose
        is not restricted in where it comes from, because the user asked for it,
        but it is still size-capped.
+   * - :doc:`X3D <x3d>` (``loaders/x3d.py``) ``EXTERNPROTO``
+     - Each URL an ``ExternProtoDeclare`` names is resolved and read through a
+       ``Resolver`` built from the document's own location
+       (``loaders.x3d.ContainedPrototypes``), and so is each file those name,
+       eight files deep at most. A URL the resolver refuses is logged and the
+       next one tried; the prototype's instances are then empty.
    * - Wavefront OBJ (``loaders/obj.py``)
      - ``mtllib`` and texture references go through the same ``Loader``, so they
        are restricted to the model's directory.

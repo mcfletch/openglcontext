@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext.scenegraph import boundingvolume
+from OpenGLContext.scenegraph.grouping import of_types
 from pydispatch import dispatcher
 SWITCH_CHANGE_SIGNAL = 'switch-choice-change'
 #: Sent by a node whose `renderedChildren` have been replaced wholesale (an
@@ -63,7 +64,7 @@ class Switch(basenodes.Switch):
             return []
         else:
             node = self.choice[self.whichChoice]
-            if isinstance( node, types):
+            if of_types( node, types ):
                 return [node]
             return []
     def boundingVolume( self, mode: Any ) -> Any:

@@ -19,7 +19,9 @@ The first `TextureCoordinate3D` or `TextureCoordinate4D` entry is the mesh's
 it is no 2D set. A `TextureCoordinateGenerator` makes the first set in the
 vertex shader, and a later set in the fragment shader where a
 `MultiTexture` layer reads it (:mod:`~OpenGLContext.scenegraph.texturelayers`).
-`FogCoordinate` and the `attrib` vertex attributes are kept and not drawn.
+The `attrib` vertex attributes, one per coordinate, are drawn with the mesh
+for a shader to read by name (:mod:`~OpenGLContext.scenegraph.x3dshaders`).
+`FogCoordinate` is kept and not drawn.
 """
 from __future__ import annotations
 
@@ -31,13 +33,18 @@ import numpy as np
 from vrml import cache, protofunctions
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.scenegraph import boundingvolume, composedgeometry, texgen
+from OpenGLContext.scenegraph import (
+    boundingvolume, composedgeometry, coordinatedeform, texgen, x3dglsl,
+)
+from OpenGLContext.scenegraph.coordinates import fields as point_fields
+from OpenGLContext.scenegraph.coordinates import points as scene_points
 from OpenGLContext.scenegraph.texturemapping import label_set
 
 log = logging.getLogger(__name__)
 
-__all__ = ['DRAWN_KEY', 'DrawnAs', 'ElevationGrid', 'IndexedQuadSet', 'IndexedTriangleFanSet',
-           'IndexedTriangleSet', 'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
+__all__ = ['DRAWN_KEY', 'DrawnAs', 'depend_on_fields', 'ElevationGrid', 'GridDrawn',
+           'IndexedQuadSet', 'IndexedTriangleFanSet', 'IndexedTriangleSet',
+           'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
            'MeshGeometry', 'polylines', 'QuadSet',
            'TriangleFanSet', 'TriangleSet', 'TriangleStripSet']
 
@@ -64,13 +71,17 @@ def _sources(target: Any) -> Iterator[Any]:
             yield child
             if isinstance(child, x3d.MultiTextureCoordinate):
                 yield from (entry for entry in child.texCoord if entry)
+    yield from (entry for entry in getattr(target, 'attrib', None) or () if entry)
 
 
-def _depend_on_fields(holder: Any, target: Any) -> None:
+def depend_on_fields(holder: Any, target: Any) -> None:
+    """Make `holder` depend on every field of `target` and of the nodes its arrays are read from"""
     for source in _sources(target):
         for declared in protofunctions.getFields(source):
             if not declared.name.startswith(' '):
                 holder.depend(source, declared)
+    for source, name in point_fields(getattr(target, 'coord', None)):
+        holder.depend(source, name)
 
 
 def _values(child: Any, name: str) -> Any:
@@ -152,16 +163,19 @@ class MeshDrawn:
                     % arrays.dropped)
         for name in arrays.short:
             _report(self, 'has fewer %s values than it indexes; they are left out' % name)
+        for name in arrays.short_attributes:
+            _report(self, 'has fewer %s values than coordinates; the rest read as zero' % name)
         attributes = arrays.attributes
         if 'TANGENT' not in attributes and 'TEXCOORD_0' in attributes:
             attributes['TANGENT'] = estimate_tangents(
                 attributes['POSITION'], attributes['NORMAL'], attributes['TEXCOORD_0'],
                 arrays.indices)
-        return mesh_from_primitive(arrays, solid=solid)
+        return mesh_from_primitive(arrays, solid=solid,
+                                   vertex_attributes=arrays.vertex_attributes)
 
     def dependOn(self, holder: Any) -> None:
         """Make `holder` depend on every field the mesh is built from"""
-        _depend_on_fields(holder, self)
+        depend_on_fields(holder, self)
 
     def mesh(self) -> Optional[Any]:
         """The mesh drawn for this set, kept in vrml's cache under :data:`MESH_KEY`"""
@@ -180,6 +194,9 @@ class MeshDrawn:
     def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
                transparent: int = 0, mode: Any = None) -> int:
         """Draw the mesh, in whichever profile is in use"""
+        deformer = coordinatedeform.deformer_for(self)
+        if deformer is not None:
+            return deformer.render(self, visible, lit, textured, transparent, mode)
         found = self.mesh()
         if found is None:
             return 0
@@ -187,7 +204,12 @@ class MeshDrawn:
                                 transparent=transparent, mode=mode))
 
     def depthDraw(self, mode: Any) -> bool:
-        """Draw the mesh's positions into a depth map, as `PBRMesh.depthDraw` does"""
+        """Draw the mesh's positions into a depth map, as `PBRMesh.depthDraw` does
+
+        False for a deformed set, which is drawn by :meth:`render`.
+        """
+        if coordinatedeform.deformer_for(self) is not None:
+            return False
         found = self.mesh()
         return True if found is None else bool(found.depthDraw(mode))
 
@@ -197,6 +219,9 @@ class MeshDrawn:
         Kept until a field the mesh is built from is set, so a shape's
         bounds, which depend on this volume, follow its geometry.
         """
+        deformer = coordinatedeform.deformer_for(self)
+        if deformer is not None:
+            return deformer.boundingVolume(self, mode)
         current = boundingvolume.getCachedVolume(self)
         if current is not None:
             return current
@@ -226,10 +251,18 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
 
     def buildMesh(self) -> Optional[Any]:
         """The mesh of the set's triangles, or None for a set with no coordinates"""
-        points = _values(self.coord, 'point')
+        arrays = self.composedArrays()
+        return None if arrays is None else self.meshFrom(arrays, solid=bool(self.solid))
+
+    def composedArrays(self) -> Optional[composedgeometry.ComposedArrays]:
+        """The set's arrays, naming the coordinate each vertex was read from
+
+        None for a set with no coordinates.
+        """
+        points = scene_points(self.coord)
         if points is None or not len(points):
             return None
-        return self.meshFrom(composedgeometry.composed_arrays(
+        return composedgeometry.composed_arrays(
             points, self.triangles(), ccw=bool(self.ccw),
             normals=self.perFace(_values(self.normal, 'vector'), bool(self.normalPerVertex)),
             normal_per_vertex=bool(self.normalPerVertex),
@@ -237,28 +270,47 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
             color_per_vertex=bool(self.colorPerVertex),
             texcoords=self.coordinates() or [composedgeometry.default_texcoords(points)],
             tangents=_values(self.tangent, 'vector'),
-            volume_texcoords=self.volumeCoordinates()),
-            solid=bool(self.solid))
+            volume_texcoords=self.volumeCoordinates(),
+            vertex_attributes=x3dglsl.vertex_attributes(self.attrib))
 
 
-class ElevationGrid(MeshDrawn, x3d.ElevationGrid):
+class GridDrawn(MeshDrawn):
     """A grid of heights, `xDimension` across and `zDimension` deep
 
     Colours and normals are one per point, or one per quad where
     `colorPerVertex`/`normalPerVertex` is false. Normals not given are
     smoothed across folds within `creaseAngle`. Without a `texCoord`, the
-    texture spans the grid once.
+    texture spans the grid once. A subclass gives the points
+    (:meth:`gridPoints`).
     """
+
+    #: Whether rows run toward -Z where columns run toward +X, so a triangle
+    #: counter-clockwise from above is clockwise in the grid's own order.
+    MIRRORED = False
+
+    xDimension: int
+    zDimension: int
+    height: Any
+    ccw: bool
+    solid: bool
+    creaseAngle: float
+    color: Any
+    colorPerVertex: bool
+    normal: Any
+    normalPerVertex: bool
+
+    def gridPoints(self, across: int, deep: int) -> np.ndarray:
+        """The grid's points, (across * deep, 3), row by row"""
+        raise NotImplementedError('%s must give its points' % type(self).__name__)
 
     def buildMesh(self) -> Optional[Any]:
         """The mesh of the grid, or None for one smaller than 2 by 2 or short of heights"""
         across, deep = int(self.xDimension), int(self.zDimension)
-        heights = np.asarray(self.height, dtype=np.float32).ravel()
         if across < 2 or deep < 2:
             return None
-        if len(heights) < across * deep:
+        if len(self.height) < across * deep:
             _report(self, 'has %d heights for %d points; it is not drawn'
-                    % (len(heights), across * deep))
+                    % (len(self.height), across * deep))
             return None
         colors = _values(self.color, 'color')
         normals = _values(self.normal, 'vector')
@@ -268,20 +320,33 @@ class ElevationGrid(MeshDrawn, x3d.ElevationGrid):
             normals = composedgeometry.per_quad(normals)
         coordinates = self.coordinates() or [composedgeometry.grid_texcoords(across, deep)]
         return self.meshFrom(composedgeometry.composed_arrays(
-            composedgeometry.grid_points(heights, across, deep, self.xSpacing, self.zSpacing),
-            composedgeometry.grid_triangles(across, deep), ccw=bool(self.ccw),
+            self.gridPoints(across, deep),
+            composedgeometry.grid_triangles(across, deep), ccw=bool(self.ccw) != self.MIRRORED,
             normals=normals, normal_per_vertex=bool(self.normalPerVertex),
             colors=colors, color_per_vertex=bool(self.colorPerVertex),
             texcoords=coordinates, tangents=_values(getattr(self, 'tangent', None), 'vector'),
             crease_angle=float(self.creaseAngle),
-            volume_texcoords=self.volumeCoordinates()), solid=bool(self.solid))
+            volume_texcoords=self.volumeCoordinates(),
+            vertex_attributes=x3dglsl.vertex_attributes(getattr(self, 'attrib', ()))),
+            solid=bool(self.solid))
+
+
+class ElevationGrid(GridDrawn, x3d.ElevationGrid):
+    """X3D's ElevationGrid: heights above the XZ plane, `xSpacing` and `zSpacing` apart"""
+
+    def gridPoints(self, across: int, deep: int) -> np.ndarray:
+        """The grid's points, (across * deep, 3), row by row"""
+        heights = np.asarray(self.height, dtype=np.float32).ravel()
+        points: np.ndarray = composedgeometry.grid_points(
+            heights, across, deep, self.xSpacing, self.zSpacing)
+        return points
 
 
 class TriangleSet(MeshGeometry, x3d.TriangleSet):
     """Triangles of the points taken three at a time"""
 
     def triangles(self) -> np.ndarray:
-        points = _values(self.coord, 'point')
+        points = scene_points(self.coord)
         return composedgeometry.triangle_set(0 if points is None else len(points))
 
 
@@ -326,7 +391,7 @@ class QuadSet(MeshGeometry, x3d.QuadSet):
     TRIANGLES_PER_FACE = 2
 
     def triangles(self) -> np.ndarray:
-        points = _values(self.coord, 'point')
+        points = scene_points(self.coord)
         return composedgeometry.quad_set(0 if points is None else len(points))
 
 

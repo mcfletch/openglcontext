@@ -6,7 +6,7 @@ from OpenGL.arrays import vbo
 from typing import Any
 from vrml import field
 from vrml.vrml97 import basenodes
-from OpenGLContext.scenegraph import coordinatebounded, drawproperties
+from OpenGLContext.scenegraph import coordinatebounded, coordinates, drawproperties
 from OpenGLContext.scenegraph.vertexsemantics import (
     LOC_POSITION, LOC_COLOR,
 )
@@ -73,7 +73,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         """
         if not self.hasPointColours():
             return None
-        count = len(self.coord.point)
+        count = len(coordinates.points(self.coord))
         return np.asarray(self.color.color, dtype='f').reshape(-1, 3)[:count]
 
     def hasPointColours(self) -> bool:
@@ -81,7 +81,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         building the array"""
         if not self.color or not self.coord:
             return False
-        count, colours = len(self.coord.point), len(self.color.color)
+        count, colours = len(coordinates.points(self.coord)), len(self.color.color)
         if colours < count:
             if not self.__dict__.get('_fewerReported'):
                 self.__dict__['_fewerReported'] = True
@@ -106,7 +106,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         if not self.coord:
             # can't render nothing
             return 1
-        points = self.coord.point
+        points = np.asarray(coordinates.points(self.coord), dtype='f')
         if not len(points):
             # can't render nothing
             return 1
@@ -292,8 +292,8 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
         holder = mode.cache.holder(self, True, key='point_clean')
         holder.depend(self, 'coord')
-        if self.coord:
-            holder.depend(self.coord, 'point')
+        for source, name in coordinates.fields(self.coord):
+            holder.depend(source, name)
         if self.color:
             holder.depend(self.color, 'color')
         return gpu['vbo'], gpu['stride']

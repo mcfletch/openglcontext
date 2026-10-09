@@ -24,6 +24,7 @@ from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard
 from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGLContext.scenegraph import bindable
+from OpenGLContext.passes import glstate
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGL.GL import *
 from OpenGL.GL import (
@@ -506,7 +507,7 @@ def _color_select_render(pass_obj: 'FlatPass', mode: Any, toRender: Sequence[Any
             glColor4ubv(id_holder)
             self.matrix = mvmatrix
             self.renderPath = path
-            glLoadMatrixf(mvmatrix)
+            glstate.load_matrix(mvmatrix)
             node.Render(mode=self)
             id_map[color_id] = path
         pixel = array([0, 0, 0, 0], 'B')
@@ -798,6 +799,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
         # Which light went into which slot, for the zones' per-draw light mask.
         bound = []
         bound_paths = []
+        lit = []
 
         for path in light_paths:
             if light_count >= ceiling:
@@ -815,13 +817,20 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
                 configure_light_from_node(shader, light_count, light_node, light_matrix)
                 bound.append(light_node)
                 bound_paths.append(path)
+                lit.append((light_node, light_matrix))
                 light_count += 1
         self.boundLights = bound
         self.setupProjectors(light_paths)
         self.lightScopes = self.lightScopes.following(
             lightscope.scoped_lights(bound_paths) + self.projectorScopes())
+        # What a shape drawn by an X3D shader sets its lights from
+        # (scenegraph.x3dshaders): each light with its eye-space matrix, in
+        # slot order, whether the headlight follows them, and the view.
+        self.shaderLights = lit
+        self.shaderViewMatrix = matrix
+        self.shaderHeadlight = self.hasHeadlight(light_count) and light_count < ceiling
 
-        if self.hasHeadlight(light_count) and light_count < ceiling:
+        if self.shaderHeadlight:
             # Directional along the view, given in eye space.
             shader.set_light(light_count, light_type='directional',
                              color=(1.0, 1.0, 1.0), direction=(0.0, 0.0, -1.0),
@@ -1064,10 +1073,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
         nodetypes.Viewpoint,
         nodetypes.NavigationInfo,
         nodetypes.Auditory,
-        # Not a nodetype but a node class: an LOD has to be found again each
-        # frame so it can be told where the viewer is, and the same path
-        # bookkeeping that finds the lights will find it.
-        lod.LOD,
+        # Not a nodetype but a node class: an LOD or GeoLOD has to be found
+        # again each frame so it can be told where the viewer is, and the same
+        # path bookkeeping that finds the lights will find it.
+        lod.Levelled,
         # And each Billboard, turned toward the camera once a frame.
         billboard.Billboard,
         # Likewise: the baked irradiance grid is looked up once a frame and
@@ -1342,7 +1351,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
         is that node's own: which of its thresholds the answer falls in, and
         whether that is a change the flattened scenegraph has to be told about.
         """
-        if self.paths.get( lod.LOD ):
+        if self.paths.get( lod.Levelled ):
             self.chooseLevels( [
                 lod.Viewer( matrix, lod.viewer_tangent( self.fieldOfView() ) ) ] )
 
@@ -1357,7 +1366,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
         Each viewer costs one product of the stacked world matrices and two
         array expressions, as a single camera does.
         """
-        paths = self.paths.get( lod.LOD, () )
+        paths = self.paths.get( lod.Levelled, () )
         if not paths or not viewers:
             return
         placed = []
@@ -1513,8 +1522,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
             return []
         kept = matrices[keep]
         # One product for the whole surviving set. `matrix` is the camera's, so
-        # this is the only place the frame's viewpoint enters the gather.
-        modelviews = kept @ asarray( matrix, 'f' )
+        # this is the only place the frame's viewpoint enters the gather. Both
+        # are double precision and only the product, relative to the camera,
+        # is single, so a scene far from the origin keeps its millimetres.
+        modelviews = ( kept @ asarray( matrix, 'd' ) ).astype( 'f' )
         toRender = []
         seen = self.visiblePlacements = {}
         hidden = self._zoneHidden
@@ -1636,7 +1647,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
                 self._pointsBuffer = points
         matrices = None if fresh else self._matrixBuffer
         if matrices is None or len(matrices) != count:
-            matrices = zeros( (count, 4, 4), 'f' )
+            matrices = zeros( (count, 4, 4), 'd' )
             if not fresh:
                 self._matrixBuffer = matrices
         nodes: list[Any] = []
@@ -1686,7 +1697,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
         makes one shape at a time, made for the whole scene by
         :func:`OpenGLContext.frustum.boxes_outside`.
         """
-        planes = asarray( self.frustum.planes, 'f' )
+        planes = asarray( self.frustum.planes, 'd' )
         if not len(planes):
             return flatnonzero( drawing )
         # Reduced over the corners as the leading axis: numpy reduces a short
@@ -2204,7 +2215,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
 
                     self.matrix = mvmatrix
                     self.renderPath = path
-                    glLoadMatrixf( mvmatrix )
+                    glstate.load_matrix( mvmatrix )
                     try:
                         node.RenderTransparent( mode = self )
                         if debugFrustum:
@@ -2251,7 +2262,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
             for matrix, path, shape in deferred:
                 self.matrix = matrix
                 self.renderPath = path
-                glLoadMatrixf( matrix )
+                glstate.load_matrix( matrix )
                 try:
                     shape.RenderTransparent( mode = self )
                 except Exception as err:
@@ -2349,7 +2360,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, GeneratedText
         """Set our view platform"""
         self.viewPlatform = vp
         self.projection = vp.viewMatrix().astype('f')
-        self.modelView = vp.modelMatrix().astype('f')
+        self.modelView = vp.modelMatrix().astype('d')
         self.modelproj = dot( self.modelView, self.projection )
         self.matrix = None
 

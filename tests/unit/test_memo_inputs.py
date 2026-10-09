@@ -183,7 +183,7 @@ def _levels_pass(paths):
     passing.paths = {}
     passing._pathGeneration = 0  # noqa: SLF001 starts the level memo this test holds to its inputs from empty
     passing._levelChoice = None  # noqa: SLF001 starts the level memo this test holds to its inputs from empty
-    passing.paths[lod.LOD] = paths
+    passing.paths[lod.Levelled] = paths
     return passing
 
 
