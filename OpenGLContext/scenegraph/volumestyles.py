@@ -32,6 +32,9 @@ pointing from higher values to lower, unless a style's ``surfaceNormals``
 texture of three or more channels gives them. The gradient's magnitude (|Δf|)
 is measured in value per voxel, values running 0 to 1.
 
+The ten style nodes are the engine's classes at the end of this module, with
+the fields X3D gives them and no behaviour of their own.
+
 Transfer functions and BlendedVolumeStyle's weight tables are read as RGBA
 tables (:func:`transfer_table`), so a style samples the same layout whatever
 the texture held.
@@ -48,6 +51,7 @@ import numpy as np
 from vrml.x3d import nodes as x3d
 
 __all__ = [
+    'BlendedVolumeStyle', 'BoundaryEnhancementVolumeStyle', 'CartoonVolumeStyle', 'ComposedVolumeStyle', 'EdgeEnhancementVolumeStyle', 'OpacityMapVolumeStyle', 'ProjectionVolumeStyle', 'ShadedVolumeStyle', 'SilhouetteEnhancementVolumeStyle', 'ToneMappedVolumeStyle',
     'MAX_CARTOON_STEPS', 'MAX_ISOSURFACES', 'MAX_SEGMENTS', 'PROJECTIONS', 'Plan', 'Step',
     'TextureSlot', 'cartoon_palette', 'channels_of', 'isosurfaces', 'plan', 'rgba_table',
     'transfer_table',
@@ -682,3 +686,46 @@ def _function(found: Plan, index: int) -> str:
     else:  # pragma: no cover - every kind made above has GLSL
         raise ValueError(kind)
     return 'vec4 style%d(vec4 c, VSample s) {\n%s\n}' % (index, '\n'.join(body))
+
+
+# -- the style nodes --------------------------------------------------------------
+
+
+class BlendedVolumeStyle(x3d.BlendedVolumeStyle):
+    """X3D's BlendedVolumeStyle: values the volume it styles is drawn by"""
+
+
+class BoundaryEnhancementVolumeStyle(x3d.BoundaryEnhancementVolumeStyle):
+    """X3D's BoundaryEnhancementVolumeStyle: values the volume it styles is drawn by"""
+
+
+class CartoonVolumeStyle(x3d.CartoonVolumeStyle):
+    """X3D's CartoonVolumeStyle: values the volume it styles is drawn by"""
+
+
+class ComposedVolumeStyle(x3d.ComposedVolumeStyle):
+    """X3D's ComposedVolumeStyle: values the volume it styles is drawn by"""
+
+
+class EdgeEnhancementVolumeStyle(x3d.EdgeEnhancementVolumeStyle):
+    """X3D's EdgeEnhancementVolumeStyle: values the volume it styles is drawn by"""
+
+
+class OpacityMapVolumeStyle(x3d.OpacityMapVolumeStyle):
+    """X3D's OpacityMapVolumeStyle: values the volume it styles is drawn by"""
+
+
+class ProjectionVolumeStyle(x3d.ProjectionVolumeStyle):
+    """X3D's ProjectionVolumeStyle: values the volume it styles is drawn by"""
+
+
+class ShadedVolumeStyle(x3d.ShadedVolumeStyle):
+    """X3D's ShadedVolumeStyle: values the volume it styles is drawn by"""
+
+
+class SilhouetteEnhancementVolumeStyle(x3d.SilhouetteEnhancementVolumeStyle):
+    """X3D's SilhouetteEnhancementVolumeStyle: values the volume it styles is drawn by"""
+
+
+class ToneMappedVolumeStyle(x3d.ToneMappedVolumeStyle):
+    """X3D's ToneMappedVolumeStyle: values the volume it styles is drawn by"""

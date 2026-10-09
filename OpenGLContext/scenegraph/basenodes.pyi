@@ -186,6 +186,16 @@ from OpenGLContext.scenegraph.viewpointgroup import ViewpointGroup as ViewpointG
 from OpenGLContext.scenegraph.volumedata import IsoSurfaceVolumeData as IsoSurfaceVolumeData
 from OpenGLContext.scenegraph.volumedata import SegmentedVolumeData as SegmentedVolumeData
 from OpenGLContext.scenegraph.volumedata import VolumeData as VolumeData
+from OpenGLContext.scenegraph.volumestyles import BlendedVolumeStyle as BlendedVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import BoundaryEnhancementVolumeStyle as BoundaryEnhancementVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import CartoonVolumeStyle as CartoonVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import ComposedVolumeStyle as ComposedVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import EdgeEnhancementVolumeStyle as EdgeEnhancementVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import OpacityMapVolumeStyle as OpacityMapVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import ProjectionVolumeStyle as ProjectionVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import ShadedVolumeStyle as ShadedVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import SilhouetteEnhancementVolumeStyle as SilhouetteEnhancementVolumeStyle
+from OpenGLContext.scenegraph.volumestyles import ToneMappedVolumeStyle as ToneMappedVolumeStyle
 from OpenGLContext.scenegraph.x3dgroups import CADAssembly as CADAssembly
 from OpenGLContext.scenegraph.x3dgroups import CADFace as CADFace
 from OpenGLContext.scenegraph.x3dgroups import CADLayer as CADLayer
@@ -343,10 +353,12 @@ __all__ = [
     'BallJoint',
     'Billboard',
     'BiquadFilter',
+    'BlendedVolumeStyle',
     'BooleanFilter',
     'BooleanSequencer',
     'BooleanToggle',
     'BooleanTrigger',
+    'BoundaryEnhancementVolumeStyle',
     'BoundedPhysicsModel',
     'Box',
     'BufferAudioSource',
@@ -354,6 +366,7 @@ __all__ = [
     'CADFace',
     'CADLayer',
     'CADPart',
+    'CartoonVolumeStyle',
     'ChannelMerger',
     'ChannelSelector',
     'ChannelSplitter',
@@ -373,6 +386,7 @@ __all__ = [
     'ComposedCubeMapTexture',
     'ComposedShader',
     'ComposedTexture3D',
+    'ComposedVolumeStyle',
     'Cone',
     'ConeEmitter',
     'Contact',
@@ -394,6 +408,7 @@ __all__ = [
     'DoubleAxisHingeJoint',
     'DynamicsCompressor',
     'EaseInEaseOut',
+    'EdgeEnhancementVolumeStyle',
     'ElevationGrid',
     'EnvironmentLight',
     'ExplosionEmitter',
@@ -513,6 +528,7 @@ __all__ = [
     'NurbsTextureCoordinate',
     'NurbsToleranceSample',
     'NurbsTrimmedSurface',
+    'OpacityMapVolumeStyle',
     'OrientationChaser',
     'OrientationDamper',
     'OrientationInterpolator',
@@ -546,6 +562,7 @@ __all__ = [
     'PositionInterpolator2D',
     'PrimitivePickSensor',
     'ProgramShader',
+    'ProjectionVolumeStyle',
     'ProximitySensor',
     'QuadSet',
     'ROUTE',
@@ -560,6 +577,7 @@ __all__ = [
     'ScreenFontStyle',
     'ScreenGroup',
     'SegmentedVolumeData',
+    'ShadedVolumeStyle',
     'Shader',
     'ShaderAttribute',
     'ShaderBuffer',
@@ -569,6 +587,7 @@ __all__ = [
     'ShaderProgram',
     'ShaderSlice',
     'Shape',
+    'SilhouetteEnhancementVolumeStyle',
     'SimpleBackground',
     'SingleAxisHingeJoint',
     'SliderJoint',
@@ -607,6 +626,7 @@ __all__ = [
     'TextureUniform',
     'TimeSensor',
     'TimeTrigger',
+    'ToneMappedVolumeStyle',
     'TouchSensor',
     'Transform',
     'TransformSensor',

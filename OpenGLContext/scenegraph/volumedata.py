@@ -5,8 +5,9 @@ Each is drawn with the blended geometry by marching rays through its
 across a box ``dimensions`` in size, centred on its origin. Its render styles
 decide what each sample shows (:mod:`OpenGLContext.scenegraph.volumestyles`);
 the march itself is ``volume.frag``, drawn by
-:func:`OpenGLContext.passes.volumepass.draw`. The ten render style nodes are
-pyvrml97's own classes: they hold values and draw nothing themselves.
+:func:`OpenGLContext.passes.volumepass.draw`. The ten render style nodes
+(:mod:`~OpenGLContext.scenegraph.volumestyles`) hold values and draw nothing
+themselves.
 
 - Opaque geometry inside or in front of a volume hides what is behind it:
   the pass copies the opaque scene's depth and each ray stops there.
