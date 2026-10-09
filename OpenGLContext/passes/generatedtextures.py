@@ -44,7 +44,7 @@ from OpenGL.GL import (
 log = logging.getLogger(__name__)
 
 __all__ = ['GLTexture', 'GeneratedSchedule', 'GeneratedTexturesMixin', 'PictureTarget',
-           'UPDATES']
+           'UPDATES', 'capture_centre']
 
 #: X3D's update modes.
 UPDATES = ('NONE', 'NEXT_FRAME_ONLY', 'ALWAYS')
@@ -66,6 +66,21 @@ def wears(shape: Any, texture: Any) -> bool:
         return True
     from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept beside its one use
     return isinstance(worn, x3d.MultiTexture) and any(layer is texture for layer in worn.texture)
+
+
+def capture_centre(path: Any) -> np.ndarray:
+    """Where a generated cube map is drawn from for the node `path` ends at
+
+    A shape's local origin; an EnvironmentLight's ``origin`` in its own
+    coordinates, as X_ITE captures one.
+    """
+    matrix = np.asarray(path.transformMatrix(), np.float64)
+    origin = getattr(path[-1], 'origin', None)
+    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept beside its one use
+    if origin is None or not isinstance(path[-1], x3d.EnvironmentLight):
+        return matrix[3, :3].copy()
+    placed = np.append(np.asarray(origin, np.float64)[:3], 1.0) @ matrix
+    return placed[:3] / (placed[3] or 1.0)
 
 
 class GeneratedSchedule:
@@ -269,6 +284,20 @@ class GeneratedTexturesMixin:
             return None if name is None else GLTexture(name, GL_TEXTURE_2D)
         return None if target.cube is None else GLTexture(target.cube, GL_TEXTURE_CUBE_MAP)
 
+    def requestGenerated(self, node: Any, path: Any) -> Optional[GLTexture]:
+        """Ask for ``node`` to be drawn from where ``path`` places it, as a
+        shape wearing it asks; the cube it was last drawn into, or None before
+        its first drawing"""
+        if self._generating is None and self.generatedSchedule().request(node, path):
+            trigger = getattr(getattr(self, 'context', None), 'triggerRedraw', None)
+            if trigger is not None:
+                trigger(0)
+        target = self._targets().get(node)
+        if target is None or not self.generatedSchedule().drawn(node) or isinstance(
+                target, PictureTarget) or target.cube is None:
+            return None
+        return GLTexture(target.cube, GL_TEXTURE_CUBE_MAP)
+
     def disposeResources(self) -> None:
         """Release the generated textures' targets"""
         for target in list(self._targets().values()):
@@ -317,7 +346,7 @@ class GeneratedTexturesMixin:
             if target is not None:
                 target.release()
             target = targets[node] = CaptureTarget(size)
-        centre = np.asarray(paths[0].transformMatrix(), 'd')[3, :3]
+        centre = capture_centre(paths[0])
         near, far = self._depthRange(template)
         projection = shadowmath.cube_projection(near, far)
         target.begin()

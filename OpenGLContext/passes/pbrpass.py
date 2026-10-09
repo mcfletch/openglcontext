@@ -1273,7 +1273,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         built-in studio environment is lowered this way (see
         :func:`OpenGLContext.passes.ibl.fill_scale`).
         """
-        self._set_uniform1i('iblMode', int(mode_code), self.program)
+        self._set_uniform1i('iblModeSet', int(mode_code), self.program)
         self._set_uniform1f('iblIntensity', float(intensity), self.program)
         self._set_uniform1f('iblFill', float(fill_scale), self.program)
 

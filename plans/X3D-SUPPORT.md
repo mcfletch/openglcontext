@@ -330,7 +330,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] `LocalFog` (`passes.localfog`, per draw beside the light scope); unlit surfaces are fogged
   - [x] `EnvironmentLight` from its coefficients as the scene's image-based light (`scenegraph.environmentlight`); its cube maps: `specularTexture` faces as the reflected environment with
     halved levels, `diffuseTexture` as the irradiance's SH fit, the specular
-    cube convolved where neither coefficients nor diffuse map are given
+    cube convolved where neither coefficients nor diffuse map are given;
+    2026-10-09 (x3d-xfields): a `GeneratedCubeMapTexture` drawn from `origin`
+    (`generatedtextures.capture_centre`, `requestGenerated`) and convolved on
+    the GPU into the scene layer, turned and scaled
+    (`IBLProbe.convolve_scene`, `EnvironmentRead`); `global` false scopes it
+    by `lightsOff` bit 24 (`ZonesMixin.environmentScopes`). X_ITE ignores
+    `diffuseCoefficients` and `diffuseTexture`; the engine reads them
   - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture
 - Phase 7, runtime (§9.10, §9.15, §9.16)
   - [x] event utilities, sequencers and `KeySensor` with their behaviour (`vrml.x3d.runtime`); the engine's `TimeTrigger` clock and `KeySensor` keys (`scenegraph/x3druntime.py`, `observeEvents`)

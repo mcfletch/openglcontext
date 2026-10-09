@@ -517,9 +517,15 @@ light, each rougher level its faces averaged down by half; its
 fit. The irradiance is the ``diffuseCoefficients`` where there are nine,
 else the diffuse cube map's, else the specular cube map convolved; without
 a specular cube map the one specular level is made from the irradiance, so
-smooth surfaces reflect a blurred environment. A ``GeneratedCubeMapTexture``,
-``origin`` and ``global`` are not read. It needs full image-based lighting
-(``ContextDefinition.ibl``).
+smooth surfaces reflect a blurred environment. A ``GeneratedCubeMapTexture``
+as ``specularTexture`` is the scene drawn from the light's ``origin``, in the
+light's coordinates, as X_ITE draws it: drawn as its ``update`` says, and
+each drawing convolved on the GPU into the irradiance and the specular
+levels, turned by ``rotation`` and scaled by ``color`` times ``intensity``
+(``IBLProbe.convolve_scene``); with ``update`` ``ALWAYS`` that is every
+frame. With ``global`` false the light lights only its parent group's
+descendants, and the rest are drawn without an environment. It needs full
+image-based lighting (``ContextDefinition.ibl``).
 
 A document is lit by its own lights and its headlight: the PBR pass's
 built-in studio environment, which lights a scene built in code, is off for it,

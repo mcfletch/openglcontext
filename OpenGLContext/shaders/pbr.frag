@@ -405,7 +405,11 @@ uniform vec3 lightGridDirection;
 // Environment / image-based lighting. iblMode: 0=off (flat ambient), 1=analytic
 // (procedural env + analytic split-sum BRDF), 2=full (prefiltered probe + LUT).
 // The probe cubes are world-oriented, sampled via eyeToWorld (declared below).
-uniform int iblMode;
+// A draw outside a scoped EnvironmentLight's group has its lightsOff bit
+// ENVIRONMENT_SCOPE_BIT set (zonepass.ENVIRONMENT_SCOPE_BIT) and is drawn off.
+uniform int iblModeSet;
+#define ENVIRONMENT_SCOPE_BIT 24
+#define iblMode (((lightsOff >> ENVIRONMENT_SCOPE_BIT) & 1) != 0 ? 0 : iblModeSet)
 uniform float iblIntensity;
 // Scales what the built-in studio environment gives a non-metal: its diffuse
 // light and its reflection. A metal reflects the studio at full strength.

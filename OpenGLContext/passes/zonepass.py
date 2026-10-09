@@ -43,7 +43,11 @@ from OpenGLContext.scenegraph.zone import (
 
 log = logging.getLogger(__name__)
 
-__all__ = ['ZonesMixin']
+__all__ = ['ENVIRONMENT_SCOPE_BIT', 'ZonesMixin']
+
+#: The bit of the lit program's ``lightsOff`` set for a draw outside a scoped
+#: EnvironmentLight's group (``ENVIRONMENT_SCOPE_BIT`` in pbr.frag).
+ENVIRONMENT_SCOPE_BIT = 24
 
 #: The half-size of the box an object with no bounds is taken to fill: large
 #: enough to cross every zone, so it is weighted per fragment.
@@ -787,10 +791,35 @@ class ZonesMixin(PassResources):
                     schedule.finished(key)
                     self._probeVersion += 1
         scene = self.sceneImageLight()
+        if scene is not None and getattr(scene, 'generated', None) is not None:
+            self._convolveGenerated(probe, scene)
+            return
         mark = (id(scene), probe.lost, id(probe.prefilter))
         if scene is not None and mark != self._sceneLightMark:
             if probe.upload_light(scene, 0):
                 self._sceneLightMark = mark
+
+    def _convolveGenerated(self, probe: Any, scene: Any) -> None:
+        """Ask for the scene light's generated cube from its EnvironmentLight's
+        origin, and convolve each new drawing of it into the probe's layer 0"""
+        from OpenGLContext.passes.ibl import EnvironmentRead  # noqa: PLC0415 GL module
+        from OpenGLContext.scenegraph.imagebasedlight import _rotation_matrix  # noqa: PLC0415 kept with its use
+        found = self.sceneEnvironmentLight()
+        if found is None:
+            return
+        source = scene.generated
+        cube = self.requestGenerated(source, found[0])  # type: ignore[attr-defined]  # the pass's
+        if cube is None:
+            return
+        drawn = self.generatedSchedule().drawn(source)  # type: ignore[attr-defined]  # the pass's
+        mark = (id(scene), probe.lost, id(probe.prefilter), drawn)
+        if mark == self._sceneLightMark:
+            return
+        red, green, blue = (float(value) * float(scene.intensity) for value in scene.tint[:3])
+        turn = _rotation_matrix(scene.rotation) if scene.rotated else None
+        if probe.convolve_scene(cube.texture, max(1, int(source.size)),
+                                EnvironmentRead(turn, (red, green, blue))):
+            self._sceneLightMark = mark
 
     def _waitingLights(self) -> dict[Any, Any]:
         """The image-based lights given a layer and not yet uploaded into it."""
@@ -807,14 +836,30 @@ class ZonesMixin(PassResources):
         for path in self.paths.get(ImageBasedLight, ()):
             if not getattr(path, 'broken', False):
                 return path[-1]
+        found = self.sceneEnvironmentLight()
+        return None if found is None else found[1]
+
+    def sceneEnvironmentLight(self) -> Optional[tuple[Any, Any]]:
+        """(path, image-based light) of the first EnvironmentLight with a light; None"""
         for path in self.paths.get(x3dnodes.EnvironmentLight, ()):
             if getattr(path, 'broken', False):
                 continue
             found = getattr(path[-1], 'imageLight', None)
             light = found() if found is not None else None
             if light is not None:
-                return light
+                return path, light
         return None
+
+    def environmentScopes(self) -> lightscope.Scoped:
+        """The scene's EnvironmentLight, where its ``global`` is false, with its
+        ``lightsOff`` bit: draws outside its group are drawn without it"""
+        if any(not getattr(path, 'broken', False)
+               for path in self.paths.get(ImageBasedLight, ())):
+            return ()
+        found = self.sceneEnvironmentLight()
+        if found is None:
+            return ()
+        return lightscope.scoped_lights([found[0]], first=ENVIRONMENT_SCOPE_BIT)
 
     def zoneCaptureFaces(self) -> int:
         """How many faces of a zone's cube may be drawn in one frame."""
