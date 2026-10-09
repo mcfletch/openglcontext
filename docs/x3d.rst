@@ -945,9 +945,16 @@ Binding, viewpoints and navigation
   ``size`` and the viewer is outside the box of that size about its
   ``center``.
 - An ``Anchor`` draws its children as a group, and a click released over
-  them calls ``Context.OnAnchor(anchor, url, parameter)``. The context binds
-  the viewpoint a ``#name`` url names; opening any other url is left to an
-  application that overrides ``OnAnchor``.
+  them calls ``Context.OnAnchor(anchor, url, parameter)``, which follows the
+  urls in turn as X_ITE does (``scenegraph.anchor``): ``#name``, or the
+  document's own name with ``#name``, binds that viewpoint; another X3D or
+  VRML97 document is read by ``Context.sceneLoader`` and replaces the scene,
+  binding the viewpoint its ``#name`` fragment names, and where it does not
+  load the next url is tried. A page (``.html``, ``.htm``, ``.xhtml``), a url
+  the document may not reach (:ref:`loaders`), and any url with a
+  ``target=`` parameter other than ``_self`` go to
+  ``Context.OnAnchorElsewhere(anchor, url, target)``, which opens nothing and
+  answers False; an application that opens pages or windows overrides it.
 
 - In a scene drawn as layers (:ref:`x3d-layers`) each layer has bind stacks
   of its own: its viewpoints, backgrounds, fogs and NavigationInfos are bound

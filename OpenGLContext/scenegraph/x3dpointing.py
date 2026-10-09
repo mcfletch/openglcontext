@@ -8,7 +8,8 @@ observes its picked ``mousemove`` and ``mousebutton`` events
 - The sensors an event reaches are the enabled ones among the children of
   the lowest group on the picked path that has any, with that group itself
   where it is an `Anchor` (:func:`sensors_for`). An Anchor released over its
-  geometry follows its url through the context (:meth:`Anchor.follow`).
+  geometry follows its url through the context (:meth:`Anchor.follow`,
+  ``Context.OnAnchor``).
 - The hit is the picked point (:func:`unprojected`) and the ray the pointer's
   bearing (:func:`pointer_ray`), each in the sensors' coordinates. The
   shape's triangle under the pointer gives the hit its normal, interpolated
