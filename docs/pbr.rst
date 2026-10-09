@@ -61,7 +61,10 @@ colour, as X_ITE draws it. A ``Color`` node replaces the
 diffuse colour, a texture multiplies it, a normal map turns the normal, an
 occlusion map scales the lights' sum, and fog is X3D's. Image-based lighting,
 lightmaps and planar reflections are not read for such a shape. An appearance
-with no ``Material`` is unlit: white, times its texture or a ``Color`` node.
+with no ``Material``, a Shape with no Appearance and a document's
+``UnlitMaterial`` are unlit: white (or the emissive colour), times its
+texture or a ``Color`` node, on the colour values as given. An
+``UnlitMaterial`` built in code or read from glTF is linear light.
 A ``Material`` built in code is converted instead: its diffuse colour
 becomes the base colour and its shininess sets the roughness, lit in linear
 light with a flat ambient term.

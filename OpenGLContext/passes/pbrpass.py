@@ -299,13 +299,16 @@ def _material_factors(material: Any) -> dict:
         )
     if isinstance(material, UnlitMaterial):
         # The unlit path draws the base colour; X3D calls it the emissive colour.
+        # A document's colours are display values; glTF's are linear light.
+        displayed = material is _DOCUMENT_UNLIT or lighting.x3d_lit(material)
         return dict(_DEFAULT_FACTORS, base_color=tuple(material.emissiveColor)[:3],
-                    normal_scale=float(material.normalScale), unlit=1)
+                    normal_scale=float(material.normalScale), unlit=1,
+                    flags=DISPLAYED_BIT if displayed else 0)
     if isinstance(material, AppearanceMaterial):
         if material.x3dLit:
             if not material.material:
                 # X3D: an appearance with no material is unlit, white times its texture
-                return dict(_DEFAULT_FACTORS, unlit=1)
+                return dict(_DEFAULT_FACTORS, unlit=1, flags=DISPLAYED_BIT)
             if hasattr(material.material, 'diffuseColor'):
                 return phong_factors(material.material)
         material = material.material
@@ -353,6 +356,10 @@ BAKED_LIGHT_BIT = 64
 #: The bit saying the block is an X3D Material drawn by X3D's Phong equation
 #: (:func:`phong_factors`); the fragment shader reads it as ``phongMode``.
 PHONG_BIT = 128
+#: The bit saying an unlit block's colours are display values, as an X3D
+#: document gives them, rather than linear light; the fragment shader reads
+#: it as ``displayedMode``.
+DISPLAYED_BIT = 256
 
 
 
