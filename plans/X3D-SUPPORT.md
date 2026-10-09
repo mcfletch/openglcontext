@@ -307,7 +307,7 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     follow the document's `DocumentFonts.generation`
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
   - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)
-  - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`)
+  - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`); `transparency` of both backgrounds: the sky and ground at `1 - transparency` over transparent black, the sides their own alpha, as X_ITE (`spherebackground.sky_alpha`, 2026-10-09 x3d-xfields)
   - [x] `LocalFog` (`passes.localfog`, per draw beside the light scope); unlit surfaces are fogged
   - [x] `EnvironmentLight` from its coefficients as the scene's image-based light (`scenegraph.environmentlight`); its cube maps: `specularTexture` faces as the reflected environment with
     halved levels, `diffuseTexture` as the irradiance's SH fit, the specular

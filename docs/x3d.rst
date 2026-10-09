@@ -556,7 +556,11 @@ over. Each of its six images is drawn over them, turned as X3D turns it, once
 that image has loaded; a side with no image, or a transparent part of one,
 shows the sky and ground. A ``TextureBackground`` is drawn the same way from
 its six ``...Texture`` sides. A side is an ``ImageTexture`` or a
-``PixelTexture``; ``transparency`` is not read.
+``PixelTexture``. Either node's ``transparency`` draws the sky and ground at
+``1 - transparency`` opacity over transparent black, and not at all at 1, as
+X_ITE composites them; the sides keep their own alpha. The window's alpha is
+left at that opacity, so it shows what is behind a window composited with its
+alpha; elsewhere the sky is darkened toward black.
 
 Collision
 ~~~~~~~~~
