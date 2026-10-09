@@ -15,10 +15,13 @@ uniform mat4 projectionMatrix;
 out vec2 vTexCoord;
 out vec3 vEyePosition;    // for the fog: its length, per fragment
 
+#include "_clipplane_inc.glsl"
+
 void main() {
     vec4 eyePosition = modelViewMatrix * vec4(aPosition, 1.0);
     vEyePosition = eyePosition.xyz;
     gl_Position = projectionMatrix * eyePosition;
+    clipByPlanes(aPosition);
     vTexCoord = aTexCoord;
     // Read only for points, where GL_PROGRAM_POINT_SIZE is on
     gl_PointSize = x3dPointSize(length(eyePosition.xyz));

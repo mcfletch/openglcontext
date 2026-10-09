@@ -34,6 +34,7 @@ ATTRIBUTE_KEYWORDS = {
     'NORMAL': 'normals',
     'TEXCOORD_0': 'texcoords',
     'TEXCOORD_1': 'texcoords1',
+    'TEXCOORD_3D': 'texcoords3d',
     'TANGENT': 'tangents',
     'COLOR_0': 'colors',
 }

@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="4.0">
+  <head>
+    <component name="RigidBodyPhysics" level="2"/>
+    <meta name="title" content="X3D Rigid Bodies"/>
+    <meta name="creator" content="OpenGLContext"/>
+    <meta name="license" content="BSD-3-Clause"/>
+    <meta name="description" content="The scene oglc-x3d-rigidbody opens: brick crates falling into a stack, a marble ball bounced by a sensor's contacts, a brass door swinging against its stop, a steel chain, a driven wheel, a cardan shaft, a sliding piston and a dumbbell of two offset weights."/>
+  </head>
+  <Scene>
+    <WorldInfo title="X3D Rigid Bodies" info='"The scene oglc-x3d-rigidbody opens."'/>
+    <NavigationInfo type='"EXAMINE" "ANY"'/>
+    <Background skyColor="0.38 0.52 0.72 0.72 0.80 0.90" skyAngle="1.4" groundColor="0.30 0.27 0.22"/>
+    <Viewpoint description="The workshop" position="0 3 9" orientation="1 0 0 -0.22"/>
+    <DirectionalLight global="true" shadows="true" shadowIntensity="0.8"
+                      direction="-0.6 -0.9 -0.4" intensity="2.2" color="1 0.96 0.9"/>
+
+    <!-- What is drawn and collided. Each collidable is drawn here, where it
+         is; the bodies below carry the ones they name. -->
+    <Group>
+      <CollidableShape DEF="FLOOR" translation="0 -0.1 0">
+        <Shape containerField="shape">
+          <Appearance DEF="SANDSTONE">
+            <PhysicalMaterial metallic="0" roughness="1">
+              <ImageTexture containerField="baseTexture" url='"sandstone_base.png"'/>
+              <ImageTexture containerField="metallicRoughnessTexture" url='"sandstone_mr.png"'/>
+              <ImageTexture containerField="normalTexture" url='"sandstone_normal.png"'/>
+            </PhysicalMaterial>
+          </Appearance>
+          <Box size="14 0.2 10"/>
+        </Shape>
+      </CollidableShape>
+
+      <CollidableShape DEF="CRATE-1"><Shape containerField="shape">
+        <Appearance DEF="BRICK">
+          <PhysicalMaterial metallic="0" roughness="0.9">
+            <ImageTexture containerField="baseTexture" url='"brick_base.png"'/>
+            <ImageTexture containerField="metallicRoughnessTexture" url='"brick_mr.png"'/>
+            <ImageTexture containerField="normalTexture" url='"brick_normal.png"'/>
+          </PhysicalMaterial>
+        </Appearance>
+        <Box DEF="CRATE-BOX" size="0.6 0.6 0.6"/></Shape></CollidableShape>
+      <CollidableShape DEF="CRATE-2"><Shape containerField="shape">
+        <Appearance USE="BRICK"/><Box USE="CRATE-BOX"/></Shape></CollidableShape>
+      <CollidableShape DEF="CRATE-3"><Shape containerField="shape">
+        <Appearance USE="BRICK"/><Box USE="CRATE-BOX"/></Shape></CollidableShape>
+      <CollidableShape DEF="CRATE-4"><Shape containerField="shape">
+        <Appearance USE="BRICK"/><Box USE="CRATE-BOX"/></Shape></CollidableShape>
+      <CollidableShape DEF="CRATE-5"><Shape containerField="shape">
+        <Appearance USE="BRICK"/><Box USE="CRATE-BOX"/></Shape></CollidableShape>
+
+      <CollidableShape DEF="BALL"><Shape containerField="shape">
+        <Appearance>
+          <PhysicalMaterial metallic="0" roughness="0.25">
+            <ImageTexture containerField="baseTexture" url='"marble_base.png"'/>
+            <ImageTexture containerField="metallicRoughnessTexture" url='"marble_mr.png"'/>
+            <ImageTexture containerField="normalTexture" url='"marble_normal.png"'/>
+          </PhysicalMaterial>
+        </Appearance>
+        <Sphere radius="0.3"/></Shape></CollidableShape>
+
+      <CollidableShape DEF="POST"><Shape containerField="shape">
+        <Appearance USE="SANDSTONE"/><Box size="0.2 2 0.2"/></Shape></CollidableShape>
+      <CollidableShape DEF="DOOR"><Shape containerField="shape">
+        <Appearance DEF="BRASS">
+          <PhysicalMaterial baseColor="0.95 0.72 0.36" metallic="1" roughness="0.3"/>
+        </Appearance>
+        <Box size="1.2 1.8 0.06"/></Shape></CollidableShape>
+
+      <CollidableShape DEF="BEAM"><Shape containerField="shape">
+        <Appearance USE="SANDSTONE"/><Box size="1.6 0.2 0.2"/></Shape></CollidableShape>
+      <CollidableShape DEF="LINK-1"><Shape containerField="shape">
+        <Appearance DEF="STEEL">
+          <PhysicalMaterial baseColor="0.62 0.64 0.66" metallic="1" roughness="0.35"/>
+        </Appearance>
+        <Box DEF="LINK-BOX" size="0.08 0.5 0.08"/></Shape></CollidableShape>
+      <CollidableShape DEF="LINK-2"><Shape containerField="shape">
+        <Appearance USE="STEEL"/><Box USE="LINK-BOX"/></Shape></CollidableShape>
+      <CollidableShape DEF="LINK-3"><Shape containerField="shape">
+        <Appearance USE="STEEL"/><Box USE="LINK-BOX"/></Shape></CollidableShape>
+
+      <CollidableShape DEF="STAND"><Shape containerField="shape">
+        <Appearance USE="SANDSTONE"/><Box size="0.3 1.2 0.3"/></Shape></CollidableShape>
+      <CollidableShape DEF="WHEEL"><Shape containerField="shape">
+        <Appearance USE="STEEL"/><Cylinder height="0.12" radius="0.45"/></Shape></CollidableShape>
+
+      <CollidableShape DEF="SHAFT-1"><Shape containerField="shape">
+        <Appearance USE="BRASS"/><Box size="0.8 0.08 0.08"/></Shape></CollidableShape>
+      <CollidableShape DEF="SHAFT-2"><Shape containerField="shape">
+        <Appearance USE="BRASS"/><Box size="0.8 0.08 0.08"/></Shape></CollidableShape>
+
+      <CollidableShape DEF="RAIL"><Shape containerField="shape">
+        <Appearance USE="SANDSTONE"/><Box size="1.6 0.1 0.3"/></Shape></CollidableShape>
+      <CollidableShape DEF="PISTON"><Shape containerField="shape">
+        <Appearance USE="STEEL"/><Box size="0.3 0.3 0.3"/></Shape></CollidableShape>
+
+      <!-- A dumbbell: two weights held off its middle by CollidableOffsets. -->
+      <CollidableOffset DEF="BELL-LEFT">
+        <CollidableShape containerField="collidable" translation="-0.35 0 0">
+          <Shape containerField="shape"><Appearance USE="STEEL"/><Sphere radius="0.15"/></Shape>
+        </CollidableShape>
+      </CollidableOffset>
+      <CollidableOffset DEF="BELL-RIGHT">
+        <CollidableShape containerField="collidable" translation="0.35 0 0">
+          <Shape containerField="shape"><Appearance USE="STEEL"/><Sphere radius="0.15"/></Shape>
+        </CollidableShape>
+      </CollidableOffset>
+      <CollidableOffset DEF="BELL-BAR">
+        <CollidableShape containerField="collidable" rotation="0 0 1 1.5708">
+          <Shape containerField="shape"><Appearance USE="BRASS"/>
+            <Cylinder height="0.6" radius="0.04"/></Shape>
+        </CollidableShape>
+      </CollidableOffset>
+    </Group>
+
+    <RigidBodyCollection DEF="WORKSHOP" autoDisable="true" disableTime="0.5"
+                         disableLinearSpeed="0.05" disableAngularSpeed="0.05">
+      <!-- The crates, the floor and the dumbbell collide. The ball meets the
+           floor by the sensor's contacts alone, and bounces by them. -->
+      <CollisionCollection containerField="collider" frictionCoefficients="0.7 0.7"
+                           appliedParameters='"BOUNCE"' bounce="0.1" minBounceSpeed="0.5">
+        <CollidableShape USE="FLOOR"/>
+        <CollisionSpace useGeometry="true">
+          <CollidableShape USE="CRATE-1"/><CollidableShape USE="CRATE-2"/>
+          <CollidableShape USE="CRATE-3"/><CollidableShape USE="CRATE-4"/>
+          <CollidableShape USE="CRATE-5"/>
+        </CollisionSpace>
+        <CollidableOffset USE="BELL-LEFT"/>
+        <CollidableOffset USE="BELL-RIGHT"/>
+      </CollisionCollection>
+
+      <RigidBody DEF="CRATE-BODY-1" containerField="bodies" position="-4 0.4 0.5" mass="20">
+        <CollidableShape USE="CRATE-1" containerField="geometry"/></RigidBody>
+      <RigidBody containerField="bodies" position="-3.9 1.4 0.4" mass="20"
+                 orientation="0 1 0 0.4">
+        <CollidableShape USE="CRATE-2" containerField="geometry"/></RigidBody>
+      <RigidBody containerField="bodies" position="-4.1 2.4 0.6" mass="20"
+                 orientation="1 1 0 0.3">
+        <CollidableShape USE="CRATE-3" containerField="geometry"/></RigidBody>
+      <RigidBody containerField="bodies" position="-3.2 3.0 0.5" mass="20"
+                 angularVelocity="1 2 0">
+        <CollidableShape USE="CRATE-4" containerField="geometry"/></RigidBody>
+      <RigidBody containerField="bodies" position="-4.6 3.8 0.3" mass="20"
+                 orientation="0 0 1 0.6">
+        <CollidableShape USE="CRATE-5" containerField="geometry"/></RigidBody>
+
+      <RigidBody DEF="BALL-BODY" containerField="bodies" position="-1.5 3.5 1.5" mass="5">
+        <CollidableShape USE="BALL" containerField="geometry"/></RigidBody>
+
+      <RigidBody DEF="DUMBBELL" containerField="bodies" position="-1.5 1.2 3" mass="6"
+                 orientation="0 1 0 0.8" angularVelocity="0 0 4">
+        <CollidableOffset USE="BELL-LEFT" containerField="geometry"/>
+        <CollidableOffset USE="BELL-RIGHT" containerField="geometry"/>
+        <CollidableOffset USE="BELL-BAR" containerField="geometry"/>
+      </RigidBody>
+
+      <!-- The door: hinged on its post, thrown open against a stop. -->
+      <RigidBody DEF="POST-BODY" containerField="bodies" position="1 0.9 1.5" fixed="true">
+        <CollidableShape USE="POST" containerField="geometry"/></RigidBody>
+      <RigidBody DEF="DOOR-BODY" containerField="bodies" position="1.7 0.95 1.5" mass="15"
+                 angularVelocity="0 2.5 0" linearVelocity="0 0 -1.5">
+        <CollidableShape USE="DOOR" containerField="geometry"/></RigidBody>
+      <SingleAxisHingeJoint DEF="DOOR-HINGE" containerField="joints" anchorPoint="1.1 0.95 1.5"
+                            axis="0 1 0" minAngle="-0.1" maxAngle="1.6" stopBounce="0.4"
+                            forceOutput='"angle"'>
+        <RigidBody USE="POST-BODY" containerField="body1"/>
+        <RigidBody USE="DOOR-BODY" containerField="body2"/>
+      </SingleAxisHingeJoint>
+
+      <!-- The chain: three links on ball joints, hung from a beam. -->
+      <RigidBody DEF="BEAM-BODY" containerField="bodies" position="0 3.2 -1.5" fixed="true">
+        <CollidableShape USE="BEAM" containerField="geometry"/></RigidBody>
+      <RigidBody DEF="LINK-BODY-1" containerField="bodies" position="0 2.85 -1.5"
+                 linearVelocity="2 0 0">
+        <CollidableShape USE="LINK-1" containerField="geometry"/></RigidBody>
+      <RigidBody DEF="LINK-BODY-2" containerField="bodies" position="0 2.35 -1.5">
+        <CollidableShape USE="LINK-2" containerField="geometry"/></RigidBody>
+      <RigidBody DEF="LINK-BODY-3" containerField="bodies" position="0 1.85 -1.5">
+        <CollidableShape USE="LINK-3" containerField="geometry"/></RigidBody>
+      <BallJoint containerField="joints" anchorPoint="0 3.1 -1.5">
+        <RigidBody USE="BEAM-BODY" containerField="body1"/>
+        <RigidBody USE="LINK-BODY-1" containerField="body2"/></BallJoint>
+      <BallJoint containerField="joints" anchorPoint="0 2.6 -1.5">
+        <RigidBody USE="LINK-BODY-1" containerField="body1"/>
+        <RigidBody USE="LINK-BODY-2" containerField="body2"/></BallJoint>
+      <BallJoint containerField="joints" anchorPoint="0 2.1 -1.5">
+        <RigidBody USE="LINK-BODY-2" containerField="body1"/>
+        <RigidBody USE="LINK-BODY-3" containerField="body2"/></BallJoint>
+
+      <!-- The wheel: driven about its axle by a double-axis hinge, its
+           steering locked by equal stops. -->
+      <RigidBody DEF="STAND-BODY" containerField="bodies" position="3 0.6 -1" fixed="true">
+        <CollidableShape USE="STAND" containerField="geometry"/></RigidBody>
+      <RigidBody DEF="WHEEL-BODY" containerField="bodies" position="3.25 1.0 -1" mass="4"
+                 orientation="0 0 1 1.5708" useGlobalGravity="false">
+        <CollidableShape USE="WHEEL" containerField="geometry"/></RigidBody>
+      <DoubleAxisHingeJoint DEF="WHEEL-HINGE" containerField="joints" anchorPoint="3.25 1.0 -1"
+                            axis1="0 1 0" axis2="1 0 0" minAngle1="0" maxAngle1="0"
+                            desiredAngularVelocity2="3" maxTorque2="20"
+                            forceOutput='"hinge2AngleRate"'>
+        <RigidBody USE="STAND-BODY" containerField="body1"/>
+        <RigidBody USE="WHEEL-BODY" containerField="body2"/></DoubleAxisHingeJoint>
+
+      <!-- The cardan shaft: a motor joint turns the first shaft, and a
+           universal joint carries the turn round a bend into the second. -->
+      <RigidBody DEF="SHAFT-BODY-1" containerField="bodies" position="2.6 2.2 -2.5" mass="1"
+                 useGlobalGravity="false" autoDamp="true" angularDampingFactor="0.02">
+        <CollidableShape USE="SHAFT-1" containerField="geometry"/></RigidBody>
+      <RigidBody DEF="SHAFT-BODY-2" containerField="bodies" position="3.346 2.4 -2.5" mass="1"
+                 orientation="0 0 1 0.524" useGlobalGravity="false" autoDamp="true"
+                 angularDampingFactor="0.02">
+        <CollidableShape USE="SHAFT-2" containerField="geometry"/></RigidBody>
+      <SingleAxisHingeJoint containerField="joints" anchorPoint="2.2 2.2 -2.5" axis="1 0 0">
+        <RigidBody USE="STAND-BODY" containerField="body1"/>
+        <RigidBody USE="SHAFT-BODY-1" containerField="body2"/></SingleAxisHingeJoint>
+      <SingleAxisHingeJoint containerField="joints" anchorPoint="3.693 2.6 -2.5"
+                            axis="0.866 0.5 0">
+        <RigidBody USE="STAND-BODY" containerField="body1"/>
+        <RigidBody USE="SHAFT-BODY-2" containerField="body2"/></SingleAxisHingeJoint>
+      <MotorJoint containerField="joints" enabledAxes="1" motor1Axis="1 0 0"
+                  axis1Torque="0.05" autoCalc="true">
+        <RigidBody USE="STAND-BODY" containerField="body1"/>
+        <RigidBody USE="SHAFT-BODY-1" containerField="body2"/></MotorJoint>
+      <UniversalJoint containerField="joints" anchorPoint="3.0 2.2 -2.5" axis1="0 1 0"
+                      axis2="0 0 1">
+        <RigidBody USE="SHAFT-BODY-1" containerField="body1"/>
+        <RigidBody USE="SHAFT-BODY-2" containerField="body2"/></UniversalJoint>
+
+      <!-- The piston: pushed along its rail until it meets the far stop. -->
+      <RigidBody DEF="RAIL-BODY" containerField="bodies" position="1 0.05 -3" fixed="true">
+        <CollidableShape USE="RAIL" containerField="geometry"/></RigidBody>
+      <RigidBody DEF="PISTON-BODY" containerField="bodies" position="0.5 0.25 -3" mass="2"
+                 useGlobalGravity="false">
+        <CollidableShape USE="PISTON" containerField="geometry"/></RigidBody>
+      <SliderJoint DEF="PISTON-SLIDE" containerField="joints" axis="1 0 0" minSeparation="0"
+                   maxSeparation="1" sliderForce="4" stopBounce="0.5"
+                   forceOutput='"separation"'>
+        <RigidBody USE="RAIL-BODY" containerField="body1"/>
+        <RigidBody USE="PISTON-BODY" containerField="body2"/></SliderJoint>
+    </RigidBodyCollection>
+
+    <!-- The ball's bounce: a sensor finds it touching the floor, and its
+         contacts, with the sensor collection's bounce, go to the workshop. -->
+    <CollisionSensor DEF="BOUNCE-SENSOR">
+      <CollisionCollection containerField="collider" appliedParameters='"BOUNCE"'
+                           bounce="0.85" minBounceSpeed="0.3">
+        <CollidableShape USE="BALL"/><CollidableShape USE="FLOOR"/>
+      </CollisionCollection>
+    </CollisionSensor>
+    <ROUTE fromNode="BOUNCE-SENSOR" fromField="contacts" toNode="WORKSHOP" toField="set_contacts"/>
+  </Scene>
+</X3D>

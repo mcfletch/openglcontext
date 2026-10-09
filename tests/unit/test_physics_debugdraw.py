@@ -309,3 +309,37 @@ def test_hull_edges_are_unique():
 if __name__ == '__main__':
     import sys
     sys.exit(pytest.main([__file__, '-v']))
+
+
+def test_proxy_edges_for_cylinders_cones_and_compounds():
+    """A flat-ended cylinder, a cone and a compound of parts are each drawn."""
+    cylinder = _body.make_proxy(model.Shape.cylinder(2.0, 0.5), (0, 0, 0), (0, 0, 0, 1))
+    cone = _body.make_proxy(model.Shape(type='cylinder', height=2.0, radiusBottom=0.5,
+                                        radiusTop=0.0), (0, 0, 0), (0, 0, 0, 1))
+    compound = _body.make_proxy(model.Shape.compound([
+        model.ShapePart(model.Shape.box((1, 1, 1)), position=(2, 0, 0)),
+        model.ShapePart(model.Shape.sphere(0.5), position=(-2, 0, 0))]),
+        (0, 0, 0), (0, 0, 0, 1))
+    assert len(proxy_edges(cylinder)) > len(proxy_edges(cone)) > 0
+    edges = proxy_edges(compound)
+    assert len(edges) == 12 + 3 * 16
+    ends = np.array([point for edge in edges for point in edge])
+    assert ends[:, 0].max() == pytest.approx(2.5)
+    assert ends[:, 0].min() == pytest.approx(-2.5)
+
+
+def test_joint_line_of_a_row_joint_reaches_its_anchor():
+    """A hinge to the world draws from its anchor to the body it holds."""
+    from omi_physics.joints import HingeJoint, SliderJoint  # noqa: PLC0415 kept with its use
+    scene = DemoScene(gravity=model.Gravity(gravity=9.81), debug_flags=0)
+    b = scene.add_box(size=(1, 1, 1), position=(0, 2, 0), dynamic=True)
+    scene.world.add_joint_constraint(
+        HingeJoint(-1, b.index, anchor=(1, 2, 0), axis=(0, 0, 1)))
+    dbg = PhysicsDebugDraw(scene.world, flags=JOINTS)
+    dbg.update()
+    assert np.allclose(dbg.coord.point[0], (1, 2, 0))
+    assert np.allclose(dbg.coord.point[1], scene.world.position[b.index])
+    scene.world.remove_joint_constraint(scene.world.joint_constraints[0])
+    scene.world.add_joint_constraint(SliderJoint(-1, b.index, axis=(0, 1, 0)))
+    dbg.update()
+    assert np.asarray(dbg.coord.point).shape == (1, 3)   # no anchor on the world's side

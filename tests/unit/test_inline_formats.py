@@ -155,3 +155,23 @@ def test_an_inline_in_an_inlined_document_reads_beside_it(tmp_path):
     inner.load = True
     settle()
     assert [type(child) for child in inner.renderedChildren()] == [basenodes.Shape]
+
+
+def test_a_document_that_inlines_itself_reads_once(tmp_path, caplog):
+    from vrml.x3d import loadsensor  # noqa: PLC0415 kept with its use
+    (tmp_path / 'world.x3d').write_bytes(document('world.x3d'))
+    with caplog.at_level(logging.WARNING):
+        found = inlined(Loader.load(str(tmp_path / 'world.x3d')))
+    assert loadsensor.load_state(found) == loadsensor.FAILED
+    assert found.renderedChildren() == []
+    assert 'inlines itself' in caplog.text
+
+
+def test_documents_that_inline_each_other_stop_where_the_chain_returns(tmp_path):
+    (tmp_path / 'a.x3d').write_bytes(document('b.x3d'))
+    (tmp_path / 'b.x3d').write_bytes(document('a.x3d'))
+    outer = inlined(Loader.load(str(tmp_path / 'a.x3d')))
+    settle()
+    middle = outer.renderedChildren()[0]
+    assert isinstance(middle, Inline)
+    assert middle.renderedChildren() == []

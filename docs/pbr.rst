@@ -220,6 +220,24 @@ the same geometry and transforms. ``scenegraph/texturemapping.py`` works out
 which set and transform each channel reads; see :ref:`Surfaces that move <animated-surfaces>` for
 animating a transform.
 
+Texture layers and projectors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An appearance whose ``texture`` is a ``MultiTexture``, a cube map or a 3D
+texture draws a stage chain in place of the base colour map
+(``shaders/_layers_inc.glsl``, ``scenegraph/texturelayers.py``), and a
+``TextureProjector`` modulates the diffuse colour of what it falls on
+(``shaders/_projectors_inc.glsl``); :ref:`Loading X3D <x3d-texturing>`
+describes both. For a ``PhysicalMaterial`` or an ``UnlitMaterial`` the
+chain runs in linear light, its textures decoded from sRGB as base colour
+maps are. The chain's 2D textures are read through the base colour map's
+sampler and three extension maps' (transmission, iridescence thickness,
+clearcoat), which a material drawn with a chain does not sample; its cube
+map, 3D texture and the projectors' pictures take three samplers of their
+own, on units 32 to 34, compiled in where the fragment stage has room
+(``pbrpass.pbr_fragment_samplers``). A 3D texture's coordinates arrive at
+attribute location 15, ``TEXCOORD_3D``.
+
 .. _procedural-surfaces:
 
 Procedural surfaces

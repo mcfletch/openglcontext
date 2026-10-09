@@ -140,6 +140,27 @@ Installing the package puts these commands on your path:
    window, a swung gold vase, a swept brass rail, a bead riding a brick
    banner and a dart flying along a curve, with a key to change the
    ``NurbsSet``'s tessellation scale. See :doc:`NURBS <nurbs>`.
+``oglc-x3d-rigidbody``
+   X3D's RigidBodyPhysics nodes read from a document: brick crates falling
+   into a heap, a marble ball bounced by a sensor's contacts, a brass door
+   against its stop, a steel chain, a driven wheel, a cardan shaft, a piston
+   and a dumbbell. The p key pauses it and r starts it again. See
+   :ref:`x3d-rigid-bodies`.
+``oglc-x3d-shaders``
+   An X3D document whose shapes are drawn by their own GLSL: a toon-shaded
+   sphere, a GLSL 1.20 marble column, a geometry stage, a packaged shader, a
+   vertex-attribute heat bar and a rippling pool. See :ref:`x3d-shaders`.
+``oglc-x3d-geospatial``
+   An alpine valley placed by latitude, longitude and height: a
+   ``GeoElevationGrid`` under a ``GeoLOD`` of finer tiles, a hamlet of
+   ``GeoLocation`` huts, a balloon on a ``GeoPositionInterpolator`` and three
+   ``GeoViewpoint`` nodes, one in UTM. See :ref:`x3d-geospatial`.
+``oglc-x3d-particles``
+   X3D's particle systems read from a document: a brazier, a fountain, a
+   firework, snow in gusting wind, a sphere shedding sparks and gold beads
+   bouncing in a glass case, one for each emitter and physics model, with
+   keys to set the firework off and switch the wind. See :ref:`X3D particle
+   systems <x3d-particles>`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

@@ -42,7 +42,7 @@ from OpenGLContext.scenegraph import boundingvolume, grouping, lod
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.inline import Inline
 from OpenGLContext.scenegraph.meshgeometry import GridDrawn
-from OpenGLContext.scenegraph.viewpoint import Viewpoint
+from OpenGLContext.scenegraph.viewpoint import Perspective
 
 __all__ = ['GeoCoordinate', 'GeoElevationGrid', 'GeoLOD', 'GeoLocation', 'GeoTransform', 'GeoTransforming',
            'GeoViewpoint',
@@ -263,7 +263,7 @@ class GeoElevationGrid(GridDrawn, x3d.GeoElevationGrid):
         return geospatial.scene_points(self, found)
 
 
-class GeoViewpoint(Viewpoint, x3d.GeoViewpoint):
+class GeoViewpoint(Perspective, x3d.GeoViewpoint):
     """X3D's GeoViewpoint: a perspective view at `position` in its `geoSystem`
 
     `orientation` turns the view from the frame at `position`, which looks

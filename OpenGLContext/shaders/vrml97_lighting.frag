@@ -26,6 +26,11 @@ in vec3 vPosition;
 #include "_viewer_inc.glsl"
 in vec2 vTexCoord;
 in vec4 vColor;
+in vec2 vTexCoord1;
+in vec3 vLocalPosition;  // the point, its normal and the camera in the shape's own space
+in vec3 vLocalNormal;
+flat in vec3 vLocalEye;
+in vec4 vTexCoord3D;     // a 3D texture's coordinates (s, t, r, q)
 // A mesh's per-vertex colours, which replace diffuseColor (X3D 17.2.2.4)
 uniform bool hasVertexColor;
 // No material under X3D's rules: the diffuse colour (white, a Color node's,
@@ -46,6 +51,23 @@ uniform bool hasDiffuseTexture;
 
 uniform mat4 eyeToWorld;   // inverse camera view (cube shadow direction)
 
+// A texture layer's 2D texture (_layers_inc.glsl): the first on the diffuse
+// texture's unit, the rest on units of their own.
+uniform sampler2D textureLayerMap1;
+uniform sampler2D textureLayerMap2;
+uniform sampler2D textureLayerMap3;
+vec4 layerTexture2D(int slot, vec2 uv) {
+    if (slot == 1) return texture(textureLayerMap1, uv);
+    if (slot == 2) return texture(textureLayerMap2, uv);
+    if (slot == 3) return texture(textureLayerMap3, uv);
+    return texture(diffuseTexture, uv);
+}
+#define TEXTURE_LAYER_SAMPLERS 1
+#define TEXTURE_PROJECTORS 1
+#include "_common_inc.glsl"
+#include "_texgen_inc.glsl"
+#include "_layers_inc.glsl"
+
 // Shadow-map uniforms, samplers and sampling functions (spot/CSM packed into one
 // depth array, point shadows into a cube-array or per-slot cubes). Needs the
 // enums (above), the vPosition/vNormal varyings and eyeToWorld, all above here.
@@ -63,6 +85,8 @@ layout(location = 1) out vec4 fragObjectId;
 
 // X3D's Phong terms, shared with vrml97_vertex_color.frag and pbr.frag.
 #include "_phong_inc.glsl"
+// X3D's texture projectors, switched off per draw by _phong_inc's lightsOff
+#include "_projectors_inc.glsl"
 #include "_x3d_fog_inc.glsl"
 #include "_fill_inc.glsl"
 
@@ -93,6 +117,16 @@ void main() {
         matDiffuse *= texColor.rgb;
         alpha *= texColor.a;
     }
+    // X3D's MultiTexture, or a cube map or 3D texture, in place of the
+    // texture (_layers_inc.glsl), from the diffuse colour as it is given.
+    vec4 layered;
+    if (textureLayered(matDiffuse, alpha, specularColor, false, normal, layered)) {
+        matDiffuse = layered.rgb;
+        alpha = layered.a;
+    }
+    // X3D's texture projectors (_projectors_inc.glsl) cast onto the diffuse colour.
+    matDiffuse *= projectedColor((eyeToWorld * vec4(vPosition, 1.0)).xyz,
+                                 mat3(eyeToWorld) * normal);
 
     vec3 finalColor = matDiffuse;
     if (!unlit) {

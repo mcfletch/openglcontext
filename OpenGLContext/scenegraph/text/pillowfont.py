@@ -317,12 +317,14 @@ class _PillowTextProvider(fontprovider.TTFFontProvider):
     shader_compatible = True
 
     def key(self, fontStyle: Any = None) -> Any:
-        """The face and size a FontStyle names"""
+        """The face and size a FontStyle names, and the FontLibrary files its families are"""
         if not fontStyle:
             return None
+        from OpenGLContext.scenegraph.text import fontlibrary  # noqa: PLC0415 fontlibrary imports the context
         return (tuple(getattr(fontStyle, 'family', ()) or ()),
                 str(getattr(fontStyle, 'style', '') or ''),
-                float(getattr(fontStyle, 'size', 1.0) or 1.0))
+                float(getattr(fontStyle, 'size', 1.0) or 1.0),
+                fontlibrary.key(fontStyle))
 
     def create(self, fontStyle: Any, mode: Any = None) -> Any:
         """A new font for `fontStyle`"""

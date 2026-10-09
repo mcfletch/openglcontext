@@ -93,6 +93,8 @@ class Box( basenodes.Box ):
             return int(self._render_shader(mode))
 
         # Legacy rendering path
+        from OpenGLContext.scenegraph.winding import apply_winding_cull
+        apply_winding_cull(mode, True, bool(self.solid))
         vb = mode.cache.getData(self)
         if not vb:
             vb = self.compile( mode=mode )
@@ -109,11 +111,11 @@ class Box( basenodes.Box ):
         vb = self._get_shader_vbo(mode)
         return render_geometry(mode, GeometryArrays.interleaved(
             vb, VertexFormat.T2F_N3F_V3F, count=36,
-        ), owner=self, where='Box')
+        ), owner=self, where='Box', solid=bool(self.solid))
 
     def instanceContentKey(self) -> tuple[Any, ...]:
         """Boxes of the same size share geometry, so they batch as instances."""
-        return ('Box', tuple(round(float(v), 6) for v in self.size))
+        return ('Box', tuple(round(float(v), 6) for v in self.size), bool(self.solid))
 
     def meshArrays(self) -> Any:
         """The box's twelve triangles, each face's corners its own vertices"""
