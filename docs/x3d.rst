@@ -905,6 +905,16 @@ Binding, viewpoints and navigation
   and ``avatarSize`` (radius, eye height, step height) sizes the walking
   avatar in the world's own units. These are applied again whenever they
   change.
+- In a context with no declared modes, a document whose NavigationInfo has
+  ``WALK`` as its first type keeps its viewer on the ground
+  (``OpenGLContext.move.terrainfollow``), as X_ITE does. Down is the bound
+  viewpoint's -Y axis. When a viewpoint is bound the viewer is put on the
+  ground below it, its eye ``avatarSize[1]`` above it; after that it falls
+  at 9.80665 m/s² when above that height and steps up a rise lower than
+  ``avatarSize[2]``. Ground is any drawn shape within ``avatarSize[0]`` of
+  the line down through the eye, except under a ``Collision`` whose
+  ``enabled`` is false, and through its ``proxy`` where it has one. A viewer
+  with nothing below it falls.
 - A viewpoint bound after the first is moved to as the bound NavigationInfo's
   ``transitionType`` and ``transitionTime`` say: ``LINEAR`` straight at a
   steady pace, ``ANIMATE`` easing in and out, ``TELEPORT`` at once; with no

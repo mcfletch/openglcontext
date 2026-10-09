@@ -224,6 +224,11 @@ def _restore_offset(view: Any, platform: Any) -> None:
         platform.setOrientation(platform.quaternion * offset[1])
 
 
+def in_transition(context: Any) -> bool:
+    """Whether `context`'s camera is moving to a newly bound viewpoint"""
+    return context in _moving
+
+
 def _step_transition(context: Any, sg: Any) -> None:
     """Move the platform on along the transition in progress, if there is one"""
     move = _moving.get(context)
