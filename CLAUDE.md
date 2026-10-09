@@ -134,6 +134,8 @@ OpenGLContext/
 │   │                 # -- docs/untrusted.rst
 │   ├── x3d.py        # X3D in every encoding, read by vrml.x3d into the
 │   │                 # engine's nodes (prototypes()) -- docs/loading.rst
+│   ├── meshfiles.py  # STL, PLY (and splat PLY) and OFF, one mesh each
+│   │                 # -- docs/loading.rst#loading-meshfiles
 │   ├── gltf/         # glTF 2.0 / GLB
 │   │   ├── lod.py    # MSFT_lod: a node's coarser levels, and when each is
 │   │   │             # worth drawing -- docs/gltf.rst#lod. Making them is
@@ -142,6 +144,10 @@ OpenGLContext/
 │   │   │             # opened only when asked -- docs/baking.rst#writing-lod
 │   │   ├── splats.py # KHR_gaussian_splatting primitives read as, and
 │   │   │             # written from, GaussianSplats nodes -- docs/gltf.rst
+│   │   ├── meshopt.py   # KHR_/EXT_meshopt_compression: buffer views
+│   │   │             # decoded in NumPy -- docs/gltf.rst
+│   │   ├── variants.py  # KHR_materials_variants: GLTFScene.select_variant
+│   │   │             # -- docs/gltf.rst#gltf-variants
 │   │   └── notices.py   # asset.copyright, exporter extras and
 │   │                 # KHR_xmp_json_ld packets, as Notice records
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst

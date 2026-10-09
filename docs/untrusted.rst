@@ -191,6 +191,10 @@ Rules for each loader
        (``loaders.x3d.ContainedPrototypes``), and so is each file those name,
        eight files deep at most. A URL the resolver refuses is logged and the
        next one tried; the prototype's instances are then empty.
+   * - STL, PLY, OFF (``loaders/meshfiles.py``)
+     - Reference nothing. A count in a header is checked against the bytes
+       that follow before anything is allocated for it, and a gzip document is
+       decompressed no further than the size limit.
    * - Wavefront OBJ (``loaders/obj.py``)
      - ``mtllib`` and texture references go through the same ``Loader``, so they
        are restricted to the model's directory.

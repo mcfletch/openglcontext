@@ -244,7 +244,8 @@ Features
 
   - :doc:`OGC 3D Tiles <tiles3d>`, streamed from an octree of glTF tiles
 
-  - :doc:`VRML97 <vrml97>` worlds and Wavefront OBJ models
+  - :doc:`VRML97 <vrml97>` worlds, and Wavefront OBJ, STL, PLY and OFF
+    models (:doc:`loading`)
 
   - Quake III BSP levels and PK3 archives, through the `twig-bb
     <https://github.com/mcfletch/twig-bb>`__ project

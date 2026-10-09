@@ -103,3 +103,25 @@ Used by `OpenGLContext/scenegraph/splatmath.py`,
 - Defaults differ between the draft's text and its schema: the text gives
   `castShadow` and `pointerEvents` FALSE, the schema `true`. pyvrml97
   declares the schema's.
+
+## The PLY layout splat trainers write
+
+Source: the MIT-licensed converter `3dgs_ply2gltf` (Huawei Technologies
+Canada, listed under the extension's "Known Implementations"), read
+2026-10-09. Used by `OpenGLContext/loaders/meshfiles.py`.
+
+- One `vertex` element; properties `x`, `y`, `z` (the centre), `nx`, `ny`,
+  `nz` (unused), `f_dc_0` to `f_dc_2` (the degree-0 coefficients, red, green,
+  blue), `f_rest_0` onwards (the higher degrees), `opacity`, `scale_0` to
+  `scale_2`, `rot_0` to `rot_3`, all float.
+- `scale_*` are natural logarithms of the linear scales: the scale is
+  `exp(scale_i)`.
+- `opacity` is before the sigmoid: the opacity is `1 / (1 + exp(-opacity))`.
+- `rot_0` to `rot_3` are the quaternion's (w, x, y, z), not normalised: the
+  rotation is that quaternion divided by its length.
+- `f_rest_*` are channel-major: with K = 3, 8 or 15 coefficients per channel
+  for degree 1, 2 or 3, coefficient k of channel c (red 0, green 1, blue 2) is
+  `f_rest_(c * K + k)`. Within a channel the coefficients run degree by
+  degree, m = -l to l, as the glTF attributes do.
+- The coordinates are as the trainer left them; the converter's optional turn
+  from z-up to y-up is not part of the format.

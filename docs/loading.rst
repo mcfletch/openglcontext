@@ -5,12 +5,12 @@ Loading Content
 
 .. rst-class:: introduction
 
-OpenGLContext reads five formats into its scenegraph: X3D and VRML97 worlds,
-glTF 2.0 and GLB models, Wavefront OBJ models, and streamed OGC 3D Tiles
-datasets. This page shows the call that loads each from Python, what it
-returns, and how to wait for the files a scene names. To open a file and look
-at it without writing any code, use :doc:`oglc-view <viewer>`, which opens all
-five.
+OpenGLContext reads these formats into its scenegraph: X3D and VRML97 worlds,
+glTF 2.0, GLB and VRM models, Wavefront OBJ, STL, PLY and OFF models, and
+streamed OGC 3D Tiles datasets. This page shows the call that loads each from
+Python, what it returns, and how to wait for the files a scene names. To open
+a file and look at it without writing any code, use :doc:`oglc-view <viewer>`,
+which opens all of them.
 
 .. list-table::
    :widths: auto
@@ -19,16 +19,20 @@ five.
    * - Format
      - Call
      - Returns
-   * - X3D (``.x3d``, ``.x3dz``, ``.x3dv``, ``.x3dvz``, ``.x3dj``, ``.x3db``)
+   * - X3D (``.x3d``, ``.x3dz``, ``.x3dv``, ``.x3dvz``, ``.x3dj``, ``.x3djz``,
+       ``.x3db``, and each with ``.gz`` appended)
      - ``Loader.load(url)``
      - an ``X3DScene``, a ``sceneGraph``
    * - VRML97 (``.wrl``, ``.wrz``, ``.vrml``, ``.wrl.gz``)
      - ``Loader.load(url)``
      - a ``sceneGraph``
-   * - Wavefront OBJ (``.obj``)
+   * - Wavefront OBJ (``.obj``, ``.obj.gz``)
      - ``Loader.load(url)``
      - a ``sceneGraph``
-   * - glTF 2.0 (``.gltf``, ``.glb``)
+   * - STL, PLY, OFF (``.stl``, ``.ply``, ``.off``, each also ``.gz``)
+     - ``Loader.load(url)``
+     - a ``sceneGraph``
+   * - glTF 2.0 (``.gltf``, ``.glb``, ``.vrm``, ``.gltf.gz``, ``.glb.gz``)
      - ``gltf.load_gltf(path)``, ``gltf.load_gltf_url(url)``
      - a ``GLTFScene``, whose ``group`` is the scenegraph
    * - OGC 3D Tiles (``tileset.json``)
@@ -329,6 +333,49 @@ lights, cameras or animation, so the scale of the result is whatever the
 author modelled in, and a scene built around it supplies its own lights. A
 model moved without its ``.mtl`` file loads with every material light grey.
 :doc:`tutorials/using_obj` is a complete program.
+
+.. _loading-meshfiles:
+
+STL, PLY and OFF models
+-----------------------
+
+Each of these files holds one mesh, and loads through the same ``Loader``:
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.loader import Loader
+
+   bracket = Loader.load( 'bracket.stl' )      # or .ply, .off, and .gz of each
+
+The scene holds one ``Shape`` with a ``PBRMesh`` in a light grey
+``PhysicalMaterial`` (base colour 0.8, roughness 0.6), or white where the file
+gives vertex colours. ``OpenGLContext.loaders.meshfiles`` reads them:
+
+- STL, ASCII or binary. Each facet keeps its own corners and normal, so the
+  model is drawn faceted; a facet stored with a zero normal has one worked out
+  from its corners. A binary file is recognised by its size, so one whose
+  header happens to begin with ``solid`` still reads.
+- PLY, ASCII or binary of either byte order: positions, normals, colours
+  (``red``, ``green``, ``blue``, ``alpha``) and texture coordinates (``s``/``t``,
+  ``u``/``v`` or ``texture_u``/``texture_v``) of the ``vertex`` element, and the
+  ``face`` element's ``vertex_indices``. A file with no faces is drawn as
+  points. A PLY of 3D Gaussian splats (vertices carrying ``f_dc_*``,
+  ``f_rest_*``, ``opacity``, ``scale_*`` and ``rot_*``, as splat trainers write
+  them) loads as a ``GaussianSplats`` node, drawn as
+  :ref:`x3d-gaussian-splats` describes.
+- OFF, with the ``ST``, ``C`` and ``N`` prefixes, and a colour on any face; the
+  ``OFF`` keyword may be left out. ``4OFF``, ``nOFF`` and binary OFF are not
+  read.
+
+A model without normals is given smooth ones. Polygons are cut into triangle
+fans from their first corner, which suits the convex polygons these formats
+hold. None of the three records a unit, so the result is in whatever unit the
+file was modelled in. A file that does not hold what its header declares
+raises ``ValueError`` naming the file and the problem.
+
+A gzip-compressed document of any of the formats on this page, named with a
+``z`` or a ``.gz`` suffix, is decompressed on reading, up to the same size
+limit a document is held to before decompression.
 
 Streamed 3D Tiles
 -----------------

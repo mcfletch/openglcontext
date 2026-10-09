@@ -617,6 +617,63 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     components. Until that decoder lands, a MovieTexture is kept with its
     fields and drawn untextured; its timing is pyvrml97's
     `vrml.x3d.media.MovieTexture` on `timesensor.Clocked`, ready for it
+- Phase 11, X_ITE compatibility: glTF extensions and file formats (branch
+  x3d-xgltf, 2026-10-09). Audit of the 34 extensions on X_ITE's features page
+  against the loader and writer code
+  - [x] `KHR_accessor_float16`, `KHR_accessor_float64` (Khronos draft PR
+    2397): component types 5131 and 5130 wherever a float accessor is read;
+    animation keyframes read and interpolated in float64
+    (`accessors._read_floats(precise=True)`); a double vertex attribute is
+    logged when rounded to single precision
+  - [x] `KHR_mesh_quantization` was partial: normalized positions, normals,
+    tangents and morph deltas were read as raw integers (a gltfpack mesh drew
+    127 to 65535 times too large, its tangents swamped the normal map); all
+    float reads now take the normalized policy (`_coerce_normalized`)
+  - [x] `KHR_meshopt_compression`, `EXT_meshopt_compression`:
+    `loaders.gltf.meshopt`, a NumPy decoder from the extension READMEs'
+    appendices; ambiguities resolved from meshoptimizer's MIT reference
+    decoder, no code copied. Every buffer-view read goes through
+    `accessors.view_bytes` (accessors, sparse, images, Draco, audio), which
+    decodes a compressed view once per load. Checked against meshoptimizer
+    0.2.30's encoder on 2,700 attribute streams (both versions, all levels
+    including XOR channels), 400 triangle and 400 index streams, and its
+    filters (within the one unit the spec allows; exponential exact): no
+    differences. 100k 12-byte vertices decode in about 0.02 s, 100k
+    triangles in about 0.05 s. Tests: meshoptimizer's own vectors, the
+    filters encoded by hand, built documents, Khronos BrainStem (both
+    variants) and MeshoptCubeTest (`network`). The writer writes buffers
+    uncompressed
+  - [x] `KHR_materials_variants`: `loaders.gltf.variants`;
+    `GLTFScene.variants`, `.variant`, `.select_variant(name | index | None)`
+    re-dress every primitive that maps the variant (appearance, mesh
+    appearance, `solid`); materials of every variant built at load. Each mesh
+    keeps `materialVariants`, which the writer writes back as mappings with
+    the default material. Tested with built documents, a GL frame, and
+    Khronos MaterialsVariantsShoe (`network`)
+  - [x] `EXT_texture_avif` through Pillow (12.3 here decodes AVIF;
+    `textures.decodes`); the AVIF or WebP image is now preferred to the core
+    `source`, which is the fallback (before, the core source won). The writer
+    writes an `EncodedImage` in AVIF or WebP through its extension and lists
+    it in `extensionsRequired` (a WebP image was written as a core image,
+    which is invalid)
+  - [ ] `EXT_texture_video`: waits on pyopengl-video's GPU decoder (as
+    `MovieTexture`); a texture carrying it draws its core `source`
+  - [ ] `KHR_texture_basisu`: no KTX2/Basis transcoder under a usable licence
+    in Python; needs one (Binomial's basis_universal is Apache-2.0, C++, and
+    would be an optional compiled dependency). A texture carrying it draws its
+    core `source`
+  - left to the xnodes stream: `KHR_materials_retroreflection`,
+    `KHR_materials_volume_scatter`, `KHR_materials_pbrSpecularGlossiness`
+  - [x] X_ITE's file formats: STL, PLY (with 3D Gaussian splat PLY as
+    GaussianSplats) and OFF read by `loaders.meshfiles`, registered as Loader
+    and Adapter entries (so `Inline`, `SceneLoader` and `oglc-view` open
+    them); `.vrm` and `model/vrm` read as glTF; `.x3djz` and `.gz` appended to
+    X3D, glTF, OBJ and the mesh formats, decompressed under the resource limit
+    (`resolver.gunzipped`). Not read: SOG and SPZ (splat formats X_ITE reads
+    only with plug-ins), SVG (2D)
+  - [x] `test_gltf_conformance` skipped every render: it passed `None` as the
+    window system, and a render that drew nothing was a skip. It passes no
+    backend now, and a render that draws nothing fails
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

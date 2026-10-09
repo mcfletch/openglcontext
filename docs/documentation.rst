@@ -346,8 +346,8 @@ Geometry and text
 Worlds and content
 ~~~~~~~~~~~~~~~~~~
 
-- :doc:`Loading Content <loading>` -- loading VRML97, glTF, OBJ and 3D Tiles
-  from your own code, what each call returns, and waiting for the textures
+- :doc:`Loading Content <loading>` -- loading X3D, VRML97, glTF, OBJ, STL,
+  PLY, OFF and 3D Tiles from your own code, what each call returns, and waiting for the textures
   and inlined files a scene names.
 
 - :doc:`Loading glTF <gltf>` -- the glTF 2.0 loader: what it supports, calling
