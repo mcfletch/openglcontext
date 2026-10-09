@@ -14,6 +14,9 @@ from typing import Any, Optional
 
 from . import _flat
 from OpenGLContext.move import navigationinfo
+from OpenGLContext.passes.fixedprojectors import FixedProjectorsMixin
+from OpenGLContext.scenegraph.textureprojector import is_projector
+from vrml.x3d import nodes as x3dnodes
 from OpenGLContext.passes import glstate, lightscope
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
@@ -27,7 +30,7 @@ from pydispatch.dispatcher import connect
 import logging 
 log = logging.getLogger( __name__ )
 
-class FlatPass( _flat.FlatPass ):
+class FlatPass( FixedProjectorsMixin, _flat.FlatPass ):
     """Flat rendering pass with a single function to render scenegraph
 
     Uses structural scenegraph observations to allow the actual
@@ -194,7 +197,10 @@ class FlatPass( _flat.FlatPass ):
         """Enable a GL light for each light of the scene, then the headlight
 
         Records the scoped lights and those with a radius, which
-        :meth:`applyLegacyLights` switches off per draw.
+        :meth:`applyLegacyLights` switches off per draw. Texture projectors
+        are given texture units of their own
+        (:mod:`~OpenGLContext.passes.fixedprojectors`), and an
+        ``EnvironmentLight`` lights nothing here.
         """
         for remaining in range(0,self.MAX_LIGHTS-1):
             glDisable( GL_LIGHT0 + remaining )
@@ -202,7 +208,13 @@ class FlatPass( _flat.FlatPass ):
         lit = 0
         placed = []
         paths = []
+        projectors = []
         for path in self.layerPaths( nodetypes.Light ):
+            if is_projector( path[-1] ):
+                projectors.append( path )
+                continue
+            if isinstance( path[-1], x3dnodes.EnvironmentLight ):
+                continue
             tmatrix = path.transformMatrix()
 
             localMatrix = dot(tmatrix,matrix)
@@ -226,10 +238,13 @@ class FlatPass( _flat.FlatPass ):
             l = light.DirectionalLight( direction = (0,0,-1.0))
             glstate.load_matrix( matrix )
             l.Light( GL_LIGHT0 + bound, mode = self )
+        self.setupFixedProjectors( projectors, matrix )
         self.matrix = matrix
     
     def applyLegacyLights( self, path: Any, tmatrix: Any, bvolume: Any ) -> None:
-        """Switch off the lights whose scope or radius leaves out the draw of `path`"""
+        """Switch off the lights whose scope or radius leaves out the draw of
+        `path`, and the texture projectors whose scope does"""
+        self.applyFixedProjectors( path )
         lit = self._legacyLit
         if not lit:
             return
@@ -240,8 +255,9 @@ class FlatPass( _flat.FlatPass ):
         self._switchLegacyLights( mask & lit )
 
     def restoreLegacyLights( self ) -> None:
-        """Switch back on every light a draw switched off"""
+        """Switch back on every light a draw switched off, and the projectors' units off"""
         self._switchLegacyLights( 0 )
+        self.endFixedProjectors()
 
     def _switchLegacyLights( self, mask: int ) -> None:
         changed = mask ^ self._legacyOff

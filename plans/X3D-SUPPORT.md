@@ -385,9 +385,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (`scenegraph.textureprojector`, `passes.projectorpass`,
     `shaders/_projectors_inc.glsl`): up to four, pictures in one array
     texture, limited to their group as lights are through `lightsOff` bits 16+, modulating the
-    diffuse colour as X_ITE does; `shadows` and the compatibility profile
-    not drawn. Projectors and EnvironmentLight are no longer bound as
-    directional lamps
+    diffuse colour as X_ITE does; `shadows` not drawn (X_ITE neither; nor
+    does it cast more than four). Projectors and EnvironmentLight are no
+    longer bound as directional lamps. 2026-10-09 (x3d-xfields): the
+    compatibility profile casts them, a texture unit each from unit 1, the
+    picture baked to X_ITE's factor (`passes.fixedprojectors`); it bound
+    projectors and EnvironmentLights as GL lamps and failed the view
   - [x] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
     `ProgramShader`, `PackagedShader`, the vertex attributes
     (`scenegraph.x3dshaders`, `scenegraph.x3dglsl`): the first alternative

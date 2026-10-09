@@ -136,3 +136,17 @@ def test_a_cube_map_with_no_faces_yet_lights_nothing_until_it_has_them():
     found = light.imageLight()
     assert found is not None
     assert found.specular[0][0][0, 0] == pytest.approx((1, 1, 1))
+
+
+def test_the_compatibility_profile_draws_a_document_with_one(gl_context_compat):
+    """The fixed-function lights pass over it: it is no GL lamp"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b'''<X3D version="4.1"><Scene><Viewpoint position="0 0 4"/>
+      <EnvironmentLight/><Shape><Appearance><Material diffuseColor="1 0 0"/></Appearance>
+      <Sphere/></Shape></Scene></X3D>''', 'scene.x3d')
+    with scene_context(scene, size=(32, 32),
+                       environment={'OPENGLCONTEXT_PROFILE': 'compatibility'}) as context:
+        drawn_image(context)
+        image = drawn_image(context)
+    assert image[16, 16, 0] > 100 and image[16, 16, 1] < 30

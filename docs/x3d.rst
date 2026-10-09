@@ -484,9 +484,13 @@ times its ``color``, weighted by the texel's alpha times ``intensity``, as
 X3D browsers draw it. Its ``global`` and scope are a light's, it lights
 nothing itself, and it sends ``aspectRatio`` when its picture is known. The
 first four that are on cast, each picture resampled to 512 texels a side
-(``OpenGLContext.passes.projectorpass``); the rest are reported once.
-``shadows`` is kept and not acted on, and the compatibility profile casts
-none.
+(``OpenGLContext.passes.projectorpass``); the rest are reported once, as
+X_ITE also casts four. ``shadows`` is kept and not acted on, as in X_ITE.
+The compatibility profile casts each through a texture unit of its own, from
+unit 1 (``OpenGLContext.passes.fixedprojectors``): the same mix of picture,
+colour, alpha and intensity, modulating the lit colour on every face, from a
+picture with an image on the CPU (an ``ImageTexture`` or ``PixelTexture``).
+An ``EnvironmentLight`` lights nothing in the compatibility profile.
 
 Lighting
 ~~~~~~~~
