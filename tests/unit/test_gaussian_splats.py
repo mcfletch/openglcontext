@@ -227,6 +227,51 @@ def test_the_nearer_splat_is_drawn_over_the_farther():
     assert centre[0] > 200 and centre[2] < 20
 
 
+def _composited(centres, sigma, colours, order):
+    """The frame splatmath says round splats at eye-space `centres` make, drawn in `order`"""
+    centres = np.asarray(centres, float)
+    spread = splatmath.projected(np.identity(3) * sigma * sigma, centres, np.identity(3),
+                                 (FOCAL, FOCAL))
+    x, y = np.meshgrid(np.arange(SIZE) + 0.5 - SIZE / 2, SIZE / 2 - np.arange(SIZE) - 0.5)
+    frame = np.zeros((SIZE, SIZE, 3))
+    for index in order:
+        a, b, c = spread[index]
+        centre = FOCAL * centres[index, :2] / -centres[index, 2]
+        dx, dy = x - centre[0], y - centre[1]
+        reach = (c * dx * dx - 2 * b * dx * dy + a * dy * dy) / (a * c - b * b)
+        alpha = np.minimum(0.99, np.exp(-0.5 * reach))
+        alpha[(reach > 9.0) | (alpha < 1.0 / 255.0)] = 0.0
+        frame = frame * (1.0 - alpha[..., None]) + alpha[..., None] * np.asarray(colours[index])
+    return frame * 255.0
+
+
+@pytest.mark.usefixtures('core')
+def test_the_splats_are_drawn_farthest_from_the_camera_first():
+    """Off to the side, the red splat is nearer by depth and farther by distance."""
+    centres = [(0.8, 0, -2.0), (0.3, 0, -2.1)]
+    colours = [(1, 0, 0), (0, 0, 1)]
+    node = _splats(centres, [(0.25,) * 3] * 2, colours)
+    image = _draw(_scene(_placed(node, (0, 0, 0))))
+    by_distance = _composited(centres, 0.25, colours, [0, 1])
+    by_depth = _composited(centres, 0.25, colours, [1, 0])
+    assert np.abs(by_distance - by_depth).max() > 60
+    assert np.abs(image - by_distance).max() < 8
+
+
+@pytest.mark.usefixtures('core')
+def test_the_colour_turns_with_the_splats_and_is_not_bent_by_their_scale():
+    """A degree 1 coefficient on x, seen off axis through a stretch along x."""
+    harmonics = [[_dc((0.5, 0.5, 0.5))], [(0, 0, 0)], [(0, 0, 0)], [(-2.0, 0, 0)]]
+    node = from_arrays([(0.5, 0, 0)], [IDENTITY], [(0.1, 0.4, 0.4)], [1.0], harmonics)
+    stretched = basenodes.Transform(scale=(4, 1, 1), children=[node])
+    image = _draw(_scene(_placed(stretched, (0, 0, -6))))
+    column = round(SIZE / 2 + FOCAL * 2.0 / 6.0)
+    seen = splatmath.colours([np.concatenate([[_dc((0.5, 0.5, 0.5))], np.zeros((2, 3)),
+                                              [(-2.0, 0, 0)]])],
+                             [(2.0, 0.0, -6.0)])[0]
+    assert image[SIZE // 2, column, 0] == pytest.approx(0.99 * 255 * seen[0], abs=8)
+
+
 @pytest.mark.usefixtures('core')
 def test_turning_round_sorts_the_splats_again():
     node = _splats([(0, 0, 1), (0, 0, -1)], [(0.4,) * 3] * 2, [(1, 0, 0), (0, 0, 1)])
@@ -305,19 +350,29 @@ def _sorts(node):
 
 
 @pytest.mark.usefixtures('core')
-def test_moving_without_turning_keeps_the_order():
+def test_only_a_move_that_could_change_the_order_sorts_again():
     rng = np.random.default_rng(6)
     node = _splats(rng.normal(size=(200, 3)), [(0.1,) * 3] * 200, [(1, 1, 1)] * 200)
-    place = _placed(node)
+    place = _placed(node, (0.0, 0.0, -20.0))
     with scene_context(_scene(place), environment=PBR) as context:
         context.OnDraw(force=1)
-        for step in range(5):
-            place.translation = (0.1 * step, 0.0, -4.0 - 0.2 * step)
-            context.OnDraw(force=1)
+        place.translation = (0.0, 0.0001, -20.0)
+        context.OnDraw(force=1)
         assert _sorts(node) == 1
-        place.rotation = (0, 1, 0, 0.3)
+        place.translation = (0.5, 0.0, -20.0)
         context.OnDraw(force=1)
         assert _sorts(node) == 2
+
+
+@pytest.mark.usefixtures('core')
+def test_shadow_maps_draw_without_sorting():
+    environment = dict(PBR, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='2')
+    with scene_context(_shadow_scene(True), size=(SIZE, SIZE), environment=environment) as context:
+        for _ in range(3):
+            context.OnDraw(force=1)
+        node = context.sg.children[-1].children[0]
+        assert isinstance(node, GaussianSplats)
+        assert _sorts(node) == 1
 
 
 @pytest.mark.usefixtures('core')
@@ -364,6 +419,56 @@ def _shadow_scene(casts):
             basenodes.DirectionalLight(direction=(0, -1, 0), intensity=1.0),
             basenodes.NavigationInfo(headlight=False),
             _placed(ground, (0, -2, 0)), _placed(node, (2.5, 0, 0))]
+
+
+def _caster_scene(light, caster):
+    """`caster` 2 m up and the ground below, seen from under the caster looking down"""
+    ground = basenodes.Shape(
+        geometry=basenodes.Box(size=(8, 0.1, 8)),
+        appearance=basenodes.Appearance(material=basenodes.Material(diffuseColor=(1, 1, 1))))
+    return [basenodes.Viewpoint(position=(0, 1.5, 0), orientation=(1, 0, 0, -math.pi / 2)),
+            light, basenodes.NavigationInfo(headlight=False),
+            _placed(ground, (0, -2, 0)), _placed(caster, (0, 2, 0))]
+
+
+#: A splat's core reaches 1.17 deviations: where 0.99 exp(-d^2 / 2) is one half.
+CORE = math.sqrt(2.0 * math.log(2.0 * 0.99))
+
+
+@pytest.mark.usefixtures('core')
+@pytest.mark.parametrize('light', [
+    lambda: basenodes.DirectionalLight(direction=(0.1, -1, 0), intensity=1.0),
+    lambda: basenodes.PointLight(location=(0.2, 8, 0), intensity=1.0, radius=50),
+    lambda: basenodes.SpotLight(location=(0.2, 8, 0), direction=(0, -1, 0), intensity=1.0,
+                                radius=50, cutOffAngle=0.6, beamWidth=0.6),
+], ids=['directional', 'point', 'spot'])
+def test_a_splats_shadow_is_the_shadow_of_its_core(light):
+    """The ground a round splat darkens matches what a sphere of its core's size darkens."""
+    environment = dict(PBR, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='1')
+    sigma = 0.4
+    splat = _splats([(0, 0, 0)], [(sigma,) * 3], [(1, 1, 1)])
+    ball = basenodes.Shape(geometry=basenodes.Sphere(radius=CORE * sigma),
+                           appearance=basenodes.Appearance(
+                               material=basenodes.Material(diffuseColor=(1, 1, 1))))
+    lit = _draw(_caster_scene(light(), basenodes.Group()), environment, 3).max(axis=2)
+    shaded = {}
+    for name, caster in (('splat', splat), ('ball', ball)):
+        dark = _draw(_caster_scene(light(), caster), environment, 3).max(axis=2)
+        shaded[name] = np.count_nonzero(lit - dark > 30)
+    assert shaded['ball'] > 100
+    assert shaded['splat'] == pytest.approx(shaded['ball'], rel=0.12)
+
+
+@pytest.mark.usefixtures('core')
+@pytest.mark.parametrize('fields', [{'castShadow': False}, {'visible': False}],
+                         ids=['castShadow', 'visible'])
+def test_a_set_casts_no_shadow_where_its_fields_say_not(fields):
+    environment = dict(PBR, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='1')
+    light = basenodes.DirectionalLight(direction=(0.1, -1, 0), intensity=1.0)
+    lit = _draw(_caster_scene(light, basenodes.Group()), environment, 3)
+    node = _splats([(0, 0, 0)], [(0.4,) * 3], [(1, 1, 1)], **fields)
+    light = basenodes.DirectionalLight(direction=(0.1, -1, 0), intensity=1.0)
+    assert np.abs(_draw(_caster_scene(light, node), environment, 3) - lit).max() <= 2
 
 
 @pytest.mark.usefixtures('core')

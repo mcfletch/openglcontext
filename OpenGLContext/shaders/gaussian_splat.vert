@@ -30,7 +30,7 @@ layout(location = 0) in uint aSplat;       // required: the splat this instance 
 uniform mat4 uModelView;
 uniform mat4 uProjection;
 uniform vec2 uViewport;                    // the view's size in pixels
-uniform vec3 uCameraLocal;                 // the camera in the splats' frame
+uniform mat3 uTurn;                        // the modelview's rotation, its columns unit
 uniform samplerBuffer uGeometry;
 uniform samplerBuffer uHarmonics;
 uniform int uDegree;                       // 0 to 3
@@ -56,7 +56,8 @@ void cull() {
 }
 
 // The colour the coefficients give along `dir` (unit, or zero for degree 0
-// alone), in KHR_gaussian_splatting's basis order and constants.
+// alone), in KHR_gaussian_splatting's basis order and constants
+// (specs/gaussian-splats.md).
 vec3 harmonicColour(int splat, vec3 dir) {
     vec4 texels[12];
     int base = splat * uHarmonicTexels;
@@ -162,9 +163,12 @@ void main() {
 
     vec3 colour = vec3(0.0);
     if (uShadeColour) {
-        vec3 toSplat = centre.xyz - uCameraLocal;
+        // From the camera to the splat, turned back into the splats' frame
+        // by the rotation alone (splatmath.view_directions).
+        vec3 toSplat = perspective ? eye.xyz : vec3(0.0, 0.0, -1.0);
         float distance = length(toSplat);
-        colour = harmonicColour(splat, distance > 0.0 ? toSplat / distance : vec3(0.0));
+        vec3 dir = distance > 0.0 ? transpose(uTurn) * (toSplat / distance) : vec3(0.0);
+        colour = harmonicColour(splat, dir);
         if (uLinearColour) {
             colour = linearToSRGB(colour);
         }

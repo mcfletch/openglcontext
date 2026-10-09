@@ -8,10 +8,11 @@ projection to the screen is the one in Kerbl et al., "3D Gaussian Splatting
 for Real-Time Radiance Field Rendering" (2023), section 4.
 
 :class:`SplatSet` packs a node's fields into the rows the draw uploads;
-:func:`projected` and :func:`footprint` are what ``gaussian_splat.vert`` does
-for each splat, written here so a test can hold the shader to them;
-:class:`DepthOrder` keeps a back-to-front order and sorts again only when the
-view turns or the splats change.
+:func:`projected`, :func:`footprint` and :func:`view_directions` are what
+``gaussian_splat.vert`` does for each splat, written here so a test can hold
+the shader to them; :class:`DepthOrder` keeps a back-to-front order and sorts
+again only when the camera has moved far enough to change it or the splats
+change. The facts these follow are in ``specs/gaussian-splats.md``.
 
 Quaternions are (x, y, z, w). Matrices passed in are the engine's row-vector
 ones (``p_eye = p @ modelview``) except where a parameter says it is the
@@ -29,7 +30,8 @@ import numpy as np
 __all__ = [
     'DILATION', 'DepthOrder', 'SH_C0', 'SH_C1', 'SH_COEFFICIENTS', 'SplatSet',
     'back_to_front', 'colours', 'complete_degree', 'covariances', 'depths',
-    'footprint', 'projected', 'rotations', 'sh_basis',
+    'distances', 'facing', 'fit_harmonics', 'footprint', 'projected', 'rotations',
+    'sh_basis', 'sphere_directions', 'turn_of', 'view_directions',
 ]
 
 #: How many coefficients each degree of spherical harmonics adds: 1, 3, 5, 7.
@@ -132,6 +134,52 @@ def colours(coefficients: Any, directions: Any) -> np.ndarray:
     return np.asarray(np.clip(summed, 0.0, 1.0))
 
 
+def sphere_directions(count: int) -> np.ndarray:
+    """(count, 3) unit directions spread evenly over the sphere (a Fibonacci lattice)"""
+    index = np.arange(int(count), dtype=np.float64) + 0.5
+    z = 1.0 - 2.0 * index / max(int(count), 1)
+    ring = np.sqrt(np.maximum(1.0 - z * z, 0.0))
+    turn = index * math.pi * (3.0 - math.sqrt(5.0))
+    return np.stack([ring * np.cos(turn), ring * np.sin(turn), z], -1)
+
+
+def fit_harmonics(directions: Any, seen: Any, degree: int) -> np.ndarray:
+    """(N, (degree + 1)^2, 3) coefficients whose :func:`colours` best match `seen`
+
+    `seen` is (N, M, 3): each splat's colour as seen along each of the (M, 3)
+    unit `directions`, from the camera towards the splat. The fit is least
+    squares over those directions, so directions spread evenly
+    (:func:`sphere_directions`) weigh the whole sphere alike. A colour that
+    varies faster than `degree` follows is smoothed to the nearest one it can
+    hold.
+    """
+    basis = sh_basis(np.asarray(directions, np.float64), int(degree))
+    terms = basis.shape[1]
+    if len(basis) < terms:
+        raise ValueError('%d coefficients a channel need at least as many directions, '
+                         'not %d' % (terms, len(basis)))
+    target = np.asarray(seen, np.float64).reshape(-1, len(basis), 3) - 0.5
+    return np.asarray(np.einsum('km,nmc->nkc', np.linalg.pinv(basis), target))
+
+
+def facing(normals: Any) -> np.ndarray:
+    """(N, 4) quaternions (x, y, z, w) turning +z to each of (N, 3) `normals`
+
+    A splat with a small z scale, so turned, lies flat across the surface the
+    normal is of. A zero normal is no turn.
+    """
+    normal = np.asarray(normals, np.float64).reshape(-1, 3)
+    length = np.linalg.norm(normal, axis=1)
+    unit = normal / np.where(length > 0.0, length, 1.0)[:, None]
+    turns = np.zeros((len(unit), 4))
+    turns[:, 0], turns[:, 1] = -unit[:, 1], unit[:, 0]
+    turns[:, 3] = 1.0 + unit[:, 2]
+    opposite = turns[:, 3] <= 1e-9
+    turns[opposite] = (1.0, 0.0, 0.0, 0.0)
+    turns[length <= 0.0] = (0.0, 0.0, 0.0, 1.0)
+    return np.asarray(turns / np.linalg.norm(turns, axis=1)[:, None])
+
+
 def complete_degree(counts: Sequence[int], count: int) -> int:
     """The highest degree whose coefficients and every lower degree's have `count` rows
 
@@ -204,11 +252,49 @@ def footprint(spread: Any) -> tuple[np.ndarray, np.ndarray]:
             across * (EXTENT * np.sqrt(minor))[:, None])
 
 
+def turn_of(linear: Any) -> np.ndarray:
+    """The rotation (or reflection) part of a column-vector 3x3 `linear`: its columns made unit
+
+    This is the turn of a transform that is a rotation times a scale along
+    its own axes, the decomposition KHR_gaussian_splatting asks a splat's
+    transform to have. A column of zero length is kept as it is.
+    """
+    matrix = np.asarray(linear, np.float64).reshape(3, 3)
+    length = np.linalg.norm(matrix, axis=0)
+    return np.asarray(matrix / np.where(length > 0.0, length, 1.0))
+
+
+def view_directions(eye: Any, turn: Any, perspective: bool = True) -> np.ndarray:
+    """(N, 3) unit directions the harmonics are read along, in the splats' own turn
+
+    `eye` holds the (N, 3) eye-space centres and `turn` the column-vector
+    :func:`turn_of` of the splats' modelview. The direction is from the camera
+    to the centre (along the view axis, -z, for an orthographic view), turned
+    back by `turn`: the coefficients are turned with the splats and a scale
+    does not bend them. A centre at the camera reads (0, 0, 0), which is
+    degree 0 alone.
+    """
+    points = np.asarray(eye, np.float64).reshape(-1, 3)
+    if perspective:
+        length = np.linalg.norm(points, axis=1)
+        unit = points / np.where(length > 0.0, length, 1.0)[:, None]
+    else:
+        unit = np.tile((0.0, 0.0, -1.0), (len(points), 1))
+    return np.asarray(unit @ np.asarray(turn, np.float64).reshape(3, 3))
+
+
 def depths(positions: Any, modelview: Any) -> np.ndarray:
     """(N,) eye-space z of (N, 3) `positions` under a row-vector `modelview`"""
     matrix = np.asarray(modelview, np.float64)
     points = np.asarray(positions, np.float64).reshape(-1, 3)
     return np.asarray(points @ matrix[:3, 2] + matrix[3, 2])
+
+
+def distances(positions: Any, modelview: Any) -> np.ndarray:
+    """(N,) eye-space distances from the camera of (N, 3) `positions` under a row-vector `modelview`"""
+    matrix = np.asarray(modelview, np.float64)
+    points = np.asarray(positions, np.float64).reshape(-1, 3)
+    return np.asarray(np.linalg.norm(points @ matrix[:3, :3] + matrix[3, :3], axis=1))
 
 
 #: Bits of depth the order is sorted on: a 16-bit key sorts by radix in
@@ -241,19 +327,31 @@ def back_to_front(eye_depths: Any) -> np.ndarray:
 class DepthOrder:
     """A back-to-front order of one splat set, sorted again only when it would change
 
-    The order is by eye-space depth, which is the splat's distance along the
-    view direction in its own frame. Moving the camera without turning it, or
-    scaling the view, leaves that order as it is, so :meth:`update` sorts only
-    when the view direction in the splats' frame has turned more than
-    `tolerance` radians since the last sort, or the splats themselves have
-    changed (a new `generation`).
+    A perspective view's order is by distance from the camera, the
+    ``cameraDistance`` sort KHR_gaussian_splatting defines; turning the camera
+    where it stands leaves it as it is, and :meth:`update` sorts again when
+    the camera has moved more than `tolerance` times its distance from the
+    splats' box since the last sort (any move at all from inside that box).
+    `tolerance` is about the angle in radians such a move turns the direction
+    to the nearest splat by.
+
+    An orthographic view's order is by eye depth, which moving the camera
+    without turning it leaves as it is: it is sorted again when the view
+    direction in the splats' frame has turned more than `tolerance` radians.
+
+    Either is sorted again when the splats change (a new `generation`) or the
+    kind of projection does.
     """
 
     def __init__(self, tolerance: float = math.radians(0.25)) -> None:
         self.tolerance = float(tolerance)
         self._cosine = math.cos(self.tolerance)
         self.order: np.ndarray = np.zeros(0, np.uint32)
+        self.perspective: Optional[bool] = None
         self.direction: Optional[np.ndarray] = None
+        self.camera: Optional[np.ndarray] = None
+        #: The camera's distance from the splats' box at the last sort.
+        self.reach = 0.0
         self.generation: Any = None
         #: How many sorts this order has made.
         self.sorts = 0
@@ -265,23 +363,51 @@ class DepthOrder:
         length = float(np.linalg.norm(axis))
         return axis / length if length > 0.0 else np.array((0.0, 0.0, 1.0))
 
-    def holds(self, direction: np.ndarray, generation: Any) -> bool:
-        """Whether the order kept is good for a view along unit `direction`"""
-        return (generation == self.generation and self.direction is not None
-                and float(np.dot(direction, self.direction)) >= self._cosine)
+    @staticmethod
+    def camera_position(modelview: Any) -> np.ndarray:
+        """Where the camera is in the splats' frame; the origin for a singular `modelview`"""
+        try:
+            return np.asarray(np.linalg.inv(np.asarray(modelview, np.float64))[3, :3])
+        except np.linalg.LinAlgError:
+            return np.zeros(3)
 
-    def update(self, positions: Any, modelview: Any,
-               generation: Any) -> tuple[np.ndarray, bool]:
+    def holds(self, modelview: Any, generation: Any, perspective: bool = True) -> bool:
+        """Whether the order kept is good for a view through `modelview`"""
+        if generation != self.generation or perspective != self.perspective:
+            return False
+        if perspective:
+            assert self.camera is not None
+            moved = float(np.linalg.norm(self.camera_position(modelview) - self.camera))
+            return moved <= self.tolerance * self.reach
+        assert self.direction is not None
+        return float(np.dot(self.view_direction(modelview), self.direction)) >= self._cosine
+
+    def update(self, positions: Any, modelview: Any, generation: Any,
+               perspective: bool = True) -> tuple[np.ndarray, bool]:
         """(order, whether it was sorted now) for `positions` under `modelview`"""
         matrix = np.asarray(modelview, np.float64)
-        direction = self.view_direction(matrix)
-        if self.holds(direction, generation):
+        if self.holds(matrix, generation, perspective):
             return self.order, False
-        self.order = back_to_front(depths(positions, matrix))
-        self.direction = direction
+        points = np.asarray(positions, np.float64).reshape(-1, 3)
+        if perspective:
+            self.order = back_to_front(-distances(points, matrix))
+            self.camera = self.camera_position(matrix)
+            self.reach = _box_distance(self.camera, points)
+        else:
+            self.order = back_to_front(depths(points, matrix))
+            self.direction = self.view_direction(matrix)
+        self.perspective = perspective
         self.generation = generation
         self.sorts += 1
         return self.order, True
+
+
+def _box_distance(point: np.ndarray, positions: np.ndarray) -> float:
+    """How far `point` is from the box around `positions`; 0 inside it or for none"""
+    if not len(positions):
+        return 0.0
+    low, high = positions.min(axis=0), positions.max(axis=0)
+    return float(np.linalg.norm(np.maximum(np.maximum(low - point, point - high), 0.0)))
 
 
 @dataclass

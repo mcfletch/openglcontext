@@ -44,14 +44,14 @@ import numpy as np
 from OpenGL.GL import (
     GL_ARRAY_BUFFER, GL_BLEND, GL_CCW, GL_DEPTH_TEST, GL_FALSE,
     GL_MAX_TEXTURE_BUFFER_SIZE, GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_RGBA16F,
-    GL_RGBA32F, GL_SRC_ALPHA, GL_STATIC_DRAW, GL_TEXTURE_BUFFER, GL_TEXTURE0,
-    GL_TRIANGLE_STRIP, GL_TRUE, GL_UNSIGNED_INT,
+    GL_DYNAMIC_DRAW, GL_RGBA32F, GL_SRC_ALPHA, GL_STATIC_DRAW, GL_TEXTURE_BUFFER,
+    GL_TEXTURE0, GL_TRIANGLE_STRIP, GL_TRUE, GL_UNSIGNED_INT, GL_VIEWPORT,
     glActiveTexture, glBindBuffer, glBindTexture, glBindVertexArray, glBlendFunc,
     glBufferData, glColorMaski, glDeleteBuffers, glDeleteProgram, glDeleteTextures,
     glDeleteVertexArrays, glDepthMask, glDrawArraysInstanced, glEnable,
     glEnableVertexAttribArray, glGenBuffers, glGenTextures, glGenVertexArrays,
     glGetIntegerv, glGetUniformLocation, glTexBuffer, glUniform1i, glUniform1ui,
-    glUniform2f, glUniform3f, glUniformMatrix4fv, glUseProgram,
+    glUniform2f, glUniformMatrix3fv, glUniformMatrix4fv, glUseProgram,
     glVertexAttribDivisor, glVertexAttribIPointer,
 )
 from pydispatch import dispatcher
@@ -87,7 +87,7 @@ ORDER_SLOTS = 4
 _SPLAT_INDEX = 0
 
 #: Uniforms the program's draws set.
-_UNIFORMS = ('uModelView', 'uProjection', 'uViewport', 'uCameraLocal',
+_UNIFORMS = ('uModelView', 'uProjection', 'uViewport', 'uTurn',
              'uGeometry', 'uHarmonics', 'uDegree', 'uHarmonicTexels',
              'uLinearColour', 'uHdrOutput', 'uShadeColour', 'uObjectId')
 
@@ -113,12 +113,12 @@ def _delete_array(name: int) -> None:
 
 
 #: Each node's buffers per context: 'geometry' and 'harmonics' as (name,
-#: generation, splat count), and each order slot as (name, DepthOrder,
-#: when it was last drawn by :data:`_CLOCK`).
+#: generation, splat count), each order slot as (name, DepthOrder, when it
+#: was last drawn by :data:`_CLOCK`), and 'unordered' as (name, splat count).
 _BUFFERS = contextresources.ContextNames('_splat_buffers', _delete_buffer, _first)
 #: Each node's buffer textures per context, by the buffer they read.
 _TEXTURES = contextresources.ContextNames('_splat_textures', _delete_texture)
-#: Each node's vertex arrays per context, by order slot, as (name,).
+#: Each node's vertex arrays per context, by order slot or 'unordered', as (name,).
 _ARRAYS = contextresources.ContextNames('_splat_arrays', _delete_array, _first)
 #: The program per context, as (name, uniform locations, texel limit).
 _PROGRAMS = contextresources.ContextNames('_splat_programs', glDeleteProgram, _first)
@@ -309,7 +309,7 @@ class GaussianSplats(nodetypes.Rendering, x3d.GaussianSplats):
         glBindTexture(GL_TEXTURE_BUFFER, 0)
         return count, harmonic_texels
 
-    def _ordered(self, packed: splatmath.SplatSet, modelview: Any,
+    def _ordered(self, packed: splatmath.SplatSet, modelview: Any, perspective: bool,
                  count: int) -> int:
         """The vertex array whose order is back to front for `modelview`
 
@@ -317,39 +317,62 @@ class GaussianSplats(nodetypes.Rendering, x3d.GaussianSplats):
         longest ago, sorted again.
         """
         buffers = _BUFFERS.entries(self)
-        arrays = _ARRAYS.entries(self)
-        assert buffers is not None and arrays is not None
+        assert buffers is not None
         slots = [buffers.get(('order', slot)) for slot in range(ORDER_SLOTS)]
-        direction = splatmath.DepthOrder.view_direction(modelview)
         generation = (self._generation, count)
-        held = [slot for slot, entry in enumerate(slots)
-                if entry is not None and entry[1].holds(direction, generation)]
-        if held:
-            chosen = held[0]
-            name, keeper, _drawn = slots[chosen]
+        held = next(((slot, entry) for slot, entry in enumerate(slots)
+                     if entry is not None and entry[1].holds(modelview, generation, perspective)),
+                    None)
+        if held is not None:
+            chosen, (name, keeper, _drawn) = held
         else:
             chosen = min(range(ORDER_SLOTS),
-                         key=lambda slot: -1 if slots[slot] is None else slots[slot][2])
+                         key=lambda slot: -1 if (entry := slots[slot]) is None else entry[2])
             entry = slots[chosen]
             if entry is None:
                 name, keeper = int(glGenBuffers(1)), splatmath.DepthOrder(SORT_TOLERANCE)
             else:
                 name, keeper, _drawn = entry
-            order, _sorted = keeper.update(packed.centres[:count], modelview, generation)
-            glBindBuffer(GL_ARRAY_BUFFER, name)
-            data = order if len(order) else np.zeros(1, np.uint32)
-            glBufferData(GL_ARRAY_BUFFER, data.nbytes, data, GL_STATIC_DRAW)
-            if chosen not in arrays:
-                vao = int(glGenVertexArrays(1))
-                glBindVertexArray(vao)
-                glEnableVertexAttribArray(_SPLAT_INDEX)
-                glVertexAttribIPointer(_SPLAT_INDEX, 1, GL_UNSIGNED_INT, 4, ctypes.c_void_p(0))
-                glVertexAttribDivisor(_SPLAT_INDEX, 1)
-                glBindVertexArray(0)
-                arrays[chosen] = (vao,)
-            glBindBuffer(GL_ARRAY_BUFFER, 0)
+            order, _sorted = keeper.update(packed.centres[:count], modelview, generation,
+                                           perspective)
+            self._fill_order(name, order)
         buffers[('order', chosen)] = (name, keeper, next(_CLOCK))
-        return int(arrays[chosen][0])
+        return self._array(chosen, name)
+
+    def _unordered(self, count: int) -> int:
+        """The vertex array drawing the splats in their own order, for a depth-tested draw"""
+        buffers = _BUFFERS.entries(self)
+        assert buffers is not None
+        entry = buffers.get('unordered')
+        if entry is None or entry[1] != count:
+            name = int(glGenBuffers(1)) if entry is None else entry[0]
+            self._fill_order(name, np.arange(count, dtype=np.uint32))
+            buffers['unordered'] = (name, count)
+        return self._array('unordered', buffers['unordered'][0])
+
+    @staticmethod
+    def _fill_order(name: int, order: np.ndarray) -> None:
+        """Upload `order` into buffer `name`"""
+        glBindBuffer(GL_ARRAY_BUFFER, name)
+        data = order if len(order) else np.zeros(1, np.uint32)
+        glBufferData(GL_ARRAY_BUFFER, data.nbytes, data, GL_DYNAMIC_DRAW)
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+    def _array(self, key: Any, name: int) -> int:
+        """The vertex array reading splat indices from buffer `name`, made on first use"""
+        arrays = _ARRAYS.entries(self)
+        assert arrays is not None
+        if key not in arrays:
+            vao = int(glGenVertexArrays(1))
+            glBindVertexArray(vao)
+            glBindBuffer(GL_ARRAY_BUFFER, name)
+            glEnableVertexAttribArray(_SPLAT_INDEX)
+            glVertexAttribIPointer(_SPLAT_INDEX, 1, GL_UNSIGNED_INT, 4, ctypes.c_void_p(0))
+            glVertexAttribDivisor(_SPLAT_INDEX, 1)
+            glBindVertexArray(0)
+            glBindBuffer(GL_ARRAY_BUFFER, 0)
+            arrays[key] = (vao,)
+        return int(arrays[key][0])
 
     def _draw(self, mode: Any, shadow: bool) -> None:
         packed = self.splats()
@@ -362,21 +385,22 @@ class GaussianSplats(nodetypes.Rendering, x3d.GaussianSplats):
         shader = getattr(mode, 'shader_program', None)
         previous = mode.current_program() if hasattr(mode, 'current_program') else 0
         glUseProgram(program)
-        # Which order a shadow map's draw uses does not change what it writes:
-        # it keeps the cores and depth-tests them.
-        vao = self._ordered(packed, modelview, count)
         if shadow:
-            size = float(getattr(mode, 'shadow_resolution', 2048))
-            viewport = (size, size)
+            # A depth map's draw keeps the cores and depth-tests them, which
+            # writes the same map in any order. The map's size is whichever
+            # the pass bound: the cascades', a spot light's or a cube face's.
+            vao = self._unordered(count)
+            viewport = tuple(float(value) for value in glGetIntegerv(GL_VIEWPORT)[2:4])
         else:
+            vao = self._ordered(packed, modelview, bool(projection[3, 3] == 0.0), count)
             viewport = tuple(float(value) for value in mode.viewport[2:4])
-        camera = np.linalg.inv(modelview)[3, :3]
         glUniformMatrix4fv(uniforms['uModelView'], 1, GL_FALSE,
                            np.ascontiguousarray(modelview, np.float32))
         glUniformMatrix4fv(uniforms['uProjection'], 1, GL_FALSE,
                            np.ascontiguousarray(projection, np.float32))
+        glUniformMatrix3fv(uniforms['uTurn'], 1, GL_FALSE, np.ascontiguousarray(
+            splatmath.turn_of(modelview[:3, :3].T).T, np.float32))
         glUniform2f(uniforms['uViewport'], *viewport)
-        glUniform3f(uniforms['uCameraLocal'], *(float(value) for value in camera))
         glUniform1i(uniforms['uDegree'], packed.degree)
         glUniform1i(uniforms['uHarmonicTexels'], harmonic_texels)
         glUniform1i(uniforms['uLinearColour'], int(self.colorSpace == 'LIN_REC709_DISPLAY'))

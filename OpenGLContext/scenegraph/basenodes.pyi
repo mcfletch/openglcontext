@@ -40,6 +40,7 @@ from OpenGLContext.scenegraph.extrusions import PolyCone as PolyCone
 from OpenGLContext.scenegraph.extrusions import PolyCylinder as PolyCylinder
 from OpenGLContext.scenegraph.fog import Fog as Fog
 from OpenGLContext.scenegraph.fog import LocalFog as LocalFog
+from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats as GaussianSplats
 from OpenGLContext.scenegraph.gear import Gear as Gear
 from OpenGLContext.scenegraph.geometry2d import Arc2D as Arc2D
 from OpenGLContext.scenegraph.geometry2d import ArcClose2D as ArcClose2D
@@ -380,6 +381,7 @@ __all__ = [
     'GLSLImport',
     'GLSLObject',
     'GLSLShader',
+    'GaussianSplats',
     'Gear',
     'GeneratedCubeMapTexture',
     'GeoCoordinate',
