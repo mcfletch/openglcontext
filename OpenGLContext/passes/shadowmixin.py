@@ -14,6 +14,7 @@ during the pass via the ``mode.shadow_pass`` flag.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
@@ -156,6 +157,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         def frameGather(self) -> Any: ...
         def renderFailed(self, where: str, node: Any, err: BaseException) -> None: ...
         def batchingFunctions(self) -> Batchers: ...
+        def layerPaths(self, kind: type, layer: Any = ...) -> Sequence[Any]: ...
+        def layerMask(self, gathered: Any, frame: Any = None) -> Optional[np.ndarray]: ...
 
     use_shadows: bool = False
     shadow_pass: bool = False
@@ -277,7 +280,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         saved_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
         saved_viewport = tuple(int(v) for v in glGetIntegerv(GL_VIEWPORT))
         try:
-            for path in self.paths.get(nodetypes.Light, ()):
+            for path in self.layerPaths(nodetypes.Light):
                 light_node = path[-1]
                 if not getattr(light_node, 'on', True):
                     continue
@@ -363,6 +366,24 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                                           b['light_pos'], b['near'], b['far'],
                                           b['bias'])
             shader.set_shadow_count(len(bindings))
+        shader._shadow_program = None
+        shader._bind_program(shader.program)
+
+    def bindNoShadows(self) -> None:
+        """Have every shadow-receiving program read no shadow map
+
+        For a layer of a stack other than the one the maps were made for
+        (:mod:`OpenGLContext.passes.layerpass`), whose lights are not the ones
+        the maps' slots name.
+        """
+        shader = self.shader_program
+        if shader is None or shader.program is None:
+            return
+        for prog in shader.shadow_receiver_programs():
+            shader._shadow_program = prog
+            shader._bind_program(prog)
+            shader.init_shadow_samplers()
+            shader.set_shadow_count(0)
         shader._shadow_program = None
         shader._bind_program(shader.program)
 
@@ -697,7 +718,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         where its own map is built instead, since it converts against that map's
         projection.
         """
-        casters = [p[-1] for p in self.paths.get(nodetypes.Light, ())
+        casters = [p[-1] for p in self.layerPaths(nodetypes.Light)
                    if getattr(p[-1], 'on', True) and self._castsShadow(p[-1], caps)]
         resolution = per_light_shadow_resolution(casters, self.shadow_resolution)
         maps_unallocated = (self._shared_array is None
@@ -768,10 +789,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         walks the scene itself.
         """
         gathered = self.frameGather()
+        # A layered scene's casters are those of the layer the maps are made for
+        among = self.layerMask(gathered)
         records = []
-        for path, node, tmatrix, bvolume in zip(
-                gathered.paths, gathered.nodes, gathered.own, gathered.volumes):
-            if casts_shadow(node):
+        for index, (path, node, tmatrix, bvolume) in enumerate(zip(
+                gathered.paths, gathered.nodes, gathered.own, gathered.volumes)):
+            if casts_shadow(node) and (among is None or among[index]):
                 records.append((None, None, tmatrix, bvolume, path, node))
         return records
 

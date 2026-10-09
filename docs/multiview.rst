@@ -284,6 +284,13 @@ render. It holds the :class:`~OpenGLContext.multiview.views.View` being
 drawn. A ``Billboard`` is turned once a frame, toward the first view's
 camera, and is seen turned that way in every view.
 
+A scene with X3D layers (:ref:`x3d-layers`) is drawn as its layer stack in
+each view: every layer within the view's rectangle, bottom first, the layer
+navigation drives through the view's camera and the others through their
+own. A view's events are routed through that layer, and a pick through the
+layer that drew what is under the pointer. A frame of layers draws each view
+in turn, rather than sharing one draw between views.
+
 .. _multiview-grid:
 
 A grid to measure against

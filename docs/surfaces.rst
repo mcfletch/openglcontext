@@ -4,7 +4,7 @@ Procedural Surfaces
 .. rst-class:: introduction
 
 ``OpenGLContext.scenegraph.surfaces`` makes the materials a room is built
-from -- marble, tiles, brick, plaster, stone and brushed metals -- as texture
+from -- marble, tiles, brick, plaster, stone, wood and brushed metals -- as texture
 maps generated with NumPy, and the geometry to wear them at their real size.
 No image files are needed, every surface repeats seamlessly both ways, and the
 same seed gives the same surface.
@@ -74,6 +74,10 @@ from 0 to 1.
    * - ``sandstone``
      - ``size=256, colour=(0.72, 0.58, 0.40)``
      - Dressed stone with fine grain and faint bedding lines across it.
+   * - ``wood``
+     - ``size=256, colour=(0.42, 0.25, 0.12), rings=9``
+     - Planed wood: ``rings`` growth rings running along its length, wandering
+       a little, and a fine grain across them.
    * - ``brushed_metal``
      - ``size=256, colour=STEEL, roughness=0.28``
      - A metal brushed along one direction. ``GOLD``, ``COPPER``, ``STEEL``,
@@ -273,7 +277,7 @@ in milliseconds:
      - 14
      - 52
      - 214
-   * - ``marble``, ``brick``, ``plaster``, ``sandstone``
+   * - ``marble``, ``brick``, ``plaster``, ``sandstone``, ``wood``
      - 5
      - 20-32
      - 87-130

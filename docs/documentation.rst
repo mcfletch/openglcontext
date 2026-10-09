@@ -161,6 +161,12 @@ Installing the package puts these commands on your path:
    bouncing in a glass case, one for each emitter and physics model, with
    keys to set the firework off and switch the wind. See :ref:`X3D particle
    systems <x3d-particles>`.
+``oglc-x3d-splats``
+   X3D's ``GaussianSplats`` read from a document: a brass vase of splats
+   whose spherical harmonics carry its sheen, and a hedge read from a
+   ``KHR_gaussian_splatting`` glTF, on a marble terrace, with keys to take
+   the higher harmonics away, switch their shadows and write the vase as
+   glTF. See :ref:`x3d-gaussian-splats`.
 ``oglc-x3d-sound``
    X3D's Sound component read from a document and heard: a bronze bell on a
    ``Sound``, a copper pipe circling on a ``SpatialSound`` with Doppler, its
@@ -169,6 +175,12 @@ Installing the package puts these commands on your path:
    raising a meter, with keys to pause the bell, shape and filter the pipe,
    swap the chimes between the ears and move the listener. See :ref:`X3D
    sound <x3d-sound>`.
+``oglc-x3d-layering``
+   X3D's Layering and Layout nodes read from a document: a courtyard in
+   layer 0, a plan view of it in an inset viewport through its own
+   viewpoint, a brass frame, and a wooden panel placed in pixels with text
+   in a ``ScreenFontStyle`` and a button that shows and hides the inset.
+   See :ref:`x3d-layers`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

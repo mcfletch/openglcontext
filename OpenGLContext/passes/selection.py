@@ -170,10 +170,12 @@ class SelectionMixin(_AsyncPickMixin):
             # Read just this pixel's id + depth from the FBO (no full readback).
             obj_id, depth = selection_buffer.read_pixel(x, y)
             path = id_map.get(obj_id, [])
+            depth, (modelview, projection, viewport), layer = self._pickResolver(event)(
+                path, x, y, depth)
 
             self._dispatchPickEvent(
                 mode, event, [path] if path else [[]], x, y, depth,
-                *self._pickCamera(event))
+                modelview, projection, viewport, layer=layer)
 
     def _createPickProjection(self, pick_region: tuple[int, int, int, int],
                               viewport: tuple[int, int, int, int]) -> np.ndarray:
@@ -218,7 +220,8 @@ class SelectionMixin(_AsyncPickMixin):
         # Combine with original projection
         return asarray(dot(self.projection, pick_matrix))
 
-    def shaderSelectRenderOptimized(self, mode: Any, toRender: list, events: dict) -> None:
+    def shaderSelectRenderOptimized(self, mode: Any, toRender: list, events: dict,
+                                    missed: Optional[list] = None) -> None:
         """Optimized selection render processing each pick point individually.
 
         For each pick point:
@@ -233,9 +236,13 @@ class SelectionMixin(_AsyncPickMixin):
             mode: Render mode
             toRender: Render set
             events: Pick events
+            missed: where given, the events that hit nothing are put here
+                rather than dispatched, for a layer beneath to resolve
         """
         if not events:
             return
+        drawing = getattr(self, 'drawingLayer', None)
+        layer = drawing() if drawing is not None and getattr(self, 'layered', False) else None
 
         self.visible = False
         self.transparent = False
@@ -285,7 +292,10 @@ class SelectionMixin(_AsyncPickMixin):
                 # Skip if outside viewport
                 if px < 0 or py < 0 or px >= vp_w or py >= vp_h:
                     for event in eventSet:
-                        event.setObjectPaths([[]])
+                        if missed is not None:
+                            missed.append(event)
+                        else:
+                            event.setObjectPaths([[]])
                     continue
 
                 # Find objects whose screen bounding box contains this pick point
@@ -303,7 +313,10 @@ class SelectionMixin(_AsyncPickMixin):
                 if not hit_indices:
                     # No objects under this point
                     for event in eventSet:
-                        event.setObjectPaths([[]])
+                        if missed is not None:
+                            missed.append(event)
+                        else:
+                            event.setObjectPaths([[]])
                     continue
 
                 # Set up tiny FBO for this pick point
@@ -367,9 +380,12 @@ class SelectionMixin(_AsyncPickMixin):
                 glReadPixels(read_x, read_y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, depth_pixel)
 
                 for event in eventSet:
+                    if missed is not None and not paths:
+                        missed.append(event)
+                        continue
                     self._dispatchPickEvent(
                         mode, event, [paths], int(px), int(py), depth_pixel[0][0],
-                        matrix, self.projection, self.viewport)
+                        matrix, self.projection, self.viewport, layer=layer)
 
                 # Clean up for this pick point
                 if use_fbo:

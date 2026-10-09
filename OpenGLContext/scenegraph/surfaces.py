@@ -1,7 +1,7 @@
 """Procedural surfaces: tileable physically based maps, made with NumPy.
 
 A handful of the materials a room is built from -- checkered marble, veined
-marble, brick, plaster, sandstone, and brushed metals -- generated as plain
+marble, brick, plaster, sandstone, wood and brushed metals -- generated as plain
 arrays that repeat seamlessly both ways. :func:`pbr_material` makes one a
 :class:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial`::
 
@@ -31,7 +31,7 @@ import numpy as np
 __all__ = [
     'GOLD', 'COPPER', 'STEEL', 'BRONZE', 'SILVER', 'Maps', 'tileable_noise',
     'fbm', 'marble', 'checkered_marble', 'marble_tiles', 'tiles', 'brick', 'plaster',
-    'sandstone',
+    'sandstone', 'wood',
     'brushed_metal', 'normal_map', 'to_srgb', 'images', 'pbr_material',
     'Geometry', 'panel', 'polygon', 'block', 'prism', 'cylinder', 'sphere', 'moved',
     'placed', 'merge', 'shape',
@@ -247,6 +247,19 @@ def sandstone(size: int = 256, colour: Colour = (0.72, 0.58, 0.40), seed: int = 
     base = np.asarray(colour) * (0.82 + 0.12 * bedding + 0.1 * grain)[..., None]
     return Maps(_clip(base), _clip(0.8 + 0.15 * grain), np.zeros((size, size)),
                 _clip(0.4 + 0.3 * grain + 0.1 * bedding))
+
+
+def wood(size: int = 256, colour: Colour = (0.42, 0.25, 0.12), rings: int = 9,
+         seed: int = 7) -> Maps:
+    """Planed wood: growth rings running along its length, wandering a little,
+    and a fine grain across them."""
+    _x, y = _grid(size)
+    wander = fbm(size, 4, seed, octaves=3)
+    ring = 0.5 + 0.5 * np.sin(2 * math.pi * (y * rings + 0.8 * wander))
+    grain = fbm(size, 48, seed + 1, octaves=2)
+    base = np.asarray(colour) * (0.68 + 0.38 * ring + 0.08 * grain)[..., None]
+    return Maps(_clip(base), _clip(0.55 + 0.2 * ring + 0.1 * grain), np.zeros((size, size)),
+                _clip(0.45 + 0.12 * ring + 0.06 * grain))
 
 
 def brushed_metal(size: int = 256, colour: Colour = STEEL, roughness: float = 0.28,

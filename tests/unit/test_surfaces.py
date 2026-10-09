@@ -49,6 +49,7 @@ def test_the_same_seed_is_the_same_surface():
     (lambda: surfaces.plaster(SIZE), True),
     (lambda: surfaces.brushed_metal(SIZE, surfaces.GOLD), True),
     (lambda: surfaces.sandstone(SIZE), True),
+    (lambda: surfaces.wood(SIZE), True),
     (lambda: surfaces.marble_tiles(SIZE), False),
     (lambda: surfaces.tiles(SIZE), False),
 ])
@@ -111,6 +112,16 @@ def test_bricks_are_bonded_with_mortar_between():
     joints = [np.flatnonzero(mortar[row].astype(int) - mortar[row].mean() > 0.5)
               for row in (course // 2, course + course // 2)]
     assert set(joints[0]).isdisjoint(set(joints[1]))
+
+
+def test_wood_grain_runs_along_its_length_and_is_not_metal():
+    maps = surfaces.wood(SIZE)
+    lum = maps.base.mean(axis=-1)
+    along = np.abs(np.diff(lum, axis=1)).mean()
+    across = np.abs(np.diff(lum, axis=0)).mean()
+    assert across > 2.0 * along
+    assert maps.metallic.max() == 0.0
+    assert maps.base[..., 0].mean() > maps.base[..., 2].mean() + 0.1
 
 
 def test_a_metal_is_metallic_and_a_stone_is_not():

@@ -260,6 +260,12 @@ class ViewFrame:
     against, ``toRender`` the draw records that survived it and
     ``visiblePlacements`` which copies of each instanced set it kept.
     ``fitted`` marks the view the directional shadow cascades were fitted to.
+
+    In a frame drawn as a layer stack (:mod:`OpenGLContext.passes.layerpass`)
+    ``part`` is the :class:`~OpenGLContext.multiview.layers.LayerPart` this
+    frame draws, and ``navigated`` marks the part of the layer navigation
+    drives that its view's events are routed through; a frame of a scene
+    without layers has no part and is navigated.
     """
 
     view: View
@@ -273,6 +279,8 @@ class ViewFrame:
     toRender: list[Any] = field(default_factory=list)
     visiblePlacements: dict[int, Any] = field(default_factory=dict)
     fitted: bool = False
+    part: Any = None
+    navigated: bool = True
 
 
 class ViewRecord(NamedTuple):

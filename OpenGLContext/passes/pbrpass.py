@@ -493,6 +493,11 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     MATERIAL_UBO_BINDING: int = MATERIAL_UBO_BINDING
 
+    #: Whether the lit program writes linear HDR for bloom to composite
+    #: (:meth:`set_hdr_output`). A node drawing display colours through a
+    #: program of its own reads it.
+    hdr_output: bool = False
+
     #: The lit program is the metallic/roughness one; the helper programs are
     #: the VRML97 ones this inherits, from the same files.
     VERTEX_SOURCES: dict[str, str] = dict(
@@ -1198,6 +1203,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     def set_hdr_output(self, enabled: bool) -> None:
         """Emit linear HDR (bloom pass) rather than tone-mapping in the shader."""
+        self.hdr_output = bool(enabled)
         self._set_uniform1i('hdrOutput', 1 if enabled else 0, self.program)
 
 

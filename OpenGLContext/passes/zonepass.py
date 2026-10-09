@@ -132,7 +132,8 @@ class ZonesMixin(PassResources):
         _reflection_lookups: Mapping[Any, Any]
 
         def applyViewFrame(self, frame: Any, gl: bool = True) -> None: ...
-        def renderSet(self, matrix: Any, gathered: Any) -> list[Any]: ...
+        def renderSet(self, matrix: Any, gathered: Any, among: Any = None) -> list[Any]: ...
+        def layerMask(self, gathered: Any, frame: Any = None) -> Any: ...
         def frameGather(self) -> Any: ...
         def setupViewLighting(self, view: Any, lighting: Any,
                               fitted: bool = True) -> None: ...
@@ -978,7 +979,8 @@ class ZonesMixin(PassResources):
                     frustummodule.Frustum.fromViewingMatrix(modelproj, normalize=1),
                     fitted=False)
                 self.applyViewFrame(frame, gl=False)
-                records = [record for record in self.renderSet(view, gathered)
+                records = [record for record in self.renderSet(
+                               view, gathered, self.layerMask(gathered))
                            if not record[0][0]]
                 target.face(face)
                 self.captureBackground(view)

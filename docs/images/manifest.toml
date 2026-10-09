@@ -338,6 +338,19 @@ frames = 60
 timeout = 600
 
 [[image]]
+id = "demos/x3d_splats"
+out = "images/demos/x3d_splats.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "A brass vase on a sandstone plinth, a clipped green hedge and a steel ball on a black marble terrace, the vase and the hedge drawn as Gaussian splats"
+caption = "A vase and a hedge made of Gaussian splats, over meshes"
+producer = "script"
+module = "x3d_splats"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
 id = "demos/crowd_demo"
 out = "images/demos/crowd_demo.jpg"
 size = [1100, 680]

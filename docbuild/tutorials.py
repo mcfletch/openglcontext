@@ -155,6 +155,8 @@ PATHS = [
             'x3d_demo',
             'x3d_shaders',
             'x3d_geospatial',
+            'x3d_layering',
+            'x3d_splats',
             'x3d_sound',
             'zones_demo',
             'mirrors_room',

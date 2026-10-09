@@ -454,6 +454,10 @@ class ReflectionPlanner:
                               (0, 0, mirror.size[0], mirror.size[1]),
                               mirror.modelView, plain, mirror.modelproj,
                               None, fitted=False)
+            parent = entry.frame.part
+            if parent is not None:
+                # The layer the mirror is in, drawn whole into the mirror's tile
+                frame.part = parent._replace(first=True, bottom=True)
             own = {id(member.record[4]) for member in entry.members}
             frame.toRender = [record for record in inside(frame)
                               if id(record[4]) not in own]

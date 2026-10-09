@@ -219,7 +219,7 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     backgrounds and Fog (`scenegraph.bindable`), the tutorial's own text
     restored
 - Phase 6, OpenGLContext Interchange (§9.11, §9.12, §9.14)
-  - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered (done: CADAssembly, CADLayer, CADPart, PickableGroup, Anchor; left: LayoutGroup, ScreenGroup, Viewport)
+  - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered (done: CADAssembly, CADLayer, CADPart, PickableGroup, Anchor, LayoutGroup, ScreenGroup, Viewport)
   - [x] the render pass skips nodes whose X3D `visible` is false (`FlatPass.onVisibleChange`)
   - [x] an Inline's scene arriving after the world was walked is drawn (`CHILDREN_CHANGE_SIGNAL`, delivered through the render queue)
   - [x] lights: X3D's `shadows` replaces `castShadows` (true for a light made in code, X3D's false in a document: the builder's `declared_defaults`); `shadowIntensity` per shadow slot; `Shape.castShadow` replaces `castsShadow`
@@ -435,8 +435,45 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     - omi_physics: compound shapes and flat-ended cylinders and cones; ball, hinge, slider, universal, two-axis hinge and motor joints from rows (compiled `solve_rows`); pair rules and `ContactParameters`; steady forces, exact rotation, per-body sleep
     - not read: `finiteRotationAxis` (the whole turn is integrated exactly), `UniversalJoint` stop bounce and correction (X3D gives it no stops), the inertia's products off the diagonal
     - Basic archive: the documents whose contacts pass through a `Script` (`BallBounce`, `BounceTrimesh`, `CarDemoMain`) do not collide
-  - [ ] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
+  - [x] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
     `LayoutGroup`, `LayoutLayer`, `ScreenGroup`, `ScreenFontStyle`
+    (`scenegraph.layering`, `scenegraph.layout`, `multiview.layers`,
+    `passes.layerpass`); `oglc-x3d-layering` and `tests/x3d_layering.py`
+    - each view drawn as its layer stack, `order` bottom first, the depth
+      buffer cleared within each layer's rectangle; a `ViewFrame` per part
+      (`LayerPart`: a layer, or a `Viewport` clipping inside it), culled to
+      its paths (`Membership`, `layerMask`), drawn through its layer's camera
+      sized to its rectangle; no shared multiview draw for a stack
+    - `activeLayer` through the view's camera; every other layer through
+      `LayerCameras`, its bound viewpoint followed each frame, X3D's
+      default `Viewpoint` or (`LayoutLayer`) `OrthoViewpoint` where it binds
+      none; lights, Background, Fog, NavigationInfo and published
+      viewpoints by layer (`layerPaths`); shadows made and read in the
+      active layer only (`bindNoShadows` elsewhere)
+    - picks: a layer whose `pickable` is false writes no object ids; MRT
+      (deferred and immediate) and drawn selection resolve through the
+      topmost pickable layer under the pointer, with that layer's camera
+      (`resolve_pick`); a hit whose depth a later layer cleared is measured
+      on the shape's triangles (`surface_depth`), at its origin for a
+      shape with none; a drag measures through its press's layer
+    - Layout: sizes, alignment, offsets in PIXEL, FRACTION and WORLD; scale
+      modes NONE, FRACTION, PIXEL, STRETCH (X_ITE's readings); placed each
+      frame before the walk for the first view (`place_layouts`, `Placed`
+      nodes' `placement`, `scenegraph.framed.Framed`, shared with the
+      geospatial frames); ScreenGroup in pixels snapped to the pixel grid
+      (an odd count of pixels puts the centre mid-pixel: the half-pixel
+      test now measures 0.01 units a pixel across 401 pixels, which its
+      projection did not); ScreenFontStyle text in pixels, `pointSize` at
+      96 pixels to the inch
+    - found on the way: `pointer_ray` read depth 1, which the pass's trimmed
+      projection puts behind the camera (CylinderSensor and SphereSensor
+      took the far side); an `ImageTexture` in a prototype's body loaded
+      for the declaration and not for instances (`ImageTexture.copy`);
+      pyvrml97's builder refused a Script field holding a node the Script
+      is inside (`ECMAScriptAnnexExample2`)
+    - Billboards turned toward their own layer's camera
+    - not done: Layout nodes are placed for the first view only; the
+      compatibility profile resolves picks through the navigated layer
   - [x] Sound: all 21 nodes on omi_audio's processing graph (2026-10-09,
     branch x3d-sound). `scenegraph.x3dsound` makes each node's
     `omi_audio.graph` node and writes its fields; `audio.x3dgraph.SoundGraph`
@@ -512,7 +549,26 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     mesh's own bounds. `meshArrays()` and bounds stay in the geometry's own
     coordinates, single precision (`tests/unit/test_mesh_origin.py`)
   - [ ] VolumeRendering: the 13 nodes
-  - [ ] GaussianSplats
+  - [x] GaussianSplats (2026-10-09, branch x3d-splats). One instanced draw
+    of a screen-space quad per splat in the transparent pass, both
+    renderers and both profiles (GLSL 3.30, buffer textures). Covariance
+    projected by the perspective Jacobian (EWA), 3-sigma quads, premultiplied
+    blending; harmonics to degree 3 read along the camera-to-splat direction
+    turned by the transform's rotation; order by distance from the camera
+    (`cameraDistance`), 16-bit radix, re-sorted only past a move of 0.25
+    degrees as seen from the nearest splat; orthographic views by depth.
+    `castShadow` draws each splat's core (opacity at least one half) into
+    every shadow map, unsorted; a test holds its footprint to a sphere of the
+    core's size for directional, point and spot lights. `pointerEvents`
+    picks the cores. `colorSpace` linear is encoded per splat before
+    blending, so a linear set's overlapping fringes blend in display space.
+    glTF `KHR_gaussian_splatting` read (`loaders.gltf.splats`, every
+    component type) and written (`GLTFWriter`). Facts in
+    `specs/gaussian-splats.md`. Showcase `oglc-x3d-splats`; docs/x3d.rst
+    "Gaussian splats", docs/gltf.rst
+  - open for the maintainer: the 4.1 CD text gives `castShadow` and
+    `pointerEvents` FALSE by default, its schema `true`; pyvrml97 and the
+    engine follow the schema
   - [ ] `MovieTexture` decoded on the GPU through pyopengl-video
     ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)).
     No package that links FFmpeg at run time is used: PyAV was tried
@@ -1138,7 +1194,7 @@ the component maps onto an existing OpenGLContext subsystem.
 | Sound (4.0 audio graph) | Full, less `enableHRTF`, `interauralDistance` and `tailTime`; see below | omi_audio processing graph |
 | Geospatial | Full, later phase | double-precision paths, terrain |
 | VolumeRendering | Full, later phase | 3D textures, ray-marching pass |
-| GaussianSplats (4.1) | Later phase | a new sorted-splat pass |
+| GaussianSplats (4.1) | Full | a sorted-splat draw in the transparent pass; `KHR_gaussian_splatting` |
 | Scripting | Read, kept and written; never executed (§9.18) | |
 | DIS | Not planned | |
 
@@ -1205,7 +1261,7 @@ tests against the existing field-type test suite:
 | `MFColorRGBA` | `float32` array, n×4 |
 | `MFBool` | `bool` array |
 | `MFImage` | list of `SFImage` |
-| `SFQuaternion`, `MFQuaternion` | added if 4.1 keeps them when published (used by `GaussianSplats`) |
+| `SFQuaternion`, `MFQuaternion` | `float32` array, 4 and n×4, x y z w (used by `GaussianSplats`) |
 
 Access types. pyvrml97's `Field(exposure)` and `Event(direction)` already
 express the four X3D access types; add an `accessType` property returning the
@@ -1787,9 +1843,10 @@ LOOKAT, NONE; [MOVEMENT-MODES.md](MOVEMENT-MODES.md),
 `avatarSize`, `visibilityLimit` and `transitionType` are applied. `ViewpointGroup`
 adds a viewpoint menu entry hierarchy to the viewer.
 
-- [ ] Open: a stack per `Layer` (7.2.2). pyvrml97's stacks are per scene, so
-  a `LayerSet`'s layers share them; this waits on the engine drawing layers,
-  and on a node knowing the layer it is in.
+- [x] A stack per `Layer` (7.2.2): pyvrml97 keeps a layer's bindables on the
+  layer (`binding.place_layers`, `layer_on`); the engine draws each layer
+  through its own bound viewpoint and reads its Background, Fog and
+  NavigationInfo (`passes.layerpass`).
 
 ### 9.16 Sensors
 
@@ -1825,7 +1882,7 @@ adds a viewpoint menu entry hierarchy to the viewer.
 | CADGeometry | grouping nodes and quad sets | `CADLayer.visible` per child |
 | Geospatial | double-precision coordinates, terrain | `GeoOrigin` rebasing, `GeoElevationGrid` via terrain tiles |
 | VolumeRendering | a ray-marching pass over 3D textures | later phase |
-| GaussianSplats | a sorted-splat pass | later phase |
+| GaussianSplats | a sorted-splat draw | `scenegraph.gaussiansplats` in the transparent pass; `splatmath` arithmetic; glTF `KHR_gaussian_splatting` read and written |
 
 ### 9.18 Scripting
 
@@ -2021,8 +2078,8 @@ Review findings not taken as written, recorded 2026-10-07:
 
 - The generated stubs keep `**fields` on each constructor, documented as the
   extension fields a dialect or a prototype adds.
-- Bind stacks per `Layer` are an open item (§9.15); one stack per scene is
-  what is implemented.
+- Bind stacks per `Layer` (§9.15) are pyvrml97's (`binding.place_layers`),
+  drawn by the engine's layer stack.
 - pyvrml97 commit messages written before the commit-message rule are
   history and are not rewritten.
 - The followers' "first use wakes the node" sub-finding is how 19775-1

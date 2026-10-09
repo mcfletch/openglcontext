@@ -104,6 +104,7 @@ implements these X3D nodes, by component:
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
 - EnvironmentalSensor - ProximitySensor, TransformSensor, VisibilitySensor
+- GaussianSplats - GaussianSplats
 - Geometry2D - Arc2D, ArcClose2D, Circle2D, Disk2D, Polyline2D, Polypoint2D,
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
@@ -118,6 +119,8 @@ implements these X3D nodes, by component:
   PositionDamper, PositionDamper2D, ScalarChaser, ScalarDamper,
   TexCoordChaser2D, TexCoordDamper2D
 - KeyDeviceSensor - KeySensor, StringSensor
+- Layering - Layer, LayerSet, Viewport
+- Layout - Layout, LayoutGroup, LayoutLayer, ScreenFontStyle, ScreenGroup
 - Interpolation - ColorInterpolator, CoordinateInterpolator,
   CoordinateInterpolator2D, EaseInEaseOut, NormalInterpolator,
   OrientationInterpolator, PositionInterpolator, PositionInterpolator2D,
@@ -917,12 +920,98 @@ Binding, viewpoints and navigation
   the viewpoint a ``#name`` url names; opening any other url is left to an
   application that overrides ``OnAnchor``.
 
+- In a scene drawn as layers (:ref:`x3d-layers`) each layer has bind stacks
+  of its own: its viewpoints, backgrounds, fogs and NavigationInfos are bound
+  among themselves, and the next-viewpoint key steps through those of the
+  layer navigation drives.
+
 - A ``Billboard`` is turned toward the camera of a frame's first view once a
   frame, before the frame is drawn (``FlatPass.faceBillboards``): about its
   ``axisOfRotation``, or with ``0 0 0`` facing the camera with its +Y along the
   camera's up. Shadows are cast as it faces the camera. A frame whose camera,
   and the Billboard's parent and axis, are the last frame's leaves it as it
   is without working it out (``billboard.Facing``).
+
+.. _x3d-layers:
+
+Layers and layout
+~~~~~~~~~~~~~~~~~
+
+.. figure:: images/x3d/x3d_layering.jpg
+   :alt: A sandstone courtyard with a brick wall, marble plinths, a copper sphere, a wooden crate, a steel cone and a brass ball; at the top right a plan view of the courtyard in a brass frame; at the bottom left a wooden panel with text and a brass button
+
+   ``oglc-x3d-layering``: the courtyard in layer 0, a plan view of it in an
+   inset viewport, a brass frame, and a panel placed in pixels.
+
+A scene with a ``LayerSet`` is drawn as a stack of layers
+(``OpenGLContext.passes.layerpass``, ``OpenGLContext.multiview.layers``).
+Layer 0 is the scene's own children other than the ``LayerSet``; layer *n*
+is the *n*-th node of its ``layers``. ``order`` names the layers drawn,
+bottom first, each number once; a number naming no layer, and a layer whose
+``visible`` is false, is passed over.
+
+- Each layer is drawn over the ones beneath it with the depth buffer cleared,
+  so its shapes are in front of theirs wherever they are.
+- A layer's ``viewport`` confines it to that ``Viewport``'s
+  ``clipBoundary``: left, right, bottom and top as fractions of the view.
+  A ``Viewport`` among a layer's children, and a ``LayoutGroup``'s
+  ``viewport``, confine their children the same way within the layer. A
+  viewport's camera projects for its own rectangle, so an inset keeps its
+  shape.
+- ``activeLayer`` is the layer navigation drives: it is seen through the
+  context's camera, which the movement modes move. Every other layer is
+  seen through the viewpoint its own bind stack has bound, followed as it
+  moves; a ``Layer`` binding none is seen from X3D's default ``Viewpoint``
+  and a ``LayoutLayer`` from a default ``OrthoViewpoint``, (-1, -1, 1, 1).
+- A layer's lights light that layer alone, its ``NavigationInfo`` decides
+  its headlight, and its bound ``Background`` and ``Fog`` are its own. The
+  bottom layer is cleared to black where it binds no background; a layer
+  above it with no background clears nothing, so what is beneath shows
+  through. Shadows are cast and received in the layer navigation drives.
+- A pick is resolved through the topmost layer whose geometry is under the
+  pointer, with that layer's camera, so a ``TouchSensor`` on a panel and one
+  in the world beneath both work. A layer whose ``pickable`` is false is
+  clicked through. Where a layer above cleared the depth under a hit, the
+  hit point is measured on the shape's triangles; a shape with none (text,
+  lines, points) is measured at its origin.
+- Several views (:doc:`multiview`) each draw the whole stack; the Layout
+  nodes are placed for the first view.
+
+A ``Layout`` places a rectangle in its parent's and gives the children of
+its ``LayoutGroup`` or ``LayoutLayer`` a coordinate system centred on it
+(``OpenGLContext.scenegraph.layout``), worked out each frame for the camera
+the node is drawn through:
+
+- ``size`` in ``sizeUnits`` is the rectangle's width and height, ``align``
+  puts it against the parent's ``LEFT``, ``CENTER`` or ``RIGHT`` and
+  ``BOTTOM``, ``CENTER`` or ``TOP``, and ``offset`` in ``offsetUnits`` moves
+  it from there. A field given one value uses it for both axes.
+- The units are ``PIXEL``, ``FRACTION`` of the parent rectangle, or
+  ``WORLD``, which inside another layout is that layout's unit for the axis
+  and in an outermost layout is ``FRACTION``. The outermost layout's parent
+  rectangle is the layer's viewport.
+- ``scaleMode`` is how long one of the children's units is: ``NONE`` keeps
+  the parent's (``FRACTION`` in an outermost layout), ``FRACTION`` makes it
+  the rectangle's width or height, ``PIXEL`` one pixel, and ``STRETCH`` the
+  other axis's, so the children keep their shape.
+- Through a perspective camera a pixel is measured at the depth of the
+  layout's origin.
+
+A ``ScreenGroup``'s unit is one pixel and its axes the screen's, at its
+origin wherever that is, snapped to the pixel grid. A ``Text`` whose
+``fontStyle`` is a ``ScreenFontStyle`` is drawn the same way: ``pointSize``
+is in points of 1/72 inch at 96 pixels to the inch, so ``pointSize`` 12 is
+16 pixels tall, at any distance.
+
+``oglc-x3d-layering`` opens ``OpenGLContext/bin/x3d_layering.x3d``: a
+courtyard of sandstone, brick, marble, copper, steel, brass and wood in
+layer 0; a plan view of it in an inset viewport at the top right, through
+the inset layer's own viewpoint; a brass frame drawn under the inset; and a
+wooden panel 16 pixels in from the bottom left with text in a
+``ScreenFontStyle`` and a button whose ``TouchSensor`` shows and hides the
+inset. Its keys: ``i`` shows and hides the inset and its frame, ``p`` the
+panel. :doc:`tests/x3d_layering.py <tutorials/x3d_layering>` is the same
+scene as a tutorial.
 
 Sensors
 ~~~~~~~
@@ -1077,6 +1166,93 @@ the Earth has +Y up along the ellipsoid's normal, +X east and -Z north.
   ``keyValue`` coordinates and sends the result as ``geovalue_changed`` and,
   in the scene's coordinates, ``value_changed``.
 - ``GeoMetadata`` is kept and not drawn.
+
+.. _x3d-gaussian-splats:
+
+Gaussian splats
+~~~~~~~~~~~~~~~
+
+.. figure:: images/demos/x3d_splats.jpg
+   :alt: A brass vase on a sandstone plinth, a clipped green hedge and a steel ball on a black marble terrace, the vase and the hedge drawn as Gaussian splats
+
+   ``oglc-x3d-splats``: a vase and a hedge made of Gaussian splats, over meshes.
+
+``oglc-x3d-splats`` writes and opens ``x3d_splats.x3d``, and
+:doc:`tests/x3d_splats.py <tutorials/x3d_splats>` is the same scene as a
+tutorial: a brass vase that is a ``GaussianSplats`` node in the document,
+its spherical harmonics fitted to how polished brass looks from every side,
+and a hedge read from a ``KHR_gaussian_splatting`` glTF the document
+``Inline``\ s, on a marble terrace beside a sandstone plinth and a steel
+ball. Its keys: ``d`` takes the vase's harmonics above degree 0 away and
+gives them back, ``s`` switches both sets' ``castShadow``, ``g`` writes the
+vase as a glTF and ``w`` writes the scene back as X3D in each encoding.
+
+A ``GaussianSplats`` node is a set of 3D Gaussians, one per value of
+``positions``: each is spread along its own axes by ``scales`` (metres, one
+deviation), turned by ``orientations`` (unit quaternions, x y z w), and
+drawn with ``opacities`` from 0 to 1. Its colour is
+``sphericalHarmonicsDegree0Coef0`` and, where they are given, the
+coefficients of degrees 1 to 3, read along the direction from the camera to
+the splat; the colour is display-referred, so the scene's lights, fog,
+exposure and tone mapping do not change it. ``colorSpace`` says whether
+those colours are sRGB (``SRGB_REC709_DISPLAY``, the default) or linear
+(``LIN_REC709_DISPLAY``). The formulas are ``KHR_gaussian_splatting``'s,
+and the facts the engine follows are in ``specs/gaussian-splats.md``.
+
+- The number of splats is the length of ``positions``, shortened to any
+  shorter ``scales``, ``orientations`` or ``opacities``, and a warning
+  names the field. An empty ``orientations`` is no turn and an empty
+  ``opacities`` is opaque. A splat with a value that is not finite is left
+  out.
+- The harmonics read are those of the highest degree that every lower
+  degree and every splat has whole; with none, splats are mid grey.
+- Each splat's covariance is projected through the camera by the Jacobian
+  of the projection at its centre, and drawn as a quad over its ellipse to
+  three deviations. A splat smaller than a pixel is drawn a pixel wide.
+- The splats of one node are sorted back to front by their distance from
+  the camera (by depth along the view under an ``OrthoViewpoint``), with a
+  radix sort, and blended over the opaque scene and among the other
+  transparent shapes by the node's origin. The order is kept until the
+  camera has moved more than about a quarter of a degree as seen from the
+  nearest splat, or the fields change: turning the camera on the spot does
+  not sort again, and a still frame sorts and uploads nothing. Splats of two
+  nodes that overlap on screen are blended node by node.
+- The harmonics turn with the node: a ``Transform`` rotation turns the
+  colour with the splats, and a scale stretches them without bending it.
+- Splats blend in the frame's display values. A ``LIN_REC709_DISPLAY``
+  set's colours are encoded for the display one splat at a time, before
+  blending, so where its translucent splats overlap the result differs a
+  little from blending the linear values first.
+- ``castShadow`` true draws each splat's core, where its opacity reaches
+  one half, into the shadow maps of every light that casts shadows; the
+  thinner fringe casts none. ``visible`` false draws nothing and casts
+  nothing. The splats are not lit and receive no shadows.
+- ``pointerEvents`` true makes the cores pickable, with the picked point
+  on the core; false leaves the node out of picking.
+- ``bboxSize`` and ``bboxCenter`` replace the box computed from every
+  splat's ellipsoid to three deviations.
+
+Both renderers draw the splats, through a GLSL 3.30 program of their own
+that reads them from buffer textures, so a compatibility-profile context of
+OpenGL 3.3 or later draws them as a core one does. Where the context is
+older, or a draw fails, the node logs the error once and draws nothing from
+then on. A driver holding fewer texels in a buffer texture than the set
+needs draws as many splats as fit and logs how many.
+
+The costs, for N splats: 48 bytes a splat for the geometry and 8 to 96 bytes
+for the half-float coefficients of degree 0 to 3, uploaded when a field
+changes; a sort linear in N (about 15 ms for a million splats) and an upload
+of 4 bytes a splat when the camera moves far enough to change the order;
+one instanced draw of four vertices a splat. A shadow map draws the cores
+without sorting.
+
+A glTF primitive carrying ``KHR_gaussian_splatting`` is read as the same
+node, by ``Loader``, ``Inline`` and ``oglc-view`` alike, and
+``OpenGLContext.loaders.gltf.writer`` writes the node back as one; see
+:ref:`gltf-gaussian-splats`. ``OpenGLContext.scenegraph.splatmath`` holds
+the arithmetic with no GL, including ``fit_harmonics``, which fits
+coefficients to a colour that varies with the view, and ``facing``, which
+lays a splat across a surface's normal.
 
 .. _x3d-shaders:
 

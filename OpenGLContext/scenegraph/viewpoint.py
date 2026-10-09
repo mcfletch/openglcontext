@@ -37,23 +37,32 @@ class Placing:
 
     def moveTo( cls, path: Any, context: Any ) -> None:
         """Given a node-path to a viewpoint, move context's platform there"""
-        matrix = path.transformMatrix( )
         node = path[-1]
         platform = context.platform
         if not platform:
             platform = context.platform = context.getViewPlatform()
         if node.jump:
-            local, turned = node.placement()
-            position = list(local)+[1]
-            newPosition = arrays.dot( position, matrix )
-            newOrientation = ( path.quaternion() * turned ).XYZR()
-            platform.setOrientation( newOrientation )
+            node.placeOn( platform, path )
             if getattr( node, 'viewAll', False ):
                 framed = node.framing( context, platform )
                 if framed is not None:
-                    newPosition = framed
-            platform.setPosition( newPosition )
+                    platform.setPosition( framed )
         node.project( platform )
+
+    def placeOn( self, platform: Any, path: Any = None ) -> None:
+        """Stand `platform` where this viewpoint is and turn it the way it looks
+
+        `path` leads to the viewpoint and places it in the world; None takes
+        the viewpoint's own coordinates as the world's.
+        """
+        local, turned = self.placement()
+        position = list( local ) + [1]
+        if path is None:
+            platform.setOrientation( turned.XYZR() )
+            platform.setPosition( position )
+            return
+        platform.setOrientation( ( path.quaternion() * turned ).XYZR() )
+        platform.setPosition( arrays.dot( position, path.transformMatrix() ) )
 
     def framing( self, context: Any, platform: Any ) -> Optional[Any]:
         """Where the camera sees the whole scene, looking the way `platform` faces; None without bounds
