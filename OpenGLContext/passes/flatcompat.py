@@ -80,6 +80,11 @@ class FlatPass( FixedProjectorsMixin, _flat.FlatPass ):
         debugSelection = (mode.context.contextDefinition.debugSelection
                           and mode.context.contextDefinition.pickEnabled)
 
+        # The generated cube maps and rendered textures the last frame's
+        # shapes wore, before anything reads them.
+        self.renderGeneratedTextures( frames, None )
+        self.applyViewFrame( active )
+
         if events or debugSelection:
             self.selectRenderViews( mode, events, debugSelection )
             events.clear()
@@ -123,8 +128,10 @@ class FlatPass( FixedProjectorsMixin, _flat.FlatPass ):
             glMatrixMode( GL_MODELVIEW )
             glLoadIdentity()
 
-    def renderViewLegacy( self, frame: Any ) -> None:
-        """Draw one view of the frame through the fixed-function pipeline."""
+    def renderViewLegacy( self, frame: Any, records: Optional[Sequence[Any]] = None ) -> None:
+        """Draw one view of the frame through the fixed-function pipeline: the
+        frame's own records, or `records` where given"""
+        toRender = frame.toRender if records is None else records
         self._beginView( frame )
         try:
             # Set up generic "geometric" rendering parameters
@@ -138,21 +145,26 @@ class FlatPass( FixedProjectorsMixin, _flat.FlatPass ):
 
             self.legacyLightRender( frame.modelView )
 
-            self.renderOpaque( frame.toRender )
-            self.renderTransparent( frame.toRender )
+            self.renderOpaque( toRender )
+            self.renderTransparent( toRender )
             self.resetMeshDrawState()
         finally:
             self.restoreLegacyLights()
             self._endView( frame )
 
     def legacyBackgroundRender( self, vp: Any, matrix: Any ) -> None:
-        """Do legacy background rendering"""
+        """Draw the bound background, turned as the view `matrix` looks
+
+        Only the view's rotation turns it, so a generated texture's view,
+        looking another way than the camera `vp`, sees its own part of the sky.
+        """
         bPath = self.currentBackground( )
         if bPath is not None:
-            # legacy...
+            turn = array( matrix, 'f' )
+            turn[3,:3] = 0.0
             self.matrix = dot(
-                vp.quaternion.matrix( dtype='f'),
-                bPath.transformMatrix(translate=0,scale=0, rotate=1 )
+                turn,
+                bPath.transformMatrix(translate=0,scale=0, rotate=1 ),
             )
             bPath[-1].Render( mode=self, clear=True )
         else:

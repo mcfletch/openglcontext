@@ -459,8 +459,9 @@ depth drawn, as grey, rather than the colour. X3D 4.1 declares
 RenderedTexture's file-output fields, which are kept and not acted on, and
 not these: ``update``, ``viewpoint``, ``scene``, ``background`` and ``fog``
 are the engine's, carried in a document in an ``OpenGLContext`` metadata
-set. Neither is drawn in the compatibility profile. A RenderedTexture is an
-ordinary 2D texture once drawn, and goes wherever one does.
+set. The compatibility profile draws both with the fixed-function pipeline,
+as it draws the scene. A RenderedTexture is an ordinary 2D texture once
+drawn, and goes wherever one does.
 
 ``ImageTexture3D`` reads a DDS, KTX 1.1 or KTX 2 volume, an NRRD volume of one to four
 components (raw, gzip, bzip2 or text, with a detached data file read beside

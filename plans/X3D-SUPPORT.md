@@ -288,7 +288,10 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (`scenegraph.renderedtexture`, `passes.generatedtextures`) with the
     engine's `update`, `viewpoint`, `scene`, `background`, `fog` fields
     (X3D 4.1 declares none of them), `depthMap`; shapes wearing a chain or a
-    rendered texture are not batched
+    rendered texture are not batched. 2026-10-09 (x3d-xfields): the
+    compatibility profile draws RenderedTexture and GeneratedCubeMapTexture
+    through the fixed-function pipeline (`_drawViewFixed`,
+    `renderViewLegacy(records)`), its background turned by the drawing's view
   - [x] `FillProperties`, `LineProperties`, `PointProperties`
     (`scenegraph.drawproperties`; the wide-line program's geometry stage
     `vrml97_wide_line.geom`, `_pointsize_inc.glsl`, `_fill_inc.glsl`, and the
