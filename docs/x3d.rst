@@ -720,7 +720,9 @@ group of shapes takes the LocalFog of the first of them.
 A ``Background``'s sky and ground colours are drawn on a sphere. One
 ``groundColor`` with no ``groundAngle`` is a ground of that colour from the
 nadir to the horizon, as one ``skyColor`` with no ``skyAngle`` is a sky all
-over. Each of its six images is drawn over them, turned as X3D turns it, once
+over. X3D gives one colour more than angles; as X_ITE draws them, colours
+past that are not used, and a sky or ground with no more colours than angles
+is not drawn. Each of its six images is drawn over them, turned as X3D turns it, once
 that image has loaded; a side with no image, or a transparent part of one,
 shows the sky and ground. A ``TextureBackground`` is drawn the same way from
 its six ``...Texture`` sides. A side is an ``ImageTexture`` or a

@@ -119,6 +119,20 @@ SEGMENTS = 32
 #: buffers under ``'shader_bg'`` for the same reason.
 LEGACY_CACHE_KEY = 'sphere_bg_dl'
 
+def drawn_stops(angles: Any, colors: Any) -> tuple[Any, Any]:
+    """A Background's sky or ground angles and the colours drawn between them
+
+    X3D gives one colour more than angles. Extra colours are left out, and
+    with no more colours than angles that part of the background is not drawn
+    at all, as X_ITE draws it; both come back empty then.
+    """
+    angles = asarray(angles, 'f').reshape(-1)
+    colors = asarray(colors, 'f').reshape(-1, 3)
+    if len(colors) <= len(angles):
+        return angles[:0], colors[:0]
+    return angles, colors[:len(angles) + 1]
+
+
 class _SphereBackground( object ):
     groundAngle = field.newField( 'groundAngle', 'MFFloat', 1, [])
     groundColor = field.newField( 'groundColor', 'MFColor', 1, [])
@@ -273,7 +287,8 @@ class _SphereBackground( object ):
 
     def colorSet( self ) -> Any:
         """Compound the sky and ground angle:color arrays into a single angle:color array-set"""
-        groundAngle, groundColor = self.groundAngle, self.groundColor
+        skyAngle, skyColor = drawn_stops(self.skyAngle, self.skyColor)
+        groundAngle, groundColor = drawn_stops(self.groundAngle, self.groundColor)
         if len(groundColor) and not len(groundAngle):
             # One ground colour and no angle is that colour from the nadir to
             # the horizon, as one sky colour is the sky all over
@@ -281,7 +296,7 @@ class _SphereBackground( object ):
             groundColor = array([groundColor[0], groundColor[0]], 'f')
         # okay, ground angles are pi-groundA
         if (
-            not len(self.skyAngle) and 
+            not len(skyAngle) and 
             not len(groundAngle) and 
             not len(groundColor)
         ):
@@ -289,33 +304,33 @@ class _SphereBackground( object ):
             # against, is VRML97's way of saying the sky is that colour all
             # over, so it spans the sphere; with no colours at all there is
             # nothing to draw.
-            if len(self.skyColor):
+            if len(skyColor):
                 # Three stops rather than two: buildSphere lays a vertex pair
                 # per stop between the poles, so a set of only the two poles
                 # describes no surface and nothing rasterises.
                 uniform = zeros((3, 4), 'f')
-                uniform[:, 1:] = self.skyColor[0]
+                uniform[:, 1:] = skyColor[0]
                 uniform[1, 0] = pi / 2.0
                 uniform[2, 0] = pi
                 return uniform
             return []
         # now need to trim skyA and skyC to lowest groundA
         # and (likely) generate a new A and C for the sky's last value...
-        if len(self.skyAngle):
-            maxSky = max( self.skyAngle)
+        if len(skyAngle):
+            maxSky = max( skyAngle)
         else:
             maxSky = 0
-        if len(self.skyAngle):
+        if len(skyAngle):
             if maxSky < pi:
-                skys = zeros( (len(self.skyColor)+1,4), 'f')
-                skys[1:-1,0] = self.skyAngle
-                skys[:-1,1:] = self.skyColor
+                skys = zeros( (len(skyColor)+1,4), 'f')
+                skys[1:-1,0] = skyAngle
+                skys[:-1,1:] = skyColor
                 skys[-1] = skys[-2]
                 skys[-1,0] = pi
             else:
-                skys = zeros( (len(self.skyColor),4), 'f')
-                skys[1:,0] = self.skyAngle
-                skys[:,1:] = self.skyColor
+                skys = zeros( (len(skyColor),4), 'f')
+                skys[1:,0] = skyAngle
+                skys[:,1:] = skyColor
                 
                 if maxSky > pi:
                     # Stops past the south pole are past the far side of the
@@ -328,13 +343,13 @@ class _SphereBackground( object ):
 
             # just to be sure, we sort by angle...
             skys = setSort( skys)
-        elif len(self.skyColor):
+        elif len(skyColor):
             # VRML97 gives skyAngle one fewer value than skyColor, so a single
             # colour has no angle at all and is the sky all over -- down to
             # wherever the ground starts.  Two stops rather than one, because
             # both the ground capping below and pushOut work between a pair.
             skys = zeros( (2,4), 'f')
-            skys[:,1:] = self.skyColor[0]
+            skys[:,1:] = skyColor[0]
             skys[1,0] = pi
         else:
             skys = zeros((0,4),'f')
