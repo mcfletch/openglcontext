@@ -87,8 +87,6 @@ class LayeringPassMixin:
     #: one-element tuple holding the layer node (None for layer 0), or empty
     #: for the layer navigation drives.
     _drawingLayer: tuple[Any, ...] = _UNSET
-    #: Whether the frame being drawn writes object ids.
-    _drawingPickable: bool = True
     _layerCameras: Optional[layers.LayerCameras] = None
     _layerTable: Optional[layers.Membership] = None
     #: (generation, {(kind, layer): paths}) for :meth:`layerPaths`.
@@ -252,12 +250,7 @@ class LayeringPassMixin:
 
     def setDrawingFrame(self, frame: 'ViewFrame') -> None:
         """Read `frame`'s layer from now on (:meth:`layerPaths`)"""
-        if frame.part is None:
-            self._drawingLayer = _UNSET
-            self._drawingPickable = True
-        else:
-            self._drawingLayer = (frame.part.plan.node,)
-            self._drawingPickable = frame.part.plan.pickable
+        self._drawingLayer = _UNSET if frame.part is None else (frame.part.plan.node,)
 
     def maskObjectIds(self, masked: bool) -> None:
         """Stop, or start again, writing object ids, for a layer that is not picked"""
