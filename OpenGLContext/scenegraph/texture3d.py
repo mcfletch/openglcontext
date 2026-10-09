@@ -33,7 +33,7 @@ from vrml import cache, field, node
 from vrml.x3d import loadsensor
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.scenegraph.imagetexture import ImageURLField, load_first, sfimage_pixels
+from OpenGLContext.scenegraph.imagetexture import ImageURLField, URLRead, load_first, sfimage_pixels
 
 __all__ = ['VOLUME_KEY', 'ComposedTexture3D', 'ImageTexture3D', 'PixelTexture3D',
            'VolumeField', 'image_array', 'with_channels']
@@ -246,8 +246,10 @@ def with_channels(pixels: np.ndarray, channels: int) -> np.ndarray:
             4: np.concatenate([colour, alpha], -1)}[channels]
 
 
-class ImageTexture3D(_Texture3D, x3d.ImageTexture3D):
+class ImageTexture3D(URLRead, _Texture3D, x3d.ImageTexture3D):
     """X3D's ImageTexture3D: a volume read from a file"""
+
+    READ_FIELD = ' volume'
 
     VOLUME_FIELDS = ('volume',)
     volume = VolumeField(' volume', 1, None)

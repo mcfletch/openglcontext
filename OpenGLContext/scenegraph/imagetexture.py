@@ -271,8 +271,43 @@ def load_first(node: Any, url: Any, decode: Callable[[Any, str], Any]) -> Option
     return None
 
 
+class URLRead:
+    """A texture node whose ``url`` (an :class:`ImageURLField`) is read in the background
+
+    The node gives ``loadBackground(url, contexts)``, which reads the first
+    entry that decodes, and names in :attr:`READ_FIELD` the field that read
+    fills, so a copy made before it was filled reads the url itself.
+    """
+
+    #: The field the read fills.
+    READ_FIELD = ' image'
+
+    def requestImage(self) -> None:
+        """Read what `url` names, in the background"""
+        node: Any = self
+        loadsensor.set_load_state(node, loadsensor.LOADING)
+        background.load_in_background(
+            node.url,
+            node.loadBackground,
+            node.url,
+            context.Context.allContexts,
+            prepare=prepare_image_loading,
+        )
+
+    def copy(self, copier: Any = None) -> Any:
+        """A copy reading its own url: each instance of a prototype is a
+        copy of its body, made before the body's read has finished"""
+        made = super().copy(copier)  # type: ignore[misc]  # a node class follows this one
+        if made is not self and made.url and made.__dict__.get(self.READ_FIELD) is None:
+            made.requestImage()
+        return made
+
+
 class ImageURLField(fieldtypes.MFString):
-    """Field for managing interactions with an Image's URL value"""
+    """Field for managing interactions with an Image's URL value
+
+    Its node is a :class:`URLRead`.
+    """
 
     fieldType = "MFString"
 
@@ -293,30 +328,11 @@ class ImageURLField(fieldtypes.MFString):
     __delete__ = fdel
 
 
-class ImageTexture(_Texture, basenodes.ImageTexture):
+class ImageTexture(URLRead, _Texture, basenodes.ImageTexture):
     """A texture loaded from an image file"""
 
     image = PILImage(" image", 1, None)
     url = ImageURLField("url", 1, list)
-
-    def requestImage(self) -> None:
-        """Read the image `url` names, in the background"""
-        loadsensor.set_load_state(self, loadsensor.LOADING)
-        background.load_in_background(
-            self.url,
-            self.loadBackground,
-            self.url,
-            context.Context.allContexts,
-            prepare=prepare_image_loading,
-        )
-
-    def copy(self, copier: Any = None) -> Any:
-        """A copy reading its own image: each instance of a prototype is a
-        copy of its body, made before the body's image has arrived"""
-        made = super().copy(copier)
-        if made is not self and made.url and made.__dict__.get(' image') is None:
-            made.requestImage()
-        return made
 
     def loadBackground(self, url: Any, contexts: Sequence[Any] = ()) -> Any:
         """Load an image from the given url in the background
