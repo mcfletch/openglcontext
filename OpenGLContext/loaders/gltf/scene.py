@@ -562,6 +562,33 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
     return light
 
 
+#: The extensions this loader reads, by name: what a document may list in
+#: ``extensionsRequired`` without a report. ``KHR_draco_mesh_compression``
+#: needs the optional DracoPy as well.
+SUPPORTED_EXTENSIONS = frozenset((
+    'EXT_lights_image_based', 'EXT_mesh_gpu_instancing', 'EXT_meshopt_compression',
+    'EXT_texture_avif', 'EXT_texture_webp', 'KHR_accessor_float16',
+    'KHR_accessor_float64', 'KHR_animation_pointer', 'KHR_audio_emitter',
+    'KHR_draco_mesh_compression', 'KHR_gaussian_splatting', 'KHR_implicit_shapes',
+    'KHR_lights_punctual', 'KHR_materials_anisotropy', 'KHR_materials_clearcoat',
+    'KHR_materials_diffuse_transmission', 'KHR_materials_dispersion',
+    'KHR_materials_emissive_strength', 'KHR_materials_ior',
+    'KHR_materials_iridescence', 'KHR_materials_pbrSpecularGlossiness',
+    'KHR_materials_sheen', 'KHR_materials_specular', 'KHR_materials_transmission',
+    'KHR_materials_unlit', 'KHR_materials_variants', 'KHR_materials_volume',
+    'KHR_mesh_quantization', 'KHR_meshopt_compression', 'KHR_node_visibility',
+    'KHR_texture_transform', 'KHR_xmp_json_ld', 'MSFT_lod', 'MSFT_screencoverage',
+    'OGLC_hook', 'OGLC_materials_baked_light', 'OGLC_zone', 'OMI_environment_sky',
+    'OMI_physics_gravity',
+))
+
+
+def unread_required(g: "pygltflib.GLTF2") -> list[str]:
+    """The extensions a document requires that this loader does not read."""
+    required = getattr(g, 'extensionsRequired', None) or []
+    return sorted(str(name) for name in required if name not in SUPPORTED_EXTENSIONS)
+
+
 class _SceneBuilder:
     """Builds a :class:`GLTFScene` from a parsed glTF document.
 
@@ -577,6 +604,11 @@ class _SceneBuilder:
     def __init__(self, g: "pygltflib.GLTF2", resolver: Resolver,
                  pointer_time: Optional[float] = None) -> None:
         self.g = g
+        unread = unread_required(g)
+        if unread:
+            log.warning("glTF document lists in extensionsRequired %s, which this "
+                        "loader does not read; what depends on them is drawn "
+                        "without them", ', '.join(unread))
         self.resolver = resolver
         #: One Appearance per glTF material index, shared by its primitives.
         self.appearances: dict = {}

@@ -686,6 +686,16 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (`_flat.integrate` prunes it, lights included) and left out of the
     framing. CubeVisibility's capture pinned at t=0.25, since its blue cube
     now blinks (reference_images `ee6c177`)
+  - [x] `extensionsRequired` was never read: an unread required extension is
+    reported (`scene.SUPPORTED_EXTENSIONS`, `unread_required`)
+  - [x] tangents were made only for a normal map; also for a clearcoat normal
+    map and anisotropy, which read the tangent's direction
+  - [ ] audit gaps left open: Draco attributes outside the Draco map and a
+    Draco primitive with an uncompressed fallback when DracoPy is absent;
+    `EXT_lights_image_based` mip levels placed on the probe's five fixed
+    levels rather than spread over roughness; `clearcoatNormalTexture.scale`
+    (no material field or shader input); instanced skinned or morphed meshes
+    are static; `KHR_xmp_json_ld` keeps four notice fields
   - [x] `test_gltf_conformance` skipped every render: it passed `None` as the
     window system, and a render that drew nothing was a skip. It passes no
     backend now, and a render that draws nothing fails

@@ -162,6 +162,16 @@ animation:
   once, with its path, and its channel left out while the clip's other
   channels play.
 
+- Required extensions - a document whose ``extensionsRequired`` lists an
+  extension the loader does not read is reported, naming each, and loaded
+  without it. ``gltf.loader.SUPPORTED_EXTENSIONS`` is the set read, and
+  ``unread_required(document)`` lists what a parsed document requires
+  outside it.
+
+- Tangents - a primitive with texture coordinates and no ``TANGENT`` is given
+  tangents where its material reads directions in tangent space: a normal map,
+  a ``KHR_materials_clearcoat`` normal map, or ``KHR_materials_anisotropy``.
+
 - Visibility - ``KHR_node_visibility``. A hidden node is built with X3D's
   ``visible`` false on its ``Transform``, so it and everything under it,
   lights included, are left out of the frame and of the framing bounds until

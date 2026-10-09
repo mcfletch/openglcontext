@@ -21,7 +21,12 @@ from OpenGLContext.loaders.resolver import (
     fetch_url, DEFAULT_MAX_RESOURCE_BYTES,
 )
 from OpenGLContext.loaders.gltf import fastdecode
-from OpenGLContext.loaders.gltf.scene import _build_scene, GLTFScene
+from OpenGLContext.loaders.gltf.scene import (
+    SUPPORTED_EXTENSIONS, _build_scene, GLTFScene, unread_required,
+)
+
+__all__ = ['SUPPORTED_EXTENSIONS', 'SharedDocument', 'load_gltf', 'load_gltf_url',
+           'parse_gltf', 'unread_required']
 
 if TYPE_CHECKING:
     import pygltflib
