@@ -191,6 +191,15 @@ Rules for each loader
        (``loaders.x3d.ContainedPrototypes``), and so is each file those name,
        eight files deep at most. A URL the resolver refuses is logged and the
        next one tried; the prototype's instances are then empty.
+   * - :doc:`X3D <x3d>` and VRML97 ``Anchor``
+     - A url the document's Anchor follows is resolved through a ``Resolver``
+       built from the document's own location
+       (``scenegraph.anchor.anchor_targets``). A world it may reach is loaded
+       in place of the scene; a page, a url the resolver refuses, and any url
+       with a ``target=`` parameter other than ``_self`` go to
+       ``Context.OnAnchorElsewhere``, which opens nothing. An application that
+       opens web pages overrides it and decides which of the document's urls
+       it trusts.
    * - STL, PLY, OFF (``loaders/meshfiles.py``)
      - Reference nothing. A count in a header is checked against the bytes
        that follow before anything is allocated for it, and a gzip document is

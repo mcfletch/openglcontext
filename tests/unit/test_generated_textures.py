@@ -60,12 +60,15 @@ def test_each_shape_asking_is_kept_once():
 
 
 def drawn(body, renderer, frames=3, size=32, edit=None):
+    """`body` drawn by `renderer`, or by the fixed-function pipeline for 'compatibility'"""
     from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
     from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
     scene = Loader.loads(b'<X3D version="4.0"><Scene><Background skyColor="0 0 0"/>'
                          b'<Viewpoint position="0 0 2.4"/>' + body + b'</Scene></X3D>',
                          'scene.x3d')
-    with scene_context(scene, size=(size, size), renderer=renderer) as context:
+    named = ({'environment': {'OPENGLCONTEXT_PROFILE': 'compatibility'}}
+             if renderer == 'compatibility' else {'renderer': renderer})
+    with scene_context(scene, size=(size, size), **named) as context:
         for _frame in range(frames):
             context.OnDraw(force=1)
         image = drawn_image(context).astype(int)
@@ -181,3 +184,16 @@ def test_a_rendered_textures_engine_fields_are_carried_as_metadata():
     texture = RenderedTexture(update='ALWAYS', viewpoint=x3d.Viewpoint())
     names = {field.name for field in extension.added_fields(texture)}
     assert {'update', 'viewpoint', 'scene', 'background', 'fog'} <= names
+
+
+def test_the_compatibility_profile_draws_a_rendered_texture(gl_context_compat):
+    body = (picture(children=b'<Viewpoint containerField="viewpoint" position="0 0 1" '
+                             b'orientation="0 1 0 3.14159"/>')
+            + wall(b'0 0 1', b'6') + wall(b'1 0 0', b'-6', b'Back'))
+    found = centre(drawn(body, 'compatibility'))
+    assert close(found, (0, 0, 255), tolerance=12), found
+
+
+def test_the_compatibility_profile_draws_a_generated_cube_map(gl_context_compat):
+    found = centre(drawn(mirror() + wall(b'0 1 0', b'6'), 'compatibility'))
+    assert close(found, (0, 255, 0), tolerance=12), found

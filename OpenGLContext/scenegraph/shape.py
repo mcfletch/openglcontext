@@ -1,13 +1,16 @@
 """Renderable geometry composed of a geometry object with applied appearance"""
 
-from typing import Any
+import contextlib
+from collections.abc import Iterator
+from typing import Any, Optional
 
+from OpenGL import GL
 from OpenGL.GL import *
 from OpenGL.GL import GL_BACK, GL_FRONT, glUseProgram
 from vrml.vrml97 import basenodes
 from vrml import field
 from OpenGLContext import lighting
-from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort
+from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort, texgen
 from OpenGLContext.scenegraph.physicalmaterial import two_sided
 from OpenGLContext.scenegraph.texturelayers import is_layered, texture_layers
 from OpenGLContext.arrays import array
@@ -142,8 +145,11 @@ class Shape(basenodes.Shape):
                 else:
                     glDisable(GL_LIGHTING)
                 fill = self.fillStyle()
+                generated = texgen.fixed_function(getattr(self.geometry, 'texGen', None)) \
+                    if textured else None
                 if fill.filled:
-                    self._renderFilledFixed(lit, textured, mode)
+                    with _fixed_texgen(generated):
+                        self._renderFilledFixed(lit, textured, mode)
                 if textured:
                     self.appearance.renderPost(textureToken, mode=mode)
                 if fill.hatch:
@@ -457,3 +463,36 @@ class Shape(basenodes.Shape):
         except Exception:
             tb = traceback.format_exc()
             log.warning("""Failure during Shape.inFrustum check for %r:\n%s""", self, tb)
+
+
+#: The planes s and t are measured along, by the object-linear and eye-linear generators.
+_PLANES = ((GL_S, GL_TEXTURE_GEN_S, (1.0, 0.0, 0.0, 0.0)),
+           (GL_T, GL_TEXTURE_GEN_T, (0.0, 1.0, 0.0, 0.0)))
+
+
+@contextlib.contextmanager
+def _fixed_texgen(name: Optional[str]) -> Iterator[None]:
+    """Generate the first texture unit's s and t by the ``GL_TEXTURE_GEN_MODE``
+    named `name` (:func:`OpenGLContext.scenegraph.texgen.fixed_function`) in
+    the block; nothing for None"""
+    if name is None:
+        yield
+        return
+    generator = getattr(GL, name)
+    for coordinate, switch, plane in _PLANES:
+        glTexGeni(coordinate, GL_TEXTURE_GEN_MODE, generator)
+        if generator == GL_OBJECT_LINEAR:
+            glTexGenfv(coordinate, GL_OBJECT_PLANE, plane)
+        elif generator == GL_EYE_LINEAR:
+            # An eye plane is taken through the modelview as it is set, so
+            # with none it is in the camera's space
+            glPushMatrix()
+            glLoadIdentity()
+            glTexGenfv(coordinate, GL_EYE_PLANE, plane)
+            glPopMatrix()
+        glEnable(switch)
+    try:
+        yield
+    finally:
+        for _coordinate, switch, _plane in _PLANES:
+            glDisable(switch)

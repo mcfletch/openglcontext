@@ -14,6 +14,9 @@ in vec2 vUV;
 out vec4 fragColor;
 
 uniform samplerCube envMap;
+// The environment read turned and scaled, as ibl_prefilter.frag reads it.
+uniform mat3 envTurn;
+uniform vec3 envScale;
 uniform int faceIndex;
 
 void main() {
@@ -30,7 +33,7 @@ void main() {
         for (float theta = 0.0; theta < 0.5 * PI; theta += dTheta) {
             vec3 tangent = cos(phi) * right + sin(phi) * up;
             vec3 sampleVec = cos(theta) * N + sin(theta) * tangent;
-            vec3 rad = min(texture(envMap, sampleVec).rgb, vec3(IBL_RADIANCE_CLAMP));
+            vec3 rad = min(texture(envMap, envTurn * sampleVec).rgb * envScale, vec3(IBL_RADIANCE_CLAMP));
             irradiance += rad * cos(theta) * sin(theta);
             samples += 1.0;
         }

@@ -276,6 +276,21 @@ class TestParticleSystem:
         run(system, 3.0)
         assert np.all(np.abs(system.pool.position[:system.pool.live]) <= 1.0 + 1e-3)
 
+    @pytest.mark.parametrize('model', [
+        ForcePhysicsModel(force=(0, -4, 0)),
+        WindPhysicsModel(direction=(1, 0, 0), speed=2.0, gustiness=0.0),
+    ])
+    def test_a_massless_particle_takes_no_force(self, clock, model):
+        """19775-1, 40.4.4: zero mass, and the force model has no effect (X_ITE: nor the wind)"""
+        system = ParticleSystem(maxParticles=10, particleLifetime=10.0,
+                                emitter=ExplosionEmitter(mass=0.0, surfaceArea=1.0),
+                                physics=[model])
+        now = run(system, 1.0 / 60.0)
+        system.createParticles = False
+        before = system.pool.velocity[0].copy()
+        system.advance(now + 0.05)
+        assert system.pool.velocity[0] == pytest.approx(before)
+
     def test_wind_carries_the_particles_downwind(self, clock):
         system = ParticleSystem(maxParticles=50, particleLifetime=10.0,
                                 emitter=PointEmitter(mass=1.0, surfaceArea=1.0),
@@ -342,6 +357,41 @@ class TestLook:
         run(system, 1.0, start=0.5)
         assert list(system.particleFrames()) == [1]
         assert system.look(None).frames.shape == (2, 4, 2)
+
+    def test_a_line_is_as_wide_as_its_line_properties(self):
+        system = ParticleSystem(geometryType='LINE', appearance=basenodes.Appearance(
+            lineProperties=x3d.LineProperties(linewidthScaleFactor=5)))
+        assert system.look(None).line_width == 5.0
+        assert ParticleSystem(geometryType='LINE').look(None).line_width == 1.0
+
+    def test_the_texture_transform_moves_the_texture_coordinates(self):
+        system = ParticleSystem(appearance=basenodes.Appearance(
+            textureTransform=x3d.TextureTransform(translation=(0.5, 0.25))))
+        assert system.look(None).texture_matrix == pytest.approx((1, 0, 0.5, 0, 1, 0.25))
+        assert ParticleSystem().look(None).texture_matrix == (1, 0, 0, 0, 1, 0)
+
+    @pytest.mark.parametrize('kind, lit', [('QUAD', True), ('TRIANGLE', True),
+                                           ('SPRITE', True), ('LINE', False), ('POINT', False)])
+    def test_a_material_lights_quads_triangles_and_sprites(self, kind, lit):
+        from OpenGLContext import lighting  # noqa: PLC0415 kept with its use
+        system = ParticleSystem(geometryType=kind, appearance=basenodes.Appearance(
+            material=basenodes.Material(diffuseColor=(1, 0, 0), emissiveColor=(0, 0.25, 0),
+                                        specularColor=(0, 0, 1), shininess=0.5,
+                                        ambientIntensity=0.1)))
+        lighting.use('x3d')
+        try:
+            look = system.look(None)
+        finally:
+            lighting.use('auto')
+        assert look.lit is lit
+        if lit:
+            assert look.start_color == pytest.approx((1, 0, 0, 1))
+            assert look.material == pytest.approx((0, 0.25, 0, 0, 0, 1, 0.1, 0.5))
+
+    def test_the_engines_lighting_leaves_them_unlit(self):
+        system = ParticleSystem(appearance=basenodes.Appearance(
+            material=basenodes.Material(diffuseColor=(1, 0, 0))))
+        assert system.look(None).lit is False
 
     def test_point_size_comes_from_the_point_properties(self):
         system = ParticleSystem(geometryType='POINT', appearance=basenodes.Appearance(

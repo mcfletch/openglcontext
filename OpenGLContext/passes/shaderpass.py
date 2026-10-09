@@ -859,6 +859,11 @@ class VRML97ShaderProgram(TextureLayersMixin, _ShadowUniformMixin):
                                self.wide_line_program, self.depth_program), values)
         self._enable_clip_distances(count)
 
+    def enable_clip_distances(self, count: int) -> None:
+        """Enable GL_CLIP_DISTANCE0 to count-1 and disable those after, for a
+        layer drawing with a program of its own that writes them"""
+        self._enable_clip_distances(count)
+
     def _enable_clip_distances(self, count: int) -> None:
         """Enable GL_CLIP_DISTANCE0 to count-1 and disable those after"""
         if count == self._clip_enabled:
@@ -997,6 +1002,10 @@ class VRML97ShaderProgram(TextureLayersMixin, _ShadowUniformMixin):
         of the material's diffuse colour"""
         self._set_uniform1i('hasVertexColor', int(bool(enabled)), self.program)
 
+    #: The ``(mode, density, colour)`` :meth:`set_fog` last gave the programs,
+    #: which an X3D shader is offered as ``x3d_Fog``.
+    fog: tuple[int, float, tuple[float, ...]] = (0, 0.0, (0.0, 0.0, 0.0))
+
     def set_fog(self, density: float = 0.0, color: Color3 = (0.6, 0.7, 0.85),
                 mode: int = 1) -> None:
         """Set the frame's fog on each program that draws the scene's shapes
@@ -1006,6 +1015,7 @@ class VRML97ShaderProgram(TextureLayersMixin, _ShadowUniformMixin):
         The shaders apply X3D's fog to the colour as it is displayed
         (``_x3d_fog_inc.glsl``).
         """
+        self.fog = (int(mode), float(density), _as_floats(color))
         values = (('fogMode', int(mode), glUniform1i),
                   ('fogDensity', float(density), glUniform1f),
                   ('fogColor', _as_floats(color), _UPLOAD_3FV))

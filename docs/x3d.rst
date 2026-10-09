@@ -250,8 +250,12 @@ A composed geometry's first texture coordinate set may come from a
 generator's ``mode`` (``OpenGLContext.scenegraph.texgen``), from the
 vertex's own or camera-space position or normal. A generator for a later
 set makes that set where a ``MultiTexture`` layer reads it, per fragment
-(see :ref:`x3d-texturing`), in both renderers; the fixed-function path does not
-generate coordinates. A ``TextureCoordinate3D`` or ``TextureCoordinate4D``
+(see :ref:`x3d-texturing`), in both renderers. The compatibility profile
+makes the first set with ``glTexGen``: ``COORD`` object-linear,
+``COORD_EYE`` and ``CAMERA_SPACE_POSITION`` eye-linear,
+``CAMERA_SPACE_NORMAL`` and ``CAMERA_SPACE_REFLECTION_VECTOR`` the normal and
+reflection maps, ``SPHERE`` and ``SPHERE_LOCAL`` the sphere map; the noises
+and the refracting sphere maps generate nothing there. A ``TextureCoordinate3D`` or ``TextureCoordinate4D``
 in a composed geometry's ``MultiTextureCoordinate`` is its 3D texture
 coordinates (the first of them; it takes no 2D set's number).
 
@@ -302,8 +306,15 @@ node where it has one. Without a ``diffuseTexture``, the
 appearance's ``texture`` is the base colour map. In the same way it is a
 ``PhysicalMaterial``'s base map without a ``baseTexture``, and an
 ``UnlitMaterial``'s emissive map without an ``emissiveTexture``, in drawing
-and in a glTF written from the scene. ``ambientTexture``,
-``shininessTexture`` and ``specularTexture`` are kept and not drawn.
+and in a glTF written from the scene. Under X3D's lighting a ``Material``'s
+``ambientTexture`` multiplies its ambient term by the map's colour, its
+``specularTexture`` the specular colour by the map's colour, and its
+``shininessTexture`` the ``shininess`` by the map's alpha, each through its
+own ``...TextureMapping`` label, as X_ITE draws them. The PBR program reads
+them through samplers a Phong draw has no other use for: the lightmap's, the
+metallic/roughness map's, and the specular colour map's where the extension
+maps are compiled in or else the split-sum table's
+(``pbrpass.draw_slots``). The VRML97 renderer draws the diffuse map alone.
 A texture is sampled with its ``TextureProperties`` filters where it has
 one. Without, a document's image smaller than 16 texels on its longer side
 (``sampler.SMALL_IMAGE``) is sampled from its nearest texel, so a small
@@ -342,9 +353,11 @@ are nearest it, and a warning names a draw that more reach
 - The compatibility profile clips with ``glClipPlane``, as many planes as
   the context has (six at least).
 - A clipped shape is drawn by itself rather than in an instanced group.
-- A shape drawn with its own ``Shader`` program, and the engine's terrain,
-  vegetation and particle layers, which draw with programs of their own, are
-  not clipped.
+- A shape drawn with its own ``Shader`` program is offered the planes as
+  ``x3d_ClipPlane`` (:ref:`x3d-shaders`) and clips itself with them, as
+  under X_ITE. A ``ParticleSystem``'s particles are clipped in eye space. The
+  engine's terrain and vegetation layers, which draw with programs of their
+  own, are not clipped.
 - Planes only cut: the cut is not capped, so a solid shape is open where a
   plane passes through it.
 
@@ -396,14 +409,17 @@ itself, not batched with others.
   ``UnlitMaterial``'s chain in linear light, its textures decoded from sRGB
   as base colour maps are; a ``Material``'s, drawn by X3D's Phong equation,
   and the VRML97 renderer's combine the colours as they are given. The PBR
-  program reads a 2D layer through the base colour map's sampler and three
-  of the glTF extension maps' (a material drawn with a chain does not use
-  those maps), and one cube map and one 3D texture a draw, where the
-  driver's fragment stage has samplers left for them
-  (``pbrpass.LAYER_SAMPLERS_NEEDED``: a 32-sampler stage has). A driver
-  with 16 reads one 2D layer; what does not fit is reported once and left
-  out. The VRML97 renderer reads four 2D layers, a cube map and a 3D
-  texture.
+  program reads 2D layers through samplers the draw's material leaves free
+  (``pbrpass.draw_slots``): the base colour map's, three of the glTF
+  extension maps' where the driver has samplers for them (a material drawn
+  with a chain does not use those maps), the lightmap's, and for a
+  ``Material`` under X3D's lighting the metallic/roughness map's and the
+  split-sum table's. So a 16-sampler driver reads four 2D layers for a
+  ``Material``, two for a ``PhysicalMaterial`` or ``UnlitMaterial``. One
+  cube map and one 3D texture a draw are read where the fragment stage has
+  samplers left for them (``pbrpass.LAYER_SAMPLERS_NEEDED``). What does not
+  fit is reported once and left out. The VRML97 renderer reads four 2D
+  layers, a cube map and a 3D texture.
 - The compatibility profile draws a MultiTexture's first 2D layer, combined
   by its mode where the fixed-function texture environment has it
   (``MODULATE``, ``REPLACE``, ``ADD``, ``ADD_SIGNED``, ``SUBTRACT``), a cube
@@ -421,8 +437,10 @@ all six have images. ``ImageCubeMapTexture`` reads a DDS cube map
 picture of the six faces: a horizontal cross (4:3, -X +Z +X -Z across the
 middle, +Y over +Z and -Y under it), a vertical cross (3:4, -Z under -Y and
 upside down), a strip of six in GL's order across or down, or 3x2
-(``OpenGLContext.loaders.textureimages``). KTX 2 and HDR cube maps are not
-read.
+(``OpenGLContext.loaders.textureimages``). It reads a KTX 2 cube map too, of
+8-bit Vulkan formats (R8 to R8G8B8A8 and B8G8R8 to B8G8R8A8, UNORM or SRGB)
+or BC1 to BC3, uncompressed or zlib-supercompressed; Basis Universal and
+Zstandard KTX 2 files, and HDR cube maps, are not read.
 
 ``GeneratedCubeMapTexture`` is the scene drawn into a cube of ``size``
 texels a side from the local origin of the shape wearing it, along the world
@@ -441,10 +459,11 @@ depth drawn, as grey, rather than the colour. X3D 4.1 declares
 RenderedTexture's file-output fields, which are kept and not acted on, and
 not these: ``update``, ``viewpoint``, ``scene``, ``background`` and ``fog``
 are the engine's, carried in a document in an ``OpenGLContext`` metadata
-set. Neither is drawn in the compatibility profile. A RenderedTexture is an
-ordinary 2D texture once drawn, and goes wherever one does.
+set. The compatibility profile draws both with the fixed-function pipeline,
+as it draws the scene. A RenderedTexture is an ordinary 2D texture once
+drawn, and goes wherever one does.
 
-``ImageTexture3D`` reads a DDS or KTX volume, an NRRD volume of one to four
+``ImageTexture3D`` reads a DDS, KTX 1.1 or KTX 2 volume, an NRRD volume of one to four
 components (raw, gzip, bzip2 or text, with a detached data file read beside
 its header; samples wider than a byte scaled from their range to 0..255), or
 one picture, a volume a slice deep, and sends ``width``, ``height``,
@@ -466,9 +485,13 @@ times its ``color``, weighted by the texel's alpha times ``intensity``, as
 X3D browsers draw it. Its ``global`` and scope are a light's, it lights
 nothing itself, and it sends ``aspectRatio`` when its picture is known. The
 first four that are on cast, each picture resampled to 512 texels a side
-(``OpenGLContext.passes.projectorpass``); the rest are reported once.
-``shadows`` is kept and not acted on, and the compatibility profile casts
-none.
+(``OpenGLContext.passes.projectorpass``); the rest are reported once, as
+X_ITE also casts four. ``shadows`` is kept and not acted on, as in X_ITE.
+The compatibility profile casts each through a texture unit of its own, from
+unit 1 (``OpenGLContext.passes.fixedprojectors``): the same mix of picture,
+colour, alpha and intensity, modulating the lit colour on every face, from a
+picture with an image on the CPU (an ``ImageTexture`` or ``PixelTexture``).
+An ``EnvironmentLight`` lights nothing in the compatibility profile.
 
 .. _x3d-movies:
 
@@ -563,9 +586,15 @@ light, each rougher level its faces averaged down by half; its
 fit. The irradiance is the ``diffuseCoefficients`` where there are nine,
 else the diffuse cube map's, else the specular cube map convolved; without
 a specular cube map the one specular level is made from the irradiance, so
-smooth surfaces reflect a blurred environment. A ``GeneratedCubeMapTexture``,
-``origin`` and ``global`` are not read. It needs full image-based lighting
-(``ContextDefinition.ibl``).
+smooth surfaces reflect a blurred environment. A ``GeneratedCubeMapTexture``
+as ``specularTexture`` is the scene drawn from the light's ``origin``, in the
+light's coordinates, as X_ITE draws it: drawn as its ``update`` says, and
+each drawing convolved on the GPU into the irradiance and the specular
+levels, turned by ``rotation`` and scaled by ``color`` times ``intensity``
+(``IBLProbe.convolve_scene``); with ``update`` ``ALWAYS`` that is every
+frame. With ``global`` false the light lights only its parent group's
+descendants, and the rest are drawn without an environment. It needs full
+image-based lighting (``ContextDefinition.ibl``).
 
 A document is lit by its own lights and its headlight: the PBR pass's
 built-in studio environment, which lights a scene built in code, is off for it,
@@ -625,7 +654,11 @@ over. Each of its six images is drawn over them, turned as X3D turns it, once
 that image has loaded; a side with no image, or a transparent part of one,
 shows the sky and ground. A ``TextureBackground`` is drawn the same way from
 its six ``...Texture`` sides. A side is an ``ImageTexture`` or a
-``PixelTexture``; ``transparency`` is not read.
+``PixelTexture``. Either node's ``transparency`` draws the sky and ground at
+``1 - transparency`` opacity over transparent black, and not at all at 1, as
+X_ITE composites them; the sides keep their own alpha. The window's alpha is
+left at that opacity, so it shows what is behind a window composited with its
+alpha; elsewhere the sky is darkened toward black.
 
 Collision
 ~~~~~~~~~
@@ -826,8 +859,11 @@ nodes.
        INVERSE, EXPONENTIAL with ``referenceDistance``, ``maxDistance``,
        ``rolloffFactor``) times the cone about ``direction``;
        ``dopplerEnabled`` delays it by its distance over 343 m/s, up to one
-       second; ``spatialize``; ``priority``. ``enableHRTF`` is not read: the
-       pan is equal power between two ears
+       second; ``spatialize``; ``priority``. The pan is equal power between
+       two ears; ``enableHRTF`` hears it through a spherical head instead
+       (``omi_audio.spatial.head_response``): both ears at the level, the far
+       one later by the interaural delay and each shelved by the head's
+       shadow
    * - ``AudioDestination``, ``StreamAudioDestination``
      - its ``children``, mixed and heard
      - ``gain``, the channel fields, ``maxChannelCount``, ``isActive``.
@@ -926,10 +962,16 @@ behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
   clock, and can be changed while it runs. ``getTimer(context)`` answers a Timer-style
   handle on it: ``pause()``, ``resume()``, ``internal.multiplier`` (the
   rate) and ``addEventHandler('fraction' or 'cycle', function)``.
-- A ``LoadSensor`` is polled in the same way. ``Inline``, ``ImageTexture``
-  and ``MovieTexture`` record their load state as they read
-  (``vrml.x3d.loadsensor``); other url nodes record none and are not waited
-  for.
+- A ``LoadSensor`` is polled in the same way. The url nodes record their
+  load state as they read (``vrml.x3d.loadsensor``): ``Inline``,
+  ``InlineGeometry``, ``ImageTexture``, ``ImageCubeMapTexture``,
+  ``ImageTexture3D``, ``FontLibrary``, ``ShaderPart``, ``ShaderProgram`` and
+  ``PackagedShader``, and ``MovieTexture`` from the moment their url is set,
+  ``AudioClip`` and a ``BufferAudioSource`` reading a url when they are
+  first heard. An ``Anchor`` counts as loaded. A child with no state yet is not waited
+  for. With no children the sensor sends ``isLoaded FALSE``, ``isActive
+  FALSE`` and ``progress`` 0; a failure sends ``progress`` as the part of the
+  children loaded.
 - A ``MovieTexture`` runs as a TimeSensor does, its cycle the movie's length
   and its rate ``speed`` (:ref:`x3d-movies`).
 - A follower moves a step each frame on the engine's clock while it is
@@ -995,9 +1037,16 @@ Binding, viewpoints and navigation
   ``size`` and the viewer is outside the box of that size about its
   ``center``.
 - An ``Anchor`` draws its children as a group, and a click released over
-  them calls ``Context.OnAnchor(anchor, url, parameter)``. The context binds
-  the viewpoint a ``#name`` url names; opening any other url is left to an
-  application that overrides ``OnAnchor``.
+  them calls ``Context.OnAnchor(anchor, url, parameter)``, which follows the
+  urls in turn as X_ITE does (``scenegraph.anchor``): ``#name``, or the
+  document's own name with ``#name``, binds that viewpoint; another X3D or
+  VRML97 document is read by ``Context.sceneLoader`` and replaces the scene,
+  binding the viewpoint its ``#name`` fragment names, and where it does not
+  load the next url is tried. A page (``.html``, ``.htm``, ``.xhtml``), a url
+  the document may not reach (:ref:`loaders`), and any url with a
+  ``target=`` parameter other than ``_self`` go to
+  ``Context.OnAnchorElsewhere(anchor, url, target)``, which opens nothing and
+  answers False; an application that opens pages or windows overrides it.
 
 - In a scene drawn as layers (:ref:`x3d-layers`) each layer has bind stacks
   of its own: its viewpoints, backgrounds, fogs and NavigationInfos are bound
@@ -1107,9 +1156,13 @@ Sensors
   the enabled ones beside the geometry under the pointer, in the lowest group
   on its path that has any; the primary button presses them, and a drag
   continues on or off their geometry until it is released. The scene's and
-  the application's own handlers receive the same events. The hit is the picked point, with no
-  normal or texture coordinate. Picking (``ContextDefinition.pickEnabled``)
-  has to be on.
+  the application's own handlers receive the same events. The hit is the
+  picked point. A ``TouchSensor`` or ``GeoTouchSensor`` also sends
+  ``hitNormal_changed``, the vertex normals interpolated across the triangle
+  under the pointer, and ``hitTexCoord_changed``, the first texture
+  coordinate set there before any texture transform, both in the sensor's
+  coordinates; geometry with no triangles sends its own +z and (0, 0).
+  Picking (``ContextDefinition.pickEnabled``) has to be on.
 - A ``KeySensor`` hears every key its window receives, including keys a
   program has bound itself: ``keyPress`` for a character, ``actionKeyPress``
   for the function, arrow and page keys, and ``shiftKey``, ``controlKey`` and
@@ -1569,6 +1622,15 @@ The browser's state
       * - ``x3d_TextureMatrix[i]``
         - ``mat4``
         - each texture's transform
+      * - ``x3d_Fog``
+        - ``x3d_FogParameters``
+        - the fog the shape is in, Fog or LocalFog; ``type ==
+          x3d_NoneFog`` where there is none
+      * - ``x3d_ClipPlane[x3d_MaxClipPlanes]``
+        - ``vec4``
+        - the clip planes reaching the shape, in eye space: a point ``v`` is
+          kept where ``dot(v, plane.xyz) >= plane.w``; slots past them are
+          zero
 
    ``x3d_LightSourceParameters`` has ``int type`` (``x3d_DirectionalLight``,
    ``x3d_PointLight``, ``x3d_SpotLight``), ``vec3 color``, ``float
@@ -1583,7 +1645,13 @@ The browser's state
    ``roughness`` in place of the first four. The engine defines a structure
    for a part that names it and does not define it, after the part's
    ``#version``, with ``x3d_MaxLights`` (the renderer's light count),
-   ``x3d_MaxTextures`` and the light type numbers.
+   ``x3d_MaxTextures``, ``x3d_MaxClipPlanes`` (6) and the light and fog type
+   numbers. ``x3d_FogParameters`` has ``int type`` (``x3d_LinearFog``,
+   ``x3d_ExponentialFog``), ``vec3 color``, ``float visibilityStart`` (0),
+   ``float visibilityRange`` and ``mat3 matrix``, which turns an eye-space
+   point into the fog's space, where the range is measured. As Annex I.3.2
+   has it, the engine applies neither fog nor clip planes to a program's
+   colour; the program applies them with these, as it does under X_ITE.
 
    The engine's own input names (``aPosition``, ``aNormal``, ...,
    :ref:`fixed-attribute-locations`) are bound as well.

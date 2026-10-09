@@ -145,9 +145,11 @@ metres):
    * - Model
      - What it does
    * - ``ForcePhysicsModel``
-     - ``force`` newtons divided by the mass; with a mass of 0 the force is
-       taken as an acceleration, so the default ``(0, -9.8, 0)`` is the
-       Earth's gravity.
+     - ``force`` newtons divided by the mass. In an X3D ``ParticleSystem`` a
+       particle of mass 0 takes no force (19775-1, 40.4.4), and neither the
+       wind, as X_ITE has it; ``ParticleEmitter`` takes the force on a
+       particle of mass 0 as an acceleration, so the default ``(0, -9.8, 0)``
+       is the Earth's gravity there.
    * - ``WindPhysicsModel``
      - A pressure of 0.64615 times the square of ``speed`` (pascals) on the
        surface area, along ``direction``. ``gustiness`` scatters the speed by
@@ -510,7 +512,10 @@ blending and depth writes of the phase it drew in.
 the system's XY plane, lines along each particle's velocity, or points of a
 size in pixels. An opaque look (X3D's, where nothing is translucent) blends
 nothing, writes depth and cuts its texture out where alpha is below one half.
-Particles are unlit.
+A look may light its sprites and quads by X3D's Phong equation (``lit``,
+``material``), transform the texture coordinates (``texture_matrix``) and
+draw lines wider than a pixel (``line_width``) as strips across them. The X3D
+ClipPlanes reaching a system clip it, in eye space.
 
 .. rst-class:: technical
 
@@ -628,16 +633,26 @@ simulation and renderer:
      - A copy of ``geometry`` in the appearance, lit as any shape is; the
        copies are drawn in one instanced draw.
 
-Every type but ``GEOMETRY`` is unlit. A particle is the colour ramp's colour
-where there is one, and otherwise the material's colour (its emissive colour
-where it has one, its diffuse or base colour where not), with the material's
-transparency, times the appearance's first texture. ``colorKey`` and
-``texCoordKey`` are a particle's age in seconds: colours are interpolated
-between keys and held past either end; texture coordinates, four to a key for
-the quad types, are stepped from frame to frame, at most 16 frames. A system
-is blended where its material is transparent, its ramp has an alpha below 1
-or its texture has an alpha channel, and opaque otherwise. The texture
-transform is not applied to particles, and a line is one pixel wide.
+In a document, which X3D's lighting rules light, ``QUAD``, ``TRIANGLE`` and
+``SPRITE`` particles with a ``Material`` are lit by the Phong equation, as
+X_ITE lights them: the colour ramp's colour, or the material's diffuse colour,
+times the appearance's first texture is the diffuse colour; the material's
+emissive and specular colours, ambient intensity and shininess are its own; a
+quad's normal is the system's +Z and a sprite's faces the viewer. ``LINE``
+and ``POINT`` particles, and all of them under the engine's lighting, are
+unlit: the colour ramp's colour where there is one, and otherwise the
+material's colour (its emissive colour where it has one, its diffuse or base
+colour where not), times the appearance's first texture. Either way the
+material's transparency is the alpha. ``colorKey`` and ``texCoordKey`` are a
+particle's age in seconds, as 40.4.5 gives them (X_ITE reads them as parts of
+the particle's life): colours are interpolated between keys and held past
+either end; texture coordinates, four to a key for the quad types, are
+stepped from frame to frame, at most 16 frames. The appearance's texture
+transform (the first of a ``MultiTextureTransform``) transforms the texture
+coordinates, and its ``LineProperties`` ``linewidthScaleFactor`` is a line's
+width in pixels. A system is blended where its material is transparent, its
+ramp has an alpha below 1 or its texture has an alpha channel, and opaque
+otherwise. ``ClipPlane`` nodes reaching a system clip its particles.
 
 The emitter nodes and the physics models are the ones in
 :ref:`Sources, forces and colour ramps <particle-sources>`. A ``BoundedPhysicsModel``'s

@@ -60,6 +60,7 @@ def test_the_scene_is_lit_by_its_environment_light():
     from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
     light = EnvironmentLight(diffuseCoefficients=COEFFICIENTS)
     held = SimpleNamespace(paths={x3d.EnvironmentLight: [(None, light)]})
+    held.sceneEnvironmentLight = lambda: ZonesMixin.sceneEnvironmentLight(held)
     assert ZonesMixin.sceneImageLight(held) is light.imageLight()
 
 
@@ -136,3 +137,68 @@ def test_a_cube_map_with_no_faces_yet_lights_nothing_until_it_has_them():
     found = light.imageLight()
     assert found is not None
     assert found.specular[0][0][0, 0] == pytest.approx((1, 1, 1))
+
+
+def test_the_compatibility_profile_draws_a_document_with_one(gl_context_compat):
+    """The fixed-function lights pass over it: it is no GL lamp"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b'''<X3D version="4.1"><Scene><Viewpoint position="0 0 4"/>
+      <EnvironmentLight/><Shape><Appearance><Material diffuseColor="1 0 0"/></Appearance>
+      <Sphere/></Shape></Scene></X3D>''', 'scene.x3d')
+    with scene_context(scene, size=(32, 32),
+                       environment={'OPENGLCONTEXT_PROFILE': 'compatibility'}) as context:
+        drawn_image(context)
+        image = drawn_image(context)
+    assert image[16, 16, 0] > 100 and image[16, 16, 1] < 30
+
+
+def lit_middle(body, frames=4):
+    """The middle of a white rough sphere at the origin, drawn after `frames` frames"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b'''<X3D version="4.1"><Scene>
+      <NavigationInfo headlight="false"/><Background skyColor="0 0 0"/>
+      <Viewpoint position="0 0 4"/>''' + body + b'''</Scene></X3D>''', 'scene.x3d')
+    with scene_context(scene, size=(32, 32), ibl='full') as context:
+        for _ in range(frames):
+            image = drawn_image(context)
+    return image[16, 16].astype(int)
+
+
+SPHERE = (b'<Shape><Appearance><PhysicalMaterial baseColor="1 1 1" roughness="1" metallic="0"/>'
+          b'</Appearance><Sphere/></Shape>')
+RED_LIGHT = (b'<EnvironmentLight %s diffuseCoefficients="3 0 0 0 0 0 0 0 0 0 0 0 0 0 0 '
+             b'0 0 0 0 0 0 0 0 0 0 0 0"/>')
+
+
+def test_a_scoped_environment_light_lights_only_its_group(gl_context):
+    inside = lit_middle(b'<Group>' + RED_LIGHT % b'global="false"' + SPHERE + b'</Group>')
+    outside = lit_middle(b'<Group>' + RED_LIGHT % b'global="false"' + b'</Group>' + SPHERE)
+    assert inside[0] > 40
+    assert outside[0] < 10, outside
+
+
+def room(colour):
+    """A box round the origin, unlit in `colour`, seen from inside"""
+    return (b'<Shape><Appearance><UnlitMaterial emissiveColor="%s"/></Appearance>'
+            b'<Box size="20 20 20" solid="false"/></Shape>' % colour)
+
+
+@pytest.mark.parametrize('colour, channel', [(b'1 0 0', 0), (b'0 1 0', 1)])
+def test_a_generated_cube_map_is_the_lights_environment(gl_context, colour, channel):
+    light = (b'<EnvironmentLight><GeneratedCubeMapTexture containerField="specularTexture" '
+             b'update="ALWAYS" size="16"/></EnvironmentLight>')
+    found = lit_middle(light + room(colour) + SPHERE, frames=6)
+    others = [found[index] for index in range(3) if index != channel]
+    assert found[channel] > max(others) + 30, found
+
+
+def test_the_origin_is_where_the_light_is_captured():
+    from OpenGLContext.passes.generatedtextures import capture_centre  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph import nodepath  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph.basenodes import Transform  # noqa: PLC0415 kept with its use
+    light = EnvironmentLight(origin=(0, 2, 0))
+    placed = Transform(translation=(1, 0, 0), children=[light])
+    path = nodepath.NodePath([]) + placed + light
+    assert tuple(capture_centre(path)) == pytest.approx((1, 2, 0))

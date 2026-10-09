@@ -4,8 +4,8 @@ Drawn as the engine's Background is (:class:`~OpenGLContext.scenegraph.backgroun
 the sky and ground colours on a sphere, and each side that has an image on a
 cube over it. A side is an ImageTexture, drawn once its image has loaded, or
 a PixelTexture, decoded once and kept until its image is set; any other
-texture node, or none, leaves that side undrawn. ``transparency`` is not
-read.
+texture node, or none, leaves that side undrawn. ``transparency`` is read
+as a Background's is (:mod:`~OpenGLContext.scenegraph.spherebackground`).
 """
 from typing import Any, NamedTuple, Optional
 
