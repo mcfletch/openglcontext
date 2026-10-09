@@ -394,7 +394,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     precision
   - [ ] VolumeRendering: the 13 nodes
   - [ ] GaussianSplats
-  - [ ] `MovieTexture` through the optional decoder
+  - [ ] `MovieTexture` decoded on the GPU through pyopengl-video
+    ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)).
+    No package that links FFmpeg at run time is used: PyAV was tried
+    (2026-10-08) and removed, since the FFmpeg a platform ships carries GPL
+    components. Until that decoder lands, a MovieTexture is kept with its
+    fields and drawn untextured; its timing is pyvrml97's
+    `vrml.x3d.media.MovieTexture` on `timesensor.Clocked`, ready for it
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext
@@ -1029,11 +1035,12 @@ What will not work, and why:
   so its output fields never change. Loading reports how many `Script` nodes a
   scene has, once per load.
 - `MovieTexture` without a decoder. The specification requires MPEG-1
-  (ISO/IEC 11172-1); content also uses MP4 and WebM. Decoding needs FFmpeg or similar,
-  which cannot be a hard dependency (licence and size). An optional extra
-  (PyAV, a BSD wrapper over a user-installed FFmpeg) supplies frames; without it
-  the texture shows a placeholder and loading says so. `MovieTexture`'s audio
-  goes to omi_audio when a decoder is present.
+  (ISO/IEC 11172-1); content also uses MP4 and WebM. Decoding is planned on
+  the GPU through pyopengl-video
+  ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)),
+  through each vendor's own library; nothing that links FFmpeg, PyAV or
+  GStreamer is used. Until then the texture draws nothing and its shape is
+  drawn untextured.
 - `StreamAudioSource`, `StreamAudioDestination`. These are defined in terms of
   WebRTC media streams, which a desktop engine does not have.
   `MicrophoneSource` maps to device capture where `miniaudio` offers it.
