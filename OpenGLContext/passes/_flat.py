@@ -24,6 +24,7 @@ from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard
 from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGLContext.scenegraph import bindable
+from OpenGLContext.passes import glstate
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGL.GL import *
 from OpenGL.GL import (
@@ -500,7 +501,7 @@ def _color_select_render(pass_obj: 'FlatPass', mode: Any, toRender: Sequence[Any
             glColor4ubv(id_holder)
             self.matrix = mvmatrix
             self.renderPath = path
-            glLoadMatrixf(mvmatrix)
+            glstate.load_matrix(mvmatrix)
             node.Render(mode=self)
             id_map[color_id] = path
         pixel = array([0, 0, 0, 0], 'B')
@@ -792,6 +793,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         # Which light went into which slot, for the zones' per-draw light mask.
         bound = []
         bound_paths = []
+        lit = []
 
         for path in light_paths:
             if light_count >= ceiling:
@@ -806,11 +808,18 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
                 configure_light_from_node(shader, light_count, light_node, light_matrix)
                 bound.append(light_node)
                 bound_paths.append(path)
+                lit.append((light_node, light_matrix))
                 light_count += 1
         self.boundLights = bound
         self.lightScopes = self.lightScopes.following(lightscope.scoped_lights(bound_paths))
+        # What a shape drawn by an X3D shader sets its lights from
+        # (scenegraph.x3dshaders): each light with its eye-space matrix, in
+        # slot order, whether the headlight follows them, and the view.
+        self.shaderLights = lit
+        self.shaderViewMatrix = matrix
+        self.shaderHeadlight = self.hasHeadlight(light_count) and light_count < ceiling
 
-        if self.hasHeadlight(light_count) and light_count < ceiling:
+        if self.shaderHeadlight:
             # Directional along the view, given in eye space.
             shader.set_light(light_count, light_type='directional',
                              color=(1.0, 1.0, 1.0), direction=(0.0, 0.0, -1.0),
@@ -2191,7 +2200,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
 
                     self.matrix = mvmatrix
                     self.renderPath = path
-                    glLoadMatrixf( mvmatrix )
+                    glstate.load_matrix( mvmatrix )
                     self.applyFixedClipPlanes( path, _tmatrix )
                     try:
                         node.RenderTransparent( mode = self )
@@ -2240,7 +2249,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
             for matrix, path, shape in deferred:
                 self.matrix = matrix
                 self.renderPath = path
-                glLoadMatrixf( matrix )
+                glstate.load_matrix( matrix )
                 try:
                     shape.RenderTransparent( mode = self )
                 except Exception as err:

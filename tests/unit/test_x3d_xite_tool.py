@@ -189,6 +189,9 @@ def stand_in(tool, tmp_path, monkeypatch):
         drawn: list = []
         installs: list = []
         failing: set = set()
+        #: Documents whose first draw loses the driver.
+        losing: set = set()
+        alive = True
 
         def __init__(self, documents, dist, size):
             pass
@@ -201,12 +204,21 @@ def stand_in(tool, tmp_path, monkeypatch):
 
         def render(self, relative, path):
             Renderer.drawn.append(path)
-            return {'ok': os.path.basename(path) not in Renderer.failing, 'errors': [],
-                    'seconds': 0.0}
+            name = os.path.basename(path)
+            if name in Renderer.losing:
+                Renderer.losing.discard(name)
+                Renderer.alive = False
+                return {'ok': False, 'errors': ['driver gone'], 'seconds': 0.0}
+            return {'ok': name not in Renderer.failing, 'errors': [], 'seconds': 0.0}
+
+        def connected(self):
+            alive, Renderer.alive = Renderer.alive, True
+            return alive
 
     monkeypatch.setattr(tool, 'distribution', lambda: str(tmp_path))
     monkeypatch.setattr(tool, 'ensure_browser', lambda: Renderer.installs.append(True))
     monkeypatch.setattr(tool, 'Renderer', Renderer)
+    monkeypatch.setattr(tool, 'ISOLATED', False)
     return Renderer
 
 
@@ -244,6 +256,33 @@ def test_a_failed_render_fails_the_run(tool, tmp_path, stand_in, capsys):
     assert '1 of 2 documents failed' in printed
     stand_in.failing = set()
     assert tool.main(['--corpus', corpus, '--archive', 'Tiny', '--out', out, '--refresh']) == 0
+
+
+def test_chunks_are_one_folders_documents_at_most_so_many(tool):
+    documents = [tool.Document('A/%d' % index, 'p', 'one') for index in range(5)]
+    documents.append(tool.Document('B/x', 'p', 'two'))
+    found = tool.chunks(documents, 2)
+    assert [len(chunk) for chunk in found] == [2, 2, 1, 1]
+    assert all(len({document.root for document in chunk}) == 1 for chunk in found)
+
+
+def test_a_lost_driver_leaves_its_documents_to_another_browser(tool, tmp_path, stand_in):
+    out = tmp_path / 'out'
+    documents = [tool.Document('A/%d' % index, 'p', 'r') for index in range(4)]
+    stand_in.losing = {'A.1.png'}
+    outcome = tool.render_all(documents, str(out), (8, 8), jobs=1)
+    assert outcome == tool.Outcome(4, [])
+    assert stand_in.drawn.count(str(out / 'A.1.png')) == 2
+    assert stand_in.drawn.count(str(out / 'A.0.png')) == 1
+
+
+def test_a_record_from_before_the_run_is_not_counted(tool, tmp_path):
+    document = tool.Document('A/old', 'p', 'r')
+    record = tmp_path / 'A.old.json'
+    record.write_text('{"ok": true}')
+    assert tool.drawn_since(document, str(tmp_path), 0.0) is True
+    assert tool.drawn_since(document, str(tmp_path), os.path.getmtime(record) + 1) is None
+    assert tool.drawn_since(tool.Document('A/none', 'p', 'r'), str(tmp_path), 0.0) is None
 
 
 def test_browsers_at_a_time_leave_room_for_swiftshader(tool, monkeypatch):

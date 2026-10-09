@@ -52,6 +52,13 @@ from OpenGLContext.scenegraph.geospatial import GeoLocation as GeoLocation
 from OpenGLContext.scenegraph.geospatial import GeoTransform as GeoTransform
 from OpenGLContext.scenegraph.geospatial import GeoViewpoint as GeoViewpoint
 from OpenGLContext.scenegraph.group import Group as Group
+from OpenGLContext.scenegraph.hanim import HAnimDisplacer as HAnimDisplacer
+from OpenGLContext.scenegraph.hanim import HAnimHumanoid as HAnimHumanoid
+from OpenGLContext.scenegraph.hanim import HAnimJoint as HAnimJoint
+from OpenGLContext.scenegraph.hanim import HAnimMotion as HAnimMotion
+from OpenGLContext.scenegraph.hanim import HAnimPose as HAnimPose
+from OpenGLContext.scenegraph.hanim import HAnimSegment as HAnimSegment
+from OpenGLContext.scenegraph.hanim import HAnimSite as HAnimSite
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight as ImageBasedLight
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture as ImageDataTexture
 from OpenGLContext.scenegraph.imagetexture import ImageTexture as ImageTexture
@@ -164,6 +171,16 @@ from OpenGLContext.scenegraph.x3dgroups import CADFace as CADFace
 from OpenGLContext.scenegraph.x3dgroups import CADLayer as CADLayer
 from OpenGLContext.scenegraph.x3dgroups import PickableGroup as PickableGroup
 from OpenGLContext.scenegraph.x3dgroups import StaticGroup as StaticGroup
+from OpenGLContext.scenegraph.x3dparticles import BoundedPhysicsModel as BoundedPhysicsModel
+from OpenGLContext.scenegraph.x3dparticles import ConeEmitter as ConeEmitter
+from OpenGLContext.scenegraph.x3dparticles import ExplosionEmitter as ExplosionEmitter
+from OpenGLContext.scenegraph.x3dparticles import ForcePhysicsModel as ForcePhysicsModel
+from OpenGLContext.scenegraph.x3dparticles import ParticleSystem as ParticleSystem
+from OpenGLContext.scenegraph.x3dparticles import PointEmitter as PointEmitter
+from OpenGLContext.scenegraph.x3dparticles import PolylineEmitter as PolylineEmitter
+from OpenGLContext.scenegraph.x3dparticles import SurfaceEmitter as SurfaceEmitter
+from OpenGLContext.scenegraph.x3dparticles import VolumeEmitter as VolumeEmitter
+from OpenGLContext.scenegraph.x3dparticles import WindPhysicsModel as WindPhysicsModel
 from OpenGLContext.scenegraph.x3dpointing import CylinderSensor as CylinderSensor
 from OpenGLContext.scenegraph.x3dpointing import GeoTouchSensor as GeoTouchSensor
 from OpenGLContext.scenegraph.x3dpointing import PlaneSensor as PlaneSensor
@@ -187,6 +204,11 @@ from OpenGLContext.scenegraph.x3druntime import StringSensor as StringSensor
 from OpenGLContext.scenegraph.x3druntime import TexCoordChaser2D as TexCoordChaser2D
 from OpenGLContext.scenegraph.x3druntime import TexCoordDamper2D as TexCoordDamper2D
 from OpenGLContext.scenegraph.x3druntime import TimeTrigger as TimeTrigger
+from OpenGLContext.scenegraph.x3dshaders import ComposedShader as ComposedShader
+from OpenGLContext.scenegraph.x3dshaders import PackagedShader as PackagedShader
+from OpenGLContext.scenegraph.x3dshaders import ProgramShader as ProgramShader
+from OpenGLContext.scenegraph.x3dshaders import ShaderPart as ShaderPart
+from OpenGLContext.scenegraph.x3dshaders import ShaderProgram as ShaderProgram
 from OpenGLContext.scenegraph.zone import Zone as Zone
 from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
 from OpenGLContext.scenegraph.zone import ZoneEnvironment as ZoneEnvironment
@@ -207,9 +229,12 @@ from vrml.x3d.nodes import ClipPlane as ClipPlane
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
 from vrml.x3d.nodes import CoordinateDouble as CoordinateDouble
 from vrml.x3d.nodes import FillProperties as FillProperties
+from vrml.x3d.nodes import FloatVertexAttribute as FloatVertexAttribute
 from vrml.x3d.nodes import GeoMetadata as GeoMetadata
 from vrml.x3d.nodes import GeoOrigin as GeoOrigin
 from vrml.x3d.nodes import LineProperties as LineProperties
+from vrml.x3d.nodes import Matrix3VertexAttribute as Matrix3VertexAttribute
+from vrml.x3d.nodes import Matrix4VertexAttribute as Matrix4VertexAttribute
 from vrml.x3d.nodes import MetadataBoolean as MetadataBoolean
 from vrml.x3d.nodes import MetadataDouble as MetadataDouble
 from vrml.x3d.nodes import MetadataFloat as MetadataFloat
@@ -260,6 +285,7 @@ __all__ = [
     'BooleanSequencer',
     'BooleanToggle',
     'BooleanTrigger',
+    'BoundedPhysicsModel',
     'Box',
     'CADAssembly',
     'CADFace',
@@ -273,7 +299,9 @@ __all__ = [
     'ColorDamper',
     'ColorInterpolator',
     'ColorRGBA',
+    'ComposedShader',
     'Cone',
+    'ConeEmitter',
     'Contour2D',
     'ContourPolyline2D',
     'Coordinate',
@@ -290,6 +318,7 @@ __all__ = [
     'EaseInEaseOut',
     'ElevationGrid',
     'EnvironmentLight',
+    'ExplosionEmitter',
     'Extrusion',
     'FillProperties',
     'FloatUniform1f',
@@ -305,10 +334,12 @@ __all__ = [
     'FloatUniformm4',
     'FloatUniformm4x2',
     'FloatUniformm4x3',
+    'FloatVertexAttribute',
     'Fog',
     'FontLibrary',
     'FontStyle',
     'FontStyle3D',
+    'ForcePhysicsModel',
     'GLSLImport',
     'GLSLObject',
     'GLSLShader',
@@ -325,6 +356,13 @@ __all__ = [
     'GeoTransform',
     'GeoViewpoint',
     'Group',
+    'HAnimDisplacer',
+    'HAnimHumanoid',
+    'HAnimJoint',
+    'HAnimMotion',
+    'HAnimPose',
+    'HAnimSegment',
+    'HAnimSite',
     'IS',
     'ImageBasedLight',
     'ImageDataTexture',
@@ -353,6 +391,8 @@ __all__ = [
     'LocalFog',
     'MMImageTexture',
     'Material',
+    'Matrix3VertexAttribute',
+    'Matrix4VertexAttribute',
     'MetadataBoolean',
     'MetadataDouble',
     'MetadataFloat',
@@ -384,12 +424,15 @@ __all__ = [
     'OrientationDamper',
     'OrientationInterpolator',
     'OrthoViewpoint',
+    'PackagedShader',
     'ParticleEmitter',
+    'ParticleSystem',
     'PhysicalMaterial',
     'PickableGroup',
     'PixelTexture',
     'PlanarReflector',
     'PlaneSensor',
+    'PointEmitter',
     'PointLight',
     'PointPickSensor',
     'PointProperties',
@@ -397,6 +440,7 @@ __all__ = [
     'PolyCone',
     'PolyCylinder',
     'Polyline2D',
+    'PolylineEmitter',
     'Polypoint2D',
     'PositionChaser',
     'PositionChaser2D',
@@ -405,6 +449,7 @@ __all__ = [
     'PositionInterpolator',
     'PositionInterpolator2D',
     'PrimitivePickSensor',
+    'ProgramShader',
     'ProximitySensor',
     'QuadSet',
     'ROUTE',
@@ -418,6 +463,8 @@ __all__ = [
     'ShaderBuffer',
     'ShaderGeometry',
     'ShaderIndexBuffer',
+    'ShaderPart',
+    'ShaderProgram',
     'ShaderSlice',
     'Shape',
     'SimpleBackground',
@@ -432,6 +479,7 @@ __all__ = [
     'SquadOrientationInterpolator',
     'StaticGroup',
     'StringSensor',
+    'SurfaceEmitter',
     'Switch',
     'Tangent',
     'Teapot',
@@ -460,7 +508,9 @@ __all__ = [
     'Viewpoint',
     'ViewpointGroup',
     'VisibilitySensor',
+    'VolumeEmitter',
     'VolumePickSensor',
+    'WindPhysicsModel',
     'WorldInfo',
     'X3DScene',
     'Zone',

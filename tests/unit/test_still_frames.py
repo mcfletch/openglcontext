@@ -89,6 +89,24 @@ def _clipped():
                                       x3d.ClipPlane(plane=(1, 0, 0, 1)), *_primitives()])]
 
 
+def _shaded():
+    """A box drawn by an X3D shader with a field, a light, a texture and an attribute"""
+    from tests.unit.test_x3d_shaders import GEOMETRIES, GREEN_HEAT, composed, document, load
+    fragment = """<![CDATA[#version 330 core
+uniform vec3 colour;
+uniform x3d_LightSourceParameters x3d_LightSource[x3d_MaxLights];
+uniform sampler2D x3d_Texture2D[x3d_MaxTextures];
+out vec4 c;
+void main() { c = vec4(colour * x3d_LightSource[0].color, 1.0) * texture(x3d_Texture2D[0], vec2(0.5)); }
+]]>"""
+    return load(document(
+        composed(fragment, fields='<field name="colour" type="SFColor" '
+                 'accessType="inputOutput" value="1 0 0"/>'),
+        geometry=GEOMETRIES['IndexedTriangleSet'] % GREEN_HEAT,
+        texture='<PixelTexture image="1 1 3 0xFFFFFF"/>',
+        scene='<DirectionalLight direction="0 0 -1"/>'))
+
+
 def _nurbs():
     """X3D NURBS surfaces, a sweep and a curve, through the mesh and line paths"""
     from tests.unit.test_mirrored_geometry import _x3d_patch, _x3d_sweep, _x3d_trimmed  # noqa: PLC0415 kept with its use
@@ -117,6 +135,8 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
     pytest.param(_styled, PBR, id='line-point-fill-properties'),
     pytest.param(_picked, PBR, id='pick-sensors'),
     pytest.param(_clipped, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='clip-planes'),
+    pytest.param(_shaded, PBR, id='x3d-shader-pbr'),
+    pytest.param(_shaded, {'OPENGLCONTEXT_RENDERER': 'flat'}, id='x3d-shader-flat'),
     pytest.param(_nurbs, PBR, id='x3d-nurbs-pbr'),
     pytest.param(_nurbs, {'OPENGLCONTEXT_RENDERER': 'flat'}, id='x3d-nurbs-flat'),
 ])

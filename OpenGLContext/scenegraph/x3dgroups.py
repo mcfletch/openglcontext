@@ -51,7 +51,7 @@ class CADFace(x3d.CADFace):
     def renderedChildren(self, types: Any = (nodetypes.Children, nodetypes.Rendering)) -> list:
         """The shape, or nothing where there is none"""
         shape = self.shape
-        return [shape] if shape and isinstance(shape, types) else []
+        return [shape] if shape and grouping.of_types(shape, types) else []
 
     def boundingVolume(self, mode: Any = None) -> Any:
         """The shape's bounds; unbounded where it has none"""

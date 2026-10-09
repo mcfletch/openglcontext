@@ -209,7 +209,8 @@ through the same log as other draw failures:
        Sphere ?: MissingVertexInput: the shader cannot draw without aNormal, which this geometry does not supply (1 time, opaque pass)
 
 This check covers only the shaders the engine compiles. Nothing is reported
-for the GLSL of a ``Shader`` node, because the engine has no markers for it.
+for the GLSL of a ``Shader`` node or an X3D shader, because the engine has no
+markers for it.
 
 .. _shape-own-shader:
 
@@ -257,6 +258,14 @@ matrix; its upper-left 3×3 is the normal matrix. The pass does not touch any
 other uniform in the program. In the selection pass the shape draws with the
 pass's own program instead, so picking writes an id colour rather than the
 output of the appearance's shader.
+
+Both renderers draw such a shape this way. An X3D ``Appearance`` whose
+``shaders`` lists a ``ComposedShader``, ``ProgramShader`` or
+``PackagedShader`` takes the same path, with the first of them that links;
+:ref:`x3d-shaders` describes the names it binds and how its fields become
+uniforms. A shape whose appearance brings a program is drawn by itself, not
+in an instanced group, and the texture units its samplers use are put back
+for the shapes after it.
 
 .. _shader-assembly:
 
@@ -479,6 +488,13 @@ the state a frame or a pass starts from outright, so nothing an earlier frame
 left behind reaches it. The ``OGC151`` rule of :doc:`openglcontext-checks
 <checks>` holds the engine's draw code to these managers or a
 ``try``/``finally``.
+
+In the compatibility profile, ``glstate.load_matrix(matrix)`` and
+``glstate.multiply_matrix(matrix)`` set the fixed-function matrix through
+``glLoadMatrixd`` and ``glMultMatrixd`` for a float64 matrix, and through
+``glLoadMatrixf`` and ``glMultMatrixf`` for a float32 one. Path and modelview
+matrices are float64, so they reach GL without a copy, and a program that sets
+PyOpenGL's ``ERROR_ON_COPY`` runs.
 
 .. _passes:
 

@@ -17,6 +17,7 @@ from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
 from OpenGLContext import contextresources, displaylist
 from OpenGLContext.scenegraph import bindable
+from OpenGLContext.passes import glstate
 import bisect
 
 # Shader directory path
@@ -72,7 +73,7 @@ class _SphereBackground( object ):
         colorSet = self.colorSet()
         if len(colorSet):
             vertices, colors = self.buildSphere( colorSet )
-            glMultMatrixf( mode.matrix )
+            glstate.multiply_matrix( mode.matrix )
             first = displaylist.DisplayList()
             first.start()
             try:

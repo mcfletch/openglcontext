@@ -89,17 +89,21 @@ class Placing:
         raise NotImplementedError
 
 
-class Viewpoint(Placing, basenodes.Viewpoint):
-    """VRML97's and X3D's Viewpoint: a perspective view
-
-    Reference:
-        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Viewpoint
-    """
+class Perspective(Placing):
+    """A viewpoint with a perspective projection, `fieldOfView` radians across"""
 
     def project( self, platform: Any ) -> None:
         """Give `platform` this viewpoint's perspective: `fieldOfView` radians
         across the view's smaller dimension"""
         platform.setFrustum( self.fieldOfView, None, *self.clipping(), across='smaller' )
+
+
+class Viewpoint(Perspective, basenodes.Viewpoint):
+    """VRML97's and X3D's Viewpoint: a perspective view
+
+    Reference:
+        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Viewpoint
+    """
 
 
 class OrthoViewpoint(Placing, x3d.OrthoViewpoint):

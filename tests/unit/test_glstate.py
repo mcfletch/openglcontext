@@ -165,3 +165,20 @@ class TestTheFrameBaseline:
         assert integer(GL.GL_CULL_FACE_MODE) == GL.GL_FRONT
         GL.glCullFace(GL.GL_BACK)
         GL.glDisable(GL.GL_BLEND)
+
+
+@pytest.mark.parametrize('dtype', ['d', 'f'])
+@pytest.mark.parametrize('multiply', [False, True])
+def test_a_matrix_of_either_precision_loads_without_a_copy(gl_context_compat, dtype, multiply):
+    """Path matrices are float64 and core's camera-relative ones float32; neither is copied"""
+    import OpenGL  # noqa: PLC0415 the copy switch is the module's own
+    matrix = np.arange(16, dtype=dtype).reshape(4, 4) + 1
+    was, OpenGL.ERROR_ON_COPY = OpenGL.ERROR_ON_COPY, True
+    try:
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glLoadIdentity()
+        (glstate.multiply_matrix if multiply else glstate.load_matrix)(matrix)
+    finally:
+        OpenGL.ERROR_ON_COPY = was
+    found = np.asarray(GL.glGetDoublev(GL.GL_MODELVIEW_MATRIX)).reshape(4, 4)
+    assert found == pytest.approx(matrix.astype('d'))

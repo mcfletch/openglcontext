@@ -295,10 +295,68 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [ ] Texturing3D: `ImageTexture3D`, `ComposedTexture3D`, `PixelTexture3D`,
     `TextureCoordinate3D`, `TextureCoordinate4D`, `TextureTransform3D`
   - [ ] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
-  - [ ] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
+  - [x] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
     `ProgramShader`, `PackagedShader`, the vertex attributes
-  - [ ] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
-    models
+    (`scenegraph.x3dshaders`, `scenegraph.x3dglsl`): the first alternative
+    that is GLSL and links draws, `isSelected`/`isValid` sent, the material
+    drawn while loading or where none runs; every GL stage (tessellation as
+    patches in a 4.x context); parts read in the background under the
+    document's policy, `data:`, url text and 4.1 `sourceCode`; linked on
+    first completion and on `activate` (I.5); declared fields as uniforms by
+    Table I.3, converted to the declared type, textures as samplers;
+    X_ITE's binding names (`x3d_Vertex`, `x3d_ModelViewMatrix`,
+    `x3d_NormalMatrix`, `x3d_LightSource[]`, `x3d_Material`,
+    `x3d_Texture2D[]`, `x3d_TextureMatrix[]`, ...); `attrib` drawn into the
+    mesh at locations 15+, then the per-instance ones; GLSL 1.x translated to
+    3.30 core, run as written in the compatibility profile; the object id
+    written beside the colour; `PackagedShader` of GLSL as one text with
+    `X3D_<STAGE>_SHADER` macros, other languages passed over;
+    `oglc-x3d-shaders` and `tests/x3d_shaders.py`. Corpus: Basic/Shaders'
+    two `.x3d` have empty `ShaderPart`s and draw their material; their
+    `.x3dv`/`.wrl` copies write `language GLSL` unquoted and do not read;
+    `TestDiagnosticOverloadedChildNodes` fails on `GeneratedCubeMapTexture`
+    (CubeMapTexturing)
+  - [x] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
+    `HAnimDisplacer`, `HAnimMotion`, `HAnimPose` (`scenegraph.hanim`; the
+    arithmetic in `character.hanim`, no GL): joints, sites and the humanoid
+    transforms (pyvrml97 `Transforming` + `LocalMatrices`); the skin a skinned
+    PBRMesh per geometry reading `skinCoord` (`scenegraph.coordinatedeform`),
+    X3D's `v + sum(w (M v - v))` as four influences with the rest joint at
+    palette 0, `jointBinding*` matrices, `skinBindingCoords`/`Normals`, joint,
+    humanoid and segment displacers as morph targets; bounds from joint
+    spheres; motion (BVH channels, loop, frame range and increment,
+    next/previous, `channelsEnabled`, `motionsEnabled`) and pose transitions
+    polled on the engine clock; names, aliases and LOA from the X3DUOM
+    (pyvrml97 `vrml.x3d.hanimnames`); `HAnimJoint.limitedRotation()`
+  - landed with it: a morphed mesh the shader skins is no longer posed twice;
+    IFS generated normals follow `ccw` false; an IFS value index past every
+    value reads the last; crease-angle arccos clipped; a light aimed nowhere
+    is off; EXTERNPROTO files read through the resolver
+    (`loaders.x3d.ContainedPrototypes`); pyvrml97: joints hold sites and
+    markers, `HAnimPose.set_fraction` an SFFloat, prototype event fields,
+    looping TimeSensors counted rather than stepped
+  - corpus: HumanoidAnimation, the 194 documents of its humanoid folders drawn
+    by `oglc-x3d-regression` with none failing; 40 compared with X_ITE renders
+  - open: the IFS tessellator is the cost of a large skin's first draw
+    (Lily, 41 000 triangles: 1.5 s, the per-polygon walk and the crease
+    normals); `HAnimPose.isLoaded` routed by
+    HAnimPoseExample is not an X3D 4.1 field; a `SphereBackground` draws with
+    a VAO made each frame
+  - [x] ParticleSystems: `ParticleSystem`, the six emitters, the three physics
+    models (`x3dparticles`, on `particlesim` and `particles.ParticleRenderer`);
+    LINE/POINT/QUAD/SPRITE/TRIANGLE through one instanced draw in both
+    renderers and the compatibility profile, GEOMETRY as instanced copies;
+    keys in seconds of age; stepped through the render queue (`Ticked`).
+    The engine's `ParticleEmitter` takes the emitters (`source`) and models
+    (`physics`) and has a colour ramp and line shape. `oglc-x3d-particles`
+    - read differently from X_ITE: keys are seconds (X_ITE: fractions of the
+      life); a massless particle takes a force as an acceleration (X_ITE
+      applies none); VolumeEmitter `internal` FALSE emits from the boundary
+    - not drawn: lighting of the non-GEOMETRY types, the texture transform,
+      line width
+  - [x] prototype instances drawn: `grouping.of_types` passes an instance by
+    its body's first node type (scene, groups, Switch, LOD, CADFace); before,
+    an X3D document's ProtoInstance was never drawn
   - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
     `HAnimDisplacer`, `HAnimMotion`, `HAnimPose`
   - [ ] RigidBodyPhysics: the 14 nodes on omi_physics
@@ -352,7 +410,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     precision
   - [ ] VolumeRendering: the 13 nodes
   - [ ] GaussianSplats
-  - [ ] `MovieTexture` through the optional decoder
+  - [ ] `MovieTexture` decoded on the GPU through pyopengl-video
+    ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)).
+    No package that links FFmpeg at run time is used: PyAV was tried
+    (2026-10-08) and removed, since the FFmpeg a platform ships carries GPL
+    components. Until that decoder lands, a MovieTexture is kept with its
+    fields and drawn untextured; its timing is pyvrml97's
+    `vrml.x3d.media.MovieTexture` on `timesensor.Clocked`, ready for it
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext
@@ -987,11 +1051,12 @@ What will not work, and why:
   so its output fields never change. Loading reports how many `Script` nodes a
   scene has, once per load.
 - `MovieTexture` without a decoder. The specification requires MPEG-1
-  (ISO/IEC 11172-1); content also uses MP4 and WebM. Decoding needs FFmpeg or similar,
-  which cannot be a hard dependency (licence and size). An optional extra
-  (PyAV, a BSD wrapper over a user-installed FFmpeg) supplies frames; without it
-  the texture shows a placeholder and loading says so. `MovieTexture`'s audio
-  goes to omi_audio when a decoder is present.
+  (ISO/IEC 11172-1); content also uses MP4 and WebM. Decoding is planned on
+  the GPU through pyopengl-video
+  ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)),
+  through each vendor's own library; nothing that links FFmpeg, PyAV or
+  GStreamer is used. Until then the texture draws nothing and its shape is
+  drawn untextured.
 - `StreamAudioSource`, `StreamAudioDestination`. These are defined in terms of
   WebRTC media streams, which a desktop engine does not have.
   `MicrophoneSource` maps to device capture where `miniaudio` offers it.

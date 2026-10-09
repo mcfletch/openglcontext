@@ -106,6 +106,7 @@ oglc-terrain = "OpenGLContext.bin.terrain_view:main"
 oglc-gltf-demo = "OpenGLContext.bin.gltf_demo:main"
 oglc-gltf-regression = "OpenGLContext.bin.gltf_regression:main"
 oglc-x3d-regression = "OpenGLContext.bin.x3d_regression:main"
+oglc-x3d-geospatial = "OpenGLContext.bin.x3d_geospatial_demo:main"
 oglc-ui-demo = "OpenGLContext.bin.ui_demo:main"
 oglc-mirrors = "OpenGLContext.bin.mirrors_demo:main"
 oglc-audio-demo = "OpenGLContext.bin.audio_demo:main"
@@ -116,6 +117,8 @@ oglc-cover = "OpenGLContext.bin.cover_demo:main"
 oglc-character-sheet = "OpenGLContext.bin.character_sheet:main"
 oglc-x3d = "OpenGLContext.bin.x3d_demo:main"
 oglc-x3d-nurbs = "OpenGLContext.bin.x3d_nurbs:main"
+oglc-x3d-shaders = "OpenGLContext.bin.x3d_shaders_demo:main"
+oglc-x3d-particles = "OpenGLContext.bin.x3d_particles:main"
 # Ship an application built on the engine as a Debian package: a relocatable
 # CPython and the application on top of it, under /opt.
 oglc-deb = "OpenGLContext.packaging.deb:main"
@@ -160,8 +163,9 @@ OpenGLContext = [
     "scenegraph/*.pyi",
     "shaders/*.vert", "shaders/*.frag", "shaders/*.glsl",
     "resources/environment/*.jpg",
-    # The X3D documents `oglc-x3d` and `oglc-x3d-nurbs` open.
-    "bin/*.x3d",
+    # The X3D documents `oglc-x3d`, `oglc-x3d-nurbs`, `oglc-x3d-shaders` and
+    # `oglc-x3d-particles` open, and the packaged shader `oglc-x3d-shaders` reads.
+    "bin/*.x3d", "bin/*.glsl",
     # The exception to the rule above: the demos' packaging recipe is read
     # rather than opened -- a PyInstaller spec, a build script and the
     # distribution a .deb is built from -- and it ships so that somebody who
