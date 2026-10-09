@@ -18,10 +18,13 @@ is (`passes._flat` converts to single precision only relative to the camera).
 - :class:`GeoElevationGrid` - heights along the ellipsoid's normal over a
   grid stepping `xSpacing` east and `zSpacing` north from `geoGridOrigin`.
 
-Geometry's points are single precision relative to its GeoOrigin, so
-GeoCoordinate and GeoElevationGrid content far from its GeoOrigin, or with
-none, loses precision (about half a metre at the Earth's radius); a
-GeoLocation or GeoTransform places its children exactly.
+Triangle geometry on GeoCoordinate, and GeoElevationGrid, is built relative
+to the centre of its own points and placed by it in double precision
+(:meth:`~OpenGLContext.scenegraph.meshgeometry.MeshDrawn.meshOrigin`), and a
+GeoLocation or GeoTransform places its children exactly, with or without a
+GeoOrigin. Lines and points on GeoCoordinate are single precision in the
+scene's coordinates (about half a metre at the Earth's radius with no
+GeoOrigin).
 
 A node's `geoOrigin` (GeoOrigin) is subtracted from its geocentric
 coordinates, and turned so its up is +Y where its `rotateYUp` is true.

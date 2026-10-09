@@ -22,6 +22,12 @@ vertex shader, and a later set in the fragment shader where a
 The `attrib` vertex attributes, one per coordinate, are drawn with the mesh
 for a shader to read by name (:mod:`~OpenGLContext.scenegraph.x3dshaders`).
 `FogCoordinate` is kept and not drawn.
+
+Double-precision points (`CoordinateDouble`, `GeoCoordinate`,
+`GeoElevationGrid`) are built relative to the centre of their bounds,
+:meth:`MeshDrawn.meshOrigin`, which the render pass places the mesh by in
+double precision; the set's bounds and `meshArrays()` are in its own
+coordinates.
 """
 from __future__ import annotations
 
@@ -43,7 +49,7 @@ from OpenGLContext.scenegraph.texturemapping import label_set
 log = logging.getLogger(__name__)
 
 __all__ = ['DRAWN_KEY', 'DrawnAs', 'depend_on_fields', 'ElevationGrid', 'GridDrawn',
-           'IndexedQuadSet', 'IndexedTriangleFanSet', 'IndexedTriangleSet',
+           'IndexedQuadSet', 'IndexedTriangleFanSet', 'IndexedTriangleSet', 'LevelledMesh',
            'IndexedTriangleStripSet', 'LineSet', 'MESH_KEY', 'MeshDrawn',
            'MeshGeometry', 'polylines', 'QuadSet',
            'TriangleFanSet', 'TriangleSet', 'TriangleStripSet']
@@ -170,8 +176,28 @@ class MeshDrawn:
             attributes['TANGENT'] = estimate_tangents(
                 attributes['POSITION'], attributes['NORMAL'], attributes['TEXCOORD_0'],
                 arrays.indices)
-        return mesh_from_primitive(arrays, solid=solid,
-                                   vertex_attributes=arrays.vertex_attributes)
+        found = mesh_from_primitive(arrays, solid=solid,
+                                    vertex_attributes=arrays.vertex_attributes)
+        found.origin = arrays.origin
+        return found
+
+    def drawOrigin(self, points: Any) -> Optional[np.ndarray]:
+        """The origin `points` are built relative to (:func:`~OpenGLContext.scenegraph.composedgeometry.local_origin`)
+
+        None where a deformer draws the set, from its own points.
+        """
+        if coordinatedeform.deformer_for(self) is not None:
+            return None
+        return composedgeometry.local_origin(points)
+
+    def meshOrigin(self) -> Optional[np.ndarray]:
+        """The point the drawn mesh's positions are relative to, double precision; None for none"""
+        held = cache.CACHE.getData(self, MESH_KEY)
+        found = self.mesh() if held is None else held[0]
+        origin: Optional[np.ndarray] = None if found is None else found.origin
+        if origin is not None and coordinatedeform.deformer_for(self) is not None:
+            return None
+        return origin
 
     def dependOn(self, holder: Any) -> None:
         """Make `holder` depend on every field the mesh is built from"""
@@ -187,9 +213,16 @@ class MeshDrawn:
         return found
 
     def meshArrays(self) -> Any:
-        """The mesh's triangles; None for a node with nothing to draw"""
+        """The mesh's triangles in the node's own coordinates; None for a node with nothing to draw"""
         found = self.mesh()
-        return None if found is None else found.meshArrays()
+        if found is None:
+            return None
+        arrays = found.meshArrays()
+        if arrays is not None and found.origin is not None:
+            arrays.attributes['POSITION'] = (
+                arrays.attributes['POSITION'].astype(np.float64) + found.origin
+            ).astype(np.float32)
+        return arrays
 
     def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
                transparent: int = 0, mode: Any = None) -> int:
@@ -213,6 +246,11 @@ class MeshDrawn:
         found = self.mesh()
         return True if found is None else bool(found.depthDraw(mode))
 
+    def meshVolume(self, mode: Any = None) -> Any:
+        """The drawn mesh's bounds, relative to :meth:`meshOrigin`"""
+        found = self.mesh()
+        return boundingvolume.BoundingVolume() if found is None else found.boundingVolume(mode)
+
     def boundingVolume(self, mode: Any = None) -> Any:
         """The mesh's bounds; an empty volume for a set with nothing to draw
 
@@ -226,10 +264,64 @@ class MeshDrawn:
         if current is not None:
             return current
         found = self.mesh()
-        volume = (boundingvolume.BoundingVolume() if found is None
-                  else found.boundingVolume(mode))
+        volume: Any = boundingvolume.BoundingVolume()
+        if found is not None:
+            volume = found.boundingVolume(mode)
+            if found.origin is not None:
+                volume = boundingvolume.AABoundingBox(
+                    center=np.asarray(volume.center, np.float64) + found.origin,
+                    size=volume.size)
         self.dependOn(boundingvolume.holdVolume(self, volume))
         return volume
+
+
+class LevelledMesh(MeshDrawn):
+    """A geometry drawn as one of its meshes by level of detail: Box and the quadrics
+
+    A subclass gives :meth:`levelArrays`, and :meth:`drawLevel` where it has
+    more than one level. Level 0 is the full detail, which bounds, shadows,
+    instancing and `meshArrays()` read.
+    """
+
+    solid: Any
+
+    def levelArrays(self, level: int) -> Optional[composedgeometry.ComposedArrays]:
+        """The arrays of the mesh drawn at `level`"""
+        raise NotImplementedError('%s must give its arrays' % type(self).__name__)
+
+    def drawLevel(self, mode: Any) -> int:
+        """The level drawn for the view `mode` draws: 0, the full detail"""
+        return 0
+
+    def buildMesh(self, level: int = 0) -> Optional[Any]:
+        """The mesh of `level`'s arrays, or None for none"""
+        arrays = self.levelArrays(level)
+        return None if arrays is None else self.meshFrom(
+            arrays, solid=bool(getattr(self, 'solid', True)))
+
+    def mesh(self, level: int = 0) -> Optional[Any]:
+        """The mesh drawn at `level`, kept in vrml's cache until a field of the node is set"""
+        key = MESH_KEY if not level else '%s-%d' % (MESH_KEY, level)
+        held = cache.CACHE.getData(self, key)
+        if held is None:
+            held = (self.buildMesh(level),)
+            self.dependOn(cache.CACHE.holder(self, held, key))
+        found: Optional[Any] = held[0]
+        return found
+
+    def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
+               transparent: int = 0, mode: Any = None) -> int:
+        """Draw the mesh of the level :meth:`drawLevel` chooses"""
+        found = self.mesh(self.drawLevel(mode))
+        if found is None:
+            return 0
+        return int(found.render(visible=visible, lit=lit, textured=textured,
+                                transparent=transparent, mode=mode))
+
+    def instanceGPU(self, mode: Any) -> Any:
+        """The full-detail mesh's GPU arrays, which the instanced draw path draws"""
+        found = self.mesh()
+        return None if found is None else found.instanceGPU(mode)
 
 
 class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
@@ -263,7 +355,7 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
         if points is None or not len(points):
             return None
         return composedgeometry.composed_arrays(
-            points, self.triangles(), ccw=bool(self.ccw),
+            points, self.triangles(), ccw=bool(self.ccw), origin=self.drawOrigin(points),
             normals=self.perFace(_values(self.normal, 'vector'), bool(self.normalPerVertex)),
             normal_per_vertex=bool(self.normalPerVertex),
             colors=self.perFace(_values(self.color, 'color'), bool(self.colorPerVertex)),
@@ -319,9 +411,10 @@ class GridDrawn(MeshDrawn):
         if normals is not None and not self.normalPerVertex:
             normals = composedgeometry.per_quad(normals)
         coordinates = self.coordinates() or [composedgeometry.grid_texcoords(across, deep)]
+        points = self.gridPoints(across, deep)
         return self.meshFrom(composedgeometry.composed_arrays(
-            self.gridPoints(across, deep),
-            composedgeometry.grid_triangles(across, deep), ccw=bool(self.ccw) != self.MIRRORED,
+            points, composedgeometry.grid_triangles(across, deep),
+            origin=self.drawOrigin(points), ccw=bool(self.ccw) != self.MIRRORED,
             normals=normals, normal_per_vertex=bool(self.normalPerVertex),
             colors=colors, color_per_vertex=bool(self.colorPerVertex),
             texcoords=coordinates, tangents=_values(getattr(self, 'tangent', None), 'vector'),

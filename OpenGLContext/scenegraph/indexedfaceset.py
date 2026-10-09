@@ -1,73 +1,33 @@
-"""Indexed Face-set VRML97 node implemented using ArrayGeometry
+"""VRML97's and X3D's IndexedFaceSet, drawn as the mesh its fields build
 
-XXX This node needs some serious optimization.  Possible approaches:
+The faces are tessellated by :mod:`~OpenGLContext.scenegraph.ifscompiler`
+(convex or not, `creaseAngle` normals, the per-face and per-vertex indices),
+and the tessellated triangles become the same glTF-shaped arrays the X3D
+triangle sets are drawn from (:meth:`IndexedFaceSet.composedArrays`), so the
+face set is drawn, shadowed, bounded and instanced as their
+:class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh` is
+(:class:`~OpenGLContext.scenegraph.meshgeometry.MeshDrawn`).
 
-    display-list-generation, probably the most appropriate
-        approach of them all, as it will almost certainly
-        provide a serious speed boost.  This can be a
-        fairly simplistic mechanism, as it won't need the
-        tesselator, and it can simply process the values
-        as a stream of instructions.
-        OpenGL 3.x deprecates display-lists...
-    GL_TRIANGLE_STRIP, GL_QUAD_STRIP -- can dramatically
-        reduce memory bandwidth, requires some serious
-        analysis of the topology to get a decent result
-        while keeping VRML semantics
-    IndexedPolygons -- a single index array or equal
-        index arrays can be rendered without expansion
-    Double vs. floating point -- be able to downsample
-        arrays to 'f' type if the data can be precisely
-        stored within a 'f' type array
-    GL_ATI_vertex_array_object -- cache arrays on the
-        "server" side of the GL engine then use them
-        from there
-    GL_EXT_vertex_array_set -- cache the arrays in the
-        client-side GL engine with all arrays together
-        and the associated enables etc. should make the
-        call to render a single restore of state and then
-        glDrawArrays() -- note that I (mcf) don't have
-        this extension available, so can't implement this.
+Each texture coordinate set of a `MultiTextureCoordinate` is a set of the mesh
+(TEXCOORD_0, TEXCOORD_1, ...), indexed by `texCoordIndex`, or `coordIndex`
+where that is empty; a `Tangent` is indexed as the normals are; `attrib`
+values are one per coordinate. Double-precision coordinates are drawn from
+the centre of their bounds.
 
-    GL_EXT_compiled_vertex_array -- should be used if
-        available, alternate version of same functionality
-        GL_EXT_static_vertex_array. This is only useful
-        if we are making multiple calls to render, which
-        we are currently not doing.
-
-    cache index-sets:
-        used to do a take of the data-arrays to get triangles-arrays
-        depends on the index arrays and the tessellation-types
-
-        if no tessellation required:
-            possible to update the entire coordinate array
-            and just re-take before rendering
-        all-equal-index sets:
-            basically if the indices arrays are all identical
-            we could use an index-based array-drawing call,
-            which avoids the take-calls entirely, see
-            IndexedPolygons for an implementation.
-        if tessellation required:
-            store polys-to-tessellate as meta-indices
-                depends on the index-sets
-            re-tessellate whenever coordinates change
-            store end-of-data-array indices
-                depends on everything, used to decide
-                where the new values start writing
-                if the data array has changed, then is
-                the length of the data-array
+The compilers in :mod:`~OpenGLContext.scenegraph.ifscompiler` are
+re-exported here.
 """
 
+import hashlib
+import logging
 from typing import Any, Optional
 
 import numpy as np
-from OpenGLContext.scenegraph import coordinatebounded, coordinatedeform, coordinates
 from vrml.vrml97 import basenodes
 from vrml.x3d import nodes as x3d
 
-# The compile pipeline lives in ``ifscompiler``; re-exported here so importers
-# that used ``from ...indexedfaceset import IndexedPolygonsCompiler`` etc. keep
-# working, and so ``COMPILER_CLASSES`` is populated when this module loads.
-from OpenGLContext.scenegraph.ifscompiler import (
+from OpenGLContext.scenegraph import composedgeometry, coordinates, x3dglsl
+from OpenGLContext.scenegraph.ifscompiler import (  # noqa: F401 re-exported for importers of this module
     DummyRender,
     DUMMY_RENDER,
     COMPILER_CLASSES,
@@ -78,55 +38,44 @@ from OpenGLContext.scenegraph.ifscompiler import (
     getXNull,
     build_normalPerVertex,
 )
-import logging
+from OpenGLContext.scenegraph.meshgeometry import MeshDrawn
 
 log = logging.getLogger(__name__)
 
-#: Where an IndexedFaceSet keeps its instanced mesh, in the pass's cache.
-INSTANCE_KEY = 'instance_gpu'
+
+def _indexed(values: Any, index: Any, coord_index: Any, meta: np.ndarray,
+             sources: np.ndarray, width: int) -> Optional[np.ndarray]:
+    """`values` for each tessellated vertex, read through `index` at its place in `coordIndex`
+
+    `index` is the node's own index for the values, or empty to read them
+    through `coord_index`; an index past the values reads the last of them.
+    A vertex the tessellator made, with no place, reads its nearest
+    coordinate's value. None where there are no values.
+    """
+    found = np.asarray(values, dtype=np.float32).reshape(-1, width) if values is not None else None
+    if found is None or not len(found):
+        return None
+    lookup = np.asarray(index if len(index) else coord_index, dtype=np.int64).ravel()
+    picked = sources.copy()
+    placed = (meta >= 0) & (meta < len(lookup))
+    picked[placed] = lookup[meta[placed]]
+    picked[picked < 0] = sources[picked < 0]
+    result: np.ndarray = found[np.clip(picked, 0, len(found) - 1)]
+    return result
 
 
-class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceSet):
-    """Indexed Face-set VRML97 node
-
-    The IndexedFaceSet is the most common VRML97
-    geometry-node type.  Most 3D modellers will export
-    most geometry as IndexedFaceSets, as they are
-    the most general of the polygonal geometry types.
-
-    The OpenGLContext IndexedFaceSet node tries to
-    follow the VRML97 IndexedFaceSet node's semantics
-    as closely as possible whenever those semantics are
-    defined.  If you detect non-conformant operation,
-    please report it as a bug in OpenGLContext.
+class IndexedFaceSet(MeshDrawn, basenodes.IndexedFaceSet):
+    """VRML97's and X3D's IndexedFaceSet: polygons of `coordIndex`, tessellated
 
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#IndexedFaceSet
-
-    There are a number of major sub-types of IFS:
-        have coord + normal
-            need to tesselate
-                need to get simple triangle-points array
-                need to get simple normals array
-                # may need texCoordArray as well
-                # may need color as well
-        have coord but no normal
-            need to tesselate
-                need to get simple triangle-points array
-                need to calculate normals for (face/vertex)
-                # may need texCoordArray as well
-                # may need color as well
-        have only a single index-set, but 2 or 3 arrays
-            could just use indexed drawing if all elements
-            are triangles, in this case we don't have _any_
-            real overhead for a delta on the points/normals/colors,
-            what would VRML do?
-
-        have everything
-            once tesselated, we have a simple "take" to get values
     """
 
+    #: Draws with the pass's lit programs alone, so one draw can serve every
+    #: view of a frame that sees it; see :mod:`OpenGLContext.multiview.strategy`.
+    multiviewShared = True
+
     def planeCoordinates(self) -> Any:
-        """The TextureCoordinate the face set's 2D texture coordinates are read from, or None
+        """The TextureCoordinate the face set's first 2D texture coordinates are read from, or None
 
         ``texCoord`` itself, or the first TextureCoordinate entry of a
         MultiTextureCoordinate; None where there is none (a generator, a 3D
@@ -139,170 +88,116 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
             return entries[0] if entries else None
         return found if isinstance(found, x3d.TextureCoordinate) else None
 
-    #: Draws with the pass's lit programs alone, so one draw can serve every
-    #: view of a frame that sees it; see :mod:`OpenGLContext.multiview.strategy`.
-    multiviewShared = True
-
-
-    USE_DISPLAY_LISTS = 0
-    DEBUG_DRAW_NORMALS = 0
-
-    def render(
-        self,
-        visible: int = 1,
-        lit: int = 1,
-        textured: int = 1,
-        transparent: int = 0,
-        mode: Any = None,  # the renderpass object for which we compile
-    ) -> Any:
-        """Render the IndexedFaceSet's geometry for a Shape
-
-        visible -- can skip normals and textures if not
-        lit - can skip normals if not
-        textured -- can skip textureCoordinates if not
-        transparent -- need to sort triangle geometry...
-        """
-        deformer = coordinatedeform.deformer_for(self)
-        if deformer is not None:
-            return deformer.render(self, visible, lit, textured, transparent, mode)
-        renderer = mode.cache.getData(self)
-        if renderer is None:
-            renderer = self.compile(visible, lit, textured, transparent, mode=mode)
-        if not renderer:
-            return 0
-        return renderer.render(
-            visible,
-            lit,
-            textured,
-            transparent,
-            mode=mode,
-        )
-
-    def compile(
-        self,
-        visible: int = 1,
-        lit: int = 1,
-        textured: int = 1,
-        transparent: int = 0,
-        mode: Any = None,
-    ) -> Any:
-        """Compile the rendering structures for the IndexedFaceSet"""
-        set = []
-        for cc in COMPILER_CLASSES:
-            set.append((cc.weight(self), cc))
-        set.sort()
-        return set[-1][1](self)(
-            visible=visible,
-            lit=lit,
-            textured=textured,
-            transparent=transparent,
-            mode=mode,
-        )
-
-    def boundingVolume(self, mode: Any) -> Any:
-        """The coordinates' bounds; where they are deformed, the deformed set's"""
-        deformer = coordinatedeform.deformer_for(self)
-        if deformer is not None:
-            return deformer.boundingVolume(self, mode)
-        return super().boundingVolume(mode)
-
-    # -- instancing -------------------------------------------------------
     def _hasGeometry(self) -> bool:
         return bool(len(self.coordIndex) and self.coord and len(coordinates.points(self.coord)))
 
-    def _instanceArrays(self) -> Optional[tuple[Any, Any, Any, Any]]:
-        """Expanded (positions, normals, texcoords, colours) triangle soup for instancing.
+    def buildMesh(self) -> Optional[Any]:
+        """The mesh of the tessellated faces, or None for a set with nothing to draw"""
+        arrays = self.composedArrays()
+        return None if arrays is None else self.meshFrom(arrays, solid=bool(self.solid))
 
-        Reuses ``ArrayGeometryCompiler`` -- the same tessellation the
-        non-instanced shader path draws -- so an instanced IndexedFaceSet looks
-        identical to its per-shape rendering. Returns ``None`` when empty;
-        colours are None for a set without them.
-        """
-        if not self._hasGeometry():
-            return None
-        expanded = ArrayGeometryCompiler(self).expandedArrays()
-        if expanded is None:
-            return None
-        vertexArray, colorArray, normalArray, textureCoordinateArray = expanded
-        return vertexArray, normalArray, textureCoordinateArray, colorArray
-
-    def meshArrays(self) -> Any:
-        """The set's triangles, every three vertices one triangle"""
-        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
-        found = self._instanceArrays()
-        if found is None:
-            return None
-        positions, normals, texcoords, colours = found
-        return meshdata.arrays(positions, normals, texcoords, colours)
-
-    def composedArrays(self) -> Any:
-        """:meth:`meshArrays` with the coordinate index each vertex was read from
+    def composedArrays(self) -> Optional[composedgeometry.ComposedArrays]:
+        """The tessellated faces' arrays, every three vertices a triangle, naming
+        the coordinate each vertex was read from
 
         None where there is nothing to draw.
         """
-        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
         if not self._hasGeometry():
             return None
-        found = ArrayGeometryCompiler(self).expandedArraysAndSources()
+        compiler = ArrayGeometryCompiler(self)
+        found = compiler.expandedArraysAndSources()
         if found is None:
             return None
-        (positions, colours, normals, texcoords), sources = found
+        (single, colours, normals, first), sources = found
+        meta = np.array([vertex.metaIndex for vertex in compiler.vertices], np.int64)
+        origin = self.drawOrigin(coordinates.points(self.coord))
+        positions = single if origin is None else compiler.pointArray - origin
+        attributes = {'POSITION': positions, 'NORMAL': normals}
+        if colours is not None:
+            attributes['COLOR_0'] = colours
+        sets = self._coordinateSets(meta, sources, first)
+        for number, values in enumerate(sets):
+            if values is not None:
+                attributes['TEXCOORD_%d' % number] = values
+        volume = self.volumeCoordinates()
+        if volume is not None:
+            attributes['TEXCOORD_3D'] = _indexed(volume, self.texCoordIndex, self.coordIndex,
+                                                 meta, sources, 4)
+        tangents = _indexed(self.tangent.vector if self.tangent else None, self.normalIndex,
+                            self.coordIndex, meta, sources, 4)
+        if tangents is not None:
+            attributes['TANGENT'] = tangents
+        order = np.arange(len(positions))
         if not self.ccw:
             # The tessellation keeps the faces' own winding, which ccw false
             # says is clockwise: turn each triangle round.
-            turned = np.arange(len(positions)).reshape(-1, 3)[:, [0, 2, 1]].ravel()
-            positions, sources = positions[turned], sources[turned]
-            normals = None if normals is None else np.asarray(normals)[turned]
-            texcoords = None if texcoords is None else np.asarray(texcoords)[turned]
-            colours = None if colours is None else np.asarray(colours)[turned]
-        return meshdata.arrays(positions, normals, texcoords, colours, sources=sources)
+            order = order.reshape(-1, 3)[:, [0, 2, 1]].ravel()
+        named, missing = x3dglsl.per_vertex(x3dglsl.vertex_attributes(self.attrib),
+                                            sources[order])
+        return composedgeometry.ComposedArrays(
+            attributes={name: np.ascontiguousarray(np.asarray(value)[order], dtype=np.float32)
+                        for name, value in attributes.items()},
+            indices=None, vertex_attributes=named, short_attributes=missing,
+            sources=sources[order], origin=origin)
 
+    def _coordinateSets(self, meta: np.ndarray, sources: np.ndarray,
+                        first: Any) -> "list[Optional[np.ndarray]]":
+        """Each 2D texture coordinate set for the tessellated vertices, in set order
+
+        The first TextureCoordinate's are the tessellation's own (or X3D's
+        default where the set has no coordinates at all); a generator's, made
+        in the shader, are None.
+        """
+        nodes = self.coordinateNodes()
+        if not nodes:
+            return [first]
+        flat = self.planeCoordinates()
+        found: "list[Optional[np.ndarray]]" = []
+        for entry, values in zip(nodes, self.coordinates()):
+            if entry is flat:
+                found.append(first)
+            elif values is None:
+                found.append(None)
+            else:
+                found.append(_indexed(values, self.texCoordIndex, self.coordIndex,
+                                      meta, sources, 2))
+        return found
+
+    # -- instancing -------------------------------------------------------
     def instanceContentKey(self) -> Optional[tuple[Any, ...]]:
         """Hashable signature so distinct-but-identical IFS nodes share one draw.
 
         Covers the scatter case: a bolt, tile or leaf authored as an IFS and used
         hundreds of times collapses into a single instanced call. Hashes exactly
         the arrays and flags that determine the tessellated output. ``None`` when
-        empty (falls back to node identity in the grouper).
+        empty, or for a set with shader attributes (falls back to node identity
+        in the grouper).
         """
-        import hashlib
-        if not self._hasGeometry():
+        if not self._hasGeometry() or self.attrib:
             return None
-        h = hashlib.blake2b(digest_size=16)
+        digest = hashlib.blake2b(digest_size=16)
 
         def feed(name: str, arr: Any) -> None:
             if arr is not None and len(arr):
-                h.update(name.encode('ascii'))
-                h.update(np.ascontiguousarray(arr).tobytes())
+                digest.update(name.encode('ascii'))
+                digest.update(np.ascontiguousarray(arr).tobytes())
 
         feed('coordIndex', self.coordIndex)
         feed('point', coordinates.points(self.coord))
         feed('normalIndex', self.normalIndex)
         feed('normal', self.normal.vector if self.normal else None)
         feed('texCoordIndex', self.texCoordIndex)
-        flat = self.planeCoordinates()
-        feed('texCoord', flat.point if flat else None)
+        for number, values in enumerate(self.coordinates()):
+            feed('texCoord%d' % number, values)
+        feed('tangent', self.tangent.vector if self.tangent else None)
         feed('colorIndex', self.colorIndex)
         feed('color', self.color.color if self.color else None)
-        return ('IndexedFaceSet', h.hexdigest(),
+        return ('IndexedFaceSet', digest.hexdigest(),
                 bool(self.normalPerVertex), bool(self.colorPerVertex),
                 round(float(self.creaseAngle), 6),
                 bool(self.ccw), bool(self.solid), bool(getattr(self, 'convex', True)))
 
     def instanceGPU(self, mode: Any) -> Any:
-        """Cached separate-VBO mesh-GPU (position/normal/texcoord/colour) for
-        instancing, rebuilt when any field the arrays are made from changes."""
-        from OpenGLContext.passes.instancing import build_mesh_gpu
-        held = mode.cache.getData(self, key=INSTANCE_KEY)
-        if held is not None:
-            return held
-        arrays = self._instanceArrays()
-        if arrays is None:
-            return None
-        positions, normals, texcoords, colours = arrays
-        return build_mesh_gpu(
-            mode, self, positions, normals, texcoords, indices=None,
-            cache_key=INSTANCE_KEY, colors=colours,
-            depends=ArrayGeometryCompiler(self).dependencies())
-
-
+        """The mesh's GPU arrays, which the instanced draw path draws"""
+        found = self.mesh()
+        return None if found is None else found.instanceGPU(mode)

@@ -196,6 +196,11 @@ class SGObserver( object ):
     #: The ``(N,4,4)`` array :meth:`_worldMatrices` fills each frame, kept so a
     #: frame allocates nothing for a scene whose size has not changed.
     _matrixBuffer: Optional[Any] = None
+    #: Each path whose geometry is drawn from an origin of its own, by
+    #: ``id`` of the path: (the path, its world matrix as the transform cache
+    #: handed it over, the origin, the matrix placing the geometry). The path
+    #: is held, so its ``id`` is not reused while the entry is kept.
+    _placings: Optional[dict[int, tuple[Any, Any, Any, Any]]] = None
     #: The frame being drawn, from :meth:`drawingFrame`; None between frames.
     frameState: Optional[FrameState] = None
     #: What the last :meth:`chooseLevels` chose for: the path generation, the
@@ -1667,6 +1672,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
             node = path[-1]
             nodes.append( node )
             matrix = path.transformMatrix()
+            placing = getattr( node, 'meshOrigin', None )
+            origin = placing() if placing is not None else None
+            if origin is not None:
+                matrix = self.placedMatrix( path, matrix, origin )
             own.append( matrix )
             matrices[index] = matrix
             nothing = getattr( node, 'drawsNothing', None )
@@ -1676,8 +1685,11 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
                 drawing.append( False )
                 continue
             drawing.append( True )
-            volume = node.boundingVolume( self ) if hasattr(
-                node, 'boundingVolume' ) else None
+            if origin is not None:
+                volume = node.meshVolume( self )
+            else:
+                volume = node.boundingVolume( self ) if hasattr(
+                    node, 'boundingVolume' ) else None
             volumes.append( volume )
             corners = None
             if volume is not None:
@@ -1694,6 +1706,30 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
             list(paths), nodes, matrices, own, volumes, points,
             array( bounded, dtype=bool ), array( drawing, dtype=bool ),
         )
+
+    def placedMatrix( self, path: Any, matrix: Any, origin: Any ) -> Any:
+        """`matrix` with the geometry's `origin` moved to first, in double precision
+
+        A shape whose geometry is drawn relative to an origin of its own
+        (``Shape.meshOrigin()``) is drawn, culled and lit through this
+        matrix, with the geometry's own bounds (``Shape.meshVolume()``). The
+        same matrix object is answered while the path's matrix and the origin
+        are, so a memo keyed on a record's matrix reads "unmoved" off it.
+        """
+        placings = self._placings
+        if placings is None:
+            placings = self._placings = {}
+        held = placings.get( id(path) )
+        if (held is not None and held[0] is path and held[1] is matrix
+                and numpy.array_equal( held[2], origin )):
+            return held[3]
+        moved = numpy.identity( 4 )
+        moved[3, :3] = origin
+        placed = moved @ asarray( matrix, 'd' )
+        if len( placings ) >= lightscope.ScopeMasks.KEPT_LIMIT:
+            placings.clear()
+        placings[id(path)] = (path, matrix, numpy.array( origin, 'd' ), placed)  # noqa: OGC131 the entry holds the path, so its id is not reused while kept
+        return placed
 
     def _frustumSurvivors( self, matrices: Any, points: Any, bounded: Any,
                            drawing: Any ) -> Any:

@@ -292,7 +292,10 @@ OpenGLContext/
 │   ├── x3dglsl.py    # ...and their text, values and attribute places:
 │   │                 # GLSL 1.x translated, Table I.3 -- no GL
 │   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
-│   │                 # drawn as the PBRMesh their fields build -- docs/x3d.rst
+│   │                 # drawn as the PBRMesh their fields build; MeshDrawn and
+│   │                 # LevelledMesh, which IndexedFaceSet, Box and the
+│   │                 # quadrics draw through; double-precision points drawn
+│   │                 # from their own origin -- docs/x3d.rst
 │   ├── physicalmaterial.py, pbrmesh.py   # The metallic/roughness material
 │   │                 # (X3D's PhysicalMaterial) and mesh
 │   ├── unlitmaterial.py  # UnlitMaterial (X3D's): a colour drawn without
@@ -1029,8 +1032,9 @@ def instanceGPU(self, mode):
         depend_fields=('size',))     # names or field objects; names are clearer
 ```
 
-Working examples: `scenegraph/box.py`, `quadrics.py` (Sphere/Cone/Cylinder),
-`teapot.py`, `indexedfaceset.py`. The batcher is format-neutral, so VRML
+Working examples: `teapot.py`; `box.py`, `quadrics.py` (Sphere/Cone/Cylinder)
+and `indexedfaceset.py` answer their mesh's `instanceGPU`
+(`meshgeometry.LevelledMesh`, `MeshDrawn`). The batcher is format-neutral, so VRML
 `USE`/`DEF` sharing, glTF shared meshes and `EXT_mesh_gpu_instancing` all feed it.
 
 **2. Node-driven raw-GL instancing (vegetation / terrain).** Nodes under

@@ -356,9 +356,9 @@ automatically. These are instanceable:
   of atoms, a field of crates).
 
 - PBRMesh and IndexedFaceSet - the general triangle meshes, the most common
-  shapes in ``.wrl`` and glTF content. An instanced IndexedFaceSet uses the
-  same triangle data and colours it tessellates for normal drawing, so it
-  looks identical to a per-shape one. Face sets batch together only where
+  shapes in ``.wrl`` and glTF content. An instanced IndexedFaceSet, Box or
+  quadric draws the mesh it draws on its own, so it looks identical to a
+  per-shape one. Face sets batch together only where
   their coordinates, normals, texture coordinates and colours are equal.
 
 - glTF ``EXT_mesh_gpu_instancing`` and shared glTF meshes - recognised by the

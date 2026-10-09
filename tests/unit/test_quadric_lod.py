@@ -95,34 +95,35 @@ class TestPerLevelCaching:
 
     def test_distance_selects_level_and_caches(self, monkeypatch):
         calls = []
+        real = Sphere.buildMesh
 
-        def fake_compile(self, mode=None, level=0, key=''):
+        def counted(self, level=0):
             calls.append(level)
-            vbos = ('coords', 'indices', level)
-            mode.cache.holder(self, vbos, key=key)
-            return vbos
+            return real(self, level)
 
-        monkeypatch.setattr(Sphere, 'compile', fake_compile)
+        monkeypatch.setattr(Sphere, 'buildMesh', counted)
         s = Sphere(radius=1.0)
 
         near = self._mode(-3.0)                        # ~3 radii -> level 0
-        assert s._lod_vbos(near)[2] == 0
-        s._lod_vbos(near)                              # cached: no recompile
+        assert s.drawLevel(near) == 0
+        first = s.mesh(s.drawLevel(near))
+        assert s.mesh(s.drawLevel(near)) is first      # cached: no rebuild
         assert calls == [0]
 
         far = self._mode(-500.0)                       # coarsest level
-        lvl = s._lod_vbos(far)[2]
+        lvl = s.drawLevel(far)
         assert lvl == quadrics.tessellationlod.COARSEST_LEVEL
+        s.mesh(lvl)
         assert calls == [0, lvl]                       # a second, distinct level built
 
     def test_lod_off_forces_level0(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_LOD', 'off')
-        seen = []
-        monkeypatch.setattr(Sphere, 'compile',
-                            lambda _self, mode=None, level=0, key='': seen.append(level) or ('c', 'i', level))  # noqa: ARG005 the signature of Sphere.compile, which is called by keyword
         s = Sphere(radius=1.0)
-        s._lod_vbos(self._mode(-500.0))                # far, but LOD disabled
-        assert seen == [0]
+        assert s.drawLevel(self._mode(-500.0)) == 0    # far, but LOD disabled
+
+    def test_compile_gives_a_program_the_arrays_buffers(self):
+        coords, indices, count = Sphere(radius=1.0).compile(level=1)
+        assert count == len(Sphere(radius=1.0).compileArrays(1)[1])
 
 
 if __name__ == '__main__':

@@ -1,32 +1,19 @@
 """Box node for use in geometry attribute of Shapes"""
 import numpy as np
-from vrml import cache
-from OpenGLContext.arrays import array
-from OpenGL.arrays import vbo
 from collections.abc import Iterator
 from typing import Any
-from OpenGL.GL import *
 from vrml.vrml97 import basenodes
-from vrml import protofunctions
+
+from OpenGLContext.scenegraph import meshdata
+from OpenGLContext.scenegraph.meshgeometry import LevelledMesh
 
 
-VBO = vbo.VBO
+class Box( LevelledMesh, basenodes.Box ):
+    """A box of `size` centred on its local origin, drawn as the mesh of its twelve triangles
 
-
-class Box( basenodes.Box ):
-    """Simple Box object of given size centered about local origin
-
-    The Box geometry node can be used in the geometry
-    field of a Shape node to be displayed. Use Transform
-    nodes to position the box within the world.
-
-    The Box includes texture coordinates and normals.
-
-    Attributes of note within the Box object:
-
-        size -- x,y,z tuple giving the size of the box
-        listID -- used internally to store the display list
-            used to display the box during rendering
+    Each face has its own corners, normals and texture coordinates, laid out
+    as X3D says (:func:`yieldVertices`); the mesh carries tangents for a
+    normal map (:class:`~OpenGLContext.scenegraph.meshgeometry.LevelledMesh`).
 
     Reference:
         http://www.web3d.org/technicalinfo/specifications/vrml97/part1/nodesRef.html#Box
@@ -35,107 +22,17 @@ class Box( basenodes.Box ):
     #: view of a frame that sees it; see :mod:`OpenGLContext.multiview.strategy`.
     multiviewShared = True
 
-    def compile( self, mode: Any = None ) -> Any:
-        """Compile the box as a display-list"""
-        if vbo.get_implementation():
-            vb = VBO( array( list(yieldVertices( self.size )), 'f'))
-            def draw( textured: bool = True, lit: bool = True ) -> None:
-                vb.bind()
-                try:
-                    glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
-                    try:
-                        glEnableClientState( GL_VERTEX_ARRAY )
-                        if lit:
-                            glEnableClientState( GL_NORMAL_ARRAY )
-                            glNormalPointer( GL_FLOAT, 32, vb+8 )
-                        if textured:
-                            glEnableClientState( GL_TEXTURE_COORD_ARRAY )
-                            glTexCoordPointer( 2, GL_FLOAT, 32, vb )
-                        glVertexPointer( 3, GL_FLOAT, 32, vb+20 )
-                        glDrawArrays( GL_TRIANGLES, 0, 36 )
-                    finally:
-                        glPopClientAttrib()
-                finally:
-                    vb.unbind()
-        else:
-            interleaved = array( list(yieldVertices( self.size )), 'f')
-            def draw(textured: bool = True, lit: bool = True) -> None:
-                glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
-                try:
-                    glInterleavedArrays( GL_T2F_N3F_V3F, 0, interleaved )
-                    glDrawArrays( GL_TRIANGLES, 0, 36 )
-                finally:
-                    glPopClientAttrib()
-        holder = mode.cache.holder(self, draw)
-        holder.depend( self, protofunctions.getField(self, 'size') )
-        return draw
-
-    def _get_shader_vbo(self, mode: Any) -> Any:
-        """Get or create VBO for shader rendering."""
-        vb = mode.cache.getData(self, 'shader_vbo')
-        if vb is None:
-            vb = VBO(array(list(yieldVertices(self.size)), 'f'))
-            holder = mode.cache.holder(self, vb, 'shader_vbo')
-            holder.depend(self, protofunctions.getField(self, 'size'))
-        return vb
-
-    def render (
-            self,
-            visible: int = 1, # can skip normals and textures if not
-            lit: int = 1, # can skip normals if not
-            textured: int = 1, # can skip textureCoordinates if not
-            transparent: int = 0, # XXX should sort triangle geometry...
-            mode: Any = None, # the renderpass object for which we compile
-        ) -> int:
-        """Render the Box (build and) call the display list"""
-        # Check for shader mode
-        if getattr(mode, 'shader_mode', False):
-            return int(self._render_shader(mode))
-
-        # Legacy rendering path
-        from OpenGLContext.scenegraph.winding import apply_winding_cull
-        apply_winding_cull(mode, True, bool(self.solid))
-        vb = mode.cache.getData(self)
-        if not vb:
-            vb = self.compile( mode=mode )
-        if vb:
-            vb(textured=textured,lit=lit)
-        return 1
-
-    def _render_shader(self, mode: Any) -> bool:
-        """Render the box using the shader pipeline."""
-        from OpenGLContext.scenegraph.shadergeometry import VertexFormat
-        from OpenGLContext.scenegraph.geometryarrays import (
-            GeometryArrays, render_geometry,
-        )
-        vb = self._get_shader_vbo(mode)
-        return render_geometry(mode, GeometryArrays.interleaved(
-            vb, VertexFormat.T2F_N3F_V3F, count=36,
-        ), owner=self, where='Box', solid=bool(self.solid))
+    def levelArrays( self, level: int ) -> Any:
+        """The box's twelve triangles, each face's corners its own vertices"""
+        verts = np.asarray( list( yieldVertices( self.size ) ), dtype=np.float32 )
+        return meshdata.arrays( verts[:, 5:8], verts[:, 2:5], verts[:, 0:2] )
 
     def instanceContentKey(self) -> tuple[Any, ...]:
         """Boxes of the same size share geometry, so they batch as instances."""
         return ('Box', tuple(round(float(v), 6) for v in self.size), bool(self.solid))
 
-    def meshArrays(self) -> Any:
-        """The box's twelve triangles, each face's corners its own vertices"""
-        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
-        verts = np.asarray(list(yieldVertices(self.size)), dtype=np.float32)
-        return meshdata.arrays(verts[:, 5:8], verts[:, 2:5], verts[:, 0:2])
-
-    def instanceGPU(self, mode: Any) -> Any:
-        """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
-        from OpenGLContext.passes.instancing import build_mesh_gpu
-        verts = list(yieldVertices(self.size))   # (u,v, nx,ny,nz, x,y,z) * 36
-        texcoords = [v[0:2] for v in verts]
-        normals = [v[2:5] for v in verts]
-        positions = [v[5:8] for v in verts]
-        return build_mesh_gpu(
-            mode, self, positions, normals, texcoords, indices=None,
-            cache_key='instance_gpu',
-            depend_fields=(protofunctions.getField(self, 'size'),))
-    def boundingVolume( self, mode: Any ) -> Any:
-        """Create a bounding-volume object for this node"""
+    def boundingVolume( self, mode: Any = None ) -> Any:
+        """The box's own extent"""
         from OpenGLContext.scenegraph import boundingvolume
         current = boundingvolume.getCachedVolume( self )
         if current:

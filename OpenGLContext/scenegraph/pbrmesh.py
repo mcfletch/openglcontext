@@ -285,6 +285,11 @@ class PBRMesh(x3d.X3DGeometryNode):
     _palette_peer: Any = None
     _palette_base: Optional[int] = None
 
+    #: The point :attr:`positions` are relative to, double precision, where
+    #: they were made from double-precision coordinates; None for none. The
+    #: render pass places the mesh by it (:meth:`meshOrigin`).
+    origin: Optional[np.ndarray] = None
+
     #: The time, in seconds, :attr:`waveStyle` is evaluated at. A clock the
     #: frame advances rather than something authored, so it is an attribute
     #: and not a field.
@@ -636,6 +641,14 @@ class PBRMesh(x3d.X3DGeometryNode):
             lens[lens == 0] = 1.0
             nrm = nrm / lens
         return pos, nrm, tan, uvs
+
+    def meshOrigin(self) -> Optional[np.ndarray]:
+        """:attr:`origin`: the point the positions are relative to, or None"""
+        return self.origin
+
+    def meshVolume(self, mode: Any = None) -> Any:
+        """The bounds of the positions as they are, relative to :attr:`origin`"""
+        return self.boundingVolume(mode)
 
     # -- X3D -----------------------------------------------------------------
     def x3dEquivalent(self) -> Any:

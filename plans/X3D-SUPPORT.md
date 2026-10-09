@@ -217,7 +217,19 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] `Extrusion` rebased on X3D's declaration (its engine fields carried as `OpenGLContext` metadata)
   - [x] `TextureCoordinateGenerator` for a composed geometry's first set (`scenegraph.texgen`, the PBR vertex shader)
   - [x] point/spot `radius`: a cut-off in the shader paths; unbounded for a light made in code, 100 for a document's, a glTF light's `range`
-  - [ ] `IndexedFaceSet` and the primitives onto the same arrays; `CoordinateDouble` rebased to a float32 origin
+  - [x] `IndexedFaceSet` and the primitives onto the same arrays; `CoordinateDouble` rebased to a float32 origin
+    (2026-10-09, x3d-gaps): `IndexedFaceSet` is a `MeshDrawn` whose
+    `composedArrays()` are the tessellation's, with every
+    `MultiTextureCoordinate` set (through `texCoordIndex`), `Tangent`,
+    `ColorRGBA` and `attrib`; `Box`, `Sphere`, `Cone`, `Cylinder` are
+    `meshgeometry.LevelledMesh` (one mesh per LOD level; `Quadric.compile`
+    kept for the shader tutorials). All gain tangents, so a normal map now
+    shows on a primitive (`physics_events` re-blessed). Double-precision
+    points are drawn from their own origin (below). Found on the way:
+    `PBRMesh.depthDraw` raised under the VRML97 program (no
+    `set_skinning`), so no mesh cast a shadow in that renderer, and the
+    depth pass logged the failure at debug level; it now goes through
+    `renderFailed` (`lightobject` matches its baseline again)
   - [x] `Appearance.texture` as a PhysicalMaterial's or UnlitMaterial's base map where theirs is NULL (X3D 4, 17.2.2.4 and 17.2.2.6; `physicalmaterial.AppearanceTextured`)
   - [x] docs/x3d.rst with the implemented-node list, held to `prototypes()` by a test
   - [x] light scope: `global` false lights only its parent group's descendants (`passes.lightscope`, the per-draw `lightsOff` mask); the engine's DirectionalLight made in code is global; VRML97 dialect default `global FALSE`
@@ -230,8 +242,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] content that draws nothing: `StaticGroup` (`x3dgroups`),
     `InlineGeometry` (`scenegraph.inlinegeometry`, a file's shapes joined by
     `scenegraph.meshdata.merged_arrays` from each geometry's `meshArrays()`);
-    `CoordinateDouble` was already read wherever `Coordinate` is, and its
-    precision past float32 waits on Geospatial's origin
+    `CoordinateDouble` was already read wherever `Coordinate` is; its
+    precision is the mesh origin (below)
   - [x] a shape's bounds followed its geometry's only when the geometry field
     itself was set: a volume cached as the geometry's own object kept it
     alive. `boundingvolume.cacheVolume` depends on the cache entry holding a
@@ -475,11 +487,16 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     through `viewpoint.Placing.placement` and scales navigation
     (`navigationinfo.apply(scale=)`); `GeoLOD` is a `lod.Levelled`, the
     level machinery split out of `LOD`; the two Geo sensors are pyvrml97's
-  - [ ] follow-up: a GeoCoordinate or GeoElevationGrid with no GeoOrigin is
+  - [x] follow-up: a GeoCoordinate or GeoElevationGrid with no GeoOrigin is
     single precision at the Earth's radius (about 0.5 m); a per-mesh origin
     (points relative to their own centre, placed by a float64 translation)
     would make it exact. Same mechanism would give `CoordinateDouble` its
-    precision
+    precision. 2026-10-09 (x3d-gaps): `composedgeometry.local_origin`,
+    `ComposedArrays.origin`, `PBRMesh.origin`/`meshOrigin()`,
+    `Shape.meshOrigin()`/`meshVolume()`; the gather places such a shape by
+    `FlatPass.placedMatrix` (float64, one object while unmoved) with the
+    mesh's own bounds. `meshArrays()` and bounds stay in the geometry's own
+    coordinates, single precision (`tests/unit/test_mesh_origin.py`)
   - [ ] VolumeRendering: the 13 nodes
   - [ ] GaussianSplats
   - [ ] `MovieTexture` decoded on the GPU through pyopengl-video

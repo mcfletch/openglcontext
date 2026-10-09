@@ -7,9 +7,10 @@ two hooks (see ``plans/INSTANCED-GEOMETRY.md``):
                                identical geometry collapse into one draw; equal
                                content -> equal key, different content -> different
                                key.
-  ``_instanceArrays()``     -- the expanded (positions, normals, texcoords, colours) the
+  ``_instanceArrays()``     -- the expanded (positions, normals, texcoords) the
                                shared mesh-GPU is built from; ``instanceGPU(mode)``
                                wraps these for GL (tested separately under GL).
+                               An IndexedFaceSet's are its mesh's, ``mesh()``.
 
 These run without a GL context: they exercise the CPU tessellation/array build,
 not the VBO upload.
@@ -56,18 +57,19 @@ class TestIndexedFaceSetInstancing:
         assert a.instanceContentKey() != b.instanceContentKey()
         assert a.instanceContentKey() != _quad_ifs().instanceContentKey()
 
-    def test_instance_arrays_expand_to_triangle_soup(self):
-        positions, normals, texcoords, colours = _quad_ifs()._instanceArrays()  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
+    def test_the_mesh_is_a_triangle_soup(self):
+        mesh = _quad_ifs().mesh()
         # A quad tessellates to two triangles = six expanded vertices.
-        assert positions.shape == (6, 3)
-        assert normals.shape == (6, 3)
-        assert colours is None
+        assert mesh.positions.shape == (6, 3)
+        assert mesh.normals.shape == (6, 3)
+        assert mesh.colors is None
         # A front-facing quad (CCW in the xy plane) has +z normals.
-        assert np.allclose(normals[:, 2], 1.0, atol=1e-3)
+        assert np.allclose(mesh.normals[:, 2], 1.0, atol=1e-3)
 
-    def test_empty_ifs_has_no_instance_arrays(self):
+    def test_empty_ifs_has_no_mesh(self):
         empty = basenodes.IndexedFaceSet(coordIndex=[])
-        assert empty._instanceArrays() is None  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
+        assert empty.mesh() is None
+        assert empty.meshArrays() is None
 
 
 class TestTeapotInstancing:

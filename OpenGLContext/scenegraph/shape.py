@@ -398,6 +398,21 @@ class Shape(basenodes.Shape):
             distance = 0.0
         return tuple(key[0:2]) + (distance,) + tuple(key[1:])
 
+    def meshOrigin(self) -> Any:
+        """The point the geometry is drawn relative to, double precision; None for none
+
+        The geometry's `meshOrigin()`: geometry made from double-precision
+        coordinates is drawn from the centre of its points
+        (:mod:`OpenGLContext.scenegraph.meshgeometry`), and the render pass
+        places it by this point in double precision.
+        """
+        answer = getattr(self.geometry, 'meshOrigin', None) if self.geometry else None
+        return answer() if answer is not None else None
+
+    def meshVolume(self, mode: Any) -> Any:
+        """The geometry's bounds relative to :meth:`meshOrigin`, where it has one"""
+        return self.geometry.meshVolume(mode)
+
     def boundingVolume(self, mode: Any) -> Any:
         """Create a bounding-volume object for this node
 

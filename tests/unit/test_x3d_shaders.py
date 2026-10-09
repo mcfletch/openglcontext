@@ -691,30 +691,22 @@ class TestTheMemosFollowTheirInputs:
             ('geometry.attrib', lambda: setattr(node, 'attrib', [])),
         ], fresh=fresh)
 
-    def test_a_face_sets_compiled_attributes_follow_their_nodes(self):
+    def test_a_face_sets_mesh_attributes_follow_their_nodes(self):
         from vrml.x3d import nodes as x3d
         from OpenGLContext.scenegraph.basenodes import Coordinate, IndexedFaceSet
-        from OpenGLContext.scenegraph.ifscompiler import ArrayGeometryCompiler
         from OpenGLContext.testing.memo import check_memo_inputs
         heat = x3d.FloatVertexAttribute(name='heat', numComponents=1, value=[0, 1, 2, 3])
         node = IndexedFaceSet(coordIndex=[0, 1, 2, 3, -1], attrib=[heat], coord=Coordinate(
             point=[(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]))
-        mode = _Mode()
 
-        def answer(renderer):
-            return tuple((entry.name, entry.buffer.data.tolist()) for entry in renderer.named)
+        def answer(mesh):
+            return tuple((name, values.tolist()) for name, values, _ in mesh.vertex_attributes)
 
-        def ask():
-            renderer = mode.cache.getData(node)
-            if renderer is None:
-                renderer = node.compile(mode=mode)
-            return answer(renderer)
-
-        check_memo_inputs(ask, [
+        check_memo_inputs(lambda: answer(node.mesh()), [
             ('attrib.value', lambda: setattr(heat, 'value', [3, 2, 1, 0])),
             ('attrib.name', lambda: setattr(heat, 'name', 'cold')),
             ('geometry.attrib', lambda: setattr(node, 'attrib', [])),
-        ], fresh=lambda: answer(ArrayGeometryCompiler(node).compile(mode=mode)))
+        ], fresh=lambda: answer(node.buildMesh()))
 
 
 @pytest.mark.parametrize('renderer', RENDERERS)

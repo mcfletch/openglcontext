@@ -298,8 +298,14 @@ class ArrayGeometryCompiler(IFSCompiler):
         index of the nearest coordinate.
         """
         vertices = self.tessellate()
+        #: The tessellated vertices, three a triangle, each with the place in
+        #: `coordIndex` it was read from (``metaIndex``, -1 for one the
+        #: tessellator made).
+        self.vertices = vertices
         #: The coordinate each drawn vertex is, which X3D's `attrib` values are indexed by.
         self.coordinateIndex = np.array([vertex.coordIndex for vertex in vertices], np.int64)
+        #: The vertices' points in double precision, as the coordinates hold them.
+        self.pointArray = np.array([vertex.point for vertex in vertices], np.float64).reshape(-1, 3)
 
         # vertices is now a list of vertices such that
         # every three vertices represents a single triangle

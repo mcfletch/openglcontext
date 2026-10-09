@@ -168,8 +168,16 @@ implements these X3D nodes, by component:
 Geometry
 ~~~~~~~~
 
-The triangle sets, the quad sets and ``ElevationGrid`` are drawn as the mesh
-their fields build (``OpenGLContext.scenegraph.meshgeometry``): normals that
+The triangle sets, the quad sets, ``ElevationGrid``, ``IndexedFaceSet`` and
+the primitives ``Box``, ``Sphere``, ``Cone`` and ``Cylinder`` are drawn as the
+mesh their fields build (``OpenGLContext.scenegraph.meshgeometry``), in both
+renderers and the compatibility profile, with tangents for a normal map where
+they have texture coordinates. An ``IndexedFaceSet``'s polygons are
+tessellated, convex or not, with normals smoothed within ``creaseAngle``;
+each set of a ``MultiTextureCoordinate`` is read through ``texCoordIndex``
+(or ``coordIndex`` where that is empty), a ``Tangent`` as the normals are,
+and ``attrib`` values one per coordinate. The quadrics have one mesh per
+level of detail (``OPENGLCONTEXT_LOD``). Normals that
 are not given are generated, smoothed across folds within ``creaseAngle`` for
 ``ElevationGrid`` and across every shared coordinate for the triangle and quad
 sets whose ``normalPerVertex`` is true; ``colorPerVertex`` and
@@ -198,7 +206,14 @@ lines, and ``Polypoint2D`` as points. A curve has 48 segments to a whole turn
 (``geometry2d.SEGMENTS``).
 
 Coordinates may be a ``CoordinateDouble`` wherever a ``Coordinate`` is
-read; they are drawn in single precision, about seven significant digits.
+read. Double-precision coordinates (``CoordinateDouble``, ``GeoCoordinate``
+and ``GeoElevationGrid``'s) are built relative to the centre of their
+bounds, the geometry's ``meshOrigin()``, in single precision, and the render
+pass places the mesh by that origin in double precision, so geometry
+millions of metres from the scene's origin is drawn to its own single
+precision: a triangle set ten kilometres across keeps millimetres. The
+geometry's bounds and ``meshArrays()`` (picking, collision, acoustic
+surfaces) are in its own coordinates, in single precision.
 
 ``InlineGeometry`` draws the triangles of the file its ``url`` names, in any
 format an ``Inline`` reads (an OBJ, a glTF model, an X3D or VRML97
@@ -1042,10 +1057,11 @@ the Earth has +Y up along the ellipsoid's normal, +X east and -Z north.
 - ``GeoCoordinate`` gives any coordinate-based geometry its points, and
   ``GeoElevationGrid`` raises heights times ``yScale`` along the normal over
   a grid stepping ``xSpacing`` along the longitude or easting and
-  ``zSpacing`` along the latitude or northing. Their points are single
-  precision relative to their ``GeoOrigin``: content within a few kilometres
-  of its origin is placed to the millimetre, and content with no origin to
-  about half a metre.
+  ``zSpacing`` along the latitude or northing. Each mesh is built relative
+  to the centre of its own points and placed by it in double precision, so
+  it is drawn to the millimetre with or without a ``GeoOrigin``. Lines and
+  points on a ``GeoCoordinate`` are single precision in the scene's
+  coordinates: about half a metre at the Earth's radius with no origin.
 - ``GeoViewpoint`` places the camera at ``position``, turned by
   ``orientation`` from the frame there. Navigation is ``speedFactor`` times
   faster ten metres above the ellipsoid than at its surface, and faster
@@ -1250,7 +1266,6 @@ Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
-- ``CoordinateDouble`` is kept and not drawn.
 - ``FogCoordinate`` is kept and not drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.

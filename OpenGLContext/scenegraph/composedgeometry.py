@@ -14,6 +14,11 @@ false give one value per triangle; normals that are not given are generated,
 averaged across the triangles that share a coordinate where `normalPerVertex`
 is true and flat where it is false; `ccw` false means the triangles are wound
 clockwise as seen from their front.
+
+Double-precision points (`CoordinateDouble`, `GeoCoordinate`) are made
+relative to the centre of their bounds (:func:`local_origin`) before they are
+taken to single precision; the arrays carry that `origin`, and the render
+pass places the mesh by it in double precision.
 """
 from __future__ import annotations
 
@@ -30,7 +35,8 @@ from OpenGLContext.scenegraph import x3dglsl
 __all__ = ['ComposedArrays', 'arc_close', 'arc_points', 'arc_sweep', 'composed_arrays',
            'crease_normals', 'disk', 'fans', 'grid_points', 'grid_texcoords',
            'grid_triangles', 'indexed_fans', 'indexed_quads', 'indexed_strips',
-           'indexed_triangles', 'line_segments', 'per_quad', 'quad_set', 'quads',
+           'indexed_triangles', 'line_segments', 'local_origin', 'per_quad', 'quad_set',
+           'quads',
            'rectangle', 'split_index', 'strips', 'triangle_set', 'triangle_set_2d',
            'vertex_normals']
 
@@ -294,6 +300,21 @@ def triangle_set_2d(vertices: ArrayLike) -> "tuple[np.ndarray, np.ndarray, np.nd
     return points, triangle_set(len(points)), _flat_texcoords(points, low, high)
 
 
+def local_origin(points: Any) -> Optional[np.ndarray]:
+    """The point double-precision `points` are drawn relative to: their bounds' centre
+
+    None for single-precision points, or none: they are drawn as they are.
+    """
+    if points is None or not len(points):
+        return None
+    found = np.asarray(points)
+    if found.dtype != np.float64:
+        return None
+    found = found.reshape(-1, 3)
+    centre: np.ndarray = (found.min(axis=0) + found.max(axis=0)) / 2.0
+    return centre
+
+
 @dataclass
 class ComposedArrays:
     """A composed set's arrays, as :func:`~OpenGLContext.scenegraph.frommesh.mesh_from_primitive` reads them"""
@@ -316,6 +337,9 @@ class ComposedArrays:
     short_attributes: "list[str]" = field(default_factory=list)
     #: The coordinate each vertex was read from, or None where that is not known.
     sources: Optional[np.ndarray] = None
+    #: The point POSITION is relative to, double precision; None where it is
+    #: in the geometry's own coordinates (:func:`local_origin`).
+    origin: Optional[np.ndarray] = None
 
 
 def _face_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
@@ -346,6 +370,7 @@ def composed_arrays(
     texcoords: Sequence[Any] = (), tangents: Any = None,
     crease_angle: Optional[float] = None, volume_texcoords: Any = None,
     vertex_attributes: Sequence["tuple[str, np.ndarray, int]"] = (),
+    origin: Optional[np.ndarray] = None,
 ) -> ComposedArrays:
     """The arrays of a composed set whose triangles index `points`
 
@@ -363,11 +388,15 @@ def composed_arrays(
     vertex_attributes -- X3D's `attrib` nodes as
         :func:`~OpenGLContext.scenegraph.x3dglsl.vertex_attributes` gives
         them, one row per point
+    origin -- the point POSITION is made relative to, in double precision
+        before the points are single precision; None for none
 
     The points stay shared, and `indices` names them, where every attribute
     is one per point; where one is per triangle, every corner gets its own
     vertex and `indices` is None.
     """
+    if origin is not None:
+        points = np.asarray(points, dtype=np.float64).reshape(-1, 3) - origin
     points = np.ascontiguousarray(points, dtype=np.float32).reshape(-1, 3)
     triangles = np.asarray(triangles, dtype=np.int64).reshape(-1, 3)
     count = len(points)
@@ -450,4 +479,4 @@ def composed_arrays(
         indices=indices, dropped=int((~valid).sum()), short=short,
         vertex_attributes=named, short_attributes=missing,
         sources=np.arange(count, dtype=np.int64) if corners is None
-        else np.asarray(corners, dtype=np.int64))
+        else np.asarray(corners, dtype=np.int64), origin=origin)

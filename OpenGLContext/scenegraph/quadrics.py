@@ -1,26 +1,19 @@
-"""Quadratic geometry types (cone, sphere, cylinder, etc)
+"""The quadrics: Sphere, Cone and Cylinder, tessellated with NumPy
 
-This implementation does not use the gluQuadric objects, it 
-does direct creation via numpy operations.
+Each is drawn as the mesh of its arrays at the level of detail its distance
+from the viewer chooses (:class:`~OpenGLContext.scenegraph.meshgeometry.LevelledMesh`).
 """
 import numpy as np
-from OpenGL.GL import *
-from vrml import field, protofunctions, node
+from typing import Any
+from vrml import field, node
 from vrml.vrml97 import basenodes, nodetypes
-from vrml import cache
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.arrays import (
     zeros, arange, sin, cos, pi, concatenate, allclose, copy,
 )
 from OpenGLContext import vectorutilities
 from OpenGLContext.scenegraph import tessellationlod
-from OpenGL.arrays import vbo
-from typing import Any
-
-
-#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
-#: the accelerated and the pure-Python class it loaded.
-VBO: Any = vbo.VBO
+from OpenGLContext.scenegraph.meshgeometry import LevelledMesh
 
 #: The longitude the sides start at, the back (-Z) for points (sin, cos) of
 #: it: where VRML97 puts the texture's seam, u 0 and 1 (19775-1, 13.3).
@@ -70,131 +63,58 @@ def mesh_indices( zstep: int, ystep: int, xstep: int = 1 ) -> Any:
     indices += (yoffsets * ystep)
     return indices
 
-class Quadric( nodetypes.Geometry, node.Node ):
-    """Base-class for the various quadratic-type geometry classes"""
+class Quadric( LevelledMesh, nodetypes.Geometry, node.Node ):
+    """Base-class for the quadrics: Sphere, Cone and Cylinder
+
+    Each is drawn as the mesh of its interleaved ``V3F_T2F_N3F`` arrays at the
+    level of detail its distance from the viewer chooses
+    (:mod:`~OpenGLContext.scenegraph.tessellationlod`); a subclass gives
+    :meth:`compileArrays`.
+    """
     #: Draws with the pass's lit programs alone, so one draw can serve every
     #: view of a frame that sees it; see :mod:`OpenGLContext.multiview.strategy`.
     multiviewShared = True
 
-    def render (
-            self,
-            visible: int = 1, # can skip normals and textures if not
-            lit: int = 1, # can skip normals if not
-            textured: int = 1, # can skip textureCoordinates if not
-            transparent: int = 0,
-            mode: Any = None, # the renderpass object for which we compile
-        ) -> int:
-        """Render the geometry"""
-        # Check for shader mode
-        if getattr(mode, 'shader_mode', False):
-            return self._render_shader(mode)
+    def compileArrays( self, level: int = 0 ) -> tuple[Any, Any]:
+        """(coords Nx8 interleaved V3F_T2F_N3F, indices) at `level`"""
+        raise NotImplementedError( '%s must give its arrays' % (self.__class__.__name__,) )
 
-        # Legacy rendering path
-        from OpenGLContext.scenegraph.winding import apply_winding_cull
-        apply_winding_cull( mode, True, bool( getattr( self, 'solid', True ) ) )
-        vbos = self._lod_vbos( mode )
-        if vbos is None:
-            return 1
-        coords,indices,count = vbos
-        glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
-        glPushAttrib(GL_ALL_ATTRIB_BITS)
-        try:
-            coords.bind()
-            glEnableClientState(GL_VERTEX_ARRAY)
-            glVertexPointer( 3, GL_FLOAT,32,coords)
-            if visible:
-                if textured:
-                    glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-                    glTexCoordPointer( 2, GL_FLOAT,32,coords+12)
-                if lit:
-                    glEnableClientState(GL_NORMAL_ARRAY)
-                    glNormalPointer( GL_FLOAT,32,coords+20 )
-            # TODO: sort for transparent geometry...
-            indices.bind()
-            # Can loop loading matrix and calling just this function
-            # for each sphere you want to render...
-            # include both scale and position in the matrix...
-            glDrawElements(
-                GL_TRIANGLES, count, GL_UNSIGNED_SHORT, indices
-            )
-        finally:
-            glPopAttrib()
-            glPopClientAttrib()
-            indices.unbind()
-            coords.unbind()
-        return 1
+    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> tuple[Any, Any, int]:
+        """(coordinate VBO, index VBO, index count) of :meth:`compileArrays` at `level`
 
-    def _render_shader(self, mode: Any) -> int:
-        """Render the quadric using the shader pipeline."""
-        from OpenGLContext.scenegraph.shadergeometry import VertexFormat
-        from OpenGLContext.scenegraph.geometryarrays import (
-            GeometryArrays, render_geometry,
-        )
-        vbos = self._lod_vbos( mode )
-        if vbos is None:
-            return 1
-        coords, indices, count = vbos
-        return render_geometry(mode, GeometryArrays.interleaved(
-            coords, VertexFormat.V3F_T2F_N3F, count=count, indices=indices,
-        ), owner=self, where=self.__class__.__name__, solid=bool( getattr( self, 'solid', True ) ))
+        For a program drawing the quadric's arrays itself, as the shader
+        tutorials do; kept in ``mode.cache`` under `key` where `mode` has one.
+        The node draws its mesh (:meth:`mesh`).
+        """
+        from OpenGL.arrays import vbo  # noqa: PLC0415 only a caller drawing the arrays itself needs GL buffers
+        coords, indices = self.compileArrays( level )
+        vbos = (vbo.VBO( coords ), vbo.VBO( indices, target='GL_ELEMENT_ARRAY_BUFFER' ),
+                len( indices ))
+        if getattr( mode, 'cache', None ) is not None:
+            holder = mode.cache.holder( self, vbos, key=key )
+            for name in self._lodDependFields():
+                holder.depend( self, name )
+        return vbos
+
+    def _lodDependFields( self ) -> tuple[str, ...]:
+        """The fields :meth:`compileArrays` reads"""
+        return ()
+
+    def levelArrays( self, level: int ) -> Any:
+        """The mesh arrays of :meth:`compileArrays` at `level`"""
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        coords, indices = self.compileArrays( level )
+        c = np.asarray( coords, dtype='f' ).reshape( -1, 8 )
+        return meshdata.arrays( c[:, 0:3], c[:, 5:8], c[:, 3:5], indices=np.asarray( indices ) )
+
+    def drawLevel( self, mode: Any ) -> int:
+        """The level for this quadric's distance from the viewer"""
+        return int( tessellationlod.lod_level( mode, (0, 0, 0), self._lod_bounding_radius() ) )
 
     # -- distance level-of-detail -----------------------------------------
     def _lod_bounding_radius( self ) -> float:
         """Characteristic local radius for the distance metric (subclass hook)."""
         return 1.0
-
-    def _lod_vbos( self, mode: Any ) -> Any:
-        """Return the (coords, indices, count) VBOs for this frame's LOD level.
-
-        Each level is tessellated and cached separately under ``mode.cache`` so a
-        near quadric keeps full detail while a far one reuses a coarse mesh; the
-        level 0 mesh matches the pre-LOD tessellation, so close-up appearance is
-        unchanged.
-        """
-        level = tessellationlod.lod_level( mode, (0, 0, 0), self._lod_bounding_radius() )
-        key = 'lod%d' % level
-        vbos = None
-        if hasattr( mode, 'cache' ):
-            vbos = mode.cache.getData( self, key=key )
-        if not vbos:
-            vbos = self.compile( mode=mode, level=level, key=key )
-        return vbos
-
-    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> Any:
-        """Compile this sphere for use on mode"""
-        raise NotImplementedError( """Haven't implemented %s compilation yet"""%(self.__class__.__name__,))
-
-    # -- instancing -------------------------------------------------------
-    # Quadrics share one interleaved V3F_T2F_N3F layout, so one instanced-draw
-    # GPU builder serves them all; each subclass supplies its arrays + content key.
-    def _instanceArrays( self ) -> tuple[Any, Any]:
-        """(coords Nx8 interleaved V3F_T2F_N3F, indices) at a fixed LOD level."""
-        raise NotImplementedError
-
-    def _instanceDependFields( self ) -> tuple[str, ...]:
-        """Fields whose change should rebuild the cached instance GPU."""
-        return ()
-
-    def meshArrays( self ) -> Any:
-        """The quadric's triangles at its instanced level of detail"""
-        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
-        coords, indices = self._instanceArrays()
-        c = np.asarray( coords, dtype='f' ).reshape( -1, 8 )
-        return meshdata.arrays( c[:, 0:3], c[:, 5:8], c[:, 3:5], indices=np.asarray( indices ) )
-
-    def instanceGPU( self, mode: Any ) -> Any:
-        """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing.
-
-        De-interleaves the quadric's V3F_T2F_N3F arrays (fixed LOD, so every
-        instance shares one tessellation) into the shader attribute layout.
-        """
-        from OpenGLContext.passes.instancing import build_mesh_gpu
-        coords, indices = self._instanceArrays()
-        c = np.asarray( coords, dtype='f' ).reshape( -1, 8 )
-        return build_mesh_gpu(
-            mode, self, positions=c[:, 0:3], normals=c[:, 5:8],
-            texcoords=c[:, 3:5], indices=np.asarray( indices ).ravel(),
-            cache_key='instance_gpu', depend_fields=self._instanceDependFields() )
 
 class Sphere( basenodes.Sphere, Quadric ):
     """Sphere geometry rendered with GLU quadratic calls"""
@@ -209,18 +129,6 @@ class Sphere( basenodes.Sphere, Quadric ):
 
     def _lod_bounding_radius( self ) -> float:
         return float( self.radius )
-
-    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> Any:
-        """Compile this sphere for use on mode
-
-        returns coordvbo,indexvbo,count
-        """
-        coords, indices = self.compileArrays( level )
-        vbos = VBO(coords), VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
-        if hasattr(mode,'cache'):
-            holder = mode.cache.holder( self, vbos, key=key )
-            holder.depend( self, 'radius' )
-        return vbos
 
     def compileArrays( self, level: int = 0 ) -> tuple[Any, Any]:
         """Compile to arrays at the given LOD level...
@@ -240,18 +148,15 @@ class Sphere( basenodes.Sphere, Quadric ):
         coords[:,0:3] *= self.radius
         return coords, indices
 
+    def _lodDependFields( self ) -> tuple[str, ...]:
+        return ('radius', 'phi')
+
     def instanceContentKey( self ) -> tuple[Any, ...]:
         """Spheres of the same radius/tessellation share geometry -> one instanced
         draw (the molecular-model case: thousands of identical atoms)."""
         return ('Sphere', round(float(self.radius), 6), round(float(self.phi), 6),
                 bool(self.solid))
 
-    def _instanceArrays( self ) -> tuple[Any, Any]:
-        return self.compileArrays( 0 )
-
-    def _instanceDependFields( self ) -> tuple[str, ...]:
-        return ('radius',)
-    
     @classmethod
     def sphere( cls, phi: float = pi/8.0, latAngle: float = pi,
                 longAngle: float = (pi*2) ) -> tuple[Any, Any]:
@@ -336,28 +241,19 @@ class Cone( basenodes.Cone, Quadric ):
     def _lod_bounding_radius( self ) -> float:
         return max( float(self.bottomRadius), float(self.height) / 2.0 )
 
-    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> Any:
-        """Compile this sphere for use on mode"""
-        coords,indices = self.cone(
+    def compileArrays( self, level: int = 0 ) -> tuple[Any, Any]:
+        """(coords Nx8 interleaved V3F_T2F_N3F, indices) at `level`"""
+        return self.cone(
             self.height, self.bottomRadius, self.bottom, self.side,
             phi=lod_phi( self._BASE_PHI, level, 2*pi ),   # ring closes over 2*pi
         )
-        vbos = VBO(coords), VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
-        holder = mode.cache.holder( self, vbos, key=key )
-        holder.depend( self, 'bottomRadius' )
-        holder.depend( self, 'height' )
-        return vbos
+
+    def _lodDependFields( self ) -> tuple[str, ...]:
+        return ('bottomRadius', 'height', 'bottom', 'side')
 
     def instanceContentKey( self ) -> tuple[Any, ...]:
         return ('Cone', round(float(self.height), 6), round(float(self.bottomRadius), 6),
                 bool(self.bottom), bool(self.side), bool(self.solid))
-
-    def _instanceArrays( self ) -> tuple[Any, Any]:
-        return self.cone( self.height, self.bottomRadius, self.bottom, self.side,
-                          phi=lod_phi( self._BASE_PHI, 0, 2*pi ) )
-
-    def _instanceDependFields( self ) -> tuple[str, ...]:
-        return ('bottomRadius', 'height', 'bottom', 'side')
 
     @classmethod
     def cone(
@@ -478,30 +374,20 @@ class Cylinder( basenodes.Cylinder, Quadric ):
     def _lod_bounding_radius( self ) -> float:
         return max( float(self.radius), float(self.height) / 2.0 )
 
-    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> Any:
-        """Compile this sphere for use on mode"""
-        coords,indices = Cone.cone(
+    def compileArrays( self, level: int = 0 ) -> tuple[Any, Any]:
+        """(coords Nx8 interleaved V3F_T2F_N3F, indices) at `level`"""
+        return Cone.cone(
             self.height, self.radius, self.bottom, self.side,
             phi=lod_phi( Cone._BASE_PHI, level, 2*pi ),   # ring closes over 2*pi
             top=self.top, cylinder=True,
         )
-        vbos = VBO(coords), VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
-        holder = mode.cache.holder( self, vbos, key=key )
-        holder.depend( self, 'radius' )
-        holder.depend( self, 'height' )
-        return vbos
+
+    def _lodDependFields( self ) -> tuple[str, ...]:
+        return ('radius', 'height', 'bottom', 'side', 'top')
 
     def instanceContentKey( self ) -> tuple[Any, ...]:
         return ('Cylinder', round(float(self.height), 6), round(float(self.radius), 6),
                 bool(self.bottom), bool(self.side), bool(self.top), bool(self.solid))
-
-    def _instanceArrays( self ) -> tuple[Any, Any]:
-        return Cone.cone( self.height, self.radius, self.bottom, self.side,
-                          phi=lod_phi( Cone._BASE_PHI, 0, 2*pi ),
-                          top=self.top, cylinder=True )
-
-    def _instanceDependFields( self ) -> tuple[str, ...]:
-        return ('radius', 'height', 'bottom', 'side', 'top')
 
     def boundingVolume( self, mode: Any = None ) -> Any:
         """Create a bounding-volume object for this node
