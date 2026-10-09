@@ -44,7 +44,9 @@ def _system(kind):
 
 
 def _drawn(system, environment):
-    with scene_context([system], environment=environment) as context:
+    """The frame `system` draws in: a node in a scene of its own, or a loaded document"""
+    root = system if hasattr(system, 'getDEF') else [system]
+    with scene_context(root, environment=environment) as context:
         for _ in range(2):
             context.renderQueue.run()
             context.OnDraw(force=1)
@@ -126,3 +128,85 @@ def test_the_engines_emitter_draws_its_colour_ramp_as_sprites_or_streaks(shape):
                                   color=[(0, 1, 0), (0, 1, 0)]))
     centre = _centre(_drawn(emitter, {'OPENGLCONTEXT_RENDERER': 'pbr'})).astype(int)
     assert (centre[:, 1] > 100).any() and (centre[:, 0] < 40).all(), centre
+
+
+def _document(system, scene=''):
+    """A document of one system at the origin, seen from the default viewpoint"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    text = ('<X3D version="4.0"><Scene><NavigationInfo headlight="false"/>%s'
+            '%s</Scene></X3D>' % (scene, system))
+    return Loader.loads(text.encode('utf-8'), 'scene.x3d')
+
+
+QUADS = ('<ParticleSystem geometryType="%s" particleSize="3 3" maxParticles="4" '
+         'particleLifetime="100" lifetimeVariation="0">%s'
+         '<ExplosionEmitter containerField="emitter" speed="0"/></ParticleSystem>')
+RED = '<Appearance><Material diffuseColor="1 0 0"/>%s</Appearance>'
+
+
+@pytest.mark.parametrize('kind', ['QUAD', 'SPRITE'])
+@pytest.mark.parametrize('toward, lit', [('0 0 -1', True), ('0 0 1', False)])
+def test_a_document_lights_quads_and_sprites(kind, toward, lit):
+    refused = profile_unavailable('core')
+    if refused:
+        pytest.skip(refused)
+    scene = _document(QUADS % (kind, RED % ''),
+                      '<DirectionalLight direction="%s"/>' % toward)
+    centre = _centre(_drawn(scene, {'OPENGLCONTEXT_RENDERER': 'pbr'})).astype(int)
+    if lit:
+        assert (centre[:, 0] > 200).all() and (centre[:, 1] < 20).all(), centre
+    else:
+        assert (centre < 20).all(), centre
+
+
+def test_the_texture_transform_moves_a_particles_texture():
+    refused = profile_unavailable('core')
+    if refused:
+        pytest.skip(refused)
+    texture = '<PixelTexture image="2 1 3 0xFF0000 0x00FF00"/>'
+    plain = _document(QUADS % ('QUAD', '<Appearance>%s</Appearance>' % texture))
+    moved = _document(QUADS % ('QUAD', '<Appearance>%s<TextureTransform translation="0.5 0"/>'
+                               '</Appearance>' % texture))
+    environment = {'OPENGLCONTEXT_RENDERER': 'pbr'}
+
+    def left_of_centre(image):
+        height, width = image.shape[:2]
+        return image[height // 2, width // 2 - 6].astype(int)
+
+    assert left_of_centre(_drawn(plain, environment))[0] > 200
+    assert left_of_centre(_drawn(moved, environment))[1] > 200
+
+
+def test_a_line_is_drawn_as_wide_as_its_line_properties():
+    refused = profile_unavailable('core')
+    if refused:
+        pytest.skip(refused)
+
+    def covered(properties):
+        """The red pixels within six of the middle: a line through it, whichever way"""
+        system = ('<ParticleSystem geometryType="LINE" particleSize="0.1 6" maxParticles="1" '
+                  'particleLifetime="100" lifetimeVariation="0"><Appearance>'
+                  '<Material emissiveColor="1 0 0"/>%s</Appearance>'
+                  '<ExplosionEmitter containerField="emitter" speed="0.001"/>'
+                  '</ParticleSystem>' % properties)
+        image = _drawn(_document(system), {'OPENGLCONTEXT_RENDERER': 'pbr'}).astype(int)
+        height, width = image.shape[:2]
+        middle = image[height // 2 - 6:height // 2 + 6, width // 2 - 6:width // 2 + 6]
+        return int(((middle[:, :, 0] > 120) & (middle[:, :, 1] < 60)).sum())
+
+    thin = covered('')
+    assert 8 <= thin <= 24
+    assert covered('<LineProperties linewidthScaleFactor="9"/>') > 4 * thin
+
+
+def test_a_clip_plane_cuts_the_particles():
+    refused = profile_unavailable('core')
+    if refused:
+        pytest.skip(refused)
+    system = QUADS % ('QUAD', '<Appearance><Material emissiveColor="1 0 0"/></Appearance>')
+    scene = _document('<Group><ClipPlane plane="0 1 0 0"/>%s</Group>' % system)
+    image = _drawn(scene, {'OPENGLCONTEXT_RENDERER': 'pbr'}).astype(int)
+    height, width = image.shape[:2]
+    above = image[height // 2 - 8, width // 2]
+    below = image[height // 2 + 8, width // 2]
+    assert above[0] > 200 and below[0] < 20, (above, below)

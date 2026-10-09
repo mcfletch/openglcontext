@@ -12,8 +12,8 @@ it, kept in the context's cache until the volume or the sampler changes:
 - ``ComposedTexture3D``: its ``texture`` field's 2D textures, one slice each;
   a slice of another size than the first is resampled to it, and the slices
   have the first one's channels.
-- ``ImageTexture3D``: the first of its ``url`` entries that reads: a DDS or
-  KTX volume, an NRRD volume (with its detached data file beside the
+- ``ImageTexture3D``: the first of its ``url`` entries that reads: a DDS,
+  KTX 1.1 or KTX 2 volume, an NRRD volume (with its detached data file beside the
   header), or a single picture, which is a volume one slice deep
   (:mod:`OpenGLContext.loaders.textureimages`). Its ``width``, ``height``,
   ``depth`` and ``colorDepth`` outputs are sent when it has read.

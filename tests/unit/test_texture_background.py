@@ -98,3 +98,37 @@ def test_the_sides_are_drawn_whatever_the_far_plane(gl_context, limit):
     colour = drawn(b'<NavigationInfo visibilityLimit="' + limit + b'"/>'
                    b'<TextureBackground skyColor="0 0 1">' + sides + b'</TextureBackground>')
     assert colour[1] > colour[2] + 100
+
+
+@pytest.mark.parametrize('node', [b'Background', b'TextureBackground'])
+def test_a_transparent_sky_is_blended_over_black(gl_context, node):
+    colour = drawn(b'<%s skyColor="1 1 1" transparency="0.75"/>' % node)
+    assert colour == pytest.approx((64, 64, 64), abs=3)
+
+
+@pytest.mark.parametrize('node', [b'Background', b'TextureBackground'])
+def test_a_wholly_transparent_sky_is_not_drawn(gl_context, node):
+    colour = drawn(b'<%s skyColor="1 1 1" transparency="1"/>' % node)
+    assert tuple(colour) == (0, 0, 0)
+
+
+def test_transparency_leaves_the_sides_their_own(gl_context):
+    sides = b''.join(
+        b'<PixelTexture containerField="%sTexture" image="1 1 3 0x00FF00"/>' % side
+        for side in (b'front', b'back', b'left', b'right', b'top', b'bottom'))
+    colour = drawn(b'<TextureBackground skyColor="0 0 1" transparency="0.5">'
+                   + sides + b'</TextureBackground>')
+    assert colour[1] > 250 and colour[2] < 5
+
+
+def test_a_transparent_sky_is_blended_in_the_compatibility_profile(gl_context_compat):
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b'<X3D version="4.0"><Scene><Viewpoint position="0 0 0"/>'
+                         b'<Background skyColor="1 1 1" transparency="0.75"/></Scene></X3D>',
+                         'scene.x3d')
+    with scene_context(scene, size=(32, 32),
+                       environment={'OPENGLCONTEXT_PROFILE': 'compatibility'}) as context:
+        drawn_image(context)
+        colour = drawn_image(context)[16, 16].astype(int)
+    assert colour == pytest.approx((64, 64, 64), abs=3)

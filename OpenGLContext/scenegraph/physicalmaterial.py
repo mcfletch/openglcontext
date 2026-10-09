@@ -525,6 +525,20 @@ class AppearanceMaterial(object):
         'baseColor': 'diffuseTexture', 'emissive': 'emissiveTexture',
         'normal': 'normalTexture', 'occlusion': 'occlusionTexture',
     }
+    #: The maps only X3D's Phong equation reads, on the channels a Phong draw
+    #: has no other use for: the ambient colour's (``.rgb``), the shininess
+    #: (``.a``) and the specular colour's (``.rgb``).
+    PHONG_CHANNELS: "dict[str, str]" = {
+        'lightmap': 'ambientTexture', 'metallicRoughness': 'shininessTexture',
+        'specularColor': 'specularTexture',
+    }
+
+    def channels(self) -> "dict[str, str]":
+        """The texture field of each channel the appearance is drawn with:
+        :data:`PHONG_CHANNELS` too where it is lit by X3D's rules"""
+        if self.x3dLit:
+            return dict(self.CHANNELS, **self.PHONG_CHANNELS)
+        return self.CHANNELS
 
     @property
     def textures(self) -> "dict[str, Any]":
@@ -535,7 +549,7 @@ class AppearanceMaterial(object):
         """
         material = self.material
         found = {}
-        for channel, name in self.CHANNELS.items():
+        for channel, name in self.channels().items():
             texture = getattr(material, name, None) if material else None
             if texture:
                 found[channel] = texture
@@ -548,7 +562,7 @@ class AppearanceMaterial(object):
     def textureMapping(self, channel: str) -> str:
         """The mapping label of `channel`'s map: the material's `...TextureMapping`"""
         material = self.material
-        name = self.CHANNELS.get(channel)
+        name = self.channels().get(channel)
         if not material or name is None or not getattr(material, name, None):
             return ''
         return str(getattr(material, name + 'Mapping', '') or '')

@@ -832,7 +832,8 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         self.boundLights = bound
         self.setupProjectors(light_paths)
         self.lightScopes = self.lightScopes.following(
-            lightscope.scoped_lights(bound_paths) + self.projectorScopes())
+            lightscope.scoped_lights(bound_paths) + self.projectorScopes()
+            + self.environmentScopes())
         # What a shape drawn by an X3D shader sets its lights from
         # (scenegraph.x3dshaders): each light with its eye-space matrix, in
         # slot order, whether the headlight follows them, and the view.

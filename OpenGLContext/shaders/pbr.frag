@@ -176,6 +176,9 @@ Material _M;
 #define phongMode            ((materialFlags & 128) != 0)
 #define phongAmbientIntensity _M.phongM.x
 #define phongShininess       _M.phongM.y
+// The slot (slotTexture) a Phong draw's specularTexture is read through where
+// the specular colour map's own sampler is not compiled in; -1 for none.
+uniform int phongSpecularSlot;
 #define iridescenceFactor    _M.iridescence.x
 #define iridescenceIor       _M.iridescence.y
 #define iridescenceThickMin  _M.iridescence.z
@@ -500,7 +503,11 @@ uniform vec3 lightGridDirection;
 // Environment / image-based lighting. iblMode: 0=off (flat ambient), 1=analytic
 // (procedural env + analytic split-sum BRDF), 2=full (prefiltered probe + LUT).
 // The probe cubes are world-oriented, sampled via eyeToWorld (declared below).
-uniform int iblMode;
+// A draw outside a scoped EnvironmentLight's group has its lightsOff bit
+// ENVIRONMENT_SCOPE_BIT set (zonepass.ENVIRONMENT_SCOPE_BIT) and is drawn off.
+uniform int iblModeSet;
+#define ENVIRONMENT_SCOPE_BIT 24
+#define iblMode (((lightsOff >> ENVIRONMENT_SCOPE_BIT) & 1) != 0 ? 0 : iblModeSet)
 uniform float iblIntensity;
 // Scales what the built-in studio environment gives a non-metal: its diffuse
 // light and its reflection. A metal reflects the studio at full strength.
@@ -534,18 +541,24 @@ uniform float prefilterMaxLod;       // highest mip level of prefilterMap
 
 uniform mat4 eyeToWorld;
 
-// A texture layer's 2D texture (_layers_inc.glsl): the first on the base
-// colour map's unit, the rest on the extension maps' units, which a material
-// drawn with layers does not use.
-vec4 layerTexture2D(int slot, vec2 uv) {
+// A 2D texture a draw reads through a sampler its material leaves free
+// (pbrpass.draw_slots): 0 the base colour map's, 1 to 3 extension maps',
+// 4 the lightmap's, 5 the metallic/roughness map's, 6 the split-sum table's,
+// pointed at another unit for a Phong draw, which reads no table.
+vec4 slotTexture(int slot, vec2 uv) {
     if (slot == 0) return texture(baseColorTexture, uv);
 #if PBR_EXT_TEXTURES
     if (slot == 1) return texture(transmissionMap, uv);
     if (slot == 2) return texture(iridescenceThicknessMap, uv);
     if (slot == 3) return texture(clearcoatMap, uv);
 #endif
+    if (slot == 4) return texture(lightmapTexture, uv);
+    if (slot == 5) return texture(metallicRoughnessTexture, uv);
+    if (slot == 6) return texture(brdfLUT, uv);
     return vec4(1.0);
 }
+// A texture layer's 2D texture (_layers_inc.glsl), on the sampler of its slot
+vec4 layerTexture2D(int slot, vec2 uv) { return slotTexture(slot, uv); }
 #include "_texgen_inc.glsl"
 #include "_layers_inc.glsl"
 
@@ -852,9 +865,26 @@ void main() {
         // pass's flat fill
         vec3 emitted = emissiveFactor
                      * (hasEmissive ? texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb : vec3(1.0));
+        // The Material's ambient, shininess and specular maps (17.2.2.4) on
+        // the channels a Phong draw has no other use for
+        // (AppearanceMaterial.PHONG_CHANNELS): the ambient term times
+        // ambientTexture.rgb, the shininess times shininessTexture.a, the
+        // specular colour times specularTexture.rgb.
+        vec3 ambient = phongAmbientIntensity * diffuse;
+        if (hasLightmap) ambient *= texture(lightmapTexture, uvFor(CH_LIGHTMAP)).rgb;
+        float shininess = phongShininess;
+        if (hasMetallicRoughness)
+            shininess *= texture(metallicRoughnessTexture, uvFor(CH_METALLIC_ROUGHNESS)).a;
+        vec3 specular = specularColorFactor;
+#if PBR_EXT_TEXTURES
+        if (hasSpecularColorMap)
+            specular *= texture(specularColorMap, uvFor(CH_SPECULAR_COLOR)).rgb;
+#endif
+        if (phongSpecularSlot >= 0)
+            specular *= slotTexture(phongSpecularSlot, uvFor(CH_SPECULAR_COLOR)).rgb;
         vec3 color = emitted + occlusionShare()
-                   * phongLights(N, V, vPosition, diffuse, phongAmbientIntensity * diffuse,
-                                 specularColorFactor, phongShininess, shadows);
+                   * phongLights(N, V, vPosition, diffuse, ambient, specular, shininess,
+                                 shadows);
         fragColor = vec4(shown(fogged(clamp(color, 0.0, 1.0))), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());
         return;

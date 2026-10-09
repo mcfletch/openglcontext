@@ -75,3 +75,50 @@ def test_normal_scale_and_occlusion_strength_are_factors():
     factors = _material_factors(pbr_material(look))
     assert factors['normal_scale'] == 0.5
     assert factors['occlusion'] == 0.25
+
+
+class TestThePhongMaps:
+    """ambientTexture, shininessTexture and specularTexture, under X3D's lighting
+
+    The Phong program reads them through the samplers a Phong draw leaves
+    free: the lightmap's, the metallic/roughness map's and the specular
+    colour map's (``pbr.frag``).
+    """
+
+    @staticmethod
+    def maps():
+        return {name: ImageTexture() for name in
+                ('ambientTexture', 'shininessTexture', 'specularTexture')}
+
+    def test_each_is_a_channel_under_x3ds_lighting(self):
+        from OpenGLContext import lighting  # noqa: PLC0415 kept with its use
+        maps = self.maps()
+        look = Appearance(material=Material(**maps))
+        lighting.use('x3d')
+        try:
+            found = pbr_material(look).textures
+        finally:
+            lighting.use('auto')
+        assert found == {'lightmap': maps['ambientTexture'],
+                         'metallicRoughness': maps['shininessTexture'],
+                         'specularColor': maps['specularTexture']}
+
+    def test_none_is_read_under_the_engines_lighting(self):
+        from OpenGLContext import lighting  # noqa: PLC0415 kept with its use
+        lighting.use('engine')
+        try:
+            assert pbr_material(Appearance(material=Material(**self.maps()))).textures == {}
+        finally:
+            lighting.use('auto')
+
+    def test_each_reads_its_mapping_label(self):
+        from OpenGLContext import lighting  # noqa: PLC0415 kept with its use
+        material = Material(ambientTexture=ImageTexture(), ambientTextureMapping='TEXCOORD_1',
+                            specularTexture=ImageTexture())
+        lighting.use('x3d')
+        try:
+            found = texture_mapping(Appearance(material=material), None)
+        finally:
+            lighting.use('auto')
+        assert unpack(found, 'lightmap') == (1, 0)
+        assert unpack(found, 'specularColor') == (0, 0)

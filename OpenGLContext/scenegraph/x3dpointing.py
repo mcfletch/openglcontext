@@ -8,10 +8,14 @@ observes its picked ``mousemove`` and ``mousebutton`` events
 - The sensors an event reaches are the enabled ones among the children of
   the lowest group on the picked path that has any, with that group itself
   where it is an `Anchor` (:func:`sensors_for`). An Anchor released over its
-  geometry follows its url through the context (:meth:`Anchor.follow`).
+  geometry follows its url through the context (:meth:`Anchor.follow`,
+  ``Context.OnAnchor``).
 - The hit is the picked point (:func:`unprojected`) and the ray the pointer's
-  bearing (:func:`pointer_ray`), each in the sensors' coordinates. Picking
-  gives a point; the hit has no normal or texture coordinate.
+  bearing (:func:`pointer_ray`), each in the sensors' coordinates. The
+  shape's triangle under the pointer gives the hit its normal, interpolated
+  from the vertex normals, and its first texture coordinate set's value,
+  untransformed (:func:`surface_at`); geometry without triangles gives its
+  own +z and (0, 0).
 - The primary button (0) pressed over sensors activates them, and moving
   while it is held drags them, on or off their geometry, until it is
   released. The scene's and the application's handlers receive the same
@@ -24,7 +28,7 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 from vrml.x3d import pointing
@@ -33,8 +37,8 @@ from vrml.x3d.nodes import X3DPointingDeviceSensorNode
 
 from OpenGLContext.scenegraph.anchor import Anchor
 
-__all__ = ['CylinderSensor', 'GeoTouchSensor', 'PlaneSensor', 'PointerSensing', 'SphereSensor', 'TouchSensor',
-           'pointer_ray', 'sensing', 'sensors_for', 'unprojected']
+__all__ = ['CylinderSensor', 'GeoTouchSensor', 'PlaneSensor', 'PointerSensing', 'SphereSensor', 'Surface',
+           'TouchSensor', 'pointer_ray', 'sensing', 'sensors_for', 'surface_at', 'unprojected']
 
 #: The button that presses a sensor.
 PRIMARY = 0
@@ -67,6 +71,79 @@ def pointer_ray(view: Any, x: float, y: float) -> tuple[np.ndarray, np.ndarray]:
     return near, unprojected(view, x, y, AHEAD) - near
 
 
+class Surface(NamedTuple):
+    """A point on a shape's surface, in world coordinates
+
+    normal -- unit length
+    texCoord -- the first texture coordinate set's (s, t) there
+    """
+
+    point: np.ndarray
+    normal: np.ndarray
+    texCoord: np.ndarray
+
+
+def surface_at(path: Any, point: Any, direction: Any) -> Surface:
+    """The surface of the shape `path` ends at, at the world `point` the
+    pointer's world `direction` reaches
+
+    Of the shape's triangles the pointer's line crosses, the crossing nearest
+    `point` is taken. Its normal is the vertex normals interpolated, as the
+    shape is drawn, and turned into world coordinates; its texture coordinate
+    is ``TEXCOORD_0`` interpolated, with no texture transform. Where the
+    geometry has no triangles, or the line crosses none, the normal is the
+    shape's +z and the texture coordinate (0, 0).
+    """
+    from OpenGLContext.scenegraph import meshdata, pickgeometry  # noqa: PLC0415 kept with its use
+    point = np.asarray(point, np.float64)[:3]
+    found = path.transformMatrix() if path else None
+    world = np.identity(4) if found is None else np.asarray(found, np.float64)
+    normal, texCoord = np.array([0.0, 0.0, 1.0]), np.zeros(2)
+    arrays = meshdata.geometry_arrays(getattr(path[-1], 'geometry', None)) if path else None
+    if arrays is not None and 'POSITION' in arrays.attributes:
+        crossed = _crossed(arrays, np.linalg.inv(world), point, direction, pickgeometry)
+        if crossed is not None:
+            normal, texCoord = crossed
+    turned = normal @ np.linalg.inv(world[:3, :3]).T
+    length = float(np.linalg.norm(turned))
+    return Surface(point, turned / length if length > 0 else turned, texCoord)
+
+
+def _crossed(arrays: Any, local: np.ndarray, point: np.ndarray, direction: Any,
+             pickgeometry: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """(normal, texture coordinate) in the shape's frame where the pointer's
+    line crosses `arrays`' triangles nearest `point`; None where it crosses none"""
+    positions = np.asarray(arrays.attributes['POSITION'], np.float64).reshape(-1, 3)
+    corners = (np.arange((len(positions) // 3) * 3) if arrays.indices is None
+               else np.asarray(arrays.indices, np.intp).ravel()).reshape(-1, 3)
+    centre = _point_in(local, point)
+    bearing = _direction_in(local, direction)
+    length = float(np.linalg.norm(bearing))
+    if not len(corners) or length <= 0:
+        return None
+    # A segment through the point long enough to pass through the whole shape
+    reach = (float(np.abs(positions).max()) + float(np.linalg.norm(centre)) + 1.0) * 2.0
+    step = bearing * (reach / length)
+    crossings = pickgeometry.segment_triangles(centre - step, centre + step,
+                                               positions[corners])
+    if not len(crossings.t):
+        return None
+    nearest = int(np.argmin(np.abs(crossings.t - 0.5)))
+    triangle = corners[crossings.triangle[nearest]]
+    u, v = float(crossings.u[nearest]), float(crossings.v[nearest])
+    weights = np.array([1.0 - u - v, u, v])
+    normals = arrays.attributes.get('NORMAL')
+    if normals is not None:
+        normal = weights @ np.asarray(normals, np.float64).reshape(-1, 3)[triangle]
+    else:
+        a, b, c = positions[triangle]
+        normal = np.cross(b - a, c - a)
+    coordinates = arrays.attributes.get('TEXCOORD_0')
+    texCoord = (weights @ np.asarray(coordinates, np.float64).reshape(-1, 2)[triangle]
+                if coordinates is not None else np.zeros(2))
+    return normal, texCoord
+
+
 def sensors_for(path: Any) -> tuple[list[Any], Any]:
     """(sensors, path to their group): the enabled sensors of the lowest group on `path` with any
 
@@ -96,6 +173,14 @@ def _direction_in(matrix: np.ndarray, direction: Any) -> np.ndarray:
     return np.asarray((np.append(np.asarray(direction, np.float64)[:3], 0.0) @ matrix)[:3])
 
 
+def _hit_in(matrix: np.ndarray, surface: Surface) -> pointing.Hit:
+    """`surface` in the coordinates the world-to-local `matrix` takes it to"""
+    normal = surface.normal @ np.linalg.inv(matrix[:3, :3]).T
+    length = float(np.linalg.norm(normal))
+    return pointing.Hit(_point_in(matrix, surface.point),
+                        normal / length if length > 0 else normal, surface.texCoord)
+
+
 class PointerSensing:
     """The pointing-device sensors of one context and the pointer's effect on them"""
 
@@ -111,8 +196,9 @@ class PointerSensing:
         #: The X3D layer the press was resolved through; None for layer 0.
         self.layer: Any = None
 
-    def _picked(self, event: Any) -> tuple[list[Any], Any, Optional[np.ndarray]]:
-        """(sensors, world-to-local, world hit) for the path under `event`'s pointer"""
+    def _picked(self, event: Any) -> tuple[list[Any], Any, Optional[Surface]]:
+        """(sensors, world-to-local, the surface hit in world coordinates) for
+        the path under `event`'s pointer"""
         paths = event.getObjectPaths() or ()
         path = paths[0] if paths else None
         if not path or not getattr(event, 'viewCoordinate', None):
@@ -121,7 +207,9 @@ class PointerSensing:
         if not found:
             return [], None, None
         x, y, depth = event.viewCoordinate
-        return found, _local(prefix), unprojected(event, x, y, float(depth))
+        point = unprojected(event, x, y, float(depth))
+        _origin, direction = pointer_ray(event, x, y)
+        return found, _local(prefix), surface_at(path, point, direction)
 
     def _view(self, event: Any) -> Any:
         """The camera `event`'s pointer is measured through: its own, unless a
@@ -146,8 +234,8 @@ class PointerSensing:
         elif event.type == 'mousemove':
             self.move(event, found, matrix, hit)
 
-    def _point(self, sensors: Sequence[Any], matrix: Any, hit: Any) -> None:
-        local = pointing.Hit(_point_in(matrix, hit))
+    def _point(self, sensors: Sequence[Any], matrix: Any, hit: Surface) -> None:
+        local = _hit_in(matrix, hit)
         for sensor in sensors:
             sensor.pointerOver(local)
 
@@ -166,7 +254,7 @@ class PointerSensing:
         origin, direction = pointer_ray(view, x, y)
         for sensor, local in self.held:
             ray = pointing.Ray(_point_in(local, origin), _direction_in(local, direction))
-            on = pointing.Hit(_point_in(local, hit)) if sensor in found else None
+            on = _hit_in(local, hit) if sensor in found else None
             sensor.pointerDrag(on, ray)
 
     def press(self, event: Any, found: list[Any], matrix: Any, hit: Any) -> None:
@@ -177,7 +265,7 @@ class PointerSensing:
         self.layer = getattr(event, 'layer', None)
         x, y = event.getPickPoint()[:2]
         origin, direction = pointer_ray(self.view, x, y)
-        local = pointing.Hit(_point_in(matrix, hit))
+        local = _hit_in(matrix, hit)
         ray = pointing.Ray(_point_in(matrix, origin), _direction_in(matrix, direction))
         self.held = [(sensor, matrix) for sensor in found]
         for sensor in found:

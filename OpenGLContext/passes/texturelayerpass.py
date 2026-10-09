@@ -51,6 +51,9 @@ class LayerUnits(NamedTuple):
     cube: Optional[int] = None
     #: The 3D texture unit, or None where the program has no 3D sampler.
     volume: Optional[int] = None
+    #: The shader's number for each 2D slot, where it is not the slot's place
+    #: in :attr:`flat`.
+    slots: tuple[int, ...] = ()
 
 
 class PackedLayers(NamedTuple):
@@ -86,7 +89,8 @@ def pack_layers(table: LayerTable, units: LayerUnits, mode: Any) -> PackedLayers
         unit: Optional[int] = None
         if layer.kind == KIND_2D:
             if flat < len(units.flat):
-                slot, unit = flat, units.flat[flat]
+                slot = units.slots[flat] if units.slots else flat
+                unit = units.flat[flat]
                 flat += 1
             else:
                 _report('A MultiTexture has more 2D layers than the %d this renderer '
@@ -174,19 +178,21 @@ class TextureLayersMixin:
         return LayerUnits(())
 
     def set_texture_layers(self, table: Optional[LayerTable], mode: Any = None,
-                           geometry: Any = None, program: Any = None) -> tuple[int, ...]:
+                           geometry: Any = None, program: Any = None,
+                           units: Optional[LayerUnits] = None) -> tuple[int, ...]:
         """Have the next draw combine ``table``'s layers, or none for None
 
         Binds each layer's texture on its unit and returns the units bound,
         so a caller binding other maps knows which it must leave alone.
         ``geometry`` gives the bounding box a 3D texture with no coordinates
         is read across; ``mode.matrix`` places the camera for a generator.
+        ``units`` are this draw's, where they differ from :meth:`layer_units`.
         """
         target = program if program is not None else self.program
         if table is None or not table.layers:
             self._set_uniform1i('textureLayerCount', 0, target)
             return ()
-        packed = pack_layers(table, self.layer_units(), mode)
+        packed = pack_layers(table, units if units is not None else self.layer_units(), mode)
         self._set_uniform('textureLayer', tuple(int(v) for v in packed.info.ravel()),
                           target, _ints)
         self._set_uniform('textureLayerRows', tuple(float(v) for v in packed.rows.ravel()),

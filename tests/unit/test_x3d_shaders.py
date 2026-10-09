@@ -904,3 +904,50 @@ class TestAPartsLoadState:
         part = named(scene, 'PART')
         part.load = False
         assert part.source() == (None, None)
+
+
+FOG_FRAGMENT = """<![CDATA[#version 330 core
+uniform x3d_FogParameters x3d_Fog;
+out vec4 c;
+void main() {
+    c = x3d_Fog.type == x3d_LinearFog
+        ? vec4(x3d_Fog.color, 1.0) * clamp(x3d_Fog.visibilityRange / 100.0, 0.0, 1.0)
+        : vec4(0.0, 0.0, 1.0, 1.0);
+}
+]]>"""
+
+
+@pytest.mark.parametrize('renderer', RENDERERS)
+class TestTheSceneIsOffered:
+    """The fog and clip planes, as X_ITE offers them, for the shader to apply
+    (19775-1, I.3.2: fog is not applied to a fragment shader's colour)"""
+
+    def test_the_bound_fog_is_offered_as_x3d_fog(self, renderer):
+        scene = load(document(composed(FOG_FRAGMENT),
+                              scene='<Fog color="0 1 0" fogType="LINEAR" visibilityRange="100"/>'))
+        assert greenish(centre(scene, renderer))
+
+    def test_no_fog_is_type_none(self, renderer):
+        scene = load(document(composed(FOG_FRAGMENT)))
+        assert bluish(centre(scene, renderer))
+
+    def test_a_clip_plane_is_offered_in_eye_space(self, renderer):
+        fragment = """<![CDATA[#version 330 core
+uniform vec4 x3d_ClipPlane[x3d_MaxClipPlanes];
+out vec4 c;
+void main() {
+    // The plane y >= 1 in the world: from a camera at z 10 its normal is +y
+    // and it keeps points whose eye y is 1 or more
+    vec4 plane = x3d_ClipPlane[0];
+    bool found = abs(plane.y - 1.0) < 0.01 && abs(plane.w - 1.0) < 0.01
+              && x3d_ClipPlane[1] == vec4(0.0);
+    c = found ? vec4(0.0, 1.0, 0.0, 1.0) : vec4(1.0, 0.0, 0.0, 1.0);
+}
+]]>"""
+        body = document(composed(fragment))
+        body = body.replace('<Shape DEF="SHAPE">', '<Group><ClipPlane plane="0 1 0 -1"/>'
+                            '<Shape DEF="SHAPE">').replace('</Shape>', '</Shape></Group>')
+        scene = load(body)
+        # The plane cuts nothing of a shape drawn by its own program, so the
+        # middle is drawn
+        assert greenish(centre(scene, renderer))
