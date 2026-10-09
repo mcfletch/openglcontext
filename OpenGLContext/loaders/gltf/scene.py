@@ -567,7 +567,7 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
 #: needs the optional DracoPy as well.
 SUPPORTED_EXTENSIONS = frozenset((
     'EXT_lights_image_based', 'EXT_mesh_gpu_instancing', 'EXT_meshopt_compression',
-    'EXT_texture_avif', 'EXT_texture_webp', 'KHR_accessor_float16',
+    'EXT_texture_avif', 'EXT_texture_video', 'EXT_texture_webp', 'KHR_accessor_float16',
     'KHR_accessor_float64', 'KHR_animation_pointer', 'KHR_audio_emitter',
     'KHR_draco_mesh_compression', 'KHR_gaussian_splatting', 'KHR_implicit_shapes',
     'KHR_lights_punctual', 'KHR_materials_anisotropy', 'KHR_materials_clearcoat',

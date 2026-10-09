@@ -172,19 +172,79 @@ def texture_image(g: "pygltflib.GLTF2", texture_index: Optional[int],
         return None
 
 
+VIDEO_EXTENSION = 'EXT_texture_video'
+
+#: A video's file suffix by its MIME type, for one written out of a buffer view.
+_VIDEO_SUFFIX = {'video/mp4': '.mp4', 'video/quicktime': '.mov', 'video/webm': '.webm'}
+
+
+def video_texture(g: "pygltflib.GLTF2", tex: Any, resolver: Resolver) -> Any:
+    """The MovieTexture an ``EXT_texture_video`` texture names, or None.
+
+    The extension (Draft; github.com/takahirox/EXT_texture_video) lists the
+    document's videos under its root ``extensions`` by ``uri`` or
+    ``bufferView`` and ``mimeType``, and a texture names one by ``source``. A
+    ``uri`` is resolved under the document's policy; a ``bufferView``'s bytes
+    are written once, by their digest, to the asset cache, since the decoder
+    reads a movie from a file. The movie loops from the start of the clock.
+    None where the texture names no video, or the video is not there, and the
+    texture is then drawn from its core ``source``.
+    """
+    block = (getattr(tex, 'extensions', None) or {}).get(VIDEO_EXTENSION)
+    source = block.get('source') if isinstance(block, dict) else None
+    root = (getattr(g, 'extensions', None) or {}).get(VIDEO_EXTENSION)
+    videos = root.get('videos') if isinstance(root, dict) else None
+    if not isinstance(source, int) or isinstance(source, bool) \
+            or not isinstance(videos, list) or not 0 <= source < len(videos) \
+            or not isinstance(videos[source], dict):
+        return None
+    video = videos[source]
+    try:
+        if isinstance(video.get('uri'), str) and not video['uri'].startswith('data:'):
+            location = str(resolver.resolve(video['uri']))
+        elif isinstance(video.get('bufferView'), int):
+            location = _cached_video(bytes(view_bytes(g, video['bufferView'], resolver)),
+                                     str(video.get('mimeType') or 'video/mp4'))
+        else:
+            return None
+    except (IOError, ValueError) as err:
+        log.warning("glTF %s video %d is not read: %s", VIDEO_EXTENSION, source, err)
+        return None
+    from OpenGLContext.scenegraph.movietexture import MovieTexture  # noqa: PLC0415 the node imports the video player
+    return MovieTexture(url=[location], loop=True)
+
+
+def _cached_video(data: bytes, mime_type: str) -> str:
+    """A path holding ``data``, written to the asset cache once by its digest."""
+    import os  # noqa: PLC0415 only a buffered video is written
+    from OpenGLContext import atomicfiles  # noqa: PLC0415 as above
+    from OpenGLContext.loaders.resolver import default_cache_dir  # noqa: PLC0415 as above
+    path = os.path.join(default_cache_dir(), 'gltf-video',
+                        hashlib.sha256(data).hexdigest() + _VIDEO_SUFFIX.get(mime_type, '.mp4'))
+    if not os.path.isfile(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        atomicfiles.write_bytes(path, data)
+    return path
+
+
 def _texture_holder(g: "pygltflib.GLTF2", texture_index: Optional[int], resolver: Resolver,
                     cache: "dict[int, Optional[ImageDataTexture]]"
                     ) -> Optional[ImageDataTexture]:
     """The texture node at an index, remembered per document by index
 
     The shader decodes each channel's colour space itself, so one image used
-    as a base colour and as a roughness map is one texture.
+    as a base colour and as a roughness map is one texture. A texture naming
+    an ``EXT_texture_video`` video is a MovieTexture (:func:`video_texture`).
     """
     if texture_index is None:
         return None
     if texture_index in cache:
         return cache[texture_index]
     tex = g.textures[texture_index]
+    movie = video_texture(g, tex, resolver)
+    if movie is not None:
+        cache[texture_index] = movie
+        return movie  # type: ignore[no-any-return]  # a MovieTexture is drawn as an image texture is
     src = _texture_source(tex)
     if src is None:
         return None

@@ -234,6 +234,19 @@ animation:
   its own is never read. A stream that does not decode to the layout its view
   declares stops the load with the view's index and the reason.
 
+- Video textures - ``EXT_texture_video`` (a draft, from
+  github.com/takahirox/EXT_texture_video): a texture naming one of the
+  document's videos is a ``MovieTexture``, decoded on the GPU as
+  :ref:`x3d-movies` describes, looping from the start of the engine's clock. A
+  video given by ``uri`` is resolved under the document's policy; one in a
+  buffer view is written once, by its digest, to the asset cache, since the
+  decoder reads a file. A texture whose video is not in the document, or
+  whose reference the policy refuses, is drawn from its core ``source``; in a
+  context with no decoder the surface is drawn untextured, as any
+  ``MovieTexture`` is.
+  The writer writes a ``MovieTexture`` as such a texture, its uri relative to
+  the written file where the video is beside it, and requires the extension.
+
 - Material variants - ``KHR_materials_variants``, selected with
   ``scene.select_variant()``. See :ref:`Material variants <gltf-variants>`.
 
@@ -691,10 +704,6 @@ Current limitations
   is available under a licence this project can use. A texture carrying it is
   drawn from its core ``source`` where the document gives one, and without the
   texture where it does not.
-
-- ``EXT_texture_video`` is not read: a video texture waits on the GPU video
-  decoder planned for ``pyopengl-video``. Its core ``source``, where there is
-  one, is drawn as a still image.
 
 - ``KHR_draco_mesh_compression`` needs the optional ``DracoPy`` package.
   Without it, the loader skips a Draco-compressed primitive with a warning and

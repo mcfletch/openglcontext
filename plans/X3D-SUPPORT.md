@@ -739,8 +739,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     writes an `EncodedImage` in AVIF or WebP through its extension and lists
     it in `extensionsRequired` (a WebP image was written as a core image,
     which is invalid)
-  - [ ] `EXT_texture_video`: waits on pyopengl-video's GPU decoder (as
-    `MovieTexture`); a texture carrying it draws its core `source`
+  - [x] `EXT_texture_video` (draft, github.com/takahirox/EXT_texture_video,
+    MIT): `textures.video_texture` makes a looping `MovieTexture` of the
+    named video (uri resolved under the document's policy; a buffer view
+    written once to the asset cache by digest); falls back to the core
+    `source`. Written back by the writer (relative uri beside the written
+    file; extension required). GL test draws `colours.mp4`'s frame
   - [ ] `KHR_texture_basisu`: no KTX2/Basis transcoder under a usable licence
     in Python; needs one (Binomial's basis_universal is Apache-2.0, C++, and
     would be an optional compiled dependency). A texture carrying it draws its

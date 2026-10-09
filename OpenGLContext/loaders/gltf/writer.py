@@ -50,7 +50,8 @@ from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.loaders.gltf.materials import (
     GLTF_TEXTURE_KEYS, MATERIAL_EXTENSION_FIELDS, khr_transform_params,
 )
-from OpenGLContext.loaders.gltf.textures import IMAGE_EXTENSIONS, gl_sampler
+from OpenGLContext.loaders.gltf.textures import IMAGE_EXTENSIONS, VIDEO_EXTENSION, gl_sampler
+from OpenGLContext.scenegraph.movietexture import MovieTexture
 from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
@@ -509,6 +510,10 @@ class GLTFWriter:
         self.extras: dict = {}
         self._shapes: list[dict] = []
         self._sounds: list[GlobalSound] = []
+        #: EXT_texture_video uris, in the order the textures first name them.
+        self._videos: list[str] = []
+        #: The directory :meth:`write` is writing into, while it writes.
+        self._directory: Optional[str] = None
         #: KHR_materials_variants names, in the order the meshes first map them.
         self._variant_names: list[str] = []
 
@@ -803,6 +808,8 @@ class GLTFWriter:
     # -- textures --------------------------------------------------------------
 
     def _add_texture(self, holder: Any) -> int:
+        if isinstance(holder, MovieTexture):
+            return self._add_video(holder)
         sampler = self._add_sampler(holder)
         image = self._add_image(holder)
         key = (image, sampler)
@@ -823,6 +830,23 @@ class GLTFWriter:
         index = len(self._textures) - 1
         self._texture_index[key] = index
         return index
+
+    def _add_video(self, holder: Any) -> int:
+        """A MovieTexture as an ``EXT_texture_video`` texture naming its first url
+
+        It has no still image to fall back to, so the document requires the
+        extension.
+        """
+        urls = [str(url) for url in holder.url]
+        if not urls:
+            raise ValueError('A MovieTexture with no url has no video to write')
+        if urls[0] not in self._videos:
+            self._videos.append(urls[0])
+        entry = {'extensions': {VIDEO_EXTENSION: {'source': self._videos.index(urls[0])}}}
+        self._extensions_used.add(VIDEO_EXTENSION)
+        self._extensions_required.add(VIDEO_EXTENSION)
+        self._textures.append(entry)
+        return len(self._textures) - 1
 
     def _add_image(self, holder: Any) -> int:
         """A texture's image: an ImageTexture's first URL as a uri, else embedded
@@ -976,6 +1000,9 @@ class GLTFWriter:
         """The document-level blocks: material variant names, and what the zones
         and their sounds need."""
         extensions: dict[str, Any] = {}
+        if self._videos:
+            extensions[VIDEO_EXTENSION] = {'videos': [
+                {'uri': self._relative(uri)} for uri in self._videos]}
         if self._variant_names:
             extensions[variantsext.EXTENSION] = {
                 'variants': [{'name': name} for name in self._variant_names]}
@@ -1104,9 +1131,24 @@ class GLTFWriter:
         directory = os.path.dirname(os.path.abspath(path))
         for name, data in self.external_buffers().items():
             atomicfiles.write_bytes(os.path.join(directory, name), data)
-        data = self.to_glb()
+        self._directory = directory
+        try:
+            data = self.to_glb()
+        finally:
+            self._directory = None
         atomicfiles.write_bytes(path, data)
         return data
+
+    def _relative(self, location: str) -> str:
+        """A file ``location`` as a uri relative to the file being written,
+        where it is under that file's directory; otherwise as it is."""
+        directory = self._directory
+        if directory is None or '://' in location or not os.path.isabs(location):
+            return location
+        inside = os.path.relpath(location, directory)
+        if inside.startswith(os.pardir):
+            return location
+        return inside.replace(os.sep, '/')
 
 
 def _check_buffer_name(name: Optional[str]) -> None:
