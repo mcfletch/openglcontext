@@ -654,6 +654,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] InstancedShape: the engine's InstancedShape is X_ITE's node; its
     placements come from the five X3D lists (clamped to each list's last
     entry, as X_ITE does) where `placements` is empty
+  - [x] ImageTextureAtlas (`texture3d.ImageTextureAtlas`, `atlas_volume`): the
+    tiles of one picture as slices, top row of each tile at t=0 as X_ITE
+    reads it; matches X_ITE's render of the test atlas (0.5% of pixels)
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

@@ -17,6 +17,11 @@ it, kept in the context's cache until the volume or the sampler changes:
   header), or a single picture, which is a volume one slice deep
   (:mod:`OpenGLContext.loaders.textureimages`). Its ``width``, ``height``,
   ``depth`` and ``colorDepth`` outputs are sent when it has read.
+- ``ImageTextureAtlas`` (X_ITE's): the first picture of its ``url`` that
+  reads, cut into ``slicesOverX`` tiles across and ``slicesOverY`` down; the
+  first ``numberOfSlices`` tiles, left to right along each row from the top
+  row down, are the slices from r=0 up, each with its tile's top row at t=0,
+  as X_ITE reads it (:func:`atlas_volume`).
 
 A 3D texture is drawn through an appearance's ``texture`` field or a
 ``MultiTexture`` layer, sampled at the geometry's ``TextureCoordinate3D`` or
@@ -30,13 +35,15 @@ from typing import Any, Optional
 
 import numpy as np
 from vrml import cache, field, node
-from vrml.x3d import loadsensor
+from vrml.x3d import loadsensor, xite
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.scenegraph.imagetexture import ImageURLField, URLRead, load_first, sfimage_pixels
+from OpenGLContext.scenegraph.imagetexture import (
+    ImageURLField, PILImage, URLRead, decode_picture, load_first, sfimage_pixels,
+)
 
-__all__ = ['VOLUME_KEY', 'ComposedTexture3D', 'ImageTexture3D', 'PixelTexture3D',
-           'VolumeField', 'image_array', 'with_channels']
+__all__ = ['VOLUME_KEY', 'ComposedTexture3D', 'ImageTexture3D', 'ImageTextureAtlas',
+           'PixelTexture3D', 'VolumeField', 'atlas_volume', 'image_array', 'with_channels']
 
 log = logging.getLogger(__name__)
 
@@ -291,6 +298,72 @@ class ImageTexture3D(URLRead, _Texture3D, x3d.ImageTexture3D):
     #: What deleting ``url`` deletes (:class:`ImageURLField`): the volume.
     image = property(lambda self: self.volume, doc='The volume read from the url',
                      fdel=_deleteVolume)
+
+
+def atlas_volume(image: Any, across: int, down: int, slices: int) -> Optional[np.ndarray]:
+    """The ``(depth, height, width, channels)`` volume a picture's tiles make; None for none
+
+    `image` is a PIL image, cut into `across` by `down` tiles of
+    ``floor(width / across)`` by ``floor(height / down)`` texels; the first
+    `slices` of them, read along each row from the top row down, are the
+    slices, each from its tile's top row.
+    """
+    across, down, slices = int(across), int(down), int(slices)
+    if across <= 0 or down <= 0 or slices <= 0 or image is None:
+        return None
+    if image.mode not in ('L', 'LA', 'RGB', 'RGBA'):
+        image = image.convert('RGBA' if 'A' in image.getbands() else 'RGB')
+    pixels = np.asarray(image)
+    pixels = pixels[..., None] if pixels.ndim == 2 else pixels
+    height, width = pixels.shape[:2]
+    tile_height, tile_width = height // down, width // across
+    if not tile_height or not tile_width:
+        return None
+    tiles = []
+    for index in range(min(slices, across * down)):
+        row, column = divmod(index, across)
+        top, left = row * height // down, column * width // across
+        tiles.append(pixels[top:top + tile_height, left:left + tile_width])
+    return np.ascontiguousarray(np.stack(tiles))
+
+
+class ImageTextureAtlas(URLRead, _Texture3D, xite.ImageTextureAtlas):
+    """X_ITE's ImageTextureAtlas: a volume cut from the tiles of one picture"""
+
+    VOLUME_FIELDS = ('image', 'slicesOverX', 'slicesOverY', 'numberOfSlices')
+    image = PILImage(' image', 1, None)
+    url = ImageURLField('url', 1, list)
+
+    def buildVolume(self) -> Optional[np.ndarray]:
+        return atlas_volume(self.image, self.slicesOverX, self.slicesOverY,
+                            self.numberOfSlices)
+
+    def loadBackground(self, url: Any, contexts: Any = ()) -> Optional[np.ndarray]:
+        """Read the first picture of ``url`` that decodes; the volume it makes, or None
+
+        The picture is kept whatever the slicing fields say when it arrives,
+        since a document's reader may set them after the url; the volume is
+        cut from it when it is drawn. Asks each of ``contexts`` (weak
+        references) for a redraw once it has read.
+        """
+        found = load_first(self, url, decode_picture)
+        if found is None:
+            loadsensor.set_load_state(self, loadsensor.FAILED)
+            log.warning('Unable to load a picture from the url %s for %s', url, self)
+            return None
+        volume = atlas_volume(found[0], self.slicesOverX, self.slicesOverY,
+                              self.numberOfSlices)
+        self.image = found[0]
+        if volume is not None:
+            depth, height, width, channels = volume.shape
+            self.width, self.height, self.depth, self.colorDepth = (
+                width, height, depth, channels)
+        loadsensor.set_load_state(self, loadsensor.LOADED)
+        for reference in contexts:
+            context = reference()
+            if context:
+                context.triggerRedraw(1)
+        return volume
 
 
 def _fetch(base: str, name: str) -> bytes:

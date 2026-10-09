@@ -162,7 +162,7 @@ implements these X3D nodes, by component:
 - Texturing - ImageTexture, MovieTexture, MultiTexture, MultiTextureCoordinate,
   MultiTextureTransform, PixelTexture, RenderedTexture, TextureCoordinate,
   TextureCoordinateGenerator, TextureProperties, TextureTransform
-- Texturing3D - ComposedTexture3D, ImageTexture3D, PixelTexture3D,
+- Texturing3D - ComposedTexture3D, ImageTexture3D, ImageTextureAtlas, PixelTexture3D,
   TextureCoordinate3D, TextureCoordinate4D, TextureTransform3D,
   TextureTransformMatrix3D
 - Time - TimeSensor
@@ -485,6 +485,13 @@ not these: ``update``, ``viewpoint``, ``scene``, ``background`` and ``fog``
 are the engine's, carried in a document in an ``OpenGLContext`` metadata
 set. Neither is drawn in the compatibility profile. A RenderedTexture is an
 ordinary 2D texture once drawn, and goes wherever one does.
+
+X_ITE's ``ImageTextureAtlas`` reads one picture from its ``url`` and cuts
+it into ``slicesOverX`` tiles across and ``slicesOverY`` down; the first
+``numberOfSlices`` tiles, left to right along each row from the top row
+down, are the volume's slices from r=0 up, each with its tile's top row at
+t=0, as X_ITE reads it. Its ``width``, ``height``, ``depth`` and
+``colorDepth`` are sent once it has read.
 
 ``ImageTexture3D`` reads a DDS or KTX volume, an NRRD volume of one to four
 components (raw, gzip, bzip2 or text, with a detached data file read beside

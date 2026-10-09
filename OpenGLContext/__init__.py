@@ -447,3 +447,4 @@ Node( 'SpecularGlossinessMaterial', 'OpenGLContext.scenegraph.specularglossiness
 Node( 'BlendMode', 'OpenGLContext.scenegraph.rendermodes.BlendMode' )
 Node( 'DepthMode', 'OpenGLContext.scenegraph.rendermodes.DepthMode' )
 Node( 'InstancedShape', 'OpenGLContext.scenegraph.instancedshape.InstancedShape' )
+Node( 'ImageTextureAtlas', 'OpenGLContext.scenegraph.texture3d.ImageTextureAtlas' )

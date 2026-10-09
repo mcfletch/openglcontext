@@ -188,6 +188,7 @@ from OpenGLContext.scenegraph.text.fontstyle3d import ScreenFontStyle as ScreenF
 from OpenGLContext.scenegraph.text.text import Text as Text
 from OpenGLContext.scenegraph.texture3d import ComposedTexture3D as ComposedTexture3D
 from OpenGLContext.scenegraph.texture3d import ImageTexture3D as ImageTexture3D
+from OpenGLContext.scenegraph.texture3d import ImageTextureAtlas as ImageTextureAtlas
 from OpenGLContext.scenegraph.texture3d import PixelTexture3D as PixelTexture3D
 from OpenGLContext.scenegraph.texturebackground import TextureBackground as TextureBackground
 from OpenGLContext.scenegraph.textureprojector import TextureProjector as TextureProjector
@@ -495,6 +496,7 @@ __all__ = [
     'ImageDataTexture',
     'ImageTexture',
     'ImageTexture3D',
+    'ImageTextureAtlas',
     'IndexedFaceSet',
     'IndexedLineSet',
     'IndexedPolygons',
