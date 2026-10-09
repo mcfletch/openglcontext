@@ -54,7 +54,10 @@ A ``Material`` read from a VRML97 or X3D document is drawn by X3D's Phong
 equation (ISO/IEC 19775-1, 17.2.2.5): the emissive colour, plus for each light
 its ``ambientIntensity`` times the Material's ``ambientIntensity`` and diffuse
 colour, its diffuse and its Blinn-Phong specular terms, on the colour values as
-given and without the tone map, bloom on or off. A ``Color`` node replaces the
+given and without the tone map, bloom on or off. The specular term,
+(N·H) to the power 128 × ``shininess``, is computed whichever side of the
+face the light is on, and a ``shininess`` of 0 gives the whole specular
+colour, as X_ITE draws it. A ``Color`` node replaces the
 diffuse colour, a texture multiplies it, a normal map turns the normal, an
 occlusion map scales the lights' sum, and fog is X3D's. Image-based lighting,
 lightmaps and planar reflections are not read for such a shape. An appearance
