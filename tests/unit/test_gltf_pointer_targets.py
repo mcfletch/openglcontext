@@ -154,6 +154,8 @@ class TestMaterials:
         ('extensions/KHR_materials_ior/ior', 1.25, lambda s: s.appearance.material.ior),
         ('extensions/KHR_materials_clearcoat/clearcoatFactor', 0.5,
          lambda s: s.appearance.material.clearcoat),
+        ('extensions/KHR_materials_clearcoat/clearcoatNormalTexture/scale', 0.5,
+         lambda s: s.appearance.material.clearcoatNormalScale),
         ('extensions/KHR_materials_transmission/transmissionFactor', 0.5,
          lambda s: s.appearance.material.transmission),
         ('extensions/KHR_materials_iridescence/iridescenceThicknessMaximum', 300.0,

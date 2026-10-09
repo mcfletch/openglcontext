@@ -94,3 +94,27 @@ class TestTangents:
 
     def test_no_tangents_where_nothing_reads_them(self):
         assert _mesh(load_gltf(_document({}))).tangents is None
+
+
+class TestClearcoatNormalScale:
+    def test_the_scale_is_the_materials(self):
+        material = _mesh_shape_material({'extensions': {'KHR_materials_clearcoat': {
+            'clearcoatFactor': 1.0,
+            'clearcoatNormalTexture': {'index': 0, 'scale': 0.25}}}})
+        assert material.clearcoatNormalScale == pytest.approx(0.25)
+
+    def test_the_default_is_one(self):
+        material = _mesh_shape_material({'extensions': {'KHR_materials_clearcoat': {
+            'clearcoatFactor': 1.0, 'clearcoatNormalTexture': {'index': 0}}}})
+        assert material.clearcoatNormalScale == pytest.approx(1.0)
+
+
+def _mesh_shape_material(material):
+    scene = load_gltf(_document(material))
+    stack = [scene.group]
+    while stack:
+        node = stack.pop()
+        if getattr(node, 'geometry', None) is not None:
+            return node.appearance.material
+        stack.extend(getattr(node, 'children', None) or [])
+    raise AssertionError('no shape')

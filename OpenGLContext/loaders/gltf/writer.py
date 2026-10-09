@@ -803,6 +803,10 @@ class GLTFWriter:
                 info = texture_info(channel)
                 if info is not None:
                     wanted[extension][key] = info
+        coat = wanted.get('KHR_materials_clearcoat', {}).get('clearcoatNormalTexture')
+        scale = float(getattr(material, 'clearcoatNormalScale', 1.0))
+        if coat is not None and not _close(scale, 1.0):
+            coat['scale'] = _factor(scale)
         return wanted
 
     # -- textures --------------------------------------------------------------

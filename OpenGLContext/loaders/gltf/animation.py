@@ -595,6 +595,8 @@ _MATERIAL_POINTERS: dict[tuple[str, ...], tuple[str, str]] = {
     ('alphaCutoff',): ('appearance', 'alphaCutoff'),
     ('emissiveFactor',): ('material', 'emissiveColor'),
     ('normalTexture', 'scale'): ('material', 'normalScale'),
+    ('extensions', 'KHR_materials_clearcoat', 'clearcoatNormalTexture', 'scale'):
+        ('material', 'clearcoatNormalScale'),
     ('occlusionTexture', 'strength'): ('material', 'occlusionStrength'),
     ('pbrMetallicRoughness', 'metallicFactor'): ('material', 'metallic'),
     ('pbrMetallicRoughness', 'roughnessFactor'): ('material', 'roughness'),

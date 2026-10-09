@@ -184,9 +184,12 @@ def _ext_specular(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
 def _ext_clearcoat(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('clearcoat', _info(ext.get('clearcoatTexture')))
     add('clearcoatRoughness', _info(ext.get('clearcoatRoughnessTexture')))
-    add('clearcoatNormal', _info(ext.get('clearcoatNormalTexture')))
+    normal = ext.get('clearcoatNormalTexture')
+    add('clearcoatNormal', _info(normal))
     return {'clearcoat': _factor(values, ext, 'clearcoatFactor', 0.0, minimum=0.0, maximum=1.0),
-            'clearcoatRoughness': _factor(values, ext, 'clearcoatRoughnessFactor', 0.0, minimum=0.0, maximum=1.0)}
+            'clearcoatRoughness': _factor(values, ext, 'clearcoatRoughnessFactor', 0.0, minimum=0.0, maximum=1.0),
+            'clearcoatNormalScale': _factor(values, normal, 'scale', 1.0)
+            if isinstance(normal, dict) else 1.0}
 
 
 def _ext_sheen(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
@@ -297,7 +300,8 @@ _MATERIAL_EXT_HANDLERS = {
 _MATERIAL_EXT_DEFAULTS = dict(
     bakedLight=False, emissiveStrength=1.0, specular=1.0,
     specularColor=(1.0, 1.0, 1.0),
-    ior=1.5, clearcoat=0.0, clearcoatRoughness=0.0, sheenColor=(0.0, 0.0, 0.0),
+    ior=1.5, clearcoat=0.0, clearcoatRoughness=0.0, clearcoatNormalScale=1.0,
+    sheenColor=(0.0, 0.0, 0.0),
     sheenRoughness=0.0, iridescence=0.0, iridescenceIor=1.3,
     iridescenceThicknessMin=100.0, iridescenceThicknessMax=400.0,
     transmission=0.0, diffuseTransmission=0.0, diffuseTransmissionColor=(1.0, 1.0, 1.0),

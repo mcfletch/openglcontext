@@ -174,6 +174,9 @@ class PhysicalMaterial(ChannelMaterial, x3d.PhysicalMaterial):
     specularColor = field.newField('specularColor', 'SFColor', 1, (1.0, 1.0, 1.0))
     clearcoat = field.newField('clearcoat', 'SFFloat', 1, 0.0)
     clearcoatRoughness = field.newField('clearcoatRoughness', 'SFFloat', 1, 0.0)
+    #: The strength of `clearcoatNormalTexture`, as `normalScale` is of the
+    #: base normal map: its x and y are multiplied by it.
+    clearcoatNormalScale = field.newField('clearcoatNormalScale', 'SFFloat', 1, 1.0)
     sheenColor = field.newField('sheenColor', 'SFColor', 1, (0.0, 0.0, 0.0))
     sheenRoughness = field.newField('sheenRoughness', 'SFFloat', 1, 0.0)
     ior = field.newField('ior', 'SFFloat', 1, 1.5)

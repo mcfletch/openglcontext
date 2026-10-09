@@ -298,6 +298,7 @@ _DEFAULT_FACTORS: "dict[str, Any]" = dict(
     base_color=(1.0, 1.0, 1.0), metallic=0.0, roughness=1.0, emissive=(0.0, 0.0, 0.0),
     occlusion=1.0, normal_scale=1.0, unlit=0, emissive_strength=1.0, specular=1.0,
     specular_color=(1.0, 1.0, 1.0), clearcoat=0.0, clearcoat_roughness=0.0,
+    clearcoat_normal_scale=1.0,
     sheen_color=(0.0, 0.0, 0.0), sheen_roughness=0.0, ior=1.5, thickness=0.0,
     attenuation_color=(1.0, 1.0, 1.0), attenuation_distance=0.0,
     flags=0,
@@ -336,6 +337,7 @@ def _material_factors(material: Any) -> dict:
             emissive_strength=float(m.emissiveStrength), specular=float(m.specular),
             specular_color=tuple(m.specularColor)[:3], clearcoat=float(m.clearcoat),
             clearcoat_roughness=float(m.clearcoatRoughness),
+            clearcoat_normal_scale=float(m.clearcoatNormalScale),
             sheen_color=tuple(m.sheenColor)[:3], sheen_roughness=float(m.sheenRoughness),
             ior=float(m.ior), thickness=float(m.thickness),
             attenuation_color=tuple(m.attenuationColor)[:3],
@@ -451,7 +453,7 @@ def _pack_material_block(material: Any) -> np.ndarray:
     buf[12:15] = d['sheen_color']
     buf[15] = d['normal_scale']
     buf[16:19] = d['attenuation_color']
-    # word 19 is reserved: the alpha cutoff is the appearance's, set per draw.
+    buf[19] = d['clearcoat_normal_scale']
     buf[20] = d['emissive_strength']
     buf[21] = d['specular']
     buf[22] = d['clearcoat']

@@ -98,7 +98,7 @@ struct Material {
     vec3  emissiveFactor;       float roughnessFactor;
     vec3  specularColorFactor;  float occlusionStrength;   // KHR_materials_specular color
     vec3  sheenColorFactor;     float normalScale;         // KHR_materials_sheen color
-    vec3  attenuationColor;     float reserved19;          // KHR_materials_volume color; unused
+    vec3  attenuationColor;     float clearcoatNormalScale; // KHR_materials_volume color; clearcoatNormalTexture.scale
     float emissiveStrength;     float specularFactor;      // KHR_materials_emissive_strength / _specular
     float clearcoatFactor;      float clearcoatRoughness;  // KHR_materials_clearcoat
     float sheenRoughnessFactor; float ior;                 // KHR_materials_sheen / _ior
@@ -147,6 +147,7 @@ Material _M;
 #define sheenColorFactor     _M.sheenColorFactor
 #define normalScale          _M.normalScale
 #define attenuationColor     _M.attenuationColor
+#define clearcoatNormalScale _M.clearcoatNormalScale
 #define emissiveStrength     _M.emissiveStrength
 #define specularFactor       _M.specularFactor
 #define clearcoatFactor      _M.clearcoatFactor
@@ -852,6 +853,7 @@ void main() {
         vec3 Tc = normalize(vTangent - Ngeom * dot(Ngeom, vTangent));
         vec3 Bc = cross(Ngeom, Tc) * (vTangentW == 0.0 ? 1.0 : vTangentW);
         vec3 cTex = texture(clearcoatNormalMap, uvFor(CH_CLEARCOAT_NORMAL)).xyz * 2.0 - 1.0;
+        cTex.xy *= clearcoatNormalScale;
         Nc = normalize(mat3(Tc, Bc, Ngeom) * cTex);
     }
 #endif
