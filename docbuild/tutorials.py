@@ -159,6 +159,7 @@ PATHS = [
             'x3d_splats',
             'x3d_volume',
             'x3d_sound',
+            'x3d_movie',
             'zones_demo',
             'mirrors_room',
             'water_demo',

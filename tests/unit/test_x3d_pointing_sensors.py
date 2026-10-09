@@ -226,7 +226,7 @@ def test_a_documents_geo_touch_sensor_sends_the_hit_in_its_geo_system(gl_context
         touch = scene.getDEF('T')
         for _ in range(120):
             context.OnDraw(force=1)
-            if 'hitGeoCoord_changed' in touch.__dict__:
+            if 'hitPoint_changed' in touch.__dict__:
                 break
     expected = geospatial.geo_coordinates(touch, touch.hitPoint_changed)[0]
     assert tuple(touch.hitGeoCoord_changed) == pytest.approx(tuple(expected))

@@ -76,8 +76,9 @@ The packages it is built on
      - The node, field, route and prototype model the scenegraph is built
        from, and the readers that fill it: X3D's encodings and VRML97.
    * - `pyopengl-video <https://github.com/mcfletch/pyopengl-video>`__
-     - Encodes the colour buffer to H.264 on the GPU's own encoder, without
-       copying the frame off the card. An extra: ``OpenGLContext[video]``.
+     - Encodes the colour buffer to H.264 on the GPU's own encoder, and
+       decodes H.264 into textures on its decoder, without copying a frame off
+       the card. An extra: ``OpenGLContext[video]``.
    * - `pygltflib <https://gitlab.com/dodgyville/pygltflib>`__
      - Reads and writes glTF 2.0 and GLB, as the typed records the
        specification describes.
@@ -226,8 +227,10 @@ simulation packages update.
        them, on ``omi_audio``.
      - :doc:`Spatial audio <audio>`
    * - ``video``
-     - H.264 capture of what a context drew, through ``pyopengl-video``.
-     - :doc:`Capturing the Render <capturing>`, :doc:`Recording <recording>`
+     - H.264 capture of what a context drew, and a ``MovieTexture``'s movie
+       played into a texture, through ``pyopengl-video``.
+     - :doc:`Capturing the Render <capturing>`, :doc:`Recording <recording>`,
+       :ref:`Movies <x3d-movies>`
    * - ``scenegraph``
      - Every node type: shapes, materials, lights, text, NURBS, extrusions,
        terrain, water, roads, vegetation, procedural surfaces, zones,

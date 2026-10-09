@@ -470,6 +470,75 @@ first four that are on cast, each picture resampled to 512 texels a side
 ``shadows`` is kept and not acted on, and the compatibility profile casts
 none.
 
+.. _x3d-movies:
+
+Movies
+~~~~~~
+
+.. figure:: images/x3d/x3d_movie.jpg
+   :alt: A room with a wood floor, plaster walls and ceiling, and a brick wall with three screens in steel frames, each showing a dial, a bar and a cube on a coloured backdrop at a different point in the film
+
+   ``oglc-x3d-movie``: one film on three screens, looped, reversed, and
+   waiting on its first frame for a key.
+
+A ``MovieTexture`` plays an H.264 movie, decoded on the GPU by
+`pyopengl-video <https://github.com/mcfletch/pyopengl-video>`__ into the
+texture the shape is drawn with
+(``OpenGLContext.scenegraph.movietexture``, ``OpenGLContext.video.playback``).
+It needs the ``video`` extra (``pip install OpenGLContext[video]``) and a
+decoder pyopengl-video drives for the window's context: VA-API on Linux, for
+AMD and Intel GPUs, which reads into an EGL context. GLFW on Wayland and the
+``egl`` offscreen backend make EGL contexts; a GLX context (GLFW on X11, GLUT,
+Tk, pygame) has no decoder. Where there is none, the shape is drawn
+untextured and the reason is logged once.
+
+- ``url`` is read as an image texture's is: each entry resolved against the
+  document under its policy (:doc:`untrusted`), a remote one downloaded into
+  the asset cache, on the engine's loader pool. The movie's index is read and
+  none of its media. An MP4 (or QuickTime) file with an H.264 track, or a raw
+  H.264 stream, is played; MPEG-1, AVI, WebM and Ogg are refused by name and
+  the next entry tried. A LoadSensor watching the node sees it loading, then
+  loaded or failed.
+- ``duration_changed`` is the movie's length in seconds, sent on the render
+  thread once the movie is open; -1 where no entry opens.
+- The timing is a TimeSensor's (:ref:`Time <x3d-time>`): ``startTime``,
+  ``stopTime``, ``pauseTime``, ``resumeTime``, ``loop``, ``isActive``,
+  ``isPaused`` and ``elapsedTime``, with the movie's length as the cycle and
+  ``speed`` as its rate. A negative ``speed`` plays backwards, and 2 twice as
+  fast.
+- Before the movie first plays it shows its first frame, or its last for a
+  negative ``speed``. While paused, and after it stops, it shows the frame it
+  was showing. A movie that ends with ``loop`` FALSE shows its last frame (its
+  first, backwards).
+- The frame shown is the last one at or before the media time. Each new frame
+  is copied on the GPU into one ``GL_RGBA8`` texture per movie and context,
+  which keeps its name, its sampler and, where the sampler's minification
+  reads them, mipmaps made after each copy. ``repeatS``, ``repeatT`` and
+  ``textureProperties`` are read when a context first draws the movie, as X3D
+  gives them ``initializeOnly``. The copy needs ``glCopyImageSubData``
+  (OpenGL 4.3).
+- It is a 2D texture wherever one goes: an appearance's ``texture`` in both
+  renderers and the compatibility profile, a layer of a ``MultiTexture``, a
+  ``TextureProjector``'s picture. The frame is opaque.
+- The node is bound to a context, and polled by its clock, the first time a
+  shape wearing it is drawn there. Its media time does not depend on when
+  that is, since a run starts at ``startTime``; its events are sent from
+  then.
+- pyopengl-video decodes video and no audio. A ``MovieTexture`` as a
+  ``Sound`` node's ``source`` is silent.
+
+``oglc-x3d-movie`` opens ``OpenGLContext/bin/x3d_movie.x3d``: a room with a
+wood floor, a brick wall between plaster walls, and three screens in brushed
+steel frames, each playing one film. The left screen loops it; the centre
+loops it at ``speed`` -1 through a ``TextureProperties``; the right plays it
+once, from the ``s`` key, inside a ``MultiTexture`` that darkens its edges.
+``p`` pauses and resumes the left screen. The film is
+``OpenGLContext/bin/x3d_movie_film.x3d`` drawn by the engine offscreen and
+encoded with pyopengl-video's hardware encoder (:doc:`recording`), in a
+process of its own, the first time the command runs.
+:doc:`tests/x3d_movie.py <tutorials/x3d_movie>` is the same scene as a
+tutorial.
+
 Lighting
 ~~~~~~~~
 
@@ -837,6 +906,8 @@ An ``Inline`` reads any format a registered reader opens: another X3D or
 VRML97 world, an OBJ model or a glTF model. Its scene is read on the loader
 pool and drawn from the frame after it arrives. See :ref:`x3d-worlds`.
 
+.. _x3d-time:
+
 Time
 ~~~~
 
@@ -855,9 +926,12 @@ behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
   clock, and can be changed while it runs. ``getTimer(context)`` answers a Timer-style
   handle on it: ``pause()``, ``resume()``, ``internal.multiplier`` (the
   rate) and ``addEventHandler('fraction' or 'cycle', function)``.
-- A ``LoadSensor`` is polled in the same way. ``Inline`` and ``ImageTexture``
-  record their load state as they read (``vrml.x3d.loadsensor``); other url
-  nodes record none and are not waited for.
+- A ``LoadSensor`` is polled in the same way. ``Inline``, ``ImageTexture``
+  and ``MovieTexture`` record their load state as they read
+  (``vrml.x3d.loadsensor``); other url nodes record none and are not waited
+  for.
+- A ``MovieTexture`` runs as a TimeSensor does, its cycle the movie's length
+  and its rate ``speed`` (:ref:`x3d-movies`).
 - A follower moves a step each frame on the engine's clock while it is
   moving, queued on its window's render queue.
 

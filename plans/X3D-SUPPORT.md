@@ -665,13 +665,47 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - open for the maintainer: the 4.1 CD text gives `castShadow` and
     `pointerEvents` FALSE by default, its schema `true`; pyvrml97 and the
     engine follow the schema
-  - [ ] `MovieTexture` decoded on the GPU through pyopengl-video
+  - [x] `MovieTexture` decoded on the GPU through pyopengl-video
     ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)).
     No package that links FFmpeg at run time is used: PyAV was tried
     (2026-10-08) and removed, since the FFmpeg a platform ships carries GPL
-    components. Until that decoder lands, a MovieTexture is kept with its
-    fields and drawn untextured; its timing is pyvrml97's
-    `vrml.x3d.media.MovieTexture` on `timesensor.Clocked`, ready for it
+    components. Landed 2026-10-09 (stream xmovie): the node
+    (`scenegraph.movietexture`) is pyvrml97's `vrml.x3d.media.MovieTexture`,
+    polled on the engine clock; `url` is opened on the loader pool through
+    `Loader.local_copy` (the document's resolver policy, read in place),
+    with LoadSensor states and `duration_changed` (-1 on failure) sent on
+    the render thread. `video.playback.Playback` makes pyopengl-video's
+    player in each context the first time a shape wearing it is drawn and
+    copies each new frame with `glCopyImageSubData` into one `GL_RGBA8`
+    texture with the node's sampler (`repeatS`/`repeatT`,
+    `TextureProperties`, mipmaps where the filter reads them), so the PBR
+    program's sRGB decode, the VRML97 renderer, the compatibility profile,
+    `MultiTexture` layers and projectors all read it as an image texture.
+    Before the first run the first frame shows (the last for negative
+    `speed`), paused and stopped hold their frame, as X_ITE's video element
+    does. No decoder for the context (no backend, pyopengl-video missing,
+    or a GLX context: maintainer decision 2026-10-09, the engine's context
+    choice is unchanged) draws untextured with the reason logged once. The
+    13 H.264 MP4/MOV files in Web3D's corpus archives decode; the corpus's
+    MPEG-1, AVI and other containers are refused by name (pyopengl-video
+    x3d-movie 595a7f0, which also reports a GLX context as unavailable).
+    Showcase `oglc-x3d-movie`: a film drawn by the engine offscreen
+    (`x3d_movie_film.x3d`) and recorded with pyopengl-video's VA-API encoder
+    in a process of its own, on three screens (looped; reversed through a
+    TextureProperties; started by a key inside a MultiTexture) in a brick,
+    plaster, steel and wood room; `tests/x3d_movie.py`, docs/x3d.rst
+    "Movies"
+    - kept by choice (spec over X_ITE): a negative `speed` plays backwards
+      (19775-1 18.4.3 "A negative speed implies that the movie will play
+      backwards"); X_ITE's video element rejects a negative playbackRate
+      and plays forward. Before its first run a movie with negative `speed`
+      shows its last frame (the same clause); X_ITE shows the first
+    - waiting: a MovieTexture as a `Sound` source is silent, since
+      pyopengl-video decodes no audio. Movie audio is deferred by the
+      maintainer (2026-10-09); OxideAV is the candidate named for it.
+      `pitch` and `gain` are kept and not read
+    - the node is bound to a context when a shape wearing it is first drawn
+      there; a movie no drawn shape wears sends no events
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext
@@ -1305,13 +1339,14 @@ What will not work, and why:
   routed to and from, and is written back out unchanged; its code never runs,
   so its output fields never change. Loading reports how many `Script` nodes a
   scene has, once per load.
-- `MovieTexture` without a decoder. The specification requires MPEG-1
-  (ISO/IEC 11172-1); content also uses MP4 and WebM. Decoding is planned on
-  the GPU through pyopengl-video
+- `MovieTexture` beyond H.264. The specification requires MPEG-1
+  (ISO/IEC 11172-1); content also uses AVI and WebM. Decoding is on the GPU
+  through pyopengl-video
   ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)),
-  through each vendor's own library; nothing that links FFmpeg, PyAV or
-  GStreamer is used. Until then the texture draws nothing and its shape is
-  drawn untextured.
+  through each vendor's own library, and covers H.264 in MP4 or raw streams
+  on VA-API (Linux, AMD and Intel, EGL contexts); nothing that links FFmpeg,
+  PyAV or GStreamer is used. Another codec, another platform or a GLX
+  context draws the shape untextured.
 - `StreamAudioSource`, `StreamAudioDestination`. These are defined in terms of
   WebRTC media streams, which a desktop engine does not have: a
   `StreamAudioDestination` is heard as an `AudioDestination` is, and a

@@ -191,6 +191,12 @@ Rules for each loader
        (``loaders.x3d.ContainedPrototypes``), and so is each file those name,
        eight files deep at most. A URL the resolver refuses is logged and the
        next one tried; the prototype's instances are then empty.
+   * - :ref:`MovieTexture <x3d-movies>` ``url``
+     - Each entry is resolved by ``Loader.local_copy`` under the document's
+       ``Resolver``: a file in the document's directory is read in place, a
+       sample at a time, and a same-origin http(s) entry is downloaded into
+       the asset cache, size-capped as any reference is. A refused entry is
+       logged and the next one tried.
    * - Wavefront OBJ (``loaders/obj.py``)
      - ``mtllib`` and texture references go through the same ``Loader``, so they
        are restricted to the model's directory.
