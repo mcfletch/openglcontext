@@ -421,21 +421,18 @@ class Extrusion(SweptGeometry, x3d.Extrusion):
 
 
 def _by_spine_point(value: Any, spine: np.ndarray, width: int) -> np.ndarray:
-    """An Extrusion's `scale` or `orientation`, one entry per distinct spine point
+    """An Extrusion's `scale` or `orientation`, one entry per listed spine point
 
     Spine point i takes entry ``min(i, count - 1)``, as X_ITE reads them, so
     a list shorter than the spine carries its last entry on and a longer one
     is cut; one entry, or none, is left for the library to apply throughout.
-    A closed spine's repeated last point is its first, and has no entry of
-    its own.
+    On a closed spine the library uses the first point's entry for the
+    repeated last point.
     """
     values = np.asarray(value, dtype='d').reshape(-1, width)
     if len(values) <= 1:
         return values
-    steps = len(spine)
-    if steps > 2 and np.array_equal(spine[0], spine[-1]):
-        steps -= 1
-    chosen: np.ndarray = values[np.minimum(np.arange(steps), len(values) - 1)]
+    chosen: np.ndarray = values[np.minimum(np.arange(len(spine)), len(values) - 1)]
     return chosen
 
 
