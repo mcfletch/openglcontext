@@ -1571,6 +1571,8 @@ fields, and ``ReceiverPdu``, ``SignalPdu``, ``TransmitterPdu``,
 ``DISEntityManager`` and ``DISEntityTypeMapping`` are kept as their
 declarations and do nothing.
 
+.. _x3d-not-drawn:
+
 Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
@@ -1578,6 +1580,73 @@ Kept and not drawn
 - ``FogCoordinate`` is kept and not drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
+
+.. _x3d-browser-options:
+
+Browser options
+---------------
+
+X_ITE's browser options, and X3D's (19775-1, Table 9.2), are
+``ContextDefinition`` fields, each with an environment variable as its
+default (:doc:`environment`). ``auto`` gives a VRML97 or X3D document X_ITE
+16.4.3's default and leaves any other scene as the engine draws it.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - X_ITE option
+     - Field
+     - A document's default
+   * - ``ToneMapping``
+     - ``toneMapping`` (:ref:`tone-mapping`)
+     - ``none``
+   * - ``Exposure``
+     - ``exposure``
+     - 1.0
+   * - ``ColorSpace``
+     - ``colorSpace``
+     - ``linear_when_physical_material``
+   * - ``Shading``
+     - ``shading`` (:ref:`shading`)
+     - ``gouraud``
+   * - ``Antialiased``, ``Multisampling``
+     - ``multisampleSamples``, set as the window is made
+     - unset; ``oglc-x3d-regression`` draws with 4
+   * - ``PrimitiveQuality``
+     - ``primitiveQuality``
+     - ``medium``: 20 sides for a Cone and a Cylinder, 32 sides and 14
+       rings for a Sphere (``low`` 16, 20 and 8; ``high`` 32, 64 and 30)
+   * - ``TextureQuality``
+     - ``textureQuality``
+     - ``medium``: a texture that names no filter is minified from the
+       nearest mipmap level (``AVG_PIXEL_NEAREST_MIPMAP``); ``low`` takes the
+       nearest texel of the nearest level, ``high`` blends two levels
+
+Distance level of detail steps down from the primitive quality as the
+viewer moves away (``OPENGLCONTEXT_LOD``). A change of either quality applies
+to meshes and textures made after it; a texture already drawn keeps its
+filters.
+
+A document has no way to set these. X_ITE reads them from the page that
+embeds the browser and from ``Browser.setBrowserOption`` in a Script, and a
+document's Scripts are not run here (:ref:`x3d-not-drawn`); a ``META`` or
+``WorldInfo`` convention would be the engine's own, which X_ITE would not
+read, so a document would render differently in the two. An application
+sets the fields, and a shell or a CI run sets the variables.
+
+Options with no engine field:
+
+- ``QualityWhenMoving`` and ``MotionBlur``: X_ITE 16.4.3 declares both and
+  reads neither, so a document is drawn the same with any value.
+- ``DisplayColorSpace`` ``DISPLAY_P3``: X_ITE marks its canvas as Display P3
+  and writes the same values, which a P3 display shows more saturated. A
+  desktop GL window has no colour space to set through GLFW, Tk, wx or Qt's
+  GL widget; an EGL window surface on a system with
+  ``EGL_EXT_gl_colorspace_display_p3`` has, and the engine's EGL backend
+  makes pbuffers, which have no display. Frames are written as sRGB.
+- ``XRSessionMode``: a WebXR session. The engine opens no XR session; its
+  multiview drawing (:doc:`multiview`) draws several views of one frame.
 
 Comparing renders with Web3D's examples
 ---------------------------------------

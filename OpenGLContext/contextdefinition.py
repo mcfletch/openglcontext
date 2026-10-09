@@ -6,7 +6,7 @@ from vrml import node, field
 
 from OpenGLContext import renderoptions
 from OpenGLContext.audio import settings as audiosettings
-from OpenGLContext.passes import shading as shadingmodes, tonemapping
+from OpenGLContext.passes import quality, shading as shadingmodes, tonemapping
 
 
 # The three helpers below are passed to ``newField`` **uncalled**, so each is
@@ -239,6 +239,17 @@ class ContextDefinition( node.Node ):
     #: for a VRML97 or X3D document, as X_ITE draws one, and phong elsewhere.
     #: See OpenGLContext.passes.shading.
     shading = field.newField( "shading", "SFString", 1, shadingmodes.default_shading )
+    #: Sides and rings of a Sphere, Cone and Cylinder: "auto", "low", "medium"
+    #: or "high", X_ITE's counts (env: OPENGLCONTEXT_PRIMITIVE_QUALITY). "auto"
+    #: is medium for a document and the engine's own elsewhere.
+    #: See OpenGLContext.passes.quality.
+    primitiveQuality = field.newField( "primitiveQuality", "SFString", 1,
+                                       quality.default_primitive_quality )
+    #: The filters of a texture that names none: "auto", "low", "medium" or
+    #: "high" (env: OPENGLCONTEXT_TEXTURE_QUALITY). "auto" is medium for a
+    #: document's texture and high elsewhere.
+    textureQuality = field.newField( "textureQuality", "SFString", 1,
+                                     quality.default_texture_quality )
     #: Image-based lighting: "auto", "full", "analytic" or "off"
     #: (env: OPENGLCONTEXT_IBL). "auto" degrades itself on a software
     #: rasteriser, where the prefilter precompute is too slow.
@@ -421,6 +432,12 @@ class ContextDefinition( node.Node ):
         'shading': {'label': 'Shading',
                     'options': shadingmodes.CHOICES,
                     'optionLabels': shadingmodes.LABELS},
+        'primitiveQuality': {'label': 'Primitive detail',
+                             'options': quality.CHOICES,
+                             'optionLabels': quality.LABELS},
+        'textureQuality': {'label': 'Texture filtering',
+                           'options': quality.CHOICES,
+                           'optionLabels': quality.LABELS},
         'ibl': {'label': 'Environment lighting',
                 'options': renderoptions.CHOICES['ibl'],
                 'optionLabels': renderoptions.LABELS['ibl']},
@@ -467,7 +484,8 @@ class ContextDefinition( node.Node ):
     #: should read: the expensive things first, the diagnostics last.
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
-        'bloom', 'toneMapping', 'exposure', 'colorSpace', 'shading', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
+        'bloom', 'toneMapping', 'exposure', 'colorSpace', 'shading',
+        'primitiveQuality', 'textureQuality', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
         'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',
         'renderer', 'lighting',

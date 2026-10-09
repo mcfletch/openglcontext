@@ -4,7 +4,7 @@ Each is drawn as the mesh of its arrays at the level of detail its distance
 from the viewer chooses (:class:`~OpenGLContext.scenegraph.meshgeometry.LevelledMesh`).
 """
 import numpy as np
-from typing import Any
+from typing import Any, Optional
 from vrml import field, node
 from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext.scenegraph import boundingvolume
@@ -12,6 +12,7 @@ from OpenGLContext.arrays import (
     zeros, arange, sin, cos, pi, concatenate, allclose, copy,
 )
 from OpenGLContext import vectorutilities
+from OpenGLContext.passes import quality
 from OpenGLContext.scenegraph import tessellationlod
 from OpenGLContext.scenegraph.meshgeometry import LevelledMesh
 
@@ -33,6 +34,8 @@ LOD_STEP_FACTOR = (1.0, 0.83, 0.67, 0.5)
 # ...but never fewer than this many slices, so the coarsest level stays a
 # recognizable round solid rather than a smoothed tetrahedron.
 LOD_MIN_STEPS = 6
+#: The engine's full-detail angle between a Cone's or Cylinder's sides: 32 sides.
+CONE_PHI = pi / 16
 
 
 def lod_phi( base_phi: float, level: int, period: float ) -> float:
@@ -50,6 +53,14 @@ def lod_phi( base_phi: float, level: int, period: float ) -> float:
     factor = LOD_STEP_FACTOR[min(level, len(LOD_STEP_FACTOR) - 1)]
     steps = max( LOD_MIN_STEPS, round( full_steps * factor ) )
     return period / steps
+
+
+def side_phi( chosen: Optional[str] ) -> float:
+    """The full-detail angle between a Cone's or Cylinder's sides at quality `chosen`
+
+    None is the engine's own, 32 sides.
+    """
+    return CONE_PHI if chosen is None else 2 * pi / quality.cone_sides( chosen )
 
 
 def mesh_indices( zstep: int, ystep: int, xstep: int = 1 ) -> Any:
@@ -100,6 +111,19 @@ class Quadric( LevelledMesh, nodetypes.Geometry, node.Node ):
         """The fields :meth:`compileArrays` reads"""
         return ()
 
+    def primitiveQuality( self ) -> Optional[str]:
+        """The quality this quadric is tessellated at, or None for the engine's own
+
+        :func:`OpenGLContext.passes.quality.primitive_quality` for whether the
+        node belongs to a document.
+        """
+        from OpenGLContext.lighting import in_document  # noqa: PLC0415 lighting reads the scene classes
+        return quality.primitive_quality( in_document( self ) )
+
+    def meshKey( self, level: int ) -> str:
+        """The mesh's cache key: its level's, and the quality it was tessellated at"""
+        return '%s-%s' % ( super().meshKey( level ), self.primitiveQuality() or 'engine' )
+
     def levelArrays( self, level: int ) -> Any:
         """The mesh arrays of :meth:`compileArrays` at `level`"""
         from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
@@ -122,7 +146,7 @@ class Sphere( basenodes.Sphere, Quadric ):
     # LOD level (keyed by level -> (coords, indices)).
     #: Unit-radius meshes, keyed by the angular step they were tessellated at,
     #: so every sphere drawn at a given detail shares one tessellation.
-    _unitSpheres: dict[float, tuple[Any, Any]] = {}
+    _unitSpheres: dict[tuple[float, float], tuple[Any, Any]] = {}
     #: Base angular step: pi/12 is a 24-sided silhouette, fine enough that the
     #: LOD schedule can step down from it without a visible pop.
     phi = field.newField( 'phi', 'SFFloat', 1, pi/12.0)
@@ -137,13 +161,19 @@ class Sphere( basenodes.Sphere, Quadric ):
         """
         # period=pi: phi must divide the pole-to-pole latitude evenly (which
         # also closes the 2*pi longitude) or the mesh has a cap/seam gap.
-        step = lod_phi( self.phi, level, pi )
-        # Keyed on the step rather than on the level, because the step is what
-        # the mesh is: two spheres of different phi at the same level are two
-        # different meshes, and two that resolve to the same step are one.
-        if step not in Sphere._unitSpheres:
-            Sphere._unitSpheres[step] = self.sphere( step )
-        coords,indices = Sphere._unitSpheres[step]
+        chosen = self.primitiveQuality()
+        if chosen is None:
+            step = around = lod_phi( self.phi, level, pi )
+        else:
+            sides, rings = quality.sphere_dimensions( chosen )
+            step = lod_phi( pi / rings, level, pi )
+            around = lod_phi( 2 * pi / sides, level, 2 * pi )
+        # Keyed on the steps rather than on the level, because the steps are
+        # what the mesh is: two spheres of different phi at the same level are
+        # two different meshes, and two that resolve to the same steps are one.
+        if (step, around) not in Sphere._unitSpheres:
+            Sphere._unitSpheres[(step, around)] = self.sphere( step, longPhi=around )
+        coords,indices = Sphere._unitSpheres[(step, around)]
         coords = copy( coords )
         coords[:,0:3] *= self.radius
         return coords, indices
@@ -155,14 +185,15 @@ class Sphere( basenodes.Sphere, Quadric ):
         """Spheres of the same radius/tessellation share geometry -> one instanced
         draw (the molecular-model case: thousands of identical atoms)."""
         return ('Sphere', round(float(self.radius), 6), round(float(self.phi), 6),
-                bool(self.solid))
+                bool(self.solid), self.primitiveQuality())
 
     @classmethod
     def sphere( cls, phi: float = pi/8.0, latAngle: float = pi,
-                longAngle: float = (pi*2) ) -> tuple[Any, Any]:
+                longAngle: float = (pi*2), longPhi: Optional[float] = None ) -> tuple[Any, Any]:
         """Create arrays for rendering a unit-sphere
         
         phi -- angle between points on the sphere (stacks/slices)
+        longPhi -- angle between points around it, where it differs from phi
 
         The longitude starts at the back, -Z, where VRML97's texture seam is
         (:data:`SEAM`).
@@ -170,7 +201,7 @@ class Sphere( basenodes.Sphere, Quadric ):
         returns coordarray, indexarray
         """
         latsteps = arange( 0,latAngle+0.000003, phi )
-        longsteps = SEAM + arange( 0,longAngle+0.000003, phi )
+        longsteps = SEAM + arange( 0,longAngle+0.000003, phi if longPhi is None else longPhi )
         return cls._partialSphere( latsteps,longsteps )
 
     @classmethod
@@ -236,7 +267,7 @@ class Sphere( basenodes.Sphere, Quadric ):
         
 class Cone( basenodes.Cone, Quadric ):
     """Cone geometry rendered with GLU quadratic calls"""
-    _BASE_PHI = pi/16
+    _BASE_PHI = CONE_PHI
 
     def _lod_bounding_radius( self ) -> float:
         return max( float(self.bottomRadius), float(self.height) / 2.0 )
@@ -245,7 +276,7 @@ class Cone( basenodes.Cone, Quadric ):
         """(coords Nx8 interleaved V3F_T2F_N3F, indices) at `level`"""
         return self.cone(
             self.height, self.bottomRadius, self.bottom, self.side,
-            phi=lod_phi( self._BASE_PHI, level, 2*pi ),   # ring closes over 2*pi
+            phi=lod_phi( side_phi( self.primitiveQuality() ), level, 2*pi ),   # ring closes over 2*pi
         )
 
     def _lodDependFields( self ) -> tuple[str, ...]:
@@ -253,7 +284,7 @@ class Cone( basenodes.Cone, Quadric ):
 
     def instanceContentKey( self ) -> tuple[Any, ...]:
         return ('Cone', round(float(self.height), 6), round(float(self.bottomRadius), 6),
-                bool(self.bottom), bool(self.side), bool(self.solid))
+                bool(self.bottom), bool(self.side), bool(self.solid), self.primitiveQuality())
 
     @classmethod
     def cone(
@@ -378,7 +409,7 @@ class Cylinder( basenodes.Cylinder, Quadric ):
         """(coords Nx8 interleaved V3F_T2F_N3F, indices) at `level`"""
         return Cone.cone(
             self.height, self.radius, self.bottom, self.side,
-            phi=lod_phi( Cone._BASE_PHI, level, 2*pi ),   # ring closes over 2*pi
+            phi=lod_phi( side_phi( self.primitiveQuality() ), level, 2*pi ),   # ring closes over 2*pi
             top=self.top, cylinder=True,
         )
 
@@ -387,7 +418,8 @@ class Cylinder( basenodes.Cylinder, Quadric ):
 
     def instanceContentKey( self ) -> tuple[Any, ...]:
         return ('Cylinder', round(float(self.height), 6), round(float(self.radius), 6),
-                bool(self.bottom), bool(self.side), bool(self.top), bool(self.solid))
+                bool(self.bottom), bool(self.side), bool(self.top), bool(self.solid),
+                self.primitiveQuality())
 
     def boundingVolume( self, mode: Any = None ) -> Any:
         """Create a bounding-volume object for this node

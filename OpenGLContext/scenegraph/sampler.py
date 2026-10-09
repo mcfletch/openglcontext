@@ -9,8 +9,9 @@ A document's texture with no `TextureProperties` whose image is smaller than
 :data:`SMALL_IMAGE` texels on its longer side is sampled from its nearest
 texel, magnified or minified, so a `PixelTexture`'s few texels are drawn as
 crisp squares; X3D leaves the default filters to the browser, and this is
-X_ITE's choice too. A texture made in code takes the engine's filters
-whatever its size.
+X_ITE's choice too. Any other filters a texture leaves to the browser
+(`DEFAULT`, `FASTEST`, `NICEST`) are the texture quality's
+(:mod:`OpenGLContext.passes.quality`).
 """
 from typing import Any, Optional
 
@@ -51,28 +52,34 @@ def sampler_of(texture: Any, size: Optional[tuple[int, ...]] = None) -> "dict[st
     than :data:`SMALL_IMAGE`. A 3D texture's or a cube map's also has
     `wrap_r`: its `repeatR`, or a cube map's faces clamped to their edges.
     """
+    from OpenGLContext.lighting import in_document  # noqa: PLC0415 lighting reads the scene classes
+    from OpenGLContext.passes import quality  # noqa: PLC0415 kept with its use
+    document = in_document(texture)
+    level = quality.texture_quality(document)
     properties = getattr(texture, 'textureProperties', None)
     deep = hasattr(texture, 'repeatR') or isinstance(texture, x3d.X3DEnvironmentTextureNode)
     if properties:
+        minification, magnification = quality.texture_filters(
+            str(properties.minificationFilter), str(properties.magnificationFilter), level)
         found = {
             'wrap_s': str(properties.boundaryModeS),
             'wrap_t': str(properties.boundaryModeT),
-            'minification': str(properties.minificationFilter),
-            'magnification': str(properties.magnificationFilter),
+            'minification': minification,
+            'magnification': magnification,
         }
         if deep:
             found['wrap_r'] = str(properties.boundaryModeR)
         return found
-    from OpenGLContext.lighting import in_document  # noqa: PLC0415 lighting reads the scene classes
-    small = size is not None and max(size) < SMALL_IMAGE and in_document(texture)
-    filter_ = 'NEAREST_PIXEL' if small else 'DEFAULT'
+    small = size is not None and max(size) < SMALL_IMAGE and document
+    minification, magnification = (('NEAREST_PIXEL', 'NEAREST_PIXEL') if small
+                                   else quality.texture_filters('DEFAULT', 'DEFAULT', level))
 
     def wrap(name: str) -> str:
         return 'REPEAT' if getattr(texture, name, True) else 'CLAMP_TO_EDGE'
     found = {
         'wrap_s': wrap('repeatS'), 'wrap_t': wrap('repeatT'),
-        'minification': filter_,
-        'magnification': filter_,
+        'minification': minification,
+        'magnification': magnification,
     }
     if deep:
         # A cube map has no repeat fields, and its faces meet at their edges.

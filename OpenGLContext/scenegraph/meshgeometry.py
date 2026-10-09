@@ -299,9 +299,13 @@ class LevelledMesh(MeshDrawn):
         return None if arrays is None else self.meshFrom(
             arrays, solid=bool(getattr(self, 'solid', True)))
 
+    def meshKey(self, level: int) -> str:
+        """The key the mesh of `level` is kept under in vrml's cache"""
+        return MESH_KEY if not level else '%s-%d' % (MESH_KEY, level)
+
     def mesh(self, level: int = 0) -> Optional[Any]:
         """The mesh drawn at `level`, kept in vrml's cache until a field of the node is set"""
-        key = MESH_KEY if not level else '%s-%d' % (MESH_KEY, level)
+        key = self.meshKey(level)
         held = cache.CACHE.getData(self, key)
         if held is None:
             held = (self.buildMesh(level),)

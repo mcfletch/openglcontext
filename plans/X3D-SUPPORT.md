@@ -213,9 +213,23 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     default from `OPENGLCONTEXT_MULTISAMPLING`; X_ITE's Antialiased and
     Multisampling are that one count. The window default stays unset;
     `oglc-x3d-regression` draws with 4 samples, X_ITE's default
-    (`--multisampling`). The glass backdrop and the opaque depth copy read
+    (`--multisampling`). The glass backdrop and the transparent phase read
     a multisampled window (`tests/unit/test_multisampling.py`); the MRT pick
     target and bloom's target are one sample a pixel
+  - [x] primitive and texture quality: `ContextDefinition.primitiveQuality`
+    and `textureQuality` (`OPENGLCONTEXT_PRIMITIVE_QUALITY`,
+    `OPENGLCONTEXT_TEXTURE_QUALITY`), `passes/quality.py`. X_ITE's counts:
+    medium 20 sides for Cone and Cylinder, 32 sides and 14 rings for Sphere;
+    its default filters, medium AVG_PIXEL_NEAREST_MIPMAP. `auto` is medium
+    for a document's node or texture and the engine's own elsewhere.
+    Re-blessed for the change: x3d_demo (4.7%, its cylinders' sides and the
+    floor's and wall's mipmaps), x3d_layering (2.4%)
+  - [x] QualityWhenMoving, MotionBlur: X_ITE 16.4.3 declares and never reads
+    them; no engine field. DisplayColorSpace DISPLAY_P3 and XRSessionMode:
+    not implemented, the limits in `docs/x3d.rst` (Browser options)
+  - [x] no document-level switch for the options (no META or WorldInfo
+    convention): X_ITE reads them from its page and from Scripts, so such a
+    convention would draw a document differently in the two
   - kept by choice: under Gouraud X_ITE 16.4.3 multiplies its texture
     projectors into a diffuse colour it has already used, so a projector casts
     nothing; the engine casts it onto the diffuse colour (19775-1, 42.2.2).

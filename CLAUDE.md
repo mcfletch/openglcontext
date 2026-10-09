@@ -216,6 +216,8 @@ OpenGLContext/
 │   │                 # is written with (X_ITE's options) -- docs/pbr.rst#tone-mapping
 │   ├── shading.py    # Points, wireframe, flat, Gouraud or Phong -- no GL
 │   │                 # -- docs/pbr.rst#shading
+│   ├── quality.py    # Primitive tessellation and texture filters by quality
+│   │                 # (X_ITE's options) -- no GL -- docs/x3d.rst#x3d-browser-options
 │   ├── clipscope.py  # Which ClipPlanes clip a draw, in its own frame -- no GL
 │   │                 # -- docs/x3d.rst
 │   ├── clippass.py   # The pass's side: each draw given its planes, the

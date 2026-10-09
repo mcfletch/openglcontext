@@ -18,12 +18,17 @@ def document_texture(texture):
     return scene, scene.children[1].appearance.texture
 
 
-@pytest.mark.parametrize('size, expected', [((2, 2), 'NEAREST_PIXEL'), ((15, 4), 'NEAREST_PIXEL'),
-                                            ((16, 16), 'DEFAULT'), ((256, 2), 'DEFAULT')])
+NEAREST = ('NEAREST_PIXEL', 'NEAREST_PIXEL')
+#: X_ITE's default filters, a document's at medium texture quality
+MEDIUM = ('AVG_PIXEL_NEAREST_MIPMAP', 'AVG_PIXEL')
+
+
+@pytest.mark.parametrize('size, expected', [((2, 2), NEAREST), ((15, 4), NEAREST),
+                                            ((16, 16), MEDIUM), ((256, 2), MEDIUM)])
 def test_a_documents_small_image_is_sampled_by_its_nearest_pixel(size, expected):
     _scene, texture = document_texture('<PixelTexture image="%s"/>' % CHECKER)
     found = sampler.sampler_of(texture, size)
-    assert found['minification'] == found['magnification'] == expected
+    assert (found['minification'], found['magnification']) == expected
 
 
 def test_texture_properties_choose_for_a_small_image():
@@ -35,7 +40,7 @@ def test_texture_properties_choose_for_a_small_image():
 
 def test_a_small_image_built_in_code_takes_the_engines_filters():
     texture = basenodes.PixelTexture(image=[2, 2, 1, 0xff, 0, 0, 0xff])
-    assert sampler.sampler_of(texture, (2, 2))['magnification'] == 'DEFAULT'
+    assert sampler.sampler_of(texture, (2, 2))['magnification'] == 'AVG_PIXEL'
 
 
 def test_a_pixel_texture_answers_its_size():

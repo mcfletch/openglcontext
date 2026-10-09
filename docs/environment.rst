@@ -209,6 +209,17 @@ Lighting and shadows
        the window is made. For the frames after a pointer event over a
        pickable scene, and with bloom on, the frame is drawn into a target
        of one sample a pixel and is not antialiased.
+   * - ``OPENGLCONTEXT_PRIMITIVE_QUALITY``
+     - ``auto``, ``low``, ``medium``, ``high``
+     - ``auto``
+     - Sides and rings of a Sphere, Cone and Cylinder, X_ITE's counts.
+       ``auto`` is ``medium`` for a document's node and the engine's own
+       tessellation elsewhere. See :ref:`x3d-browser-options`.
+   * - ``OPENGLCONTEXT_TEXTURE_QUALITY``
+     - ``auto``, ``low``, ``medium``, ``high``
+     - ``auto``
+     - The filters of a texture that names none. ``auto`` is ``medium`` for
+       a document's texture and ``high`` elsewhere.
    * - ``OPENGLCONTEXT_SHADING``
      - ``auto``, ``point``, ``wireframe``, ``flat``, ``gouraud``, ``phong``
      - ``auto``

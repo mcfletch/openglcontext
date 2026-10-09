@@ -231,6 +231,14 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - ``auto``/``srgb``/``linear_when_physical_material``/``linear``
      - Which materials are lit in linear light.
      - ``OPENGLCONTEXT_COLOR_SPACE``
+   * - ``primitiveQuality``
+     - ``auto``/``low``/``medium``/``high``
+     - Sides and rings of the quadrics (:ref:`x3d-browser-options`).
+     - ``OPENGLCONTEXT_PRIMITIVE_QUALITY``
+   * - ``textureQuality``
+     - ``auto``/``low``/``medium``/``high``
+     - The filters of a texture that names none.
+     - ``OPENGLCONTEXT_TEXTURE_QUALITY``
    * - ``shading``
      - ``auto``/``point``/``wireframe``/``flat``/``gouraud``/``phong``
      - How surfaces are shaded (:ref:`shading`).

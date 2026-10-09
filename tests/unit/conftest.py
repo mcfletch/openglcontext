@@ -19,7 +19,7 @@ from collections.abc import Iterator
 import pytest
 
 from OpenGLContext import renderoptions
-from OpenGLContext.passes import pbrpass, shadersource, shadowcaps
+from OpenGLContext.passes import pbrpass, quality, shadersource, shadowcaps
 
 
 @pytest.fixture(autouse=True)
@@ -30,6 +30,9 @@ def reset_environment_memos() -> Iterator[None]:
     than a value some earlier test settled; after, so a test that deliberately
     pokes a memo does not leave it holding its answer.
 
+    The frame's quality choices (:func:`OpenGLContext.passes.quality.use`)
+    go back to ``auto`` for the same reason.
+
     The driver's shadow capabilities are memoised for the same reason the
     environment reads are -- they cannot change while a context lives -- and a
     test that fakes a failing GL query has to reach the query to see it fail.
@@ -39,6 +42,7 @@ def reset_environment_memos() -> Iterator[None]:
         renderoptions.reset_env_cache()
         shadowcaps.reset_detected()
         shadersource.reset_shadow_config()
+        quality.use('auto', 'auto')
 
     clear()
     yield

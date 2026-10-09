@@ -1886,6 +1886,10 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         # Reset per-frame caches
         self.stats.reset()
         context.renderStats = self.stats
+        # The tessellation and texture filters a mesh or texture made in this
+        # frame reads (OpenGLContext.passes.quality)
+        from OpenGLContext.passes import quality  # noqa: PLC0415 contextdefinition imports it first
+        quality.use( *quality.chosen( self ) )
         self._has_mousemove_handlers = None
         # Deferred runtime-transparent shapes are collected fresh each frame
         #; drained by renderTransparent.
