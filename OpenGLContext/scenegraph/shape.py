@@ -7,7 +7,7 @@ from OpenGL.GL import GL_BACK, GL_FRONT, glUseProgram
 from vrml.vrml97 import basenodes
 from vrml import field
 from OpenGLContext import lighting
-from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort
+from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort, rendermodes
 from OpenGLContext.scenegraph.physicalmaterial import two_sided
 from OpenGLContext.scenegraph.texturelayers import is_layered, texture_layers
 from OpenGLContext.arrays import array
@@ -166,10 +166,7 @@ class Shape(basenodes.Shape):
         Sets up material and texture uniforms on the shader, then
         calls geometry's render method (which will use shader path).
         """
-        from OpenGLContext.passes.shaderpass import (
-            appearance_solid_color,
-            configure_material_from_node,
-        )
+        from OpenGLContext.passes.shaderpass import appearance_solid_color
 
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
@@ -200,6 +197,18 @@ class Shape(basenodes.Shape):
                 return None
             # No program of its own runs: drawn with its material and texture.
 
+        if getattr(mode, 'visible', True) and rendermodes.has_modes(self.appearance):
+            # X_ITE's BlendMode and DepthMode: the appearance's own state
+            # around the draw.
+            with rendermodes.applied(self.appearance):
+                return self._render_shader_drawn(mode, shader_program)
+        return self._render_shader_drawn(mode, shader_program)
+
+    def _render_shader_drawn(self, mode: Any, shader_program: Any) -> Any:
+        """Draw the geometry with the appearance's material through `shader_program`"""
+        from OpenGLContext.passes.shaderpass import (  # noqa: PLC0415 shaderpass imports the scenegraph
+            configure_material_from_node,
+        )
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
         if getattr(mode, 'visible', True) and hasattr(shader_program, 'configure_appearance'):

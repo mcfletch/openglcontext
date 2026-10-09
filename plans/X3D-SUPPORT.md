@@ -646,6 +646,11 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `test_gltf_conformance.test_view_matches_baseline` passed None as the
     window system and skipped every view; it renders them now (460 pass;
     RiggedSimple differs 2.4% under load, its animation time not pinned)
+  - [x] BlendMode and DepthMode (`scenegraph.rendermodes`): GL blend and
+    depth state around the shape's draw, put back after; a BlendMode makes
+    the shape blended (X_ITE's reading); a shape with either is drawn alone
+    and after the other opaque shapes. Against X_ITE the test document
+    differs only in UnlitMaterial's colour encoding
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

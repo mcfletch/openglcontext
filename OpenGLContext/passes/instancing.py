@@ -24,7 +24,7 @@ from OpenGL.GL import (
 )
 from OpenGLContext import renderoptions
 from OpenGLContext.scenegraph import vertexsemantics
-from OpenGLContext.scenegraph import coordinatedeform, drawproperties
+from OpenGLContext.scenegraph import coordinatedeform, drawproperties, rendermodes
 from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
 from OpenGLContext.scenegraph.texturemapping import texture_mapping
 
@@ -118,11 +118,13 @@ def styled(appearance: Any) -> bool:
 def drawn_alone(appearance: Any) -> bool:
     """Whether a shape of `appearance` is drawn by itself rather than in an instanced group
 
-    A styled one (:func:`styled`), and one bringing a program of its own (an
+    A styled one (:func:`styled`), one bringing a program of its own (an
     X3D shader, the engine's `Shader`): the instanced draw is the pass's
-    program.
+    program; and one with a BlendMode or DepthMode, whose state is set
+    around its own draw (:mod:`~OpenGLContext.scenegraph.rendermodes`).
     """
-    return styled(appearance) or bool(getattr(appearance, 'bringsProgram', False))
+    return (styled(appearance) or bool(getattr(appearance, 'bringsProgram', False))
+            or rendermodes.has_modes(appearance))
 
 
 def geometry_instance_key(shape: Any) -> Optional[tuple]:

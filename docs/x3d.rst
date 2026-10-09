@@ -171,7 +171,8 @@ implements these X3D nodes, by component:
   IsoSurfaceVolumeData, OpacityMapVolumeStyle, ProjectionVolumeStyle,
   SegmentedVolumeData, ShadedVolumeStyle, SilhouetteEnhancementVolumeStyle,
   ToneMappedVolumeStyle, VolumeData
-- X_ITE - AnisotropyMaterialExtension, ClearcoatMaterialExtension,
+- X_ITE - AnisotropyMaterialExtension, BlendMode, ClearcoatMaterialExtension,
+  DepthMode,
   DiffuseTransmissionMaterialExtension, DispersionMaterialExtension,
   EmissiveStrengthMaterialExtension, IORMaterialExtension,
   IridescenceMaterialExtension, RetroreflectionMaterialExtension,
@@ -336,6 +337,24 @@ scattering among them. Routing to an extension node's field changes the
 material. X_ITE's ``SpecularGlossinessMaterial`` is glTF's
 specular/glossiness material, drawn as the :doc:`PBR renderer <pbr>` page
 describes.
+
+X_ITE's ``BlendMode`` and ``DepthMode`` go in an ``Appearance``'s
+``blendMode`` and ``depthMode``. A ``BlendMode`` names the blend factors
+(``ZERO``, ``ONE``, ``SRC_COLOR``, ``ONE_MINUS_SRC_COLOR``, ``DST_COLOR``,
+``ONE_MINUS_DST_COLOR``, ``SRC_ALPHA``, ``ONE_MINUS_SRC_ALPHA``,
+``DST_ALPHA``, ``ONE_MINUS_DST_ALPHA``, ``SRC_ALPHA_SATURATE`` and the
+``CONSTANT_...`` ones against ``blendColor``) and the equations
+(``FUNC_ADD``, ``FUNC_SUBTRACT``, ``FUNC_REVERSE_SUBTRACT``, ``MIN``,
+``MAX``) for colour and alpha, and makes its shapes blended, drawn with the
+transparent ones back to front. A ``DepthMode`` names whether the depth test
+runs (``depthTest``), its comparison (``depthFunction``: ``NEVER``,
+``LESS``, ``EQUAL``, ``LESS_EQUAL``, ``GREATER``, ``NOT_EQUAL``,
+``GREATER_EQUAL``, ``ALWAYS``), whether depth is written (``depthMask``),
+the ``depthRange`` and a ``polygonOffset`` (factor, units). A name OpenGL
+does not have reads as the field's default. A shape with either is drawn by
+itself, not in an instanced group, and after the opaque shapes without one,
+so its depth test is made against them
+(:mod:`~OpenGLContext.scenegraph.rendermodes`).
 
 A ``FontLibrary`` reads a TrueType or OpenType file, under the document's url
 policy, as a font family its ``FontStyle`` nodes may name

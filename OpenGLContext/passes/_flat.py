@@ -22,6 +22,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard,layering
+from OpenGLContext.scenegraph import rendermodes
 from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGLContext.scenegraph import bindable
 from OpenGLContext.passes import glstate
@@ -139,15 +140,21 @@ def opaqueDrawOrder(opaque: Sequence[tuple[Any, Any]]) -> list[tuple[Any, Any]]:
     still helps.  The groups come in the order their first shape does, and
     shapes at one depth keep the order they arrived in: where two fragments
     land at the same depth the later draw is the one seen, so an order that
-    changed from run to run would change the frame.
+    changed from run to run would change the frame. A shape whose appearance
+    sets its own blend or depth state comes after the others, so a DepthMode's
+    test is made against the rest of the scene.
     """
     def material(record: Any) -> Any:
         return getattr(getattr(record[5], 'appearance', None), 'material', None)
 
+    def moded(record: Any) -> bool:
+        return rendermodes.has_modes(getattr(record[5], 'appearance', None))
+
     rank: dict[Any, int] = {}
     for _index, record in opaque:
         rank.setdefault(material(record), len(rank))
-    return sorted(opaque, key=lambda item: (rank[material(item[1])], -item[1][1][3][2]))
+    return sorted(opaque, key=lambda item: (moded(item[1]), rank[material(item[1])],
+                                            -item[1][1][3][2]))
 
 
 class GatheredPaths( NamedTuple ):
@@ -976,7 +983,11 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                     self.stats.instanceGroups += 1
                     self.stats.instances += len(group)
                     self.stats.draws += 1
-            singles = [(None, rec) for rec in single_recs]
+            # Batching puts what it leaves alone first; a shape with its own
+            # blend or depth state is still drawn after the others.
+            singles = sorted(((None, rec) for rec in single_recs),
+                             key=lambda item: rendermodes.has_modes(
+                                 getattr(item[1][5], 'appearance', None)))
 
         self.stats.opaque += len(singles)
         self.stats.draws += len(singles)

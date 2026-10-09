@@ -151,7 +151,8 @@ class Appearance(xite.Appearance):
         # material or a texture with alpha. Transmissive glass stays opaque
         # here; the transmission pass draws it (see appearance_alpha).
         from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
-        transparent = appearance_alpha(self)[0] == 'BLEND'
+        # A BlendMode blends whatever the alpha mode says (X_ITE's reading).
+        transparent = appearance_alpha(self)[0] == 'BLEND' or bool(self.blendMode)
         materialParams = None
         textureToken = []
         # A texture the pass draws is asked for as it is drawn, not as it is sorted
