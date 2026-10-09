@@ -498,7 +498,42 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (points relative to their own centre, placed by a float64 translation)
     would make it exact. Same mechanism would give `CoordinateDouble` its
     precision
-  - [ ] VolumeRendering: the 13 nodes
+  - [x] VolumeRendering: the 13 nodes (2026-10-09, branch x3d-volume).
+    `scenegraph.volumedata` draws VolumeData, SegmentedVolumeData and
+    IsoSurfaceVolumeData with the blended geometry by marching rays through
+    the voxels (`shaders/volume.frag`): half-voxel steps, opacity per voxel
+    thickness, front-to-back, stopped at the opaque depth the pass copies
+    once per view (`passes.volumepass`), so geometry inside a volume hides
+    and is hidden; picks reach the first half-opaque sample. The ten styles
+    are generated GLSL (`scenegraph.volumestyles`), one program per
+    arrangement of styles, the values uniforms read each draw: projection
+    (MAX, MIN, AVERAGE, LMIP), segments by identifier with `segmentEnabled`,
+    isosurfaces by `surfaceValues` or `contourStepSize` (at most 64). The
+    first style's opacity is the voxel's first component (the default
+    opacity map), and a disabled style is skipped: both as X_ITE draws them.
+    Slices run along +Z (41.2.2.1; X_ITE agrees). Both profiles draw through
+    the same GLSL 3.30 program. `oglc-x3d-volume`: a generated CT scan of an
+    ammonite (`bin.x3d_volume.ammonite`), written by
+    `textureimages.nrrd_bytes`
+    - fixed on the way: a document's near plane is half `avatarSize`'s
+      collision radius (23.4.4), 0.125 m by default (the Web3D brain
+      examples sat inside 0.3); `ImageTexture3D` and `ImageCubeMapTexture`
+      read their url again (`imagetexture.URLRead`), broken when
+      `ImageTexture.requestImage` became what the url field calls
+    - compared with X_ITE 16.4.3 on the Web3D examples with their datasets
+      (not in the corpus; fetched from snoid.sv.vt.edu by hand) and on probe
+      scenes: brain, ventricles, edge, shaded, composed, segmented and MIP
+      agree. X_ITE lights the default style by the headlight, which the
+      specification does not; its camera for the oblique viewpoints
+      (BasicBackpack, BasicSkull) is turned from the viewpoint's, a box drawn
+      the same way
+    - open: ShadedVolumeStyle `shadows` and `phaseFunction` are kept and not
+      drawn (level 4); a ProjectionVolumeStyle as a segment's or isosurface's
+      style draws as the default; `dimensions` with two or three zeros (a line
+      or a point) draws nothing; a depth copy from a multisampled framebuffer
+      relies on the driver resolving it (this one does), and a refusal draws
+      volumes without occlusion, logged once; the corpus's VolumeRendering
+      datasets are not fetched by `oglc-x3d-regression --fetch`
   - [x] GaussianSplats (2026-10-09, branch x3d-splats). One instanced draw
     of a screen-space quad per splat in the transparent pass, both
     renderers and both profiles (GLSL 3.30, buffer textures). Covariance
@@ -1143,7 +1178,7 @@ the component maps onto an existing OpenGLContext subsystem.
 | Sound (classic `Sound`/`AudioClip`) | Full | omi_audio |
 | Sound (4.0 audio graph) | Full, less `enableHRTF`, `interauralDistance` and `tailTime`; see below | omi_audio processing graph |
 | Geospatial | Full, later phase | double-precision paths, terrain |
-| VolumeRendering | Full, later phase | 3D textures, ray-marching pass |
+| VolumeRendering | Full, less ShadedVolumeStyle `shadows` and `phaseFunction` | 3D textures, ray-marching pass |
 | GaussianSplats (4.1) | Full | a sorted-splat draw in the transparent pass; `KHR_gaussian_splatting` |
 | Scripting | Read, kept and written; never executed (§9.18) | |
 | DIS | Not planned | |
@@ -1831,7 +1866,7 @@ adds a viewpoint menu entry hierarchy to the viewer.
 | TextureProjection | projective texturing in the shadow-map path | |
 | CADGeometry | grouping nodes and quad sets | `CADLayer.visible` per child |
 | Geospatial | double-precision coordinates, terrain | `GeoOrigin` rebasing, `GeoElevationGrid` via terrain tiles |
-| VolumeRendering | a ray-marching pass over 3D textures | later phase |
+| VolumeRendering | a ray-marching pass over 3D textures | `scenegraph.volumedata`, `volumestyles` generated GLSL, `passes.volumepass` opaque depth copy |
 | GaussianSplats | a sorted-splat draw | `scenegraph.gaussiansplats` in the transparent pass; `splatmath` arithmetic; glTF `KHR_gaussian_splatting` read and written |
 
 ### 9.18 Scripting

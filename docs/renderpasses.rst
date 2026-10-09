@@ -68,7 +68,11 @@ number of views; the steps after them run once for each view.
     captures the opaque backdrop first, so the shader can sample it through the
     surface.
   - Transparent - draw blended geometry back to front for this view's camera,
-    with depth writes off.
+    with depth writes off. A node drawn here that needs the opaque scene's
+    depth asks ``mode.opaqueDepth()`` for it: a depth texture the view's
+    size, copied from the depth buffer the first time a view's transparent
+    phase asks, or 0 where the copy failed. X3D volumes stop their rays there
+    (:ref:`x3d-volume-rendering`).
 
 - Bloom - when bloom is on, blur the bright parts of each view within its own
   rectangle and composite the glow onto the frame.
@@ -554,6 +558,8 @@ divide the work:
 - ``bloom.py`` -- the HDR target and the glow composited from it.
 - ``transmission.py`` -- the backdrop capture for glass
   (``KHR_materials_transmission``).
+- ``volumepass.py`` -- the opaque depth copy, the X3D volume programs and
+  their draw. See :ref:`x3d-volume-rendering`.
 - ``instancing.py`` -- collapsing repeated shapes into one draw. See
   :doc:`Instanced Geometry <instancing>`.
 - ``selection.py``, ``selectionbuffers.py``, ``asyncpick.py`` -- colour and

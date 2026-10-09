@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Full" version="4.0">
+  <head>
+    <component name="VolumeRendering" level="3"/>
+    <component name="Texturing3D" level="2"/>
+    <meta name="title" content="X3D volume rendering"/>
+    <meta name="creator" content="OpenGLContext"/>
+    <meta name="license" content="BSD-3-Clause"/>
+    <meta name="description" content="The scene oglc-x3d-volume opens: three CT scans of an ammonite on marble plinths, drawn through a transfer function, by segment and as isosurfaces."/>
+  </head>
+  <Scene>
+    <WorldInfo title="X3D volume rendering" info='"The scene oglc-x3d-volume opens."'/>
+    <NavigationInfo type='"EXAMINE" "ANY"' headlight="false"/>
+    <Background skyColor="0.07 0.07 0.09 0.24 0.22 0.2" skyAngle="1.5" groundColor="0.12 0.1 0.09"/>
+    <Viewpoint description="The specimens" position="0 1.85 4.9" orientation="1 0 0 -0.08" fieldOfView="1.05"/>
+    <DirectionalLight global="true" direction="-0.35 -0.55 -0.75" intensity="1.1"
+                      ambientIntensity="0.35" color="1 0.96 0.9"/>
+
+    <!-- The floor, in sandstone. -->
+    <Shape>
+      <Appearance>
+        <PhysicalMaterial metallic="0" roughness="1">
+          <ImageTexture containerField="baseTexture" url='"sandstone_base.png"'/>
+          <ImageTexture containerField="metallicRoughnessTexture" url='"sandstone_mr.png"'/>
+          <ImageTexture containerField="normalTexture" url='"sandstone_normal.png"'/>
+        </PhysicalMaterial>
+        <TextureTransform scale="5 3"/>
+      </Appearance>
+      <IndexedFaceSet coordIndex="0 1 2 3 -1" texCoordIndex="0 1 2 3 -1" solid="false">
+        <Coordinate point="-9 0 5  9 0 5  9 0 -6  -9 0 -6"/>
+        <TextureCoordinate point="0 0  1 0  1 1  0 1"/>
+      </IndexedFaceSet>
+    </Shape>
+
+    <!-- A marble plinth with a steel rod rising from it, which passes
+         through the specimen mounted on it. -->
+    <ProtoDeclare name="Mount">
+      <ProtoInterface>
+        <field name="translation" type="SFVec3f" accessType="initializeOnly" value="0 0 0"/>
+      </ProtoInterface>
+      <ProtoBody>
+        <Transform>
+          <IS><connect nodeField="translation" protoField="translation"/></IS>
+          <!-- A fill light for the plinth and the rod only: the volume
+               styles that read lights read the one key light. -->
+          <DirectionalLight global="false" direction="0.5 -0.3 -0.8" intensity="0.6"
+                            ambientIntensity="0.25" color="0.9 0.92 1"/>
+          <Transform translation="0 0.35 0">
+            <Shape>
+              <Appearance>
+                <PhysicalMaterial metallic="0" roughness="0.55">
+                  <ImageTexture containerField="baseTexture" url='"marble_base.png"'/>
+                  <ImageTexture containerField="metallicRoughnessTexture" url='"marble_mr.png"'/>
+                  <ImageTexture containerField="normalTexture" url='"marble_normal.png"'/>
+                </PhysicalMaterial>
+              </Appearance>
+              <Box size="1.3 0.7 1.0"/>
+            </Shape>
+          </Transform>
+          <Transform translation="0 1.2 0">
+            <Shape>
+              <Appearance>
+                <PhysicalMaterial baseColor="0.9 0.91 0.93" metallic="0.35" roughness="0.3">
+                  <ImageTexture containerField="baseTexture" url='"steel_base.png"'/>
+                  <ImageTexture containerField="metallicRoughnessTexture" url='"steel_mr.png"'/>
+                  <ImageTexture containerField="normalTexture" url='"steel_normal.png"'/>
+                </PhysicalMaterial>
+              </Appearance>
+              <Cylinder radius="0.035" height="1.0"/>
+            </Shape>
+          </Transform>
+        </Transform>
+      </ProtoBody>
+    </ProtoDeclare>
+
+    <ProtoInstance name="Mount"><fieldValue name="translation" value="-2.05 0 0"/></ProtoInstance>
+    <ProtoInstance name="Mount"><fieldValue name="translation" value="0 0 0"/></ProtoInstance>
+    <ProtoInstance name="Mount"><fieldValue name="translation" value="2.05 0 0"/></ProtoInstance>
+
+    <!-- Left: the scan through a transfer function that hides the sediment
+         and colours the shell, its outline drawn more opaque. -->
+    <Transform translation="-2.05 1.6 0" rotation="0 1 0 0.45">
+      <VolumeData DEF="Study" dimensions="1.6 1.6 0.8">
+        <ImageTexture3D DEF="Scan" containerField="voxels" url='"ammonite.nrrd"'/>
+        <ComposedVolumeStyle containerField="renderStyle">
+          <OpacityMapVolumeStyle>
+            <ImageTexture DEF="Transfer" containerField="transferFunction"
+                          url='"ammonite_transfer.png"'/>
+          </OpacityMapVolumeStyle>
+          <SilhouetteEnhancementVolumeStyle silhouetteBoundaryOpacity="1"
+                                            silhouetteRetainedOpacity="0.4"
+                                            silhouetteSharpness="3"/>
+        </ComposedVolumeStyle>
+      </VolumeData>
+    </Transform>
+
+    <!-- Centre: the scan by segment, turning. The air is not drawn; the
+         shell wall is lit, the septa tone-mapped, the siphuncle's edges
+         darkened and the sediment's boundaries kept. -->
+    <Transform DEF="Turntable" translation="0 1.6 0" rotation="0 1 0 0.6">
+      <SegmentedVolumeData DEF="Sections" dimensions="1.6 1.6 0.8"
+                           segmentEnabled="false true true true true">
+        <ImageTexture3D USE="Scan" containerField="voxels"/>
+        <ImageTexture3D DEF="Segments" containerField="segmentIdentifiers"
+                        url='"ammonite_segments.nrrd"'/>
+        <OpacityMapVolumeStyle containerField="renderStyle"/>
+        <ShadedVolumeStyle containerField="renderStyle" lighting="true">
+          <Material diffuseColor="0.96 0.88 0.76" specularColor="0.7 0.7 0.7"
+                    shininess="0.5" ambientIntensity="0.3"/>
+        </ShadedVolumeStyle>
+        <ToneMappedVolumeStyle containerField="renderStyle" warmColor="1 0.55 0.35 0"
+                               coolColor="0.15 0.35 0.55 0"/>
+        <EdgeEnhancementVolumeStyle containerField="renderStyle" edgeColor="0.55 0.08 0.02 1"
+                                    gradientThreshold="0.5"/>
+        <BoundaryEnhancementVolumeStyle containerField="renderStyle" boundaryOpacity="1"
+                                        retainedOpacity="0.08" opacityFactor="1"/>
+      </SegmentedVolumeData>
+    </Transform>
+    <TimeSensor DEF="Clock" cycleInterval="40" loop="true"/>
+    <OrientationInterpolator DEF="Turn" key="0 0.25 0.5 0.75 1"
+                             keyValue="0 1 0 0.6  0 1 0 2.1708  0 1 0 3.74159  0 1 0 5.31239  0 1 0 6.88318"/>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Turn" toField="set_fraction"/>
+    <ROUTE fromNode="Turn" fromField="value_changed" toNode="Turntable" toField="set_rotation"/>
+
+    <!-- Right: two isosurfaces, the sediment's translucent and the shell's
+         in cartoon shading. -->
+    <Transform translation="2.05 1.6 0" rotation="0 1 0 -0.45">
+      <IsoSurfaceVolumeData DEF="Surfaces" dimensions="1.6 1.6 0.8" surfaceValues="0.2 0.6">
+        <ImageTexture3D USE="Scan" containerField="voxels"/>
+        <SilhouetteEnhancementVolumeStyle containerField="renderStyle"
+                                          silhouetteBoundaryOpacity="0.9"
+                                          silhouetteRetainedOpacity="0.2"
+                                          silhouetteSharpness="2"/>
+        <CartoonVolumeStyle containerField="renderStyle" colorSteps="5"
+                            orthogonalColor="1 0.92 0.78 1" parallelColor="0.32 0.14 0.06 1"/>
+      </IsoSurfaceVolumeData>
+    </Transform>
+  </Scene>
+</X3D>

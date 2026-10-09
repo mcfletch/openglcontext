@@ -167,6 +167,12 @@ Installing the package puts these commands on your path:
    ``KHR_gaussian_splatting`` glTF, on a marble terrace, with keys to take
    the higher harmonics away, switch their shadows and write the vase as
    glTF. See :ref:`x3d-gaussian-splats`.
+``oglc-x3d-volume``
+   X3D's VolumeRendering component read from a document: three CT scans of
+   an ammonite, generated, on marble plinths: one through a transfer
+   function, one by segment with its shell lit and its septa tone-mapped,
+   one as isosurfaces, with keys to give the first each of the ten render
+   styles. See :ref:`x3d-volume-rendering`.
 ``oglc-x3d-sound``
    X3D's Sound component read from a document and heard: a bronze bell on a
    ``Sound``, a copper pipe circling on a ``SpatialSound`` with Doppler, its

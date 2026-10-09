@@ -165,6 +165,11 @@ implements these X3D nodes, by component:
   TextureCoordinate3D, TextureCoordinate4D, TextureTransform3D,
   TextureTransformMatrix3D
 - Time - TimeSensor
+- VolumeRendering - BlendedVolumeStyle, BoundaryEnhancementVolumeStyle,
+  CartoonVolumeStyle, ComposedVolumeStyle, EdgeEnhancementVolumeStyle,
+  IsoSurfaceVolumeData, OpacityMapVolumeStyle, ProjectionVolumeStyle,
+  SegmentedVolumeData, ShadedVolumeStyle, SilhouetteEnhancementVolumeStyle,
+  ToneMappedVolumeStyle, VolumeData
 
 .. x3d-implemented-end
 
@@ -430,9 +435,9 @@ one picture, a volume a slice deep, and sends ``width``, ``height``,
 ``depth`` and ``colorDepth`` once read. ``ComposedTexture3D`` stacks its 2D
 textures as slices, resampled to the first's size; ``PixelTexture3D`` is
 its ``image``: components, width, height and depth, then the pixels s
-first, then t, then r (``OpenGLContext.scenegraph.texture3d``). The
-VolumeRendering documents' volumes load; volume rendering itself is a later
-component.
+first, then t, then r (``OpenGLContext.scenegraph.texture3d``). A
+VolumeRendering node draws one by marching rays through it
+(:ref:`x3d-volume-rendering`).
 
 A ``TextureProjector`` casts its ``texture`` from ``location`` along
 ``direction`` through a perspective of ``fieldOfView`` (the smaller of the
@@ -1209,6 +1214,120 @@ node, by ``Loader``, ``Inline`` and ``oglc-view`` alike, and
 the arithmetic with no GL, including ``fit_harmonics``, which fits
 coefficients to a colour that varies with the view, and ``facing``, which
 lays a splat across a surface's normal.
+
+.. _x3d-volume-rendering:
+
+Volume rendering
+~~~~~~~~~~~~~~~~
+
+.. figure:: images/demos/x3d_volume.jpg
+   :alt: Three CT scans of an ammonite on checkered marble plinths, each on a steel rod: one amber through a transfer function, one with its shell lit and its septa tone-mapped, one as cartoon-shaded isosurfaces
+
+   ``oglc-x3d-volume``: a generated CT scan of an ammonite, drawn by three volume data nodes.
+
+``oglc-x3d-volume`` writes and opens ``x3d_volume.x3d``, and
+:doc:`tests/x3d_volume.py <tutorials/x3d_volume>` is the same scene as a
+tutorial. Its data is a CT scan of an ammonite made by
+``OpenGLContext.bin.x3d_volume.ammonite``: a shell coiling three times
+wider each whorl, its septa, the siphuncle through them and sediment in the
+last chambers, blurred over a voxel and given a scanner's noise. Each of
+three marble plinths carries the scan on a steel rod that passes through it:
+a ``VolumeData`` through a transfer function, a ``SegmentedVolumeData``
+whose segments are shaded, tone-mapped, edge- and boundary-enhanced, and an
+``IsoSurfaceVolumeData`` of two surfaces. Keys 1 to 9 and 0 give the first
+specimen each render style in turn; ``s`` shows and hides the second's
+sediment and ``i`` steps the third's inner surface.
+
+``VolumeData``, ``SegmentedVolumeData`` and ``IsoSurfaceVolumeData`` draw
+their ``voxels``, any ``X3DTexture3DNode``, in a box ``dimensions`` across
+centred on their origin, its slices in the XY plane from -Z to +Z: texture
+s, t and r run along X, Y and Z. Each is drawn with the blended geometry,
+in the order of its centre's distance, by marching each pixel's ray through
+the box (``OpenGLContext.scenegraph.volumedata``,
+``OpenGLContext.passes.volumepass``, ``shaders/volume.frag``):
+
+- Samples are half a voxel apart. Front to back, each sample's opacity is
+  the opacity for a voxel's thickness, corrected for the step, so a volume
+  looks the same at any size and sampling. A ray stops once its colour is
+  99.5% opaque, and takes at most 2048 samples.
+- A ray stops at the opaque geometry: the first volume a view draws copies
+  the depth buffer, which then holds the opaque geometry alone, so a shape
+  inside the volume hides what is behind it and is hidden by what is in
+  front of it. A camera inside the box sees the volume around it.
+- Colours are X3D's as displayed, like a ``Material``'s: X3D's fog fades
+  each sample by its distance, and tone mapping and exposure do not change
+  them.
+- A pick reaches the first sample where the volume has become half opaque,
+  with the picked point there; a ray that never does passes through to what
+  is behind. The compatibility profile's colour pick reaches the box.
+- A volume casts no shadow and receives none. ``visible`` false draws
+  nothing; a ``dimensions`` value of zero draws the volume as a plane, and
+  two or three zeros draw nothing. ``bboxSize`` and ``bboxCenter`` replace
+  the box for culling.
+
+The render styles follow ISO/IEC 19775-1 41.4 (``OpenGLContext.scenegraph.volumestyles``
+turns them into the GLSL the march compiles, one program for each
+arrangement of styles). Each style takes the colour and opacity it is given
+and gives its own. The first is given the voxel's colour channels and, as
+opacity, its first component: the default ``OpacityMapVolumeStyle``'s ramp
+from transparent at 0 to opaque at 1.
+
+- ``OpacityMapVolumeStyle`` with no ``transferFunction`` is that default.
+  With one, a 2D texture (a 1-pixel-high one is a 1D table) or a 3D texture,
+  the voxel's components index it in turn and its texel, read by Table 41.6,
+  is the colour and opacity.
+- ``BoundaryEnhancementVolumeStyle``, ``EdgeEnhancementVolumeStyle``,
+  ``SilhouetteEnhancementVolumeStyle``, ``CartoonVolumeStyle`` and
+  ``ToneMappedVolumeStyle`` use the specification's equations. Normals are the
+  voxels' gradient, pointing from higher values to lower, unless
+  ``surfaceNormals`` gives a texture of three or more channels; the
+  gradient's magnitude is in value per voxel, values running 0 to 1.
+  ``CartoonVolumeStyle`` keeps the opacity it is given, times its colour's
+  alpha, and draws nothing where the surface faces away.
+- ``ShadedVolumeStyle`` lights each sample by X3D's Phong equation with the
+  scene's lights and its ``material`` (a ``Material``'s fields; without one
+  the colour given is the diffuse colour); ``lighting`` false is the diffuse
+  colour unlit. ``shadows`` and ``phaseFunction`` are kept and not acted on.
+- ``ToneMappedVolumeStyle`` sums the warm and cool mix of each light that
+  reaches the sample, the headlight among them.
+- ``ComposedVolumeStyle`` applies its styles in order; ``BlendedVolumeStyle``
+  blends in its own ``voxels`` drawn by its ``renderStyle``, weighted as its
+  weight functions say (``TABLE`` with no table is ``ALPHA1``).
+- ``ProjectionVolumeStyle`` is the largest, smallest or mean of the voxels'
+  intensity along the ray, or with an ``intensityThreshold`` the first
+  local maximum past it. It is drawn as a ``VolumeData``'s style; as a
+  segment's or an isosurface's style it is the default opacity map.
+- A style whose ``enabled`` is false is drawn as though it were absent, as
+  X_ITE draws one.
+- ``SegmentedVolumeData`` draws each voxel by the style its
+  ``segmentIdentifiers`` value (0 to 255) indexes, the default where there is
+  none, and leaves out the segments ``segmentEnabled`` turns off. Identifiers
+  of another size than the voxels are ignored, and the first style then
+  draws the whole volume.
+- ``IsoSurfaceVolumeData`` draws a surface wherever the ray crosses one of
+  ``surfaceValues``, or with one value and a ``contourStepSize``, every
+  multiple of the step from it between 0 and 1, up to 64 surfaces; surfaces
+  are given styles as 41.4.6 says, and one with no style is opaque and
+  unlit in its voxel colour. ``surfaceTolerance`` is a gradient magnitude in
+  value per voxel, and ``gradients`` gives the surfaces' normals. No surface
+  value draws nothing.
+
+Both renderers draw volumes through the same GLSL 3.30 program, so a
+compatibility-profile context of OpenGL 3.3 or later draws them as a core
+one does. Where the depth buffer cannot be copied the volume is drawn over
+the opaque geometry inside it, and the failure is logged once.
+
+The costs: one depth copy a view in each frame that draws a volume, and per
+pixel the box covers, one texture read a sample, six more where a style
+reads normals. A still frame compiles and makes nothing. On a Radeon 8060S
+at 1280x720, a 512 x 512 x 230 scan filling the view takes about 2 ms
+unshaded and 8 ms through ``ShadedVolumeStyle``.
+
+Where X_ITE 16.4.3's renders of Web3D's VolumeRendering examples differ:
+X_ITE lights the default style by the headlight, where the specification
+gives it no lighting, and its camera on the examples whose viewpoints look
+obliquely (BasicBackpack, BasicSkull) is turned from the one the viewpoint
+gives, for a box as for a volume.
 
 .. _x3d-shaders:
 
