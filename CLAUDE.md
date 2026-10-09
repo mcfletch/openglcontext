@@ -72,6 +72,8 @@ package whose code ends up somewhere else.
 ```text
 OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
+│   ├── x3dgraph.py   # A scene's X3D sound nodes as one engine's processing
+│   │                 # graph, kept in step once a frame -- no GL
 │   └── vehicle.py    # A road vehicle's motor, tyres, wind and impacts as
 │                     # scene nodes -- docs/audio.rst#audio-vehicle
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.rst
@@ -255,6 +257,8 @@ OpenGLContext/
 │   ├── x3druntime.py # X3D's TimeTrigger on the engine clock and KeySensor on
 │   │                 # the context's keys; the other event utilities are
 │   │                 # vrml.x3d.runtime's -- docs/x3d.rst
+│   ├── x3dsound.py   # X3D's Sound component: each node as an omi_audio
+│   │                 # graph node -- no GL -- docs/x3d.rst#x3d-sound
 │   ├── x3dsensors.py # X3D's environmental sensors told each frame what they
 │   │                 # sense: the viewer, a target, the views -- no GL
 │   ├── x3drigidbody.py  # X3D's RigidBodyCollection and CollisionSensor on the

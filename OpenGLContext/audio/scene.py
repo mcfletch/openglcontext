@@ -18,16 +18,18 @@ device.
 from __future__ import annotations
 
 import logging
-import time
 import weakref
 from collections.abc import Sequence
 from typing import Any, Optional
 
 from omi_audio.device import open_device
 from omi_audio.engine import AudioEngine
+from vrml.x3d import nodes as x3d
 
 from OpenGLContext.audio.areas import apply_zones
 from OpenGLContext.audio.settings import settings_for
+from OpenGLContext.audio.x3dgraph import SoundGraph
+from OpenGLContext.events import systemtime
 from OpenGLContext.scenegraph.audio import stop_scene_audio, update_scene_audio
 
 log = logging.getLogger(__name__)
@@ -40,6 +42,10 @@ _engines: "weakref.WeakKeyDictionary[Any, AudioEngine]" = weakref.WeakKeyDiction
 #: Engines whose emitters' gains and reverb zones set on the last frame, so the
 #: frame the zones go puts both back.
 _zoned: "weakref.WeakSet[AudioEngine]" = weakref.WeakSet()
+
+#: Each engine's graph of the scene's X3D sound nodes, made when a frame first
+#: has one.
+_sound_graphs: "weakref.WeakKeyDictionary[AudioEngine, SoundGraph]" = weakref.WeakKeyDictionary()
 
 
 def existing_engine(context: Any) -> Optional[AudioEngine]:
@@ -83,10 +89,19 @@ def attach(context: Any, engine: AudioEngine) -> None:
     _engines[context] = engine
 
 
+def sound_graph(context: Any) -> Optional[SoundGraph]:
+    """The graph of ``context``'s X3D sound nodes, or None before a frame has had one"""
+    engine = _engines.get(context)
+    return _sound_graphs.get(engine) if engine is not None else None
+
+
 def close(context: Any) -> None:
     """Release ``context``'s engine and its device.  Safe if it had none."""
     engine = _engines.pop(context, None)
     if engine is not None:
+        graph = _sound_graphs.pop(engine, None)
+        if graph is not None:
+            graph.close()
         engine.close()
 
 
@@ -96,10 +111,13 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
 
     ``paths`` are the render pass's collected ``Auditory`` node paths.  An empty
     sequence returns immediately **without opening a device**, which is what
-    makes sound free for a scene that has none.
+    makes sound free for a scene that has none.  X3D's sound nodes on them are
+    played through the engine's processing graph
+    (:class:`~OpenGLContext.audio.x3dgraph.SoundGraph`), the others as voices.
 
-    ``now`` is absolute seconds, because VRML97's ``startTime`` and ``stopTime``
-    are absolute; it is taken from the wall clock when not given.
+    ``now`` is absolute seconds, because X3D's ``startTime`` and ``stopTime``
+    are absolute; it is the engine's clock
+    (:func:`~OpenGLContext.events.systemtime.systemTime`) when not given.
 
     ``zones`` are the frame's placed zones: the emitters they name are heard
     only while the camera is inside them, and the reverb is theirs. See
@@ -112,10 +130,13 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
     Returns how many nodes were driven, for a debug overlay.
     """
     if not paths or not enabled(context):
+        _silence_graph(context)
         return 0
     engine = engine_for(context)
     if engine is None:
         return 0
+    if now is None:
+        now = systemtime.systemTime()
     # The *player's* volume, read every frame: the settings screen writes the
     # field, and a volume slider that only takes effect on the next launch is a
     # volume slider nobody uses.  The application's own `master_gain` is left
@@ -132,13 +153,31 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
             _zoned.add(engine)
         else:
             _zoned.discard(engine)
-    return update_scene_audio(engine, paths,
-                              time.time() if now is None else now)
+    voices = [path for path in paths if not isinstance(path[-1], x3d.X3DSoundNode)]
+    roots = [(path[-1], path.transformMatrix()) for path in paths
+             if isinstance(path[-1], x3d.X3DSoundNode)]
+    driven = update_scene_audio(engine, voices, now)
+    graph = _sound_graphs.get(engine)
+    if roots or graph is not None:
+        if graph is None:
+            graph = _sound_graphs[engine] = SoundGraph(engine)
+        settings = settings_for(context)
+        driven += graph.update(roots, now, budget=int(settings.voices),
+                               capture=bool(settings.microphone))
+    return driven
+
+
+def _silence_graph(context: Any) -> None:
+    """Hear none of ``context``'s X3D sound nodes, where it has any"""
+    graph = sound_graph(context)
+    if graph is not None:
+        graph.clear()
 
 
 def stop(context: Any, paths: Sequence[Any]) -> None:
     """Silence every sound in a scene that is going away."""
     stop_scene_audio(paths)
+    _silence_graph(context)
     engine = _engines.get(context)
     if engine is not None:
         engine.stop_all()

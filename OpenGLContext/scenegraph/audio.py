@@ -1,6 +1,6 @@
-"""Sound in the scenegraph: emitters, sources, and VRML97's ``Sound`` node.
+"""Sound in the scenegraph: glTF's emitters and sources.
 
-Three nodes, and the split between them is the same split glTF's
+Two nodes, and the split between them is the same split glTF's
 ``KHR_audio_emitter`` makes:
 
 :class:`AudioSource`
@@ -9,10 +9,10 @@ Three nodes, and the split between them is the same split glTF's
 :class:`AudioEmitter`
     Where the sound comes from, and how it fades with distance and direction.
     Put it under a ``Transform`` and the sound is wherever that transform is.
-:class:`Sound`
-    VRML97's own node, with the fields that specification gives it.  It
-    attenuates differently -- two ellipsoids rather than a distance curve -- so
-    it computes its own gain and shares everything else.
+
+X3D's (and VRML97's) ``Sound`` and the rest of X3D's Sound component are
+:mod:`OpenGLContext.scenegraph.x3dsound`, played through omi_audio's
+processing graph.
 
 Every node has the same job once per frame: **be told where it is, and keep its
 sounds in step with that**.  The render pass calls :meth:`AudioEmitter.updateAudio`
@@ -29,14 +29,13 @@ machine with none.
 from __future__ import annotations
 
 import logging
-import math
 import os
 from collections.abc import Callable, Sequence
 from typing import Any, Optional
 
 import numpy as np
 from vrml import field, node, protofunctions
-from vrml.vrml97 import basenodes, nodetypes
+from vrml.vrml97 import nodetypes
 
 from omi_audio import formats, model, spatial
 from OpenGLContext import entropy
@@ -66,6 +65,46 @@ AIM_INTERVAL = 1.0 / 15.0
 #: How a generated settings page presents the distance models.
 DISTANCE_MODELS = tuple(entry.value for entry in spatial.DistanceModel)
 SHAPE_TYPES = tuple(entry.value for entry in spatial.ShapeType)
+
+
+def document_resolver(node: Any) -> Optional[Any]:
+    """The resolver confining ``node``'s references to its own document, if it has one.
+
+    A node read out of a scene file may only reach what that document's own
+    location permits: audio under its directory, or same-origin audio for a
+    document fetched over http(s). Its ``url`` came from the file rather than
+    from the application.  A node built in code has no document
+    behind it and is not confined.
+    """
+    root = protofunctions.root(node)
+    base = getattr(root, 'baseURI', None) if root is not None else None
+    if not base:
+        return None
+    if resolver.is_url(base):
+        return resolver.Resolver(base_url=base)
+    return resolver.Resolver(base_dir=os.path.dirname(os.path.abspath(base)))
+
+
+def clip_from_urls(node: Any, urls: Sequence[str], engine: Any) -> Any:
+    """The first of ``urls`` that decodes through ``engine``, or None.
+
+    Each entry is resolved against ``node``'s document first
+    (:func:`document_resolver`), so a name the document is not allowed to
+    reach is skipped rather than opened.
+    """
+    confine = document_resolver(node)
+    for name in urls:
+        if confine is not None:
+            try:
+                name = confine.resolve(name)
+            except IOError:
+                log.warning('%s url %r is outside its document; ignored',
+                            type(node).__name__, name)
+                continue
+        found = engine.clip(name)
+        if found is not None:
+            return found
+    return None
 
 
 def point_to_world(point: Sequence[float] | np.ndarray, matrix: Any) -> np.ndarray:
@@ -247,42 +286,9 @@ class AudioSource(node.Node):
         self._library.cache = engine.clips
         return self._library.clip_for(self._source)
 
-    def _documentResolver(self) -> Optional[Any]:
-        """The resolver confining this source to its own document, if it has one.
-
-        A source read out of a scene file may only reach what that document's
-        own location permits -- audio under its directory, or same-origin audio
-        for a document fetched over http(s) -- because the ``url`` came from the
-        file rather than from the application.  A source built in code has no
-        document behind it and is not confined.
-        """
-        root = protofunctions.root(self)
-        base = getattr(root, 'baseURI', None) if root is not None else None
-        if not base:
-            return None
-        if resolver.is_url(base):
-            return resolver.Resolver(base_url=base)
-        return resolver.Resolver(base_dir=os.path.dirname(os.path.abspath(base)))
-
     def _fromUrl(self, engine: Any) -> Any:
-        """The first of :attr:`url` that decodes, most-preferred first.
-
-        Each entry is resolved against the document first, so a name the
-        document is not allowed to reach is skipped rather than opened.
-        """
-        confine = self._documentResolver()
-        for name in self.url:
-            if confine is not None:
-                try:
-                    name = confine.resolve(name)
-                except IOError:
-                    log.warning(
-                        'AudioSource url %r is outside its document; ignored', name)
-                    continue
-            found = engine.clip(name)
-            if found is not None:
-                return found
-        return None
+        """The first of :attr:`url` that decodes; see :func:`clip_from_urls`."""
+        return clip_from_urls(self, self.url, engine)
 
     def record(self) -> model.AudioSource:
         """This node's fields as the ``KHR_audio_emitter`` record.
@@ -534,129 +540,6 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         self._playing.pop(source, None)
         self._repeats.pop(source, None)
         self._aimed.pop(source, None)
-
-
-class Sound(basenodes.Sound):
-    """VRML97's ``Sound`` node, rendered through the audio engine.
-
-    Its geometry is not the glTF one and cannot be expressed as one: two
-    ellipsoids sharing a focus at ``location``, with a ramp between them that is
-    linear in decibels.  So it works out its own level with
-    :func:`~omi_audio.spatial.ellipsoid_gain_at`, which takes the sound's world
-    location and direction and the listener's position, and hands the engine a
-    finished number to pan -- which is the one thing the two models share.
-
-    Of VRML97's time-dependent behaviour it honours what can be seen from
-    outside: ``startTime`` and ``stopTime`` bound when the clip sounds,
-    ``loop`` repeats it, ``pitch`` sets the playback rate, and ``isActive`` and
-    ``duration_changed`` are sent.  Fractional seeking into a clip that started
-    before the scene did is not implemented; a clip whose ``startTime`` has
-    passed begins at its start.
-
-    Reference:
-        ISO/IEC 14772-1:1997 (VRML97) 6.42 ``Sound``, 6.2 ``AudioClip``
-        https://www.web3d.org/documents/specifications/14772/V2.0/part1/nodesRef.html#Sound
-    """
-
-    def __init__(self, **named: Any) -> None:
-        super(Sound, self).__init__(**named)
-        self._handle: Any = None
-        self._clip: Any = None
-        self._resolved = False
-        # `isActive` is an eventOut: it has no value until something sends one,
-        # so reading it back to find out what we last said is an error.  The
-        # node remembers what it sent instead.
-        self._active = False
-
-    def updateAudio(self, engine: Any, matrix: Any, now: float = 0.0) -> None:
-        """Start, aim or stop this sound for the frame at ``now``."""
-        if engine is None:
-            return
-        source = self.source
-        if not isinstance(source, basenodes.AudioClip):
-            return
-        location = point_to_world(self.location, matrix)
-        direction = direction_to_world(self.direction, matrix)
-        level = self.intensity * spatial.ellipsoid_gain_at(
-            location, direction, engine.listener.position,
-            min_front=self.minFront, min_back=self.minBack,
-            max_front=self.maxFront, max_back=self.maxBack)
-        if not self._scheduled(source, now):
-            self._stop(source)
-            return
-        if self._handle is not None and self._handle.playing:
-            left, right = _pan(engine, location, level, self.spatialize)
-            self._handle.set_gain(left, right)
-            return
-        if self._handle is not None:
-            self._stop(source)
-            return
-        self._start(engine, source, location, level)
-
-    def stopAudio(self) -> None:
-        """Silence this sound."""
-        source = self.source
-        self._stop(source if isinstance(source, basenodes.AudioClip) else None)
-
-    def _scheduled(self, source: Any, now: float) -> bool:
-        """Whether the clip's ``startTime``/``stopTime`` allow it to sound.
-
-        ``stopTime`` at or before ``startTime`` means "no stop", which is what
-        VRML97's time-dependent nodes specify and what lets the default pair of
-        zeroes mean "play from the beginning and never stop".
-        """
-        if now < source.startTime:
-            return False
-        return not (source.stopTime > source.startTime and now >= source.stopTime)
-
-    def _start(self, engine: Any, source: Any, location: np.ndarray,
-               level: float) -> None:
-        """Resolve the clip if need be, and give it a voice."""
-        if not self._resolved:
-            self._resolved = True
-            for name in source.url:
-                found = engine.clip(name)
-                if found is not None:
-                    self._clip = found
-                    source.duration_changed = found.duration
-                    break
-        if self._clip is None:
-            return
-        left, right = _pan(engine, location, level, self.spatialize)
-        self._handle = engine.mixer.play_gains(
-            self._clip, left, right, priority=self.priority,
-            loop=source.loop, rate=source.pitch)
-        if self._handle is not None:
-            self._active = True
-            source.isActive = True
-
-    def _stop(self, source: Any) -> None:
-        """Release the voice and say so, if there was one."""
-        if self._handle is not None:
-            self._handle.stop()
-            self._handle = None
-        if self._active:
-            self._active = False
-            if source is not None:
-                source.isActive = False
-
-
-def _pan(engine: Any, location: np.ndarray, level: float,
-         spatialize: bool) -> tuple[float, float]:
-    """``level`` split between the ears for a sound at ``location``.
-
-    A sound the author asked not to spatialise still fades with distance -- the
-    ellipsoids and ``intensity`` are already in ``level`` -- but sits in the
-    middle of the stereo field wherever it is, which is what VRML97 specifies.
-    """
-    if level <= 0.0:
-        return 0.0, 0.0
-    if not spatialize:
-        centre = level * math.sqrt(0.5)
-        return centre, centre
-    azimuth, _ = engine.listener.azimuth_elevation(location)
-    left, right = spatial.equal_power_pan(azimuth)
-    return level * left, level * right
 
 
 def update_scene_audio(engine: Any, paths: Sequence[Any], now: float = 0.0) -> int:

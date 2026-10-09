@@ -469,6 +469,11 @@ switched on for a run therefore also applies to the subprocesses it starts.
      - number
      - ``1.0``
      - Master gain.
+   * - ``OPENGLCONTEXT_AUDIO_MICROPHONE``
+     - yes/no
+     - off
+     - Whether a scene's X3D ``MicrophoneSource`` and ``StreamAudioSource`` may
+       open an audio input. See :ref:`audio-x3d`.
    * - ``OPENGLCONTEXT_STALL_MS``
      - milliseconds
      - unset (threshold 50)

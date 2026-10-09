@@ -12,8 +12,9 @@ The engine is the separate `omi_audio <https://github.com/mcfletch/omi_audio>`__
 package: the ``KHR_audio_emitter`` data model, the gain curves, the clip cache,
 the mixer, the device interface and the engine object. It has no scenegraph
 code, and a project with no renderer, or a different one, can use it on its
-own. OpenGLContext adds the ``AudioEmitter``, ``AudioSource`` and ``Sound``
-nodes, and one engine per context that the render pass drives.
+own. OpenGLContext adds the ``AudioEmitter`` and ``AudioSource`` nodes, X3D's
+Sound component on omi_audio's processing graph, and one engine per context
+that the render pass drives.
 
 .. _audio-dataflow:
 
@@ -98,9 +99,16 @@ The module chain
      - The player's switch, volume and voice budget, as a
        ``ContextDefinition`` sub-node
      - the field system
+   * - ``OpenGLContext/audio/x3dgraph.py``
+     - ``SoundGraph``: a scene's X3D sound nodes as one engine's processing
+       graph
+     - ``omi_audio.graph``, ``omi_audio.device``
    * - ``OpenGLContext/scenegraph/audio.py``
-     - The ``AudioEmitter``, ``AudioSource`` and ``Sound`` nodes
+     - The ``AudioEmitter`` and ``AudioSource`` nodes
      - ``omi_audio.model``, ``omi_audio.spatial``
+   * - ``OpenGLContext/scenegraph/x3dsound.py``
+     - X3D's Sound component: each node and the graph node it plays as
+     - ``omi_audio.graph``, ``vrml.x3d.sound``
    * - ``OpenGLContext/loaders/gltf/scene.py``
      - ``audio_library`` and ``_audio_emitters``: a document's emitters as
        nodes under their glTF nodes
@@ -223,15 +231,48 @@ focus at the sound, with a ramp between them that is linear in decibels.
    along the axis, and their harmonic mean at right angles.
 
 At the outer ellipsoid the ramp has reached −20 dB, which the specification
-treats as inaudible, and beyond it the gain is zero. The mixer ramps every
+treats as inaudible, and beyond it the gain is zero. The graph ramps every
 gain change across a block, so the step from 0.1 to 0 produces no click.
 
-The geometry is ``omi_audio.spatial.ellipsoid_gain_at(location, direction,
-listener_position, ...)``, which takes three world-space vectors. The node
-transforms its ``location`` and ``direction`` into world space, multiplies by
-``intensity``, and pans. A zero ``direction`` has no front or back, so the
-``front`` distances apply in every direction. A ``set_pitch`` on an active
-``AudioClip`` is ignored, as VRML97 specifies.
+The geometry is ``omi_audio.spatial.ellipsoid_gain(distance, cos_theta, ...)``.
+The node carries its ``location`` and ``direction`` into world space,
+multiplies by ``intensity``, and pans. A zero ``direction`` has no front or
+back, so the ``front`` distances apply in every direction. A ``pitch`` set on
+an active ``AudioClip`` takes effect when it next starts, as the
+specification says.
+
+.. _audio-x3d-graph:
+
+X3D's sound nodes on the processing graph
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.audio.x3dgraph.SoundGraph`` is one engine's graph of a
+scene's X3D sound nodes. The render pass hands ``audio.scene.update`` the
+frame's ``Auditory`` paths; the X3D sound nodes among them go to the graph
+with their world matrices, and the rest are played as voices. Each frame the
+graph:
+
+1. walks from those roots through each node's ``audioInputs()`` (its
+   ``children``, a ``Sound``'s ``source``) and each ``ChannelSplitter``'s
+   ``outputs``, making each node's ``omi_audio.graph`` node the first time
+   (``makeAudio``);
+2. writes each node's fields onto its graph node (``applyAudio``), writing a
+   value only where it changed, and advances its time (``vrml.x3d.sound``);
+3. compares the wiring with the last frame's and, where it differs, connects
+   every graph node to its inputs and compiles, which swaps the plan the
+   audio thread renders whole; nodes no longer reached are let go and their
+   inputs closed;
+4. starts, pauses or silences each source as its time says, a clip or buffer
+   from where its time has reached;
+5. opens or closes each audio input;
+6. places each ``Sound`` and ``SpatialSound`` for the listener and silences
+   those past the voice budget.
+
+A new graph node is settled (``Node.settle``) after its first frame, so it
+starts at its fields rather than ramping there from its defaults. The work
+of a frame grows linearly with the nodes (``test_x3d_sound.py`` holds it to
+that); 100 ``SpatialSound`` nodes of three graph nodes each take about
+1.6 ms a frame.
 
 .. _mixer:
 

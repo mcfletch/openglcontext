@@ -429,7 +429,30 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     - Billboards turned toward their own layer's camera
     - not done: Layout nodes are placed for the first view only; the
       compatibility profile resolves picks through the navigated layer
-  - [ ] Sound: the 4.0 audio graph (19 nodes) on omi_audio
+  - [x] Sound: all 21 nodes on omi_audio's processing graph (2026-10-09,
+    branch x3d-sound). `scenegraph.x3dsound` makes each node's
+    `omi_audio.graph` node and writes its fields; `audio.x3dgraph.SoundGraph`
+    walks the frame's sound roots, rewires and compiles only when the wiring
+    changes, places `Sound` (VRML97 ellipsoids) and `SpatialSound` (Web Audio
+    distance models, cone, Doppler as a propagation delay) for the camera or a
+    `ListenerPointSource`, and silences past `AudioSettings.voices` by
+    `priority`. Timing is pyvrml97's `vrml.x3d.sound` on `timesensor.Clocked`:
+    a clip started before it was first heard plays from where its time has
+    reached (`BufferSource.start(offset)`). Destinations (the stream one
+    included) are heard; a `Sound`/`SpatialSound` no destination reads is heard
+    as VRML97's is. `MicrophoneSource`/`StreamAudioSource` open an input only
+    with `AudioSettings.microphone` (`OPENGLCONTEXT_AUDIO_MICROPHONE`), only
+    while heard and running. The voice-based VRML97 `Sound` is replaced.
+    `oglc-x3d-sound`
+    - omi_audio: `BufferSource.start(offset)`, `Node.settle()`
+    - not read: `enableHRTF` (equal-power pan), `interauralDistance`,
+      `tailTime`, `mediaDeviceID` and `streamIdentifier` of the destinations
+      (one output, the device); a `ListenerPointSource` as an input is
+      silence; a `Convolver`'s `buffer` is one channel (X3D gives it no channel
+      count); a `MovieTexture` as a `Sound` source is silent
+    - open for the maintainer: `StreamAudioDestination` is heard, as Web3D's
+      AudioSpatialSound examples use it, rather than sent to a W3C media
+      stream; `StreamAudioSource` reads an input device by name
 - Phase 9, Fast Infoset reader
   - [x] `vrml.x3d.fastinfoset`: X.891 decoder to XML events, iterative over element depth; values in an algorithm without a decoder arrive `Undecoded`
   - [x] `vrml.x3d.fivocabulary`: tables A.2-A.5 as Web3D's files number them (attribute names one past A.3 from 57, a 1025-entry table, 54-56 unknown); delta-zlib integers in the files' layout at index 34
@@ -1099,7 +1122,7 @@ the component maps onto an existing OpenGLContext subsystem.
 | ParticleSystems | Full | engine particles |
 | Layering, Layout | Full | overlay UI and multi-view rendering |
 | Sound (classic `Sound`/`AudioClip`) | Full | omi_audio |
-| Sound (4.0 audio graph) | Sources, gain, panning, filters, delay, analyser; see below | omi_audio |
+| Sound (4.0 audio graph) | Full, less `enableHRTF`, `interauralDistance` and `tailTime`; see below | omi_audio processing graph |
 | Geospatial | Full, later phase | double-precision paths, terrain |
 | VolumeRendering | Full, later phase | 3D textures, ray-marching pass |
 | GaussianSplats (4.1) | Later phase | a new sorted-splat pass |
@@ -1125,11 +1148,13 @@ What will not work, and why:
   GStreamer is used. Until then the texture draws nothing and its shape is
   drawn untextured.
 - `StreamAudioSource`, `StreamAudioDestination`. These are defined in terms of
-  WebRTC media streams, which a desktop engine does not have.
-  `MicrophoneSource` maps to device capture where `miniaudio` offers it.
-- `Convolver`, `DynamicsCompressor`, `WaveShaper`, `PeriodicWave` are
-  implementable in NumPy and are planned last within Sound; they are listed
-  here because a first release of the audio graph will not have them.
+  WebRTC media streams, which a desktop engine does not have: a
+  `StreamAudioDestination` is heard as an `AudioDestination` is, and a
+  `StreamAudioSource` reads the audio input its first `streamIdentifier`
+  names, as a `MicrophoneSource` reads `mediaDeviceID`'s. Both inputs open
+  only where the application allows capture.
+- `SpatialSound.enableHRTF` and `ListenerPointSource.interauralDistance`. The
+  pan is equal power between two ears; there is no HRTF.
 - DIS (`EspduTransform`, `SignalPdu`, …). These exchange IEEE 1278 network
   packets for military simulation; nothing in an engine for games and
   applications calls for it. The nodes parse and are inert.

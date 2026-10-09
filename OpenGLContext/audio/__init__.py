@@ -17,15 +17,19 @@ What is here is the two seams between that engine and a context:
                            on the :class:`~OpenGLContext.contextdefinition.ContextDefinition`
                            so it validates, serialises and generates its own
                            settings page like every other field group.
+:mod:`~.x3dgraph`          :class:`~.x3dgraph.SoundGraph`, a scene's X3D sound
+                           nodes as one engine's processing graph, kept in
+                           step once a frame.
 :mod:`~.vehicle`           :class:`~.vehicle.VehicleSoundtrack`, a road
                            vehicle's motor, tyres, wind and impacts as one
                            emitter, fed from an ``omi_physics`` vehicle.
 =========================  ====================================================
 
-The nodes that put a sound *in* a scene are
-:mod:`OpenGLContext.scenegraph.audio` -- ``AudioEmitter``, ``AudioSource`` and
-VRML97's ``Sound`` -- and the glTF loader reads ``KHR_audio_emitter`` blocks
-into them through :mod:`OpenGLContext.loaders.gltf.scene`.
+The nodes that put a sound *in* a scene are ``AudioEmitter`` and
+``AudioSource`` (:mod:`OpenGLContext.scenegraph.audio`), which the glTF loader
+reads ``KHR_audio_emitter`` blocks into through
+:mod:`OpenGLContext.loaders.gltf.scene`, and X3D's Sound component
+(:mod:`OpenGLContext.scenegraph.x3dsound`).
 
 Sound is **optional and never fatal**.  ``miniaudio`` may be absent and a device
 may fail to open; both end in one warning and a silent run, so a machine with no

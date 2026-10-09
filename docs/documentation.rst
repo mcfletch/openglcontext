@@ -161,6 +161,14 @@ Installing the package puts these commands on your path:
    bouncing in a glass case, one for each emitter and physics model, with
    keys to set the firework off and switch the wind. See :ref:`X3D particle
    systems <x3d-particles>`.
+``oglc-x3d-sound``
+   X3D's Sound component read from a document and heard: a bronze bell on a
+   ``Sound``, a copper pipe circling on a ``SpatialSound`` with Doppler, its
+   oscillator shaped and filtered, and a steel drum through an
+   ``AudioDestination`` with an echo, a room, a compressor and an analyser
+   raising a meter, with keys to pause the bell, shape and filter the pipe,
+   swap the chimes between the ears and move the listener. See :ref:`X3D
+   sound <x3d-sound>`.
 ``oglc-x3d-layering``
    X3D's Layering and Layout nodes read from a document: a courtyard in
    layer 0, a plan view of it in an inset viewport through its own
