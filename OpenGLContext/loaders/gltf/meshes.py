@@ -9,6 +9,9 @@ tangents, Lengyel-method tangents -- so authored maps actually shade. Attribute
 counts and index ranges are validated up front, so a malformed primitive reports
 which attribute disagrees instead of crashing in the VBO upload.
 
+A primitive carrying ``KHR_gaussian_splatting`` is read by :mod:`splats` as a
+GaussianSplats node instead.
+
 Also reads a primitive's morph ``targets`` (position/normal/tangent deltas) for the
 animation Player to blend per frame.
 
@@ -36,6 +39,7 @@ if TYPE_CHECKING:
     # defining modules.
     from OpenGLContext.scenegraph.shape import Shape
     from OpenGLContext.scenegraph.appearance import Appearance
+    from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 else:
     from OpenGLContext.scenegraph.basenodes import Shape, Appearance
 from OpenGLContext.loaders.gltf.accessors import (
@@ -45,6 +49,7 @@ from OpenGLContext.loaders.gltf.accessors import (
 from OpenGLContext.loaders.gltf.materials import _build_appearance, _double_sided
 from OpenGLContext.loaders.gltf.transforms import _bounds_from_points
 from OpenGLContext.loaders.gltf import draco as _draco
+from OpenGLContext.loaders.gltf import splats as _splats
 
 log = logging.getLogger(__name__)
 
@@ -98,10 +103,23 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
                      resolver: Resolver, appearances: dict, tex_cache: dict,
                      hooks: "Optional[HookRunner]" = None,
                      world: Optional[np.ndarray] = None
-                     ) -> tuple[Optional["Shape"], Optional[tuple[np.ndarray, np.ndarray]]]:
+                     ) -> tuple[Optional["Shape | GaussianSplats"],
+                                Optional[tuple[np.ndarray, np.ndarray]]]:
+    """The node a primitive draws as and its bounds; (None, None) for one with nothing to draw
+
+    A ``KHR_gaussian_splatting`` primitive is a GaussianSplats node; any other
+    is a Shape holding a PBRMesh.
+    """
     attrs = primitive.attributes
     if attrs.POSITION is None:
         return None, None
+    if _splats.splat_extension(primitive) is not None:
+        splats = _splats.read_splats(g, primitive, resolver,
+                                     getattr(hooks, 'values', None))
+        if splats is not None:
+            extent = splats.splats().bounds()
+            return splats, extent if extent is not None else _bounds_from_points(
+                np.asarray(splats.positions, np.float32).reshape(-1, 3))
     if _draco.draco_extension(primitive) is not None:
         try:
             arrays = _draco.draco_arrays(g, primitive, resolver)

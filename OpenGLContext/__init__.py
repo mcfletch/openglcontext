@@ -135,6 +135,7 @@ Node( 'EnvironmentLight', 'OpenGLContext.scenegraph.environmentlight.Environment
 Node( 'Fog', 'OpenGLContext.scenegraph.fog.Fog' )
 Node( 'FontLibrary', 'OpenGLContext.scenegraph.text.fontlibrary.FontLibrary' )
 Node( 'FontStyle', 'OpenGLContext.scenegraph.text.fontstyle3d.FontStyle' )
+Node( 'GaussianSplats', 'OpenGLContext.scenegraph.gaussiansplats.GaussianSplats' )
 Node( 'Gear', 'OpenGLContext.scenegraph.gear.Gear' )
 Node( 'Group', 'OpenGLContext.scenegraph.group.Group' )
 Node( 'GeoCoordinate', 'OpenGLContext.scenegraph.geospatial.GeoCoordinate' )

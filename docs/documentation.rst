@@ -161,6 +161,12 @@ Installing the package puts these commands on your path:
    bouncing in a glass case, one for each emitter and physics model, with
    keys to set the firework off and switch the wind. See :ref:`X3D particle
    systems <x3d-particles>`.
+``oglc-x3d-splats``
+   X3D's ``GaussianSplats`` read from a document: a brass vase of splats
+   whose spherical harmonics carry its sheen, and a hedge read from a
+   ``KHR_gaussian_splatting`` glTF, on a marble terrace, with keys to take
+   the higher harmonics away, switch their shadows and write the vase as
+   glTF. See :ref:`x3d-gaussian-splats`.
 ``oglc-x3d-sound``
    X3D's Sound component read from a document and heard: a bronze bell on a
    ``Sound``, a copper pipe circling on a ``SpatialSound`` with Doppler, its

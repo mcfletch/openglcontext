@@ -138,6 +138,8 @@ OpenGLContext/
 │   │   │             # openglcontext-editor's job, not the engine's
 │   │   ├── lodasset.py  # A chain read one level at a time, sidecars
 │   │   │             # opened only when asked -- docs/baking.rst#writing-lod
+│   │   ├── splats.py # KHR_gaussian_splatting primitives read as, and
+│   │   │             # written from, GaussianSplats nodes -- docs/gltf.rst
 │   │   └── notices.py   # asset.copyright, exporter extras and
 │   │                 # KHR_xmp_json_ld packets, as Notice records
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
@@ -277,6 +279,10 @@ OpenGLContext/
 │   │                 # triangles, for the pick sensors -- NumPy only
 │   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the
 │   │                 # context to follow its url (Context.OnAnchor)
+│   ├── gaussiansplats.py  # X3D's GaussianSplats: sorted, blended splats
+│   │                 # drawn from buffer textures -- docs/x3d.rst#x3d-gaussian-splats
+│   ├── splatmath.py  # Splats' covariance, harmonic colour, projection,
+│   │                 # back-to-front order and fitting -- no GL
 │   ├── geospatial.py # X3D's Geospatial nodes: GeoLocation, GeoTransform,
 │   │                 # GeoCoordinate, GeoElevationGrid, GeoViewpoint, GeoLOD
 │   │                 # -- docs/x3d.rst

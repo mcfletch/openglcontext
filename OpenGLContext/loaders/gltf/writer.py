@@ -21,7 +21,8 @@ want to interleave building and inspect indices as they go.
 What is written is the subset the engine's PBR path reads: mesh primitives with
 position/normal/UV/tangent/colour attributes, metallic-roughness materials with
 their five texture channels and the ``KHR_materials_*`` factors, embedded PNG
-images with their samplers, a node hierarchy, and GPU instancing. Skinning,
+images with their samplers, a node hierarchy, GPU instancing, and Gaussian
+splats as ``KHR_gaussian_splatting`` primitives. Skinning,
 animation and morph targets are not written; a document that needs them is
 authored elsewhere.
 
@@ -43,9 +44,11 @@ import numpy as np
 from OpenGLContext import __version__ as _engine_version
 from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.loaders.gltf import hooks as _hooks
+from OpenGLContext.loaders.gltf.splats import splat_primitive
 from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.loaders.gltf.materials import GLTF_TEXTURE_KEYS, khr_transform_params
 from OpenGLContext.loaders.gltf.textures import gl_sampler
+from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.physicalmaterial import (
@@ -72,7 +75,9 @@ _CHUNK_JSON, _CHUNK_BIN = 0x4E4F534A, 0x004E4942
 # the index buffer of a typical terrain tile.
 _SHORT_INDEX_LIMIT = 1 << 16
 
-MeshLike = Union[PBRMesh, "SceneNode"]
+#: What a glTF mesh primitive is written from.
+Primitive = Union[PBRMesh, GaussianSplats]
+MeshLike = Union[PBRMesh, GaussianSplats, "SceneNode"]
 
 
 # --- the scene description ----------------------------------------------------
@@ -156,9 +161,10 @@ class EncodedImage(ImageDataTexture):
 class SceneNode:
     """One node of the written hierarchy: a placed mesh, or a parent of nodes.
 
-    ``mesh`` is a :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh` or a list of
-    them sharing this node's placement (they become the primitives of one glTF
-    mesh). The placement is either ``matrix`` (16 floats, column-major) or the
+    ``mesh`` is a :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh`, a
+    :class:`~OpenGLContext.scenegraph.gaussiansplats.GaussianSplats`, or a list
+    of them sharing this node's placement (they become the primitives of one
+    glTF mesh). The placement is either ``matrix`` (16 floats, column-major) or the
     ``translation``/``rotation``/``scale`` triple; a node giving both is refused,
     since glTF cannot express the pair. ``rotation`` is an xyzw quaternion.
 
@@ -174,7 +180,7 @@ class SceneNode:
     chain keeps its finer levels out of the file every reader opens.
     """
 
-    mesh: PBRMesh | Sequence[PBRMesh] | None = None
+    mesh: Primitive | Sequence[Primitive] | None = None
     name: Optional[str] = None
     translation: Optional[Sequence[float]] = None
     rotation: Optional[Sequence[float]] = None
@@ -525,17 +531,20 @@ class GLTFWriter:
 
     # -- meshes ----------------------------------------------------------------
 
-    def add_mesh(self, mesh: PBRMesh | Sequence[PBRMesh],
+    def add_mesh(self, mesh: Primitive | Sequence[Primitive],
                  name: Optional[str] = None,
                  buffer: Optional[str] = None) -> int:
         """Write one mesh (or a group of primitives) and return its index.
 
-        Passing the same :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh` object
-        again returns the index already assigned to it. ``buffer`` is the file
-        beside the ``.glb`` its arrays go to, as :attr:`SceneNode.buffer`.
+        Each primitive is a :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh`,
+        or a :class:`~OpenGLContext.scenegraph.gaussiansplats.GaussianSplats`
+        written as a ``KHR_gaussian_splatting`` primitive. Passing the same
+        object again returns the index already assigned to it. ``buffer`` is
+        the file beside the ``.glb`` its arrays go to, as :attr:`SceneNode.buffer`.
         """
         _check_buffer_name(buffer)
-        primitives_source = [mesh] if isinstance(mesh, PBRMesh) else list(mesh)
+        primitives_source = ([mesh] if isinstance(mesh, (PBRMesh, GaussianSplats))
+                             else list(mesh))
         if len(primitives_source) == 1:
             cached = self._mesh_index.get(primitives_source[0])
             if cached is not None:
@@ -550,7 +559,13 @@ class GLTFWriter:
             self._mesh_index.set(primitives_source[0], index)
         return index
 
-    def _primitive(self, mesh: PBRMesh, buffer: Optional[str] = None) -> dict:
+    def _primitive(self, mesh: Primitive, buffer: Optional[str] = None) -> dict:
+        if isinstance(mesh, GaussianSplats):
+            splat, extension = splat_primitive(
+                mesh, lambda array, kind, bounds: self._buffer.add_floats(
+                    array, kind, bounds=bounds, buffer=buffer))
+            self._extensions_used.add(extension)
+            return splat
         positions = np.asarray(mesh.positions, '<f4')
         if positions.ndim != 2 or positions.shape[1] != 3 or not len(positions):
             raise ValueError("a glTF primitive needs a non-empty (N,3) POSITION array")
@@ -1104,10 +1119,11 @@ def write_glb(content: MeshLike | Iterable[MeshLike],
     """Write meshes or nodes as a ``.glb`` and return the bytes.
 
     ``content`` is a :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh`, a
+    :class:`~OpenGLContext.scenegraph.gaussiansplats.GaussianSplats`, a
     :class:`SceneNode`, or any iterable of them; a bare mesh is placed at the
     origin. With ``path``, the bytes are also written there.
     """
-    items = ([content] if isinstance(content, (PBRMesh, SceneNode))
+    items = ([content] if isinstance(content, (PBRMesh, GaussianSplats, SceneNode))
              else list(content))
     writer = GLTFWriter(generator=generator)
     for item in items:
