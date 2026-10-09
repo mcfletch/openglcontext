@@ -26,13 +26,13 @@ from OpenGL.GL import (
     glUseProgram, glActiveTexture, glBindTexture, glGetIntegerv,
     glGenBuffers, glBindBuffer, glBufferData, glBindBufferBase, glDeleteBuffers,
     glGetUniformBlockIndex, glUniformBlockBinding, glUniformMatrix4fv,
-    glUniform1fv, glUniform1iv, glUniform4fv,
+    glUniform1f, glUniform1fv, glUniform1i, glUniform1iv, glUniform4fv,
 )
 from OpenGL.GL import shaders as GL_shaders
 from vrml import cache
 
 from OpenGLContext import contextresources, renderoptions
-from OpenGLContext.passes import flatcore
+from OpenGLContext.passes import flatcore, tonemapping
 from OpenGLContext.passes.instancing import instance_collapse_is_enabled
 from OpenGLContext.passes.shaderpass import (
     VRML97ShaderProgram, link_program, load_fragment_source, resolve_shadow_config,
@@ -1179,6 +1179,27 @@ class PBRShaderProgram(VRML97ShaderProgram):
         clip to white; everything else stays at 1.0."""
         self._set_uniform1f('exposure', float(exposure), self.program)
 
+    def set_display(self, display: tonemapping.Display, metered: float = 1.0) -> None:
+        """Set the tone curve, the colour space and the exposure a frame is written with
+
+        ``metered`` is the exposure a glTF scene's light meter asks for; the
+        display's own exposure multiplies it.
+        """
+        self.set_exposure(float(metered) * display.exposure)
+        self._set_uniform1i('toneMapping', tonemapping.operator_code(display.operator),
+                            self.program)
+        self._set_uniform1i('colorSpace', tonemapping.color_space_code(display.color_space),
+                            self.program)
+        self._set_uniform1i('documentDisplay', int(display.document), self.program)
+        # The programs drawing colours X3D gives as displayed (_displayed_inc.glsl)
+        values = tonemapping.display_uniforms(display)
+        self._set_on_programs(
+            (self.unlit_program, self.vertex_color_program, self.point_program,
+             self.line_program, self.wide_line_program),
+            (('toneMapping', int(values['toneMapping']), glUniform1i),
+             ('documentDisplay', int(values['documentDisplay']), glUniform1i),
+             ('exposure', float(values['exposure']), glUniform1f)))
+
     def set_transmission(self, transmission_factor: float, material: Any = None) -> None:
         """Set the frame-gated transmission factor (volume params are in the UBO)."""
         self._set_uniform1f('transmissionFactor', float(transmission_factor), self.program)
@@ -1227,6 +1248,7 @@ class PBRPass(flatcore.FlatPass):
     """Render pass using the PBR metallic/roughness shader."""
 
     use_shaders: bool = True
+    toneMapped = True
     #: No flat fill: the light that is not from a lamp comes from the environment
     #: (:meth:`iblPrepare`), and with the environment off there is none.
     #: ``context.gltf_scene_ambient`` adds one.

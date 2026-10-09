@@ -5,6 +5,7 @@
 
 #include "_objectid_inc.glsl"
 #include "_x3d_fog_inc.glsl"
+#include "_displayed_inc.glsl"
 
 uniform vec4 solidColor;
 // A line or point set of the scene in solidColor, which the fog is over; off
@@ -50,11 +51,11 @@ void main() {
         // solid colours of the selection pass are not fogged
         vec4 texel = texture(diffuseTexture, vTexCoord);
         fragColor = texel * solidColor;
-        fragColor.rgb = x3dFogged(fragColor.rgb, length(vEyePosition));
+        fragColor.rgb = displayedX3D(x3dFogged(fragColor.rgb, length(vEyePosition)));
     } else {
         fragColor = solidColor;
         if (fogSolid) {
-            fragColor.rgb = x3dFogged(fragColor.rgb, length(vEyePosition));
+            fragColor.rgb = displayedX3D(x3dFogged(fragColor.rgb, length(vEyePosition)));
         }
     }
 

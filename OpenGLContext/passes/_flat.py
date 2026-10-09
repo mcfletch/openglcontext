@@ -82,6 +82,7 @@ if TYPE_CHECKING:
     from OpenGLContext.passes.instancing import Batchers
     from OpenGLContext.passes.renderfailures import RenderFailureLog
     from OpenGLContext.passes.renderstats import RenderStats
+    from OpenGLContext.passes import tonemapping
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 __all__ = (
@@ -592,6 +593,9 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         transform -- ignored, legacy code only
     """
     passCount = 0
+    #: Whether this pass writes its frame through a tone curve and exposure
+    #: (:meth:`frameDisplay`); the VRML97 passes write colours as they are.
+    toneMapped = False
     visible = True
     transparent = False
     transform = True
@@ -1214,6 +1218,20 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         """
         path = binding.current_path( list( self.layerPaths( nodetypes.NavigationInfo ) ) )
         return None if path is None else path[-1]
+
+    def frameDisplay( self ) -> 'tonemapping.Display':
+        """The tone curve, colour space and exposure this pass writes its scene with
+
+        :func:`OpenGLContext.passes.tonemapping.display` for the definition
+        and the scene being drawn, where the pass tone-maps
+        (:attr:`toneMapped`); otherwise ``tonemapping.ENGINE``, which the
+        layers drawing their own programs (terrain, vegetation, an HDR sky)
+        read and the pass's own programs do not.
+        """
+        from OpenGLContext.passes import tonemapping  # noqa: PLC0415 contextdefinition imports it first
+        if not self.toneMapped:
+            return tonemapping.ENGINE
+        return tonemapping.display( self, getattr( self, 'scene', None ) )
 
     def x3dLighting( self ) -> bool:
         """Whether the scene is lit by X3D's rules rather than the engine's

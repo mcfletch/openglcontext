@@ -65,14 +65,14 @@ class TestSRGBPipeline:
 
     def test_decode_routes_through_piecewise(self):
         src = _read('pbr.frag')
-        assert 'toLinear(vec3 c) { return sRGBToLinear(c); }' in src
+        assert 'toLinear(vec3 c) { return drawLinear ? sRGBToLinear(c) : c; }' in src
 
     def test_final_encode_is_piecewise_not_gamma_shortcut(self):
         src = _read('pbr.frag')
         # no leftover pow(..., 1.0/2.2) gamma-encode shortcut anywhere
         assert not re.search(r'pow\([^;]*1\.0\s*/\s*2\.2', src), \
             "final sRGB encode must use linearToSRGB, not pow(c, 1/2.2)"
-        assert 'color = linearToSRGB(color);' in src
+        assert 'color = drawLinear ? linearToSRGB(color)' in src
 
 
 if __name__ == '__main__':

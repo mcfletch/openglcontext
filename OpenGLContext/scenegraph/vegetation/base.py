@@ -19,6 +19,7 @@ from OpenGL.GL import (
     glUniformMatrix4fv, glUseProgram,
 )
 from vrml.vrml97 import basenodes as vnodes
+from OpenGLContext.passes import tonemapping
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import GLLayer, ViewPrograms, view_copies
 
@@ -126,6 +127,7 @@ class InstancedVegBase(vnodes.PointSet, GLLayer):
         program, U = form
         prev = mode.current_program() if hasattr(mode, "current_program") else 0
         glUseProgram(program)
+        tonemapping.upload_display(program, tonemapping.frame_display(mode))
         ViewPrograms.apply_views(mode, U)
         glUniformMatrix4fv(U["uModelView"], 1, GL_FALSE, np.ascontiguousarray(mode.matrix, np.float32))
         glUniformMatrix4fv(U["uProjection"], 1, GL_FALSE, np.ascontiguousarray(mode.projection, np.float32))

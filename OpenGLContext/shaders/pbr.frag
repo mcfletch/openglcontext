@@ -301,6 +301,10 @@ uniform float alphaCutoff;         // the appearance's, for MASK
 // When true (bloom pass), emit LINEAR HDR: the tone map + sRGB encode move to the
 // bloom composite, so >1 emissive survives to bloom. Default false = tone-map here.
 uniform bool hdrOutput;
+// A VRML97 or X3D document (OpenGLContext.passes.tonemapping): a Material and
+// an unlit appearance take the exposure and the tone curve, as X_ITE draws
+// them, and are lit in sRGB unless colorSpace is linear.
+uniform bool documentDisplay;
 
 // KHR_materials_transmission backdrop. The backdrop is the opaque scene captured
 // to a mipmapped colour texture; transmissive fragments sample it at the refracted
@@ -520,16 +524,13 @@ uint effectiveObjectId() {
 // X3D's texture projectors, switched off per draw by _phong_inc's lightsOff
 #include "_projectors_inc.glsl"
 
-// sRGB decode alias kept local so callers read as intent ("decode this texel").
-vec3 toLinear(vec3 c) { return sRGBToLinear(c); }
+// Whether this draw is lit in linear light (colorSpace, _tonemap_inc.glsl):
+// set at the top of main(). A draw lit in sRGB uses its texels as they are
+// and writes its result unencoded, as X_ITE's SRGB colour space does.
+bool drawLinear = true;
 
-// ACES filmic tone map (Narkowicz fit). Replaces Reinhard, which desaturates
-// bright colours toward grey -- that turned saturated metals (gold) muddy/olive
-// and plastic-looking. ACES keeps highlight saturation, so metals read as metal.
-vec3 acesToneMap(vec3 x) {
-    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
+// A colour texel as this draw lights with it ("decode this texel").
+vec3 toLinear(vec3 c) { return drawLinear ? sRGBToLinear(c) : c; }
 
 // Cheap analytic environment (a sky/ground gradient) standing in for an IBL
 // probe, so metals reflect *something* and read as metal rather than plastic.
@@ -629,31 +630,46 @@ vec3 fogged(vec3 color) {
 
 #include "_untoned_inc.glsl"
 
-// A colour X3D gives as it is displayed (a Phong or unlit surface, already
-// fogged), as it is written out: itself, or its untoned() value for bloom.
+// A colour as it is displayed, as it is written out: itself, or its
+// untoned() value for bloom.
 vec3 shown(vec3 color) {
     return hdrOutput ? untoned(color) : color;
 }
 
-// Linear HDR colour, times exposure, as it is written out: fogged, then
-// tone-mapped and encoded for the display unless bloom composites it later.
-vec3 displayed(vec3 color) {
-    if (fogMode == 1) {
+// A colour this draw lit, times exposure where `toned`, as it is written out:
+// through the tone curve where `toned`, encoded to sRGB where the draw is lit
+// in linear light, and fogged. The engine's aerial fog (mode 1) applies to
+// the lit colour; X3D's curves (modes 2 and 3) to the colour as it is
+// displayed, which for a draw lit in sRGB is the lit colour before the curve,
+// as X_ITE applies them. Correct only with GL_FRAMEBUFFER_SRGB disabled,
+// which the pass sets.
+vec3 finished(vec3 color, bool toned) {
+    if (fogMode == 1 || (fogMode > 1 && !drawLinear)) {
         color = fogged(color);
     }
-    if (fogMode > 1) {
-        // X3D's curves mix in the displayed colour; with bloom that colour is
-        // made here and written as the linear light the composite displays as it.
-        return shown(fogged(linearToSRGB(acesToneMap(color))));
+    if (hdrOutput && toned && drawLinear == frameLinear() && fogMode <= 1) {
+        return color;              // bloom: the composite tone-maps and encodes
     }
-    // filmic tone map (ACES) + sRGB encode for a non-sRGB framebuffer. Correct
-    // ONLY with GL_FRAMEBUFFER_SRGB disabled (the pass forces this); an sRGB draw
-    // target would double-encode. See pbrpass framebuffer setup.
-    if (!hdrOutput) {                 // default: tone-map + sRGB here
-        color = acesToneMap(color);
-        color = linearToSRGB(color);
-    }                                 // bloom pass: leave linear HDR for the composite
-    return color;
+    if (toned) {
+        color = toneCurve(color);
+    }
+    color = drawLinear ? linearToSRGB(color) : clamp(color, 0.0, 1.0);
+    if (fogMode > 1 && drawLinear) {
+        color = fogged(color);
+    }
+    return shown(color);
+}
+
+// Linear HDR colour, times exposure, as it is written out (finished).
+vec3 displayed(vec3 color) {
+    return finished(color, true);
+}
+
+// A colour X3D gives as it is displayed (a Phong or unlit surface), as it is
+// written out: in a document, times exposure and through the tone curve as
+// X_ITE draws one (documentDisplay); elsewhere as it is.
+vec3 displayedX3D(vec3 color) {
+    return finished(documentDisplay ? color * exposure : color, documentDisplay);
 }
 
 // `N` turned by the material's tangent-space normal map, where it has one
@@ -691,6 +707,10 @@ void main() {
     // else element 0 (the single bound material). All factor reads below use the
     // register copy _M, not repeated UBO fetches.
     _M = materials[instancingEnabled ? vMaterialIndex : 0u];
+    // A physical material is lit in linear light unless the colour space is
+    // sRGB; a document's Material and unlit appearance only where it is linear.
+    drawLinear = (phongMode || (unlitMode && documentDisplay)) ? colorSpace == 2
+                                                               : frameLinear();
 
     // --- material inputs (each texture samples its own UV set + transform) ---
     vec4 baseTex = hasBaseColor ? texture(baseColorTexture, uvFor(CH_BASE_COLOR)) : vec4(1.0);
@@ -710,7 +730,7 @@ void main() {
     vec4 layered;
     bool hasLayers = textureLayered(
         phongMode ? (hasVertexColor ? vColor.rgb : baseColorFactor) : albedo, alpha,
-        phongMode ? specularColorFactor : vec3(1.0), !phongMode,
+        phongMode ? specularColorFactor : vec3(1.0), drawLinear,
         gl_FrontFacing ? normalize(vNormal) : -normalize(vNormal), layered);
     if (hasLayers) {
         albedo = layered.rgb;
@@ -719,15 +739,13 @@ void main() {
     // X3D's texture projectors (_projectors_inc.glsl) cast onto the diffuse colour.
     vec3 projected = projectedColor((eyeToWorld * vec4(vPosition, 1.0)).xyz,
                                     mat3(eyeToWorld) * (gl_FrontFacing ? vNormal : -vNormal));
-    if (!phongMode) albedo *= sRGBToLinear(projected);
+    if (!phongMode) albedo *= toLinear(projected);
 
     if (alphaMode == 1 && alpha < alphaCutoff) discard;  // MASK
 
     // KHR_materials_unlit: emit base color directly (no lighting)
     if (unlitMode) {
-        vec3 unlit = shown(fogMode == 1 ? linearToSRGB(fogged(albedo))
-                                        : fogged(linearToSRGB(albedo)));
-        fragColor = vec4(unlit, alpha);
+        fragColor = vec4(displayedX3D(albedo), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());   // unlit is still pickable
         return;
     }
@@ -735,11 +753,11 @@ void main() {
     // X3D's Phong equation (19775-1, 17.2.2.5) on the colour values as given:
     // a Color node replaces the diffuse colour, a texture multiplies it, the
     // normal map turns N and the occlusion map scales the lights' sum, and
-    // the result is displayed as it is, without the tone map, bloom or not.
+    // the result is displayed as it is (displayedX3D), bloom or not.
     if (phongMode) {
-        vec3 diffuse = projected * (hasLayers ? albedo
+        vec3 diffuse = toLinear(projected) * (hasLayers ? albedo
                      : (hasVertexColor ? vColor.rgb : baseColorFactor)
-                       * (hasBaseColor ? baseTex.rgb : vec3(1.0)));
+                       * (hasBaseColor ? toLinear(baseTex.rgb) : vec3(1.0)));
         vec3 N = normalize(vNormal);
         if (!gl_FrontFacing) N = -N;
         N = normalMapped(N);
@@ -749,11 +767,11 @@ void main() {
         // X3D's ambient light is each light's own (phongLight), not the
         // pass's flat fill
         vec3 emitted = emissiveFactor
-                     * (hasEmissive ? texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb : vec3(1.0));
+                     * (hasEmissive ? toLinear(texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb) : vec3(1.0));
         vec3 color = emitted + occlusionShare()
                    * phongLights(N, V, vPosition, diffuse, phongAmbientIntensity * diffuse,
                                  specularColorFactor, phongShininess, shadows);
-        fragColor = vec4(shown(fogged(clamp(color, 0.0, 1.0))), alpha);
+        fragColor = vec4(displayedX3D(color), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());
         return;
     }

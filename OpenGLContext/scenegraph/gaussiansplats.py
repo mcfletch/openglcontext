@@ -63,6 +63,7 @@ from vrml.vrml97 import nodetypes
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext import contextresources
+from OpenGLContext.passes import tonemapping
 from OpenGLContext.scenegraph import boundingvolume, splatmath
 from OpenGLContext.scenegraph.instancedgl import load_program
 
@@ -411,6 +412,7 @@ class GaussianSplats(nodetypes.Rendering, x3d.GaussianSplats):
         glUniform1i(uniforms['uHarmonicTexels'], harmonic_texels)
         glUniform1i(uniforms['uLinearColour'], int(self.colorSpace == 'LIN_REC709_DISPLAY'))
         glUniform1i(uniforms['uHdrOutput'], int(bool(getattr(shader, 'hdr_output', False))))
+        tonemapping.upload_display(program, tonemapping.frame_display(mode))
         glUniform1ui(uniforms['uObjectId'], int(getattr(shader, '_current_object_id', 0)))
         textures = _TEXTURES.entries(self)
         assert textures is not None

@@ -41,6 +41,7 @@ from OpenGL.GL import (
 from PIL import Image
 from vrml.vrml97 import basenodes as vnodes
 
+from OpenGLContext.passes import tonemapping
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
     ViewPrograms,
@@ -195,6 +196,7 @@ class GroundShading(GLLayer):
         program, U = form
         previous = mode.current_program() if hasattr(mode, 'current_program') else 0
         glUseProgram(program)
+        tonemapping.upload_display(program, tonemapping.frame_display(mode))
         ViewPrograms.apply_views(mode, U)
         glUniformMatrix4fv(U['uModel'], 1, GL_FALSE,
                            np.ascontiguousarray(model, np.float32))

@@ -24,6 +24,7 @@ import numpy as np
 from OpenGL import GL
 from OpenGL.GL.shaders import compileProgram, compileShader
 
+from OpenGLContext.passes import tonemapping
 from OpenGLContext.passes.disposal import PassResources, let_go
 from OpenGLContext.scenegraph.vertexsemantics import LOC_POSITION
 
@@ -445,6 +446,7 @@ def draw(mode: Any, plan: Any, voxels: Any, dimensions: Sequence[float],
         GL.glUniform1f(at['uStep'], STEP)
         GL.glUniform1i(at['uMaxSteps'], MAX_STEPS)
         GL.glUniform1i(at['hdrOutput'], int(bool(getattr(mode, '_bloom_active', False))))
+        tonemapping.upload_display(program, tonemapping.frame_display(mode))
         shader = getattr(mode, 'shader_program', None)
         GL.glUniform1ui(at['objectId'], int(getattr(shader, '_current_object_id', 0) or 0))
         fog_mode, density, colour = _fog(mode)

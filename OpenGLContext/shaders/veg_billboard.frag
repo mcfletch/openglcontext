@@ -8,7 +8,9 @@ uniform float fogDensity; uniform vec3 fogColor; uniform float uNearFade; unifor
 uniform float uLodStart, uLodEnd;   // mesh->impostor cross-fade window, shared with veg_mesh.frag so the handoff stays seamless
 uniform float uSunLevel;   // flat sun term for this billboard set; low for grass (near-vertical blades barely face the sun) so impostors match the dark, per-fragment-lit geometry clumps instead of reading as bright flat lumps
 out vec4 fragColor;
-vec3 aces(vec3 x){const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.,1.);}
+// The frame's tone curve and exposure (OpenGLContext.passes.tonemapping)
+#include "_tonemap_inc.glsl"
+uniform float exposure;
 void main(){
     vec4 t = texture(pine, vUV);
     if(t.a < 0.4) discard;
@@ -34,6 +36,6 @@ void main(){
     // takes the key light, and leaves the ambient it does not block.
     vec3 col = lin * (amb*mix(0.55,1.0,vShade) + sunColor*uSunLevel*vShade);
     if(fogDensity>0.0){ float f=1.-exp(-fogDensity*length(toViewer(vEyePos))); col=mix(col,fogColor,clamp(f,0.,1.)); }
-    col = aces(col);
+    col = toneCurve(col * exposure);
     fragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);
 }

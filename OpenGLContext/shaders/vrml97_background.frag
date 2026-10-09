@@ -3,6 +3,8 @@
 // Background fragment shader - outputs vertex color for sphere gradient backgrounds
 // No lighting calculation, just passes through interpolated vertex colors
 
+#include "_displayed_inc.glsl"
+
 in vec3 vColor;
 
 // Output color (attachment 0)
@@ -11,7 +13,7 @@ layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragObjectId;
 
 void main() {
-    fragColor = vec4(vColor, 1.0);
+    fragColor = vec4(displayedX3D(vColor), 1.0);
     // Background is never selectable - output ID 0
     fragObjectId = vec4(0.0, 0.0, 0.0, 0.0);
 }

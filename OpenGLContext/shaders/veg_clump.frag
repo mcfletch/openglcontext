@@ -9,7 +9,9 @@ uniform float uFadeStart, uFadeEnd;   // dither-dissolve the clump out across th
 uniform float uCutStart, uCutEnd;     // dither the clump IN across this inner window (uCutEnd<=0 disables)
 uniform vec3 uUpEye;                  // world +Y in eye space: hemisphere-ambient split axis
 out vec4 fragColor;
-vec3 aces(vec3 x){const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.,1.);}
+// The frame's tone curve and exposure (OpenGLContext.passes.tonemapping)
+#include "_tonemap_inc.glsl"
+uniform float exposure;
 void main(){
     vec4 t=texture(atlas,vUV);
     if(t.a<0.33) discard;   // alpha CUTOUT (not blend) -> depth-correct, no foliage bleed
@@ -32,6 +34,6 @@ void main(){
     // takes the key light, and leaves the ambient it does not block.
     vec3 col=alb*(amb*mix(0.55,1.0,vShade)+sunColor*ndl*vShade);
     if(fogDensity>0.0){float f=1.-exp(-fogDensity*length(toViewer(vEyePos)));col=mix(col,fogColor,clamp(f,0.,1.));}
-    col=aces(col);
+    col=toneCurve(col * exposure);
     fragColor=vec4(pow(col,vec3(1.0/2.2)),1.0);
 }

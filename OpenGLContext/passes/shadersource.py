@@ -75,6 +75,11 @@ def _resolve_includes(src: str, seen: set) -> str:
     return '\n'.join(out)
 
 
+def resolve_includes(src: str) -> str:
+    """``src``, a shader's text held in Python, with its ``#include``s spliced in"""
+    return _resolve_includes(src, set())
+
+
 def preprocess_shader(filename: str, defines: Optional[list] = None) -> str:
     """Read a shader, resolve its ``#include``s, inject ``defines`` after #version.
 

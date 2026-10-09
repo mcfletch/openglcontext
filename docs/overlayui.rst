@@ -218,6 +218,19 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - bool
      - HDR bloom post-process.
      - ``OPENGLCONTEXT_BLOOM``
+   * - ``toneMapping``
+     - ``auto``/``none``/``aces_narkowicz``/``aces_hill``/
+       ``aces_hill_exposure_boost``/``khr_pbr_neutral``
+     - The tone curve (:ref:`tone-mapping`).
+     - ``OPENGLCONTEXT_TONE_MAPPING``
+   * - ``exposure``
+     - float, 0–4
+     - Multiplier on a lit colour before the tone curve.
+     - ``OPENGLCONTEXT_EXPOSURE``
+   * - ``colorSpace``
+     - ``auto``/``srgb``/``linear_when_physical_material``/``linear``
+     - Which materials are lit in linear light.
+     - ``OPENGLCONTEXT_COLOR_SPACE``
    * - ``ibl``
      - ``auto``/``full``/``analytic``/``off``
      - Image-based lighting. ``auto`` uses a cheaper mode on a software

@@ -183,6 +183,29 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     FloatVertexAttribute), a `PointSet` or an `IndexedLineSet`; read back,
     every corner has its values (`tests/unit/test_pbrmesh_x3d_writing.py`).
     Skin and morph targets are not written
+- [ ] X_ITE's rendering options (stream xrender, 2026-10-09; X_ITE 16.4.3's
+  BrowserOptions, read from its MIT source)
+  - [x] tone mapping: `ContextDefinition.toneMapping`
+    (`OPENGLCONTEXT_TONE_MAPPING`): none, aces_narkowicz, aces_hill,
+    aces_hill_exposure_boost, khr_pbr_neutral, X_ITE's curves and constants
+    (`passes/tonemapping.py`, `shaders/_tonemap_inc.glsl`); `exposure`
+    (`OPENGLCONTEXT_EXPOSURE`) multiplies the metered exposure. X_ITE 16.4.3's
+    default is NONE (its BrowserOptions field), so `auto` draws a document with
+    none and other scenes with aces_narkowicz, the engine's curve. In a
+    document the exposure and the curve apply to Material, unlit, lines,
+    points and Background as well, as X_ITE applies them. Bloom's composite,
+    the HDR sky, terrain and vegetation use the same curve. Re-blessed for the
+    change: x3d_demo, x3d_geospatial, x3d_layering, x3d_sound, x3d_splats,
+    x3d_volume (each a document of PhysicalMaterials, drawn without the curve)
+  - [x] colour space: `ContextDefinition.colorSpace`
+    (`OPENGLCONTEXT_COLOR_SPACE`): srgb, linear_when_physical_material (auto),
+    linear. In a document an UnlitMaterial and a no-material appearance are lit
+    in sRGB, as X_ITE draws them: `UnlitMaterial emissiveColor 0.5` is 128,
+    where it was 188, and a MultiTexture on one combines its layers as
+    displayed
+  - kept by choice: X_ITE encodes with a power of 1/2.2, the engine with the
+    piecewise sRGB function (IEC 61966-2-1, which glTF names for its colour
+    textures); at most 10 levels in 255 apart, in the darkest values
 - [ ] At merge: rebuild pyvrml97's accelerator in the main checkout
   (`accelerate/`, `setup.py build_ext --inplace` or a reinstall); its
   `fieldaccel2` announces sets through `vrml.event.announce` (pyvrml97

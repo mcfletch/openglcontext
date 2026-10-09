@@ -5,6 +5,7 @@
 
 #include "_objectid_inc.glsl"
 #include "_x3d_fog_inc.glsl"
+#include "_displayed_inc.glsl"
 
 in vec3 gColor;
 in vec3 gEyePosition;
@@ -41,6 +42,6 @@ void main() {
     if (inGap(gAlong)) {
         discard;
     }
-    fragColor = vec4(x3dFogged(gColor, length(gEyePosition)), 1.0);
+    fragColor = vec4(displayedX3D(x3dFogged(gColor, length(gEyePosition))), 1.0);
     fragObjectId = encodeObjectId(objectId);
 }

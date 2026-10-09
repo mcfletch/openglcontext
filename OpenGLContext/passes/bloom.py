@@ -44,6 +44,9 @@ from OpenGL.GL import (
 )
 from OpenGL.GL import shaders as GL_shaders
 
+from OpenGLContext.passes import tonemapping
+from OpenGLContext.passes.shadersource import resolve_includes
+
 log = logging.getLogger(__name__)
 
 
@@ -100,21 +103,19 @@ void main(){
     frag = vec4(c, 1.0);
 }"""
 
+#: The composite: the frame's tone curve and, where the frame is encoded,
+#: the sRGB encoding (``_tonemap_inc.glsl``, ``toneMapping`` and ``colorSpace``).
 _COMPOSITE_FRAG = """#version 330 core
+#include "_common_inc.glsl"
+#include "_tonemap_inc.glsl"
 in vec2 uv; out vec4 frag;
 uniform sampler2D scene; uniform sampler2D bloom; uniform float strength;
 uniform vec4 bounds;    // the bloom texel centres a sample may reach: min.xy, max.xy
-vec3 aces(vec3 x){
-    const float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14;
-    return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
-}
-vec3 toSRGB(vec3 c){
-    return mix(1.055*pow(max(c,0.0), vec3(1.0/2.4))-0.055, c*12.92, step(c, vec3(0.0031308)));
-}
 void main(){
     vec3 hdr = texture(scene, uv).rgb
              + strength * texture(bloom, clamp(uv, bounds.xy, bounds.zw)).rgb;
-    frag = vec4(toSRGB(aces(hdr)), 1.0);
+    vec3 shown = toneCurve(hdr);
+    frag = vec4(frameLinear() ? linearToSRGB(shown) : clamp(shown, 0.0, 1.0), 1.0);
 }"""
 
 
@@ -238,7 +239,7 @@ class BloomPass(object):
                 vao=glGenVertexArrays(1),
                 bright=_compile(_FS_VERT, _BRIGHT_FRAG),
                 blur=_compile(_FS_VERT, _BLUR_FRAG),
-                composite=_compile(_FS_VERT, _COMPOSITE_FRAG),
+                composite=_compile(_FS_VERT, resolve_includes(_COMPOSITE_FRAG)),
             )
         if self._targets is not None and self._targets.size == (w, h):
             return self._chain, self._targets
@@ -281,7 +282,8 @@ class BloomPass(object):
         return True
 
     def composite(self, rects: Optional[Sequence[Rect]] = None,
-                  clear: bool = False) -> None:
+                  clear: bool = False,
+                  display: Optional[tonemapping.Display] = None) -> None:
         """Bright-pass + blur the HDR scene and composite it to the previous target.
 
         ``rects`` are the views' rectangles in window pixels; each is blurred
@@ -289,6 +291,8 @@ class BloomPass(object):
         whole window as one. ``clear`` clears the previous target to black
         first, for rectangles that leave part of the window uncovered, which
         the composite would otherwise leave holding an earlier frame.
+        ``display`` gives the tone curve and colour space the frame is
+        written with; None is the engine's default (:class:`tonemapping.Display`).
 
         Does nothing where :meth:`begin` has not run: there is no scene to
         composite, and every name below would be missing.
@@ -349,6 +353,11 @@ class BloomPass(object):
         self._bind_tex(chain.composite, 'scene', targets.scene_tex, 0)
         self._bind_tex(chain.composite, 'bloom', targets.ping_tex[blurred], 1)
         glUniform1f(glGetUniformLocation(chain.composite, 'strength'), self.STRENGTH)
+        shown = display if display is not None else tonemapping.Display()
+        glUniform1i(glGetUniformLocation(chain.composite, 'toneMapping'),
+                    tonemapping.operator_code(shown.operator))
+        glUniform1i(glGetUniformLocation(chain.composite, 'colorSpace'),
+                    tonemapping.color_space_code(shown.color_space))
         for tile in tiles:
             region, _full = tile_uniforms(tile, (w, h))
             _half_region, half_bounds = tile_uniforms(

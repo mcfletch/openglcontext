@@ -1,6 +1,5 @@
 """Panoramic image-cube Background node
 """
-import os
 from typing import Any, Optional
 
 from numpy import array, concatenate, cross, dot
@@ -13,7 +12,8 @@ from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
 
 from OpenGLContext import contextresources, texture
-from OpenGLContext.passes import glstate
+from OpenGLContext.passes import glstate, tonemapping
+from OpenGLContext.passes.shadersource import preprocess_shader
 from OpenGLContext.scenegraph import bindable, imagetexture
 from OpenGLContext.scenegraph.vertexsemantics import LOC_POSITION, LOC_TEXCOORD
 
@@ -59,7 +59,6 @@ CORNERS = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
 #: seen from inside the cube is X3D's mirrored left to right on the four sides
 #: and top to bottom on the top and bottom.
 LAYOUTS = ('X3D', 'CUBEMAP')
-SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
 
 #: The faces' program, per GL context that compiled one.
 _programs: dict[Optional[contextresources.ContextKey], Any] = {}
@@ -114,10 +113,8 @@ def _program() -> tuple[Any, int, int]:
     key = contextresources.context_key()
     found: Optional[tuple[Any, int, int]] = _programs.get(key)
     if found is None:
-        sources = []
-        for name in ('background_faces.vert', 'background_faces.frag'):
-            with open(os.path.join(SHADER_DIR, name)) as stream:
-                sources.append(stream.read())
+        sources = [preprocess_shader(name)
+                   for name in ('background_faces.vert', 'background_faces.frag')]
         program = shaders.compileProgram(
             shaders.compileShader(sources[0], GL_VERTEX_SHADER),
             shaders.compileShader(sources[1], GL_FRAGMENT_SHADER))
@@ -180,6 +177,7 @@ class _CubeBackground( object ):
             glDepthMask(GL_FALSE)
             glUniformMatrix4fv(mvp_location, 1, GL_FALSE, matrix)
             glUniform1i(image_location, 0)
+            tonemapping.upload_display(program, tonemapping.frame_display(mode))
             glBindVertexArray(vao)
             try:
                 with vertices:

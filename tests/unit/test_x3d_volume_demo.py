@@ -106,8 +106,10 @@ def test_the_specimens_are_drawn(demo):
         pytest.skip(refused)
     with scene_context(demo.scene, size=(160, 90),
                        environment={'OPENGLCONTEXT_RENDERER': 'pbr'}) as context:
+        # The volumes' files load on the background pool and reach the render
+        # thread through its queue; a busy machine takes longer for both.
         for _ in range(3):
-            background.wait_for_idle(20.0)
+            assert background.wait_for_idle(120.0)
             context.renderQueue.run()
             context.OnDraw(force=1)
         image = drawn_image(context).astype(int)

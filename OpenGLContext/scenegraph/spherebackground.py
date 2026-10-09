@@ -1,6 +1,5 @@
 """Gradient-sphere background node"""
 import numpy as np
-import os
 from typing import Any, Optional
 
 from OpenGLContext.arrays import *
@@ -17,11 +16,10 @@ from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
 from OpenGLContext import contextresources, displaylist
 from OpenGLContext.scenegraph import bindable
-from OpenGLContext.passes import glstate
+from OpenGLContext.passes import glstate, tonemapping
+from OpenGLContext.passes.shadersource import preprocess_shader
 import bisect
 
-# Shader directory path
-SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
 
 #: The gradient program, per GL context that compiled one.  A program is a name
 #: its own context issues, so a second window handed the first one's program
@@ -335,13 +333,8 @@ class _SphereBackground( object ):
         if compiled is not None:
             return compiled
 
-        vert_path = os.path.join(SHADER_DIR, 'vrml97_background.vert')
-        frag_path = os.path.join(SHADER_DIR, 'vrml97_background.frag')
-
-        with open(vert_path, 'r') as f:
-            vert_source = f.read()
-        with open(frag_path, 'r') as f:
-            frag_source = f.read()
+        vert_source = preprocess_shader('vrml97_background.vert')
+        frag_source = preprocess_shader('vrml97_background.frag')
 
         vertex_shader = GL_shaders.compileShader(vert_source, GL_VERTEX_SHADER)
         fragment_shader = GL_shaders.compileShader(frag_source, GL_FRAGMENT_SHADER)
@@ -435,6 +428,7 @@ class _SphereBackground( object ):
             glDisable(GL_CULL_FACE)
 
             glUseProgram(program)
+            tonemapping.upload_display(program, tonemapping.frame_display(mode))
 
             # Set matrices. The background is infinitely far away, so it must
             # follow the camera's orientation but not its position -- otherwise

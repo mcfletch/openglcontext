@@ -185,6 +185,22 @@ Lighting and shadows
      - yes/no
      - off
      - The bright-pass bloom composite.
+   * - ``OPENGLCONTEXT_TONE_MAPPING``
+     - ``auto``, ``none``, ``aces_narkowicz``, ``aces_hill``,
+       ``aces_hill_exposure_boost``, ``khr_pbr_neutral``
+     - ``auto``
+     - The tone curve. ``auto`` draws a VRML97 or X3D document with none, as
+       X_ITE does, and other scenes with ``aces_narkowicz``. See
+       :ref:`tone-mapping`.
+   * - ``OPENGLCONTEXT_EXPOSURE``
+     - number
+     - ``1.0``
+     - Multiplier on a lit colour before the tone curve.
+   * - ``OPENGLCONTEXT_COLOR_SPACE``
+     - ``auto``, ``srgb``, ``linear_when_physical_material``, ``linear``
+     - ``auto``
+     - Which materials are lit in linear light. ``auto`` is
+       ``linear_when_physical_material``.
    * - ``OPENGLCONTEXT_TRANSMISSION``
      - ``auto``, ``full``, ``blend``, ``off``
      - ``auto``

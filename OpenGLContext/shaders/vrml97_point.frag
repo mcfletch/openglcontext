@@ -5,6 +5,7 @@
 
 #include "_objectid_inc.glsl"
 #include "_x3d_fog_inc.glsl"
+#include "_displayed_inc.glsl"
 
 in vec3 vColor;
 in vec3 vEyePosition;
@@ -31,7 +32,7 @@ void main() {
         color = color * texColor;
     }
 
-    fragColor = vec4(x3dFogged(color.rgb, length(vEyePosition)), color.a);
+    fragColor = vec4(displayedX3D(x3dFogged(color.rgb, length(vEyePosition))), color.a);
 
     // Output object ID to selection buffer (encode as RGBA8)
     fragObjectId = encodeObjectId(objectId);

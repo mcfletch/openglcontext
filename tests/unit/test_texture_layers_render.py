@@ -22,13 +22,13 @@ def square(texture, coordinates=b'', material=b'<UnlitMaterial emissiveColor="1 
             b'</IndexedTriangleSet></Shape>')
 
 
-def drawn(body, renderer, size=32):
+def drawn(body, renderer, size=32, **definition):
     from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
     from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
     scene = Loader.loads(b'<X3D version="4.0"><Scene><Background skyColor="0 0 0"/>'
                          b'<Viewpoint position="0 0 2.4"/>' + body + b'</Scene></X3D>',
                          'scene.x3d')
-    with scene_context(scene, size=(size, size), renderer=renderer) as context:
+    with scene_context(scene, size=(size, size), renderer=renderer, **definition) as context:
         context.OnDraw(force=1)
         return drawn_image(context).astype(int)
 
@@ -46,17 +46,27 @@ CASES = [
     # (mode, source, function, colours, expected)
     (b'"MODULATE" "MODULATE"', b'', b'', (b'0xFF8000', b'0x00FFFF'), (0, 128, 0)),
     (b'"MODULATE" "ADD"', b'', b'', (b'0x800000', b'0x008000'), (128, 128, 0)),
-    # The PBR program combines an unlit or physical surface's textures in
-    # linear light, the VRML97 one as they are displayed.
-    (b'"MODULATE" "SUBTRACT"', b'', b'', (b'0x808080', b'0xFF4000'),
-     {'vrml97': (127, 0, 0), 'pbr': (229, 0, 0)}),
+    # An unlit surface's textures combine as they are displayed, as X_ITE
+    # combines them (colorSpace, below for linear light).
+    (b'"MODULATE" "SUBTRACT"', b'', b'', (b'0x808080', b'0xFF4000'), (127, 0, 0)),
     (b'"MODULATE" "REPLACE"', b'', b'', (b'0xFF0000', b'0x0000FF'), (0, 0, 255)),
     (b'"MODULATE" "SELECT_ARG2"', b'', b'', (b'0xFF0000', b'0x0000FF'), (255, 0, 0)),
     (b'"MODULATE" "MODULATE"', b'"" "FACTOR"', b'', (b'0xFFFFFF', b'0x0000FF'), (64, 128, 191)),
     (b'"REPLACE"', b'', b'"COMPLEMENT"', (b'0xFF0000',), (0, 255, 255)),
-    (b'"MODULATE" "ADDSIGNED"', b'', b'', (b'0x808080', b'0x404040'),
-     {'vrml97': (64, 64, 64), 'pbr': (0, 0, 0)}),
+    (b'"MODULATE" "ADDSIGNED"', b'', b'', (b'0x808080', b'0x404040'), (64, 64, 64)),
 ]
+
+
+@pytest.mark.parametrize('mode, colours, expected', [
+    (b'"MODULATE" "SUBTRACT"', (b'0x808080', b'0xFF4000'), (229, 0, 0)),
+    (b'"MODULATE" "ADDSIGNED"', (b'0x808080', b'0x404040'), (0, 0, 0)),
+])
+def test_with_a_linear_colour_space_the_layers_combine_in_linear_light(
+        gl_context, mode, colours, expected):
+    texture = (b"<MultiTexture mode='" + mode + b"'>"
+               + b''.join(pixel(colour) for colour in colours) + b'</MultiTexture>')
+    found = centre(drawn(square(texture), 'pbr', colorSpace='linear'))
+    assert close(found, expected), (found, expected)
 
 
 @pytest.mark.parametrize('renderer', RENDERERS)
@@ -67,8 +77,6 @@ def test_a_multitexture_combines_its_layers_by_their_modes(
                + (b" source='" + source + b"'" if source else b'')
                + (b" function='" + function + b"'" if function else b'') + b'>'
                + b''.join(pixel(colour) for colour in colours) + b'</MultiTexture>')
-    if isinstance(expected, dict):
-        expected = expected[renderer]
     found = centre(drawn(square(texture), renderer))
     assert close(found, expected), (found, expected)
 

@@ -40,6 +40,7 @@ from vrml.vrml97 import nodetypes
 from vrml.x3d import binding
 
 from OpenGLContext import context, contextresources
+from OpenGLContext.passes import tonemapping
 from OpenGLContext.scenegraph import bindable
 from OpenGLContext.loaders import background
 
@@ -388,8 +389,11 @@ class _HDRBackground(object):
             glUniform1i(locations['equirectMap'], 0)
         if locations['mvpMatrix'] != -1:
             glUniformMatrix4fv(locations['mvpMatrix'], 1, GL_FALSE, mvp)
+        shown = tonemapping.frame_display(mode)
+        tonemapping.upload_display(program, shown)
         if locations['exposure'] != -1:
-            glUniform1f(locations['exposure'], float(self._effective_exposure(mode)))
+            glUniform1f(locations['exposure'],
+                        float(self._effective_exposure(mode)) * shown.exposure)
         if locations['hdrOutput'] != -1:
             glUniform1i(locations['hdrOutput'], 1 if getattr(mode, '_bloom_active', False) else 0)
 

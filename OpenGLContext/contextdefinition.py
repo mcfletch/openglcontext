@@ -6,6 +6,7 @@ from vrml import node, field
 
 from OpenGLContext import renderoptions
 from OpenGLContext.audio import settings as audiosettings
+from OpenGLContext.passes import tonemapping
 
 
 # The three helpers below are passed to ``newField`` **uncalled**, so each is
@@ -212,6 +213,22 @@ class ContextDefinition( node.Node ):
     #: HDR bloom post-process (env: OPENGLCONTEXT_BLOOM).
     bloom = field.newField( "bloom", "SFBool", 1,
                             lambda: renderoptions.env_flag('OPENGLCONTEXT_BLOOM', False))
+    #: The tone curve: "auto", "none", "aces_narkowicz", "aces_hill",
+    #: "aces_hill_exposure_boost" or "khr_pbr_neutral"
+    #: (env: OPENGLCONTEXT_TONE_MAPPING). "auto" draws a VRML97 or X3D
+    #: document with none, as X_ITE does, and other scenes with
+    #: aces_narkowicz. See OpenGLContext.passes.tonemapping.
+    toneMapping = field.newField( "toneMapping", "SFString", 1,
+                                  tonemapping.default_tone_mapping )
+    #: Multiplier on a lit colour before the tone curve; it multiplies a glTF
+    #: scene's metered exposure (env: OPENGLCONTEXT_EXPOSURE).
+    exposure = field.newField( "exposure", "SFFloat", 1, tonemapping.default_exposure )
+    #: Which materials are lit in linear light: "auto", "srgb",
+    #: "linear_when_physical_material" or "linear"
+    #: (env: OPENGLCONTEXT_COLOR_SPACE). "auto" is
+    #: linear_when_physical_material.
+    colorSpace = field.newField( "colorSpace", "SFString", 1,
+                                 tonemapping.default_color_space )
     #: Image-based lighting: "auto", "full", "analytic" or "off"
     #: (env: OPENGLCONTEXT_IBL). "auto" degrades itself on a software
     #: rasteriser, where the prefilter precompute is too slow.
@@ -383,6 +400,14 @@ class ContextDefinition( node.Node ):
         'maximumLights': {'label': 'Lights', 'minimum': 0, 'maximum': 8,
                           'step': 1},
         'bloom': {'label': 'Bloom'},
+        'toneMapping': {'label': 'Tone mapping',
+                        'options': tonemapping.TONE_MAPPING_CHOICES,
+                        'optionLabels': tonemapping.TONE_MAPPING_LABELS},
+        'exposure': {'label': 'Exposure', 'minimum': 0.0, 'maximum': 4.0,
+                     'step': 0.05},
+        'colorSpace': {'label': 'Lit in linear light',
+                       'options': tonemapping.COLOR_SPACE_CHOICES,
+                       'optionLabels': tonemapping.COLOR_SPACE_LABELS},
         'ibl': {'label': 'Environment lighting',
                 'options': renderoptions.CHOICES['ibl'],
                 'optionLabels': renderoptions.LABELS['ibl']},
@@ -429,7 +454,7 @@ class ContextDefinition( node.Node ):
     #: should read: the expensive things first, the diagnostics last.
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
-        'bloom', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
+        'bloom', 'toneMapping', 'exposure', 'colorSpace', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
         'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',
         'renderer', 'lighting',

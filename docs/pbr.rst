@@ -54,7 +54,8 @@ A ``Material`` read from a VRML97 or X3D document is drawn by X3D's Phong
 equation (ISO/IEC 19775-1, 17.2.2.5): the emissive colour, plus for each light
 its ``ambientIntensity`` times the Material's ``ambientIntensity`` and diffuse
 colour, its diffuse and its Blinn-Phong specular terms, on the colour values as
-given and without the tone map, bloom on or off. A ``Color`` node replaces the
+given, bloom on or off. The exposure and the tone curve apply to the result
+(:ref:`tone-mapping`); by default a document has neither. A ``Color`` node replaces the
 diffuse colour, a texture multiplies it, a normal map turns the normal, an
 occlusion map scales the lights' sum, and fog is X3D's. Image-based lighting,
 lightmaps and planar reflections are not read for such a shape. An appearance
@@ -552,6 +553,100 @@ PBR texture sets are widely available under CC0 and similar licences, and
 Blender and other editors can apply them to a model before you export it to
 glTF.
 
+.. _tone-mapping:
+
+Tone Mapping, Exposure and Colour Space
+---------------------------------------
+
+Three settings decide how a lit colour becomes what is written to the window.
+Each is a ``ContextDefinition`` field, with an environment variable as its
+default, and each matches the X_ITE browser option of the same name.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Field
+     - Values
+     - Default
+     - Environment
+   * - ``toneMapping``
+     - ``auto``, ``none``, ``aces_narkowicz``, ``aces_hill``,
+       ``aces_hill_exposure_boost``, ``khr_pbr_neutral``
+     - ``auto``
+     - ``OPENGLCONTEXT_TONE_MAPPING``
+   * - ``exposure``
+     - a number, 0 or more
+     - ``1.0``
+     - ``OPENGLCONTEXT_EXPOSURE``
+   * - ``colorSpace``
+     - ``auto``, ``srgb``, ``linear_when_physical_material``, ``linear``
+     - ``auto``
+     - ``OPENGLCONTEXT_COLOR_SPACE``
+
+The tone curve takes a lit colour, which can be brighter than 1, to the range
+0 to 1:
+
+- ``none`` - no curve; a channel above 1 is clipped.
+- ``aces_narkowicz`` - Krzysztof Narkowicz's fit to the ACES filmic curve, per
+  channel. Saturated highlights keep their hue.
+- ``aces_hill`` - Stephen Hill's fit, which works across the channels in the
+  ACES colour space. Highlights desaturate toward white.
+- ``aces_hill_exposure_boost`` - Hill's fit with the colour divided by 0.6
+  first, which brightens the mid-tones.
+- ``khr_pbr_neutral`` - the Khronos PBR Neutral curve: colours below 0.76 pass
+  through with a 0.04 offset taken off, so a base colour reads as authored;
+  brighter colours compress toward white.
+
+``auto`` draws a scene read from a VRML97 or X3D document with ``none``, which
+is X_ITE's default, and every other scene (glTF, a scene built in code) with
+``aces_narkowicz``. The curves and their constants are X_ITE 16.4.3's.
+
+``exposure`` multiplies the colour before the curve. A glTF scene lit by
+lights in absolute units sets its own exposure from a light meter, and this
+multiplies that.
+
+``colorSpace`` says which materials are lit in linear light. A material lit in
+linear light has its textures decoded from sRGB and its result encoded to sRGB
+as it is written. A material lit in sRGB uses its texels as they are and
+writes its result as it is.
+
+- ``linear_when_physical_material`` (what ``auto`` gives) - a
+  ``PhysicalMaterial`` and every glTF material are lit in linear light; in a
+  document, a ``Material`` and an unlit appearance are lit in sRGB.
+- ``linear`` - every material is lit in linear light.
+- ``srgb`` - every material is lit in sRGB, and the frame is not encoded.
+
+In a document, the exposure and the curve apply to every colour drawn: a
+``PhysicalMaterial``, a ``Material``, an unlit appearance, lines, points and
+the ``Background``. In any other scene they apply to the lit materials, the
+HDR sky, terrain and vegetation; a colour given as displayed (an unlit glTF
+material, a line) is written as it is. The VRML97 renderer applies none of
+the three. With bloom on, the composite applies the curve and the encoding to
+the whole frame, and a colour given as displayed is written as the linear
+light the composite turns into that colour.
+
+.. code-block:: python
+
+   from OpenGLContext.contextdefinition import ContextDefinition
+
+   definition = ContextDefinition(toneMapping='khr_pbr_neutral', exposure=1.5)
+
+.. code-block:: bash
+
+   OPENGLCONTEXT_TONE_MAPPING=aces_hill oglc-view model.glb
+
+:mod:`OpenGLContext.passes.tonemapping` holds the curves in NumPy
+(``tone_map``, ``untone``) beside the shaders' copy in
+``shaders/_tonemap_inc.glsl``, and ``display(context)`` answers the curve,
+exposure and colour space a frame is drawn with.
+
+.. rst-class:: technical
+
+X_ITE encodes to sRGB with a power of 1/2.2; the engine uses the piecewise
+sRGB transfer function. The two differ by at most 10 levels in 255, in the
+darkest values.
+
 Lighting the Scene
 ------------------
 
@@ -957,8 +1052,8 @@ environment, and computed again if the environment changes.
 .. rst-class:: technical
 
 Colour - lighting is computed in linear colour. Base-colour and emissive
-texels are decoded from sRGB when read. The final colour is tone-mapped with
-an ACES filmic curve and encoded to sRGB. Because the shader encodes sRGB
+texels are decoded from sRGB when read. The final colour goes through the
+tone curve (:ref:`tone-mapping`) and is encoded to sRGB. Because the shader encodes sRGB
 itself, ``GL_FRAMEBUFFER_SRGB`` stays disabled (see :ref:`srgb-output`).
 
 .. rst-class:: technical

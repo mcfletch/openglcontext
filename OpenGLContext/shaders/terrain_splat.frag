@@ -29,10 +29,9 @@ out vec4 fragColor;
 
 vec3 sRGBToLinear(vec3 c){ return pow(c, vec3(2.2)); }
 vec3 linearToSRGB(vec3 c){ return pow(c, vec3(1.0/2.2)); }
-vec3 aces(vec3 x){
-    const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;
-    return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.0,1.0);
-}
+// The frame's tone curve and exposure (OpenGLContext.passes.tonemapping)
+#include "_tonemap_inc.glsl"
+uniform float exposure;
 
 void main(){
     vec4 w = texture(controlMap, (vWorldPos.xz - worldMin)/worldSize);
@@ -77,6 +76,6 @@ void main(){
         float fog = 1.0-exp(-fogDensity*length(toViewer(vEyePos)));
         color = mix(color, fogColor, clamp(fog,0.0,1.0));
     }
-    color = aces(color);
+    color = toneCurve(color * exposure);
     fragColor = vec4(linearToSRGB(color), 1.0);
 }

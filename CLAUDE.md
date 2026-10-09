@@ -212,6 +212,8 @@ OpenGLContext/
 │   ├── renderstats.py # What a frame cost in shapes and draws, for the
 │   │                 # developer overlay -- docs/hud.rst
 │   ├── localfog.py   # Which LocalFog fogs a draw: its scope -- no GL
+│   ├── tonemapping.py  # The tone curve, exposure and colour space a frame
+│   │                 # is written with (X_ITE's options) -- docs/pbr.rst#tone-mapping
 │   ├── clipscope.py  # Which ClipPlanes clip a draw, in its own frame -- no GL
 │   │                 # -- docs/x3d.rst
 │   ├── clippass.py   # The pass's side: each draw given its planes, the

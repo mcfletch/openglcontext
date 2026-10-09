@@ -49,6 +49,7 @@ layout(location = 1) out vec4 fragObjectId;
 // X3D's Phong terms, shared with vrml97_lighting.frag and pbr.frag.
 #include "_phong_inc.glsl"
 #include "_x3d_fog_inc.glsl"
+#include "_displayed_inc.glsl"
 #include "_fill_inc.glsl"
 
 void main() {
@@ -80,6 +81,6 @@ void main() {
                                           shininess, lightShadow),
                             0.0, 1.0);
 
-    fragColor = vec4(x3dFogged(finalColor, length(toViewer(vPosition))), alpha);
+    fragColor = vec4(displayedX3D(x3dFogged(finalColor, length(toViewer(vPosition)))), alpha);
     fragObjectId = encodeObjectId(objectId);
 }

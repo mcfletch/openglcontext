@@ -27,7 +27,7 @@ from OpenGLContext.passes.disposal import PassResources, let_go
 from OpenGLContext.passes.layerguard import LayerGuard
 from OpenGLContext.passes.reflectionpass import ReflectionsMixin
 from OpenGLContext.debug.logs import getTraceback
-from OpenGLContext.passes import localfog
+from OpenGLContext.passes import localfog, tonemapping
 from OpenGLContext.scenegraph import fog as fognode
 
 if TYPE_CHECKING:
@@ -202,11 +202,12 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         shader.set_ibl_mode(ibl.MODE_CODE[mode], ibl_scale,
                             ibl.fill_scale(mode, probe, bool(self.boundLights),
                                            studio_fill))
-        # Camera exposure (1.0 unless a glTF scene with absolute-unit punctual lights
-        # set a light-meter value on the context). Default keeps every other scene
-        # -- VRML, IBL-lit demos, the blessed baselines -- pixel-identical.
-        if hasattr(shader, 'set_exposure'):
-            shader.set_exposure(
+        # The tone curve, colour space and exposure (tonemapping.display); the
+        # metered exposure is 1.0 unless a glTF scene with absolute-unit punctual
+        # lights set a light-meter value on the context.
+        if hasattr(shader, 'set_display'):
+            shader.set_display(
+                tonemapping.frame_display(self),
                 float(getattr(getattr(self, 'context', None), 'gltf_exposure', 1.0)))
         # Bloom: the scene renders into a linear HDR target, so the PBR shader emits
         # linear HDR (tone-mapping moves to the bloom composite). Off by default.
@@ -518,4 +519,5 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         if pass_ is not None:
             self._bloomGuard().run(
                 pass_.composite, rects,
-                clear=rects is not None and not covers(rects, width, height))
+                clear=rects is not None and not covers(rects, width, height),
+                display=tonemapping.frame_display(self))
