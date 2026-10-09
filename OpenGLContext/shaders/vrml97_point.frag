@@ -21,7 +21,9 @@ layout(location = 0) out vec4 fragColor;
 // Output object ID (attachment 1) - for selection buffer
 layout(location = 1) out vec4 fragObjectId;
 
-void main() {
+#include "_oit_inc.glsl"
+
+void shadeFragment() {
     vec4 color = vec4(vColor, 1.0);
 
     if (hasTexture) {
@@ -36,4 +38,9 @@ void main() {
 
     // Output object ID to selection buffer (encode as RGBA8)
     fragObjectId = encodeObjectId(objectId);
+}
+
+void main() {
+    shadeFragment();
+    oitAccumulate();
 }

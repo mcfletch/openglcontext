@@ -231,6 +231,10 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - ``auto``/``srgb``/``linear_when_physical_material``/``linear``
      - Which materials are lit in linear light.
      - ``OPENGLCONTEXT_COLOR_SPACE``
+   * - ``orderIndependentTransparency``
+     - bool
+     - Transparent surfaces by weighted blending (:ref:`x3d-browser-options`).
+     - ``OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY``
    * - ``primitiveQuality``
      - ``auto``/``low``/``medium``/``high``
      - Sides and rings of the quadrics (:ref:`x3d-browser-options`).

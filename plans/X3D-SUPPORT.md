@@ -196,7 +196,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     points and Background as well, as X_ITE applies them. Bloom's composite,
     the HDR sky, terrain and vegetation use the same curve. Re-blessed for the
     change: x3d_demo, x3d_geospatial, x3d_layering, x3d_sound, x3d_splats,
-    x3d_volume (each a document of PhysicalMaterials, drawn without the curve)
+    x3d_volume, and after the merge x3d_movie (each a document of
+    PhysicalMaterials, drawn without the curve)
   - [x] colour space: `ContextDefinition.colorSpace`
     (`OPENGLCONTEXT_COLOR_SPACE`): srgb, linear_when_physical_material (auto),
     linear. In a document an UnlitMaterial and a no-material appearance are lit
@@ -224,6 +225,15 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     for a document's node or texture and the engine's own elsewhere.
     Re-blessed for the change: x3d_demo (4.7%, its cylinders' sides and the
     floor's and wall's mipmaps), x3d_layering (2.4%)
+  - [x] order-independent transparency:
+    `ContextDefinition.orderIndependentTransparency`
+    (`OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY`, off as in X_ITE):
+    weighted blended, X_ITE's weight and composite (`passes/oit.py`,
+    `shaders/_oit_inc.glsl`); the targets take the view's opaque depth copy
+    as their depth buffer. Found on the way and fixed: a pick of a
+    transparent surface read the depth behind it (its hit point was on the
+    far plane) and the id of the last transparent surface drawn; the ids and
+    depth of the nearest are drawn after the colours while picking
   - [x] QualityWhenMoving, MotionBlur: X_ITE 16.4.3 declares and never reads
     them; no engine field. DisplayColorSpace DISPLAY_P3 and XRSessionMode:
     not implemented, the limits in `docs/x3d.rst` (Browser options)

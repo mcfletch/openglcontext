@@ -1058,7 +1058,8 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         prog = shader.program
 
         self.refreshZones([record for _obj_index, record in transparent])
-        try:
+
+        def draw_all(ids: Optional[dict]) -> None:
             for _obj_index, record in transparent:
                 _key, mvmatrix, tmatrix, bvolume, path, node = record
                 self.matrix = mvmatrix
@@ -1070,7 +1071,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
 
                 # Set object ID for MRT selection buffer (stable per-path id),
                 # or mask it for a non-pickable shape.
-                masked = self._writeShapeId(shader, path, node, prog, id_map)
+                masked = self._writeShapeId(shader, path, node, prog, ids)
                 self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
                 self.applyZones(shader, path, tmatrix, bvolume, prog)
                 self.applyPlanarReflection(shader, record, prog)
@@ -1083,6 +1084,34 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                     self.renderFailed('transparent', node, err)
                 finally:
                     self._restoreShapeId(masked)
+        try:
+            targets = self._beginOrderIndependent(shader)
+            if targets is None:
+                # The colours alone: the ids are drawn below, nearest first
+                if id_map is not None:
+                    glColorMaski( OBJECT_ID_ATTACHMENT, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE )
+                try:
+                    draw_all(None)
+                finally:
+                    if id_map is not None:
+                        glColorMaski( OBJECT_ID_ATTACHMENT, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE )
+            else:
+                try:
+                    draw_all(None)
+                finally:
+                    self._endOrderIndependent(shader, targets)
+            if id_map is not None:
+                # The picking ids and depth of the nearest transparent surface,
+                # which a pick reads its shape and its point from: drawn again
+                # with the colour attachment masked and depth written.
+                disable_object_id_blend()
+                glColorMaski(0, False, False, False, False)
+                glDepthMask(1)
+                try:
+                    draw_all(id_map)
+                finally:
+                    glColorMaski(0, True, True, True, True)
+                    glDepthMask(0)
         finally:
             self.transparent = False
             shader.unuse()
@@ -1232,6 +1261,36 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         if not self.toneMapped:
             return tonemapping.ENGINE
         return tonemapping.display( self, getattr( self, 'scene', None ) )
+
+    def _beginOrderIndependent( self, shader: Any ) -> Optional[Any]:
+        """The view's OIT targets, bound for its transparent surfaces, or None
+
+        None where :func:`OpenGLContext.passes.oit.enabled` is false, where the
+        pass's programs cannot draw into them, or where the view's depth
+        could not be copied; the surfaces are then blended in order.
+        """
+        from OpenGLContext.passes import oit  # noqa: PLC0415 GL module, imported where used
+        if not ( oit.enabled( self ) and hasattr( shader, 'set_oit' ) ):
+            return None
+        depth = self.opaqueDepth()
+        if not depth:
+            return None
+        if getattr( self, '_oit_targets', None ) is None:
+            self._oit_targets = oit.OITTargets()
+        targets = self._oit_targets
+        if not targets.begin( self.viewport, depth ):
+            return None
+        shader.set_oit(True)
+        shader.use(lit=True)
+        return targets
+
+    def _endOrderIndependent( self, shader: Any, targets: Any ) -> None:
+        """Compose ``targets`` over the view and blend in order from then on"""
+        shader.set_oit(False)
+        targets.compose()
+        shader.use(lit=True)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
     def frameShading( self ) -> str:
         """The shading this pass draws its scene with
@@ -2254,6 +2313,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         See :mod:`OpenGLContext.passes.disposal`.
         """
         let_go( self, '_shader_program_instance' )
+        let_go( self, '_oit_targets' )
         self.shader_program = None
         super().disposeResources()
 

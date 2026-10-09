@@ -32,7 +32,9 @@ layout(location = 0) out vec4 fragColor;
 // Output object ID (attachment 1)
 layout(location = 1) out vec4 fragObjectId;
 
-void main() {
+#include "_oit_inc.glsl"
+
+void shadeFragment() {
     if (textMode) {
         // Text rendering mode
         vec4 texel = texture(diffuseTexture, vTexCoord);
@@ -67,4 +69,9 @@ void main() {
     } else {
         fragObjectId = encodeObjectId(objectId);
     }
+}
+
+void main() {
+    shadeFragment();
+    oitAccumulate();
 }

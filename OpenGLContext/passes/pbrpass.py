@@ -1200,6 +1200,13 @@ class PBRShaderProgram(VRML97ShaderProgram):
              ('documentDisplay', int(values['documentDisplay']), glUniform1i),
              ('exposure', float(values['exposure']), glUniform1f)))
 
+    def set_oit(self, enabled: bool) -> None:
+        """Have the scene's programs write the order-independent targets' values (_oit_inc.glsl)"""
+        self._set_on_programs(
+            (self.program, self.unlit_program, self.vertex_color_program, self.point_program,
+             self.line_program, self.wide_line_program),
+            (('oitPass', int(bool(enabled)), glUniform1i),))
+
     def set_shading(self, shading: str) -> None:
         """Shade the frame by ``shading``, one of :data:`OpenGLContext.passes.shading.SHADINGS`
 

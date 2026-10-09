@@ -38,10 +38,17 @@ bool inGap(float along) {
     return false;
 }
 
-void main() {
+#include "_oit_inc.glsl"
+
+void shadeFragment() {
     if (inGap(gAlong)) {
         discard;
     }
     fragColor = vec4(displayedX3D(x3dFogged(gColor, length(gEyePosition))), 1.0);
     fragObjectId = encodeObjectId(objectId);
+}
+
+void main() {
+    shadeFragment();
+    oitAccumulate();
 }

@@ -7,6 +7,7 @@ from vrml import node, field
 from OpenGLContext import renderoptions
 from OpenGLContext.audio import settings as audiosettings
 from OpenGLContext.passes import quality, shading as shadingmodes, tonemapping
+from OpenGLContext.passes.oit import default_enabled as _default_oit
 
 
 # The three helpers below are passed to ``newField`` **uncalled**, so each is
@@ -243,6 +244,11 @@ class ContextDefinition( node.Node ):
     #: or "high", X_ITE's counts (env: OPENGLCONTEXT_PRIMITIVE_QUALITY). "auto"
     #: is medium for a document and the engine's own elsewhere.
     #: See OpenGLContext.passes.quality.
+    #: Transparent surfaces drawn by weighted blending, in no order, as X_ITE's
+    #: OrderIndependentTransparency (env:
+    #: OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY). See OpenGLContext.passes.oit.
+    orderIndependentTransparency = field.newField(
+        "orderIndependentTransparency", "SFBool", 1, _default_oit )
     primitiveQuality = field.newField( "primitiveQuality", "SFString", 1,
                                        quality.default_primitive_quality )
     #: The filters of a texture that names none: "auto", "low", "medium" or
@@ -432,6 +438,7 @@ class ContextDefinition( node.Node ):
         'shading': {'label': 'Shading',
                     'options': shadingmodes.CHOICES,
                     'optionLabels': shadingmodes.LABELS},
+        'orderIndependentTransparency': {'label': 'Order-independent transparency'},
         'primitiveQuality': {'label': 'Primitive detail',
                              'options': quality.CHOICES,
                              'optionLabels': quality.LABELS},
@@ -485,7 +492,7 @@ class ContextDefinition( node.Node ):
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
         'bloom', 'toneMapping', 'exposure', 'colorSpace', 'shading',
-        'primitiveQuality', 'textureQuality', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
+        'orderIndependentTransparency', 'primitiveQuality', 'textureQuality', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
         'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',
         'renderer', 'lighting',

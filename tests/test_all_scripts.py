@@ -727,6 +727,7 @@ SLOW_SCRIPTS = {
     'shader_instanced_mapped.py': SLOW_TIMEOUT,
     'shader_instanced.py': SLOW_TIMEOUT,
     'test_shader_comprehensive.py': SLOW_TIMEOUT,
+    'x3d_movie.py': SLOW_TIMEOUT,  # draws and encodes its film before the scene opens
 }
 
 # Scripts that require GLUT specifically (the GLUT backend or GLUT draw helpers

@@ -713,7 +713,9 @@ vec3 facingNormal() {
     return gl_FrontFacing ? N : -N;
 }
 
-void main() {
+#include "_oit_inc.glsl"
+
+void shadeFragment() {
     faceNormal = normalize(cross(dFdx(vPosition), dFdy(vPosition)));
     vec4 hatched;
     if (x3dHatch(hatched)) {
@@ -1310,4 +1312,9 @@ void main() {
     color = displayed(color);
     fragColor = vec4(color, alpha);
     fragObjectId = encodeObjectId(effectiveObjectId());
+}
+
+void main() {
+    shadeFragment();
+    oitAccumulate();
 }

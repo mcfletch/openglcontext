@@ -209,6 +209,11 @@ Lighting and shadows
        the window is made. For the frames after a pointer event over a
        pickable scene, and with bloom on, the frame is drawn into a target
        of one sample a pixel and is not antialiased.
+   * - ``OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY``
+     - yes/no
+     - off
+     - Transparent surfaces drawn by weighted blending, in no order. See
+       :ref:`x3d-browser-options`.
    * - ``OPENGLCONTEXT_PRIMITIVE_QUALITY``
      - ``auto``, ``low``, ``medium``, ``high``
      - ``auto``

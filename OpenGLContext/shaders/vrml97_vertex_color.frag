@@ -52,7 +52,9 @@ layout(location = 1) out vec4 fragObjectId;
 #include "_displayed_inc.glsl"
 #include "_fill_inc.glsl"
 
-void main() {
+#include "_oit_inc.glsl"
+
+void shadeFragment() {
     vec4 hatched;
     if (x3dHatch(hatched)) {
         fragColor = hatched;
@@ -83,4 +85,9 @@ void main() {
 
     fragColor = vec4(displayedX3D(x3dFogged(finalColor, length(toViewer(vPosition)))), alpha);
     fragObjectId = encodeObjectId(objectId);
+}
+
+void main() {
+    shadeFragment();
+    oitAccumulate();
 }

@@ -33,7 +33,9 @@ Exceptions are as follows:
 
 	The tone curves in OpenGLContext/shaders/_tonemap_inc.glsl and
 	OpenGLContext/passes/tonemapping.py follow X_ITE 16.4.3's
-	ToneMapping2.glsl, under the MIT licence:
+	ToneMapping2.glsl, and the weighted blended transparency in
+	OpenGLContext/shaders/_oit_inc.glsl and OpenGLContext/passes/oit.py
+	follows its OIT2 and OITCompose2 shaders, under the MIT licence:
 
 		Copyright (c) 2009 Holger Seelig and other contributors
 

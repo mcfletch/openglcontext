@@ -1687,6 +1687,9 @@ default (:doc:`environment`). ``auto`` gives a VRML97 or X3D document X_ITE
    * - ``Antialiased``, ``Multisampling``
      - ``multisampleSamples``, set as the window is made
      - unset; ``oglc-x3d-regression`` draws with 4
+   * - ``OrderIndependentTransparency``
+     - ``orderIndependentTransparency``
+     - off
    * - ``PrimitiveQuality``
      - ``primitiveQuality``
      - ``medium``: 20 sides for a Cone and a Cylinder, 32 sides and 14
@@ -1696,6 +1699,18 @@ default (:doc:`environment`). ``auto`` gives a VRML97 or X3D document X_ITE
      - ``medium``: a texture that names no filter is minified from the
        nearest mipmap level (``AVG_PIXEL_NEAREST_MIPMAP``); ``low`` takes the
        nearest texel of the nearest level, ``high`` blends two levels
+
+Order-independent transparency draws a view's transparent surfaces by
+weighted blending (McGuire and Bavoil, with X_ITE's weight): each adds its
+colour, weighted by its opacity and its nearness, to a pair of half-float
+targets the view's size, and the pair is composed over the opaque scene. The
+result does not depend on the order the surfaces are drawn in, which sorting
+by each shape's origin gets wrong for shapes that interpenetrate or share an
+origin; two surfaces of equal opacity close together are mixed evenly rather
+than the nearer drawn over the farther. The PBR pass's programs for
+surfaces, lines and points write the targets; volumes, particle systems and
+Gaussian splats, which have programs of their own, are not weighted. A pick finds the nearest transparent surface and its
+point, with or without it.
 
 Distance level of detail steps down from the primitive quality as the
 viewer moves away (``OPENGLCONTEXT_LOD``). A change of either quality applies

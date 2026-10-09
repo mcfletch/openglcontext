@@ -100,10 +100,12 @@ def test_i_steps_the_inner_surface(demo):
     assert demo.press('x') == ''
 
 
-def test_the_specimens_are_drawn(demo):
+def test_the_specimens_are_drawn(tmp_path):
+    """The demo as it opens, which the key tests sharing `demo` have changed"""
     refused = profile_unavailable('core')
     if refused:
         pytest.skip(refused)
+    demo = x3d_volume.VolumeScene(str(tmp_path))
     with scene_context(demo.scene, size=(160, 90),
                        environment={'OPENGLCONTEXT_RENDERER': 'pbr'}) as context:
         # The volumes' files load on the background pool and reach the render
