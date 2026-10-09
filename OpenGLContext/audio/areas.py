@@ -61,7 +61,8 @@ _reverbs: "weakref.WeakKeyDictionary[Any, _ReverbOverZones]" = weakref.WeakKeyDi
 
 
 def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
-                position: ArrayLike, table: Any = None) -> None:
+                position: ArrayLike, table: Any = None,
+                ground: Optional['Reverb'] = None) -> None:
     """Set each zone-controlled emitter's gain, and the reverb, for a listener at ``position``.
 
     ``emitters`` are the scene's :class:`~OpenGLContext.scenegraph.audio.AudioEmitter`
@@ -78,6 +79,11 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
     the application's. A value the application sets while the zones are
     applied is taken as its own from then on. When no zone has a reverb any
     more, the application's is put back.
+
+    ``ground`` is the reverb of the room the listener is in, from the scene's
+    acoustic surfaces (:meth:`OpenGLContext.audio.acoustics.Acoustics.reverb`):
+    it is heard in place of the application's while it is given, with the
+    zones laid over it in the same way.
     """
     from OpenGLContext.passes import zonelayers
     from OpenGLContext.scenegraph.zone import AUDIO
@@ -97,19 +103,20 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
         wanted = float(shares.get(emitter, 0.0)) if emitter in controlled else 1.0
         if getattr(emitter, 'zoneGain', 1.0) != wanted:
             emitter.zoneGain = wanted
-    _lay_reverb(engine, zones, position, weights)
+    _lay_reverb(engine, zones, position, weights, ground)
 
 
 def _lay_reverb(engine: Any, zones: Sequence[Any], position: ArrayLike,
-                weights: Optional[dict[PlacedZone, float]]) -> None:
-    """The zones' reverb over the application's, on ``engine``; see :func:`apply_zones`."""
+                weights: Optional[dict[PlacedZone, float]],
+                ground: Optional['Reverb'] = None) -> None:
+    """The zones' reverb over the room's or the application's, on ``engine``; see :func:`apply_zones`."""
     from OpenGLContext.passes import zonelayers
     from OpenGLContext.scenegraph.zone import REVERB
     target = getattr(engine, 'reverb', None)
     if target is None:
         return
     held = _reverbs.get(engine)
-    reverberant = any(zone.setting(REVERB) is not None for zone in zones)
+    reverberant = ground is not None or any(zone.setting(REVERB) is not None for zone in zones)
     if held is None:
         if not reverberant:
             return
@@ -120,7 +127,8 @@ def _lay_reverb(engine: Any, zones: Sequence[Any], position: ArrayLike,
         _write(target, held.base)
         del _reverbs[engine]
         return
-    _write(target, zonelayers.reverb_at(zones, position, weights, held.base))
+    _write(target, zonelayers.reverb_at(zones, position, weights,
+                                        held.base if ground is None else ground))
     held.written = _reading(target)
 
 

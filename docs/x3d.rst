@@ -146,7 +146,7 @@ implements these X3D nodes, by component:
 - Shaders - ComposedShader, FloatVertexAttribute, Matrix3VertexAttribute,
   Matrix4VertexAttribute, PackagedShader, ProgramShader, ShaderPart,
   ShaderProgram
-- Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
+- Shape - AcousticProperties, Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
   PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - Analyser, AudioClip, AudioDestination, BiquadFilter,
   BufferAudioSource, ChannelMerger, ChannelSelector, ChannelSplitter,
@@ -782,6 +782,29 @@ Every source and processing node runs from ``startTime`` to a later
 ``elapsedTime``; a processing node not ``enabled`` passes its input through,
 and a source not ``enabled`` is silent. Each node with a ``channelCount``
 output sends the channels it renders. ``tailTime`` is not read.
+
+A ``Shape`` whose ``Appearance`` has an enabled ``AcousticProperties`` is a
+surface sound meets (``OpenGLContext.audio.acoustics``). Its ``absorption``,
+``diffuse`` and ``specular`` are read as shares of the sound energy striking
+it, and what is left passes through it:
+
+- A ``Sound`` or ``SpatialSound`` keeps the share of its energy its straight
+  path to the listener passes: the product of ``1 - absorption - diffuse -
+  specular`` (held between 0 and 1) over each surface the path crosses, so a
+  path through a closed box crosses it twice. Its gain is that share's square
+  root. A node of defaults passes everything.
+- A listener inside the box round all the acoustic surfaces hears that room's
+  reverb: its decay is Sabine's reverberation time, ``0.161 V / A`` seconds
+  for the box's volume ``V`` in cubic metres and ``A`` the sum of each
+  surface's area in square metres times ``1 - diffuse - specular``, at most
+  10 seconds; its level is the square root of ``diffuse + specular``
+  averaged by area. A
+  ``ZoneReverb`` is laid over it as over the application's reverb
+  (:doc:`zones`); outside the box the application's reverb is heard again.
+
+``refraction`` is not read, since a sound is heard along one straight path.
+The surfaces are one room, the box round all of them, and their reflections
+are heard as that reverb, not as separate echoes.
 
 Inline
 ~~~~~~

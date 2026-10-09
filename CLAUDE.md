@@ -72,6 +72,8 @@ package whose code ends up somewhere else.
 ```text
 OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
+│   ├── acoustics.py  # X3D's AcousticProperties: surfaces between a sound and
+│   │                 # the listener, and the room's reverb -- no GL -- docs/x3d.rst
 │   ├── x3dgraph.py   # A scene's X3D sound nodes as one engine's processing
 │   │                 # graph, kept in step once a frame -- no GL
 │   └── vehicle.py    # A road vehicle's motor, tyres, wind and impacts as

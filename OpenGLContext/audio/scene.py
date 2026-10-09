@@ -26,6 +26,7 @@ from omi_audio.device import open_device
 from omi_audio.engine import AudioEngine
 from vrml.x3d import nodes as x3d
 
+from OpenGLContext.audio.acoustics import Acoustics, properties_of
 from OpenGLContext.audio.areas import apply_zones
 from OpenGLContext.audio.settings import settings_for
 from OpenGLContext.audio.x3dgraph import SoundGraph
@@ -46,6 +47,9 @@ _zoned: "weakref.WeakSet[AudioEngine]" = weakref.WeakSet()
 #: Each engine's graph of the scene's X3D sound nodes, made when a frame first
 #: has one.
 _sound_graphs: "weakref.WeakKeyDictionary[AudioEngine, SoundGraph]" = weakref.WeakKeyDictionary()
+
+#: Each engine's acoustic surfaces, made when a frame first has one.
+_acoustics: "weakref.WeakKeyDictionary[AudioEngine, Acoustics]" = weakref.WeakKeyDictionary()
 
 
 def existing_engine(context: Any) -> Optional[AudioEngine]:
@@ -105,8 +109,14 @@ def close(context: Any) -> None:
         engine.close()
 
 
+def acoustic_paths(paths: Sequence[Any]) -> list[Any]:
+    """The paths among `paths` to a shape with enabled AcousticProperties"""
+    return [path for path in paths if properties_of(path[-1]) is not None]
+
+
 def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
-           zones: Sequence[Any] = (), table: Any = None) -> int:
+           zones: Sequence[Any] = (), table: Any = None,
+           surfaces: Sequence[Any] = ()) -> int:
     """Keep ``context``'s sounds in step with its camera, for one frame.
 
     ``paths`` are the render pass's collected ``Auditory`` node paths.  An empty
@@ -127,6 +137,11 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
     the application's; a scene that never had a reverb zone leaves the
     reverb to the application.
 
+    ``surfaces`` are the paths to the shapes with enabled AcousticProperties
+    (:func:`acoustic_paths`): each Sound and SpatialSound is heard at the
+    share of it they pass, and a listener inside them hears their room's
+    reverb under the zones' (:mod:`OpenGLContext.audio.acoustics`).
+
     Returns how many nodes were driven, for a debug overlay.
     """
     if not paths or not enabled(context):
@@ -146,10 +161,16 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
     platform = _view_platform(context)
     if platform is not None:
         engine.listen(platform)
-    if zones or engine in _zoned:
+    acoustics = _acoustics.get(engine)
+    if surfaces or acoustics is not None:
+        if acoustics is None:
+            acoustics = _acoustics[engine] = Acoustics()
+        acoustics.update([(path[-1], path.transformMatrix()) for path in surfaces])
+    ground = acoustics.reverb(engine.listener.position) if acoustics else None
+    if zones or ground is not None or engine in _zoned:
         apply_zones(engine, [path[-1] for path in paths], zones,
-                    engine.listener.position, table)
-        if zones:
+                    engine.listener.position, table, ground=ground)
+        if zones or ground is not None:
             _zoned.add(engine)
         else:
             _zoned.discard(engine)
@@ -163,7 +184,7 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
             graph = _sound_graphs[engine] = SoundGraph(engine)
         settings = settings_for(context)
         driven += graph.update(roots, now, budget=int(settings.voices),
-                               capture=bool(settings.microphone))
+                               capture=bool(settings.microphone), acoustics=acoustics)
     return driven
 
 

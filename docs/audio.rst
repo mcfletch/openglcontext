@@ -729,6 +729,23 @@ An ``Analyser``'s ``frequencyData()``, ``timeDomainData()``,
 returns the context's ``SoundGraph``; its ``audioNode(node)`` is the graph
 node an X3D node plays as.
 
+A shape's ``AcousticProperties`` (on its ``Appearance``) make it a surface
+sound meets: a ``Sound`` or ``SpatialSound`` behind it is quieter, and a
+listener inside the surfaces hears their room's reverb. In code:
+
+.. code-block:: python
+
+   from vrml.x3d.nodes import AcousticProperties
+
+   curtain = Shape(geometry=Box(size=(4, 3, 0.05)), appearance=Appearance(
+       acousticProperties=AcousticProperties(absorption=0.6, diffuse=0.2)))
+
+A fifth of the sound's energy, ``1 - 0.6 - 0.2``, passes the curtain, so
+what is heard through it has 0.45 of its gain.
+:ref:`x3d-sound` gives the rules, and
+``OpenGLContext.audio.acoustics.Acoustics`` answers the same questions for an
+application of its own.
+
 ``oglc-x3d-sound`` opens a scene using the component's nodes; see
 :ref:`audio-demos`.
 

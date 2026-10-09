@@ -90,6 +90,26 @@ def test_a_failure_in_the_audio_update_never_costs_a_frame(monkeypatch, caplog):
     assert 'audio' in caplog.text
 
 
+def test_the_shapes_with_acoustic_properties_are_the_surfaces(monkeypatch):
+    """The pass hands the audio update the paths to its acoustic surfaces"""
+    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph import basenodes  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph.nodepath import NodePath  # noqa: PLC0415 kept with its use
+    heard = []
+    monkeypatch.setattr(audioscene, 'update',
+                        lambda context, paths, **named: heard.append(named['surfaces']) or 1)
+    wall = basenodes.Shape(geometry=basenodes.Box(), appearance=basenodes.Appearance(
+        acousticProperties=x3d.AcousticProperties(absorption=1.0)))
+    plain = basenodes.Shape(geometry=basenodes.Box(), appearance=basenodes.Appearance())
+    paths = [NodePath([wall]), NodePath([plain])]
+    instance = _flat.FlatPass.__new__(_flat.FlatPass)
+    instance.paths = {nodetypes.Auditory: ['a sound'], nodetypes.Rendering: paths}
+    instance._zones = ()
+    instance._allTable = None
+    assert instance.renderAudio(FakeContext()) == 1
+    assert heard == [[paths[0]]]
+
+
 def test_a_scene_with_no_audible_nodes_costs_nothing():
     """The common case: no paths, so no engine, no device, no thread."""
     instance = _flat.FlatPass.__new__(_flat.FlatPass)

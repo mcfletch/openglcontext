@@ -22,6 +22,10 @@ than the ``budget`` of voices, those that rank lowest are silenced: higher
 `priority` first; among those above 0.5, the more recently heard; then the
 louder at the listener (16.4.2).
 
+Given the frame's :class:`~OpenGLContext.audio.acoustics.Acoustics`, each
+Sound and SpatialSound is heard at the share its straight path to the listener
+passes through the scene's acoustic surfaces.
+
 MicrophoneSource and StreamAudioSource open an input only with ``capture``
 true, and only while they are heard and running; the input is closed when
 either stops.
@@ -36,6 +40,7 @@ from omi_audio.device import CaptureDevice, open_capture
 from omi_audio.engine import AudioEngine
 from omi_audio.spatial import Listener
 
+from OpenGLContext.audio.acoustics import Acoustics
 from OpenGLContext.scenegraph import x3dsound
 
 log = logging.getLogger(__name__)
@@ -152,13 +157,14 @@ class SoundGraph:
 
     def update(self, roots: Sequence[tuple[Any, Any]], now: float,
                listener: Optional[Listener] = None, budget: int = DEFAULT_BUDGET,
-               capture: bool = False) -> int:
+               capture: bool = False, acoustics: Optional[Acoustics] = None) -> int:
         """Keep the graph in step with ``roots`` at time ``now``; how many nodes it drove
 
         ``roots`` are the frame's top-level sound nodes, each with its world
         matrix. ``listener`` is the camera's; the engine's where None.
         ``budget`` is how many Sound and SpatialSound nodes are heard at once,
-        and ``capture`` whether an input may be opened.
+        ``capture`` whether an input may be opened, and ``acoustics`` the
+        frame's acoustic surfaces.
         """
         walk = _Walk(roots)
         fresh = set()
@@ -184,7 +190,7 @@ class SoundGraph:
         self._planned = planned
         self._capture(walk, capture)
         self._place(walk, listener if listener is not None else self.engine.listener,
-                    budget, now)
+                    budget, now, acoustics)
         for found in walk.order:
             if found in fresh:
                 self._made[found].settle()
@@ -276,8 +282,10 @@ class SoundGraph:
                 self._report('capture', '%s is silent: audio capture is off '
                              '(AudioSettings.microphone)' % (type(found).__name__,))
 
-    def _place(self, walk: _Walk, listener: Listener, budget: int, now: float) -> None:
-        """Place every Sound and SpatialSound for the listener, within the budget"""
+    def _place(self, walk: _Walk, listener: Listener, budget: int, now: float,
+               acoustics: Optional[Acoustics] = None) -> None:
+        """Place every Sound and SpatialSound for the listener, within the budget,
+        each at the share of it the acoustic surfaces pass"""
         for found in walk.order:
             if isinstance(found, x3dsound.ListenerPointSource):
                 point = found.listener(walk.matrices[found])
@@ -289,6 +297,9 @@ class SoundGraph:
         for found in walk.order:
             if isinstance(found, x3dsound.Placed):
                 placement = found.placement(walk.matrices[found], hearing)
+                if acoustics and placement.level > 0.0:
+                    placement = x3dsound.scaled(placement, acoustics.occlusion(
+                        found.origin(walk.matrices[found]), hearing.position))
                 since = self._since.setdefault(found, now)
                 candidates.append((found, placement, float(found.priority), since))
         chosen = audible(candidates, budget)

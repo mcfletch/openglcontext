@@ -258,6 +258,7 @@ from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
 from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
+from vrml.x3d.nodes import AcousticProperties as AcousticProperties
 from vrml.x3d.nodes import BallJoint as BallJoint
 from vrml.x3d.nodes import ClipPlane as ClipPlane
 from vrml.x3d.nodes import CollisionCollection as CollisionCollection
@@ -318,6 +319,7 @@ from vrml.x3d.sensors import TransformSensor as TransformSensor
 from vrml.x3d.sensors import VisibilitySensor as VisibilitySensor
 
 __all__ = [
+    'AcousticProperties',
     'Analyser',
     'Anchor',
     'Appearance',

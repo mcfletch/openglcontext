@@ -15,9 +15,12 @@
     <DirectionalLight global="true" direction="-0.4 -0.8 -0.5" intensity="1.4" color="1 0.95 0.88"/>
     <PointLight global="true" location="0 3 2" intensity="0.6" color="1 0.85 0.7" radius="12"/>
 
-    <!-- The floor, in sandstone. -->
+    <!-- The floor, in sandstone. Its AcousticProperties, and the plinths',
+         are the shares of sound energy they absorb and reflect; a sound
+         behind a plinth is heard through it at what is left. -->
     <Shape>
       <Appearance>
+        <AcousticProperties absorption="0.05" diffuse="0.25" specular="0.7"/>
         <PhysicalMaterial metallic="0" roughness="1">
           <ImageTexture containerField="baseTexture" url='"sandstone_base.png"'/>
           <ImageTexture containerField="metallicRoughnessTexture" url='"sandstone_mr.png"'/>
@@ -42,6 +45,7 @@
           <Transform translation="0 0.35 0">
             <Shape>
               <Appearance>
+                <AcousticProperties absorption="0.01" diffuse="0.09" specular="0.85"/>
                 <PhysicalMaterial metallic="0" roughness="0.55">
                   <ImageTexture containerField="baseTexture" url='"marble_base.png"'/>
                   <ImageTexture containerField="metallicRoughnessTexture" url='"marble_mr.png"'/>

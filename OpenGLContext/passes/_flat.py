@@ -1322,8 +1322,9 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
             return 0
         try:
             from OpenGLContext.audio import scene as audioscene
+            surfaces = audioscene.acoustic_paths( self.paths.get( nodetypes.Rendering, () ) )
             return audioscene.update( context, paths, zones=self.zones,
-                                      table=self.zoneTable )
+                                      table=self.zoneTable, surfaces=surfaces )
         except Exception as err:
             log.warning(
                 "Failure updating scene audio: %s", getTraceback( err ),

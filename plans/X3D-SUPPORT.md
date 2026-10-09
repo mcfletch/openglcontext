@@ -253,7 +253,16 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (`scenegraph.drawproperties`; the wide-line program's geometry stage
     `vrml97_wide_line.geom`, `_pointsize_inc.glsl`, `_fill_inc.glsl`, and the
     compatibility profile's line width, line stipple and polygon stipple)
-  - [ ] `AcousticProperties` with Sound
+  - [x] `AcousticProperties` with Sound (2026-10-09, x3d-gaps;
+    `audio.acoustics`): absorption, diffuse and specular as shares of the
+    energy striking a surface, the rest passing. A Sound or SpatialSound
+    keeps the product of the crossed surfaces' transmission along its
+    straight path, as a gain its square root (`SoundGraph.update(acoustics=)`);
+    a listener inside the box round the surfaces hears Sabine's reverberation
+    time (`0.161 V / A`, at most 10 s) at the root of the area-weighted
+    reflection, laid
+    under the zones' reverb (`areas.apply_zones(ground=)`). Not read:
+    `refraction`; reflections as separate echoes; more than one room
   - [x] `ClipPlane` (`passes.clipscope`, `passes.clippass`,
     `_clipplane_inc.glsl`): planes in the drawn object's frame, so every
     view, mirror and shadow map; up to 8 a draw, nearest groups first;

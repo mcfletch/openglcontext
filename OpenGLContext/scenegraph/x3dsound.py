@@ -61,6 +61,7 @@ __all__ = [
     'ChannelMerger', 'ChannelSelector', 'ChannelSplitter', 'Convolver', 'Delay',
     'DynamicsCompressor', 'Gain', 'ListenerPointSource', 'MicrophoneSource',
     'Hearing', 'OscillatorSource', 'PeriodicWave', 'Placement', 'SILENT', 'Sound', 'SoundNode',
+    'scaled',
     'SpatialSound', 'StreamAudioDestination', 'StreamAudioSource', 'WaveShaper',
 ]
 
@@ -106,6 +107,14 @@ class Placement(NamedTuple):
 
 #: A sound not heard.
 SILENT = Placement(0.0, 0.0, 0.0)
+
+
+def scaled(placement: Placement, share: float) -> Placement:
+    """`placement` heard at `share` of its level"""
+    if share >= 1.0:
+        return placement
+    return placement._replace(left=placement.left * share, right=placement.right * share,
+                              level=placement.level * share)
 
 
 class SoundNode:
@@ -311,6 +320,12 @@ class Placed(SoundNode):
 
     def applyAudio(self, audio: Any, made: SoundGraph) -> None:
         """The gains are the placement's (:meth:`placeAudio`)"""
+
+    location: Any
+
+    def origin(self, matrix: Any) -> Vec3:
+        """Where the sound comes from in the world, with this node at ``matrix``"""
+        return _point(matrix.tolist(), self.location)
 
     def placement(self, matrix: Any, hearing: Hearing) -> Placement:
         """Where the sound is heard from ``hearing``, with this node at ``matrix``"""

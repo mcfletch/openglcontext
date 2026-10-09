@@ -300,6 +300,7 @@ Node( 'TexCoordChaser2D', 'OpenGLContext.scenegraph.x3druntime.TexCoordChaser2D'
 Node( 'TexCoordDamper2D', 'OpenGLContext.scenegraph.x3druntime.TexCoordDamper2D' )
 # X3D nodes that are data the engine reads through their declarations.
 Node( 'ColorRGBA', 'vrml.x3d.nodes.ColorRGBA' )
+Node( 'AcousticProperties', 'vrml.x3d.nodes.AcousticProperties' )
 Node( 'MultiTextureCoordinate', 'vrml.x3d.nodes.MultiTextureCoordinate' )
 Node( 'MultiTextureTransform', 'vrml.x3d.nodes.MultiTextureTransform' )
 Node( 'TextureTransformMatrix3D', 'vrml.x3d.nodes.TextureTransformMatrix3D' )
