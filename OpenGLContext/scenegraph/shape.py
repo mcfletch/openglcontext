@@ -9,6 +9,7 @@ from vrml import field
 from OpenGLContext import lighting
 from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort
 from OpenGLContext.scenegraph.physicalmaterial import two_sided
+from OpenGLContext.scenegraph.texturelayers import is_layered, texture_layers
 from OpenGLContext.arrays import array
 import traceback
 import logging
@@ -65,6 +66,8 @@ class Shape(basenodes.Shape):
         mode._lineProperties = getattr(self.appearance, 'lineProperties', None)
         mode._pointProperties = getattr(self.appearance, 'pointProperties', None)
         mode._fillProperties = getattr(self.appearance, 'fillProperties', None)
+        # The geometry a 3D texture spans in the compatibility profile
+        mode._texturedGeometry = self.geometry
 
     def fillStyle(self) -> drawproperties.FillStyle:
         """The appearance's FillProperties as drawn; the default for a
@@ -226,8 +229,15 @@ class Shape(basenodes.Shape):
             else:
                 shader_program.set_default_material()
 
+            # A MultiTexture, a cube map or a 3D texture is a chain of layers
+            # in place of the texture.
+            layered = self.appearance and is_layered(self.appearance.texture)
+            if hasattr(shader_program, 'set_texture_layers'):
+                shader_program.set_texture_layers(
+                    texture_layers(self.appearance, self.geometry) if layered else None,
+                    mode, self.geometry)
             # Set up texture if present
-            if self.appearance and self.appearance.texture:
+            if self.appearance and self.appearance.texture and not layered:
                 tex = self.appearance.texture.cached(mode)
                 if tex is not None:
                     shader_program.bind_texture(tex)

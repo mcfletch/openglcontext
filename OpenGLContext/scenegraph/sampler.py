@@ -1,9 +1,9 @@
-"""How a 2D texture is sampled: X3D's boundary modes and filters as GL state
+"""How a texture is sampled: X3D's boundary modes and filters as GL state
 
-An X3D 2D texture states its sampler with `repeatS`/`repeatT`, or with a
-`TextureProperties` node that names boundary modes and filters in X3D's
-terms. `sampler_of` reads either into one dictionary; `apply_sampler` sets
-it on a GL texture object.
+An X3D texture states its sampler with `repeatS`/`repeatT` (and a 3D
+texture's `repeatR`), or with a `TextureProperties` node that names boundary
+modes and filters in X3D's terms. `sampler_of` reads either into one
+dictionary; `apply_sampler` sets it on a GL texture object of any target.
 
 A document's texture with no `TextureProperties` whose image is smaller than
 :data:`SMALL_IMAGE` texels on its longer side is sampled from its nearest
@@ -42,30 +42,44 @@ MAGNIFICATION = {'AVG_PIXEL': 'GL_LINEAR', 'NEAREST_PIXEL': 'GL_NEAREST'}
 SMALL_IMAGE = 16
 
 
-def sampler_of(texture: Any, size: Optional[tuple[int, int]] = None) -> "dict[str, str]":
-    """The X3D boundary modes and filters an X3D 2D texture is sampled with
+def sampler_of(texture: Any, size: Optional[tuple[int, ...]] = None) -> "dict[str, str]":
+    """The X3D boundary modes and filters an X3D texture is sampled with
 
     From its `textureProperties` node where there is one, else from
     `repeatS`/`repeatT` with the default filters, or with NEAREST_PIXEL for a
-    document's image `size` (width, height) smaller than :data:`SMALL_IMAGE`.
+    document's image `size` (width, height, and a volume's depth) smaller
+    than :data:`SMALL_IMAGE`. A 3D texture's or a cube map's also has
+    `wrap_r`: its `repeatR`, or a cube map's faces clamped to their edges.
     """
     properties = getattr(texture, 'textureProperties', None)
+    deep = hasattr(texture, 'repeatR') or isinstance(texture, x3d.X3DEnvironmentTextureNode)
     if properties:
-        return {
+        found = {
             'wrap_s': str(properties.boundaryModeS),
             'wrap_t': str(properties.boundaryModeT),
             'minification': str(properties.minificationFilter),
             'magnification': str(properties.magnificationFilter),
         }
+        if deep:
+            found['wrap_r'] = str(properties.boundaryModeR)
+        return found
     from OpenGLContext.lighting import in_document  # noqa: PLC0415 lighting reads the scene classes
     small = size is not None and max(size) < SMALL_IMAGE and in_document(texture)
     filter_ = 'NEAREST_PIXEL' if small else 'DEFAULT'
-    return {
-        'wrap_s': 'REPEAT' if getattr(texture, 'repeatS', True) else 'CLAMP_TO_EDGE',
-        'wrap_t': 'REPEAT' if getattr(texture, 'repeatT', True) else 'CLAMP_TO_EDGE',
+
+    def wrap(name: str) -> str:
+        return 'REPEAT' if getattr(texture, name, True) else 'CLAMP_TO_EDGE'
+    found = {
+        'wrap_s': wrap('repeatS'), 'wrap_t': wrap('repeatT'),
         'minification': filter_,
         'magnification': filter_,
     }
+    if deep:
+        # A cube map has no repeat fields, and its faces meet at their edges.
+        found['wrap_r'] = wrap('repeatR') if hasattr(texture, 'repeatR') else 'CLAMP_TO_EDGE'
+        if not hasattr(texture, 'repeatR'):
+            found['wrap_s'] = found['wrap_t'] = 'CLAMP_TO_EDGE'
+    return found
 
 
 def texture_properties(wrap_s: str = 'REPEAT', wrap_t: str = 'REPEAT',
@@ -80,19 +94,26 @@ def texture_properties(wrap_s: str = 'REPEAT', wrap_t: str = 'REPEAT',
 
 
 def apply_sampler(texture: Any, sampler: "dict[str, str]") -> None:
-    """Set a sampler (as `sampler_of` gives it) on a GL texture object, with mipmaps"""
+    """Set a sampler (as `sampler_of` gives it) on a GL texture object, with mipmaps
+
+    The texture's `target` says what it is bound to: a 2D texture where it
+    names none. A 3D texture's or a cube map's sampler also gives `wrap_r`.
+    """
     from OpenGL import GL  # noqa: PLC0415 GL only when a texture is compiled
-    GL.glBindTexture(GL.GL_TEXTURE_2D, texture.texture)
-    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S,
-                       getattr(GL, WRAP_MODES.get(sampler['wrap_s'], 'GL_REPEAT')))
-    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T,
-                       getattr(GL, WRAP_MODES.get(sampler['wrap_t'], 'GL_REPEAT')))
+    target = getattr(texture, 'target', GL.GL_TEXTURE_2D)
+    GL.glBindTexture(target, texture.texture)
+    wraps = [(GL.GL_TEXTURE_WRAP_S, 'wrap_s'), (GL.GL_TEXTURE_WRAP_T, 'wrap_t')]
+    if target != GL.GL_TEXTURE_2D:
+        wraps.append((GL.GL_TEXTURE_WRAP_R, 'wrap_r'))
+    for parameter, name in wraps:
+        GL.glTexParameteri(target, parameter,
+                           getattr(GL, WRAP_MODES.get(sampler.get(name, 'REPEAT'), 'GL_REPEAT')))
     minification = getattr(GL, MINIFICATION.get(sampler['minification'],
                                                  'GL_LINEAR_MIPMAP_LINEAR'))
     try:
-        GL.glGenerateMipmap(GL.GL_TEXTURE_2D)
+        GL.glGenerateMipmap(target)
     except GL.GLError:
         minification = GL.GL_LINEAR
-    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, minification)
-    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER,
+    GL.glTexParameteri(target, GL.GL_TEXTURE_MIN_FILTER, minification)
+    GL.glTexParameteri(target, GL.GL_TEXTURE_MAG_FILTER,
                        getattr(GL, MAGNIFICATION.get(sampler['magnification'], 'GL_LINEAR')))

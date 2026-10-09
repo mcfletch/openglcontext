@@ -62,6 +62,7 @@ from typing import Any, Optional
 import numpy as np
 from OpenGLContext.scenegraph import coordinatebounded, coordinatedeform, coordinates
 from vrml.vrml97 import basenodes
+from vrml.x3d import nodes as x3d
 
 # The compile pipeline lives in ``ifscompiler``; re-exported here so importers
 # that used ``from ...indexedfaceset import IndexedPolygonsCompiler`` etc. keep
@@ -123,6 +124,21 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         have everything
             once tesselated, we have a simple "take" to get values
     """
+
+    def planeCoordinates(self) -> Any:
+        """The TextureCoordinate the face set's 2D texture coordinates are read from, or None
+
+        ``texCoord`` itself, or the first TextureCoordinate entry of a
+        MultiTextureCoordinate; None where there is none (a generator, a 3D
+        set), and the faces take X3D's default coordinates.
+        """
+        found = self.texCoord
+        if isinstance(found, x3d.MultiTextureCoordinate):
+            entries = [entry for entry in found.texCoord
+                       if isinstance(entry, x3d.TextureCoordinate)]
+            return entries[0] if entries else None
+        return found if isinstance(found, x3d.TextureCoordinate) else None
+
     #: Draws with the pass's lit programs alone, so one draw can serve every
     #: view of a frame that sees it; see :mod:`OpenGLContext.multiview.strategy`.
     multiviewShared = True
@@ -264,7 +280,8 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         feed('normalIndex', self.normalIndex)
         feed('normal', self.normal.vector if self.normal else None)
         feed('texCoordIndex', self.texCoordIndex)
-        feed('texCoord', self.texCoord.point if self.texCoord else None)
+        flat = self.planeCoordinates()
+        feed('texCoord', flat.point if flat else None)
         feed('colorIndex', self.colorIndex)
         feed('color', self.color.color if self.color else None)
         return ('IndexedFaceSet', h.hexdigest(),

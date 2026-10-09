@@ -103,6 +103,9 @@ from OpenGLContext.passes.flateffects import _FlatEffectsMixin
 from OpenGLContext.passes.multiviewpass import MultiviewPassMixin
 from OpenGLContext.passes.zonepass import ZonesMixin
 from OpenGLContext.passes.clippass import ClipPlanesMixin
+from OpenGLContext.passes.generatedtextures import GeneratedTexturesMixin
+from OpenGLContext.passes.projectorpass import ProjectorsMixin
+from OpenGLContext.scenegraph.textureprojector import is_projector
 
 # MRT draw-buffer index carrying the packed object id (attachment 1).
 OBJECT_ID_ATTACHMENT = 1
@@ -271,6 +274,10 @@ class SGObserver( object ):
             if hasattr(next, 'renderedChildren'):
                 # watch for next's changes...
                 for child in next.renderedChildren( ):
+                    if any( child is ancestor for ancestor in path ):
+                        # A document can put a node among its own descendants
+                        log.warning( '%s is inside itself; it is drawn once', child )
+                        continue
                     todo.append( (child,path) )
     def npFor( self, node: Any ) -> list[Any]:
         """The paths ending at ``node``, a record made for it if it has none."""
@@ -543,7 +550,7 @@ def presentFrame( context: Any ) -> Any:
 
 
 class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMixin,
-                SelectionMixin, SGObserver ):
+                GeneratedTexturesMixin, ProjectorsMixin, SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
     Uses structural scenegraph observations to allow the actual
@@ -798,8 +805,11 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         for path in light_paths:
             if light_count >= ceiling:
                 break
-            tmatrix = path.transformMatrix()
             light_node = path[-1]
+            # An image-based light or a texture projector is no lamp
+            if isinstance(light_node, x3dnodes.EnvironmentLight) or is_projector(light_node):
+                continue
+            tmatrix = path.transformMatrix()
             if hasattr(light_node, 'on') and light_node.on:
                 # Transform light to eye space (combine light's transform with view matrix)
                 # This matches how fixed-function glLightfv works - it transforms
@@ -811,7 +821,9 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
                 lit.append((light_node, light_matrix))
                 light_count += 1
         self.boundLights = bound
-        self.lightScopes = self.lightScopes.following(lightscope.scoped_lights(bound_paths))
+        self.setupProjectors(light_paths)
+        self.lightScopes = self.lightScopes.following(
+            lightscope.scoped_lights(bound_paths) + self.projectorScopes())
         # What a shape drawn by an X3D shader sets its lights from
         # (scenegraph.x3dshaders): each light with its eye-space matrix, in
         # slot order, whether the headlight follows them, and the view.
@@ -1583,7 +1595,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
             return state.gathered
         return self.gatherPaths()
 
-    def _walkPaths( self ) -> GatheredPaths:
+    def _walkPaths( self, fresh: bool = False ) -> GatheredPaths:
         """Everything this frame needs to know about every renderable path.
 
         One walk of the scene, because everything in it is asked for more than
@@ -1629,15 +1641,22 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         moved" straight off the identity. A row of the stack carries the same
         numbers but is a new object every frame, and every such memo keyed on it
         would miss every time.
+
+        ``fresh`` walks into arrays of its own rather than the frame's, for a
+        walk of paths other than the frame's (a RenderedTexture's scene).
         """
         paths = self.paths.get( nodetypes.Rendering, ())
         count = len(paths)
-        points = self._pointsBuffer
+        points = None if fresh else self._pointsBuffer
         if points is None or len(points) != count:
-            points = self._pointsBuffer = zeros( (count, 8, 4), 'f' )
-        matrices = self._matrixBuffer
+            points = zeros( (count, 8, 4), 'f' )
+            if not fresh:
+                self._pointsBuffer = points
+        matrices = None if fresh else self._matrixBuffer
         if matrices is None or len(matrices) != count:
-            matrices = self._matrixBuffer = zeros( (count, 4, 4), 'd' )
+            matrices = zeros( (count, 4, 4), 'd' )
+            if not fresh:
+                self._matrixBuffer = matrices
         nodes: list[Any] = []
         own: list[Any] = []
         volumes: list[Any] = []
@@ -1885,6 +1904,9 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
                 # The zone probes this frame's share of captures is for, drawn
                 # before anything is drawn that reads them.
                 self.renderZoneProbes(frames, lighting)
+                # The generated cube maps and rendered textures the last
+                # frame's shapes wore, before anything reads them.
+                self.renderGeneratedTextures(frames, lighting)
                 # Every mirror's reflection, for every view, before any view
                 # is drawn: they are views of their own, drawn into the
                 # reflection atlas, and a view reads them as it shades.

@@ -79,7 +79,10 @@ class Texture(object):
             VRML97 and X3D put texture coordinate (0, 0) at an image's lower
             left, so their textures store the bottom row first; glTF puts it
             at the upper left.
+        target -- the GL texture target the texture is bound to.
     """
+
+    target: int = GL_TEXTURE_2D
 
     def __init__(self, image: Any = None, format: Optional[int] = None,
                  topFirst: bool = False) -> None:
@@ -302,6 +305,8 @@ class Texture(object):
 class CubeTexture(Texture):
     """Texture class for use with Cube samplers"""
 
+    target = GL_TEXTURE_CUBE_MAP
+
     CUBE_NAME_MAP: ClassVar[dict[str, int]] = {
         "-x": GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
         "+x": GL_TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -427,6 +432,75 @@ class CubeTexture(Texture):
         """Disable for context-manager behaviour"""
         # Unbind the texture
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
+
+
+#: Sized internal format, source format and swizzle for 1 to 4 channels of
+#: unsigned bytes, under a core profile: one channel is luminance and two are
+#: luminance with alpha, as :meth:`Texture.store` reads them.
+_CHANNEL_FORMATS: dict[int, tuple[int, int, Optional[tuple[int, int, int, int]]]] = {
+    1: (GL_R8, GL_RED, (GL_RED, GL_RED, GL_RED, GL_ONE)),
+    2: (GL_RG8, GL_RG, (GL_RED, GL_RED, GL_RED, GL_GREEN)),
+    3: (GL_RGB8, GL_RGB, None),
+    4: (GL_RGBA8, GL_RGBA, None),
+}
+
+
+class VolumeTexture(Texture):
+    """A 3D texture holding a ``(depth, height, width, channels)`` uint8 volume
+
+    The first slice is r=0 and the first row of a slice t=0. One channel is
+    luminance and two luminance with alpha, as for a 2D texture. Sampled
+    through a shader's ``sampler3D``, or the fixed-function ``GL_TEXTURE_3D``
+    unit.
+    """
+
+    target = GL_TEXTURE_3D
+
+    def __init__(self, volume: Any = None) -> None:
+        super().__init__()
+        self.size: tuple[int, int, int] = (0, 0, 0)
+        if volume is not None:
+            self.store_volume(volume)
+
+    def store_volume(self, volume: Any) -> None:
+        """Upload ``volume``, replacing whatever the texture held"""
+        volume = np.ascontiguousarray(volume, dtype=np.uint8)
+        if volume.ndim == 3:
+            volume = volume[..., None]
+        depth, height, width, channels = volume.shape
+        internal, source, swizzle = _CHANNEL_FORMATS[channels]
+        self.components = channels
+        self.format = source
+        self.size = (width, height, depth)
+        glBindTexture(GL_TEXTURE_3D, self.texture)
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+        glTexImage3D(GL_TEXTURE_3D, 0, internal, width, height, depth, 0, source,
+                     GL_UNSIGNED_BYTE, volume)
+        if swizzle is not None:
+            for parameter, value in zip(
+                    (GL_TEXTURE_SWIZZLE_R, GL_TEXTURE_SWIZZLE_G,
+                     GL_TEXTURE_SWIZZLE_B, GL_TEXTURE_SWIZZLE_A), swizzle):
+                glTexParameteri(GL_TEXTURE_3D, parameter, value)
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        for wrap in (GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R):
+            glTexParameteri(GL_TEXTURE_3D, wrap, GL_CLAMP_TO_EDGE)
+
+    def bind(self) -> 'VolumeTexture':
+        """Make this the texture bound to ``GL_TEXTURE_3D``, and return it."""
+        glBindTexture(GL_TEXTURE_3D, self.texture)
+        return self
+
+    def __call__(self) -> 'VolumeTexture':
+        """Bind the volume and switch the fixed-function 3D texture unit on."""
+        self.bind()
+        glEnable(GL_TEXTURE_3D)
+        return self
+
+    __enter__ = __call__
+
+    def __exit__(self, typ: Any, val: Any, tb: Any) -> None:
+        glDisable(GL_TEXTURE_3D)
 
 
 class MMTexture(Texture):

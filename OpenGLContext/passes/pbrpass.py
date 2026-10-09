@@ -49,6 +49,8 @@ from OpenGLContext.scenegraph.physicalmaterial import (
 from OpenGLContext.scenegraph.material_fields import read_material_fields
 from OpenGLContext.scenegraph.texgen import TexGen
 from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
+from OpenGLContext.scenegraph.texturelayers import drawn_singly, is_layered, texture_layers
+from OpenGLContext.passes.texturelayerpass import LayerUnits
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext import lighting
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
@@ -169,6 +171,33 @@ PBR_TEXTURE_BITS = {channel: 1 << index for index, channel in
 
 # Highest unit any extension texture wants; the program needs a budget past it.
 _EXT_UNITS_MAX = max(PBR_EXT_UNITS.values()) if PBR_EXT_UNITS else 15
+
+
+#: The units a texture layer's cube map and 3D texture are bound on. Past the
+#: fragment stage's 32: a unit's number may run to the combined budget (at
+#: least 48 in GL 3.3), and what the stage counts is its samplers.
+LAYER_CUBE_UNIT = 32
+LAYER_VOLUME_UNIT = 33
+#: The unit the texture projectors' pictures are bound on.
+PROJECTOR_UNIT = 34
+#: The samplers the texture layers and the texture projectors add to the
+#: program: a cube map, a 3D texture and the projectors' images.
+LAYER_SAMPLERS_NEEDED = 3
+#: The extension maps whose samplers read a texture layer's 2D texture, in
+#: slot order after the base colour map (``layerTexture2D`` in pbr.frag).
+LAYER_CHANNELS = ('transmission', 'iridescenceThickness', 'clearcoat')
+
+
+def pbr_fragment_samplers(ext: bool, planar: bool, cube_array: bool,
+                          shadow_lights: int) -> int:
+    """How many samplers the PBR fragment stage declares without the texture layers'
+
+    The six core maps, the three image-based lighting maps, the transmission
+    backdrop, the two shadow arrays and the point shadows (one cube array, or
+    a cube a light), the extension maps and the planar reflection.
+    """
+    return (6 + 3 + 1 + 2 + (1 if cube_array else int(shadow_lights))
+            + (len(PBR_EXT_UNITS) if ext else 0) + (1 if planar else 0))
 
 
 def ext_texture_channels(budget: int) -> dict:
@@ -507,7 +536,17 @@ class PBRShaderProgram(VRML97ShaderProgram):
             # ARB_texture_cube_map_array support the point-shadow cube arrays
             # do -- and the #extension line that support already enables.
             self.zone_probes_supported = bool(self.shadow_cube_array)
-            ext_defines = ['#define PBR_EXT_TEXTURES %d'
+            # The texture layers' cube map and 3D texture, and the texture
+            # projectors' images, where the fragment stage has samplers left.
+            self.layer_samplers_supported = pbr_fragment_samplers(
+                ext_textures_supported(self.texture_budget),
+                self.planar_reflection_supported, bool(self.shadow_cube_array),
+                self.MAX_SHADOW_LIGHTS) + LAYER_SAMPLERS_NEEDED <= self.texture_budget
+            ext_defines = ['#define TEXTURE_LAYER_SAMPLERS %d'
+                           % (1 if self.layer_samplers_supported else 0),
+                           '#define TEXTURE_PROJECTORS %d'
+                           % (1 if self.layer_samplers_supported else 0),
+                           '#define PBR_EXT_TEXTURES %d'
                            % (1 if ext_textures_supported(self.texture_budget) else 0),
                            '#define PBR_PLANAR_REFLECTION %d'
                            % (1 if self.planar_reflection_supported else 0),
@@ -561,6 +600,39 @@ class PBRShaderProgram(VRML97ShaderProgram):
     #: Whether this driver has the texture unit the joint palette needs; False
     #: until a program has been compiled against a real context.
     skinning_supported: bool = False
+
+    #: Whether the fragment stage has samplers for a texture layer's cube map
+    #: and 3D texture and for the texture projectors; False until a program
+    #: has been compiled against a real context.
+    layer_samplers_supported: bool = False
+
+    def layer_units(self) -> LayerUnits:
+        """Where the PBR program reads texture layers
+
+        The first 2D layer on the base colour map's unit and three more on
+        extension maps' units, which a material drawn with layers does not
+        use; the cube map and 3D texture on units of their own where the
+        stage has samplers for them.
+        """
+        flat = (PBR_UNITS['baseColor'],) + tuple(
+            self.ext_channels[channel] for channel in LAYER_CHANNELS
+            if channel in self.ext_channels)
+        if not self.layer_samplers_supported:
+            return LayerUnits(flat)
+        return LayerUnits(flat, LAYER_CUBE_UNIT, LAYER_VOLUME_UNIT)
+
+    def projector_unit(self) -> Optional[int]:
+        """The unit the program reads projectors' pictures from; None where it has no sampler"""
+        return PROJECTOR_UNIT if self.layer_samplers_supported else None
+
+    def _init_lit_layers(self, program: int) -> None:
+        """Point the program's cube map, 3D layer and projector samplers at their units"""
+        if self.layer_samplers_supported:
+            self.init_layer_samplers(program)
+            self._set_uniform1i('projectorImages', PROJECTOR_UNIT, program)
+        else:
+            self._set_uniform1i('textureLayerCount', 0, program)
+        self._set_uniform1i('projectorCount', 0, program)
 
     #: Whether zones may have environment probes of their own: the scene's
     #: probe is then a cube-map array, and must be built as one. False until a
@@ -977,6 +1049,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
         found = []
         for channel, unit in self.texture_units:
             holder = textures.get(channel)
+            if is_layered(holder):
+                # A stage chain, bound by set_texture_layers
+                continue
             tex = holder.cached(mode) if holder is not None else None
             if tex is not None and getattr(tex, 'texture', None):
                 found.append((channel, unit, tex.texture))
@@ -987,8 +1062,20 @@ class PBRShaderProgram(VRML97ShaderProgram):
             glActiveTexture(GL_TEXTURE0 + unit)
             glBindTexture(GL_TEXTURE_2D, texture)
             sampled |= PBR_TEXTURE_BITS[channel]
+        self._sampled = sampled
         self._set_uniform1i('materialTextures', sampled, self.program)
         glActiveTexture(GL_TEXTURE0)
+
+    #: The ``materialTextures`` bits :meth:`bind_pbr_textures` last set.
+    _sampled: int = 0
+
+    @staticmethod
+    def layerBits() -> int:
+        """The ``materialTextures`` bits of the maps whose units texture layers use"""
+        found = PBR_TEXTURE_BITS['baseColor']
+        for channel in LAYER_CHANNELS:
+            found |= PBR_TEXTURE_BITS[channel]
+        return found
 
     def set_texture_mapping(self, mapping: TextureMapping) -> None:
         """Each material channel's texture coordinates and transform, for the next draw"""
@@ -1015,8 +1102,10 @@ class PBRShaderProgram(VRML97ShaderProgram):
         else:
             material = _DOCUMENT_UNLIT if lighting.x3d_lit(geometry) else None
         # The coordinates depend on the geometry as well as the appearance, so
-        # they are set before the same-material early-out.
+        # they are set before the same-material early-out, as are the texture
+        # layers, which are bound after the material's maps share their units.
         self.set_texture_mapping(texture_mapping(appearance, geometry, back))
+        layers = texture_layers(appearance, geometry, back)
         # An octahedral impostor is a property of the material rather than of
         # the draw, so it is set here beside the rest of it. Before the
         # same-material early-out: the previous shape may have been an ordinary
@@ -1030,6 +1119,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         if (material is self._appearance_material
                 and appearance is self._appearance_seen
                 and self.transmission_mode == self._appearance_tmode):
+            self.set_texture_layers(layers, mode, geometry)
             return
         self._appearance_material = material
         self._appearance_seen = appearance
@@ -1059,6 +1149,12 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self.set_alpha(alpha, code, cutoff)
             self.set_transmission(0.0)
         self.bind_pbr_textures(material, mode)
+        if self.set_texture_layers(layers, mode, geometry):
+            # Units the layers took from extension maps are not sampled as them,
+            # and the next material binds its own maps on them again.
+            self._set_uniform1i('materialTextures', self._sampled & ~self.layerBits(),
+                                self.program)
+            self._boundTextures = None
 
     def set_ibl_mode(self, mode_code: int, intensity: float = 1.0,
                      fill_scale: float = 1.0) -> None:
@@ -1193,6 +1289,9 @@ class PBRPass(flatcore.FlatPass):
             return False
         # So is a surface with a back material: it is drawn a side at a time.
         if two_sided(getattr(shape, 'appearance', None)):
+            return False
+        # And a surface of texture layers, or wearing a rendered texture.
+        if drawn_singly(getattr(getattr(shape, 'appearance', None), 'texture', None)):
             return False
         return hasattr(geometry, 'instanceGPU')
 

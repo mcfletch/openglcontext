@@ -1,7 +1,7 @@
 """ImageTexture and MMImageTexture nodes using PIL"""
 
 import contextlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from OpenGL.GL import *
@@ -226,6 +226,51 @@ def prepare_image_loading() -> None:
     Image.init()
 
 
+def _decode_picture(file: Any, baseURL: str) -> Any:
+    """The picture in `file`, decoded now
+
+    Decoded here rather than by whoever first looks at the pixels: PIL reads
+    lazily, so an image left undecoded holds the file it came from open --
+    six of them for a cubemap -- and does its reading on the thread that
+    draws.
+    """
+    image = Image.open(file)
+    image.load()
+    return image
+
+
+def load_first(node: Any, url: Any, decode: Callable[[Any, str], Any]) -> Optional[tuple[Any, str, str]]:
+    """The first entry of `url` that fetches and decodes: (decoded, its URL, its file name)
+
+    Each entry is read relative to `node`'s root's base URL and handed, as
+    an open file, to ``decode(file, url)``. An entry that cannot be fetched,
+    or whose bytes `decode` raises on -- truncated, another format, or a few
+    dozen bytes declaring a billion pixels -- is reported and the next is
+    tried. None where none is read.
+    """
+    from OpenGLContext.loaders.loader import Loader
+
+    baseNode = protofunctions.root(node)
+    baseURI = baseNode.baseURI if baseNode else None
+    for single in ([url] if isinstance(url, (bytes, str)) else list(url)):
+        try:
+            result = Loader(single, baseURL=baseURI)
+        except IOError as err:
+            log.warning("Unable to fetch the image at %s: %s", single, err)
+            continue
+        if not result:
+            continue
+        baseURL, filename, file, headers = result
+        try:
+            with contextlib.closing(file):
+                decoded = decode(file, baseURL)
+        except Exception as err:
+            log.warning("Unable to decode the image at %s: %s", single, err)
+            continue
+        return decoded, baseURL, filename
+    return None
+
+
 class ImageURLField(fieldtypes.MFString):
     """Field for managing interactions with an Image's URL value"""
 
@@ -275,47 +320,19 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
             if contexts, iterate through the list calling
             context.triggerRedraw(1)
         """
-        from OpenGLContext.loaders.loader import Loader
-
-        baseNode = protofunctions.root(self)
-        baseURI = baseNode.baseURI if baseNode else None
-        for single in ([url] if isinstance(url, (bytes, str)) else list(url)):
-            try:
-                result = Loader(single, baseURL=baseURI)
-            except IOError as err:
-                log.warning("Unable to fetch the image at %s: %s", single, err)
-                continue
-            if not result:
-                continue
-            baseURL, filename, file, headers = result
-            try:
-                with contextlib.closing(file):
-                    image = Image.open(file)
-                    # Decoded here rather than by whoever first looks at the
-                    # pixels: PIL reads lazily, so an image left undecoded
-                    # holds the file it came from open -- six of them for a
-                    # cubemap -- and does its reading on the thread that draws.
-                    image.load()
-            except Exception as err:
-                # Whatever a decoder makes of bytes that are not the image they
-                # claim to be: truncated, another format, or a few dozen bytes
-                # declaring a billion pixels, which Pillow refuses outright. One
-                # unreadable texture costs the texture, and the world it is in
-                # goes on being drawn -- so the next url in the list is tried,
-                # a file that does not decode having not succeeded.
-                log.warning("Unable to decode the image at %s: %s", single, err)
-                continue
-            image.info["url"] = baseURL
-            image.info["filename"] = filename
-            return self.setImage(image, contexts)
-
-        loadsensor.set_load_state(self, loadsensor.FAILED)
-        log.warning(
-            """Unable to load any image from the url %s for the node %s""",
-            url,
-            str(self),
-        )
-        return None
+        found = load_first(self, url, _decode_picture)
+        if found is None:
+            loadsensor.set_load_state(self, loadsensor.FAILED)
+            log.warning(
+                """Unable to load any image from the url %s for the node %s""",
+                url,
+                str(self),
+            )
+            return None
+        image, baseURL, filename = found
+        image.info["url"] = baseURL
+        image.info["filename"] = filename
+        return self.setImage(image, contexts)
 
     def setImage(self, image: Any, contexts: Sequence[Any] = ()) -> None:
         """Set PIL image as our new image

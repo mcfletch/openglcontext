@@ -271,3 +271,12 @@ def test_no_appearance_reads_the_first_set_untransformed():
     from vrml.node import NULL  # noqa: PLC0415 kept with its one use
     assert texture_mapping(NULL, mesh()) is texturemapping.IDENTITY
     assert texture_mapping(None, mesh()) is texturemapping.IDENTITY
+
+
+def test_a_transform_3d_moves_a_2d_maps_s_and_t():
+    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph.texturemapping import transform_matrix  # noqa: PLC0415 kept with its use
+    found = transform_matrix(x3d.TextureTransform3D(translation=(0.5, 0.25, 9), scale=(2, 1, 1)))
+    flat = transform_matrix(x3d.TextureTransform(translation=(0.5, 0.25), scale=(2, 1)))
+    assert np.allclose(found, flat)
+    assert np.allclose(found, [[2, 0, 1.0], [0, 1, 0.25]])

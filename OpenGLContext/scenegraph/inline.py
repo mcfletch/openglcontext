@@ -105,7 +105,7 @@ _reading = threading.local()
 def _document_key(location: Any) -> str:
     """A document's location as the inline chain compares it"""
     text = str(location)
-    if '://' in text:
+    if '://' in text or text.startswith('data:'):
         return text
     return os.path.realpath(text)
 

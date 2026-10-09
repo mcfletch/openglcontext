@@ -1,5 +1,6 @@
 // X3D's TextureCoordinateGenerator: the first texture coordinate set made
-// from the vertex rather than read from aTexCoord. The mode numbers are
+// from the vertex rather than read from aTexCoord (generatedTexCoord), and a
+// MultiTexture layer's made per fragment (texGenMake, _layers_inc.glsl). The mode numbers are
 // OpenGLContext.scenegraph.texgen.MODES.
 #define TEXGEN_SPHERE                          1
 #define TEXGEN_CAMERA_SPACE_NORMAL             2
@@ -39,43 +40,61 @@ float texGenNoise(vec3 p) {
     return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z);
 }
 
-vec2 texGenNoiseAt(vec3 p) {
-    vec3 scale = vec3(texGenParameter[0], texGenParameter[1], texGenParameter[2]);
-    vec3 at = p * mix(vec3(1.0), scale, step(1e-6, abs(scale)))
-              + vec3(texGenParameter[3], texGenParameter[4], texGenParameter[5]);
-    return vec2(texGenNoise(at), texGenNoise(at + vec3(17.0, 31.0, 47.0)));
+// Noise of `p` scaled by p0.xyz (where not zero) and moved by (p0.w, p1.xy):
+// a generator's first six parameters.
+vec3 texGenNoiseAt(vec3 p, vec4 p0, vec4 p1) {
+    vec3 scale = p0.xyz;
+    vec3 at = p * mix(vec3(1.0), scale, step(1e-6, abs(scale))) + vec3(p0.w, p1.xy);
+    return vec3(texGenNoise(at), texGenNoise(at + vec3(17.0, 31.0, 47.0)),
+                texGenNoise(at + vec3(59.0, 3.0, 23.0)));
 }
 
-// The view direction refracted, then blended toward its reflection.
-vec3 texGenRefracted(vec3 view, vec3 normal) {
-    float eta = texGenParameter[0] > 0.0 ? texGenParameter[0] : 1.0;
+// The view direction refracted with p0.x as the index (1 where not given),
+// then blended toward its reflection by p0.y.
+vec3 texGenRefracted(vec3 view, vec3 normal, vec4 p0) {
+    float eta = p0.x > 0.0 ? p0.x : 1.0;
     vec3 bent = refract(view, normal, 1.0 / eta);
     if (dot(bent, bent) < 1e-12) bent = reflect(view, normal);
-    return normalize(mix(bent, reflect(view, normal), clamp(texGenParameter[1], 0.0, 1.0)));
+    return normalize(mix(bent, reflect(view, normal), clamp(p0.y, 0.0, 1.0)));
 }
 
-// The coordinate `texGenMode` makes; `local*` are the vertex in its own space,
-// `eye*` in the camera's, and `localEye` the camera in the vertex's own space.
-vec2 generatedTexCoord(vec3 localPosition, vec3 localNormal, vec3 eyePosition,
-                       vec3 eyeNormal, vec3 localEye) {
+// The coordinate generator `mode` makes, with its eight parameters in p0 and
+// p1; `local*` are the point in its own space, `eye*` in the camera's, and
+// `localEye` the camera in the point's own space. A 2D texture reads xy; a
+// 3D texture reads all three where the mode makes them (COORD, COORD_EYE,
+// CAMERA_SPACE_POSITION, CAMERA_SPACE_NORMAL, CAMERA_SPACE_REFLECTION_VECTOR
+// and the noises), and z = 0 for the sphere maps.
+vec3 texGenMake(int mode, vec4 p0, vec4 p1, vec3 localPosition, vec3 localNormal,
+                vec3 eyePosition, vec3 eyeNormal, vec3 localEye) {
     vec3 view = normalize(eyePosition);
     vec3 localView = normalize(localPosition - localEye);
-    if (texGenMode == TEXGEN_SPHERE) return texGenSphere(reflect(view, eyeNormal));
-    if (texGenMode == TEXGEN_CAMERA_SPACE_NORMAL) return eyeNormal.xy;
-    // CAMERA_SPACE_POSITION and COORD_EYE are both the vertex in camera space
-    if (texGenMode == TEXGEN_CAMERA_SPACE_POSITION || texGenMode == TEXGEN_COORD_EYE) {
-        return eyePosition.xy;
+    if (mode == TEXGEN_SPHERE) return vec3(texGenSphere(reflect(view, eyeNormal)), 0.0);
+    if (mode == TEXGEN_CAMERA_SPACE_NORMAL) return eyeNormal;
+    // CAMERA_SPACE_POSITION and COORD_EYE are both the point in camera space
+    if (mode == TEXGEN_CAMERA_SPACE_POSITION || mode == TEXGEN_COORD_EYE) return eyePosition;
+    if (mode == TEXGEN_CAMERA_SPACE_REFLECTION_VECTOR) return reflect(view, eyeNormal);
+    if (mode == TEXGEN_SPHERE_LOCAL) {
+        return vec3(texGenSphere(reflect(localView, normalize(localNormal))), 0.0);
     }
-    if (texGenMode == TEXGEN_CAMERA_SPACE_REFLECTION_VECTOR) return reflect(view, eyeNormal).xy;
-    if (texGenMode == TEXGEN_SPHERE_LOCAL) {
-        return texGenSphere(reflect(localView, normalize(localNormal)));
+    if (mode == TEXGEN_COORD) return localPosition;
+    if (mode == TEXGEN_NOISE) return texGenNoiseAt(localPosition, p0, p1);
+    if (mode == TEXGEN_NOISE_EYE) return texGenNoiseAt(eyePosition, p0, p1);
+    if (mode == TEXGEN_SPHERE_REFLECT) {
+        return vec3(texGenSphere(texGenRefracted(view, eyeNormal, p0)), 0.0);
     }
-    if (texGenMode == TEXGEN_COORD) return localPosition.xy;
-    if (texGenMode == TEXGEN_NOISE) return texGenNoiseAt(localPosition);
-    if (texGenMode == TEXGEN_NOISE_EYE) return texGenNoiseAt(eyePosition);
-    if (texGenMode == TEXGEN_SPHERE_REFLECT) return texGenSphere(texGenRefracted(view, eyeNormal));
-    if (texGenMode == TEXGEN_SPHERE_REFLECT_LOCAL) {
-        return texGenSphere(texGenRefracted(localView, normalize(localNormal)));
+    if (mode == TEXGEN_SPHERE_REFLECT_LOCAL) {
+        return vec3(texGenSphere(texGenRefracted(localView, normalize(localNormal), p0)), 0.0);
     }
-    return vec2(0.0);
+    return vec3(0.0);
+}
+
+// The first coordinate set as `texGenMode` makes it in the vertex shader.
+vec2 generatedTexCoord(vec3 localPosition, vec3 localNormal, vec3 eyePosition,
+                       vec3 eyeNormal, vec3 localEye) {
+    vec4 p0 = vec4(texGenParameter[0], texGenParameter[1], texGenParameter[2],
+                   texGenParameter[3]);
+    vec4 p1 = vec4(texGenParameter[4], texGenParameter[5], texGenParameter[6],
+                   texGenParameter[7]);
+    return texGenMake(texGenMode, p0, p1, localPosition, localNormal, eyePosition,
+                      eyeNormal, localEye).xy;
 }

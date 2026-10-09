@@ -26,7 +26,12 @@ Semantic         Location  Components  Shader name
 ``TEXCOORD_1``   11        2           ``aTexCoord1``
 ``JOINTS_0``     12        4           ``aJoints``
 ``WEIGHTS_0``    13        4           ``aWeights``
+``TEXCOORD_3D``  15        4           ``aTexCoord3D``
 ===============  ========  ==========  =============
+
+``TEXCOORD_3D`` is the engine's own: an X3D ``TextureCoordinate3D`` or
+``TextureCoordinate4D`` set as (s, t, r, q), q one for three components,
+which a 3D texture reads (:mod:`OpenGLContext.scenegraph.texturelayers`).
 
 Locations 5 to 10 and 14 carry the per-instance inputs the instanced draw path
 supplies (:mod:`OpenGLContext.passes.instancing`): a ``mat4`` model-view occupies
@@ -48,7 +53,7 @@ from typing import NamedTuple
 __all__ = [
     'VertexSemantic', 'SEMANTICS', 'BY_SEMANTIC', 'BY_ATTRIBUTE', 'location',
     'LOC_TEXCOORD', 'LOC_NORMAL', 'LOC_POSITION', 'LOC_TANGENT', 'LOC_COLOR',
-    'LOC_TEXCOORD1', 'LOC_JOINTS', 'LOC_WEIGHTS',
+    'LOC_TEXCOORD1', 'LOC_JOINTS', 'LOC_WEIGHTS', 'LOC_TEXCOORD3D',
     'INSTANCE_MODELVIEW', 'INSTANCE_MODELVIEW_COLUMNS', 'INSTANCE_OBJECT_ID',
     'INSTANCE_MATERIAL', 'INSTANCE_JOINT_BASE', 'FIRST_FREE_LOCATION',
 ]
@@ -75,6 +80,7 @@ LOC_COLOR = 4
 LOC_TEXCOORD1 = 11
 LOC_JOINTS = 12
 LOC_WEIGHTS = 13
+LOC_TEXCOORD3D = 15
 
 #: First of the four consecutive locations a per-instance ``mat4`` model-view
 #: occupies; a matrix input takes one location per column.
@@ -85,7 +91,7 @@ INSTANCE_MATERIAL = 10
 INSTANCE_JOINT_BASE = 14
 
 #: Where a shader of your own may put an input the engine has no name for.
-FIRST_FREE_LOCATION = 15
+FIRST_FREE_LOCATION = 16
 
 SEMANTICS: tuple[VertexSemantic, ...] = (
     VertexSemantic('TEXCOORD_0', LOC_TEXCOORD, 2, 'aTexCoord'),
@@ -96,6 +102,7 @@ SEMANTICS: tuple[VertexSemantic, ...] = (
     VertexSemantic('TEXCOORD_1', LOC_TEXCOORD1, 2, 'aTexCoord1'),
     VertexSemantic('JOINTS_0', LOC_JOINTS, 4, 'aJoints'),
     VertexSemantic('WEIGHTS_0', LOC_WEIGHTS, 4, 'aWeights'),
+    VertexSemantic('TEXCOORD_3D', LOC_TEXCOORD3D, 4, 'aTexCoord3D'),
 )
 
 BY_SEMANTIC: dict[str, VertexSemantic] = {
