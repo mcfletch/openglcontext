@@ -47,7 +47,9 @@ from OpenGLContext.loaders.gltf import hooks as _hooks
 from OpenGLContext.loaders.gltf.splats import splat_primitive
 from OpenGLContext.loaders.gltf import variants as variantsext
 from OpenGLContext.loaders.resolver import contained_source
-from OpenGLContext.loaders.gltf.materials import GLTF_TEXTURE_KEYS, khr_transform_params
+from OpenGLContext.loaders.gltf.materials import (
+    GLTF_TEXTURE_KEYS, MATERIAL_EXTENSION_FIELDS, khr_transform_params,
+)
 from OpenGLContext.loaders.gltf.textures import IMAGE_EXTENSIONS, gl_sampler
 from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
@@ -361,39 +363,9 @@ def _kind_for(array: np.ndarray, name: str, allowed: Sequence[int]) -> str:
 
 # --- materials ----------------------------------------------------------------
 
-# Written when the field differs from the glTF default. Each entry is
-# (extension, {json key: (material field, default)}); the reader's handler table
-# in materials.py is the other half of the pair.
-_MATERIAL_EXTENSIONS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
-    # Ours: the vertex colours on this material are light worked out when the
-    # world was built rather than a tint on the surface, so a reader adds them
-    # as emission and lets its own lights shade the surface underneath.
-    ('OGLC_materials_baked_light', {}),
-    ('KHR_materials_emissive_strength',
-     {'emissiveStrength': ('emissiveStrength', 1.0)}),
-    ('KHR_materials_ior', {'ior': ('ior', 1.5)}),
-    ('KHR_materials_specular', {'specularFactor': ('specular', 1.0),
-                                'specularColorFactor': ('specularColor', (1.0, 1.0, 1.0))}),
-    ('KHR_materials_clearcoat', {'clearcoatFactor': ('clearcoat', 0.0),
-                                 'clearcoatRoughnessFactor': ('clearcoatRoughness', 0.0)}),
-    ('KHR_materials_sheen', {'sheenColorFactor': ('sheenColor', (0.0, 0.0, 0.0)),
-                             'sheenRoughnessFactor': ('sheenRoughness', 0.0)}),
-    ('KHR_materials_transmission', {'transmissionFactor': ('transmission', 0.0)}),
-    ('KHR_materials_volume', {'thicknessFactor': ('thickness', 0.0),
-                              'attenuationColor': ('attenuationColor', (1.0, 1.0, 1.0)),
-                              'attenuationDistance': ('attenuationDistance', 0.0)}),
-    ('KHR_materials_diffuse_transmission',
-     {'diffuseTransmissionFactor': ('diffuseTransmission', 0.0),
-      'diffuseTransmissionColorFactor': ('diffuseTransmissionColor', (1.0, 1.0, 1.0))}),
-    ('KHR_materials_anisotropy', {'anisotropyStrength': ('anisotropyStrength', 0.0),
-                                  'anisotropyRotation': ('anisotropyRotation', 0.0)}),
-    ('KHR_materials_dispersion', {'dispersion': ('dispersion', 0.0)}),
-    ('KHR_materials_iridescence',
-     {'iridescenceFactor': ('iridescence', 0.0),
-      'iridescenceIor': ('iridescenceIor', 1.3),
-      'iridescenceThicknessMinimum': ('iridescenceThicknessMin', 100.0),
-      'iridescenceThicknessMaximum': ('iridescenceThicknessMax', 400.0)}),
-)
+# Written when the field differs from the glTF default; the table is the
+# reader's too (materials.MATERIAL_EXTENSION_FIELDS).
+_MATERIAL_EXTENSIONS = MATERIAL_EXTENSION_FIELDS
 
 # attenuationDistance is +inf in glTF and 0.0 in PhysicalMaterial ("no absorption"),
 # so the sentinel must not be written as a literal distance of zero.

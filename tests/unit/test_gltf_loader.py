@@ -1120,7 +1120,11 @@ class TestAnimationPointerLive:
 
 
 class TestNodeVisibilityChildPropagation:
-    """An invisible node hides its whole subtree (spec: visible iff all ancestors are)."""
+    """An invisible node hides its whole subtree (spec: visible iff all ancestors are).
+
+    The subtree is built under a Transform whose X3D ``visible`` is false, which
+    leaves it out of the frame and out of the framing bounds, and an animation
+    pointer can show it."""
 
     def _build(self):
         pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
@@ -1142,7 +1146,13 @@ class TestNodeVisibilityChildPropagation:
 
     def test_child_of_invisible_is_hidden(self):
         scene = self._build()
-        assert _find_shape(scene.group) is None
+        assert not scene.node_transforms[0].visible
+        assert scene.node_transforms[1].visible
+        assert _find_shape(scene.node_transforms[0]) is not None
+
+    def test_hidden_geometry_is_not_framed(self):
+        scene = self._build()
+        assert scene.radius == 1.0 and tuple(scene.center) == (0.0, 0.0, 0.0)
 
 
 if __name__ == '__main__':

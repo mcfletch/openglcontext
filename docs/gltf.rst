@@ -148,10 +148,24 @@ animation:
 - Lights - ``KHR_lights_punctual`` directional, point and spot lights.
 
 - Animation - keyframed node transforms, skinning and morph targets.
-  ``KHR_animation_pointer`` animates material and texture-transform
-  properties, and ``KHR_node_visibility`` shows and hides nodes. A pointer
-  whose property cannot be set is logged once, with its path, and left
-  unanimated while the clip's other channels play.
+  ``KHR_animation_pointer`` drives these properties of the glTF Object Model:
+  a node's ``translation``, ``rotation``, ``scale``, ``weights`` and
+  ``weights/{i}`` and its ``KHR_node_visibility`` ``visible``; a material's
+  ``alphaCutoff``, ``emissiveFactor``, ``normalTexture/scale``,
+  ``occlusionTexture/strength``, the ``pbrMetallicRoughness`` factors
+  (``baseColorFactor`` with its alpha for a material that blends or masks),
+  every factor of the ``KHR_materials_*`` extensions the loader reads, and each
+  texture's ``KHR_texture_transform`` ``offset``, ``rotation`` and ``scale``
+  where the texture declares one; a punctual light's ``color``,
+  ``intensity``, ``range`` and spot cone angles; a perspective camera's
+  ``yfov``, ``znear`` and ``zfar``. A pointer to any other property is logged
+  once, with its path, and its channel left out while the clip's other
+  channels play.
+
+- Visibility - ``KHR_node_visibility``. A hidden node is built with X3D's
+  ``visible`` false on its ``Transform``, so it and everything under it,
+  lights included, are left out of the frame and of the framing bounds until
+  an animation pointer, or the application, sets ``visible`` true.
 
 - Instancing - ``EXT_mesh_gpu_instancing``. Repeated meshes are also batched
   into one instanced draw when the file does not use the extension. See

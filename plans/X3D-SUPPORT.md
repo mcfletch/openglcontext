@@ -671,6 +671,21 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     X3D, glTF, OBJ and the mesh formats, decompressed under the resource limit
     (`resolver.gunzipped`). Not read: SOG and SPZ (splat formats X_ITE reads
     only with plug-ins), SVG (2D)
+  - [x] `KHR_animation_pointer` was partial (material factors, emissive
+    strength, texture transforms, a light's visibility): `animation.PointerTargets`
+    now resolves node TRS, weights and `weights/{i}`, node visibility,
+    `alphaCutoff`, normal scale, occlusion strength, base colour with alpha,
+    every `MATERIAL_EXTENSION_FIELDS` factor (the table moved from the writer
+    to `materials`), light colour, intensity, range and cone angles, camera
+    `yfov`, `znear`, `zfar`. An unresolved pointer is logged once. Not driven:
+    orthographic camera fields, `aspectRatio`, `EXT_lights_image_based`
+    intensity and rotation, `clearcoatNormalTexture/scale` (no engine field),
+    texture transforms a texture does not declare
+  - [x] `KHR_node_visibility` was partial: a hidden node was not built, so it
+    could not be shown. It is built with X3D `visible` false
+    (`_flat.integrate` prunes it, lights included) and left out of the
+    framing. CubeVisibility's capture pinned at t=0.25, since its blue cube
+    now blinks (reference_images `ee6c177`)
   - [x] `test_gltf_conformance` skipped every render: it passed `None` as the
     window system, and a render that drew nothing was a skip. It passes no
     backend now, and a render that draws nothing fails

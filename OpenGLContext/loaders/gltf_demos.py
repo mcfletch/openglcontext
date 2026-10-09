@@ -253,7 +253,7 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
     _studio('CompareTransmission', margin=0.9),
     _studio('CompareVolume', margin=0.95),
     SceneSpec('Corset'),
-    SceneSpec('CubeVisibility'),
+    SceneSpec('CubeVisibility', anim_time=0.25),   # the blue cube blinks; shown here
     _studio('DiffuseTransmissionPlant', margin=0.9),
     _studio('DiffuseTransmissionTeacup', yaw=0.5, elevation=0.35, tilt=-0.18,
           margin=0.9),

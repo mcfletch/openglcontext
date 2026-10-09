@@ -245,6 +245,40 @@ def _factor(values: DocumentValues, ext: dict, key: str, default: float,
                          minimum=minimum, maximum=maximum)
 
 
+#: Each material extension's factors as (extension, {JSON key: (PhysicalMaterial
+#: field, glTF default)}): what the writer writes where a field differs from the
+#: default, and what a KHR_animation_pointer under the extension drives.
+MATERIAL_EXTENSION_FIELDS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
+    # Ours: the vertex colours on this material are light worked out when the
+    # world was built rather than a tint on the surface, so a reader adds them
+    # as emission and lets its own lights shade the surface underneath.
+    ('OGLC_materials_baked_light', {}),
+    ('KHR_materials_emissive_strength',
+     {'emissiveStrength': ('emissiveStrength', 1.0)}),
+    ('KHR_materials_ior', {'ior': ('ior', 1.5)}),
+    ('KHR_materials_specular', {'specularFactor': ('specular', 1.0),
+                                'specularColorFactor': ('specularColor', (1.0, 1.0, 1.0))}),
+    ('KHR_materials_clearcoat', {'clearcoatFactor': ('clearcoat', 0.0),
+                                 'clearcoatRoughnessFactor': ('clearcoatRoughness', 0.0)}),
+    ('KHR_materials_sheen', {'sheenColorFactor': ('sheenColor', (0.0, 0.0, 0.0)),
+                             'sheenRoughnessFactor': ('sheenRoughness', 0.0)}),
+    ('KHR_materials_transmission', {'transmissionFactor': ('transmission', 0.0)}),
+    ('KHR_materials_volume', {'thicknessFactor': ('thickness', 0.0),
+                              'attenuationColor': ('attenuationColor', (1.0, 1.0, 1.0)),
+                              'attenuationDistance': ('attenuationDistance', 0.0)}),
+    ('KHR_materials_diffuse_transmission',
+     {'diffuseTransmissionFactor': ('diffuseTransmission', 0.0),
+      'diffuseTransmissionColorFactor': ('diffuseTransmissionColor', (1.0, 1.0, 1.0))}),
+    ('KHR_materials_anisotropy', {'anisotropyStrength': ('anisotropyStrength', 0.0),
+                                  'anisotropyRotation': ('anisotropyRotation', 0.0)}),
+    ('KHR_materials_dispersion', {'dispersion': ('dispersion', 0.0)}),
+    ('KHR_materials_iridescence',
+     {'iridescenceFactor': ('iridescence', 0.0),
+      'iridescenceIor': ('iridescenceIor', 1.3),
+      'iridescenceThicknessMinimum': ('iridescenceThicknessMin', 100.0),
+      'iridescenceThicknessMaximum': ('iridescenceThicknessMax', 400.0)}),
+)
+
 _MATERIAL_EXT_HANDLERS = {
     'OGLC_materials_baked_light': _ext_baked_light,
     'KHR_materials_emissive_strength': _ext_emissive_strength,

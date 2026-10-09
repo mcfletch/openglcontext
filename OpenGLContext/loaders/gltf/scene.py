@@ -74,6 +74,7 @@ from OpenGLContext.loaders.gltf.transforms import (
 from OpenGLContext.loaders.gltf.animation import (
     Player, compute_world_matrices,
     _trs_animated_nodes, _build_animations, _register_morph, _register_skin,
+    PointerTargets,
 )
 
 log = logging.getLogger(__name__)
@@ -628,6 +629,13 @@ class _SceneBuilder:
         self.values = DocumentValues(logger=log)
         self.lod_alternatives: set = lodext.alternative_ids(g, self.values)
         self._coarser_levels = 0
+        # How many hidden (KHR_node_visibility) nodes the walk is inside: what
+        # is built there is not counted in the framing.
+        self._hiding = 0
+        # KHR_animation_pointer's targets beyond nodes and materials: the light
+        # nodes built for each punctual light, and each camera node's camera.
+        self.light_nodes: dict[int, list] = {}
+        self.camera_indices: list[int] = []
         # The OGLC_hook kinds this document's materials and nodes name, and the
         # hook_data they write. One runner for the whole load, so an unknown
         # kind is reported once rather than once per primitive.
@@ -713,7 +721,7 @@ class _SceneBuilder:
         the model: it is the same part, drawn instead. Recording it would frame
         the camera on a scene counted several times over.
         """
-        if self._coarser_levels:
+        if self._coarser_levels or self._hiding:
             return
         minimum, maximum = _world_box(world, bounds)
         positions = getattr(getattr(shape, 'geometry', None), 'positions', None)
@@ -755,20 +763,21 @@ class _SceneBuilder:
         # ``group.children`` was O(n^2) in the node/primitive count.
         children = list(group.children)
         node_ext = getattr(node, 'extensions', None) or {}
-        # KHR_node_visibility: an invisible node -- or any descendant of one --
-        # contributes no drawn geometry or light and isn't counted in the framing
-        # bounds. Visibility is the AND of this node's flag and its ancestors'
-        # (the spec requires a node drawn only if it and every ancestor is visible),
-        # so the flag threads down the recursion as `parent_visible`. The authored
-        # initial flag may itself be a KHR_animation_pointer target baked in above.
+        # KHR_node_visibility: a hidden node is built with X3D's `visible` false
+        # on its Transform, which leaves it and everything under it, lights
+        # included, out of the frame until something shows it (an animation
+        # pointer, or the application). A node is drawn only where it and every
+        # ancestor is visible, so `node_visible` threads down the recursion;
+        # what is not drawn is not counted in the framing bounds.
         node_visible = parent_visible
         node_casts = parent_casts and _casts_shadow(node)   # parent_casts: an MSFT_lod alternative of a marked node
         placements: Optional[np.ndarray] = None
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
-            if isinstance(nv, dict):
-                node_visible = node_visible and self.values.flag(
-                    nv.get('visible'), True, 'KHR_node_visibility visible')
+            if isinstance(nv, dict) and not self.values.flag(
+                    nv.get('visible'), True, 'KHR_node_visibility visible'):
+                group.visible = False
+                node_visible = False
             gi_ext = node_ext.get('EXT_mesh_gpu_instancing')
             if gi_ext:
                 placements = gpu_instance_placements(
@@ -776,11 +785,13 @@ class _SceneBuilder:
         lod_ids = lodext.level_ids(
             node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None,
             self.values, own=node_index)
-        if lod_ids and node.mesh is not None and node_visible and placements is None:
+        hidden_here = parent_visible and not node_visible
+        self._hiding += hidden_here
+        if lod_ids and node.mesh is not None and placements is None:
             children.append(self._lod_node(node, node_index, lod_ids, world,
                                            ancestry, node_visible, group,
                                            node_casts))
-        elif (node.mesh is not None and node_visible and placements is not None
+        elif (node.mesh is not None and placements is not None
               and not self._mesh_shareable(node.mesh)):
             # A hook whose result stands for one copy is run for each
             # placement, and each copy is placed on its own.
@@ -790,7 +801,7 @@ class _SceneBuilder:
                     children.append(MatrixTransform(localMatrix=placement,
                                                     children=[shape]))
                     self._record_part(placed, shape, bounds)
-        elif node.mesh is not None and node_visible:
+        elif node.mesh is not None:
             shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
                 # One node per mesh primitive holding every placement, sharing
@@ -808,16 +819,19 @@ class _SceneBuilder:
                 _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
         if getattr(node, 'camera', None) is not None and self.g.cameras:
             self.cameras.append((world, self.g.cameras[node.camera]))
-        if isinstance(node_ext, dict) and self.light_defs and node_visible:
+            self.camera_indices.append(node.camera)
+        if isinstance(node_ext, dict) and self.light_defs:
             li = (node_ext.get('KHR_lights_punctual', {}) or {}).get('light')
             if li is not None and 0 <= li < len(self.light_defs):
                 light = _light_node(self.light_defs[li], world, node_casts)
                 if light is not None:
                     children.append(light)
-                    self.node_light[node_index] = light   # for KHR_animation_pointer visibility
+                    self.node_light[node_index] = light
+                    self.light_nodes.setdefault(li, []).append(light)
                     wpos = (None if isinstance(light, DirectionalLight) else
                             tuple(float(v) for v in (np.array([0, 0, 0, 1.0]) @ world)[:3]))
-                    self.light_meter.append((light, wpos))
+                    if node_visible:
+                        self.light_meter.append((light, wpos))
         if self.audio_document.emitters:
             children.extend(self._audio_emitters(node))
         zone = self.zoning.zone_for(node, node_index)
@@ -825,6 +839,7 @@ class _SceneBuilder:
             children.append(zone)
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
+        self._hiding -= hidden_here
         return self._place(node, node_index, group, children, world)
 
     def _place(self, node: Any, node_index: int, group: "Transform",
@@ -1176,8 +1191,13 @@ class _SceneBuilder:
             radius = float(np.linalg.norm(framed.maximum - framed.minimum) / 2.0) or 1.0
         poses = _camera_poses(self.cameras)
         viewpoints = _viewpoints_for_poses(poses, self.scene_graph, self.used_defs)
-        animations = _build_animations(
-            g, self.resolver, self.node_transforms, self.node_light, self.appearances)
+        by_camera: dict[int, list] = {}
+        for camera, viewpoint in zip(self.camera_indices, viewpoints):
+            by_camera.setdefault(camera, []).append(viewpoint)
+        animations = _build_animations(g, self.resolver, PointerTargets(
+            g, node_transforms=self.node_transforms, node_morph=self.node_morph,
+            appearances=self.appearances, lights=self.light_nodes,
+            viewpoints=by_camera))
         scene = GLTFScene(root, center, radius,
                           camera=(poses[0] if poses else None), cameras=poses,
                           viewpoints=viewpoints, sceneGraph=self.scene_graph,
