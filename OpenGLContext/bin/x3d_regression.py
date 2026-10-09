@@ -37,10 +37,11 @@ from typing import Any, Optional
 
 from OpenGLContext import atomicfiles, renderoptions
 from OpenGLContext.testing import renderregression
+from OpenGLContext.video.clock import CAPTURE_FPS
 
 __all__ = [
     'Scene', 'find_scenes', 'upstream_render', 'render_scene', 'parse_render_report',
-    'build_report', 'run', 'main',
+    'build_report', 'run', 'main', 'capture_time', 'WORLD_START', 'CAPTURE_FPS',
 ]
 
 #: The size of the renders Web3D publishes, so each sits beside its own.
@@ -59,6 +60,19 @@ MAX_PROBLEMS = 20
 #: The world time, in seconds since 1970, a document's first frame is drawn at
 #: (2000-01-01): a TimeSensor with startTime 0 has run its cycle long before.
 WORLD_START = 946684800.0
+
+
+def capture_time(frames: int) -> float:
+    """The world time, in seconds since 1970, of the frame a run of `frames`
+    frames reads back
+
+    The clock stands at :data:`WORLD_START` while the document's loads arrive
+    and moves one step of 1/:data:`CAPTURE_FPS` seconds before each frame
+    counted, and once more before the frame that is read.
+    """
+    return WORLD_START + (frames + 1) / CAPTURE_FPS
+
+
 #: Begins the line the drawing process reports on.
 REPORT_MARK = 'X3D_RENDER '
 #: The per-channel difference a pixel must exceed to count as differing from
