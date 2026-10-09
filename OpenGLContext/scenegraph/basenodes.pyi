@@ -39,6 +39,7 @@ from OpenGLContext.scenegraph.extrusions import PolyCone as PolyCone
 from OpenGLContext.scenegraph.extrusions import PolyCylinder as PolyCylinder
 from OpenGLContext.scenegraph.fog import Fog as Fog
 from OpenGLContext.scenegraph.fog import LocalFog as LocalFog
+from OpenGLContext.scenegraph.fogcoordinate import FogCoordinate as FogCoordinate
 from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats as GaussianSplats
 from OpenGLContext.scenegraph.gear import Gear as Gear
 from OpenGLContext.scenegraph.geometry2d import Arc2D as Arc2D
@@ -459,6 +460,7 @@ __all__ = [
     'FloatUniformm4x3',
     'FloatVertexAttribute',
     'Fog',
+    'FogCoordinate',
     'FontLibrary',
     'FontStyle',
     'FontStyle3D',

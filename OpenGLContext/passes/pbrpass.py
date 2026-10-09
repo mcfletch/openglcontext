@@ -52,6 +52,7 @@ from OpenGLContext.scenegraph.physicalmaterial import (
     material_to_pbr, pbr_material,
 )
 from OpenGLContext.scenegraph.material_fields import read_material_fields
+from OpenGLContext.scenegraph.fogcoordinate import FOG_DEPTH_UNIT, bind_depths
 from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial
 from OpenGLContext.scenegraph.texgen import TexGen
 from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
@@ -787,6 +788,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self._set_uniform1i(_PBR_EXT_SAMPLER[channel], unit, self.program)
         self._set_uniform1i('materialTextures', 0, self.program)
         self._set_uniform1i('scatterPass', 0, self.program)
+        self._set_uniform1i('fogDepths', FOG_DEPTH_UNIT, self.program)
+        self._set_uniform1i('hasFogDepths', 0, self.program)
         if self.volume_scatter_supported:
             self._set_uniform1i('scatterBuffer', SCATTER_UNIT, self.program)
             self._set_uniform1i('hasScatterBuffer', 0, self.program)
@@ -795,6 +798,15 @@ class PBRShaderProgram(VRML97ShaderProgram):
             if loc != -1:
                 glUniform3fv(loc, len(samples), samples)
             self._set_uniform1f('scatterMinRadius', least, self.program)
+
+    def set_fog_depths(self, owner: Any, depths: Optional[np.ndarray]) -> None:
+        """Fog the next draw by `owner`'s per-vertex FogCoordinate `depths`, or by distance
+
+        `depths` None fogs by distance, as every geometry without a
+        FogCoordinate is.
+        """
+        found = depths is not None and bind_depths(owner, depths)
+        self._set_uniform1i('hasFogDepths', 1 if found else 0, self.program)
 
     def set_scatter_pass(self, drawing: bool) -> None:
         """Whether the next draws fill the volume-scatter buffer rather than the frame"""

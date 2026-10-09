@@ -25,10 +25,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `ReceiverPdu`, `SignalPdu`, `TransmitterPdu`, `DISEntityManager`,
     `DISEntityTypeMapping`, which act only on a DIS network (IEEE 1278.1 PDUs
     over UDP), not implemented: a maintainer decision whether the engine
-    speaks DIS; `FogCoordinate`, which needs a per-vertex input and every one
-    of the 16 attribute locations GL 3.3 guarantees is taken (the table holds
-    no two semantics to one location): a maintainer decision between sharing
-    `TEXCOORD_3D`'s location 15 and a 17th location
+    speaks DIS. `FogCoordinate` is drawn (x3d-xnodes): its depths are read
+    from a buffer texture by `gl_VertexID`, taking no attribute location
 
 - Phase 1, pyvrml97 groundwork (§9.1)
   - [x] `ElevationGrid.xSpacing`/`zSpacing` 1.0, `NavigationInfo.type` `["WALK", "ANY"]`
@@ -657,6 +655,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] ImageTextureAtlas (`texture3d.ImageTextureAtlas`, `atlas_volume`): the
     tiles of one picture as slices, top row of each tile at t=0 as X_ITE
     reads it; matches X_ITE's render of the test atlas (0.5% of pixels)
+  - [x] FogCoordinate (`scenegraph.fogcoordinate`): per-vertex depths from the
+    coordinate each vertex was read from, in a buffer texture the PBR vertex
+    shader reads by `gl_VertexID`; the depth is the fog share (X_ITE's
+    `1 - depth` interpolant). Triangle sets, IndexedFaceSet, ElevationGrid;
+    0.3% of pixels from X_ITE on the test document. Lines, points and the
+    VRML97 renderer fog by distance
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

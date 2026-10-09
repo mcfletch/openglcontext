@@ -100,7 +100,7 @@ implements these X3D nodes, by component:
 - CubeMapTexturing - ComposedCubeMapTexture, GeneratedCubeMapTexture,
   ImageCubeMapTexture
 - DIS - EspduTransform
-- EnvironmentalEffects - Background, Fog, LocalFog, TextureBackground
+- EnvironmentalEffects - Background, Fog, FogCoordinate, LocalFog, TextureBackground
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
 - EnvironmentalSensor - ProximitySensor, TransformSensor, VisibilitySensor
@@ -592,6 +592,15 @@ Fog and backgrounds
 A ``Fog`` or ``LocalFog`` fades the colour as it is displayed, after tone
 mapping, by X3D's equation: a ``LINEAR`` fog leaves an object
 ``(visibilityRange - distance) / visibilityRange`` of its own colour.
+
+A geometry's ``FogCoordinate`` gives each coordinate a ``depth``, 0 to 1,
+which is the share of the fog colour it takes in place of the share its
+distance gives, interpolated across each face, as X_ITE reads it; a list
+shorter than the coordinates gives its last depth to the rest. It is read by
+the triangle and quad sets, ``IndexedFaceSet`` and ``ElevationGrid`` drawn
+by the PBR renderer; the depths reach the vertex shader in a buffer texture
+read by vertex index, and such a shape is drawn by itself rather than in an
+instanced group. Lines, points and the VRML97 renderer fog by distance.
 
 An enabled ``LocalFog`` fogs the siblings in its parent group and their
 descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);
@@ -1624,7 +1633,6 @@ Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
-- ``FogCoordinate`` is kept and not drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
 

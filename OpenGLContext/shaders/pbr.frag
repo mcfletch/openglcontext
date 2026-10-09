@@ -84,6 +84,8 @@ in vec2 vTexCoord1;      // second UV set (glTF TEXCOORD_1)
 in vec3 vTangent;
 in float vTangentW;
 in vec4 vColor;
+in float vFogDepth;      // X3D FogCoordinate depth, where hasFogDepths
+uniform bool hasFogDepths;
 in float vModelScale;   // world-space object scale for KHR_materials_volume thickness
 in vec3 vLocalPosition;  // the point, its normal and the camera in the shape's own space
 in vec3 vLocalNormal;
@@ -720,6 +722,10 @@ float spotAttenuation(int i, vec3 L) {
 // X3D's fog equation is written: displayed() and the Phong and unlit branches
 // call it at those two points.
 vec3 fogged(vec3 color) {
+    // A FogCoordinate's depth is the share of the fog colour itself, in
+    // place of the one the distance gives (X_ITE's reading).
+    if (hasFogDepths && fogMode > 0 && fogDensity > 0.0)
+        return mix(color, fogColor, clamp(vFogDepth, 0.0, 1.0));
     return x3dFogged(color, length(toViewer(vPosition)));
 }
 

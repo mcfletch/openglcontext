@@ -46,6 +46,10 @@ uniform bool impostorHemi;
 // The atlas itself, the same uniform the fragment stage samples, asked here
 // only for its size: the half-texel inset below is measured in its texels.
 uniform sampler2D baseColorTexture;
+// X3D FogCoordinate depths, one per vertex, read by gl_VertexID so they take
+// no attribute location (scenegraph/fogcoordinate.py).
+uniform samplerBuffer fogDepths;
+uniform bool hasFogDepths;
 
 out vec3 vNormal;        // eye space
 out vec3 vPosition;      // eye space
@@ -65,6 +69,7 @@ out vec3 vLocalNormal;
 flat out vec3 vLocalEye;
 out vec4 vTexCoord3D;
 out float vModelScale;   // world-space object scale, for KHR_materials_volume thickness
+out float vFogDepth;     // X3D FogCoordinate depth, 0 to 1; read where hasFogDepths
 flat out uint vObjectId;       // per-instance picking id (used only when instancing)
 flat out uint vMaterialIndex;  // per-instance material-array index
 #include "_multiview_inc.glsl"
@@ -180,6 +185,7 @@ void main() {
     // it here puts the refraction offset + Beer-Lambert absorption in world units, so
     // a non-unit-scaled instance absorbs correctly (was treated as already world-scale).
     vModelScale = (length(mat3(mv)[0]) + length(mat3(mv)[1]) + length(mat3(mv)[2])) / 3.0;
+    vFogDepth = hasFogDepths ? texelFetch(fogDepths, gl_VertexID).r : 0.0;
     vObjectId = aInstanceObjectId;
     vMaterialIndex = aInstanceMaterial;
     gl_Position = projectionMatrix * eyePosition;

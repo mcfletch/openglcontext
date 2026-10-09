@@ -146,6 +146,8 @@ def geometry_instance_key(shape: Any) -> Optional[tuple]:
     geometry = getattr(shape, 'geometry', None)
     if geometry is None or coordinatedeform.deformer_for(geometry) is not None:
         return None
+    if getattr(geometry, 'fogCoord', None):
+        return None     # its fog depths are set for its own draw
     appearance = getattr(shape, 'appearance', None)
     if drawn_alone(appearance):
         return None
@@ -215,6 +217,8 @@ def geometry_texture_key(shape: Any) -> Optional[tuple]:
     geometry = getattr(shape, 'geometry', None)
     if geometry is None or coordinatedeform.deformer_for(geometry) is not None:
         return None
+    if getattr(geometry, 'fogCoord', None):
+        return None     # its fog depths are set for its own draw
     appearance = getattr(shape, 'appearance', None)
     if drawn_alone(appearance):
         return None

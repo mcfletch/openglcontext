@@ -289,6 +289,9 @@ class PBRMesh(x3d.X3DGeometryNode):
     #: they were made from double-precision coordinates; None for none. The
     #: render pass places the mesh by it (:meth:`meshOrigin`).
     origin: Optional[np.ndarray] = None
+    #: An X3D FogCoordinate's depth for each vertex, which fogs it in place of
+    #: its distance (:mod:`~OpenGLContext.scenegraph.fogcoordinate`); None for none.
+    fog_depths: Optional[np.ndarray] = None
 
     #: The time, in seconds, :attr:`waveStyle` is evaluated at. A clock the
     #: frame advances rather than something authored, so it is an attribute
@@ -889,6 +892,8 @@ class PBRMesh(x3d.X3DGeometryNode):
         if not getattr(mode, 'shadow_pass', False):
             if sp is not None and hasattr(sp, 'set_vertex_color'):
                 sp.set_vertex_color(self.colors is not None)
+            if sp is not None and hasattr(sp, 'set_fog_depths'):
+                sp.set_fog_depths(self, self.fog_depths)
 
         if sp is not None and getattr(sp, 'program', None):
             # An input nothing feeds reads one default value for every vertex,
