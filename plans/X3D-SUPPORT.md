@@ -217,6 +217,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (`--multisampling`). The glass backdrop and the transparent phase read
     a multisampled window (`tests/unit/test_multisampling.py`); the MRT pick
     target and bloom's target are one sample a pixel
+  - [x] Phong specular as X_ITE draws it and 17.2.2.4 writes it: (N.H)^(128
+    shininess) with no N.L clip, and 1 at shininess 0 (`_phong_inc.glsl`, both
+    passes; `tests/unit/test_pbr_phong.py`)
   - [x] primitive and texture quality: `ContextDefinition.primitiveQuality`
     and `textureQuality` (`OPENGLCONTEXT_PRIMITIVE_QUALITY`,
     `OPENGLCONTEXT_TEXTURE_QUALITY`), `passes/quality.py`. X_ITE's counts:
@@ -237,6 +240,14 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] QualityWhenMoving, MotionBlur: X_ITE 16.4.3 declares and never reads
     them; no engine field. DisplayColorSpace DISPLAY_P3 and XRSessionMode:
     not implemented, the limits in `docs/x3d.rst` (Browser options)
+  - [ ] LogarithmicDepthBuffer: not implemented. X_ITE writes
+    gl_FragDepth = log2(1 + w) / log2(far + 1) in every program, and turns it on
+    for every GeoViewpoint. In the engine it needs a compiled variant of every
+    main-view program (a gl_FragDepth write in the default variant would turn
+    early depth testing off for every draw), and the depth readers (the pick's
+    point, the volumes' opaque depth, the OIT targets' depth test) converting
+    the stored depth back. The maintainer's call whether it is worth that;
+    renders differ only in depth precision
   - [x] no document-level switch for the options (no META or WorldInfo
     convention): X_ITE reads them from its page and from Scripts, so such a
     convention would draw a document differently in the two

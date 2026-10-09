@@ -207,3 +207,29 @@ def test_a_document_inlined_into_a_scene_built_in_code(gl_context, tmp_path):
     inlined = [node for node in inline.inlined if hasattr(node, 'appearance')][0]
     assert flags(inlined.appearance) & PHONG_BIT
     assert not flags(own.appearance) & PHONG_BIT
+
+
+SPECULAR = (b"<X3D version='3.3'><Scene><Viewpoint position='0 0 0'/>"
+            b"<NavigationInfo headlight='false'/>%s<Shape><Appearance>"
+            b"<Material diffuseColor='0 0 0' specularColor='0.5 0.5 0.5' shininess='%s'/>"
+            b"</Appearance>" + QUAD + b"</Shape></Scene></X3D>")
+
+
+@pytest.mark.parametrize('renderer', ['pbr', 'vrml97'])
+@pytest.mark.parametrize('light, shininess, expected', [
+    # shininess 0: the exponent is 0, so the factor is 1 wherever the light reaches
+    (b"<DirectionalLight direction='0 0 -1'/>", b'0', 128),
+    (b"<DirectionalLight direction='0 -0.6 -0.8'/>", b'0', 128),
+    # a light just behind the surface still gives the highlight X3D's
+    # equation gives, (N.H)^(128 shininess), unclipped by N.L, as X_ITE draws it
+    # N.H 0.667: 0.5 x 0.667^1.28
+    (b"<DirectionalLight direction='0 -0.9939 0.1104'/>", b'0.01', 76),
+])
+def test_the_specular_term_is_x3ds(gl_context, renderer, light, shininess, expected):
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    with scene_context(Loader.loads(SPECULAR % (light, shininess), 'a.x3d'), size=(32, 32),
+                       renderer=renderer) as context:
+        drawn_image(context)
+        found = tuple(drawn_image(context)[16, 16].astype(int))
+    assert found == pytest.approx((expected,) * 3, abs=4)

@@ -1734,6 +1734,13 @@ Options with no engine field:
   GL widget; an EGL window surface on a system with
   ``EGL_EXT_gl_colorspace_display_p3`` has, and the engine's EGL backend
   makes pbuffers, which have no display. Frames are written as sRGB.
+- ``LogarithmicDepthBuffer``: X_ITE writes each fragment's depth as the
+  logarithm of its distance, and does so for every ``GeoViewpoint``. The
+  engine writes the rasterised depth; a scene with a far plane thousands of
+  times its near plane loses depth precision in the distance, and a
+  Geospatial scene is drawn about the viewer in double precision
+  (:ref:`Geospatial <x3d-geospatial>`). Renders differ only where two
+  surfaces are closer than the depth buffer resolves.
 - ``XRSessionMode``: a WebXR session. The engine opens no XR session; its
   multiview drawing (:doc:`multiview`) draws several views of one frame.
 
