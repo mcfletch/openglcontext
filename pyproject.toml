@@ -120,6 +120,7 @@ oglc-x3d-nurbs = "OpenGLContext.bin.x3d_nurbs:main"
 oglc-x3d-rigidbody = "OpenGLContext.bin.x3d_rigidbody:main"
 oglc-x3d-shaders = "OpenGLContext.bin.x3d_shaders_demo:main"
 oglc-x3d-particles = "OpenGLContext.bin.x3d_particles:main"
+oglc-x3d-sound = "OpenGLContext.bin.x3d_sound:main"
 # Ship an application built on the engine as a Debian package: a relocatable
 # CPython and the application on top of it, under /opt.
 oglc-deb = "OpenGLContext.packaging.deb:main"
@@ -165,7 +166,7 @@ OpenGLContext = [
     "shaders/*.vert", "shaders/*.frag", "shaders/*.glsl",
     "resources/environment/*.jpg",
     # The X3D documents `oglc-x3d`, `oglc-x3d-nurbs`, `oglc-x3d-shaders`,
-    # `oglc-x3d-particles` and `oglc-x3d-rigidbody` open, and the packaged
+    # `oglc-x3d-particles`, `oglc-x3d-rigidbody` and `oglc-x3d-sound` open, and the packaged
     # shader `oglc-x3d-shaders` reads.
     "bin/*.x3d", "bin/*.glsl",
     # The exception to the rule above: the demos' packaging recipe is read

@@ -24,7 +24,6 @@ from OpenGLContext.scenegraph.anchor import Anchor as Anchor
 from OpenGLContext.scenegraph.appearance import Appearance as Appearance
 from OpenGLContext.scenegraph.audio import AudioEmitter as AudioEmitter
 from OpenGLContext.scenegraph.audio import AudioSource as AudioSource
-from OpenGLContext.scenegraph.audio import Sound as Sound
 from OpenGLContext.scenegraph.background import Background as Background
 from OpenGLContext.scenegraph.billboard import Billboard as Billboard
 from OpenGLContext.scenegraph.box import Box as Box
@@ -223,6 +222,27 @@ from OpenGLContext.scenegraph.x3dshaders import PackagedShader as PackagedShader
 from OpenGLContext.scenegraph.x3dshaders import ProgramShader as ProgramShader
 from OpenGLContext.scenegraph.x3dshaders import ShaderPart as ShaderPart
 from OpenGLContext.scenegraph.x3dshaders import ShaderProgram as ShaderProgram
+from OpenGLContext.scenegraph.x3dsound import Analyser as Analyser
+from OpenGLContext.scenegraph.x3dsound import AudioClip as AudioClip
+from OpenGLContext.scenegraph.x3dsound import AudioDestination as AudioDestination
+from OpenGLContext.scenegraph.x3dsound import BiquadFilter as BiquadFilter
+from OpenGLContext.scenegraph.x3dsound import BufferAudioSource as BufferAudioSource
+from OpenGLContext.scenegraph.x3dsound import ChannelMerger as ChannelMerger
+from OpenGLContext.scenegraph.x3dsound import ChannelSelector as ChannelSelector
+from OpenGLContext.scenegraph.x3dsound import ChannelSplitter as ChannelSplitter
+from OpenGLContext.scenegraph.x3dsound import Convolver as Convolver
+from OpenGLContext.scenegraph.x3dsound import Delay as Delay
+from OpenGLContext.scenegraph.x3dsound import DynamicsCompressor as DynamicsCompressor
+from OpenGLContext.scenegraph.x3dsound import Gain as Gain
+from OpenGLContext.scenegraph.x3dsound import ListenerPointSource as ListenerPointSource
+from OpenGLContext.scenegraph.x3dsound import MicrophoneSource as MicrophoneSource
+from OpenGLContext.scenegraph.x3dsound import OscillatorSource as OscillatorSource
+from OpenGLContext.scenegraph.x3dsound import PeriodicWave as PeriodicWave
+from OpenGLContext.scenegraph.x3dsound import Sound as Sound
+from OpenGLContext.scenegraph.x3dsound import SpatialSound as SpatialSound
+from OpenGLContext.scenegraph.x3dsound import StreamAudioDestination as StreamAudioDestination
+from OpenGLContext.scenegraph.x3dsound import StreamAudioSource as StreamAudioSource
+from OpenGLContext.scenegraph.x3dsound import WaveShaper as WaveShaper
 from OpenGLContext.scenegraph.zone import Zone as Zone
 from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
 from OpenGLContext.scenegraph.zone import ZoneEnvironment as ZoneEnvironment
@@ -233,7 +253,6 @@ from OpenGLContext.scenegraph.zone import ZoneReverb as ZoneReverb
 from OpenGLContext.scenegraph.zone import ZoneVisibility as ZoneVisibility
 from vrml.route import IS as IS
 from vrml.route import ROUTE as ROUTE
-from vrml.vrml97.basenodes import AudioClip as AudioClip
 from vrml.vrml97.basenodes import Color as Color
 from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
@@ -299,26 +318,33 @@ from vrml.x3d.sensors import TransformSensor as TransformSensor
 from vrml.x3d.sensors import VisibilitySensor as VisibilitySensor
 
 __all__ = [
+    'Analyser',
     'Anchor',
     'Appearance',
     'Arc2D',
     'ArcClose2D',
     'AudioClip',
+    'AudioDestination',
     'AudioEmitter',
     'AudioSource',
     'Background',
     'BallJoint',
     'Billboard',
+    'BiquadFilter',
     'BooleanFilter',
     'BooleanSequencer',
     'BooleanToggle',
     'BooleanTrigger',
     'BoundedPhysicsModel',
     'Box',
+    'BufferAudioSource',
     'CADAssembly',
     'CADFace',
     'CADLayer',
     'CADPart',
+    'ChannelMerger',
+    'ChannelSelector',
+    'ChannelSplitter',
     'Circle2D',
     'ClipPlane',
     'CollidableOffset',
@@ -340,6 +366,7 @@ __all__ = [
     'Contact',
     'Contour2D',
     'ContourPolyline2D',
+    'Convolver',
     'Coordinate',
     'CoordinateChaser',
     'CoordinateDamper',
@@ -349,9 +376,11 @@ __all__ = [
     'CubeBackground',
     'Cylinder',
     'CylinderSensor',
+    'Delay',
     'DirectionalLight',
     'Disk2D',
     'DoubleAxisHingeJoint',
+    'DynamicsCompressor',
     'EaseInEaseOut',
     'ElevationGrid',
     'EnvironmentLight',
@@ -380,6 +409,7 @@ __all__ = [
     'GLSLImport',
     'GLSLObject',
     'GLSLShader',
+    'Gain',
     'Gear',
     'GeneratedCubeMapTexture',
     'GeoCoordinate',
@@ -427,6 +457,7 @@ __all__ = [
     'LinePickSensor',
     'LineProperties',
     'LineSet',
+    'ListenerPointSource',
     'LoadSensor',
     'LocalFog',
     'MMImageTexture',
@@ -439,6 +470,7 @@ __all__ = [
     'MetadataInteger',
     'MetadataSet',
     'MetadataString',
+    'MicrophoneSource',
     'MotorJoint',
     'MouseOver',
     'MovieTexture',
@@ -466,9 +498,11 @@ __all__ = [
     'OrientationDamper',
     'OrientationInterpolator',
     'OrthoViewpoint',
+    'OscillatorSource',
     'PackagedShader',
     'ParticleEmitter',
     'ParticleSystem',
+    'PeriodicWave',
     'PhysicalMaterial',
     'PickableGroup',
     'PixelTexture',
@@ -517,6 +551,7 @@ __all__ = [
     'SingleAxisHingeJoint',
     'SliderJoint',
     'Sound',
+    'SpatialSound',
     'Sphere',
     'SphereBackground',
     'SphereSensor',
@@ -526,6 +561,8 @@ __all__ = [
     'SpotLight',
     'SquadOrientationInterpolator',
     'StaticGroup',
+    'StreamAudioDestination',
+    'StreamAudioSource',
     'StringSensor',
     'SurfaceEmitter',
     'Switch',
@@ -564,6 +601,7 @@ __all__ = [
     'VisibilitySensor',
     'VolumeEmitter',
     'VolumePickSensor',
+    'WaveShaper',
     'WindPhysicsModel',
     'WorldInfo',
     'X3DScene',

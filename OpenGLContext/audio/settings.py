@@ -54,6 +54,11 @@ class AudioSettings(node.Node):
     #: important is dropped, so this is a quality setting as much as a budget:
     #: a busy scene on a small pool loses its quietest sounds first.
     voices = field.newField('voices', 'SFInt32', 1, 32)
+    #: Whether a scene may open an audio input: X3D's MicrophoneSource and
+    #: StreamAudioSource. Off, they are silent and no input is opened.
+    microphone = field.newField(
+        'microphone', 'SFBool', 1,
+        lambda: renderoptions.env_flag('OPENGLCONTEXT_AUDIO_MICROPHONE', False))
 
     #: How a generated settings page presents these; see
     #: :mod:`OpenGLContext.ui.generate`.
@@ -63,10 +68,11 @@ class AudioSettings(node.Node):
                    'step': 0.05},
         'voices': {'label': 'Simultaneous sounds', 'minimum': 4,
                    'maximum': 128, 'step': 4},
+        'microphone': {'label': 'Scenes may use the microphone'},
     }
 
     #: The order a settings page shows them in.
-    FIELDS = ('enabled', 'volume', 'voices')
+    FIELDS = ('enabled', 'volume', 'voices', 'microphone')
 
 
 def settings_for(context: Any) -> AudioSettings:

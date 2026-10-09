@@ -8,14 +8,16 @@ import numpy as np
 import pytest
 
 from omi_audio import synth, AudioEngine
-from omi_audio.device import NullDevice
+from omi_audio.device import NullCapture, NullDevice
 from vrml.vrml97 import basenodes
 
 from OpenGLContext.audio import scene as audioscene
+from OpenGLContext.audio import x3dgraph
 from OpenGLContext.audio.settings import AudioSettings, settings_for
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import viewplatform
 from OpenGLContext.scenegraph import audio as audionodes
+from OpenGLContext.scenegraph import x3dsound
 from OpenGLContext.physics.zones import scene_zones
 from OpenGLContext.scenegraph.transform import Transform
 from OpenGLContext.scenegraph.zone import Zone, ZoneAudio, ZoneReverb
@@ -210,6 +212,13 @@ class TestDefinitionSubNode:
         monkeypatch.setenv('OPENGLCONTEXT_AUDIO_VOLUME', '0.3')
         assert AudioSettings().volume == pytest.approx(0.3)
 
+    def test_audio_capture_is_off_by_default(self):
+        assert not ContextDefinition().audio.microphone
+
+    def test_the_environment_can_allow_audio_capture(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_AUDIO_MICROPHONE', '1')
+        assert AudioSettings().microphone
+
     def test_every_field_is_offered_by_a_settings_screen(self):
         for name in AudioSettings.FIELDS:
             assert name in AudioSettings.UI_HINTS, name
@@ -229,6 +238,78 @@ class TestDefinitionSubNode:
             assert len(audioscene.engine_for(context).mixer.voices) == 6
         finally:
             audioscene.close(context)
+
+
+class TestX3DSound:
+    """X3D's sound nodes on a frame's paths are played through the engine's graph."""
+
+    def destination(self):
+        return x3dsound.AudioDestination(children=[x3dsound.OscillatorSource()])
+
+    def test_x3d_sound_nodes_go_to_the_graph(self, context):
+        destination = self.destination()
+        assert audioscene.update(context, [FakePath(destination)], now=1.0) == 2
+        graph = audioscene.sound_graph(context)
+        assert graph.heard == (destination,)
+
+    def test_voices_and_the_graph_are_driven_together(self, context):
+        audioscene.engine_for(context).clips.put('beep', synth.tone(440.0, 5.0))
+        audioscene.update(context, [FakePath(emitter()), FakePath(self.destination())],
+                          now=1.0)
+        engine = audioscene.existing_engine(context)
+        assert engine.active_voices == 1
+        assert audioscene.sound_graph(context).heard
+
+    def test_a_frame_with_no_sounds_hears_none_of_the_graph(self, context):
+        audioscene.update(context, [FakePath(self.destination())], now=1.0)
+        audioscene.update(context, [], now=1.1)
+        assert audioscene.sound_graph(context).heard == ()
+
+    def test_stopping_the_scene_hears_none_of_the_graph(self, context):
+        paths = [FakePath(self.destination())]
+        audioscene.update(context, paths, now=1.0)
+        audioscene.stop(context, paths)
+        assert audioscene.sound_graph(context).heard == ()
+
+    def test_a_context_with_no_x3d_sound_has_no_graph(self, context):
+        audioscene.update(context, [FakePath(emitter())], now=1.0)
+        assert audioscene.sound_graph(context) is None
+
+    def test_the_voice_budget_is_the_graphs(self, monkeypatch):
+        context = FakeContext(voices=1)
+        quiet = x3dsound.SpatialSound(children=[x3dsound.OscillatorSource()])
+        loud = x3dsound.SpatialSound(children=[x3dsound.OscillatorSource()], priority=1.0)
+        try:
+            audioscene.update(context, [FakePath(quiet), FakePath(loud)], now=1.0)
+            graph = audioscene.sound_graph(context)
+            assert graph.audioNode(quiet).gains == (0.0, 0.0)
+            assert graph.audioNode(loud).gains != (0.0, 0.0)
+        finally:
+            audioscene.close(context)
+
+    def test_capture_follows_the_setting(self, monkeypatch):
+        opened = []
+
+        def opening(rate, device='', ring=None):
+            opened.append(device)
+            return NullCapture(sample_rate=rate, ring=ring)
+
+        monkeypatch.setattr(x3dgraph, 'open_capture', opening)
+        microphone = x3dsound.AudioDestination(children=[x3dsound.MicrophoneSource()])
+        for allowed in (False, True):
+            context = FakeContext(microphone=allowed)
+            try:
+                audioscene.update(context, [FakePath(microphone)], now=1.0)
+            finally:
+                audioscene.close(context)
+        assert opened == ['']
+
+    def test_closing_the_context_closes_its_graph(self, context):
+        audioscene.update(context, [FakePath(self.destination())], now=1.0)
+        graph = audioscene.sound_graph(context)
+        audioscene.close(context)
+        assert graph.heard == ()
+        assert audioscene.sound_graph(context) is None
 
 
 class TestVolumeOwnership:
