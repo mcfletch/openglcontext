@@ -22,14 +22,21 @@ How the specification's open points are read:
   full system holds about ``maxParticles``; an `ExplosionEmitter` makes all
   ``maxParticles`` at once when the system starts creating, and again each
   time creation is switched back on.
-- ``colorKey`` and ``texCoordKey`` are a particle's age in seconds. Colours are
-  interpolated between keys and texture-coordinate frames are stepped.
-- A force on a particle of no mass is taken as an acceleration, so the default
-  `ForcePhysicsModel` is the Earth's gravity whatever the emitter's mass.
-- Particles drawn as sprites, quads, triangles, lines or points are unlit: the
-  colour ramp where there is one, the material's colour otherwise (its
-  emissive colour where it has one, its diffuse colour where not), times the
-  texture. A ``GEOMETRY`` system is lit as any shape is.
+- ``colorKey`` and ``texCoordKey`` are a particle's age in seconds, as 40.4.5
+  says. Colours are interpolated between keys and texture-coordinate frames
+  are stepped.
+- A particle of no mass takes no force: the `ForcePhysicsModel` has no effect
+  (40.4.4), nor, as X_ITE has it, the `WindPhysicsModel`.
+- Under X3D's lighting, sprites, quads and triangles with a `Material` are
+  lit by the Phong equation, as X_ITE lights them: the colour ramp, or the
+  material's diffuse colour, times the texture is the diffuse colour, a quad's
+  normal is the system's +z and a sprite's faces the viewer. Lines and points,
+  and the rest under the engine's lighting, are unlit: the colour ramp where
+  there is one, the material's colour otherwise (its emissive colour where it
+  has one, its diffuse colour where not), times the texture. A ``GEOMETRY``
+  system is lit as any shape is.
+- The appearance's texture transform (the first of a `MultiTextureTransform`)
+  moves the texture coordinates, and `LineProperties` sets a line's width.
 - `VolumeEmitter`'s ``internal`` of FALSE starts particles on the volume's
   boundary rather than inside it.
 """
@@ -404,9 +411,18 @@ class ParticleSystem(Ticked, Shape, x3d.ParticleSystem, GLLayer):
         return self.emitter or _still()
 
     def models(self) -> list[ParticleModel]:
-        """The simulation models of the enabled `physics` nodes, in order"""
+        """The simulation models of the enabled `physics` nodes, in order
+
+        Where the emitter's particles have no mass, the force and wind models
+        are left out: a force moves nothing of no mass (40.4.4).
+        """
         emitter = self.currentEmitter()
-        return models_of(self.physics, mass=float(getattr(emitter, 'mass', 0.0)),
+        mass = float(getattr(emitter, 'mass', 0.0))
+        physics = self.physics
+        if mass <= 0.0:
+            physics = [model for model in physics
+                       if not isinstance(model, (x3d.ForcePhysicsModel, x3d.WindPhysicsModel))]
+        return models_of(physics, mass=mass,
                          surfaceArea=float(getattr(emitter, 'surfaceArea', 0.0)))
 
     def advance(self, now: float) -> bool:
@@ -505,21 +521,45 @@ class ParticleSystem(Ticked, Shape, x3d.ParticleSystem, GLLayer):
         from OpenGLContext.passes.shaderpass import appearance_solid_color
         appearance = self.appearance
         colour = appearance_solid_color(appearance)
+        shape = SHAPE_OF.get(self.geometryType, 'quad')
+        lit = self._litMaterial(shape)
+        if lit is not None:
+            colour = (float(lit.diffuseColor[0]), float(lit.diffuseColor[1]),
+                      float(lit.diffuseColor[2]), colour[3])
         ramp = self.colorRampAt()
         start = (1.0, 1.0, 1.0, colour[3]) if ramp else colour
         texture, textureAlpha = _texture(appearance, mode)
         frames = self.frameRampAt()
         point = drawproperties.point_size(getattr(appearance, 'pointProperties', None)
                                           if appearance else None)
+        line = drawproperties.line_style(getattr(appearance, 'lineProperties', None)
+                                         if appearance else None)
         blended = colour[3] < 1.0 or ramp.translucent or textureAlpha
         return ParticleLook(
-            shape=SHAPE_OF.get(self.geometryType, 'quad'),
+            shape=shape,
             size=(float(self.particleSize[0]), float(self.particleSize[1])),
             start_color=start, end_color=start, texture=texture, round=False,
             frames=frames.frames if frames else None,
             blending='alpha' if blended else 'opaque',
             point_size=(point.scale, point.minimum, point.maximum),
-            point_attenuation=point.attenuation)
+            point_attenuation=point.attenuation, line_width=float(line.width),
+            texture_matrix=_texture_matrix(appearance),
+            lit=lit is not None,
+            material=_phong_terms(lit) if lit is not None else ParticleLook.material)
+
+    def _litMaterial(self, shape: str) -> Any:
+        """The `Material` that lights the particles, or None where they are unlit
+
+        Sprites and quads with a Material, under X3D's lighting.
+        """
+        from OpenGLContext import lighting  # noqa: PLC0415 the lighting module imports nodes
+        if shape not in ('sprite', 'quad') or not lighting.x3d_lit(self):
+            return None
+        material = getattr(self.appearance, 'material', None) if self.appearance else None
+        if material is None or not hasattr(material, 'diffuseColor') \
+                or not hasattr(material, 'shininess'):
+            return None
+        return material
 
     # ------------------------------------------------------------------
     # Drawing
@@ -659,6 +699,23 @@ def _radius(geometry: Any, mode: Any) -> float:
     if not len(points):
         return 0.0
     return float(np.linalg.norm(points[:, :3], axis=1).max())
+
+
+def _texture_matrix(appearance: Any) -> tuple[float, ...]:
+    """The rows for s and t of the appearance's texture transform, the first
+    of a MultiTextureTransform"""
+    from OpenGLContext.scenegraph.texturemapping import transform_matrix  # noqa: PLC0415 imports materials
+    transform = getattr(appearance, 'textureTransform', None) if appearance else None
+    if isinstance(transform, x3d.MultiTextureTransform):
+        transform = transform.textureTransform[0] if transform.textureTransform else None
+    return tuple(float(value) for value in transform_matrix(transform or None).ravel())
+
+
+def _phong_terms(material: Any) -> tuple[float, ...]:
+    """A Material's emissive colour, specular colour, ambient intensity and shininess"""
+    return (tuple(float(value) for value in material.emissiveColor)[:3]
+            + tuple(float(value) for value in material.specularColor)[:3]
+            + (float(material.ambientIntensity), float(material.shininess)))
 
 
 def _texture(appearance: Any, mode: Any) -> tuple[int, bool]:

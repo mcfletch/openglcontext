@@ -16,7 +16,7 @@ toward the front.
   different sizes are resampled to the largest; the cube is made once all
   six have images.
 - ``ImageCubeMapTexture``: the first of its ``url`` entries that reads as a
-  cube map: a DDS or KTX cube map, or one picture of the six faces as a
+  cube map: a DDS, KTX 1.1 or KTX 2 cube map, or one picture of the six faces as a
   cross, a strip or 3x2 (:mod:`OpenGLContext.loaders.textureimages`).
 - ``GeneratedCubeMapTexture``: the scene drawn from the shape wearing it
   (:mod:`OpenGLContext.passes.generatedtextures`).

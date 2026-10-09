@@ -72,14 +72,15 @@
     </Transform>
 
     <!-- The fountain: a ConeEmitter throwing streaks of water up, pulled back
-         down by the default ForcePhysicsModel, the Earth's gravity. -->
+         down by the default ForcePhysicsModel, the Earth's gravity, which
+         moves only particles with a mass. -->
     <ProtoInstance name="Plinth"><fieldValue name="translation" value="-4.5 0 0"/></ProtoInstance>
     <Transform translation="-4.5 0.6 0">
       <ParticleSystem DEF="Fountain" geometryType="LINE" maxParticles="400"
                       particleLifetime="1.1" lifetimeVariation="0.1" particleSize="0.02 0.25">
         <Appearance><Material emissiveColor="0.5 0.75 1"/></Appearance>
         <ConeEmitter containerField="emitter" direction="0 1 0" angle="0.25" speed="5.5"
-                     variation="0.15"/>
+                     variation="0.15" mass="1"/>
         <ForcePhysicsModel containerField="physics"/>
       </ParticleSystem>
     </Transform>
@@ -139,7 +140,7 @@
                       particleLifetime="1.2" lifetimeVariation="0.25" particleSize="0.18 0.18"
                       texCoordKey="0 0.6">
         <Appearance>
-          <Material emissiveColor="1 0.85 0.5"/>
+          <Material diffuseColor="0 0 0" emissiveColor="1 0.85 0.5"/>
           <ImageTexture url='"particle_sheet.png"'/>
         </Appearance>
         <SurfaceEmitter containerField="emitter" speed="0.8" variation="0.3">

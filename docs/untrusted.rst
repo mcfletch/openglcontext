@@ -193,6 +193,21 @@ Rules for each loader
        prototypes it is; with none, it is the file's first ``PROTO``. A URL
        the resolver refuses is logged and the next one tried; the
        prototype's instances are then empty.
+   * - :doc:`X3D <x3d>` and VRML97 ``Anchor``
+     - A url the document's Anchor follows is resolved through a ``Resolver``
+       built from the document's own location
+       (``scenegraph.anchor.anchor_targets``). A world it may reach is loaded
+       in place of the scene; a page, a url the resolver refuses, and any url
+       with a ``target=`` parameter other than ``_self`` go to
+       ``Context.OnAnchorElsewhere``, which opens nothing. An application that
+       opens web pages overrides it and decides which of the document's urls
+       it trusts.
+   * - :ref:`MovieTexture <x3d-movies>` ``url``
+     - Each entry is resolved by ``Loader.local_copy`` under the document's
+       ``Resolver``: a file in the document's directory is read in place, a
+       sample at a time, and a same-origin http(s) entry is downloaded into
+       the asset cache, size-capped as any reference is. A refused entry is
+       logged and the next one tried.
    * - Wavefront OBJ (``loaders/obj.py``)
      - ``mtllib`` and texture references go through the same ``Loader``, so they
        are restricted to the model's directory.

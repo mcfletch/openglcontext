@@ -221,9 +221,52 @@ def test_a_documents_geo_touch_sensor_sends_the_hit_in_its_geo_system(gl_context
         context.OnDraw(force=1)
         synthetic.dispatch(context, {'type': 'mousemove', 'buttons': [], 'x': 32, 'y': 32,
                                      'pick': True})
-        for _ in range(3):
+        # A pick is read back once its fence signals: a frame or two after
+        # it is drawn on an idle machine, more on a busy one.
+        touch = scene.getDEF('T')
+        for _ in range(120):
             context.OnDraw(force=1)
-    touch = scene.getDEF('T')
+            if 'hitPoint_changed' in touch.__dict__:
+                break
     expected = geospatial.geo_coordinates(touch, touch.hitPoint_changed)[0]
     assert tuple(touch.hitGeoCoord_changed) == pytest.approx(tuple(expected))
     assert tuple(touch.hitPoint_changed)[2] == pytest.approx(1.5, abs=0.05)
+
+
+def turned_scene():
+    """A Box turned a quarter about y below a TouchSensor's group: its -x face looks at the camera"""
+    touch = x3dpointing.TouchSensor()
+    shape = Shape(geometry=Box())
+    inner = Transform(rotation=(0, 1, 0, np.pi / 2), children=[shape])
+    outer = Group(children=[inner, touch])
+    graph = sceneGraph(children=[outer])
+    path = nodepath.NodePath([]) + graph + outer + inner + shape
+    return path, touch
+
+
+def test_a_touch_sends_the_surface_normal_in_the_sensors_coordinates():
+    path, touch = turned_scene()
+    sensing = x3dpointing.PointerSensing()
+    sensing.observe(Event('mousemove', path, x=55, y=52, depth=depth_at(9.0)))
+    assert tuple(touch.hitNormal_changed) == pytest.approx((0, 0, 1), abs=1e-5)
+
+
+def test_a_touch_sends_the_first_texture_coordinate_at_the_hit():
+    path, touch = turned_scene()
+    sensing = x3dpointing.PointerSensing()
+    sensing.observe(Event('mousemove', path, x=55, y=52, depth=depth_at(9.0)))
+    x, y, _z = x3dpointing.unprojected(Camera(), 55, 52, depth_at(9.0))
+    # The Box's -x face: s runs along +z (world x here), t along +y
+    assert tuple(touch.hitTexCoord_changed) == pytest.approx(((x + 1) / 2, (y + 1) / 2), abs=1e-4)
+
+
+def test_a_touch_on_geometry_without_triangles_points_its_normal_along_z():
+    from OpenGLContext.scenegraph.basenodes import IndexedLineSet  # noqa: PLC0415 kept with its use
+    touch = x3dpointing.TouchSensor()
+    shape = Shape(geometry=IndexedLineSet())
+    inner = Transform(rotation=(0, 1, 0, np.pi / 2), children=[shape])
+    group = Group(children=[inner, touch])
+    path = nodepath.NodePath([]) + sceneGraph(children=[group]) + group + inner + shape
+    x3dpointing.PointerSensing().observe(Event('mousemove', path, depth=depth_at(9.0)))
+    assert tuple(touch.hitNormal_changed) == pytest.approx((1, 0, 0), abs=1e-5)
+    assert tuple(touch.hitTexCoord_changed) == pytest.approx((0, 0))

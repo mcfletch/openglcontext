@@ -15,6 +15,10 @@ in vec2 vUV;
 out vec4 fragColor;
 
 uniform samplerCube envMap;
+// The environment read turned and scaled: an EnvironmentLight's rotation and
+// colour times intensity; the identity and 1 for the engine's own.
+uniform mat3 envTurn;
+uniform vec3 envScale;
 uniform int faceIndex;
 uniform float roughness;
 uniform float envResolution;   // face size of envMap (for mip selection)
@@ -46,7 +50,7 @@ void main() {
             // (even +Inf in the .hdr), which overflows this accumulation to NaN --
             // rendering everything lit by the probe (reflections, transmission) black.
             // A finite ceiling keeps the range while killing the firefly/Inf.
-            vec3 rad = min(textureLod(envMap, L, mip).rgb, vec3(IBL_RADIANCE_CLAMP));
+            vec3 rad = min(textureLod(envMap, envTurn * L, mip).rgb * envScale, vec3(IBL_RADIANCE_CLAMP));
             prefiltered += rad * NdotL;
             totalWeight += NdotL;
         }

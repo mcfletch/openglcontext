@@ -48,8 +48,9 @@ from OpenGL.GL import (
     glActiveTexture, glBindBuffer, glBindTexture, glBindVertexArray, glBlendFunc,
     glBufferData, glDepthMask, glDisable, glDrawArraysInstanced, glEnable,
     glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays, glGetUniformLocation,
-    glUniform1f, glUniform1i, glUniform2f, glUniform2fv, glUniform3f, glUniform4f,
-    glUniformMatrix4fv, glUseProgram, glVertexAttribDivisor, glVertexAttribPointer,
+    glUniform1f, glUniform1i, glUniform2f, glUniform2fv, glUniform3f, glUniform3fv,
+    glUniform4f, glUniform4fv, glUniformMatrix3fv, glUniformMatrix4fv, glUseProgram,
+    glVertexAttribDivisor, glVertexAttribPointer,
 )
 from vrml import field, node
 from vrml.vrml97 import nodetypes
@@ -112,10 +113,14 @@ _DRAWS: dict[int, tuple[int, int, int]] = {
     0: (GL_TRIANGLE_STRIP, 0, 4), 1: (GL_TRIANGLE_STRIP, 0, 4),
     2: (GL_LINES, 4, 2), 3: (GL_POINTS, 6, 1),
 }
+#: A line wider than a pixel: the quad's corners, as a strip across it.
+_WIDE_LINE = (GL_TRIANGLE_STRIP, 0, 4)
 
 _UNIFORMS = ('uModelView', 'uProjection', 'uShape', 'uSize', 'uSizeRange',
              'uStartColor', 'uEndColor', 'uFrameCount', 'uFrames', 'uPointSize',
-             'uPointAttenuation', 'uTexture', 'uHasTexture', 'uRound', 'uCutoff')
+             'uPointAttenuation', 'uTexture', 'uHasTexture', 'uRound', 'uCutoff',
+             'uLineWidth', 'uViewport', 'uNormalMatrix', 'uTexRows', 'uLit', 'uEmissive',
+             'uSpecular', 'uAmbientIntensity', 'uShininess', 'clipPlaneCount', 'clipPlanes')
 
 Color4 = tuple[float, float, float, float]
 
@@ -133,7 +138,12 @@ class ParticleLook:
     coordinates per frame, at most :data:`MAX_FRAMES` frames. ``blending`` is
     a key of :data:`BLEND_MODES`. A point is ``point_size`` pixels (scale,
     least and most) divided by ``point_attenuation`` (constant, linear and
-    quadratic in the distance from the eye).
+    quadratic in the distance from the eye), and a line ``line_width``
+    pixels across. ``texture_matrix`` is the rows for s and t of a 2x3
+    transform of the texture coordinates. A ``lit`` sprite or quad is shaded
+    by X3D's Phong equation with its colour as the diffuse colour and
+    ``material``'s emissive colour, specular colour, ambient intensity and
+    shininess, a sprite facing the viewer and a quad along its +z.
     """
 
     shape: str = 'sprite'
@@ -147,6 +157,10 @@ class ParticleLook:
     blending: str = 'additive'
     point_size: tuple[float, float, float] = (1.0, 1.0, 1.0)
     point_attenuation: tuple[float, float, float] = (1.0, 0.0, 0.0)
+    line_width: float = 1.0
+    texture_matrix: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+    lit: bool = False
+    material: tuple[float, ...] = (0.0,) * 8
 
     @property
     def opaque(self) -> bool:
@@ -188,9 +202,11 @@ class ParticleRenderer:
     """
 
     def __init__(self) -> None:
+        from OpenGLContext.passes.volumepass import light_locations  # noqa: PLC0415 GL module
         self.program = load_program('particle.vert', 'particle.frag')
         self.uniforms = {name: int(glGetUniformLocation(self.program, name))
                          for name in _UNIFORMS}
+        self.lights = light_locations(self.program)
         self.vao = int(glGenVertexArrays(1))
         glBindVertexArray(self.vao)
         self.corners = int(glGenBuffers(1))
@@ -240,6 +256,13 @@ class ParticleRenderer:
             glUniform2fv(uniforms['uFrames'], len(corners), corners)
         glUniform3f(uniforms['uPointSize'], *look.point_size)
         glUniform3f(uniforms['uPointAttenuation'], *look.point_attenuation)
+        wide = shape == 2 and look.line_width > 1.0
+        glUniform1f(uniforms['uLineWidth'], float(look.line_width))
+        viewport = getattr(mode, 'viewport', None) or (0, 0, 1, 1)
+        glUniform2f(uniforms['uViewport'], float(max(viewport[2], 1)), float(max(viewport[3], 1)))
+        glUniform3fv(uniforms['uTexRows'], 2, np.asarray(look.texture_matrix, np.float32))
+        self._light(look, mode, modelview)
+        self._clip(mode)
         glUniform1i(uniforms['uRound'], 1 if look.round else 0)
         glUniform1i(uniforms['uHasTexture'], 1 if look.texture else 0)
         if look.texture:
@@ -262,7 +285,7 @@ class ParticleRenderer:
         # Only the cull disable is ours, so it goes through the pass's cull memo
         # (a particle quad is seen from both sides) rather than a glGet snapshot.
         set_cull_state(mode, False, GL_CCW)
-        primitive, first, vertices = _DRAWS[shape]
+        primitive, first, vertices = _WIDE_LINE if wide else _DRAWS[shape]
         if shape == 3:
             glEnable(GL_PROGRAM_POINT_SIZE)
         try:
@@ -273,6 +296,54 @@ class ParticleRenderer:
             _restore_phase(mode)
             glBindVertexArray(0)
             glUseProgram(previous)
+
+
+    def _light(self, look: ParticleLook, mode: Any, modelview: Any) -> None:
+        """The frame's lights and the material, for a lit look"""
+        from OpenGLContext.passes.shaderpass import normal_matrix  # noqa: PLC0415 GL module
+        from OpenGLContext.passes.volumepass import upload_frame_lights  # noqa: PLC0415 GL module
+        uniforms = self.uniforms
+        glUniform1i(uniforms['uLit'], 1 if look.lit else 0)
+        if not look.lit:
+            return
+        glUniformMatrix3fv(uniforms['uNormalMatrix'], 1, GL_FALSE, np.ascontiguousarray(
+            normal_matrix(np.asarray(modelview, np.float64))[:3, :3], np.float32))
+        emissive, specular = look.material[:3], look.material[3:6]
+        glUniform3f(uniforms['uEmissive'], *emissive)
+        glUniform3f(uniforms['uSpecular'], *specular)
+        glUniform1f(uniforms['uAmbientIntensity'], float(look.material[6]))
+        glUniform1f(uniforms['uShininess'], float(look.material[7]))
+        upload_frame_lights(self.lights, mode)
+
+    def _clip(self, mode: Any) -> None:
+        """The clip planes reaching the system, in eye space (X3D's ClipPlane)"""
+        uniforms = self.uniforms
+        planes = clip_planes_in_eye(mode)
+        glUniform1i(uniforms['clipPlaneCount'], len(planes))
+        if len(planes):
+            padded = np.zeros((8, 4), np.float32)
+            padded[:len(planes)] = planes
+            glUniform4fv(uniforms['clipPlanes'], 8, padded)
+        shader = getattr(mode, 'shader_program', None)
+        enable = getattr(shader, 'enable_clip_distances', None)
+        if enable is not None:
+            enable(len(planes))
+
+
+def clip_planes_in_eye(mode: Any) -> np.ndarray:
+    """The clip planes reaching the node `mode` draws now, in eye space; (n, 4)
+
+    The pass's ``clipPlanes`` reaching its ``renderPath``, placed by the
+    inverse of the view the pass draws through (``shaderViewMatrix``). None
+    where the pass has no planes.
+    """
+    found = getattr(mode, 'clipPlanes', None)
+    path = getattr(mode, 'renderPath', None)
+    view = getattr(mode, 'shaderViewMatrix', None)
+    if not found or path is None or view is None:
+        return np.zeros((0, 4), np.float32)
+    planes: np.ndarray = found.object_planes(path, np.linalg.inv(np.asarray(view, np.float64)))
+    return planes
 
 
 def _restore_phase(mode: Any) -> None:

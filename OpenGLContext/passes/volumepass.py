@@ -28,7 +28,8 @@ from OpenGLContext.passes.disposal import PassResources, let_go
 from OpenGLContext.scenegraph.vertexsemantics import LOC_POSITION
 
 __all__ = ['MAX_STEPS', 'box_corners', 'box_size', 'OpaqueDepth', 'OpaqueDepths', 'VolumePassMixin', 'VolumePrograms',
-           'draw']
+           'draw', 'LIGHT_UNIFORMS', 'LightUniforms', 'frame_lights', 'light_locations',
+           'upload_frame_lights']
 
 log = logging.getLogger(__name__)
 
@@ -145,9 +146,19 @@ _COMMON = ('uModelView', 'uProjection', 'uInverseModelView', 'uInverseProjection
            'uDimensions', 'uVoxels', 'uViewport', 'uHasSceneDepth', 'uStep', 'uMaxSteps',
            'hdrOutput', 'objectId', 'uPickPass', 'fogMode', 'fogDensity', 'fogColor', 'numLights',
            'lightsOff')
-_LIGHT = ('lightType', 'lightColor', 'lightPosition', 'lightDirection', 'lightAttenuation',
-          'lightAttenuationFloor', 'lightRange', 'lightRadius', 'lightBeamWidth',
-          'lightCutOffAngle', 'lightIntensity', 'lightAmbientIntensity')
+#: The per-light uniform arrays of ``_lights_inc.glsl``.
+LIGHT_UNIFORMS = ('lightType', 'lightColor', 'lightPosition', 'lightDirection',
+                  'lightAttenuation', 'lightAttenuationFloor', 'lightRange', 'lightRadius',
+                  'lightBeamWidth', 'lightCutOffAngle', 'lightIntensity',
+                  'lightAmbientIntensity')
+
+
+def light_locations(program: int) -> dict[str, int]:
+    """The locations of `program`'s ``_lights_inc.glsl`` uniforms, each slot's
+    by name, and ``numLights``, ``lightsOff`` and ``sceneAmbient``"""
+    names = ['%s[%d]' % (light, slot) for light in LIGHT_UNIFORMS for slot in range(MAX_LIGHTS)]
+    names += ['numLights', 'lightsOff', 'sceneAmbient']
+    return {uniform: int(GL.glGetUniformLocation(program, uniform)) for uniform in names}
 
 
 def _source(plan: Any) -> tuple[str, str]:
@@ -194,7 +205,8 @@ class VolumePrograms:
                       err.args[0] if getattr(err, 'args', None) else err)
         else:
             names = list(_COMMON) + list(plan.uniforms)
-            names += ['%s[%d]' % (light, slot) for light in _LIGHT for slot in range(MAX_LIGHTS)]
+            names += ['%s[%d]' % (light, slot) for light in LIGHT_UNIFORMS
+                      for slot in range(MAX_LIGHTS)]
             names += ['uVolume', 'uSceneDepth'] + [slot.name for slot in plan.textures]
             locations = {uniform: int(GL.glGetUniformLocation(name, uniform))
                          for uniform in names}
@@ -292,9 +304,9 @@ class VolumePassMixin(PassResources):
 
 # -- drawing ---------------------------------------------------------------------
 
-class _Lamps:
+class LightUniforms:
     """Uploads :func:`~OpenGLContext.passes.shaderpass.configure_light_from_node`'s
-    lights to a volume program's light uniforms"""
+    lights to a program's ``_lights_inc.glsl`` uniforms, by their locations"""
 
     def __init__(self, locations: dict[str, int]) -> None:
         self.locations = locations
@@ -324,6 +336,24 @@ class _Lamps:
                             ('lightIntensity', intensity),
                             ('lightAmbientIntensity', ambient_intensity)):
             GL.glUniform1f(at['%s[%d]' % (name, index)], float(value))
+
+
+def upload_frame_lights(locations: dict[str, int], mode: Any) -> None:
+    """Give the bound program at `locations` (:func:`light_locations`) the
+    frame's lights, the headlight after them, and the pass's per-draw
+    ``lightsOff`` mask"""
+    from OpenGLContext.passes.shaderpass import configure_light_from_node  # noqa: PLC0415 GL module
+    lamps = LightUniforms(locations)
+    lights, headlight = frame_lights(mode)
+    for slot, (light, matrix) in enumerate(lights[:MAX_LIGHTS]):
+        configure_light_from_node(cast(Any, lamps), slot, light, matrix)
+    count = min(len(lights), MAX_LIGHTS)
+    if headlight and count < MAX_LIGHTS:
+        lamps.set_light(count, 'directional', direction=(0.0, 0.0, -1.0))
+        count += 1
+    GL.glUniform1i(locations['numLights'], count)
+    shader = getattr(mode, 'shader_program', None)
+    GL.glUniform1i(locations['lightsOff'], int(getattr(shader, '_lights_off', 0) or 0))
 
 
 def frame_lights(mode: Any) -> tuple[list[tuple[Any, Any]], bool]:
@@ -414,7 +444,6 @@ def draw(mode: Any, plan: Any, voxels: Any, dimensions: Sequence[float],
     Restores the pass's program, blending, depth test and face culling.
     """
     from OpenGLContext.passes.instancing import set_cull_state  # noqa: PLC0415 GL module
-    from OpenGLContext.passes.shaderpass import configure_light_from_node  # noqa: PLC0415 GL module
     programs = mode.volumePrograms()
     found = programs.program(plan)
     if found is None:
@@ -452,16 +481,7 @@ def draw(mode: Any, plan: Any, voxels: Any, dimensions: Sequence[float],
         GL.glUniform1f(at['fogDensity'], float(density))
         GL.glUniform3f(at['fogColor'], *(float(value) for value in tuple(colour)[:3]))
         if plan.lights:
-            lamps = _Lamps(at)
-            lights, headlight = frame_lights(mode)
-            for slot, (light, matrix) in enumerate(lights[:MAX_LIGHTS]):
-                configure_light_from_node(cast(Any, lamps), slot, light, matrix)
-            count = min(len(lights), MAX_LIGHTS)
-            if headlight and count < MAX_LIGHTS:
-                lamps.set_light(count, 'directional', direction=(0.0, 0.0, -1.0))
-                count += 1
-            GL.glUniform1i(at['numLights'], count)
-            GL.glUniform1i(at['lightsOff'], int(getattr(shader, '_lights_off', 0) or 0))
+            upload_frame_lights(at, mode)
         for name, value in plan.values().items():
             kind, length = plan.uniforms[name]
             _upload(at.get(name, -1), kind, length, value)

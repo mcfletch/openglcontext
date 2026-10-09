@@ -15,8 +15,18 @@ lights a white surface fully), read as its spherical-harmonic fit. The
 irradiance is the ``diffuseCoefficients`` where there are nine of them, else
 the diffuse cube map's, else the specular cube map convolved. Without a
 specular cube map the one specular level is the irradiance, so smooth
-surfaces reflect a blurred environment. A ``GeneratedCubeMapTexture`` is not
-read here, nor are ``origin`` and ``global``. All multiply by ``color``.
+surfaces reflect a blurred environment. All multiply by ``color``.
+
+A ``GeneratedCubeMapTexture`` as ``specularTexture`` is the scene drawn from
+the light's ``origin``, in its own coordinates, as X_ITE draws it: the render
+pass draws it as its ``update`` says and convolves each drawing into the
+environment (:meth:`IBLProbe.convolve_scene
+<OpenGLContext.passes.ibl.IBLProbe.convolve_scene>`), turned by ``rotation``
+and scaled by ``color`` times ``intensity``. The light's image-based light
+then carries it as :attr:`ImageBasedLight.generated`. Where ``global`` is
+false the light lights only its parent group's descendants
+(:meth:`ZonesMixin.environmentScopes
+<OpenGLContext.passes.zonepass.ZonesMixin.environmentScopes>`).
 """
 from __future__ import annotations
 
@@ -62,9 +72,16 @@ class EnvironmentLight(x3d.EnvironmentLight):
         found: Optional[ImageBasedLight] = held[0]
         return found
 
+    def generatedSource(self) -> Any:
+        """The ``GeneratedCubeMapTexture`` that is ``specularTexture``, or None"""
+        texture = self.specularTexture
+        return texture if isinstance(texture, x3d.GeneratedCubeMapTexture) else None
+
     def _build(self) -> Optional[ImageBasedLight]:
         if not self.on:
             return None
+        if self.generatedSource() is not None:
+            return self._generated()
         colour = np.asarray(self.color, np.float64)[:3]
         values = np.asarray(self.diffuseCoefficients, dtype=np.float64).ravel()
         specular = _linear_faces(self.specularTexture)
@@ -94,6 +111,19 @@ class EnvironmentLight(x3d.EnvironmentLight):
             # irradiance_faces does.
             unturned = ImageBasedLight(irradianceCoefficients=light.irradianceCoefficients)
             light.specular = [unturned.irradiance_faces(SPECULAR_SIZE)]
+        return light
+
+
+    def _generated(self) -> ImageBasedLight:
+        """The image-based light of a generated cube map: its turn and scale,
+        the cube itself convolved by the pass"""
+        x, y, z, angle = (float(value) for value in self.rotation)
+        length = math.sqrt(x * x + y * y + z * z) or 1.0
+        half = math.sin(angle / 2.0) / length
+        light = ImageBasedLight(intensity=float(self.intensity),
+                                rotation=(x * half, y * half, z * half, math.cos(angle / 2.0)))
+        light.generated = self.generatedSource()
+        light.tint = tuple(float(value) for value in self.color)[:3]
         return light
 
 

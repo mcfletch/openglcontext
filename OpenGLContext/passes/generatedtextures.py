@@ -13,8 +13,9 @@ first does; the pass asks for that frame.
 drawn once; ``NEXT_FRAME_ONLY`` once more, after which the node's ``update``
 is set to ``NONE``; ``ALWAYS`` with every frame the scene is drawn. A drawing
 leaves out the shapes wearing the texture, which would otherwise read the
-texture being drawn. Both are drawn in the shader passes; the compatibility
-profile draws neither.
+texture being drawn. The shader passes draw them with their programs, the
+compatibility profile with the fixed-function pipeline
+(:meth:`GeneratedTexturesMixin._drawViewFixed`).
 """
 from __future__ import annotations
 
@@ -43,7 +44,7 @@ from OpenGL.GL import (
 log = logging.getLogger(__name__)
 
 __all__ = ['GLTexture', 'GeneratedSchedule', 'GeneratedTexturesMixin', 'PictureTarget',
-           'UPDATES']
+           'UPDATES', 'capture_centre']
 
 #: X3D's update modes.
 UPDATES = ('NONE', 'NEXT_FRAME_ONLY', 'ALWAYS')
@@ -65,6 +66,21 @@ def wears(shape: Any, texture: Any) -> bool:
         return True
     from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept beside its one use
     return isinstance(worn, x3d.MultiTexture) and any(layer is texture for layer in worn.texture)
+
+
+def capture_centre(path: Any) -> np.ndarray:
+    """Where a generated cube map is drawn from for the node `path` ends at
+
+    A shape's local origin; an EnvironmentLight's ``origin`` in its own
+    coordinates, as X_ITE captures one.
+    """
+    matrix = np.asarray(path.transformMatrix(), np.float64)
+    origin = getattr(path[-1], 'origin', None)
+    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept beside its one use
+    if origin is None or not isinstance(path[-1], x3d.EnvironmentLight):
+        return matrix[3, :3].copy()
+    placed = np.append(np.asarray(origin, np.float64)[:3], 1.0) @ matrix
+    return placed[:3] / (placed[3] or 1.0)
 
 
 class GeneratedSchedule:
@@ -253,8 +269,6 @@ class GeneratedTexturesMixin:
 
         Asking records that the shape being drawn wears it.
         """
-        if not getattr(self, 'shader_mode', False):
-            return None
         path = getattr(self, 'renderPath', None)
         if path is not None and not wears(path[-1], node):
             path = None
@@ -269,6 +283,20 @@ class GeneratedTexturesMixin:
             name = target.depth if bool(getattr(node, 'depthMap', False)) else target.colour
             return None if name is None else GLTexture(name, GL_TEXTURE_2D)
         return None if target.cube is None else GLTexture(target.cube, GL_TEXTURE_CUBE_MAP)
+
+    def requestGenerated(self, node: Any, path: Any) -> Optional[GLTexture]:
+        """Ask for ``node`` to be drawn from where ``path`` places it, as a
+        shape wearing it asks; the cube it was last drawn into, or None before
+        its first drawing"""
+        if self._generating is None and self.generatedSchedule().request(node, path):
+            trigger = getattr(getattr(self, 'context', None), 'triggerRedraw', None)
+            if trigger is not None:
+                trigger(0)
+        target = self._targets().get(node)
+        if target is None or not self.generatedSchedule().drawn(node) or isinstance(
+                target, PictureTarget) or target.cube is None:
+            return None
+        return GLTexture(target.cube, GL_TEXTURE_CUBE_MAP)
 
     def disposeResources(self) -> None:
         """Release the generated textures' targets"""
@@ -298,7 +326,8 @@ class GeneratedTexturesMixin:
         from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept beside its one use
         template = self.activeFrame if self.activeFrame is not None else (  # type: ignore[attr-defined]  # the pass's
             frames[0] if frames else None)
-        if template is None or getattr(self, 'shader_program', None) is None:
+        if template is None or (getattr(self, 'shader_mode', False)
+                                and getattr(self, 'shader_program', None) is None):
             return False
         if isinstance(node, x3d.GeneratedCubeMapTexture):
             return self._drawCube(node, paths, template, lighting)
@@ -317,7 +346,7 @@ class GeneratedTexturesMixin:
             if target is not None:
                 target.release()
             target = targets[node] = CaptureTarget(size)
-        centre = np.asarray(paths[0].transformMatrix(), 'd')[3, :3]
+        centre = capture_centre(paths[0])
         near, far = self._depthRange(template)
         projection = shadowmath.cube_projection(near, far)
         target.begin()
@@ -408,11 +437,14 @@ class GeneratedTexturesMixin:
         from OpenGLContext.multiview.strategy import ViewFrame  # noqa: PLC0415 kept with the drawing
         from OpenGLContext.scenegraph.pbrmesh import PBRMesh  # noqa: PLC0415 GL
         owner: Any = self
-        shader = owner.shader_program
         modelproj = np.dot(view, projection)
         frame = ViewFrame(
             template.view, template.camera, rect, view, projection, modelproj,
             frustummodule.Frustum.fromViewingMatrix(modelproj, normalize=1), fitted=False)
+        if not getattr(owner, 'shader_mode', False):
+            self._drawViewFixed(frame, paths, rendered, walk)
+            return
+        shader = owner.shader_program
         active = owner.activeFrame
         lookups = getattr(owner, '_reflection_lookups', None)
         hdr = bool(getattr(owner, '_bloom_active', False))
@@ -444,3 +476,22 @@ class GeneratedTexturesMixin:
             owner.clearPlanarReflection()
             if active is not None:
                 owner.applyViewFrame(active, gl=False)
+
+    def _drawViewFixed(self, frame: Any, paths: list[Any], rendered: Any,
+                       walk: Optional[_SceneWalk]) -> None:
+        """Draw ``frame``'s view through the fixed-function pipeline, without ``paths``' shapes"""
+        owner: Any = self
+        active = owner.activeFrame
+        self._generating = rendered if rendered is not None else True
+        try:
+            with self._scenePaths(rendered, walk):
+                owner.applyViewFrame(frame, gl=False)
+                gathered = owner._walkPaths(fresh=True) if walk is not None else owner.frameGather()
+                among = None if walk is not None else owner.layerMask(gathered)
+                records = [record for record in owner.renderSet(frame.modelView, gathered, among)
+                           if not any(record[4] is path for path in paths)]
+                owner.renderViewLegacy(frame, records)
+        finally:
+            self._generating = None
+            if active is not None:
+                owner.applyViewFrame(active)

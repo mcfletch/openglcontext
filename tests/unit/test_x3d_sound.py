@@ -408,6 +408,22 @@ class TestSpatialSound:
         left, right = self.ears(engine)
         assert left == pytest.approx(right, rel=1e-3)
 
+    def test_enable_hrtf_hears_it_through_a_head(self, engine, graph):
+        """X_ITE's HRTF panning: the far ear later and shadowed, no pan gains"""
+        node = self.spatial(enableHRTF=True)
+        frame(graph, (node, translation(5.0)))
+        audio = graph.audioNode(node)
+        assert audio.head is not None
+        assert audio.head.left_delay > 0.0 and audio.head.right_delay == 0.0
+        assert audio.gains[0] == pytest.approx(audio.gains[1])
+        left, right = self.ears(engine)
+        assert right > 1.2 * left
+
+    def test_without_hrtf_it_is_panned_by_equal_power(self, graph):
+        node = self.spatial()
+        frame(graph, (node, translation(5.0)))
+        assert graph.audioNode(node).head is None
+
     def test_doppler_delays_it_by_its_distance(self, graph):
         node = self.spatial(dopplerEnabled=True)
         frame(graph, (node, translation(0.0, 0.0, -34.3)))
