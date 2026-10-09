@@ -855,9 +855,17 @@ behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
   clock, and can be changed while it runs. ``getTimer(context)`` answers a Timer-style
   handle on it: ``pause()``, ``resume()``, ``internal.multiplier`` (the
   rate) and ``addEventHandler('fraction' or 'cycle', function)``.
-- A ``LoadSensor`` is polled in the same way. ``Inline`` and ``ImageTexture``
-  record their load state as they read (``vrml.x3d.loadsensor``); other url
-  nodes record none and are not waited for.
+- A ``LoadSensor`` is polled in the same way. The url nodes record their
+  load state as they read (``vrml.x3d.loadsensor``): ``Inline``,
+  ``InlineGeometry``, ``ImageTexture``, ``ImageCubeMapTexture``,
+  ``ImageTexture3D``, ``FontLibrary``, ``ShaderPart``, ``ShaderProgram`` and
+  ``PackagedShader`` from the moment their url is set, ``AudioClip`` and a
+  ``BufferAudioSource`` reading a url when they are first heard. An
+  ``Anchor`` counts as loaded and a ``MovieTexture`` with a url as failed,
+  since nothing decodes its movie. A child with no state yet is not waited
+  for. With no children the sensor sends ``isLoaded FALSE``, ``isActive
+  FALSE`` and ``progress`` 0; a failure sends ``progress`` as the part of the
+  children loaded.
 - A follower moves a step each frame on the engine's clock while it is
   moving, queued on its window's render queue.
 

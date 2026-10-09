@@ -327,7 +327,7 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] environmental sensors (`vrml.x3d.sensors`, sensed once a frame by `scenegraph.x3dsensors`)
   - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit's normal and first texture coordinate from the triangle under the pointer, `surface_at`, as X_ITE sends them, 2026-10-09 x3d-xfields)
   - [x] `TimeSensor` (`vrml.x3d.timesensor`): start, stop, pause, resume, and the engine's `rate`; polled by the context's time manager
-  - [x] `LoadSensor` (`vrml.x3d.loadsensor`); `Inline` and `ImageTexture` record their load state
+  - [x] `LoadSensor` (`vrml.x3d.loadsensor`); every url node records its load state (2026-10-09 x3d-xfields: audio sources when first heard, `Anchor` loaded and `MovieTexture` failed through `loadState()`; no children and a failure report as X_ITE does)
   - [x] `Anchor`: a group; `#viewpoint` bound, other urls through `Context.OnAnchor`
   - [x] the cascade: a field is reached once per cascade, through handlers and their outputs (`vrml.event`)
   - [x] `Collision`: `enabled` and `proxy` in the walk's collision world; `collideTime` and `isActive` from the avatar's touches (`physics.x3dcollision`)

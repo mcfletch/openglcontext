@@ -5,10 +5,14 @@ The Anchor is reached by the pointer as the pointing-device sensors are
 over its geometry and releasing it there calls
 ``context.OnAnchor(anchor, url, parameter)``, which the context answers
 (:meth:`OpenGLContext.context.ContextCore.OnAnchor`).
+
+An Anchor reads nothing until it is followed, so a LoadSensor watching one
+reads it as loaded, as X_ITE does.
 """
 from typing import Any, Optional
 
 from vrml.vrml97 import basenodes
+from vrml.x3d import loadsensor
 
 from OpenGLContext.scenegraph import grouping
 
@@ -19,6 +23,10 @@ class Anchor(grouping.Grouping, basenodes.Anchor):
     Reference:
         https://www.web3d.org/specifications/X3Dv4Draft/ISO-IEC19775-1v4.1-CD/Part01/components/networking.html#Anchor
     """
+
+    def loadState(self) -> str:
+        """Loaded: an Anchor has nothing to read until it is followed"""
+        return loadsensor.LOADED
 
     def bind(self, context: Any) -> bool:
         """Have `context`'s pointer reach this Anchor"""

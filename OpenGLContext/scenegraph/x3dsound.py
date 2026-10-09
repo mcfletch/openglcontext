@@ -46,6 +46,7 @@ from numpy.typing import NDArray
 from omi_audio import graph, model, spatial
 from omi_audio.graph.panner import SPEED_OF_SOUND
 from vrml import cache, node
+from vrml.x3d import loadsensor
 from vrml.x3d import nodes as x3d
 from vrml.x3d import sound as timing
 
@@ -439,8 +440,12 @@ class _Samples(NamedTuple):
 
 
 def _clip_samples(owner: Any, urls: Sequence[str], engine: Any) -> Optional[_Samples]:
-    """The first of ``urls`` that decodes, as samples; None for none"""
+    """The first of ``urls`` that decodes, as samples; None for none
+
+    `owner` records the read as loaded or failed for a LoadSensor.
+    """
     clip = clip_from_urls(owner, urls, engine)
+    loadsensor.set_load_state(owner, loadsensor.FAILED if clip is None else loadsensor.LOADED)
     if clip is None:
         return None
     return _Samples(clip.samples.reshape(1, -1), float(clip.sample_rate))

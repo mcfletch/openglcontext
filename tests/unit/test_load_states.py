@@ -116,3 +116,42 @@ def test_a_documents_load_sensor_sees_its_texture_load(gl_context, tmp_path):
         background.wait_for_idle(10.0)
         context.OnDraw(force=1)
     assert scene.getDEF('L').isLoaded is True
+
+
+@pytest.fixture
+def audio_engine():
+    from omi_audio import synth  # noqa: PLC0415 kept with its use
+    from omi_audio.device import NullDevice  # noqa: PLC0415 kept with its use
+    from omi_audio.engine import AudioEngine  # noqa: PLC0415 kept with its use
+    made = AudioEngine(device=NullDevice(sample_rate=8000), voices=4)
+    made.clips.put('beep', synth.tone(440.0, 0.25, sample_rate=8000))
+    yield made
+    made.close()
+
+
+@pytest.mark.parametrize('name', ['AudioClip', 'BufferAudioSource'])
+def test_a_sound_file_read_is_loaded_or_failed(audio_engine, name):
+    node_class = prototypes()[name]
+    found = node_class(url=['beep'])
+    assert loadsensor.load_state(found) is None
+    found.playedSamples(audio_engine)
+    assert loadsensor.load_state(found) == LOADED
+    missing = node_class(url=['nowhere.wav'])
+    missing.playedSamples(audio_engine)
+    assert loadsensor.load_state(missing) == FAILED
+
+
+def test_samples_in_the_buffer_read_no_url(audio_engine):
+    source = prototypes()['BufferAudioSource'](buffer=[0.0, 0.5], numberOfChannels=1)
+    source.playedSamples(audio_engine)
+    assert loadsensor.load_state(source) is None
+
+
+def test_a_movie_with_a_url_failed():
+    movie_class = prototypes()['MovieTexture']
+    assert loadsensor.load_state(movie_class(url=['film.mp4'])) == FAILED
+    assert loadsensor.load_state(movie_class()) is None
+
+
+def test_an_anchor_is_loaded():
+    assert loadsensor.load_state(prototypes()['Anchor'](url=['#there'])) == LOADED
