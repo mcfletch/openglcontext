@@ -20,17 +20,21 @@ left, as :mod:`OpenGLContext.multiview.views` counts them.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+import weakref
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from typing import Any, NamedTuple, Optional
 
 import numpy as np
+from vrml.x3d import binding
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.multiview.views import Rect
 
 __all__ = [
-    'LayerPlan', 'Membership', 'PathLayers', 'active_number', 'chain_rect',
-    'clip_chain', 'clip_rect', 'drawn_layers', 'intersect', 'layer_of',
+    'LayerCameras', 'LayerPart', 'LayerPlan', 'Membership', 'PathLayers', 'active_number', 'chain_rect',
+    'cleared_after', 'clip_chain', 'clip_rect', 'contains', 'drawn_layers', 'intersect',
+    'layer_of', 'part_of', 'sized', 'stack_parts',
 ]
 
 #: X3D's ``clipBoundary``: left, right, bottom, top, as fractions.
@@ -200,3 +204,140 @@ class Membership:
         table = PathLayers(paths)
         self._held = (paths, generation, len(paths), table)
         return table
+
+
+class LayerPart(NamedTuple):
+    """One rectangle a frame draws part of one layer in
+
+    ``chain`` is the ``Viewport`` nodes that clip the paths drawn here,
+    outermost first; () for the paths of the layer clipped by none.
+    ``first`` marks the layer's first part, which clears the depth buffer
+    and draws the layer's background; ``bottom`` marks the first part of the
+    stack, which clears its rectangle whatever the layer binds.
+    """
+
+    plan: LayerPlan
+    chain: tuple[Any, ...]
+    rect: Rect
+    first: bool
+    bottom: bool
+
+
+def stack_parts(drawn: Sequence[LayerPlan], table: PathLayers, rect: Rect) -> list[LayerPart]:
+    """The parts a view in `rect` draws the layers `drawn` in, bottom first
+
+    A layer's rectangle is its viewport's part of `rect`; each clipping of
+    its paths (:meth:`PathLayers.chains`) is a part of that. A part with no
+    pixels is left out, and a layer whose own rectangle has none with it.
+    """
+    found: list[LayerPart] = []
+    for plan in drawn:
+        own = rect if plan.viewport is None else clip_rect(tuple(plan.viewport.clipBoundary), rect)
+        if own[2] <= 0 or own[3] <= 0:
+            continue
+        found.append(LayerPart(plan, (), own, True, not found))
+        for chain in table.chains(plan.node):
+            clipped = chain_rect(chain, own)
+            if clipped[2] > 0 and clipped[3] > 0:
+                found.append(LayerPart(plan, chain, clipped, False, False))
+    return found
+
+
+def contains(rect: Rect, point: Sequence[float]) -> bool:
+    """Whether the window position `point` (x, y) is within `rect`"""
+    x, y = float(point[0]), float(point[1])
+    return rect[0] <= x < rect[0] + rect[2] and rect[1] <= y < rect[1] + rect[3]
+
+
+def part_of(parts: Sequence[LayerPart], layer: Any, chain: Sequence[Any]) -> Optional[int]:
+    """The index of the part of `parts` that draws the paths of `layer` (None
+    for layer 0) clipped by `chain`; None where no part does"""
+    for index, part in enumerate(parts):
+        if (part.plan.node is layer and len(part.chain) == len(chain)
+                and all(a is b for a, b in zip(part.chain, chain))):
+            return index
+    return None
+
+
+def cleared_after(parts: Sequence[LayerPart], index: int, point: Sequence[float]) -> bool:
+    """Whether a layer drawn after part `index` clears the depth buffer at `point`
+
+    Where one does, the depth buffer at the end of the frame no longer holds
+    the depth part `index` drew there.
+    """
+    layer = parts[index].plan.number
+    return any(part.first and not part.bottom and part.plan.number != layer
+               and contains(part.rect, point) for part in parts[index + 1:])
+
+
+@contextmanager
+def sized(camera: Any, size: Sequence[int]) -> Iterator[None]:
+    """Within the block, `camera` projects for a rectangle `size` (width,
+    height) pixels; its own aspect is put back as the block ends
+
+    A camera with no ``setViewport``, or an empty size, is left as it is.
+    """
+    tell = getattr(camera, 'setViewport', None)
+    width, height = int(size[0]), int(size[1])
+    if tell is None or width <= 0 or height <= 0:
+        yield
+        return
+    held = camera.frustum
+    tell(width, height)
+    try:
+        yield
+    finally:
+        camera.frustum = held
+
+
+class LayerCameras:
+    """The cameras of the layers navigation does not drive -- no GL
+
+    A layer is seen from the viewpoint its bind stack has on top
+    (:func:`vrml.x3d.binding.current_path`), followed each frame as it is
+    moved or rebound; where it binds none, from X3D's default viewpoint: a
+    ``Viewpoint`` for a ``Layer``, an ``OrthoViewpoint`` for a
+    ``LayoutLayer``. Each layer keeps one view platform; layer 0's is kept
+    under None.
+    """
+
+    def __init__(self) -> None:
+        self._platforms: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
+        self._bottom: Any = None
+        self._defaults: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
+
+    def _platform(self, layer: Any) -> Any:
+        from OpenGLContext.move.viewplatform import ViewPlatform  # noqa: PLC0415 kept with its use
+        found = self._bottom if layer is None else self._platforms.get(layer)
+        if found is None:
+            found = ViewPlatform()
+            if layer is None:
+                self._bottom = found
+            else:
+                self._platforms[layer] = found
+        return found
+
+    def _default(self, layer: Any) -> Any:
+        """X3D's default viewpoint for `layer`, made once"""
+        from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint, Viewpoint  # noqa: PLC0415 kept with its use
+        if layer is None:
+            return Viewpoint()
+        found = self._defaults.get(layer)
+        if found is None:
+            found = self._defaults[layer] = (
+                OrthoViewpoint() if isinstance(layer, x3d.LayoutLayer) else Viewpoint())
+        return found
+
+    def camera(self, layer: Any, paths: Sequence[Any]) -> Any:
+        """The view platform `layer` (None for layer 0) is drawn through this
+        frame; `paths` lead to the layer's viewpoints, in the order it has them"""
+        platform = self._platform(layer)
+        path = binding.current_path(list(paths)) if paths else None
+        if path is not None:
+            view = path[-1]
+            view.placeOn(platform, path)
+        else:
+            view = self._default(layer)
+            view.placeOn(platform)
+        view.project(platform)
+        return platform

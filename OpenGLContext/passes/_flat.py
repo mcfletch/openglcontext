@@ -21,7 +21,7 @@ from types import MappingProxyType
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
-from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard
+from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard,layering
 from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGLContext.scenegraph import bindable
 from OpenGLContext.passes import glstate
@@ -1100,6 +1100,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
         x3dnodes.ClipPlane,
         # X3D's image-based light, the scene's when it has no ImageBasedLight.
         x3dnodes.EnvironmentLight,
+        # The layer stack a scene is drawn as, and the groups placed on the
+        # screen once a frame (passes.layerpass).
+        x3dnodes.LayerSet,
+        layering.Placed,
     ]
 
     #: The grid this frame's objects are lit from, or None where the scene

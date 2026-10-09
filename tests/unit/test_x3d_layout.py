@@ -167,10 +167,15 @@ class TestScreen:
         assert placed[3, :2] == pytest.approx((0.01, -0.01))
 
     def test_an_odd_viewport_snaps_to_half_pixels_about_the_centre(self):
-        projection = transformmatrix.orthoMatrix(-2.01, 2.01, -1.0, 1.0, 0.1, 100.0)
+        # 401 pixels of 0.01 units: the window is 4.01 units across, and the
+        # centre is in the middle of pixel 200, half a pixel from its corners.
+        projection = transformmatrix.orthoMatrix(-2.005, 2.005, -1.0, 1.0, 0.1, 100.0)
         moved = transformmatrix.transMatrix((0.001, 0.0, -5.0))[0]
         placed = layout.screen_modelview(moved, projection, (401, 200))
+        assert placed[0, 0] == pytest.approx(0.01)
         assert placed[3, 0] == pytest.approx(0.005)
+        # Pixel 201's left edge, counted from the window's left at -2.005
+        assert (placed[3, 0] + 2.005) / 0.01 == pytest.approx(201.0)
 
     def test_perspective_pixels_are_measured_at_the_origins_depth(self):
         projection = transformmatrix.perspectiveMatrix(np.pi / 2, 2.0, 0.1, 100.0)
@@ -192,3 +197,92 @@ class TestLocalMatrix:
 
     def test_a_singular_wanted_has_no_local_matrix(self):
         assert layout.local_matrix(np.zeros((4, 4)), np.identity(4)) is None
+
+
+class TestPlacingLayouts:
+    """Layout nodes placed in a scene, as the render pass places them each frame"""
+
+    CAMERA = transformmatrix.transMatrix((0.0, 0.0, -10.0))[0]
+
+    def walk(self, *layers_):
+        from OpenGLContext.passes.flatcore import FlatPass  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph import layering  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.basenodes import sceneGraph  # noqa: PLC0415 kept with its use
+        scene = sceneGraph(children=[layering.LayerSet(layers=list(layers_))])
+        walked = FlatPass(scene, [])
+        placed = [path for path in walked.paths.get(layering.Placed, ())]
+        return walked, placed
+
+    def eye(self, path):
+        return layout.LayoutEye(self.CAMERA, ORTHO, PIXELS)
+
+    def at(self, walked, node, local=(0.0, 0.0)):
+        """Where `local` in `node`'s coordinates is in eye space"""
+        path = walked.nodePaths[node][0]
+        point = np.array((local[0], local[1], 0.0, 1.0)) @ path.transformMatrix() @ self.CAMERA
+        return tuple(np.round(point[:2], 6))
+
+    def test_a_layout_layer_puts_its_children_in_its_rectangle(self):
+        from OpenGLContext.scenegraph import layering  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.basenodes import Shape  # noqa: PLC0415 kept with its use
+        shape = Shape()
+        top = layering.LayoutLayer(
+            layout=x3d.Layout(size=[100, 50], sizeUnits=['PIXEL'], align=['RIGHT', 'TOP'],
+                              scaleMode=['PIXEL']),
+            children=[shape])
+        walked, placed = self.walk(top)
+        assert layout.place_layouts(placed, self.eye) == 1
+        assert self.at(walked, shape) == (1.5, 0.75)
+        assert self.at(walked, shape, (50, 25)) == (2.0, 1.0)
+
+    def test_a_second_frame_with_nothing_moved_places_nothing(self):
+        from OpenGLContext.scenegraph import layering  # noqa: PLC0415 kept with its use
+        top = layering.LayoutLayer(layout=x3d.Layout(size=[0.5], sizeUnits=['FRACTION']))
+        _walked, placed = self.walk(top)
+        assert layout.place_layouts(placed, self.eye) == 1
+        assert layout.place_layouts(placed, self.eye) == 0
+
+    def test_a_group_in_a_layout_measures_world_units_in_its_parents(self):
+        from OpenGLContext.scenegraph import layering  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.basenodes import Shape  # noqa: PLC0415 kept with its use
+        shape = Shape()
+        inner = layering.LayoutGroup(layout=x3d.Layout(size=[50, 50], align=['RIGHT', 'TOP']),
+                                     children=[shape])
+        top = layering.LayoutLayer(
+            layout=x3d.Layout(size=[200, 100], sizeUnits=['PIXEL'], align=['LEFT', 'BOTTOM'],
+                              scaleMode=['PIXEL']),
+            children=[inner])
+        walked, placed = self.walk(top)
+        layout.place_layouts(placed, self.eye)
+        assert self.at(walked, shape) == (-0.25, -0.25)
+
+    def test_a_group_with_no_layout_is_drawn_in_its_parents_coordinates(self):
+        from OpenGLContext.scenegraph import layering  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.basenodes import Shape  # noqa: PLC0415 kept with its use
+        shape = Shape()
+        top = layering.LayoutLayer(
+            layout=x3d.Layout(size=[100, 50], sizeUnits=['PIXEL'], align=['RIGHT', 'TOP'],
+                              scaleMode=['PIXEL']),
+            children=[layering.LayoutGroup(children=[shape])])
+        walked, placed = self.walk(top)
+        layout.place_layouts(placed, self.eye)
+        assert self.at(walked, shape, (50, 25)) == (2.0, 1.0)
+
+    def test_a_screen_group_counts_pixels(self):
+        from OpenGLContext.scenegraph import layering  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.basenodes import Shape, Transform  # noqa: PLC0415 kept with its use
+        shape = Shape()
+        screen = layering.ScreenGroup(children=[shape])
+        layer = layering.Layer(children=[Transform(translation=(0.5, 0.25, 0),
+                                                   scale=(3, 3, 3), children=[screen])])
+        walked, placed = self.walk(layer)
+        layout.place_layouts(placed, self.eye)
+        assert self.at(walked, shape) == (0.5, 0.25)
+        assert self.at(walked, shape, (10, 20)) == (0.6, 0.45)
+
+    def test_a_path_with_no_eye_is_left_where_it_is(self):
+        from OpenGLContext.scenegraph import layering  # noqa: PLC0415 kept with its use
+        top = layering.LayoutLayer(layout=x3d.Layout(size=[0.5], sizeUnits=['FRACTION']))
+        _walked, placed = self.walk(top)
+        assert layout.place_layouts(placed, lambda path: None) == 0
+        assert np.allclose(top.localMatrix(), np.identity(4))

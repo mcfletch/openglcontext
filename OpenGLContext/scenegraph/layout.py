@@ -33,15 +33,16 @@ Matrices are 4x4 and row-vector, ``point @ matrix``, as the engine's are.
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
+from vrml.x3d import nodes as x3d
 
 __all__ = [
-    'LayoutSpec', 'Region', 'eye_per_pixel', 'local_matrix', 'place',
-    'screen_modelview', 'spec_of', 'view_extent',
+    'LayoutEye', 'LayoutSpec', 'Region', 'eye_per_pixel', 'local_matrix', 'place',
+    'place_layouts', 'screen_modelview', 'spec_of', 'view_extent',
 ]
 
 WORLD, FRACTION, PIXEL = 'WORLD', 'FRACTION', 'PIXEL'
@@ -247,3 +248,70 @@ def local_matrix(wanted: Any, parent_modelview: Any) -> Optional[tuple[np.ndarra
     if not (np.all(np.isfinite(forward)) and np.all(np.isfinite(inverse))):
         return None
     return forward, inverse
+
+
+class LayoutEye(NamedTuple):
+    """The camera a placed node is drawn through: its world-to-eye
+    ``modelview``, its ``projection`` and the ``pixels`` (width, height) of
+    the rectangle it is drawn in"""
+
+    modelview: Any
+    projection: Any
+    pixels: tuple[int, int]
+
+
+def _enclosing(path: Any, regions: dict[int, tuple[Any, Optional[Region]]]) -> Optional[Region]:
+    """The region of the nearest layout `path` passes through; None for none"""
+    parent = getattr(path, 'parent', None)
+    while parent is not None:
+        held = regions.get(id(parent))
+        if held is not None and held[0] is parent:
+            return held[1]
+        parent = getattr(parent, 'parent', None)
+    return None
+
+
+def _wanted(node: Any, parent_mv: np.ndarray, eye: LayoutEye,
+            enclosing: Optional[Region]) -> tuple[np.ndarray, Optional[Region]]:
+    """The modelview `node`'s children are seen through, and the region a
+    layout inside it is placed in"""
+    if isinstance(node, x3d.ScreenGroup):
+        return screen_modelview(parent_mv, eye.projection, eye.pixels), enclosing
+    if isinstance(node, x3d.LayoutGroup) and isinstance(node.viewport, x3d.X3DViewportNode):
+        # The group's viewport is the rectangle its layout is placed in
+        enclosing = None
+    chosen = getattr(node, 'layout', None)
+    if not isinstance(chosen, x3d.X3DLayoutNode):
+        return parent_mv, enclosing
+    depth = -float(parent_mv[3, 2])
+    pixel = eye_per_pixel(eye.projection, eye.pixels, depth)
+    root = view_extent(eye.projection, depth)
+    return place(spec_of(chosen), parent_mv, enclosing, pixel, root)
+
+
+def place_layouts(paths: Sequence[Any], eye_of: Callable[[Any], Optional[LayoutEye]]) -> int:
+    """Place the node at the end of each of `paths`; how many moved
+
+    `paths` lead to ``LayoutLayer``, ``LayoutGroup`` and ``ScreenGroup``
+    nodes (:class:`OpenGLContext.scenegraph.layering.Placed`), each before
+    the paths within it, as the render pass walks them. `eye_of` answers the
+    :class:`LayoutEye` a path is drawn through, or None for one not drawn;
+    a node not drawn keeps its placement.
+    """
+    from OpenGLContext.scenegraph.billboard import parent_matrix  # noqa: PLC0415 billboard imports the scenegraph
+    regions: dict[int, tuple[Any, Optional[Region]]] = {}
+    moved = 0
+    for path in paths:
+        eye = eye_of(path)
+        if eye is None:
+            continue
+        node = path[-1]
+        parent_mv = np.asarray(parent_matrix(path), dtype=np.float64) @ np.asarray(
+            eye.modelview, dtype=np.float64)
+        wanted, region = _wanted(node, parent_mv, eye, _enclosing(path, regions))
+        # The table holds the path, so its id is not reused while it is kept
+        regions[id(path)] = (path, region)  # noqa: OGC131 the entry holds the path
+        local = local_matrix(wanted, parent_mv)
+        if local is not None and node.place(local[0]):
+            moved += 1
+    return moved

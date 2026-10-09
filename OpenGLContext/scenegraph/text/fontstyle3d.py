@@ -1,6 +1,10 @@
-"""FontStyle extensions for OpenGLContext"""
+"""FontStyle extensions for OpenGLContext, and X3D's ScreenFontStyle"""
 from vrml.vrml97 import basenodes
 from vrml import field, node
+from vrml.x3d import nodes as x3d
+
+#: Pixels to a point: a point is 1/72 inch, drawn at 96 pixels to the inch.
+PIXELS_PER_POINT = 96.0 / 72.0
 
 class FontStyle( basenodes.FontStyle ):
     """FontStyle with ability to specify geometry format"""
@@ -19,6 +23,30 @@ class FontStyle( basenodes.FontStyle ):
     #: ``bitmap``); empty takes the first of FontProvider.PROVIDER_SEARCH_ORDER
     #: that has a font.
     format = field.newField( 'format', 'SFString', 1, "")
+
+class ScreenFontStyle( x3d.ScreenFontStyle ):
+    """X3D's ScreenFontStyle: text measured in points on the screen
+
+    A Text with this style is drawn in a coordinate system whose unit is one
+    pixel, facing the screen, at the Text's origin
+    (:func:`OpenGLContext.scenegraph.layout.screen_modelview`); its glyphs are
+    :attr:`size` pixels tall. `pointSize` is in points of 1/72 inch, at 96
+    pixels to the inch (:data:`PIXELS_PER_POINT`).
+
+    Reference:
+        https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/layout.html#ScreenFontStyle
+    """
+    PROTO = 'ScreenFontStyle'
+    #: The provider format to draw with, as :class:`FontStyle`'s.
+    format = field.newField( 'format', 'SFString', 1, "")
+    #: A Text drawn with this style is measured in pixels.
+    screen = True
+
+    @property
+    def size( self ) -> float:
+        """The glyphs' height in pixels: `pointSize` points"""
+        return float( self.pointSize ) * PIXELS_PER_POINT
+
 
 class FontStyle3D( FontStyle ):
     """FontStyle with ability to specify 3D extrusion properties"""
