@@ -256,6 +256,19 @@ _DEFAULT_FACTORS: "dict[str, Any]" = dict(
 )
 
 
+def drawn_material(appearance: Any, geometry: Any, back: bool = False) -> Any:
+    """What a shape of `appearance` and `geometry` is drawn with
+
+    The appearance's material (:func:`pbr_material`); for a shape with no
+    appearance, unlit white under X3D's lighting rules
+    (:mod:`OpenGLContext.lighting`) and None, the engine's lit neutral grey,
+    under its own.
+    """
+    if appearance:
+        return pbr_material(appearance, back)
+    return _DOCUMENT_UNLIT if lighting.x3d_lit(geometry) else None
+
+
 def phong_factors(material_node: Any) -> dict:
     """The block of an X3D Material drawn by X3D's Phong equation (:data:`PHONG_BIT`)
 
@@ -1109,10 +1122,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         rules (:mod:`OpenGLContext.lighting`), and in the engine's lit neutral
         grey under its own.
         """
-        if appearance:
-            material = pbr_material(appearance, back)
-        else:
-            material = _DOCUMENT_UNLIT if lighting.x3d_lit(geometry) else None
+        material = drawn_material(appearance, geometry, back)
         # The coordinates depend on the geometry as well as the appearance, so
         # they are set before the same-material early-out, as are the texture
         # layers, which are bound after the material's maps share their units.
