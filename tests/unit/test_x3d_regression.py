@@ -157,7 +157,8 @@ def test_a_document_may_name_an_image_above_its_folder(tmp_path, where, url):
 def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
 
-    def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
+    def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw',
+                multisampling=4):
         Image.new('RGB', size, (200, 0, 0)).save(out)
         return True, {'problems': ['warning: something'], 'viewpoint': None}
 
@@ -181,7 +182,8 @@ def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
     assert record['gl_renderer'] == 'test'
     assert os.path.exists(report)
 
-    def different(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
+    def different(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw',
+                multisampling=4):
         Image.new('RGB', size, (0, 0, 200)).save(out)
         return True, {'problems': [], 'viewpoint': None}
 
@@ -192,7 +194,8 @@ def test_a_run_renders_records_blesses_and_reports(monkeypatch, tmp_path):
 def test_a_failed_render_fails_the_run(monkeypatch, tmp_path, capsys):
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': ''})
 
-    def crashed(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
+    def crashed(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw',
+                multisampling=4):
         return False, {'error': 'killed by SIGSEGV', 'returncode': -11}
 
     monkeypatch.setattr(R, 'render_scene', crashed)
@@ -250,7 +253,8 @@ def test_bless_promotes_what_was_drawn_and_reviewed(monkeypatch, tmp_path, capsy
     root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
     drawn = []
 
-    def counting(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
+    def counting(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw',
+                multisampling=4):
         drawn.append(scene.name)
         return _fake_render(scene, out, size, frames)
     monkeypatch.setattr(R, 'render_scene', counting)
@@ -278,7 +282,8 @@ def test_no_corpus_says_how_to_fetch_one(tmp_path, capsys):
     assert '--fetch' in capsys.readouterr().out
 
 
-def _fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw'):
+def _fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr', backend='glfw',
+                multisampling=4):
     Image.new('RGB', size, (200, 0, 0)).save(out)
     return True, {'problems': [], 'viewpoint': None}
 
@@ -395,3 +400,10 @@ def test_the_reference_column_is_named_for_its_reference(tmp_path):
     R.build_report(str(out_dir), str(tmp_path / 'baselines'), str(report), 2.0, 5)
     html = report.read_text()
     assert '<h4>X_ITE 16.4.3</h4>' in html and 'Khronos' not in html
+
+
+def test_documents_are_drawn_with_x_ites_four_samples():
+    assert R.build_parser().parse_args([]).multisampling == 4
+    assert R.build_parser().parse_args(['--multisampling', '0']).multisampling == 0
+    found = R._render_environment('out.png', 4, 'pbr', 'glfw', multisampling=4)
+    assert found['OPENGLCONTEXT_MULTISAMPLING'] == '4'

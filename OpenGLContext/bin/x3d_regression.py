@@ -181,13 +181,14 @@ def render_outcome(returncode: int, stdout: Optional[str], stderr: Optional[str]
 
 def render_scene(scene: Scene, out: str, size: tuple[int, int], frames: int,
                  timeout: float = RENDER_TIMEOUT, renderer: str = 'pbr',
-                 backend: str = 'glfw') -> tuple[bool, dict[str, Any]]:
+                 backend: str = 'glfw', multisampling: int = 4) -> tuple[bool, dict[str, Any]]:
     """Draw `scene` to the PNG `out` in a process of its own, with `renderer`
-    (``pbr`` or ``vrml97``) on window system `backend`; whether it succeeded
-    (:func:`render_outcome`), and what the process reported"""
+    (``pbr`` or ``vrml97``) on window system `backend` with `multisampling`
+    samples a pixel; whether it succeeded (:func:`render_outcome`), and what
+    the process reported"""
     if os.path.exists(out):
         os.remove(out)
-    env = _render_environment(out, frames, renderer, backend)
+    env = _render_environment(out, frames, renderer, backend, multisampling)
     command = [sys.executable, '-m', 'OpenGLContext.bin.x3d_regression', '--render', scene.path,
                '--root', scene.root, '--size', '%dx%d' % size]
     try:
@@ -199,11 +200,12 @@ def render_scene(scene: Scene, out: str, size: tuple[int, int], frames: int,
 
 
 def _render_environment(out: str, frames: int, renderer: str = 'pbr',
-                        backend: str = 'glfw') -> dict[str, str]:
+                        backend: str = 'glfw', multisampling: int = 4) -> dict[str, str]:
     """The drawing process's environment: a clean one on `backend`, drawing
-    with `renderer` and capturing `frames` frames to `out`"""
+    with `renderer` at `multisampling` samples a pixel and capturing `frames`
+    frames to `out`"""
     return renderregression.capture_environment(
-        backend,
+        backend, OPENGLCONTEXT_MULTISAMPLING=str(int(multisampling)),
         OPENGLCONTEXT_RENDERER=renderer, OPENGLCONTEXT_BLOOM='0',
         OPENGLCONTEXT_AUDIO='0', OPENGLCONTEXT_SEED='4242',
         OPENGLCONTEXT_CAPTURE_START=repr(WORLD_START),
@@ -331,7 +333,8 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
     def drawn(scene: Scene) -> str:
         new_path = os.path.join(out_dir, scene.slug + '.png')
         ok, report = render_scene(scene, new_path, args.size, args.frames,
-                                  renderer=args.renderer, backend=args.backend)
+                                  renderer=args.renderer, backend=args.backend,
+                                  multisampling=args.multisampling)
         record = _view_metadata(scene, report, args, provenance)
         if not ok:
             record.update(error=report.get('error', 'no render'),
@@ -446,6 +449,9 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
     parser.add_argument('--renderer', choices=('pbr', 'vrml97'), default='pbr',
                         help="the pass documents are drawn with: the PBR pass (default), "
                              "or the VRML97 pass")
+    parser.add_argument('--multisampling', type=int, default=4, metavar='N',
+                        help="samples a pixel (default 4, X_ITE's Antialiased and "
+                             "Multisampling defaults; 0 draws without)")
     parser.add_argument('--render', metavar='DOCUMENT', help=argparse.SUPPRESS)
     parser.add_argument('--root', metavar='DIR', help=argparse.SUPPRESS)
     return parser

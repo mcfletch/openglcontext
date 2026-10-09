@@ -201,6 +201,14 @@ Lighting and shadows
      - ``auto``
      - Which materials are lit in linear light. ``auto`` is
        ``linear_when_physical_material``.
+   * - ``OPENGLCONTEXT_MULTISAMPLING``
+     - integer
+     - unset
+     - Samples a pixel for antialiasing, the default of
+       ``ContextDefinition.multisampleSamples``; 0 or less is none. Read as
+       the window is made. For the frames after a pointer event over a
+       pickable scene, and with bloom on, the frame is drawn into a target
+       of one sample a pixel and is not antialiased.
    * - ``OPENGLCONTEXT_SHADING``
      - ``auto``, ``point``, ``wireframe``, ``flat``, ``gouraud``, ``phong``
      - ``auto``

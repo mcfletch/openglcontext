@@ -1618,7 +1618,9 @@ processors by default, as SwiftShader runs threads of its own), and
 The difference counts pixels more than 32 apart in a channel. It is for the
 reader of the report and fails no run. X_ITE draws a document at the
 browser's clock, and ours at a fixed time in 2000 (below), so an animated
-document is at a different point of its animation in the two.
+document is at a different point of its animation in the two. Documents are
+drawn with 4 samples a pixel, X_ITE's default antialiasing;
+``--multisampling N`` names another count, and 0 draws without.
 
 .. code-block:: bash
 

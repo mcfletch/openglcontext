@@ -152,7 +152,12 @@ class ContextDefinition( node.Node ):
     alpha = field.newField( "alpha", "SFBool", 1, False)
 
     multisampleBuffer = field.newField( "multisampleBuffer", "SFInt32", 1, -1)
-    multisampleSamples = field.newField( "multisampleSamples", "SFInt32", 1, -1)
+    #: Samples a pixel for antialiasing, X_ITE's Antialiased and Multisampling
+    #: (env: OPENGLCONTEXT_MULTISAMPLING); 0 or less is none. A window-creation
+    #: setting: it takes effect on the next window.
+    multisampleSamples = field.newField(
+        "multisampleSamples", "SFInt32", 1,
+        lambda: int(renderoptions.env_number('OPENGLCONTEXT_MULTISAMPLING', -1, integer=True)))
     stereo = field.newField( "stereo", "SFInt32", 1, -1)
 
     debugBBox = field.newField( "debugBBox", "SFBool", 1, False )
