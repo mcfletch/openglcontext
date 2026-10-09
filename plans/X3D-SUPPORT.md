@@ -215,6 +215,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - `glelathe`: minified rings are mipmapped, and with opengl_extrusions'
     `uv-seam` branch the spiral and screw no longer squeeze the texture back
     across the contour's seam
+  - `physics_events` (2026-10-09, x3d-gaps): its boxes are meshes with
+    tangents, so their normal maps show; re-blessed in this worktree's
+    `tests/reference_images` (commit named in the x3d-gaps report)
   - [x] `spherebackgroundobject` crashed: `bound` restored on the engine's
     backgrounds and Fog (`scenegraph.bindable`), the tutorial's own text
     restored
