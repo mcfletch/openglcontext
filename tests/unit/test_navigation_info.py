@@ -48,6 +48,9 @@ class Paths:
     def __init__(self, scene):
         self.paths = {nodetypes.NavigationInfo: [(scene, child) for child in scene.children]}
 
+    def layerPaths(self, kind):
+        return self.paths.get(kind, ())
+
 
 def test_the_pass_binds_the_first_navigation_info():
     first, second = NavigationInfo(), NavigationInfo()

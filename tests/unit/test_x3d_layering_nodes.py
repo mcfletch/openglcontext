@@ -98,3 +98,53 @@ class TestScreenFontStyle:
 
     def test_it_draws_with_the_first_format_that_has_a_font(self):
         assert ScreenFontStyle().format == ''
+
+
+def test_new_layers_are_walked_at_the_next_frame():
+    from OpenGLContext.scenegraph.basenodes import sceneGraph  # noqa: PLC0415 kept with its use
+    from vrml.vrml97 import nodetypes  # noqa: PLC0415 kept with its use
+    found = layering.LayerSet()
+    walked = FlatPass(sceneGraph(children=[found]), [])
+    shape = Shape(geometry=Box())
+    found.layers = [layering.Layer(children=[shape])]
+    walked.walkPending()
+    assert [path[-1] for path in walked.paths.get(nodetypes.Rendering, ())] == [shape]
+
+
+class TestThePassesTables:
+    """What the pass keeps of the layers, made again as what it is made from changes"""
+
+    def walk(self):
+        from OpenGLContext.scenegraph.basenodes import sceneGraph  # noqa: PLC0415 kept with its use
+        self.shape = Shape(geometry=Box())
+        self.group = layering.LayoutGroup(children=[self.shape])
+        self.layer = layering.Layer(children=[self.group])
+        self.light = layering.Layer()
+        self.found = layering.LayerSet(layers=[self.layer, self.light], order=[0, 1, 2])
+        return FlatPass(sceneGraph(children=[self.found]), [])
+
+    def test_a_layout_groups_viewport_reclips_its_paths(self):
+        walked = self.walk()
+        assert walked.layerTable().chains(self.layer) == []
+        port = layering.Viewport(clipBoundary=[0, 0.5, 0, 1])
+        self.group.viewport = port
+        assert walked.layerTable().chains(self.layer) == [(port,)]
+
+    def test_a_new_path_is_in_its_layers_paths(self):
+        from OpenGLContext.scenegraph.basenodes import PointLight  # noqa: PLC0415 kept with its use
+        from vrml.vrml97 import nodetypes  # noqa: PLC0415 kept with its use
+        walked = self.walk()
+        assert list(walked.layerPaths(nodetypes.Light, self.light)) == []
+        lamp = PointLight()
+        self.light.children = [lamp]
+        walked.walkPending()
+        assert [path[-1] for path in walked.layerPaths(nodetypes.Light, self.light)] == [lamp]
+        assert list(walked.layerPaths(nodetypes.Light, None)) == []
+
+    def test_the_active_layer_follows_the_layer_set(self):
+        walked = self.walk()
+        assert walked.activeLayer() is None
+        self.found.activeLayer = 2
+        assert walked.activeLayer() is self.light
+        self.found.order = [0, 1]
+        assert walked.activeLayer() is None

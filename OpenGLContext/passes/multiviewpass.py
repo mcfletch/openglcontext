@@ -75,7 +75,8 @@ class MultiviewPassMixin( PassResources ):
         def gatherPaths( self ) -> 'GatheredPaths': ...
         def refreshClipPlanes( self ) -> None: ...
         def renderSet( self, matrix: Any,
-                       gathered: Optional['GatheredPaths'] = None ) -> list[Any]: ...
+                       gathered: Optional['GatheredPaths'] = None,
+                       among: Optional[numpy.ndarray] = None ) -> list[Any]: ...
         def greatestDepth( self, toRender: Sequence[Any] ) -> float: ...
         def zoneHiddenAt( self, camera: Any ) -> Any: ...
         def setupViewLighting( self, matrix: Any, lighting: Optional['Lighting'],
@@ -84,9 +85,23 @@ class MultiviewPassMixin( PassResources ):
                                 skip: Optional[set] = None ) -> None: ...
         def resetMeshDrawState( self ) -> None: ...
         def shaderSelectRenderOptimized( self, mode: Any, toRender: list,
-                                         events: dict ) -> None: ...
+                                         events: dict,
+                                         missed: Optional[list] = None ) -> None: ...
         def selectRender( self, mode: Any, toRender: Sequence[Any],
                           events: dict[Any, Any] ) -> None: ...
+        @staticmethod
+        def _dispatchPickEvent( mode: Any, event: Any, object_paths: list,
+                                x: float, y: float, depth: float,
+                                matrix: Any, projection: Any, viewport: Any,
+                                layer: Any = None ) -> None: ...
+        layered: bool
+        def stackLayers( self, frames: Sequence['ViewFrame'] ) -> list['ViewFrame']: ...
+        def setDrawingFrame( self, frame: 'ViewFrame' ) -> None: ...
+        def placeLayouts( self, frames: Sequence['ViewFrame'] ) -> int: ...
+        def faceLayerBillboards( self, frames: Sequence['ViewFrame'] ) -> None: ...
+        def layerMask( self, gathered: 'GatheredPaths',
+                       frame: Optional['ViewFrame'] = None ) -> Any: ...
+        def pickable( self, frame: 'ViewFrame' ) -> bool: ...
 
     #: The cameras the shape being drawn is seen from, as points in the eye
     #: space it is drawn in, while one draw serves several views; None for a
@@ -276,6 +291,14 @@ class MultiviewPassMixin( PassResources ):
         the selection render on screen in place of the frame, so every view
         draws it whether or not it has an event to resolve.
         """
+        if self.layered and self.use_shaders and not debugSelection:
+            try:
+                self.selectRenderLayers( mode, events )
+            finally:
+                self.finishViews()
+            if self.activeFrame is not None:
+                self.applyViewFrame( self.activeFrame, gl=False )
+            return
         grouped = { id( frame ): subset for frame, subset in self.eventsByView( events ) }
         try:
             for frame in self.viewFrames:
@@ -291,6 +314,40 @@ class MultiviewPassMixin( PassResources ):
             self.finishViews()
         if self.activeFrame is not None:
             self.applyViewFrame( self.activeFrame, gl=False )
+
+    def selectRenderLayers( self, mode: Any, events: dict[Any, Any] ) -> None:
+        """Resolve ``events`` through the layers of the views they were made in
+
+        Each event is tried against the parts of its view from the top layer
+        down, each pickable part under its pick point drawing the selection
+        render through its own camera; the first part with a hit dispatches
+        it. An event no part hits is dispatched with no path through the
+        part navigation drives.
+        """
+        from OpenGLContext.multiview.layers import contains
+        for routed, subset in self.eventsByView( events ):
+            pending = dict( subset )
+            for frame in reversed( [ frame for frame in self.viewFrames
+                                     if frame.view is routed.view ] ):
+                if not pending:
+                    break
+                if not self.pickable( frame ):
+                    continue
+                here = { key: event for key, event in pending.items()
+                         if contains( frame.rect, event.getPickPoint() ) }
+                if not here:
+                    continue
+                missed: list[Any] = []
+                self.applyViewFrame( frame )
+                self.shaderSelectRenderOptimized( mode, frame.toRender, here, missed )
+                for key, event in here.items():
+                    if not any( event is other for other in missed ):
+                        del pending[key]
+            for event in pending.values():
+                x, y = event.getPickPoint()[:2]
+                self._dispatchPickEvent(
+                    mode, event, [[]], x, y, 1.0, routed.modelView, routed.projection,
+                    routed.rect, layer=routed.part.plan.node if routed.part is not None else None )
 
     #: This frame's views, each with its camera's matrices, frustum and draw
     #: list; the first frame's active view is :attr:`activeFrame`. Built by
@@ -339,7 +396,8 @@ class MultiviewPassMixin( PassResources ):
         That takes several views, a strategy that shares, and no more views
         than the driver has viewports.
         """
-        if self.multiviewStrategy not in ( 'geometry', 'vertex' ) or len( frames ) < 2:
+        if ( self.multiviewStrategy not in ( 'geometry', 'vertex' ) or len( frames ) < 2
+                or self.layered ):
             return False
         from OpenGLContext.multiview.strategy import MultiviewCapabilities
         return len( frames ) <= MultiviewCapabilities.detect().max_views
@@ -391,6 +449,7 @@ class MultiviewPassMixin( PassResources ):
                 self.modelView, self.projection, self.modelproj,
                 self.calculateFrustum(), fitted=view is layout.active,
             ) )
+        frames = self.stackLayers( frames )
         active = next( ( frame for frame in frames if frame.fitted ), frames[0] )
         active.fitted = True
         self.viewFrames = frames
@@ -419,7 +478,9 @@ class MultiviewPassMixin( PassResources ):
         """
         from OpenGLContext.multiview.views import covers
         width, height = context.getViewPort()
-        if covers( [ frame.rect for frame in frames ], width, height ):
+        # A layer above the bottom of a stack does not clear what it covers
+        if covers( [ frame.rect for frame in frames
+                     if frame.part is None or frame.part.bottom ], width, height ):
             return
         glDisable( GL_SCISSOR_TEST )
         glViewport( 0, 0, int( width ), int( height ) )
@@ -436,6 +497,7 @@ class MultiviewPassMixin( PassResources ):
         the scissor rectangle, so a clear and a wide line stay inside the tile.
         """
         self.view = frame.view
+        self.setDrawingFrame( frame )
         self.viewPlatform = frame.camera
         self.modelView = frame.modelView
         self.projection = frame.projection
@@ -459,15 +521,18 @@ class MultiviewPassMixin( PassResources ):
         then culls the one table against its own frustum and trims its
         projection to the depth of what it kept.
         """
-        from OpenGLContext.multiview.views import tile_of
         from OpenGLContext.scenegraph.lod import viewer_for
         frames = list( self.viewFrames )
         window = self.context.getViewPort()
         self.chooseLevels( [
             viewer_for( frame.camera, frame.modelView, frame.projection )
             for frame in frames ] )
-        if frames:
+        if self.layered:
+            self.faceLayerBillboards( frames )
+        elif frames:
             self.faceBillboards( frames[0].modelView )
+        # Before the walk: a placed group moves the paths through it.
+        self.placeLayouts( frames )
         self.senseEnvironment( frames )
         self.sensePicks()
         self.refreshClipPlanes()
@@ -479,11 +544,12 @@ class MultiviewPassMixin( PassResources ):
             # Nodes the zones hide from this view's camera are left out of its
             # cull; the active view's set stands for the frame's other draws.
             self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( frame ) )
-            frame.toRender = self.renderSet( frame.modelView, gathered )
+            frame.toRender = self.renderSet( frame.modelView, gathered,
+                                             self.layerMask( gathered, frame ) )
             frame.visiblePlacements = self.visiblePlacements or {}
             frame.maxDepth = self.greatestDepth( frame.toRender )
             if frame.maxDepth:
-                with tile_of( frame.view, frame.camera, window ):
+                with self.cameraFor( frame, window ):
                     frame.projection = frame.camera.viewMatrix( frame.maxDepth )
                 # The frustum stays the one the view was culled with.
                 frame.modelproj = dot( asarray( frame.modelView, 'd' ),
@@ -492,6 +558,20 @@ class MultiviewPassMixin( PassResources ):
         self.applyViewFrame( active, gl=False )
         self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )
         return frames
+
+    @staticmethod
+    def cameraFor( frame: 'ViewFrame', window: tuple[int, int] ) -> Any:
+        """A block within which ``frame``'s camera projects for ``frame``'s rectangle
+
+        A layer's part is drawn into a rectangle of its own
+        (:func:`~OpenGLContext.multiview.layers.sized`); a view, into its tile
+        (:func:`~OpenGLContext.multiview.views.tile_of`).
+        """
+        if frame.part is not None:
+            from OpenGLContext.multiview.layers import sized
+            return sized( frame.camera, frame.rect[2:] )
+        from OpenGLContext.multiview.views import tile_of
+        return tile_of( frame.view, frame.camera, window )
 
     def senseEnvironment( self, frames: Sequence['ViewFrame'] ) -> None:
         """Tell the scene's environmental sensors what they sense from these views.
@@ -534,7 +614,7 @@ class MultiviewPassMixin( PassResources ):
         The one the context routed it to, where that view was drawn this frame;
         otherwise the one under its pick point; otherwise the active view.
         """
-        frames = self.viewFrames
+        frames = [ frame for frame in self.viewFrames if frame.navigated ]
         routed = getattr( event, 'view', None )
         for frame in frames:
             if frame.view is routed:

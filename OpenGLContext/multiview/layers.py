@@ -32,9 +32,11 @@ from vrml.x3d import nodes as x3d
 from OpenGLContext.multiview.views import Rect
 
 __all__ = [
-    'LayerCameras', 'LayerPart', 'LayerPlan', 'Membership', 'PathLayers', 'active_number', 'chain_rect',
-    'cleared_after', 'clip_chain', 'clip_rect', 'contains', 'drawn_layers', 'intersect',
-    'layer_of', 'part_of', 'sized', 'stack_parts',
+    'LayerCameras', 'LayerPart', 'LayerPlan', 'Membership', 'PathLayers', 'PickedPart',
+    'active_number', 'chain_rect', 'cleared_after', 'clip_chain', 'clip_generation', 'clip_rect',
+    'contains',
+    'drawn_layers', 'intersect', 'layer_of', 'part_of', 'resolve_pick', 'sized', 'stack_parts',
+    'surface_depth',
 ]
 
 #: X3D's ``clipBoundary``: left, right, bottom, top, as fractions.
@@ -148,40 +150,76 @@ def clip_chain(path: Sequence[Any]) -> tuple[Any, ...]:
     return tuple(found)
 
 
+_clip_changes = 0
+
+
+def clip_generation() -> int:
+    """A count that moves whenever a ``LayoutGroup``'s ``viewport`` is set
+
+    The paths of a scene and this count together decide which clipping each
+    path is drawn with (:func:`clip_chain`).
+    """
+    return _clip_changes
+
+
+def _clipping_changed(*_args: Any, **_named: Any) -> None:
+    global _clip_changes
+    _clip_changes += 1
+
+
+def _watch_clipping() -> None:
+    from pydispatch import dispatcher  # noqa: PLC0415 kept with its use
+    dispatcher.connect(_clipping_changed, signal=('set', x3d.LayoutGroup.viewport), weak=False)
+
+
+_watch_clipping()
+
+
 class PathLayers:
     """Which layer, and which clipping, each of one set of paths is drawn in
 
-    ``layers[i]`` and ``clips[i]`` are those of the *i*-th path.
+    ``layers[i]`` and ``clips[i]`` are those of the *i*-th path. The masks
+    and clippings asked for are kept with the table, keyed by the nodes
+    themselves, which the paths hold.
     """
 
     def __init__(self, paths: Sequence[Sequence[Any]]) -> None:
         self.layers: list[Any] = [layer_of(path) for path in paths]
         self.clips: list[tuple[Any, ...]] = [clip_chain(path) for path in paths]
-        self._masks: dict[tuple[int, tuple[int, ...]], np.ndarray] = {}
+        self._masks: dict[tuple[Any, tuple[Any, ...]], np.ndarray] = {}
+        self._layerMasks: dict[Any, np.ndarray] = {}
+        self._chains: dict[Any, list[tuple[Any, ...]]] = {}
 
     def mask(self, layer: Any, chain: tuple[Any, ...]) -> np.ndarray:
         """Which paths are drawn in `layer` (None for layer 0) clipped by `chain`"""
-        key = (id(layer), tuple(id(port) for port in chain))
+        key = (layer, tuple(chain))
         found = self._masks.get(key)
         if found is None:
-            found = np.array([
+            found = self._masks[key] = np.array([
                 held is layer and len(clip) == len(chain)
                 and all(a is b for a, b in zip(clip, chain))
                 for held, clip in zip(self.layers, self.clips)], dtype=bool)
-            # The paths this table was made for hold the layer and viewport
-            # nodes, so the ids are not reused while it is kept.
-            self._masks[key] = found  # noqa: OGC131 the paths hold the keyed nodes
+        return found
+
+    def layer_mask(self, layer: Any) -> np.ndarray:
+        """Which paths are drawn in `layer` (None for layer 0), however clipped"""
+        found = self._layerMasks.get(layer)
+        if found is None:
+            found = self._layerMasks[layer] = np.array(
+                [held is layer for held in self.layers], dtype=bool)
         return found
 
     def chains(self, layer: Any) -> list[tuple[Any, ...]]:
         """The distinct clippings of `layer`'s paths, other than none, in the
         order their first paths come"""
-        found: list[tuple[Any, ...]] = []
-        for held, clip in zip(self.layers, self.clips):
-            if held is layer and clip and not any(
-                    len(clip) == len(known) and all(a is b for a, b in zip(clip, known))
-                    for known in found):
-                found.append(clip)
+        found = self._chains.get(layer)
+        if found is None:
+            found = self._chains[layer] = []
+            for held, clip in zip(self.layers, self.clips):
+                if held is layer and clip and not any(
+                        len(clip) == len(known) and all(a is b for a, b in zip(clip, known))
+                        for known in found):
+                    found.append(clip)
         return found
 
 
@@ -193,9 +231,9 @@ class Membership:
     """
 
     def __init__(self) -> None:
-        self._held: Optional[tuple[Any, int, int, PathLayers]] = None
+        self._held: Optional[tuple[Any, Any, int, PathLayers]] = None
 
-    def of(self, paths: Sequence[Sequence[Any]], generation: int) -> PathLayers:
+    def of(self, paths: Sequence[Sequence[Any]], generation: Any) -> PathLayers:
         """The table for `paths`, made again where they or `generation` differ"""
         held = self._held
         if (held is not None and held[0] is paths and held[1] == generation
@@ -341,3 +379,110 @@ class LayerCameras:
             view.placeOn(platform)
         view.project(platform)
         return platform
+
+
+#: A window depth in front of the camera whatever its far plane
+#: (:data:`OpenGLContext.scenegraph.x3dpointing.AHEAD`).
+AHEAD = 0.5
+
+
+class PickedPart(NamedTuple):
+    """One part of a view as a pick made in it is resolved: the part, and the
+    camera it was drawn through (row-vector ``modelview`` and
+    ``projection``, and the ``rect`` it was drawn in)"""
+
+    part: LayerPart
+    modelview: Any
+    projection: Any
+    rect: Rect
+
+
+def _window_to_world(modelview: Any, projection: Any, rect: Rect,
+                     point: Sequence[float], depth: float) -> Optional[np.ndarray]:
+    """The world point at window position `point` and window depth `depth`"""
+    x, y, width, height = (float(value) for value in rect)
+    device = np.array((2.0 * (float(point[0]) - x) / max(width, 1.0) - 1.0,
+                       2.0 * (float(point[1]) - y) / max(height, 1.0) - 1.0,
+                       2.0 * depth - 1.0, 1.0))
+    try:
+        inverse = np.linalg.inv(np.asarray(modelview, np.float64) @ np.asarray(projection, np.float64))
+    except np.linalg.LinAlgError:
+        return None
+    found = device @ inverse
+    if abs(found[3]) < 1e-300:
+        return None
+    return np.asarray(found[:3] / found[3])
+
+
+def surface_depth(path: Any, modelview: Any, projection: Any, rect: Rect,
+                  point: Sequence[float]) -> Optional[float]:
+    """The window depth of the shape at the end of `path` under `point`
+
+    The pointer's ray through `point` is crossed with the shape's triangles
+    (:func:`OpenGLContext.scenegraph.meshdata.geometry_arrays`), and the
+    nearest crossing's depth answered. A shape with no triangles, or one the
+    ray misses, is measured at its origin. None where the camera or the
+    shape's matrix cannot be inverted.
+    """
+    from OpenGLContext.scenegraph import meshdata, pickgeometry  # noqa: PLC0415 kept with its use
+    world = np.asarray(path.transformMatrix(), np.float64)
+    # Depth 1 may be behind the camera (the pass trims its projection with a
+    # far plane there); the near plane and AHEAD are both in front.
+    start = _window_to_world(modelview, projection, rect, point, 0.0)
+    ahead = _window_to_world(modelview, projection, rect, point, AHEAD)
+    try:
+        local = np.linalg.inv(world)
+    except np.linalg.LinAlgError:
+        return None
+    if start is None or ahead is None:
+        return None
+    hit = np.zeros(3)
+    found = meshdata.geometry_arrays(getattr(path[-1], 'geometry', None))
+    if found is not None:
+        positions = np.asarray(found.attributes['POSITION'], np.float64).reshape(-1, 3)
+        corners = (np.arange((len(positions) // 3) * 3) if found.indices is None
+                   else np.asarray(found.indices, np.intp).ravel())
+        begin, toward = (_homogeneous(np.append(each, 1.0) @ local) for each in (start, ahead))
+        bearing = toward - begin
+        length = float(np.linalg.norm(bearing))
+        if len(corners) and length > 0:
+            # Far enough along the ray to pass every triangle
+            reach = float(np.linalg.norm(begin)) + float(np.abs(positions).max()) * 2.0 + 1.0
+            end = begin + bearing * (reach / length)
+            crossings = pickgeometry.segment_triangles(
+                begin, end, positions[corners].reshape(-1, 3, 3))
+            if len(crossings.t):
+                hit = begin + float(crossings.t.min()) * (end - begin)
+    clip = (np.append(hit, 1.0) @ world @ np.asarray(modelview, np.float64)
+            @ np.asarray(projection, np.float64))
+    if abs(clip[3]) < 1e-300:
+        return None
+    return float(min(max((clip[2] / clip[3] + 1.0) / 2.0, 0.0), 1.0))
+
+
+def _homogeneous(point: np.ndarray) -> np.ndarray:
+    return np.asarray(point[:3] / point[3])
+
+
+def resolve_pick(views: Sequence[PickedPart], navigated: int, path: Sequence[Any],
+                 point: Sequence[float], depth: float) -> tuple[int, float]:
+    """(index of the part of `views` a pick is resolved through, its depth)
+
+    A pick that hit nothing, or hit a path no part draws, is resolved through
+    `navigated`, the part navigation drives, with the depth read. A hit is
+    resolved through the part that drew the path; where a layer drawn after
+    it cleared the depth buffer at `point`, the depth is measured on the
+    shape (:func:`surface_depth`).
+    """
+    if not path:
+        return navigated, depth
+    parts = [view.part for view in views]
+    index = part_of(parts, layer_of(path), clip_chain(path))
+    if index is None:
+        return navigated, depth
+    if cleared_after(parts, index, point):
+        view = views[index]
+        found = surface_depth(path, view.modelview, view.projection, view.rect, point)
+        if found is not None:
+            depth = found
+    return index, depth

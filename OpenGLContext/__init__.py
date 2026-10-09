@@ -266,6 +266,7 @@ Node( 'KeySensor', 'OpenGLContext.scenegraph.x3druntime.KeySensor' )
 # scene is drawn as, and the groups the render pass places on the screen.
 Node( 'Layer', 'OpenGLContext.scenegraph.layering.Layer' )
 Node( 'LayerSet', 'OpenGLContext.scenegraph.layering.LayerSet' )
+Node( 'Layout', 'vrml.x3d.nodes.Layout' )
 Node( 'LayoutGroup', 'OpenGLContext.scenegraph.layering.LayoutGroup' )
 Node( 'LayoutLayer', 'OpenGLContext.scenegraph.layering.LayoutLayer' )
 Node( 'ScreenFontStyle', 'OpenGLContext.scenegraph.text.fontstyle3d.ScreenFontStyle' )

@@ -274,3 +274,75 @@ class TestLayerCameras:
         first, second = layering.Layer(), layering.Layer()
         assert cameras.camera(first, []) is not cameras.camera(second, [])
         assert cameras.camera(None, []) is cameras.camera(None, [])
+
+
+class TestResolvingPicks:
+    """Which layer a pick is resolved through, and the depth it is unprojected at"""
+
+    def setup_method(self):
+        from vrml.vrml97 import transformmatrix  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph import layering, nodepath  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.basenodes import Box, Shape, Transform  # noqa: PLC0415 kept with its use
+        self.box = Shape(geometry=Box(size=(2, 2, 2)))
+        self.layer = layering.Layer(children=[Transform(translation=(0, 0, -5),
+                                                        children=[self.box])])
+        self.found = layering.LayerSet(layers=[self.layer], order=[0, 1])
+        root = object()
+        moved = self.layer.children[0]
+        self.path = nodepath.NodePath([root, self.found, self.layer, moved, self.box])
+        self.projection = transformmatrix.perspectiveMatrix(np.pi / 2, 1.0, 1.0, 100.0)
+        self.camera = np.identity(4)
+        plan = layers.LayerPlan(0, None)
+        upper = layers.LayerPlan(1, self.layer)
+        self.parts = [
+            layers.LayerPart(plan, (), (0, 0, 100, 100), True, True),
+            layers.LayerPart(upper, (), (0, 0, 100, 100), True, False),
+        ]
+        self.picked = [layers.PickedPart(part, self.camera, self.projection, part.rect)
+                       for part in self.parts]
+
+    def depth_of(self, z):
+        clip = np.array((0.0, 0.0, z, 1.0)) @ self.projection
+        return (clip[2] / clip[3] + 1.0) / 2.0
+
+    def test_a_shapes_surface_depth_is_found_along_the_pointer(self):
+        found = layers.surface_depth(self.path, self.camera, self.projection,
+                                     (0, 0, 100, 100), (50, 50))
+        assert found == pytest.approx(self.depth_of(-4.0))
+
+    def test_the_surface_is_found_through_the_passes_trimmed_projection(self):
+        from OpenGLContext.move.viewplatform import ViewPlatform  # noqa: PLC0415 kept with its use
+        self.projection = ViewPlatform(aspect=1.0, near=1.0).viewMatrix(-(101 * 1.01))
+        found = layers.surface_depth(self.path, self.camera, self.projection,
+                                     (0, 0, 100, 100), (50, 50))
+        assert found == pytest.approx(self.depth_of(-4.0))
+
+    def test_a_shape_with_no_triangles_is_measured_at_its_origin(self):
+        from OpenGLContext.scenegraph.basenodes import Text  # noqa: PLC0415 kept with its use
+        self.box.geometry = Text(string=['x'])
+        found = layers.surface_depth(self.path, self.camera, self.projection,
+                                     (0, 0, 100, 100), (50, 50))
+        assert found == pytest.approx(self.depth_of(-5.0))
+
+    def test_a_pick_in_the_top_layer_is_resolved_there_with_the_depth_read(self):
+        index, depth = layers.resolve_pick(self.picked, 0, self.path, (50, 50), 0.25)
+        assert (index, depth) == (1, 0.25)
+
+    def test_a_pick_beneath_a_layer_that_cleared_the_depth_is_measured(self):
+        lower = layers.LayerPart(layers.LayerPlan(1, self.layer), (), (0, 0, 100, 100),
+                                 True, True)
+        upper = layers.LayerPart(layers.LayerPlan(2, object()), (), (0, 0, 100, 100),
+                                 True, False)
+        picked = [layers.PickedPart(part, self.camera, self.projection, part.rect)
+                  for part in (lower, upper)]
+        index, depth = layers.resolve_pick(picked, 1, self.path, (50, 50), 1.0)
+        assert index == 0
+        assert depth == pytest.approx(self.depth_of(-4.0))
+
+    def test_a_miss_is_resolved_through_the_navigated_part(self):
+        assert layers.resolve_pick(self.picked, 0, [], (50, 50), 1.0) == (0, 1.0)
+
+    def test_a_path_in_no_part_is_resolved_through_the_navigated_part(self):
+        from OpenGLContext.scenegraph import layering, nodepath  # noqa: PLC0415 kept with its use
+        stray = nodepath.NodePath([object(), layering.Layer(), self.box])
+        assert layers.resolve_pick(self.picked, 0, stray, (50, 50), 0.5) == (0, 0.5)

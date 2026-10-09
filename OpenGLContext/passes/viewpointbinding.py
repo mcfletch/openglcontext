@@ -31,6 +31,9 @@ log = logging.getLogger(__name__)
 def publish_viewpoints(context: Any, pass_: Any) -> None:
     """Give the scenegraph the pass's paths to its Viewpoints, in the order found.
 
+    In a scene drawn as layers, the Viewpoints of the layer navigation drives
+    (:meth:`~OpenGLContext.passes.layerpass.LayeringPassMixin.layerPaths`).
+
     Assigns ``SceneGraph.viewpointPaths`` and, where that is a different set
     of paths from the last frame's, calls ``context.OnViewpointsChanged`` with
     them: a scene loaded, a camera added or taken away. A pass drawing no
@@ -39,7 +42,10 @@ def publish_viewpoints(context: Any, pass_: Any) -> None:
     graph = getattr(pass_, 'scene', None)
     if graph is None:
         return
-    paths = tuple(pass_.paths.get(nodetypes.Viewpoint, ()))
+    # A scene drawn as layers is navigated in one of them, whose viewpoints these are
+    layered = getattr(pass_, 'layerPaths', None)
+    paths = tuple(layered(nodetypes.Viewpoint) if layered is not None
+                  else pass_.paths.get(nodetypes.Viewpoint, ()))
     known: Sequence[Any] = getattr(graph, 'viewpointPaths', ())
     if len(paths) == len(known) and all(
             path is seen for path, seen in zip(paths, known)):

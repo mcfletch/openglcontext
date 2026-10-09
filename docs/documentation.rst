@@ -161,6 +161,12 @@ Installing the package puts these commands on your path:
    bouncing in a glass case, one for each emitter and physics model, with
    keys to set the firework off and switch the wind. See :ref:`X3D particle
    systems <x3d-particles>`.
+``oglc-x3d-layering``
+   X3D's Layering and Layout nodes read from a document: a courtyard in
+   layer 0, a plan view of it in an inset viewport through its own
+   viewpoint, a brass frame, and a wooden panel placed in pixels with text
+   in a ``ScreenFontStyle`` and a button that shows and hides the inset.
+   See :ref:`x3d-layers`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

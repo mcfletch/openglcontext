@@ -6,7 +6,7 @@ allocations, uploads and compiles are counted by
 ones a game's still moment is made of: VRML97 primitives through both
 renderers, a field of shapes drawn as one instanced group, a mirror with
 bloom, shadows, text, X3D's line, point and fill properties, X3D's NURBS
-geometry, pick sensors and ClipPlanes.
+geometry, pick sensors, ClipPlanes and X3D layers.
 """
 import pytest
 
@@ -145,6 +145,25 @@ def _nurbs():
         for index, geometry in enumerate(geometries)]
 
 
+def _layered():
+    """X3D layers: an inset with its own viewpoint and background, and a panel
+    placed in pixels with screen text"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    return Loader.loads(b'''<X3D version="4.0"><Scene>
+      <Viewpoint position="0 0 10"/><Shape><Box/></Shape>
+      <LayerSet order="0 1 2">
+        <Layer><Viewport containerField="viewport" clipBoundary="0.6 1 0.6 1"/>
+          <Background skyColor="0 0 0.3"/><Viewpoint position="0 10 0" orientation="1 0 0 -1.57"/>
+          <Shape><Sphere/></Shape></Layer>
+        <LayoutLayer><Layout containerField="layout" size="80 30" sizeUnits='"PIXEL"'
+            align='"LEFT" "BOTTOM"' scaleMode='"PIXEL"'/>
+          <Shape><Appearance><Material emissiveColor="1 1 1"/></Appearance>
+            <Text string="panel"><ScreenFontStyle pointSize="10"/></Text></Shape>
+          <ScreenGroup><Shape><Rectangle2D size="80 30"/></Shape></ScreenGroup>
+        </LayoutLayer>
+      </LayerSet></Scene></X3D>''', 'layered.x3d')
+
+
 PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
 
 
@@ -166,6 +185,7 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
     pytest.param(_shaded, {'OPENGLCONTEXT_RENDERER': 'flat'}, id='x3d-shader-flat'),
     pytest.param(_nurbs, PBR, id='x3d-nurbs-pbr'),
     pytest.param(_nurbs, {'OPENGLCONTEXT_RENDERER': 'flat'}, id='x3d-nurbs-flat'),
+    pytest.param(_layered, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='x3d-layers'),
 ])
 def test_a_still_frame_asks_nothing_new_of_gl(scene, environment):
     with scene_context(scene(), environment=environment) as context:

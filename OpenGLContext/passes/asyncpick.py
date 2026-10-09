@@ -13,6 +13,7 @@ through it so the three cannot drift.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Optional
 
 import ctypes
@@ -57,19 +58,22 @@ class _AsyncPickMixin(PassResources):
     @staticmethod
     def _dispatchPickEvent(mode: Any, event: Any, object_paths: list,
                            x: float, y: float, depth: float,
-                           matrix: Any, projection: Any, viewport: Any) -> None:
+                           matrix: Any, projection: Any, viewport: Any,
+                           layer: Any = None) -> None:
         """Populate a pick event and hand it to the context.
 
         ``object_paths`` is the already-formed list passed to
         ``event.setObjectPaths`` (the callers differ on how they wrap a hit path,
         so they form it and this only sets it), keeping the three pick paths in
-        lock-step for every other field.
+        lock-step for every other field. ``layer`` is the X3D layer the event
+        was resolved through, None for layer 0 and a scene without layers.
         """
         event.setObjectPaths(object_paths)
         event.viewCoordinate = x, y, depth
         event.modelViewMatrix = matrix
         event.projectionMatrix = projection
         event.viewport = viewport
+        event.layer = layer
         if hasattr(mode.context, 'ProcessEvent'):
             mode.context.ProcessEvent(event)
 
@@ -88,6 +92,30 @@ class _AsyncPickMixin(PassResources):
         if frame is None:
             return self.modelView, self.projection, self.viewport
         return frame.modelView, frame.projection, frame.rect
+
+    def _pickResolver(self, event: Any) -> Callable[[Any, float, float, float],
+                                                    tuple[float, tuple[Any, Any, Any], Any]]:
+        """How a pick of ``event`` is resolved, from the frame as it is now
+
+        A callable of (path, x, y, depth) answering (depth, (modelview,
+        projection, viewport), layer). In a scene drawn as layers it is the
+        layer that drew the path's
+        (:meth:`~OpenGLContext.passes.layerpass.LayeringPassMixin.layerPickResolver`);
+        otherwise the view's camera (:meth:`_pickCamera`) with the depth read.
+        """
+        layered = getattr(self, 'layerPickResolver', None)
+        found = layered(event) if layered is not None else None
+        if found is not None:
+            resolver: Callable[[Any, float, float, float],
+                               tuple[float, tuple[Any, Any, Any], Any]] = found
+            return resolver
+        camera = self._pickCamera(event)
+
+        def resolve(_path: Any, _x: float, _y: float,
+                    depth: float) -> tuple[float, tuple[Any, Any, Any], Any]:
+            return depth, camera, None
+
+        return resolve
 
     def disposeResources(self) -> None:
         """Delete the pooled pack buffers and the fences of picks in flight.
@@ -185,9 +213,9 @@ class _AsyncPickMixin(PassResources):
             'id_pid': id_pid, 'id_cap': id_cap,
             'dz_pid': dz_pid, 'dz_cap': dz_cap,
             'fence': fence, 'id_map': id_map,
-            # Each event's camera as it was when this frame was drawn, not as
-            # it is when the batch resolves a frame or more later.
-            'cameras': [self._pickCamera(e) for e in evs],
+            # Each event's cameras as they were when this frame was drawn, not
+            # as they are when the batch resolves a frame or more later.
+            'resolvers': [self._pickResolver(e) for e in evs],
         })
         # Keep the in-flight queue bounded: if the GPU falls behind, block on the
         # oldest so events still get delivered and PBOs are recycled.
@@ -291,9 +319,11 @@ class _AsyncPickMixin(PassResources):
                 obj_id, depth = 0, 1.0
             path = id_map.get(obj_id, [])
             x, y = b['samples'][i]
+            depth, (modelview, projection, viewport), layer = b['resolvers'][i](
+                path, x, y, depth)
             self._dispatchPickEvent(
                 mode, event, [path] if path else [[]], x, y, depth,
-                *b['cameras'][i])
+                modelview, projection, viewport, layer=layer)
 
         glDeleteSync(b['fence'])
         self._releasePBO(b['id_pid'], b['id_cap'])
