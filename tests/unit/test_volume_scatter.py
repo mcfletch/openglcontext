@@ -76,3 +76,15 @@ def test_scattered_light_moves_from_the_back_lobe_to_the_lit_side(gl_context):
     assert scattered[12].sum() < plain[12].sum() - 60, (plain[12], scattered[12])
     # The lit side takes it back in, blurred across the terminator.
     assert scattered[40].sum() > plain[40].sum() + 60, (plain[40], scattered[40])
+
+
+def test_the_buffer_has_a_unit_no_other_sampler_uses():
+    from OpenGLContext.passes import pbrpass  # noqa: PLC0415 kept with its use
+    from OpenGLContext.passes.reflection import REFLECTION_UNIT  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph.fogcoordinate import FOG_DEPTH_UNIT  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT  # noqa: PLC0415 kept with its use
+    others = (set(pbrpass.PBR_UNITS.values()) | set(pbrpass.PBR_EXT_UNITS.values())
+              | {pbrpass.LAYER_CUBE_UNIT, pbrpass.LAYER_VOLUME_UNIT, pbrpass.PROJECTOR_UNIT,
+                 pbrpass.BORROWED_BRDF_UNIT, REFLECTION_UNIT, SKIN_PALETTE_UNIT, FOG_DEPTH_UNIT})
+    assert scatter.SCATTER_UNIT not in others
+    assert FOG_DEPTH_UNIT not in others - {FOG_DEPTH_UNIT}

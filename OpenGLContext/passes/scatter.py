@@ -40,7 +40,7 @@ from OpenGLContext.scenegraph import materialextensions
 
 #: The texture unit the PBR program reads the scatter buffer from: past the
 #: units the texture layers and projectors take (pbrpass).
-SCATTER_UNIT = 35
+SCATTER_UNIT = 37
 #: How many samples of the buffer each fragment reads.
 SCATTER_SAMPLES_COUNT = 55
 #: The cumulative probability the profile's sampling covers.
