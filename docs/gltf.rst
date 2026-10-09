@@ -142,8 +142,11 @@ animation:
 
 - Alpha - opaque, mask (with cutoff) and blend modes.
 
-- Cameras - each perspective camera in the file becomes a viewpoint. In the
-  viewer, PageUp / PageDown cycle through them.
+- Cameras - each camera in the file becomes a viewpoint: a perspective camera a
+  ``Viewpoint`` and an orthographic one an ``OrthoViewpoint`` whose window is
+  ``(-xmag, -ymag, xmag, ymag)``. A perspective camera's ``aspectRatio`` is
+  kept beside its ``Viewpoint``; the projection takes the window's shape, as
+  X_ITE's does. In the viewer, PageUp / PageDown cycle through them.
 
 - Lights - ``KHR_lights_punctual`` directional, point and spot lights.
 
@@ -154,13 +157,17 @@ animation:
   ``alphaCutoff``, ``emissiveFactor``, ``normalTexture/scale``,
   ``occlusionTexture/strength``, the ``pbrMetallicRoughness`` factors
   (``baseColorFactor`` with its alpha for a material that blends or masks),
-  every factor of the ``KHR_materials_*`` extensions the loader reads, and each
+  every factor of the ``KHR_materials_*`` extensions the loader reads,
+  ``KHR_materials_clearcoat``'s ``clearcoatNormalTexture/scale``, and each
   texture's ``KHR_texture_transform`` ``offset``, ``rotation`` and ``scale``
-  where the texture declares one; a punctual light's ``color``,
-  ``intensity``, ``range`` and spot cone angles; a perspective camera's
-  ``yfov``, ``znear`` and ``zfar``. A pointer to any other property is logged
-  once, with its path, and its channel left out while the clip's other
-  channels play.
+  (a texture that declares no transform, or shares one with another texture,
+  is given its own); a punctual light's ``color``, ``intensity``, ``range``
+  and spot cone angles; a perspective camera's ``yfov``, ``aspectRatio``,
+  ``znear`` and ``zfar``, and an orthographic one's ``xmag``, ``ymag``,
+  ``znear`` and ``zfar``; an ``EXT_lights_image_based`` light's ``intensity``
+  and ``rotation`` (interpolated as a quaternion, as a node's rotation is).
+  A pointer to any other property is logged once, with its path, and its
+  channel left out while the clip's other channels play.
 
 - Required extensions - a document whose ``extensionsRequired`` lists an
   extension the loader does not read is reported, naming each, and loaded
@@ -177,9 +184,10 @@ animation:
   lights included, are left out of the frame and of the framing bounds until
   an animation pointer, or the application, sets ``visible`` true.
 
-- Instancing - ``EXT_mesh_gpu_instancing``. Repeated meshes are also batched
-  into one instanced draw when the file does not use the extension. See
-  :doc:`Instanced rendering <instancing>`.
+- Instancing - ``EXT_mesh_gpu_instancing``. The instances share the node's
+  geometry, so a skin or morph weights on the node move every instance.
+  Repeated meshes are also batched into one instanced draw when the file does
+  not use the extension. See :doc:`Instanced rendering <instancing>`.
 
 - Levels of detail - ``MSFT_lod`` with ``MSFT_screencoverage``: a node's
   coarser alternatives and the share of the window at which each one is drawn.
@@ -221,8 +229,12 @@ animation:
 
 - Geometry compression - ``KHR_draco_mesh_compression``, when the optional
   ``DracoPy`` package is installed (``pip install DracoPy``, or
-  ``OpenGLContext[draco]``). Without it, the loader skips a Draco-compressed
-  primitive with a warning and loads the rest of the scene.
+  ``OpenGLContext[draco]``). An attribute the extension's ``attributes`` map
+  does not name is read from its own accessor. Without ``DracoPy``, a
+  primitive whose accessors also hold the uncompressed data (a document that
+  lists the extension in ``extensionsUsed`` only) is drawn from that data, and
+  one without is skipped, with one warning per load, while the rest of the
+  scene loads.
 
 - Buffer compression - ``KHR_meshopt_compression`` and
   ``EXT_meshopt_compression``, decoded in NumPy with no further package: all
@@ -706,8 +718,8 @@ Current limitations
   texture where it does not.
 
 - ``KHR_draco_mesh_compression`` needs the optional ``DracoPy`` package.
-  Without it, the loader skips a Draco-compressed primitive with a warning and
-  loads the rest of the scene.
+  Without it, a Draco-compressed primitive with no uncompressed fallback is
+  skipped with a warning and the rest of the scene loads.
 
 - Two material effects are approximations of the reference result: volumetric
   subsurface scattering, and transmission through nested transparent shells.
