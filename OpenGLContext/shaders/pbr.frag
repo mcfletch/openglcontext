@@ -305,6 +305,11 @@ uniform bool hdrOutput;
 // an unlit appearance take the exposure and the tone curve, as X_ITE draws
 // them, and are lit in sRGB unless colorSpace is linear.
 uniform bool documentDisplay;
+// The shading (OpenGLContext.passes.shading): flat lights each face with its
+// own normal; Gouraud lights a document's Material without its textures and
+// multiplies the result by its main texture (19775-1, 17.2.2.7).
+uniform bool flatShading;
+uniform bool gouraudShading;
 
 // KHR_materials_transmission backdrop. The backdrop is the opaque scene captured
 // to a mipmapped colour texture; transmissive fragments sample it at the refracted
@@ -696,7 +701,20 @@ float occlusionShare() {
 
 #include "_fill_inc.glsl"
 
+// The face's own normal, from the eye-space position's derivatives; set at
+// the top of main(), where the control flow is uniform.
+vec3 faceNormal = vec3(0.0, 0.0, 1.0);
+
+// The surface normal on the side being drawn: the interpolated normal, or
+// with flatShading the face's own
+vec3 facingNormal() {
+    if (flatShading) return faceNormal;
+    vec3 N = normalize(vNormal);
+    return gl_FrontFacing ? N : -N;
+}
+
 void main() {
+    faceNormal = normalize(cross(dFdx(vPosition), dFdy(vPosition)));
     vec4 hatched;
     if (x3dHatch(hatched)) {
         fragColor = hatched;
@@ -728,17 +746,17 @@ void main() {
     // map (_layers_inc.glsl): it starts from the diffuse colour as Phong
     // reads it, or as the metallic/roughness model does in linear light.
     vec4 layered;
+    float untexturedAlpha = alpha;
     bool hasLayers = textureLayered(
         phongMode ? (hasVertexColor ? vColor.rgb : baseColorFactor) : albedo, alpha,
-        phongMode ? specularColorFactor : vec3(1.0), drawLinear,
-        gl_FrontFacing ? normalize(vNormal) : -normalize(vNormal), layered);
+        phongMode ? specularColorFactor : vec3(1.0), drawLinear, facingNormal(), layered);
     if (hasLayers) {
         albedo = layered.rgb;
         alpha = layered.a;
     }
     // X3D's texture projectors (_projectors_inc.glsl) cast onto the diffuse colour.
     vec3 projected = projectedColor((eyeToWorld * vec4(vPosition, 1.0)).xyz,
-                                    mat3(eyeToWorld) * (gl_FrontFacing ? vNormal : -vNormal));
+                                    mat3(eyeToWorld) * facingNormal());
     if (!phongMode) albedo *= toLinear(projected);
 
     if (alphaMode == 1 && alpha < alphaCutoff) discard;  // MASK
@@ -751,16 +769,19 @@ void main() {
     }
 
     // X3D's Phong equation (19775-1, 17.2.2.5) on the colour values as given:
-    // a Color node replaces the diffuse colour, a texture multiplies it, the
-    // normal map turns N and the occlusion map scales the lights' sum, and
-    // the result is displayed as it is (displayedX3D), bloom or not.
+    // a Color node replaces the diffuse colour, the normal map turns N and the
+    // occlusion map scales the lights' sum, and the result is displayed as it
+    // is (displayedX3D), bloom or not. With Phong shading a texture multiplies
+    // the diffuse colour; with Gouraud (17.2.2.7) the lit colour, emissive and
+    // specular included, is multiplied by the main texture or put through the
+    // MultiTexture's stages. A texture projector casts onto the diffuse colour
+    // in both.
     if (phongMode) {
-        vec3 diffuse = toLinear(projected) * (hasLayers ? albedo
-                     : (hasVertexColor ? vColor.rgb : baseColorFactor)
-                       * (hasBaseColor ? toLinear(baseTex.rgb) : vec3(1.0)));
-        vec3 N = normalize(vNormal);
-        if (!gl_FrontFacing) N = -N;
-        N = normalMapped(N);
+        vec3 untextured = hasVertexColor ? vColor.rgb : baseColorFactor;
+        vec3 mainTexture = hasBaseColor ? toLinear(baseTex.rgb) : vec3(1.0);
+        vec3 diffuse = toLinear(projected) * (gouraudShading ? untextured
+                     : (hasLayers ? albedo : untextured * mainTexture));
+        vec3 N = normalMapped(facingNormal());
         vec3 V = normalize(toViewer(vPosition));
         float shadows[MAX_LIGHTS];
         resolveShadows(shadows);
@@ -771,6 +792,16 @@ void main() {
         vec3 color = emitted + occlusionShare()
                    * phongLights(N, V, vPosition, diffuse, phongAmbientIntensity * diffuse,
                                  specularColorFactor, phongShininess, shadows);
+        if (gouraudShading) {
+            vec4 staged;
+            if (textureLayered(color, untexturedAlpha, specularColorFactor, drawLinear,
+                               facingNormal(), staged)) {
+                color = staged.rgb;
+                alpha = staged.a;
+            } else {
+                color *= mainTexture;
+            }
+        }
         fragColor = vec4(displayedX3D(color), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());
         return;
@@ -814,11 +845,10 @@ void main() {
         lightmap = texture(lightmapTexture, uvFor(CH_LIGHTMAP)).rgb * lightmapStrength;
 
     // --- normal (with optional tangent-space normal map) ---
-    vec3 Ngeom = normalize(vNormal);
     // Two-sided surfaces: flip the normal on back-facing fragments so they
     // are lit correctly (single-sided back faces are culled, so this is
     // harmless).
-    if (!gl_FrontFacing) Ngeom = -Ngeom;
+    vec3 Ngeom = facingNormal();
     // Water's fine ripple, per fragment. It repeats over a few metres and a
     // sheet is meshed across a whole tile, so at the vertices it is sampled
     // hundreds of metres apart and aliases away to nothing -- which is what

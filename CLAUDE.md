@@ -214,6 +214,8 @@ OpenGLContext/
 │   ├── localfog.py   # Which LocalFog fogs a draw: its scope -- no GL
 │   ├── tonemapping.py  # The tone curve, exposure and colour space a frame
 │   │                 # is written with (X_ITE's options) -- docs/pbr.rst#tone-mapping
+│   ├── shading.py    # Points, wireframe, flat, Gouraud or Phong -- no GL
+│   │                 # -- docs/pbr.rst#shading
 │   ├── clipscope.py  # Which ClipPlanes clip a draw, in its own frame -- no GL
 │   │                 # -- docs/x3d.rst
 │   ├── clippass.py   # The pass's side: each draw given its planes, the

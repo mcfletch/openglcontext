@@ -56,8 +56,10 @@ its ``ambientIntensity`` times the Material's ``ambientIntensity`` and diffuse
 colour, its diffuse and its Blinn-Phong specular terms, on the colour values as
 given, bloom on or off. The exposure and the tone curve apply to the result
 (:ref:`tone-mapping`); by default a document has neither. A ``Color`` node replaces the
-diffuse colour, a texture multiplies it, a normal map turns the normal, an
-occlusion map scales the lights' sum, and fog is X3D's. Image-based lighting,
+diffuse colour, a normal map turns the normal, an occlusion map scales the
+lights' sum, and fog is X3D's. Where the texture applies is the shading's
+(:ref:`shading`): a document is shaded as Gouraud, which multiplies the lit
+colour by the texture, emissive and specular included. Image-based lighting,
 lightmaps and planar reflections are not read for such a shape. An appearance
 with no ``Material`` is unlit: white, times its texture or a ``Color`` node.
 A ``Material`` built in code is converted instead: its diffuse colour
@@ -640,6 +642,48 @@ light the composite turns into that colour.
 (``tone_map``, ``untone``) beside the shaders' copy in
 ``shaders/_tonemap_inc.glsl``, and ``display(context)`` answers the curve,
 exposure and colour space a frame is drawn with.
+
+.. _shading:
+
+Shading
+~~~~~~~
+
+``ContextDefinition.shading`` (``OPENGLCONTEXT_SHADING``) is X_ITE's and
+X3D's ``Shading`` browser option:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Value
+     - Draws
+   * - ``point``
+     - each polygon as its corners
+   * - ``wireframe``
+     - each polygon as its edges
+   * - ``flat``
+     - each face lit with its own normal, worked out per fragment from the
+       face's plane; a document's Material textured as ``gouraud``
+   * - ``gouraud``
+     - a document's Material lit without its textures, and the lit colour
+       multiplied by the main texture (ISO/IEC 19775-1, 17.2.2.7): the
+       ``diffuseTexture``, else the appearance's ``texture``; a
+       ``MultiTexture`` starts its stages from the lit colour
+   * - ``phong``
+     - a document's Material lit with its texture multiplying the diffuse
+       colour (17.2.2.5)
+   * - ``auto`` (default)
+     - ``gouraud`` for a VRML97 or X3D document, X_ITE's default; ``phong``
+       for every other scene
+
+``gouraud`` and ``phong`` differ only for a textured ``Material`` in a
+document: under ``gouraud`` the texture darkens the specular highlight and
+the emissive colour as well as the diffuse colour. Both light each fragment;
+neither interpolates colours from the vertices. A texture projector casts
+onto the diffuse colour under either. ``point`` and ``wireframe`` set the
+polygon mode for the scene's geometry, after the background is drawn; lines
+and points are drawn as they are. The VRML97 renderer reads ``point`` and
+``wireframe`` only.
 
 .. rst-class:: technical
 

@@ -203,6 +203,17 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     in sRGB, as X_ITE draws them: `UnlitMaterial emissiveColor 0.5` is 128,
     where it was 188, and a MultiTexture on one combines its layers as
     displayed
+  - [x] shading: `ContextDefinition.shading` (`OPENGLCONTEXT_SHADING`): point,
+    wireframe (polygon modes), flat (the face's normal from the position's
+    derivatives), gouraud, phong. `auto` is gouraud for a document, X_ITE's
+    default: the lit colour times the main texture (19775-1 17.2.2.7, which
+    allows Gouraud by default and recommends this algorithm), where phong
+    multiplies the diffuse colour first (17.2.2.5)
+  - kept by choice: under Gouraud X_ITE 16.4.3 multiplies its texture
+    projectors into a diffuse colour it has already used, so a projector casts
+    nothing; the engine casts it onto the diffuse colour (19775-1, 42.2.2).
+    X_ITE draws a line set as points under POINT; the engine draws polygons
+    as points and lines as lines
   - kept by choice: X_ITE encodes with a power of 1/2.2, the engine with the
     piecewise sRGB function (IEC 61966-2-1, which glTF names for its colour
     textures); at most 10 levels in 255 apart, in the darkest values

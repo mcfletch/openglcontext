@@ -1233,6 +1233,27 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
             return tonemapping.ENGINE
         return tonemapping.display( self, getattr( self, 'scene', None ) )
 
+    def frameShading( self ) -> str:
+        """The shading this pass draws its scene with
+
+        :func:`OpenGLContext.passes.shading.frame_shading` for the
+        definition and the scene being drawn.
+        """
+        from OpenGLContext.passes import shading  # noqa: PLC0415 contextdefinition imports it first
+        return shading.frame_shading( self, getattr( self, 'scene', None ) )
+
+    def polygonMode( self, frame: 'ViewFrame' ) -> Optional[int]:
+        """``GL_POINT`` or ``GL_LINE`` where ``frame``'s geometry is drawn as points or lines
+
+        A view styled wireframe (:class:`OpenGLContext.multiview.views.ViewStyle`)
+        is drawn as lines; otherwise the frame's shading decides
+        (:meth:`frameShading`). None draws filled polygons.
+        """
+        from OpenGLContext.passes import shading  # noqa: PLC0415 contextdefinition imports it first
+        if frame.view.style.wireframe:
+            return GL_LINE
+        return shading.polygon_mode( self.frameShading() )
+
     def x3dLighting( self ) -> bool:
         """Whether the scene is lit by X3D's rules rather than the engine's
 
@@ -1997,7 +2018,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                         shared = self.renderShared(frames, id_map, lighting)
                     for frame in frames:
                         joined = (shared if shared is not None
-                                  and not frame.view.style.wireframe else {})
+                                  and self.polygonMode( frame ) is None else {})
                         self.renderViewShader(frame, id_map, lighting,
                                               background=shared is None,
                                               shared=joined)
@@ -2068,8 +2089,9 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         if background:
             self._drawBackground( frame )
         self.matrix = frame.modelView
-        if frame.view.style.wireframe:
-            glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
+        polygons = self.polygonMode( frame )
+        if polygons is not None:
+            glPolygonMode( GL_FRONT_AND_BACK, polygons )
 
     def _drawBackground( self, frame: 'ViewFrame' ) -> None:
         """Clear the view the pass is looking through to its background.
@@ -2116,7 +2138,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
 
     def _endView( self, frame: 'ViewFrame' ) -> None:
         """Undo what :meth:`_beginView` set that the next view must not inherit."""
-        if frame.view.style.wireframe:
+        if self.polygonMode( frame ) is not None:
             glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
 
     def setupViewLighting( self, matrix: Any, lighting: Optional['Lighting'],

@@ -69,6 +69,7 @@ class MultiviewPassMixin( PassResources ):
         _zoneHidden: Any
 
         def setViewPlatform( self, vp: Any ) -> None: ...
+        def polygonMode( self, frame: 'ViewFrame' ) -> Optional[int]: ...
         def calculateFrustum( self ) -> Any: ...
         def chooseLevels( self, viewers: Sequence['lod.Viewer'] ) -> None: ...
         def faceBillboards( self, modelview: Any ) -> None: ...
@@ -150,7 +151,7 @@ class MultiviewPassMixin( PassResources ):
         """
         found: dict[int, list[Any]] = {}
         for index, frame in enumerate( frames ):
-            if frame.view.style.wireframe:
+            if self.polygonMode( frame ) is not None:
                 continue
             for record in frame.toRender:
                 if not self.sharesDraw( record ):

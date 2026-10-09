@@ -27,7 +27,7 @@ from OpenGLContext.passes.disposal import PassResources, let_go
 from OpenGLContext.passes.layerguard import LayerGuard
 from OpenGLContext.passes.reflectionpass import ReflectionsMixin
 from OpenGLContext.debug.logs import getTraceback
-from OpenGLContext.passes import localfog, tonemapping
+from OpenGLContext.passes import localfog, shading, tonemapping
 from OpenGLContext.scenegraph import fog as fognode
 
 if TYPE_CHECKING:
@@ -209,6 +209,8 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
             shader.set_display(
                 tonemapping.frame_display(self),
                 float(getattr(getattr(self, 'context', None), 'gltf_exposure', 1.0)))
+        if hasattr(shader, 'set_shading'):
+            shader.set_shading(shading.frame_shading(self))
         # Bloom: the scene renders into a linear HDR target, so the PBR shader emits
         # linear HDR (tone-mapping moves to the bloom composite). Off by default.
         if hasattr(shader, 'set_hdr_output'):

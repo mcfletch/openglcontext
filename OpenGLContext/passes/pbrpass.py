@@ -1200,6 +1200,15 @@ class PBRShaderProgram(VRML97ShaderProgram):
              ('documentDisplay', int(values['documentDisplay']), glUniform1i),
              ('exposure', float(values['exposure']), glUniform1f)))
 
+    def set_shading(self, shading: str) -> None:
+        """Shade the frame by ``shading``, one of :data:`OpenGLContext.passes.shading.SHADINGS`
+
+        ``flat`` lights each face with its own normal; every shading but
+        ``phong`` textures a document's Material as Gouraud does.
+        """
+        self._set_uniform1i('flatShading', int(shading == 'flat'), self.program)
+        self._set_uniform1i('gouraudShading', int(shading != 'phong'), self.program)
+
     def set_transmission(self, transmission_factor: float, material: Any = None) -> None:
         """Set the frame-gated transmission factor (volume params are in the UBO)."""
         self._set_uniform1f('transmissionFactor', float(transmission_factor), self.program)

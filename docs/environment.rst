@@ -201,6 +201,11 @@ Lighting and shadows
      - ``auto``
      - Which materials are lit in linear light. ``auto`` is
        ``linear_when_physical_material``.
+   * - ``OPENGLCONTEXT_SHADING``
+     - ``auto``, ``point``, ``wireframe``, ``flat``, ``gouraud``, ``phong``
+     - ``auto``
+     - How surfaces are shaded. ``auto`` is ``gouraud`` for a document and
+       ``phong`` elsewhere. See :ref:`shading`.
    * - ``OPENGLCONTEXT_TRANSMISSION``
      - ``auto``, ``full``, ``blend``, ``off``
      - ``auto``

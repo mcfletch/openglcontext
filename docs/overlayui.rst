@@ -231,6 +231,10 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - ``auto``/``srgb``/``linear_when_physical_material``/``linear``
      - Which materials are lit in linear light.
      - ``OPENGLCONTEXT_COLOR_SPACE``
+   * - ``shading``
+     - ``auto``/``point``/``wireframe``/``flat``/``gouraud``/``phong``
+     - How surfaces are shaded (:ref:`shading`).
+     - ``OPENGLCONTEXT_SHADING``
    * - ``ibl``
      - ``auto``/``full``/``analytic``/``off``
      - Image-based lighting. ``auto`` uses a cheaper mode on a software

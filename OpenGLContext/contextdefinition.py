@@ -6,7 +6,7 @@ from vrml import node, field
 
 from OpenGLContext import renderoptions
 from OpenGLContext.audio import settings as audiosettings
-from OpenGLContext.passes import tonemapping
+from OpenGLContext.passes import shading as shadingmodes, tonemapping
 
 
 # The three helpers below are passed to ``newField`` **uncalled**, so each is
@@ -229,6 +229,11 @@ class ContextDefinition( node.Node ):
     #: linear_when_physical_material.
     colorSpace = field.newField( "colorSpace", "SFString", 1,
                                  tonemapping.default_color_space )
+    #: How surfaces are shaded: "auto", "point", "wireframe", "flat",
+    #: "gouraud" or "phong" (env: OPENGLCONTEXT_SHADING). "auto" is gouraud
+    #: for a VRML97 or X3D document, as X_ITE draws one, and phong elsewhere.
+    #: See OpenGLContext.passes.shading.
+    shading = field.newField( "shading", "SFString", 1, shadingmodes.default_shading )
     #: Image-based lighting: "auto", "full", "analytic" or "off"
     #: (env: OPENGLCONTEXT_IBL). "auto" degrades itself on a software
     #: rasteriser, where the prefilter precompute is too slow.
@@ -408,6 +413,9 @@ class ContextDefinition( node.Node ):
         'colorSpace': {'label': 'Lit in linear light',
                        'options': tonemapping.COLOR_SPACE_CHOICES,
                        'optionLabels': tonemapping.COLOR_SPACE_LABELS},
+        'shading': {'label': 'Shading',
+                    'options': shadingmodes.CHOICES,
+                    'optionLabels': shadingmodes.LABELS},
         'ibl': {'label': 'Environment lighting',
                 'options': renderoptions.CHOICES['ibl'],
                 'optionLabels': renderoptions.LABELS['ibl']},
@@ -454,7 +462,7 @@ class ContextDefinition( node.Node ):
     #: should read: the expensive things first, the diagnostics last.
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
-        'bloom', 'toneMapping', 'exposure', 'colorSpace', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
+        'bloom', 'toneMapping', 'exposure', 'colorSpace', 'shading', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
         'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',
         'renderer', 'lighting',
