@@ -50,7 +50,10 @@ from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.loaders.gltf.materials import (
     GLTF_TEXTURE_KEYS, MATERIAL_EXTENSION_FIELDS, khr_transform_params,
 )
-from OpenGLContext.loaders.gltf.textures import IMAGE_EXTENSIONS, VIDEO_EXTENSION, gl_sampler
+from OpenGLContext.loaders.basisu import BasisImage
+from OpenGLContext.loaders.gltf.textures import (
+    BASISU_EXTENSION, IMAGE_EXTENSIONS, VIDEO_EXTENSION, gl_sampler,
+)
 from OpenGLContext.scenegraph.movietexture import MovieTexture
 from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
@@ -472,6 +475,7 @@ def _factor(value: Any) -> Any:
 #: The extension a texture needs for an image in each format the core does
 #: not allow.
 _IMAGE_EXTENSION = {mime: name for name, mime in IMAGE_EXTENSIONS}
+_KTX2_IDENTIFIER = b'\xabKTX 20\xbb\r\n\x1a\n'
 
 
 class GLTFWriter:
@@ -879,6 +883,16 @@ class GLTFWriter:
         cached = self._image_index.get(image)
         if cached is not None:
             return cached
+        if isinstance(image, BasisImage) and image.data[:12] == _KTX2_IDENTIFIER:
+            # The file as it came, under the extension that carries it; there
+            # is no PNG beside it, so the document requires the extension.
+            view = self._buffer.add_view(image.data)
+            self._images.append({'bufferView': view, 'mimeType': 'image/ktx2'})
+            index = self._image_index.set(image, len(self._images) - 1)
+            self._image_extension[index] = BASISU_EXTENSION
+            return index
+        if isinstance(image, BasisImage):
+            image = image.pil()
         buffer = io.BytesIO()
         image.save(buffer, format='PNG')
         view = self._buffer.add_view(buffer.getvalue())

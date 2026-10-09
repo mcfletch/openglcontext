@@ -219,6 +219,11 @@ animation:
   animation, read into ``scene.notices``. The viewer shows them on ``i``; see
   :ref:`viewer-notices`.
 
+- Texture compression - ``KHR_texture_basisu``, when the optional
+  ``opengl_basisu`` package is installed (``pip install
+  'OpenGLContext[basisu]'``). See :ref:`Basis Universal textures
+  <gltf-basisu>` below.
+
 - Geometry compression - ``KHR_draco_mesh_compression``, when the optional
   ``DracoPy`` package is installed (``pip install DracoPy``, or
   ``OpenGLContext[draco]``). Without it, the loader skips a Draco-compressed
@@ -697,13 +702,55 @@ differ by a quarter of the image width, so the loader rolls the image's
 columns once, at load. The drawn sky and its reflections then share one
 direction-to-texture mapping and always agree.
 
+.. _gltf-basisu:
+
+Basis Universal textures
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+A ``KHR_texture_basisu`` texture names a KTX 2 image whose payload is Basis
+Universal ETC1S or UASTC. The transcoder is the separate ``opengl_basisu``
+package, which compiles Binomial's basis_universal transcoder (Apache-2.0)::
+
+   pip install 'OpenGLContext[basisu]'
+
+With it installed, the Basis image is preferred to the texture's core
+``source``, and :mod:`OpenGLContext.loaders.basisu` reads it. When the texture
+is first drawn, the context's extensions and version choose the format it is
+uploaded in, every mip level the file holds with ``glCompressedTexImage2D``:
+
+=========================  ===========================================================
+Codec                      Formats, in the order they are taken
+=========================  ===========================================================
+ETC1S (desktop GL)         BC7, BC1 (BC3 with alpha), ASTC 4x4, ETC1/ETC2, RGBA8
+UASTC (desktop GL)         ASTC 4x4, BC7, BC3/BC1, ETC2/ETC1, RGBA8
+ETC1S (OpenGL ES)          ETC1/ETC2, BC7, ASTC 4x4, BC1/BC3, RGBA8
+UASTC (OpenGL ES)          ASTC 4x4, BC7, ETC2/ETC1, BC3/BC1, RGBA8
+=========================  ===========================================================
+
+BC7 is GL 4.2 or ``GL_ARB_texture_compression_bptc``; BC1 and BC3 are
+``GL_EXT_texture_compression_s3tc``; ETC1 and ETC2 are GL 4.3, OpenGL ES 3.0 or
+``GL_ARB_ES3_compatibility``; ASTC is OpenGL ES 3.2 or
+``GL_KHR_texture_compression_astc_ldr``. A context offering none of them gets
+RGBA8. Desktop drivers that report ETC2 commonly decode it to RGBA8 at upload,
+so desktop GL takes the BC formats first. The format's linear enum is used for
+an sRGB file too: the shader decodes each map's colour space.
+
+A file with one mip level is sampled without mipmaps, since GL cannot generate
+them for a block format; encode with ``basisu -mipmap`` for a mip chain. A
+Basis image that does not transcode gives way to the core ``source``.
+
+Without ``opengl_basisu``, a texture is drawn from its core ``source`` (a PNG or
+JPEG fallback) where it has one, and is not drawn where it has none. The load
+logs one warning naming the extra to install and how many textures each case
+covers.
+
+The texture node holds a :class:`~OpenGLContext.loaders.basisu.BasisImage`;
+``image.pil()`` gives level 0 as a PIL image for code that reads the pixels.
+The glTF writer writes a Basis KTX 2 image back as it came, under
+``KHR_texture_basisu``, and lists the extension as required.
+
 Current limitations
 ~~~~~~~~~~~~~~~~~~~
-
-- ``KHR_texture_basisu`` (KTX2 / Basis Universal) is not read. No transcoder
-  is available under a licence this project can use. A texture carrying it is
-  drawn from its core ``source`` where the document gives one, and without the
-  texture where it does not.
 
 - ``KHR_draco_mesh_compression`` needs the optional ``DracoPy`` package.
   Without it, the loader skips a Draco-compressed primitive with a warning and

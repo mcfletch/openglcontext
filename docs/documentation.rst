@@ -55,6 +55,10 @@ Optional extras add the packages for particular features:
 ``OpenGLContext[video]``
    :doc:`Recording what the engine draws <recording>` to an H.264 file, using
    the video encoder in the graphics driver.
+``OpenGLContext[basisu]``
+   Basis Universal textures, through ``opengl_basisu``: glTF's
+   :ref:`KHR_texture_basisu <gltf-basisu>`, and KTX 2 or ``.basis`` files named
+   by X3D's texture nodes, uploaded in the block formats the GPU samples.
 ``OpenGLContext[all]``
    GLFW, Pygame, Draco, OpenEXR and audio playback together.
 
