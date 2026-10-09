@@ -422,7 +422,9 @@ class GeneratedTexturesMixin:
                 owner._reflection_lookups = {}
                 owner.applyViewFrame(frame, gl=False)
                 gathered = owner._walkPaths(fresh=True) if walk is not None else owner.frameGather()
-                records = [record for record in owner.renderSet(view, gathered)
+                # The frame's own scene is captured in the layer navigation drives
+                among = None if walk is not None else owner.layerMask(gathered)
+                records = [record for record in owner.renderSet(view, gathered, among)
                            if not any(record[4] is path for path in paths)]
                 owner.captureBackground(view)
                 owner.setupViewLighting(view, lighting, fitted=False)

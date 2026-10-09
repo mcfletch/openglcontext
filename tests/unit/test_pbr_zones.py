@@ -901,8 +901,11 @@ class CapturingPass(ZonedPass):
     def applyViewFrame(self, frame, gl=True):
         pass
 
-    def renderSet(self, _matrix, gathered=None):  # noqa: ARG002 the signature of the pass's renderSet
+    def renderSet(self, _matrix, gathered=None, among=None):  # noqa: ARG002 the signature of the pass's renderSet
         return []
+
+    def layerMask(self, gathered, frame=None):  # noqa: ARG002 the signature of the pass's layerMask
+        return None
 
     def currentBackground(self):
         return None

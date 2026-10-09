@@ -27,18 +27,32 @@ SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
 #: its own context issues, so a second window handed the first one's program
 #: draws through a name its driver never gave out.
 _shaders: dict[Optional[contextresources.ContextKey], Any] = {}
+#: The vertex array every gradient sphere is drawn through, per GL context;
+#: each draw points it at that sphere's buffers.
+_vertex_arrays: dict[Optional[contextresources.ContextKey], int] = {}
 
 
 @contextresources.on_context_lost
 def _drop_context_resources() -> None:
-    """Forget the program of the context now being destroyed.
+    """Forget the program and vertex array of the context now being destroyed.
 
-    Keying alone leaves it reachable by the next context the driver gives the
+    Keying alone leaves them reachable by the next context the driver gives the
     same address to; letting go as the context dies is what makes the key
     trustworthy.  The sphere's own vertex buffers live in the render pass's
     cache, which lets go of its own.
     """
-    _shaders.pop(contextresources.context_key(), None)
+    key = contextresources.context_key()
+    _shaders.pop(key, None)
+    _vertex_arrays.pop(key, None)
+
+
+def _vertex_array() -> int:
+    """The gradient spheres' vertex array, for the current context"""
+    key = contextresources.context_key()
+    found = _vertex_arrays.get(key)
+    if found is None:
+        found = _vertex_arrays[key] = int(glGenVertexArrays(1))
+    return found
 
 MINANGLE = pi*1.0/4
 MAXANGLE = pi*3.0/4
@@ -414,9 +428,7 @@ class _SphereBackground( object ):
         depth_test_enabled = glIsEnabled(GL_DEPTH_TEST)
         cull_face_enabled = glIsEnabled(GL_CULL_FACE)
 
-        # Create VAO for core profile compatibility
-        vao = glGenVertexArrays(1)
-        glBindVertexArray(vao)
+        glBindVertexArray(_vertex_array())
 
         try:
             glDisable(GL_DEPTH_TEST)
@@ -479,7 +491,6 @@ class _SphereBackground( object ):
         finally:
             # Restore state
             glBindVertexArray(0)
-            glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
             if depth_test_enabled:
                 glEnable(GL_DEPTH_TEST)
             if cull_face_enabled:

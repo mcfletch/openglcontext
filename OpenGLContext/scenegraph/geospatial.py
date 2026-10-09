@@ -28,17 +28,17 @@ coordinates, and turned so its up is +Y where its `rotateYUp` is true.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
-from OpenGL.GL import glMultMatrixd
 from vrml import cache, protofunctions
-from vrml.vrml97 import nodetypes, transformmatrix
+from vrml.vrml97 import transformmatrix
 from vrml.x3d import geospatial
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext import quaternion
-from OpenGLContext.scenegraph import boundingvolume, grouping, lod
+from OpenGLContext.scenegraph import lod
+from OpenGLContext.scenegraph.framed import Framed
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.inline import Inline
 from OpenGLContext.scenegraph.meshgeometry import GridDrawn
@@ -67,105 +67,25 @@ def depend_on_origin(holder: Any, node: Any) -> None:
         holder.depend(source, protofunctions.getField(source, name))
 
 
-class GeoTransforming(grouping.Grouping, nodetypes.Transforming):
+class GeoTransforming(Framed):
     """A group whose frame is worked out from geospatial fields, in double precision
 
     A subclass gives :meth:`geoMatrix` and the fields it reads in
-    :attr:`MATRIX_FIELDS`.
+    :attr:`MATRIX_FIELDS`; the frame also follows the node's geoSystem and
+    geoOrigin.
     """
 
-    #: The node's own fields its frame is worked out from.
-    MATRIX_FIELDS: tuple[str, ...] = ()
-    _KEY = 'geo-local-matrices'
+    FRAME_KEY = 'geo-local-matrices'
 
     def geoMatrix(self) -> np.ndarray:
         """The row-vector 4x4 frame the children are drawn in"""
         raise NotImplementedError('%s must give its frame' % type(self).__name__)
 
-    def _matrices(self) -> Any:
-        """The holder of (forward, inverse), kept until a field it is worked out from is set"""
-        holder = cache.CACHE.getHolder(self, key=self._KEY)
-        if holder is not None and holder.data is not None:
-            return holder
-        forward = self.geoMatrix()
-        data = (forward, np.linalg.inv(forward))
-        if holder is None:
-            holder = cache.CACHE.holder(self, data, key=self._KEY)
-            for name in self.MATRIX_FIELDS:
-                holder.depend(self, protofunctions.getField(self, name))
-            depend_on_origin(holder, self)
-        else:
-            holder.data = data
-        return holder
+    def frameMatrix(self) -> np.ndarray:
+        return self.geoMatrix()
 
-    def localMatrices(self, translate: bool = True, scale: bool = True,
-                      rotate: bool = True) -> Any:
-        """The holder of the forward and inverse frames, as the node paths ask for them
-
-        A request leaving out the translation, the scale or the rotation is
-        answered with that part taken out of the whole frame.
-        """
-        whole = self._matrices()
-        if translate and scale and rotate:
-            return whole
-        key = (self._KEY, translate, scale, rotate)
-        holder = cache.CACHE.getHolder(self, key=key)
-        if holder is not None and holder.data is not None:
-            return holder
-        forward = whole.data[0].copy()
-        if not translate:
-            forward[3, :3] = 0.0
-        lengths = np.linalg.norm(forward[:3, :3], axis=1)
-        if rotate and not scale:
-            forward[:3, :3] /= np.where(lengths > 0, lengths, 1.0)[:, None]
-        elif scale and not rotate:
-            forward[:3, :3] = np.diag(lengths)
-        elif not (scale or rotate):
-            forward[:3, :3] = np.eye(3)
-        data = (forward, np.linalg.inv(forward))
-        if holder is None:
-            holder = cache.CACHE.holder(self, data, key=key)
-            holder.depend_holder(whole)
-        else:
-            holder.data = data
-        return holder
-
-    def localMatrix(self, mode: Any = None) -> np.ndarray:
-        """The frame the children are drawn in"""
-        found: np.ndarray = self._matrices().data[0]
-        return found
-
-    def transform(self, mode: Any = None, translate: int = 1, scale: int = 1,
-                  rotate: int = 1) -> None:
-        """Multiply the frame into the fixed-function modelview"""
-        holder = self.localMatrices(bool(translate), bool(scale), bool(rotate))
-        glMultMatrixd(np.ascontiguousarray(holder.data[0], dtype=np.float64))
-
-    def boundingVolume(self, mode: Any = None) -> Any:
-        """The children's volumes, carried into the parent's coordinates by the frame"""
-        current = boundingvolume.getCachedVolume(self)
-        if current is not None:
-            return current
-        volumes: list[Any] = []
-        dependencies: list[tuple[Any, Optional[str]]] = [(self, 'children')]
-        dependencies += [(self, name) for name in self.MATRIX_FIELDS]
-        dependencies += origin_fields(self)
-        unbounded = False
-        for child in self.children:
-            try:
-                if hasattr(child, 'boundingVolume'):
-                    volume = child.boundingVolume(mode)
-                    volumes.append(volume)
-                    dependencies.append((volume, None))
-            except boundingvolume.UnboundedObject:
-                unbounded = True
-        try:
-            volume = boundingvolume.BoundingBox.union(volumes, self.localMatrix(mode))
-        except boundingvolume.UnboundedObject:
-            unbounded = True
-        if unbounded:
-            volume = boundingvolume.UnboundedVolume()
-        return boundingvolume.cacheVolume(self, volume, dependencies)
+    def frameDependencies(self) -> list[tuple[Any, str]]:
+        return super().frameDependencies() + origin_fields(self)
 
 
 class GeoLocation(GeoTransforming, x3d.GeoLocation):

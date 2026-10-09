@@ -167,7 +167,10 @@ OpenGLContext/
 │   ├── viewset.py    # Several arrangements of one set of views, by name
 │   ├── mixin.py      # Context's views, built from navigation.views, over
 │   │                 # the camera it already had -- docs/multiview.rst
-│   └── quad.py       # Three orthographic views around a perspective one
+│   ├── quad.py       # Three orthographic views around a perspective one
+│   └── layers.py     # X3D's layer stack as a frame draws it: which layers, in
+│                     # what order, each part's rectangle and camera, and the
+│                     # layer a pick is resolved through -- no GL -- docs/x3d.rst#x3d-layers
 ├── nav/              # Navigation mesh generated from a collision mesh
 ├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.rst
 ├── passes/           # Rendering passes -- docs/renderpasses.rst, flat.rst, pbr.rst
@@ -192,6 +195,8 @@ OpenGLContext/
 │   │                 # a per-draw lightsOff mask -- no GL -- docs/x3d.rst
 │   ├── reflection.py # Planar reflections' arithmetic: which surfaces are
 │   │                 # mirrors, their planes, a mirror's camera -- docs/reflections.rst
+│   ├── layerpass.py  # The pass's side of X3D's layers: a view drawn as its
+│   │                 # layer stack, each layer's lights, bindables and picks
 │   ├── multiviewpass.py      # The pass's side of several views: layout, a
 │   │                         # cull per view, the shared draw, pick routing
 │   ├── reflectionpass.py     # The pass's side: a frame's mirror views drawn
@@ -260,6 +265,12 @@ OpenGLContext/
 │   │                 # sense: the viewer, a target, the views -- no GL
 │   ├── x3drigidbody.py  # X3D's RigidBodyCollection and CollisionSensor on the
 │   │                 # engine clock; collidables drawn where they are
+│   ├── layering.py   # X3D's Layering and Layout nodes: LayerSet, Layer,
+│   │                 # LayoutLayer, LayoutGroup, ScreenGroup, Viewport
+│   ├── layout.py     # X3D's Layout arithmetic and the placing of Layout and
+│   │                 # ScreenGroup nodes each frame -- no GL
+│   ├── framed.py     # A group whose frame the node works out itself
+│   │                 # (geospatial frames, screen placements)
 │   ├── x3dpointing.py   # X3D's pointing-device sensors told of each
 │   │                 # context's picked pointer -- no GL
 │   ├── x3dpicking.py # X3D's pick sensors told each frame what their picking

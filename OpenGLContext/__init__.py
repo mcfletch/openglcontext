@@ -283,6 +283,16 @@ Node( 'SplineScalarInterpolator', 'vrml.x3d.runtime.SplineScalarInterpolator' )
 Node( 'SquadOrientationInterpolator', 'vrml.x3d.runtime.SquadOrientationInterpolator' )
 Node( 'EaseInEaseOut', 'vrml.x3d.runtime.EaseInEaseOut' )
 Node( 'KeySensor', 'OpenGLContext.scenegraph.x3druntime.KeySensor' )
+# X3D's Layering and Layout components (scenegraph.layering): the layers a
+# scene is drawn as, and the groups the render pass places on the screen.
+Node( 'Layer', 'OpenGLContext.scenegraph.layering.Layer' )
+Node( 'LayerSet', 'OpenGLContext.scenegraph.layering.LayerSet' )
+Node( 'Layout', 'vrml.x3d.nodes.Layout' )
+Node( 'LayoutGroup', 'OpenGLContext.scenegraph.layering.LayoutGroup' )
+Node( 'LayoutLayer', 'OpenGLContext.scenegraph.layering.LayoutLayer' )
+Node( 'ScreenFontStyle', 'OpenGLContext.scenegraph.text.fontstyle3d.ScreenFontStyle' )
+Node( 'ScreenGroup', 'OpenGLContext.scenegraph.layering.ScreenGroup' )
+Node( 'Viewport', 'OpenGLContext.scenegraph.layering.Viewport' )
 Node( 'StringSensor', 'OpenGLContext.scenegraph.x3druntime.StringSensor' )
 # X3D's followers, ticked through the render queue on the engine's clock.
 Node( 'ColorChaser', 'OpenGLContext.scenegraph.x3druntime.ColorChaser' )

@@ -1,7 +1,11 @@
 """VRML97-like Text node"""
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Iterator
 from typing import Any
+
+import numpy
 
 from vrml.vrml97 import basenodes
 from OpenGLContext import lighting
@@ -65,10 +69,13 @@ class Text( basenodes.Text ):
         if not dataSet:
             dataSet = self.compile( mode=mode )
         provider, font, lines = dataSet
-        if provider and font and lines:
-            return font.render( lines, fontStyle=self.effectiveFontStyle(), mode=mode )
-        else:
+        if not ( provider and font and lines ):
             return 0
+        style = self.effectiveFontStyle()
+        if getattr( style, 'screen', False ):
+            with screen_space( mode ):
+                return font.render( lines, fontStyle=style, mode=mode )
+        return font.render( lines, fontStyle=style, mode=mode )
     def compile( self, mode: Any = None ) -> tuple[Any, Any, Any]:
         """Compile the text node to provider, font, lines-set"""
         value = '\n'.join( self.string )
@@ -95,14 +102,51 @@ class Text( basenodes.Text ):
         if fonts is not None:
             holder.depend( fonts, 'generation' )
         if self.fontStyle:
+            declared = { field.name for field in protofunctions.getFields( self.fontStyle ) }
             for field in [
-                'style','family','size','format',
+                'style','family','size','pointSize','format',
                 'quality','renderFront','renderBack','renderSides',
                 'thickness'
             ]:
-                if hasattr( self.fontStyle, field ):
+                if field in declared:
                     holder.depend( self.fontStyle, field )
         return dataSet
+
+
+@contextlib.contextmanager
+def screen_space( mode: Any ) -> Iterator[None]:
+    """Within the block, `mode` draws in pixels facing the screen at the
+    origin of the node it is drawing
+
+    The ScreenFontStyle's coordinates
+    (:func:`OpenGLContext.scenegraph.layout.screen_modelview`): the pass's
+    modelview and the bound program's (or the fixed-function stack's) are
+    those, and are put back as the block ends.
+    """
+    from OpenGLContext.scenegraph.layout import screen_modelview  # noqa: PLC0415 kept with its use
+    held = getattr( mode, 'matrix', None )
+    viewport = getattr( mode, 'viewport', None )
+    projection = getattr( mode, 'projection', None )
+    if held is None or viewport is None or projection is None:
+        yield
+        return
+    placed = screen_modelview( held, projection, ( viewport[2], viewport[3] ) )
+    shader = getattr( mode, 'shader_program', None ) if getattr( mode, 'shader_mode', False ) else None
+    mode.matrix = placed
+    _load( shader, placed, projection )
+    try:
+        yield
+    finally:
+        mode.matrix = held
+        _load( shader, held, projection )
+
+
+def _load( shader: Any, modelview: Any, projection: Any ) -> None:
+    if shader is not None:
+        shader.set_matrices( numpy.asarray( modelview, 'f' ), projection )
+    else:
+        from OpenGLContext.passes import glstate  # noqa: PLC0415 GL state, kept with its use
+        glstate.load_matrix( modelview )
 
 
 _DOCUMENT_STYLE: list[Any] = []

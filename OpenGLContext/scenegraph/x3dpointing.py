@@ -16,6 +16,9 @@ observes its picked ``mousemove`` and ``mousebutton`` events
   while it is held drags them, on or off their geometry, until it is
   released. The scene's and the application's handlers receive the same
   events.
+- In a scene drawn as X3D layers, an event carries the camera of the layer
+  it was resolved through (its ``layer``); a drag measures the pointer
+  through the camera of the layer it was pressed in.
 """
 from __future__ import annotations
 
@@ -52,10 +55,16 @@ def unprojected(view: Any, x: float, y: float, depth: float) -> np.ndarray:
     return np.asarray(found[:3] / found[3])
 
 
+#: A window depth in front of the camera whatever the far plane: the render
+#: pass trims its projection with a far plane behind the camera, which puts
+#: depth 1 behind it and everything in front below 1.
+AHEAD = 0.5
+
+
 def pointer_ray(view: Any, x: float, y: float) -> tuple[np.ndarray, np.ndarray]:
     """(origin, direction): the pointer's bearing through (x, y), from the near plane"""
     near = unprojected(view, x, y, 0.0)
-    return near, unprojected(view, x, y, 1.0) - near
+    return near, unprojected(view, x, y, AHEAD) - near
 
 
 def sensors_for(path: Any) -> tuple[list[Any], Any]:
@@ -99,6 +108,8 @@ class PointerSensing:
         self.held: list[tuple[Any, np.ndarray]] = []
         #: The view the press was picked through, for drags whose event has none.
         self.view: Any = None
+        #: The X3D layer the press was resolved through; None for layer 0.
+        self.layer: Any = None
 
     def _picked(self, event: Any) -> tuple[list[Any], Any, Optional[np.ndarray]]:
         """(sensors, world-to-local, world hit) for the path under `event`'s pointer"""
@@ -113,6 +124,10 @@ class PointerSensing:
         return found, _local(prefix), unprojected(event, x, y, float(depth))
 
     def _view(self, event: Any) -> Any:
+        """The camera `event`'s pointer is measured through: its own, unless a
+        drag held from another layer's press"""
+        if self.held and getattr(event, 'layer', None) is not self.layer:
+            return self.view
         if getattr(event, 'modelViewMatrix', None) is not None and \
                 getattr(event, 'projectionMatrix', None) is not None:
             return event
@@ -159,6 +174,7 @@ class PointerSensing:
         if not found:
             return
         self.view = self._view(event)
+        self.layer = getattr(event, 'layer', None)
         x, y = event.getPickPoint()[:2]
         origin, direction = pointer_ray(self.view, x, y)
         local = pointing.Hit(_point_in(matrix, hit))

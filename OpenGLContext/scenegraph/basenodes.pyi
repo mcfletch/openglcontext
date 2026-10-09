@@ -78,6 +78,12 @@ from OpenGLContext.scenegraph.interpolators import NormalInterpolator as NormalI
 from OpenGLContext.scenegraph.interpolators import OrientationInterpolator as OrientationInterpolator
 from OpenGLContext.scenegraph.interpolators import PositionInterpolator as PositionInterpolator
 from OpenGLContext.scenegraph.interpolators import ScalarInterpolator as ScalarInterpolator
+from OpenGLContext.scenegraph.layering import Layer as Layer
+from OpenGLContext.scenegraph.layering import LayerSet as LayerSet
+from OpenGLContext.scenegraph.layering import LayoutGroup as LayoutGroup
+from OpenGLContext.scenegraph.layering import LayoutLayer as LayoutLayer
+from OpenGLContext.scenegraph.layering import ScreenGroup as ScreenGroup
+from OpenGLContext.scenegraph.layering import Viewport as Viewport
 from OpenGLContext.scenegraph.light import DirectionalLight as DirectionalLight
 from OpenGLContext.scenegraph.light import PointLight as PointLight
 from OpenGLContext.scenegraph.light import SpotLight as SpotLight
@@ -161,6 +167,7 @@ from OpenGLContext.scenegraph.teapot import Teapot as Teapot
 from OpenGLContext.scenegraph.text.fontlibrary import FontLibrary as FontLibrary
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle as FontStyle
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle3D as FontStyle3D
+from OpenGLContext.scenegraph.text.fontstyle3d import ScreenFontStyle as ScreenFontStyle
 from OpenGLContext.scenegraph.text.text import Text as Text
 from OpenGLContext.scenegraph.texture3d import ComposedTexture3D as ComposedTexture3D
 from OpenGLContext.scenegraph.texture3d import ImageTexture3D as ImageTexture3D
@@ -274,6 +281,7 @@ from vrml.x3d.nodes import FillProperties as FillProperties
 from vrml.x3d.nodes import FloatVertexAttribute as FloatVertexAttribute
 from vrml.x3d.nodes import GeoMetadata as GeoMetadata
 from vrml.x3d.nodes import GeoOrigin as GeoOrigin
+from vrml.x3d.nodes import Layout as Layout
 from vrml.x3d.nodes import LineProperties as LineProperties
 from vrml.x3d.nodes import Matrix3VertexAttribute as Matrix3VertexAttribute
 from vrml.x3d.nodes import Matrix4VertexAttribute as Matrix4VertexAttribute
@@ -460,6 +468,11 @@ __all__ = [
     'IsoSurfaceVolumeData',
     'KeySensor',
     'LOD',
+    'Layer',
+    'LayerSet',
+    'Layout',
+    'LayoutGroup',
+    'LayoutLayer',
     'LinePickSensor',
     'LineProperties',
     'LineSet',
@@ -544,6 +557,8 @@ __all__ = [
     'ScalarDamper',
     'ScalarInterpolator',
     'ScreenCoverageLOD',
+    'ScreenFontStyle',
+    'ScreenGroup',
     'SegmentedVolumeData',
     'Shader',
     'ShaderAttribute',
@@ -605,6 +620,7 @@ __all__ = [
     'UnlitMaterial',
     'Viewpoint',
     'ViewpointGroup',
+    'Viewport',
     'VisibilitySensor',
     'VolumeData',
     'VolumeEmitter',

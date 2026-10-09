@@ -44,6 +44,9 @@ class Paths:
     def __init__(self, scene, kind):
         self.paths = {kind: [(scene, child) for child in scene.children]}
 
+    def layerPaths(self, kind):
+        return self.paths.get(kind, ())
+
 
 def test_the_first_background_is_bound_where_none_is():
     first, second = SphereBackground(), SphereBackground()

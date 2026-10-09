@@ -185,7 +185,7 @@ class FlatPass( _flat.FlatPass ):
         for remaining in range(0,self.MAX_LIGHTS-1):
             glDisable( GL_LIGHT0 + remaining )
         bound = 0
-        for path in self.paths.get( nodetypes.Light, ()):
+        for path in self.layerPaths( nodetypes.Light ):
             tmatrix = path.transformMatrix()
 
             localMatrix = dot(tmatrix,matrix)

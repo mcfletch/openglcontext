@@ -40,6 +40,15 @@ def test_the_ray_through_the_middle_of_the_view_looks_ahead():
     assert direction / np.linalg.norm(direction) == pytest.approx((0, 0, -1), abs=1e-6)
 
 
+def test_the_ray_looks_ahead_through_the_render_passes_trimmed_projection():
+    # The pass trims the projection with a negative depth, which puts the far
+    # plane behind the camera: depth 1 is not in front of it
+    camera = Camera()
+    camera.projectionMatrix = ViewPlatform(aspect=1.0, near=1.0).viewMatrix(-(101 * 1.01))
+    _origin, direction = x3dpointing.pointer_ray(camera, 50, 50)
+    assert direction / np.linalg.norm(direction) == pytest.approx((0, 0, -1), abs=1e-6)
+
+
 def test_a_depth_unprojects_to_the_world():
     camera = Camera()
     # Depth of a point 5 units in front of the camera, in [0, 1].

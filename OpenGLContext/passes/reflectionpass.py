@@ -64,6 +64,7 @@ class ReflectionsMixin(PassResources):
         def stats(self) -> "RenderStats": ...
 
         def frameGather(self) -> "GatheredPaths": ...
+        def layerMask(self, gathered: "GatheredPaths", frame: Any = None) -> Any: ...
         def applyViewFrame(self, frame: Any, gl: bool = True) -> None: ...
         frameState: Optional["FrameState"]
 
@@ -446,7 +447,11 @@ class ReflectionsMixin(PassResources):
                 state.reach = placed
         eye = np.linalg.inv(np.asarray(frame.modelView, 'd'))[3, :3]
         small = too_small_mask(placed[0], placed[1], gathered.bounded, eye, texels)
-        records = [record for record in self.renderSet(frame.modelView, gathered, ~small)
+        among = ~small
+        layered = self.layerMask(gathered, frame)
+        if layered is not None:
+            among &= layered
+        records = [record for record in self.renderSet(frame.modelView, gathered, among)
                    if not record[0][0]]
         frame.visiblePlacements = self.visiblePlacements or {}
         return records

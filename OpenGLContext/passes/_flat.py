@@ -21,7 +21,7 @@ from types import MappingProxyType
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
-from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard
+from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard,layering
 from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGLContext.scenegraph import bindable
 from OpenGLContext.passes import glstate
@@ -100,6 +100,7 @@ from OpenGLContext.passes.selection import (
     SelectionMixin,
 )
 from OpenGLContext.passes.flateffects import _FlatEffectsMixin
+from OpenGLContext.passes.layerpass import LayeringPassMixin
 from OpenGLContext.passes.multiviewpass import MultiviewPassMixin
 from OpenGLContext.passes.volumepass import VolumePassMixin
 from OpenGLContext.passes.zonepass import ZonesMixin
@@ -550,7 +551,8 @@ def presentFrame( context: Any ) -> Any:
     return context.SwapBuffers()
 
 
-class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMixin,
+class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, MultiviewPassMixin,
+                ZonesMixin, ClipPlanesMixin,
                 GeneratedTexturesMixin, ProjectorsMixin, SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
@@ -689,6 +691,10 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         """Bind shadow maps onto the lit program after lights (mixin override)."""
         return None   # base pass has no shadows; ShadowMapMixin overrides this
 
+    def bindNoShadows(self) -> None:
+        """Have the lit programs read no shadow maps (mixin override)."""
+        return None   # base pass has no shadows; ShadowMapMixin overrides this
+
     # The selection framebuffers, picking methods and use_mrt_selection flag live
     # in SelectionMixin.
     # Frames for which to keep reading back the MRT id/depth buffers. Reading the
@@ -795,7 +801,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         shader = self.shader_program
         assert shader is not None, 'shader lights are only set up in shader mode'
         shader.use(lit=True)  # Ensure shader is bound before setting uniforms
-        light_paths = self.paths.get(nodetypes.Light, ())
+        light_paths = self.layerPaths(nodetypes.Light)
         ceiling = self.maxLights(shader.MAX_LIGHTS)
         lamps = self.sceneLamps(matrix, ceiling)
         for slot, (light_node, _path, light_matrix) in enumerate(lamps):
@@ -833,7 +839,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         texture projectors are left out.
         """
         lamps: list[tuple[Any, Any, Any]] = []
-        for path in self.paths.get(nodetypes.Light, ()):
+        for path in self.layerPaths(nodetypes.Light):
             if len(lamps) >= ceiling:
                 break
             light_node = path[-1]
@@ -1105,6 +1111,11 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         x3dnodes.ClipPlane,
         # X3D's image-based light, the scene's when it has no ImageBasedLight.
         x3dnodes.EnvironmentLight,
+        # The layer stack a scene is drawn as, and the groups placed on the
+        # screen once a frame (passes.layerpass).
+        x3dnodes.LayerSet,
+        layering.Placed,
+        x3dnodes.X3DViewportNode,
     ]
 
     #: The grid this frame's objects are lit from, or None where the scene
@@ -1173,7 +1184,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         with none, the first drawn whose ``bound`` is set, else the first drawn
         (:func:`OpenGLContext.scenegraph.bindable.current_path`).
         """
-        return bindable.current_path( list( self.paths.get( nodetypes.Background, () ) ) )
+        return bindable.current_path( list( self.layerPaths( nodetypes.Background ) ) )
 
     def currentFog( self ) -> Any:
         """The bound Fog node's path, or None.
@@ -1182,7 +1193,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         reaches, or with none the first drawn.
         """
         from OpenGLContext.scenegraph.fog import bound_fog
-        return bound_fog( self.paths.get( nodetypes.Fog, () ) )
+        return bound_fog( self.layerPaths( nodetypes.Fog ) )
 
     def currentNavigation( self ) -> Any:
         """The bound NavigationInfo node, or None.
@@ -1190,7 +1201,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         Bound as the background is: the stack's topmost NavigationInfo a
         drawn path reaches, or with none the first drawn.
         """
-        path = binding.current_path( list( self.paths.get( nodetypes.NavigationInfo, () ) ) )
+        path = binding.current_path( list( self.layerPaths( nodetypes.NavigationInfo ) ) )
         return None if path is None else path[-1]
 
     def x3dLighting( self ) -> bool:
@@ -1884,7 +1895,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
                 # shadow pass binds/unbinds its own depth FBOs and restores state.
                 if self.use_shadows:
                     shader_program.use(lit=True)
-                    self.renderFrameShadows(frames, active)
+                    self.renderFrameShadows(self.shadowFrames(frames), active)
 
                 # Render into the MRT selection FBO only while picking is active.
                 # Otherwise render straight to the screen: no second render
@@ -2003,8 +2014,23 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         """Clear the view the pass is looking through to its background.
 
         A view with a flat background clears to it; any other draws the
-        scene's bound ``Background``, which clears as it draws.
+        scene's bound ``Background``, which clears as it draws. A layer above
+        the bottom of a stack clears the depth buffer within its rectangle,
+        and draws its own bound ``Background`` where it binds one; the rest
+        of a layer's parts clear nothing.
         """
+        part = frame.part
+        if part is not None and not part.bottom:
+            if not part.first:
+                return
+            if self.currentBackground() is None:
+                glClear( GL_DEPTH_BUFFER_BIT )
+                return
+            if self.use_shaders:
+                self.shaderBackgroundRender( frame.camera, frame.modelView )
+            else:
+                self.legacyBackgroundRender( frame.camera, frame.modelView )
+            return
         colour = frame.view.style.clear_colour()
         if colour is not None:
             glClearColor( *colour )
@@ -2043,7 +2069,11 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         assert shader_program is not None, 'lighting is set up on a program'
         self.setupShaderLights(matrix)
         if self.use_shadows:
-            self.bindShadowUniforms(fitted=fitted)
+            # The maps are made for the layer navigation drives
+            if self.drawsShadows():
+                self.bindShadowUniforms(fitted=fitted)
+            else:
+                self.bindNoShadows()
         self.iblSetup(matrix, lighting)
         self.fogSetup()
         shader_program.set_default_material()
@@ -2104,6 +2134,11 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         shader_program = self.shader_program
         assert shader_program is not None, 'shader views are drawn with a program'
         matrix = frame.modelView
+        # A layer that is not picked writes no ids: a pick reads through it
+        masked = id_map is not None and not self.pickable( frame )
+        if masked:
+            id_map = None
+            self.maskObjectIds( True )
         self._beginView( frame, background )
         try:
             self.setupViewLighting(matrix, lighting, fitted=frame.fitted)
@@ -2123,6 +2158,8 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
         finally:
             self.clearPlanarReflection()
             self._endView( frame )
+            if masked:
+                self.maskObjectIds( False )
 
     def disposeResources( self ) -> None:
         """Release the programs, then what every mixin holds.
@@ -2161,7 +2198,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, MultiviewPassMixin, ZonesMix
     def legacyLightRender( self, matrix: Any ) -> None:
         """Do legacy light-rendering operation"""
         id = 0
-        for path in self.paths.get( nodetypes.Light, ()):
+        for path in self.layerPaths( nodetypes.Light ):
             tmatrix = path.transformMatrix()
 
             localMatrix = dot(tmatrix,matrix)

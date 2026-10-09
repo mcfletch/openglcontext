@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="4.0">
+  <head>
+    <component name="Layering" level="1"/>
+    <component name="Layout" level="2"/>
+    <meta name="title" content="X3D layers"/>
+    <meta name="creator" content="OpenGLContext"/>
+    <meta name="license" content="BSD-3-Clause"/>
+    <meta name="description" content="The scene oglc-x3d-layering opens: a courtyard navigated in layer 0, a plan view of it in an inset viewport, a brass frame around the inset and a wooden HUD panel placed in pixels, with a button that shows and hides the inset."/>
+  </head>
+  <Scene>
+    <WorldInfo title="X3D layers" info='"The scene oglc-x3d-layering opens."'/>
+
+    <!-- Layer 0: the scene's own children, the courtyard navigation drives. -->
+    <NavigationInfo type='"EXAMINE" "ANY"' headlight="false"/>
+    <Background skyColor="0.16 0.22 0.36 0.52 0.62 0.78" skyAngle="1.45" groundColor="0.36 0.31 0.24"/>
+    <Viewpoint description="The courtyard" position="0 4.5 14" orientation="1 0 0 -0.28"/>
+    <DirectionalLight global="true" direction="-0.45 -0.8 -0.4" intensity="1.3" color="1 0.95 0.88"/>
+
+    <!-- A marble plinth, used under each piece. -->
+    <ProtoDeclare name="Plinth">
+      <ProtoInterface>
+        <field name="translation" type="SFVec3f" accessType="initializeOnly" value="0 0 0"/>
+      </ProtoInterface>
+      <ProtoBody>
+        <Transform>
+          <IS><connect nodeField="translation" protoField="translation"/></IS>
+          <Transform translation="0 0.5 0">
+            <Shape>
+              <Appearance>
+                <PhysicalMaterial baseColor="0.7 0.6 0.45" metallic="0" roughness="0.8">
+                  <ImageTexture containerField="baseTexture" url='"marble_base.png"'/>
+                  <ImageTexture containerField="metallicRoughnessTexture" url='"marble_mr.png"'/>
+                  <ImageTexture containerField="normalTexture" url='"marble_normal.png"'/>
+                </PhysicalMaterial>
+              </Appearance>
+              <Box size="1.6 1 1.6"/>
+            </Shape>
+          </Transform>
+        </Transform>
+      </ProtoBody>
+    </ProtoDeclare>
+
+    <Group DEF="Courtyard">
+      <!-- The paving, in sandstone. -->
+      <Shape>
+        <Appearance>
+          <PhysicalMaterial metallic="0" roughness="1">
+            <ImageTexture containerField="baseTexture" url='"sandstone_base.png"'/>
+            <ImageTexture containerField="metallicRoughnessTexture" url='"sandstone_mr.png"'/>
+            <ImageTexture containerField="normalTexture" url='"sandstone_normal.png"'/>
+          </PhysicalMaterial>
+          <TextureTransform scale="12 10"/>
+        </Appearance>
+        <IndexedFaceSet coordIndex="0 1 2 3 -1" texCoordIndex="0 1 2 3 -1" solid="false">
+          <Coordinate point="-20 0 14  20 0 14  20 0 -20  -20 0 -20"/>
+          <TextureCoordinate point="0 0  1 0  1 1  0 1"/>
+        </IndexedFaceSet>
+      </Shape>
+
+      <!-- A brick wall across the back. -->
+      <Transform translation="0 1.5 -7">
+        <Shape>
+          <Appearance>
+            <PhysicalMaterial metallic="0" roughness="1">
+              <ImageTexture containerField="baseTexture" url='"brick_base.png"'/>
+              <ImageTexture containerField="metallicRoughnessTexture" url='"brick_mr.png"'/>
+              <ImageTexture containerField="normalTexture" url='"brick_normal.png"'/>
+            </PhysicalMaterial>
+            <TextureTransform scale="9 1.2"/>
+          </Appearance>
+          <Box size="24 3 0.6"/>
+        </Shape>
+      </Transform>
+
+      <!-- Four marble plinths, each with a piece on it. -->
+      <ProtoInstance name="Plinth"><fieldValue name="translation" value="-4.5 0 -2"/></ProtoInstance>
+      <ProtoInstance name="Plinth"><fieldValue name="translation" value="-1.5 0 1"/></ProtoInstance>
+      <ProtoInstance name="Plinth"><fieldValue name="translation" value="1.5 0 -2"/></ProtoInstance>
+      <ProtoInstance name="Plinth"><fieldValue name="translation" value="4.5 0 1"/></ProtoInstance>
+
+      <!-- A copper sphere. -->
+      <Transform translation="-4.5 1.75 -2">
+        <Shape>
+          <Appearance>
+            <PhysicalMaterial metallic="0.45" roughness="0.3">
+              <ImageTexture containerField="baseTexture" url='"copper_base.png"'/>
+              <ImageTexture containerField="metallicRoughnessTexture" url='"copper_mr.png"'/>
+            </PhysicalMaterial>
+          </Appearance>
+          <Sphere radius="0.75"/>
+        </Shape>
+      </Transform>
+
+      <!-- A wooden crate. -->
+      <Transform translation="-1.5 1.5 1" rotation="0 1 0 0.4">
+        <Shape>
+          <Appearance>
+            <PhysicalMaterial metallic="0" roughness="0.8">
+              <ImageTexture containerField="baseTexture" url='"wood_base.png"'/>
+              <ImageTexture containerField="metallicRoughnessTexture" url='"wood_mr.png"'/>
+              <ImageTexture containerField="normalTexture" url='"wood_normal.png"'/>
+            </PhysicalMaterial>
+          </Appearance>
+          <Box size="1 1 1"/>
+        </Shape>
+      </Transform>
+
+      <!-- A steel cone. -->
+      <Transform translation="1.5 1.75 -2">
+        <Shape>
+          <Appearance>
+            <PhysicalMaterial metallic="0.45" roughness="0.35">
+              <ImageTexture containerField="baseTexture" url='"steel_base.png"'/>
+              <ImageTexture containerField="metallicRoughnessTexture" url='"steel_mr.png"'/>
+            </PhysicalMaterial>
+          </Appearance>
+          <Cone bottomRadius="0.65" height="1.5"/>
+        </Shape>
+      </Transform>
+
+      <!-- A brass ball circling the fourth plinth, which the inset follows. -->
+      <Transform translation="4.5 1.6 1">
+        <Transform DEF="Orbit">
+          <Transform translation="1.1 0 0">
+            <Shape>
+              <Appearance>
+                <PhysicalMaterial metallic="0.45" roughness="0.25">
+                  <ImageTexture containerField="baseTexture" url='"brass_base.png"'/>
+                  <ImageTexture containerField="metallicRoughnessTexture" url='"brass_mr.png"'/>
+                </PhysicalMaterial>
+              </Appearance>
+              <Sphere radius="0.4"/>
+            </Shape>
+          </Transform>
+        </Transform>
+      </Transform>
+      <TimeSensor DEF="Clock" cycleInterval="8" loop="true"/>
+      <OrientationInterpolator DEF="Turn" key="0 0.5 1" keyValue="0 1 0 0  0 1 0 3.14159  0 1 0 6.28318"/>
+    </Group>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Turn" toField="set_fraction"/>
+    <ROUTE fromNode="Turn" fromField="value_changed" toNode="Orbit" toField="set_rotation"/>
+
+    <!-- Drawn bottom first: the courtyard, the frame, the inset over it, the
+         panel on top. -->
+    <LayerSet order="0 2 1 3">
+      <!-- Layer 1: the courtyard seen from above, in the top right of the
+           window, through a viewpoint of its own. -->
+      <Layer DEF="Inset">
+        <Viewport containerField="viewport" clipBoundary="0.66 0.98 0.58 0.96"/>
+        <NavigationInfo headlight="false"/>
+        <Background skyColor="0.1 0.12 0.16"/>
+        <Viewpoint description="From above" position="0 21 0" orientation="1 0 0 -1.5708"
+                   fieldOfView="0.75"/>
+        <DirectionalLight global="true" direction="-0.45 -0.8 -0.4" intensity="1.3"
+                          color="1 0.95 0.88"/>
+        <Group USE="Courtyard"/>
+      </Layer>
+
+      <!-- Layer 2: a brass frame a little larger than the inset, drawn under
+           it. -->
+      <LayoutLayer DEF="Frame" pickable="false">
+        <NavigationInfo/>
+        <LayoutGroup>
+          <Layout containerField="layout" size="0.33 0.395" sizeUnits='"FRACTION"'
+                  align='"RIGHT" "TOP"' offset="-0.015 -0.0325" offsetUnits='"FRACTION"'
+                  scaleMode='"FRACTION"'/>
+          <Shape>
+            <Appearance>
+              <PhysicalMaterial baseColor="0.5 0.42 0.3" metallic="0" roughness="0.85">
+                <ImageTexture containerField="baseTexture" url='"brass_base.png"'/>
+              </PhysicalMaterial>
+            </Appearance>
+            <Rectangle2D size="1 1"/>
+          </Shape>
+        </LayoutGroup>
+      </LayoutLayer>
+
+      <!-- Layer 3: the panel, 268 by 84 pixels, 16 in from the bottom left,
+           with a button that shows and hides the inset. -->
+      <LayoutLayer DEF="Panel">
+        <NavigationInfo/>
+        <LayoutGroup>
+          <Layout containerField="layout" size="268 84" sizeUnits='"PIXEL"'
+                  align='"LEFT" "BOTTOM"' offset="16 16" offsetUnits='"PIXEL"'
+                  scaleMode='"PIXEL"'/>
+          <Shape>
+            <Appearance>
+              <PhysicalMaterial metallic="0" roughness="0.7">
+                <ImageTexture containerField="baseTexture" url='"wood_base.png"'/>
+                <ImageTexture containerField="metallicRoughnessTexture" url='"wood_mr.png"'/>
+                <ImageTexture containerField="normalTexture" url='"wood_normal.png"'/>
+              </PhysicalMaterial>
+            </Appearance>
+            <Rectangle2D size="268 84"/>
+          </Shape>
+          <Transform translation="-124 18 1">
+            <Shape>
+              <Appearance><Material diffuseColor="0 0 0" emissiveColor="1 0.95 0.82"/></Appearance>
+              <Text string='"X3D layers" "0 courtyard, 1 inset, 2 frame, 3 panel"'>
+                <ScreenFontStyle pointSize="10" family='"SANS"' justify='"BEGIN" "MIDDLE"'/>
+              </Text>
+            </Shape>
+          </Transform>
+          <!-- The button: a brass plate whose click toggles the inset. -->
+          <Transform translation="-52 -20 1">
+            <Group>
+              <Shape>
+                <Appearance>
+                  <PhysicalMaterial baseColor="0.7 0.6 0.45" metallic="0" roughness="0.5">
+                    <ImageTexture containerField="baseTexture" url='"brass_base.png"'/>
+                    <ImageTexture containerField="metallicRoughnessTexture" url='"brass_mr.png"'/>
+                  </PhysicalMaterial>
+                </Appearance>
+                <Rectangle2D size="140 26"/>
+              </Shape>
+              <Transform translation="0 0 1">
+                <Shape>
+                  <Appearance><Material diffuseColor="0 0 0" emissiveColor="0.15 0.1 0.05"/></Appearance>
+                  <Text string='"show / hide inset"'>
+                    <ScreenFontStyle pointSize="10" family='"SANS"' justify='"MIDDLE" "MIDDLE"'/>
+                  </Text>
+                </Shape>
+              </Transform>
+              <TouchSensor DEF="Button" description="show or hide the inset"/>
+            </Group>
+          </Transform>
+        </LayoutGroup>
+      </LayoutLayer>
+    </LayerSet>
+
+    <BooleanFilter DEF="Pressed"/>
+    <BooleanToggle DEF="Shown" toggle="true"/>
+    <ROUTE fromNode="Button" fromField="isActive" toNode="Pressed" toField="set_boolean"/>
+    <ROUTE fromNode="Pressed" fromField="inputTrue" toNode="Shown" toField="set_boolean"/>
+    <ROUTE fromNode="Shown" fromField="toggle_changed" toNode="Inset" toField="set_visible"/>
+    <ROUTE fromNode="Shown" fromField="toggle_changed" toNode="Frame" toField="set_visible"/>
+  </Scene>
+</X3D>

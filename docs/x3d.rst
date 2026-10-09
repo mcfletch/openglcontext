@@ -118,6 +118,8 @@ implements these X3D nodes, by component:
   PositionDamper, PositionDamper2D, ScalarChaser, ScalarDamper,
   TexCoordChaser2D, TexCoordDamper2D
 - KeyDeviceSensor - KeySensor, StringSensor
+- Layering - Layer, LayerSet, Viewport
+- Layout - Layout, LayoutGroup, LayoutLayer, ScreenFontStyle, ScreenGroup
 - Interpolation - ColorInterpolator, CoordinateInterpolator,
   CoordinateInterpolator2D, EaseInEaseOut, NormalInterpolator,
   OrientationInterpolator, PositionInterpolator, PositionInterpolator2D,
@@ -875,12 +877,98 @@ Binding, viewpoints and navigation
   the viewpoint a ``#name`` url names; opening any other url is left to an
   application that overrides ``OnAnchor``.
 
+- In a scene drawn as layers (:ref:`x3d-layers`) each layer has bind stacks
+  of its own: its viewpoints, backgrounds, fogs and NavigationInfos are bound
+  among themselves, and the next-viewpoint key steps through those of the
+  layer navigation drives.
+
 - A ``Billboard`` is turned toward the camera of a frame's first view once a
   frame, before the frame is drawn (``FlatPass.faceBillboards``): about its
   ``axisOfRotation``, or with ``0 0 0`` facing the camera with its +Y along the
   camera's up. Shadows are cast as it faces the camera. A frame whose camera,
   and the Billboard's parent and axis, are the last frame's leaves it as it
   is without working it out (``billboard.Facing``).
+
+.. _x3d-layers:
+
+Layers and layout
+~~~~~~~~~~~~~~~~~
+
+.. figure:: images/x3d/x3d_layering.jpg
+   :alt: A sandstone courtyard with a brick wall, marble plinths, a copper sphere, a wooden crate, a steel cone and a brass ball; at the top right a plan view of the courtyard in a brass frame; at the bottom left a wooden panel with text and a brass button
+
+   ``oglc-x3d-layering``: the courtyard in layer 0, a plan view of it in an
+   inset viewport, a brass frame, and a panel placed in pixels.
+
+A scene with a ``LayerSet`` is drawn as a stack of layers
+(``OpenGLContext.passes.layerpass``, ``OpenGLContext.multiview.layers``).
+Layer 0 is the scene's own children other than the ``LayerSet``; layer *n*
+is the *n*-th node of its ``layers``. ``order`` names the layers drawn,
+bottom first, each number once; a number naming no layer, and a layer whose
+``visible`` is false, is passed over.
+
+- Each layer is drawn over the ones beneath it with the depth buffer cleared,
+  so its shapes are in front of theirs wherever they are.
+- A layer's ``viewport`` confines it to that ``Viewport``'s
+  ``clipBoundary``: left, right, bottom and top as fractions of the view.
+  A ``Viewport`` among a layer's children, and a ``LayoutGroup``'s
+  ``viewport``, confine their children the same way within the layer. A
+  viewport's camera projects for its own rectangle, so an inset keeps its
+  shape.
+- ``activeLayer`` is the layer navigation drives: it is seen through the
+  context's camera, which the movement modes move. Every other layer is
+  seen through the viewpoint its own bind stack has bound, followed as it
+  moves; a ``Layer`` binding none is seen from X3D's default ``Viewpoint``
+  and a ``LayoutLayer`` from a default ``OrthoViewpoint``, (-1, -1, 1, 1).
+- A layer's lights light that layer alone, its ``NavigationInfo`` decides
+  its headlight, and its bound ``Background`` and ``Fog`` are its own. The
+  bottom layer is cleared to black where it binds no background; a layer
+  above it with no background clears nothing, so what is beneath shows
+  through. Shadows are cast and received in the layer navigation drives.
+- A pick is resolved through the topmost layer whose geometry is under the
+  pointer, with that layer's camera, so a ``TouchSensor`` on a panel and one
+  in the world beneath both work. A layer whose ``pickable`` is false is
+  clicked through. Where a layer above cleared the depth under a hit, the
+  hit point is measured on the shape's triangles; a shape with none (text,
+  lines, points) is measured at its origin.
+- Several views (:doc:`multiview`) each draw the whole stack; the Layout
+  nodes are placed for the first view.
+
+A ``Layout`` places a rectangle in its parent's and gives the children of
+its ``LayoutGroup`` or ``LayoutLayer`` a coordinate system centred on it
+(``OpenGLContext.scenegraph.layout``), worked out each frame for the camera
+the node is drawn through:
+
+- ``size`` in ``sizeUnits`` is the rectangle's width and height, ``align``
+  puts it against the parent's ``LEFT``, ``CENTER`` or ``RIGHT`` and
+  ``BOTTOM``, ``CENTER`` or ``TOP``, and ``offset`` in ``offsetUnits`` moves
+  it from there. A field given one value uses it for both axes.
+- The units are ``PIXEL``, ``FRACTION`` of the parent rectangle, or
+  ``WORLD``, which inside another layout is that layout's unit for the axis
+  and in an outermost layout is ``FRACTION``. The outermost layout's parent
+  rectangle is the layer's viewport.
+- ``scaleMode`` is how long one of the children's units is: ``NONE`` keeps
+  the parent's (``FRACTION`` in an outermost layout), ``FRACTION`` makes it
+  the rectangle's width or height, ``PIXEL`` one pixel, and ``STRETCH`` the
+  other axis's, so the children keep their shape.
+- Through a perspective camera a pixel is measured at the depth of the
+  layout's origin.
+
+A ``ScreenGroup``'s unit is one pixel and its axes the screen's, at its
+origin wherever that is, snapped to the pixel grid. A ``Text`` whose
+``fontStyle`` is a ``ScreenFontStyle`` is drawn the same way: ``pointSize``
+is in points of 1/72 inch at 96 pixels to the inch, so ``pointSize`` 12 is
+16 pixels tall, at any distance.
+
+``oglc-x3d-layering`` opens ``OpenGLContext/bin/x3d_layering.x3d``: a
+courtyard of sandstone, brick, marble, copper, steel, brass and wood in
+layer 0; a plan view of it in an inset viewport at the top right, through
+the inset layer's own viewpoint; a brass frame drawn under the inset; and a
+wooden panel 16 pixels in from the bottom left with text in a
+``ScreenFontStyle`` and a button whose ``TouchSensor`` shows and hides the
+inset. Its keys: ``i`` shows and hides the inset and its frame, ``p`` the
+panel. :doc:`tests/x3d_layering.py <tutorials/x3d_layering>` is the same
+scene as a tutorial.
 
 Sensors
 ~~~~~~~
