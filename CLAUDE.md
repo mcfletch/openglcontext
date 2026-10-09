@@ -206,6 +206,8 @@ OpenGLContext/
 │   ├── reflectionplanner.py  # A frame's mirrors: what to draw and read -- no GL
 │   ├── reflectiontiles.py    # The atlas packer and the schedule -- no GL
 │   ├── reflectionatlas.py    # The texture every reflection is a tile of
+│   ├── volumepass.py # The pass's side of volumes: the opaque depth copy,
+│   │                 # the programs by plan, the march's draw and pick
 │   ├── gputimer.py   # GPU time of a stretch of a frame, read without waiting
 │   ├── renderstats.py # What a frame cost in shapes and draws, for the
 │   │                 # developer overlay -- docs/hud.rst
@@ -285,6 +287,11 @@ OpenGLContext/
 │   │                 # drawn from buffer textures -- docs/x3d.rst#x3d-gaussian-splats
 │   ├── splatmath.py  # Splats' covariance, harmonic colour, projection,
 │   │                 # back-to-front order and fitting -- no GL
+│   ├── volumedata.py # X3D's VolumeData, SegmentedVolumeData and
+│   │                 # IsoSurfaceVolumeData, ray-marched with the blended
+│   │                 # geometry -- docs/x3d.rst#x3d-volume-rendering
+│   ├── volumestyles.py  # X3D's volume render styles as the GLSL a march
+│   │                 # compiles: plans, palettes, transfer tables -- no GL
 │   ├── geospatial.py # X3D's Geospatial nodes: GeoLocation, GeoTransform,
 │   │                 # GeoCoordinate, GeoElevationGrid, GeoViewpoint, GeoLOD
 │   │                 # -- docs/x3d.rst

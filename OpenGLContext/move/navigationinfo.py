@@ -17,8 +17,8 @@ NavigationInfo is bound and again when it changes.
   context's declared navigation offers is selected (:func:`apply`); ``ANY``
   and the types with no engine mode leave the choice with the player. A
   context with no declared movement modes keeps its own navigation.
-- ``visibilityLimit``, where positive, is the far clipping distance
-  (:func:`clip`).
+- ``visibilityLimit``, where positive, is the far clipping distance, and
+  half of ``avatarSize``'s collision radius the near one (:func:`clip`).
 - ``speed`` scales the declared modes' speeds relative to X3D's default of 1,
   so 1 leaves the engine's own speeds and 2 doubles them
   (:func:`speed_factor`); a speed the application sets on a mode is the one
@@ -175,15 +175,23 @@ def _scale_speeds(manager: Any, factor: float) -> None:
 
 
 def clip(platform: Any, info: Any) -> None:
-    """Give `platform` `info`'s visibilityLimit as its far distance, where positive"""
-    if info is not None and float(info.visibilityLimit) > 0:
-        platform.setClipping(far=float(info.visibilityLimit))
+    """Give `platform` `info`'s clipping distances
+
+    The near plane at half the avatar's collision radius, as 19775-1 23.4.4
+    recommends, and `info`'s visibilityLimit as the far plane where positive.
+    """
+    if info is None:
+        return
+    radius = avatar_of(info)[0]
+    far = float(info.visibilityLimit)
+    platform.setClipping(near=radius * 0.5 if radius > 0 else None,
+                         far=far if far > 0 else None)
 
 
 def apply(context: Any, info: Any, document: bool = False, scale: float = 1.0) -> None:
     """Apply `info` to `context` as it is bound, and as its fields change
 
-    The far clipping distance of the context's ``platform`` (:func:`clip`),
+    The clipping distances of the context's ``platform`` (:func:`clip`),
     the avatar size (``context.navigationAvatar``) and the modes' speeds, each
     time one of those fields has changed; and the movement mode `info` asks
     for, when it is bound or its ``type`` changes. `info` is None where the

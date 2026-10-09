@@ -1,0 +1,12 @@
+{
+  "frames": 60,
+  "git": "v3.0.0a4-853-ge9a31d2a-dirty",
+  "id": "demos/x3d_volume",
+  "licence": "BSD-3-Clause",
+  "module": "x3d_volume",
+  "producer": "script",
+  "size": [
+    1100,
+    680
+  ]
+}

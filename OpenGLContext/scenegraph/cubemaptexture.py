@@ -36,7 +36,7 @@ from vrml import cache, field, node
 from vrml.x3d import loadsensor
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.scenegraph.imagetexture import ImageURLField, load_first
+from OpenGLContext.scenegraph.imagetexture import ImageURLField, URLRead, load_first
 from OpenGLContext.scenegraph.texture3d import image_array, with_channels
 
 __all__ = ['FACE_FIELDS', 'FACES_KEY', 'ComposedCubeMapTexture', 'CubeMapTexture',
@@ -201,9 +201,10 @@ class ComposedCubeMapTexture(CubeMapTexture, x3d.ComposedCubeMapTexture):
         return faces
 
 
-class ImageCubeMapTexture(CubeMapTexture, x3d.ImageCubeMapTexture):
+class ImageCubeMapTexture(URLRead, CubeMapTexture, x3d.ImageCubeMapTexture):
     """X3D's ImageCubeMapTexture: a cube map read from one file"""
 
+    READ_FIELD = ' faces'
     FACE_SOURCES = ('faces',)
     faces = FacesField(' faces', 1, None)
     url = ImageURLField('url', 1, list)

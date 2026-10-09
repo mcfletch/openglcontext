@@ -102,6 +102,7 @@ from OpenGLContext.passes.selection import (
 from OpenGLContext.passes.flateffects import _FlatEffectsMixin
 from OpenGLContext.passes.layerpass import LayeringPassMixin
 from OpenGLContext.passes.multiviewpass import MultiviewPassMixin
+from OpenGLContext.passes.volumepass import VolumePassMixin
 from OpenGLContext.passes.zonepass import ZonesMixin
 from OpenGLContext.passes.clippass import ClipPlanesMixin
 from OpenGLContext.passes.generatedtextures import GeneratedTexturesMixin
@@ -561,7 +562,8 @@ def presentFrame( context: Any ) -> Any:
     return context.SwapBuffers()
 
 
-class FlatPass( _FlatEffectsMixin, LayeringPassMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMixin,
+class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, MultiviewPassMixin,
+                ZonesMixin, ClipPlanesMixin,
                 GeneratedTexturesMixin, ProjectorsMixin, SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
@@ -810,32 +812,16 @@ class FlatPass( _FlatEffectsMixin, LayeringPassMixin, MultiviewPassMixin, ZonesM
         shader = self.shader_program
         assert shader is not None, 'shader lights are only set up in shader mode'
         shader.use(lit=True)  # Ensure shader is bound before setting uniforms
-        light_count = 0
         light_paths = self.layerPaths(nodetypes.Light)
         ceiling = self.maxLights(shader.MAX_LIGHTS)
+        lamps = self.sceneLamps(matrix, ceiling)
+        for slot, (light_node, _path, light_matrix) in enumerate(lamps):
+            configure_light_from_node(shader, slot, light_node, light_matrix)
+        light_count = len(lamps)
         # Which light went into which slot, for the zones' per-draw light mask.
-        bound = []
-        bound_paths = []
-        lit = []
-
-        for path in light_paths:
-            if light_count >= ceiling:
-                break
-            light_node = path[-1]
-            # An image-based light or a texture projector is no lamp
-            if isinstance(light_node, x3dnodes.EnvironmentLight) or is_projector(light_node):
-                continue
-            tmatrix = path.transformMatrix()
-            if hasattr(light_node, 'on') and light_node.on:
-                # Transform light to eye space (combine light's transform with view matrix)
-                # This matches how fixed-function glLightfv works - it transforms
-                # the light position/direction by the current modelview matrix
-                light_matrix = dot(tmatrix, matrix)
-                configure_light_from_node(shader, light_count, light_node, light_matrix)
-                bound.append(light_node)
-                bound_paths.append(path)
-                lit.append((light_node, light_matrix))
-                light_count += 1
+        bound = [light_node for light_node, _path, _matrix in lamps]
+        bound_paths = [path for _node, path, _matrix in lamps]
+        lit = [(light_node, light_matrix) for light_node, _path, light_matrix in lamps]
         self.boundLights = bound
         self.setupProjectors(light_paths)
         self.lightScopes = self.lightScopes.following(
@@ -854,6 +840,25 @@ class FlatPass( _FlatEffectsMixin, LayeringPassMixin, MultiviewPassMixin, ZonesM
                              intensity=1.0)
             light_count += 1
         shader.set_num_lights(light_count)
+
+    def sceneLamps(self, matrix: Any, ceiling: int) -> list[tuple[Any, Any, Any]]:
+        """The scene's lights a frame binds, in slot order: ``(node, path, matrix)`` each
+
+        ``matrix`` is the light's modelview under the view ``matrix``, which
+        takes its position and direction to eye space as ``glLightfv`` does.
+        At most ``ceiling``; lights that are off, image-based lights and
+        texture projectors are left out.
+        """
+        lamps: list[tuple[Any, Any, Any]] = []
+        for path in self.layerPaths(nodetypes.Light):
+            if len(lamps) >= ceiling:
+                break
+            light_node = path[-1]
+            if isinstance(light_node, x3dnodes.EnvironmentLight) or is_projector(light_node):
+                continue
+            if getattr(light_node, 'on', False):
+                lamps.append((light_node, path, dot(path.transformMatrix(), matrix)))
+        return lamps
 
     def maxLights(self, ceiling: int) -> int:
         """Lights to bind this frame.  The base pass uses all the shader has."""
@@ -1022,6 +1027,7 @@ class FlatPass( _FlatEffectsMixin, LayeringPassMixin, MultiviewPassMixin, ZonesM
         transparent = [(i, rec) for i, rec in enumerate(toRender) if rec[0][0]]
         if not transparent:
             return
+        self.forgetOpaqueDepth()
         self.stats.transparent += len(transparent)
         self.stats.draws += len(transparent)
         # Eye looks down -z, so farthest-first is ascending eye-space origin z.
@@ -2294,6 +2300,7 @@ class FlatPass( _FlatEffectsMixin, LayeringPassMixin, MultiviewPassMixin, ZonesM
     def renderTransparent( self, toRender: Sequence[Any] ) -> None:
         """Render the transparent geometry from toRender (in forward order)"""
         self.transparent = True
+        self.forgetOpaqueDepth()
         setup = False
         debugFrustum = self.context.contextDefinition.debugBBox
         try:

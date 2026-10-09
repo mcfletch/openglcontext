@@ -351,6 +351,19 @@ frames = 60
 timeout = 600
 
 [[image]]
+id = "demos/x3d_volume"
+out = "images/demos/x3d_volume.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "Three CT scans of an ammonite on checkered marble plinths, each on a steel rod: one amber through a transfer function, one with its shell lit and its septa tone-mapped, one as cartoon-shaded isosurfaces"
+caption = "A generated CT scan of an ammonite, drawn by three X3D volume data nodes"
+producer = "script"
+module = "x3d_volume"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
 id = "demos/crowd_demo"
 out = "images/demos/crowd_demo.jpg"
 size = [1100, 680]
