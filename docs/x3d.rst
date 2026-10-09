@@ -349,9 +349,10 @@ are nearest it, and a warning names a draw that more reach
 - The compatibility profile clips with ``glClipPlane``, as many planes as
   the context has (six at least).
 - A clipped shape is drawn by itself rather than in an instanced group.
-- A shape drawn with its own ``Shader`` program, and the engine's terrain,
-  vegetation and particle layers, which draw with programs of their own, are
-  not clipped.
+- A shape drawn with its own ``Shader`` program is offered the planes as
+  ``x3d_ClipPlane`` (:ref:`x3d-shaders`) and clips itself with them, as
+  under X_ITE. The engine's terrain, vegetation and particle layers, which
+  draw with programs of their own, are not clipped.
 - Planes only cut: the cut is not capped, so a solid shape is open where a
   plane passes through it.
 
@@ -1521,6 +1522,15 @@ The browser's state
       * - ``x3d_TextureMatrix[i]``
         - ``mat4``
         - each texture's transform
+      * - ``x3d_Fog``
+        - ``x3d_FogParameters``
+        - the fog the shape is in, Fog or LocalFog; ``type ==
+          x3d_NoneFog`` where there is none
+      * - ``x3d_ClipPlane[x3d_MaxClipPlanes]``
+        - ``vec4``
+        - the clip planes reaching the shape, in eye space: a point ``v`` is
+          kept where ``dot(v, plane.xyz) >= plane.w``; slots past them are
+          zero
 
    ``x3d_LightSourceParameters`` has ``int type`` (``x3d_DirectionalLight``,
    ``x3d_PointLight``, ``x3d_SpotLight``), ``vec3 color``, ``float
@@ -1535,7 +1545,13 @@ The browser's state
    ``roughness`` in place of the first four. The engine defines a structure
    for a part that names it and does not define it, after the part's
    ``#version``, with ``x3d_MaxLights`` (the renderer's light count),
-   ``x3d_MaxTextures`` and the light type numbers.
+   ``x3d_MaxTextures``, ``x3d_MaxClipPlanes`` (6) and the light and fog type
+   numbers. ``x3d_FogParameters`` has ``int type`` (``x3d_LinearFog``,
+   ``x3d_ExponentialFog``), ``vec3 color``, ``float visibilityStart`` (0),
+   ``float visibilityRange`` and ``mat3 matrix``, which turns an eye-space
+   point into the fog's space, where the range is measured. As Annex I.3.2
+   has it, the engine applies neither fog nor clip planes to a program's
+   colour; the program applies them with these, as it does under X_ITE.
 
    The engine's own input names (``aPosition``, ``aNormal``, ...,
    :ref:`fixed-attribute-locations`) are bound as well.

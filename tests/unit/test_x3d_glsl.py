@@ -454,3 +454,19 @@ class TestLinkSchedule:
         schedule.linked(('a', 'b'), ok=False)
         assert not schedule.due(('a', 'b'))
         assert schedule.due(('a', 'fixed'))
+
+
+class TestTheSceneParameters:
+    def test_exponential_fog_is_its_type_with_the_range_in_eye_space(self):
+        found = x3dglsl.fog_parameters(3, 0.05, (0.5, 0.5, 0.5))
+        assert found['type'] == 2
+        assert found['visibilityRange'] == pytest.approx(20.0)
+
+    def test_fog_of_no_density_is_none(self):
+        assert x3dglsl.fog_parameters(2, 0.0, (1, 1, 1))['type'] == 0
+
+    def test_a_clip_plane_has_a_unit_normal_and_its_distance(self):
+        found = x3dglsl.clip_plane_parameters([(0.0, 2.0, 0.0, -4.0)])
+        assert found.shape == (x3dglsl.MAX_CLIP_PLANES, 4)
+        assert tuple(found[0]) == pytest.approx((0.0, 1.0, 0.0, 2.0))
+        assert not found[1:].any()

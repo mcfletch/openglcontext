@@ -296,7 +296,10 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `_clipplane_inc.glsl`): planes in the drawn object's frame, so every
     view, mirror and shadow map; up to 8 a draw, nearest groups first;
     `glClipPlane` in the compatibility profile; clipped shapes are not
-    instanced; a Shader node's program and the terrain/vegetation/particle
+    instanced; a Shader node's program is offered the planes as X_ITE's
+    `x3d_ClipPlane[6]` in eye space and the fog as `x3d_Fog` (2026-10-09
+    x3d-xfields, `x3dglsl.clip_plane_parameters`, `fog_parameters`; Annex
+    I.3.2 leaves applying both to the program); the terrain/vegetation/particle
     layers are not clipped. Found on the way: `Box` and the quadrics ignored
     `solid FALSE` (now drawn from inside, and kept apart when instancing)
   - [x] `FontLibrary` (`scenegraph.text.fontlibrary`): the first url that is a

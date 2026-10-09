@@ -817,6 +817,10 @@ class X3DShaderDraw(ShaderAppearanceProgram):
       the shape, eye space, the slots after them `x3d_NoneLight`;
     - `x3d_Texture2D[i]`, `x3d_TextureCube[i]`, `x3d_Texture3D[i]` and
       `x3d_TextureMatrix[i]` from the appearance's texture and transform;
+    - `x3d_Fog` (`x3d_FogParameters`), the fog the shape is drawn in, and
+      `x3d_ClipPlane[x3d_MaxClipPlanes]`, the planes reaching it in eye
+      space, for the program to apply: the pass applies neither to a
+      program's colour (19775-1, I.3.2);
     - the declared fields of the shader's nodes, and their textures.
 
     A translated GLSL 1.x program gets its built-ins' stand-ins too. The pass's
@@ -880,8 +884,31 @@ class X3DShaderDraw(ShaderAppearanceProgram):
             linked.set('x3d_Viewport', [int(v) for v in mode.getViewport()])
         self._material(getattr(appearance, 'material', None))
         self._lights(pass_program)
+        self._fog(pass_program)
+        self._clipPlanes(view)
         self._userValues()
         self._bindTextures(appearance)
+
+    def _fog(self, pass_program: Any) -> None:
+        linked = self.linked
+        if linked.location('x3d_Fog.type') == -1 and linked.location('x3d_Fog.color') == -1:
+            return
+        mode, density, color = getattr(pass_program, 'fog', (0, 0.0, (0.0, 0.0, 0.0)))
+        for member, value in x3dglsl.fog_parameters(mode, density, color).items():
+            linked.set('x3d_Fog.%s' % member, [value] if np.ndim(value) == 0 else value)
+
+    def _clipPlanes(self, view: Any) -> None:
+        linked, mode = self.linked, self.mode
+        if linked.location('x3d_ClipPlane[0]') == -1:
+            return
+        planes: Any = ()
+        found = getattr(mode, 'clipPlanes', None)
+        path = getattr(mode, 'renderPath', None)
+        if found and path is not None and view is not None:
+            # The eye's frame, placed in the world by the inverse of the view
+            planes = found.object_planes(path, np.linalg.inv(np.asarray(view, np.float64)))
+        for index, plane in enumerate(x3dglsl.clip_plane_parameters(planes)):
+            linked.set('x3d_ClipPlane[%d]' % index, plane)
 
     def end(self) -> None:
         """Put back the texture bindings the shape's samplers replaced"""
