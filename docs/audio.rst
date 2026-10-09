@@ -9,8 +9,8 @@ distance and pans between the ears as the listener, who is the camera, moves
 past it. Sounds come from files, from glTF documents that use the
 `KHR_audio_emitter
 <https://github.com/omigroup/gltf-extensions/tree/main/extensions/2.0/KHR_audio_emitter>`__
-extension, from VRML97's ``Sound`` node, or from clips the application
-generates. This page covers using sound in an application. How the mixer, the
+extension, from X3D's Sound component (VRML97's ``Sound`` among it), or from
+clips the application generates. This page covers using sound in an application. How the mixer, the
 gain curves and the voice pool work is in :doc:`audio-internals`.
 
 .. _audio-install:
@@ -636,7 +636,13 @@ screen <overlayui-settings>`.
    * - ``audio.voices``
      - —
      - 32
-     - How many sounds can play at once.
+     - How many sounds can play at once, as voices; and, apart from them, how
+       many X3D ``Sound`` and ``SpatialSound`` nodes are heard at once.
+   * - ``audio.microphone``
+     - ``OPENGLCONTEXT_AUDIO_MICROPHONE``
+     - off
+     - Whether a scene's ``MicrophoneSource`` or ``StreamAudioSource`` may
+       open an audio input.
 
 The environment variables are listed with the others in :doc:`environment`.
 
@@ -663,29 +669,68 @@ tone has no treble to remove, so it only gets quieter; a sound with harmonics
 or noise in it changes character. The filter's response is in
 :ref:`mixer-muffle`.
 
-.. _vrml:
+.. _audio-x3d:
 
-The VRML97 ``Sound`` node
--------------------------
+X3D's Sound component
+---------------------
 
-:doc:`VRML97's <vrml97>` ``Sound`` and ``AudioClip`` nodes play, with the
-fields the specification gives them:
+X3D's Sound component, VRML97's ``Sound`` and ``AudioClip`` included, plays
+through omi_audio's processing graph (``omi_audio.graph``, the Web Audio
+model X3D 4 is defined on). Each X3D node is one graph node, made the first
+time a frame reaches it. :ref:`x3d-sound` lists every node and how its fields
+are read.
 
 .. code-block:: python
 
-   Sound(
-       source=AudioClip(url=['ambience.wav'], loop=True, pitch=1.0),
-       location=(0, 1, 0), direction=(0, 0, -1),
-       minFront=2.0, minBack=2.0, maxFront=40.0, maxBack=10.0,
-       intensity=0.8, priority=0.2, spatialize=True,
-   )
+   from OpenGLContext.scenegraph.x3dsound import (
+       AudioClip, AudioDestination, BiquadFilter, OscillatorSource, PeriodicWave,
+       Sound, SpatialSound)
 
-Full level inside the ``min`` ellipsoid, silent outside the ``max`` one, with
-a fade between. ``startTime`` and ``stopTime`` bound when the clip plays and
-``pitch`` sets the playback rate; ``isActive`` and ``duration_changed`` are
-sent. A clip whose ``startTime`` has already passed starts from its beginning.
-With ``spatialize=FALSE`` the sound still fades with distance but stays
-centred. The geometry is in :ref:`audio-ellipsoids`.
+   bell = Sound(
+       source=AudioClip(url=['bell.wav'], loop=True),
+       location=(0, 1, 0), direction=(0, 0, -1),
+       minFront=2.0, minBack=2.0, maxFront=40.0, maxBack=10.0, intensity=0.8)
+   pipe = SpatialSound(
+       dopplerEnabled=True, referenceDistance=1.5,
+       children=[BiquadFilter(type='LOWPASS', frequency=1200, children=[
+           OscillatorSource(frequency=110, periodicWave=PeriodicWave(type='SAWTOOTH'))])])
+   music = AudioDestination(children=[AudioClip(url=['music.ogg'], loop=True)])
+
+Put a ``Sound`` or ``SpatialSound`` under a ``Transform`` and it is heard
+from there. What is heard:
+
+- each enabled ``AudioDestination`` and ``StreamAudioDestination``, not
+  placed: what is connected to it is mixed and sent to the device;
+- each ``Sound`` and ``SpatialSound`` that no destination reads.
+
+A source in no destination and no ``Sound`` is made and timed but not heard.
+
+Sources and processing nodes run from ``startTime`` until a later
+``stopTime``, pause at ``pauseTime`` and resume at ``resumeTime``, as a
+``TimeSensor`` does, on the engine's clock. A clip that does not loop, and
+whose ``startTime`` plus its duration has passed when it is first seen, does
+not play: give it ``loop TRUE``, or set ``startTime`` to the time it should
+start. A looping clip that started before it was first heard plays from
+where its time has reached.
+
+Two settings bound what a scene can do:
+
+- ``audio.voices`` is how many ``Sound`` and ``SpatialSound`` nodes are heard
+  at once. Past it, those ranked lowest are silenced: higher ``priority``
+  first, then among priorities above 0.5 the more recently heard, then the
+  louder at the listener.
+- ``audio.microphone`` lets a ``MicrophoneSource`` or ``StreamAudioSource``
+  open an audio input. It is off by default; off, those nodes are silent, no
+  input is opened and the log says so once.
+
+An ``Analyser``'s ``frequencyData()``, ``timeDomainData()``,
+``byteFrequencyData()`` and ``byteTimeDomainData()`` are the Web Audio
+``AnalyserNode``'s, for an application to draw. ``audioscene.sound_graph(context)``
+returns the context's ``SoundGraph``; its ``audioNode(node)`` is the graph
+node an X3D node plays as.
+
+``oglc-x3d-sound`` opens a scene using the component's nodes; see
+:ref:`audio-demos`.
 
 .. _silence:
 
@@ -754,3 +799,34 @@ one is a cone you can hear only from in front.
 
 Every clip in both is generated at start-up, so neither ships sound files, and
 both run silently on a machine with no sound device.
+
+``oglc-x3d-sound`` opens ``OpenGLContext/bin/x3d_sound.x3d``, an X3D 4 document
+using the Sound component: a bronze bell (``Sound`` and ``AudioClip``), a
+copper pipe circling on a ``SpatialSound`` with Doppler, its oscillator
+shaped and filtered, and a steel drum through an ``AudioDestination`` with an
+echo, a room, a compressor and an ``Analyser`` raising a meter.
+``--microphone`` lets its ``MicrophoneSource`` open the default input.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Key
+     - What happens
+   * - :kbd:`b`
+     - Pauses and resumes the bell
+   * - :kbd:`d`
+     - The pipe's ``WaveShaper`` on and off
+   * - :kbd:`f`
+     - Steps the pipe's ``BiquadFilter``: 300, 1200, 4000 Hz
+   * - :kbd:`e`
+     - The drum's echo off and on
+   * - :kbd:`s`
+     - Swaps the chimes between the ears (``ChannelSelector``)
+   * - :kbd:`l`
+     - Heard from the camera, or from the centre of the orbit
+       (``ListenerPointSource``)
+
+The scene is ``SoundScene`` in ``OpenGLContext/bin/x3d_sound.py``, which holds
+no GL; :doc:`tests/x3d_sound.py <tutorials/x3d_sound>` is the same scene as a
+tutorial.

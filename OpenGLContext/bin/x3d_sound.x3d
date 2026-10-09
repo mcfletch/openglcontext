@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Full" version="4.0">
+  <head>
+    <component name="Sound" level="2"/>
+    <meta name="title" content="X3D sound"/>
+    <meta name="creator" content="OpenGLContext"/>
+    <meta name="license" content="BSD-3-Clause"/>
+    <meta name="description" content="The scene oglc-x3d-sound opens: a bronze bell playing an AudioClip through a Sound, a copper organ pipe circling on a SpatialSound with its oscillator filtered and shaped, and a steel drum on an AudioDestination with an echo, a room, a compressor and an analyser driving a meter."/>
+  </head>
+  <Scene>
+    <WorldInfo title="X3D sound" info='"The scene oglc-x3d-sound opens."'/>
+    <NavigationInfo type='"EXAMINE" "ANY"'/>
+    <Background skyColor="0.25 0.32 0.48 0.62 0.66 0.74" skyAngle="1.45" groundColor="0.34 0.3 0.25"/>
+    <Viewpoint description="The sound garden" position="0 3.2 7.5" orientation="1 0 0 -0.3"/>
+    <DirectionalLight global="true" direction="-0.4 -0.8 -0.5" intensity="1.4" color="1 0.95 0.88"/>
+    <PointLight global="true" location="0 3 2" intensity="0.6" color="1 0.85 0.7" radius="12"/>
+
+    <!-- The floor, in sandstone. -->
+    <Shape>
+      <Appearance>
+        <PhysicalMaterial metallic="0" roughness="1">
+          <ImageTexture containerField="baseTexture" url='"sandstone_base.png"'/>
+          <ImageTexture containerField="metallicRoughnessTexture" url='"sandstone_mr.png"'/>
+          <ImageTexture containerField="normalTexture" url='"sandstone_normal.png"'/>
+        </PhysicalMaterial>
+        <TextureTransform scale="4 2"/>
+      </Appearance>
+      <IndexedFaceSet coordIndex="0 1 2 3 -1" texCoordIndex="0 1 2 3 -1" solid="false">
+        <Coordinate point="-8 0 5  8 0 5  8 0 -5  -8 0 -5"/>
+        <TextureCoordinate point="0 0  1 0  1 1  0 1"/>
+      </IndexedFaceSet>
+    </Shape>
+
+    <!-- A marble plinth, under each station. -->
+    <ProtoDeclare name="Plinth">
+      <ProtoInterface>
+        <field name="translation" type="SFVec3f" accessType="initializeOnly" value="0 0 0"/>
+      </ProtoInterface>
+      <ProtoBody>
+        <Transform>
+          <IS><connect nodeField="translation" protoField="translation"/></IS>
+          <Transform translation="0 0.35 0">
+            <Shape>
+              <Appearance>
+                <PhysicalMaterial metallic="0" roughness="0.55">
+                  <ImageTexture containerField="baseTexture" url='"marble_base.png"'/>
+                  <ImageTexture containerField="metallicRoughnessTexture" url='"marble_mr.png"'/>
+                  <ImageTexture containerField="normalTexture" url='"marble_normal.png"'/>
+                </PhysicalMaterial>
+              </Appearance>
+              <Box size="1.4 0.7 1.4"/>
+            </Shape>
+          </Transform>
+        </Transform>
+      </ProtoBody>
+    </ProtoDeclare>
+
+    <!-- A brushed metal: the steel maps prepare() writes, in a colour. -->
+    <ProtoDeclare name="Metal">
+      <ProtoInterface>
+        <field name="baseColor" type="SFColor" accessType="initializeOnly" value="0.8 0.8 0.8"/>
+      </ProtoInterface>
+      <ProtoBody>
+        <Appearance>
+          <PhysicalMaterial metallic="0.9" roughness="0.45">
+            <IS><connect nodeField="baseColor" protoField="baseColor"/></IS>
+            <ImageTexture containerField="baseTexture" url='"steel_base.png"'/>
+            <ImageTexture containerField="metallicRoughnessTexture" url='"steel_mr.png"'/>
+            <ImageTexture containerField="normalTexture" url='"steel_normal.png"'/>
+          </PhysicalMaterial>
+        </Appearance>
+      </ProtoBody>
+    </ProtoDeclare>
+
+    <!-- The bell: X3D's (and VRML97's) Sound playing an AudioClip, full
+         within two metres and fading to nothing at twenty-five. -->
+    <ProtoInstance name="Plinth"><fieldValue name="translation" value="-2.8 0 0"/></ProtoInstance>
+    <Transform translation="-2.8 1.25 0">
+      <Shape>
+        <ProtoInstance name="Metal" containerField="appearance">
+          <fieldValue name="baseColor" value="0.95 0.7 0.42"/>
+        </ProtoInstance>
+        <Sphere radius="0.5"/>
+      </Shape>
+      <Sound DEF="Bell" minFront="2" minBack="2" maxFront="25" maxBack="25">
+        <AudioClip DEF="BellClip" description="A bronze bell" url='"bell.wav"' loop="true"/>
+      </Sound>
+    </Transform>
+
+    <!-- The organ pipe: a SpatialSound circling the centre plinth every
+         eight seconds, Doppler on. Its tone is a sawtooth oscillator,
+         shaped (off until d is pressed), low-passed and turned down. -->
+    <ProtoInstance name="Plinth"><fieldValue name="translation" value="0 0 0"/></ProtoInstance>
+    <TimeSensor DEF="OrbitClock" cycleInterval="8" loop="true"/>
+    <OrientationInterpolator DEF="OrbitTurn" key="0 0.5 1"
+                             keyValue="0 1 0 0  0 1 0 3.14159  0 1 0 6.28318"/>
+    <Transform translation="0 1.4 0">
+      <Transform DEF="Orbit">
+        <Transform translation="1.5 0 0">
+          <Shape>
+            <ProtoInstance name="Metal" containerField="appearance">
+              <fieldValue name="baseColor" value="0.95 0.55 0.4"/>
+            </ProtoInstance>
+            <Cylinder radius="0.18" height="0.9"/>
+          </Shape>
+          <SpatialSound DEF="Pipe" dopplerEnabled="true" referenceDistance="1.5" rolloffFactor="1">
+            <Gain DEF="PipeLevel" gain="0.3">
+              <BiquadFilter DEF="PipeFilter" type="LOWPASS" frequency="1200" qualityFactor="3">
+                <WaveShaper DEF="Distortion" enabled="false" oversample="2X"
+                            curve="-0.8 -0.78 -0.7 -0.45 0 0.45 0.7 0.78 0.8">
+                  <OscillatorSource DEF="PipeTone" frequency="110">
+                    <PeriodicWave type="SAWTOOTH"/>
+                  </OscillatorSource>
+                </WaveShaper>
+              </BiquadFilter>
+            </Gain>
+          </SpatialSound>
+        </Transform>
+      </Transform>
+    </Transform>
+    <ROUTE fromNode="OrbitClock" fromField="fraction_changed" toNode="OrbitTurn" toField="set_fraction"/>
+    <ROUTE fromNode="OrbitTurn" fromField="value_changed" toNode="Orbit" toField="set_rotation"/>
+
+    <!-- The drum: heard everywhere through an AudioDestination, its echo a
+         Delay, its room a Convolver, the whole kept in hand by a
+         DynamicsCompressor and watched by an Analyser. -->
+    <ProtoInstance name="Plinth"><fieldValue name="translation" value="2.8 0 0"/></ProtoInstance>
+    <Transform translation="2.8 1.05 0">
+      <Shape>
+        <ProtoInstance name="Metal" containerField="appearance"/>
+        <Cylinder radius="0.55" height="0.7"/>
+      </Shape>
+    </Transform>
+    <AudioDestination DEF="Speakers">
+      <DynamicsCompressor DEF="Limiter" threshold="-18" ratio="6" attack="0.005" release="0.2">
+        <Analyser DEF="Meter" fftSize="256" smoothingTimeConstant="0.6">
+          <Gain DEF="Drums" gain="0.6">
+            <BufferAudioSource DEF="Drum" description="A drum loop" url='"drum.wav"' loop="true"/>
+            <Delay DEF="Echo" delayTime="0.375" maxDelayTime="1">
+              <Gain DEF="EchoLevel" gain="0.4">
+                <BufferAudioSource USE="Drum"/>
+              </Gain>
+            </Delay>
+            <Convolver DEF="Room" normalize="true" gain="0.5">
+              <BufferAudioSource USE="Drum"/>
+            </Convolver>
+          </Gain>
+        </Analyser>
+      </DynamicsCompressor>
+      <!-- Chimes, one in each ear: split, then merged back the other way
+           round by two ChannelSelectors when s is pressed. -->
+      <ChannelMerger DEF="Chimes" gain="0.2">
+        <ChannelSelector DEF="LeftEar" channelSelection="0">
+          <ChannelSplitter DEF="Split">
+            <BufferAudioSource DEF="Pings" description="Two pings, one to each side" numberOfChannels="2" loop="true"/>
+          </ChannelSplitter>
+        </ChannelSelector>
+        <ChannelSelector DEF="RightEar" channelSelection="1">
+          <ChannelSplitter USE="Split"/>
+        </ChannelSelector>
+      </ChannelMerger>
+      <!-- Heard only where the application allows capture, as
+           oglc-x3d-sound does with its microphone option. -->
+      <Gain DEF="Monitor" gain="0.5">
+        <MicrophoneSource DEF="Microphone" description="The default input"/>
+      </Gain>
+    </AudioDestination>
+
+    <!-- The meter: eight steel bars the Analyser's levels raise. -->
+    <Transform translation="2.8 0 1.3">
+      <Transform DEF="Bar0" translation="-0.7 0.025 0" scale="1 0.05 1"><Shape DEF="BarShape"><ProtoInstance name="Metal" containerField="appearance"><fieldValue name="baseColor" value="0.6 0.75 0.95"/></ProtoInstance><Box size="0.16 1 0.16"/></Shape></Transform>
+      <Transform DEF="Bar1" translation="-0.5 0.025 0" scale="1 0.05 1"><Shape USE="BarShape"/></Transform>
+      <Transform DEF="Bar2" translation="-0.3 0.025 0" scale="1 0.05 1"><Shape USE="BarShape"/></Transform>
+      <Transform DEF="Bar3" translation="-0.1 0.025 0" scale="1 0.05 1"><Shape USE="BarShape"/></Transform>
+      <Transform DEF="Bar4" translation="0.1 0.025 0" scale="1 0.05 1"><Shape USE="BarShape"/></Transform>
+      <Transform DEF="Bar5" translation="0.3 0.025 0" scale="1 0.05 1"><Shape USE="BarShape"/></Transform>
+      <Transform DEF="Bar6" translation="0.5 0.025 0" scale="1 0.05 1"><Shape USE="BarShape"/></Transform>
+      <Transform DEF="Bar7" translation="0.7 0.025 0" scale="1 0.05 1"><Shape USE="BarShape"/></Transform>
+    </Transform>
+
+    <!-- Where the sounds are heard from: the camera, or with l the centre
+         of the orbit. -->
+    <ListenerPointSource DEF="Ear" trackCurrentView="true" position="0 1.4 0"/>
+  </Scene>
+</X3D>

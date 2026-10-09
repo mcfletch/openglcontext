@@ -149,7 +149,11 @@ implements these X3D nodes, by component:
   ShaderProgram
 - Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
   PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
-- Sound - AudioClip, Sound
+- Sound - Analyser, AudioClip, AudioDestination, BiquadFilter,
+  BufferAudioSource, ChannelMerger, ChannelSelector, ChannelSplitter,
+  Convolver, Delay, DynamicsCompressor, Gain, ListenerPointSource,
+  MicrophoneSource, OscillatorSource, PeriodicWave, Sound, SpatialSound,
+  StreamAudioDestination, StreamAudioSource, WaveShaper
 - Text - FontLibrary, FontStyle, Text
 - TextureProjection - TextureProjector, TextureProjectorParallel
 - Texturing - ImageTexture, MovieTexture, MultiTexture, MultiTextureCoordinate,
@@ -696,6 +700,85 @@ ramps keyed by a particle's age in seconds, and the physics models applied in
 order. A ``GEOMETRY`` system is lit as a shape is; the other types are unlit.
 The :ref:`particle systems page <x3d-particles>` says how each field is read,
 and ``oglc-x3d-particles`` opens a document using every node.
+
+.. _x3d-sound:
+
+Sound
+~~~~~
+
+The Sound component plays through omi_audio's processing graph, the W3C Web
+Audio model X3D 4 defines it on (``OpenGLContext.scenegraph.x3dsound``; the
+timing is pyvrml97's ``vrml.x3d.sound``). :ref:`audio-x3d` says what is heard
+and how to use it from code, and ``oglc-x3d-sound`` opens a document using the
+nodes.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Node
+     - Plays as
+     - Read
+   * - ``Sound``
+     - its ``source`` panned by its bearing from the listener
+     - VRML97's ellipsoids: full ``intensity`` inside ``minFront``/``minBack``,
+       down to -20 dB at ``maxFront``/``maxBack``, silence beyond;
+       ``spatialize`` FALSE keeps a source's channels; ``priority``
+   * - ``SpatialSound``
+     - its ``children`` panned by their bearing from the listener
+     - ``gain`` times ``intensity`` times the ``distanceModel`` (LINEAR,
+       INVERSE, EXPONENTIAL with ``referenceDistance``, ``maxDistance``,
+       ``rolloffFactor``) times the cone about ``direction``;
+       ``dopplerEnabled`` delays it by its distance over 343 m/s, up to one
+       second; ``spatialize``; ``priority``. ``enableHRTF`` is not read: the
+       pan is equal power between two ears
+   * - ``AudioDestination``, ``StreamAudioDestination``
+     - its ``children``, mixed and heard
+     - ``gain``, the channel fields, ``maxChannelCount``, ``isActive``.
+       ``mediaDeviceID`` and ``streamIdentifier`` are not read: the output is
+       the engine's device
+   * - ``AudioClip``
+     - the first ``url`` that decodes, mixed to one channel
+     - ``loop``, ``pitch`` (taking effect when it next starts), ``gain``,
+       ``duration_changed`` (-1 for none that decodes)
+   * - ``BufferAudioSource``
+     - ``buffer``, each channel's samples after the last's, at
+       ``sampleRate`` (the engine's where 0); the first ``url`` where
+       ``buffer`` is empty
+     - ``numberOfChannels``, ``loop``, ``loopStart``, ``loopEnd``,
+       ``playbackRate``, ``detune``, ``gain``; sends ``length``,
+       ``bufferlength``, ``channelCount``, ``bufferDuration``
+   * - ``OscillatorSource``, ``PeriodicWave``
+     - a band-limited wave at ``frequency`` and ``detune``: a sine, or the
+       ``periodicWave``
+     - ``type`` SINE, SQUARE, SAWTOOTH, TRIANGLE, or CUSTOM from
+       ``optionsReal`` and ``optionsImag``
+   * - ``MicrophoneSource``, ``StreamAudioSource``
+     - the audio input ``mediaDeviceID`` (or the first ``streamIdentifier``)
+       names by part of its name, or the default input
+     - opened only where ``audio.microphone`` allows, and only while heard
+       and running
+   * - ``ListenerPointSource``
+     - silence; with ``trackCurrentView`` FALSE it is where the ``Sound``
+       and ``SpatialSound`` nodes are heard from
+     - ``position``, ``orientation``. ``interauralDistance`` and its own
+       ``dopplerEnabled`` are not read
+   * - ``Gain``, ``Delay``, ``BiquadFilter``, ``Convolver``,
+       ``DynamicsCompressor``, ``WaveShaper``, ``Analyser``
+     - the omi_audio node of the same name
+     - every field; a ``BiquadFilter``'s ``gain`` is its shelf or peak in
+       decibels; a ``Convolver``'s ``buffer`` is one channel of impulse
+       response; a ``DynamicsCompressor`` sends ``reduction``; an
+       ``Analyser``'s ``gain`` scales only what it analyses
+   * - ``ChannelSplitter``, ``ChannelMerger``, ``ChannelSelector``
+     - their channels kept apart, merged in order, or one selected
+     - each of a splitter's ``outputs`` reads one of its channels, in order
+
+Every source and processing node runs from ``startTime`` to a later
+``stopTime``, pausing and resuming, and sends ``isActive``, ``isPaused`` and
+``elapsedTime``; a processing node not ``enabled`` passes its input through,
+and a source not ``enabled`` is silent. Each node with a ``channelCount``
+output sends the channels it renders. ``tailTime`` is not read.
 
 Inline
 ~~~~~~

@@ -1,4 +1,4 @@
-"""Sound in the scenegraph: emitters, sources and the VRML97 ``Sound`` node.
+"""Sound in the scenegraph: glTF's emitters and sources.
 
 The nodes are driven here exactly as the render pass drives them -- a world
 matrix and a time, once per frame -- so the whole of the scenegraph half is
@@ -16,7 +16,6 @@ from omi_audio.engine import AudioEngine
 from omi_audio.spatial import Listener
 
 from OpenGLContext.scenegraph import audio as audionodes
-from OpenGLContext.scenegraph import basenodes
 
 
 def translation(x=0.0, y=0.0, z=0.0):
@@ -403,168 +402,6 @@ class TestAudioEmitterNode:
         assert first.gain == 0.25
 
 
-class TestVRML97Sound:
-    """The ``Sound`` node pyvrml97 has always declared, finally audible."""
-
-    def make(self, **named):
-        named.setdefault('source', basenodes.AudioClip(url=['beep'], loop=True))
-        return audionodes.Sound(**named)
-
-    def test_it_plays_its_audio_clip(self, engine):
-        sound = self.make()
-        sound.updateAudio(engine, translation(), 0.0)
-        assert engine.active_voices == 1
-
-    def test_a_sound_with_no_source_is_silent(self, engine):
-        audionodes.Sound().updateAudio(engine, translation(), 0.0)
-        assert engine.active_voices == 0
-
-    def test_a_source_that_will_not_resolve_is_a_silence(self, engine):
-        sound = audionodes.Sound(source=basenodes.AudioClip(url=['nowhere.wav']))
-        sound.updateAudio(engine, translation(), 0.0)
-        assert engine.active_voices == 0
-
-    def test_inside_the_inner_ellipsoid_it_is_at_full_intensity(self, engine):
-        sound = self.make(minFront=5.0, minBack=5.0, maxFront=50.0, maxBack=50.0)
-        sound.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
-        assert level(engine) == pytest.approx(1.0, rel=0.02)
-
-    def test_outside_the_outer_ellipsoid_it_is_silent(self, engine):
-        sound = self.make(minFront=1.0, minBack=1.0, maxFront=10.0, maxBack=10.0)
-        sound.updateAudio(engine, translation(0.0, 0.0, -100.0), 0.0)
-        assert level(engine) == pytest.approx(0.0, abs=1e-6)
-
-    def test_the_ellipsoid_is_oriented_by_the_direction_field(self, engine):
-        """A forward-facing sound reaches further ahead of itself than behind."""
-        ahead = self.make(direction=(0, 0, -1), minFront=1.0, minBack=1.0,
-                          maxFront=100.0, maxBack=2.0)
-        ahead.updateAudio(engine, translation(0.0, 0.0, 20.0), 0.0)
-        behind_listener = level(engine)
-        engine.stop_all()
-        ahead2 = self.make(direction=(0, 0, -1), minFront=1.0, minBack=1.0,
-                           maxFront=100.0, maxBack=2.0)
-        ahead2.updateAudio(engine, translation(0.0, 0.0, -20.0), 0.0)
-        assert behind_listener > level(engine)
-
-    def test_a_moving_sound_is_re_aimed_rather_than_restarted(self, engine):
-        """The voice follows the node without ever being started again --
-        restarting it would retrigger the clip's attack every frame."""
-        sound = self.make(minFront=1.0, minBack=1.0, maxFront=100.0, maxBack=100.0)
-        sound.updateAudio(engine, translation(0.0, 0.0, -2.0), 0.0)
-        near = level(engine)
-        sound.updateAudio(engine, translation(0.0, 0.0, -60.0), 0.1)
-        assert engine.active_voices == 1, 'the sound was restarted, not re-aimed'
-        assert level(engine) < near
-
-    def test_stopping_a_sound_silences_it(self, engine):
-        sound = self.make()
-        sound.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
-        sound.stopAudio()
-        assert engine.active_voices == 0
-
-    def test_stopping_a_sound_that_never_started_leaves_it_ready_to_play(self, engine):
-        playing = self.make()
-        playing.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
-        sound = self.make()
-        sound.stopAudio()
-        assert engine.active_voices == 1, 'another sound was silenced'
-        sound.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
-        assert engine.active_voices == 2
-
-    def test_a_sound_with_no_direction_is_heard_from_every_side(self, engine):
-        """A zero ``direction`` has no front to tell from its back, so the
-        ``front`` distances are what reach in every direction."""
-        sound = self.make(direction=(0, 0, 0), minFront=1.0, minBack=1.0,
-                          maxFront=20.0, maxBack=2.0)
-        sound.updateAudio(engine, translation(0.0, 0.0, -10.0), 0.0)
-        ahead = level(engine)
-        engine.stop_all()
-        behind = self.make(direction=(0, 0, 0), minFront=1.0, minBack=1.0,
-                           maxFront=20.0, maxBack=2.0)
-        behind.updateAudio(engine, translation(0.0, 0.0, 10.0), 0.0)
-        assert ahead == pytest.approx(level(engine), rel=0.02)
-        assert ahead > 0.0
-
-    def test_a_sound_the_listener_is_standing_on_is_at_full_intensity(self, engine):
-        """No offset means no angle to measure; the listener is inside it."""
-        sound = self.make(minFront=1.0, minBack=1.0, maxFront=10.0, maxBack=10.0)
-        sound.updateAudio(engine, translation(0.0, 0.0, 0.0), 0.0)
-        assert level(engine) == pytest.approx(1.0, rel=0.02)
-
-    def test_intensity_scales_the_level(self, engine):
-        quiet = self.make(intensity=0.25, minFront=50.0, minBack=50.0)
-        quiet.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
-        assert level(engine) == pytest.approx(0.25, rel=0.05)
-
-    def test_a_sound_on_the_right_is_louder_in_the_right_ear(self, engine):
-        sound = self.make(minFront=50.0, minBack=50.0)
-        sound.updateAudio(engine, translation(10.0, 0.0, 0.0), 0.0)
-        block = engine.mixer.mix(64)
-        assert np.abs(block[:, 1]).max() > np.abs(block[:, 0]).max()
-
-    def test_spatialize_false_centres_the_sound(self, engine):
-        sound = self.make(spatialize=False, minFront=50.0, minBack=50.0)
-        sound.updateAudio(engine, translation(10.0, 0.0, 0.0), 0.0)
-        block = engine.mixer.mix(64)
-        assert np.abs(block[:, 1]).max() == pytest.approx(
-            float(np.abs(block[:, 0]).max()), rel=1e-3)
-
-    def test_the_location_field_is_relative_to_the_nodes_transform(self, engine):
-        far = self.make(location=(0.0, 0.0, -1000.0), minFront=1.0, minBack=1.0,
-                        maxFront=10.0, maxBack=10.0)
-        far.updateAudio(engine, translation(), 0.0)
-        assert level(engine) == pytest.approx(0.0, abs=1e-6)
-
-    def test_the_clips_pitch_becomes_the_playback_rate(self, engine):
-        clip = basenodes.AudioClip(url=['blip'], pitch=4.0)
-        sound = audionodes.Sound(source=clip, minFront=50.0, minBack=50.0)
-        sound.updateAudio(engine, translation(), 0.0)
-        engine.mixer.mix(24)                    # 0.003s: past a quartered blip
-        assert engine.active_voices == 0
-
-    def test_a_clip_that_does_not_loop_plays_once(self, engine):
-        clip = basenodes.AudioClip(url=['blip'], loop=False)
-        sound = audionodes.Sound(source=clip)
-        sound.updateAudio(engine, translation(), 0.0)
-        engine.mixer.mix(512)
-        sound.updateAudio(engine, translation(), 1.0)
-        assert engine.active_voices == 0
-
-    def test_the_clip_reports_that_it_is_active(self, engine):
-        clip = basenodes.AudioClip(url=['beep'], loop=True)
-        sound = audionodes.Sound(source=clip)
-        sound.updateAudio(engine, translation(), 0.0)
-        assert clip.isActive
-
-    def test_the_clip_reports_its_duration_once_decoded(self, engine):
-        clip = basenodes.AudioClip(url=['blip'])
-        audionodes.Sound(source=clip).updateAudio(engine, translation(), 0.0)
-        assert clip.duration_changed == pytest.approx(0.01, rel=0.05)
-
-    def test_a_stop_time_in_the_past_keeps_it_quiet(self, engine):
-        clip = basenodes.AudioClip(url=['beep'], loop=True, startTime=0.0,
-                                   stopTime=1.0)
-        audionodes.Sound(source=clip).updateAudio(engine, translation(), 5.0)
-        assert engine.active_voices == 0
-
-    def test_a_start_time_in_the_future_keeps_it_quiet_until_then(self, engine):
-        clip = basenodes.AudioClip(url=['beep'], loop=True, startTime=10.0)
-        sound = audionodes.Sound(source=clip)
-        sound.updateAudio(engine, translation(), 0.0)
-        assert engine.active_voices == 0
-        sound.updateAudio(engine, translation(), 11.0)
-        assert engine.active_voices == 1
-
-    def test_priority_reaches_the_voice_pool(self, engine):
-        engine.mixer.voices = engine.mixer.voices[:1]
-        important = self.make(priority=1.0)
-        unimportant = self.make(priority=0.0)
-        important.updateAudio(engine, translation(), 0.0)
-        unimportant.updateAudio(engine, translation(), 0.0)
-        assert engine.active_voices == 1
-        assert level(engine) > 0.0
-
-
 class TestEngineNotRequired:
     """A scene must build and run with no engine at all."""
 
@@ -578,14 +415,6 @@ class TestEngineNotRequired:
         assert emitter.repeatsAt(source) is None
         emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
         assert engine.active_voices == 1
-
-    def test_a_sound_updated_with_no_engine_plays_once_one_arrives(self, engine):
-        clip = basenodes.AudioClip(url=['beep'], loop=True)
-        sound = audionodes.Sound(source=clip)
-        sound.updateAudio(None, translation(), 0.0)
-        sound.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
-        assert engine.active_voices == 1
-        assert clip.isActive
 
 
 class TestListenerFollowsTheCamera:

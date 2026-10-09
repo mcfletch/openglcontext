@@ -167,6 +167,14 @@ Installing the package puts these commands on your path:
    ``KHR_gaussian_splatting`` glTF, on a marble terrace, with keys to take
    the higher harmonics away, switch their shadows and write the vase as
    glTF. See :ref:`x3d-gaussian-splats`.
+``oglc-x3d-sound``
+   X3D's Sound component read from a document and heard: a bronze bell on a
+   ``Sound``, a copper pipe circling on a ``SpatialSound`` with Doppler, its
+   oscillator shaped and filtered, and a steel drum through an
+   ``AudioDestination`` with an echo, a room, a compressor and an analyser
+   raising a meter, with keys to pause the bell, shape and filter the pipe,
+   swap the chimes between the ears and move the listener. See :ref:`X3D
+   sound <x3d-sound>`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and
