@@ -176,8 +176,8 @@ implements these X3D nodes, by component:
   EmissiveStrengthMaterialExtension, IORMaterialExtension,
   IridescenceMaterialExtension, RetroreflectionMaterialExtension,
   SheenMaterialExtension, SpecularMaterialExtension,
-  TransmissionMaterialExtension, VolumeMaterialExtension,
-  VolumeScatterMaterialExtension
+  SpecularGlossinessMaterial, TransmissionMaterialExtension,
+  VolumeMaterialExtension, VolumeScatterMaterialExtension
 
 .. x3d-implemented-end
 
@@ -333,7 +333,9 @@ are where the material keeps those values: ``ClearcoatMaterialExtension``,
 material's ``clearcoat``, ``sheenColor``, ``ior`` and so on, drawn as the
 :doc:`PBR renderer <pbr>` page describes, retroreflection and volume
 scattering among them. Routing to an extension node's field changes the
-material.
+material. X_ITE's ``SpecularGlossinessMaterial`` is glTF's
+specular/glossiness material, drawn as the :doc:`PBR renderer <pbr>` page
+describes.
 
 A ``FontLibrary`` reads a TrueType or OpenType file, under the document's url
 policy, as a font family its ``FontStyle`` nodes may name

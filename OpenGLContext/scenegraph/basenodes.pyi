@@ -174,6 +174,7 @@ from OpenGLContext.scenegraph.shaders import TextureBufferUniform as TextureBuff
 from OpenGLContext.scenegraph.shaders import TextureUniform as TextureUniform
 from OpenGLContext.scenegraph.shape import Shape as Shape
 from OpenGLContext.scenegraph.simplebackground import SimpleBackground as SimpleBackground
+from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial as SpecularGlossinessMaterial
 from OpenGLContext.scenegraph.spherebackground import SphereBackground as SphereBackground
 from OpenGLContext.scenegraph.switch import Switch as Switch
 from OpenGLContext.scenegraph.teapot import Teapot as Teapot
@@ -620,6 +621,7 @@ __all__ = [
     'SliderJoint',
     'Sound',
     'SpatialSound',
+    'SpecularGlossinessMaterial',
     'SpecularMaterialExtension',
     'Sphere',
     'SphereBackground',

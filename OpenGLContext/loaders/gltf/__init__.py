@@ -27,9 +27,9 @@ Secure fetching of external assets is delegated to the shared
 
     accessors             buffers/bufferViews/accessors -> numpy arrays
     textures              images + samplers -> ImageDataTexture nodes
-    specular_glossiness   the archived spec/gloss extension -> metallic/roughness
     transforms            matrix / quaternion / bounds / camera math
-    materials             glTF material + KHR extensions -> PhysicalMaterial
+    materials             glTF material + KHR extensions -> PhysicalMaterial, and
+                          the archived spec/gloss one -> SpecularGlossinessMaterial
     hooks                 OGLC_hook: what a material or node is, and the registry
     draco                 KHR_draco_mesh_compression -> decoded attribute arrays
     meshes                primitive -> renderable Shape (normals/tangents/morph)

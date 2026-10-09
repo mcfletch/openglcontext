@@ -190,6 +190,9 @@ Material _M;
 #define scatterDistanceScale       _M.retroScatterM.w
 // Flag 256: the material has a VolumeScatterMaterialExtension (pbrpass.VOLUME_SCATTER_BIT).
 #define volumeScatterMode    ((materialFlags & 256) != 0)
+// Flag 512: a SpecularGlossinessMaterial (pbrpass.SPECULAR_GLOSSINESS_BIT):
+// roughnessFactor holds the glossiness and specularColorFactor the reflectance.
+#define specGlossMode        ((materialFlags & 512) != 0)
 
 // Each material channel's texture coordinates, set per draw from the
 // appearance's mapping labels and transforms (scenegraph/texturemapping.py).
@@ -853,7 +856,15 @@ void main() {
 
     float metallic = metallicFactor;
     float roughness = roughnessFactor;
-    if (hasMetallicRoughness) {
+    if (specGlossMode) {
+        // glTF's specular/glossiness: no metal, roughness 1 - glossiness, the
+        // glossiness scaled by the specular/glossiness map's alpha.
+        float glossiness = roughnessFactor;
+#if PBR_EXT_TEXTURES
+        if (hasSpecularColorMap) glossiness *= texture(specularColorMap, uvFor(CH_SPECULAR_COLOR)).a;
+#endif
+        roughness = 1.0 - glossiness;
+    } else if (hasMetallicRoughness) {
         vec4 mr = texture(metallicRoughnessTexture, uvFor(CH_METALLIC_ROUGHNESS));
         roughness *= mr.g;
         metallic *= mr.b;
@@ -997,7 +1008,7 @@ void main() {
     // scalar specularFactor is the grazing reflectance f90 -- NOT folded into F0.
     // Folding it in (the old code) only dimmed normal incidence and left grazing at
     // 1.0; carrying it as f90 dims the whole Fresnel curve, which is the spec.
-    vec3 dielF0 = min(iorF0 * specularColorEff, vec3(1.0));
+    vec3 dielF0 = min(specGlossMode ? specularColorEff : iorF0 * specularColorEff, vec3(1.0));
     vec3 F0 = mix(dielF0, albedo, metallic);
     float specF90 = mix(specularWeight, 1.0, metallic);   // metals keep f90 = 1
     // KHR_materials_iridescence: thin-film Fresnel (hue shifts with view angle; a

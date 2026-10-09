@@ -3,8 +3,8 @@
 The table-driven KHR extension handlers (unlit / emissive-strength / specular /
 sheen / diffuse-transmission), the texture collector's None-holder and
 KHR_texture_transform texCoord-override branches, and the archived
-KHR_materials_pbrSpecularGlossiness conversion (factor-only, diffuse-texture
-fallback, and the full per-pixel texture conversion). Materials are built through
+KHR_materials_pbrSpecularGlossiness, read as a SpecularGlossinessMaterial where
+there is no metallic/roughness fallback. Materials are built through
 the real ``_build_material`` against synthetic buffers -- no GL, no network.
 """
 import io
@@ -19,6 +19,8 @@ from pygltflib import (
 )
 
 from OpenGLContext.loaders.gltf import materials as gmat
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial
 
 
 class _R:
@@ -100,44 +102,39 @@ class TestTextureCollector:
 
 
 class TestSpecularGlossiness:
-    def test_factor_only_conversion(self):
-        # A metal authored in spec/gloss: white specular, no textures.
+    def test_without_metallic_roughness_it_is_a_specular_glossiness_material(self):
         g = GLTF2()
         g.materials = [Material(extensions={'KHR_materials_pbrSpecularGlossiness': {
-            'diffuseFactor': [0.0, 0.0, 0.0, 1.0],
-            'specularFactor': [1.0, 1.0, 1.0],
-            'glossinessFactor': 1.0}})]
+            'diffuseFactor': [0.5, 0.25, 0.0, 0.5],
+            'specularFactor': [1.0, 0.8, 0.4],
+            'glossinessFactor': 0.75}}, alphaMode='BLEND')]
+        g.materials[0].pbrMetallicRoughness = None
         mat = gmat._build_material(g, 0, _R(), {})
-        # A bright white specular solves to high metalness; roughness = 1 - gloss.
-        assert mat.metallic > 0.9
-        assert abs(mat.roughness - 0.0) < 1e-6
+        assert isinstance(mat, SpecularGlossinessMaterial)
+        assert list(mat.diffuseColor) == pytest.approx([0.5, 0.25, 0.0])
+        assert list(mat.specularColor) == pytest.approx([1.0, 0.8, 0.4])
+        assert mat.glossiness == pytest.approx(0.75)
+        assert mat.transparency == pytest.approx(0.5)
 
-    def test_diffuse_texture_fallback_when_no_specgloss_texture(self):
-        g, r = _g_with_images([_png((10, 200, 10))])
-        g.materials = [Material(extensions={'KHR_materials_pbrSpecularGlossiness': {
-            'diffuseFactor': [1, 1, 1, 1],
-            'specularFactor': [0.0, 0.0, 0.0],
-            'glossinessFactor': 0.5,
-            'diffuseTexture': {'index': 0}}})]
-        mat = gmat._build_material(g, 0, r, {})
-        # No spec/gloss image, so the diffuse map is added as the base colour map.
-        assert 'baseColor' in mat.textures
-
-    def test_full_texture_conversion_to_metalrough_maps(self):
-        # A textured spec/gloss material converts per pixel to baseColor +
-        # metallicRoughness maps (metalness lives in the spec/gloss image).
+    def test_its_maps_are_its_channels(self):
         g, r = _g_with_images([_png((120, 90, 60)), _png((220, 220, 220))])
         g.materials = [Material(extensions={'KHR_materials_pbrSpecularGlossiness': {
-            'diffuseFactor': [1, 1, 1, 1],
-            'specularFactor': [1, 1, 1],
-            'glossinessFactor': 0.8,
             'diffuseTexture': {'index': 0},
-            'specularGlossinessTexture': {'index': 1}}})]
+            'specularGlossinessTexture': {'index': 1, 'texCoord': 1}}})]
+        g.materials[0].pbrMetallicRoughness = None
         mat = gmat._build_material(g, 0, r, {})
-        assert 'baseColor' in mat.textures
-        assert 'metallicRoughness' in mat.textures
-        # Factors just pass the maps through after a per-pixel conversion.
-        assert mat.metallic == 1.0 and mat.roughness == 1.0
+        assert mat.texture('baseColor') is not None
+        assert mat.texture('specularColor') is not None
+        assert mat.specularGlossinessTextureMapping == 'TEXCOORD_1'
+
+    def test_a_metallic_roughness_fallback_is_drawn_in_its_place(self):
+        g = GLTF2()
+        g.materials = [Material(
+            pbrMetallicRoughness=PbrMetallicRoughness(metallicFactor=0.25),
+            extensions={'KHR_materials_pbrSpecularGlossiness': {'glossinessFactor': 0.5}})]
+        mat = gmat._build_material(g, 0, _R(), {})
+        assert isinstance(mat, PhysicalMaterial)
+        assert mat.metallic == pytest.approx(0.25)
 
 
 if __name__ == '__main__':

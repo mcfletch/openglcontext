@@ -52,6 +52,7 @@ from OpenGLContext.scenegraph.physicalmaterial import (
     material_to_pbr, pbr_material,
 )
 from OpenGLContext.scenegraph.material_fields import read_material_fields
+from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial
 from OpenGLContext.scenegraph.texgen import TexGen
 from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
 from OpenGLContext.scenegraph.texturelayers import drawn_singly, is_layered, texture_layers
@@ -336,6 +337,14 @@ def _material_factors(material: Any) -> dict:
             scatter_anisotropy=float(m.scatterAnisotropy),
             multiscatter_color=tuple(m.multiscatterColor)[:3],
         )
+    if isinstance(material, SpecularGlossinessMaterial):
+        return dict(_DEFAULT_FACTORS, base_color=tuple(material.diffuseColor)[:3],
+                    metallic=0.0, roughness=float(material.glossiness),
+                    emissive=tuple(material.emissiveColor)[:3],
+                    occlusion=float(material.occlusionStrength),
+                    normal_scale=float(material.normalScale),
+                    specular_color=tuple(material.specularColor)[:3],
+                    flags=SPECULAR_GLOSSINESS_BIT)
     if isinstance(material, UnlitMaterial):
         # The unlit path draws the base colour; X3D calls it the emissive colour.
         return dict(_DEFAULT_FACTORS, base_color=tuple(material.emissiveColor)[:3],
@@ -395,6 +404,11 @@ PHONG_BIT = 128
 #: The bit saying the material scatters light beneath its surface
 #: (:mod:`~OpenGLContext.passes.scatter`); the shader reads ``volumeScatterMode``.
 VOLUME_SCATTER_BIT = 256
+#: The bit saying the block is a SpecularGlossinessMaterial: its roughness word
+#: is the glossiness, its specular colour the dielectric reflectance, and the
+#: specular-colour map's alpha scales the glossiness; the shader reads
+#: ``specGlossMode``.
+SPECULAR_GLOSSINESS_BIT = 512
 
 
 

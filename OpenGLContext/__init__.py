@@ -443,3 +443,4 @@ Node( 'SpecularMaterialExtension', 'OpenGLContext.scenegraph.materialextensions.
 Node( 'TransmissionMaterialExtension', 'OpenGLContext.scenegraph.materialextensions.TransmissionMaterialExtension' )
 Node( 'VolumeMaterialExtension', 'OpenGLContext.scenegraph.materialextensions.VolumeMaterialExtension' )
 Node( 'VolumeScatterMaterialExtension', 'OpenGLContext.scenegraph.materialextensions.VolumeScatterMaterialExtension' )
+Node( 'SpecularGlossinessMaterial', 'OpenGLContext.scenegraph.specularglossiness.SpecularGlossinessMaterial' )

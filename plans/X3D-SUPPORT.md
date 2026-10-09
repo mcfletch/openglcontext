@@ -637,6 +637,15 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     scatter buffer holds depth where X_ITE holds a shape id, so touching
     scattering shapes share light weighted by distance. Against X_ITE: the
     scatter test sphere 0.2% of pixels apart
+  - [x] SpecularGlossinessMaterial: the metallic/roughness program with no
+    metal, the specular colour as the dielectric reflectance and roughness
+    1 - glossiness (`SPECULAR_GLOSSINESS_BIT`); glTF's
+    KHR_materials_pbrSpecularGlossiness read as one where the material has no
+    pbrMetallicRoughness (X_ITE draws the fallback where there is one) and
+    written from one. The load-time conversion to metallic/roughness is gone.
+    `test_gltf_conformance.test_view_matches_baseline` passed None as the
+    window system and skipped every view; it renders them now (460 pass;
+    RiggedSimple differs 2.4% under load, its animation time not pinned)
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

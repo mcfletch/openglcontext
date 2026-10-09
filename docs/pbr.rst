@@ -366,6 +366,16 @@ channels as linear. ``material.textures`` is a read-only view of the textures
 by channel name, and ``material.setTexture(channel, texture)`` sets one by
 channel name. The glTF loader builds these when it imports a model.
 
+``SpecularGlossinessMaterial`` (X_ITE's, and glTF's archived
+``KHR_materials_pbrSpecularGlossiness``) is a dielectric given by its
+``diffuseColor``, the reflectance at normal incidence ``specularColor`` and
+``glossiness``, 1 less the roughness. It is drawn through the same program
+with no metal: the diffuse colour is the base colour and the specular colour
+the reflectance in place of the one ``ior`` gives. Its ``diffuseTexture``
+multiplies the diffuse colour, and its ``specularGlossinessTexture``'s RGB
+(sRGB) the specular colour and its alpha the glossiness; ``emissiveTexture``,
+``normalTexture`` and ``occlusionTexture`` are read as a PhysicalMaterial's.
+
 ``UnlitMaterial`` (X3D 4) draws its ``emissiveColor``, multiplied by its
 ``emissiveTexture``, with no lighting; the glTF loader makes one for
 ``KHR_materials_unlit``.

@@ -170,7 +170,10 @@ animation:
   ``KHR_materials_retroreflection``, ``KHR_materials_volume_scatter`` (and
   ``KHR_materials_scatter``, its later name, which the writer writes),
   ``KHR_texture_transform``, ``EXT_texture_webp``, and the legacy
-  ``KHR_materials_pbrSpecularGlossiness`` (converted to metallic-roughness).
+  ``KHR_materials_pbrSpecularGlossiness``, read as a
+  ``SpecularGlossinessMaterial`` where the material has no
+  ``pbrMetallicRoughness`` (which is drawn in its place where it has one, as
+  X_ITE does) and written from one.
 
 - Zones - ``OGLC_zone``, this project's own extension: a node marking a region,
   with a shape from ``KHR_implicit_shapes`` (glTF 2.0) or the core ``shapes``
