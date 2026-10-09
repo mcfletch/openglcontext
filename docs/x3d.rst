@@ -351,8 +351,9 @@ are nearest it, and a warning names a draw that more reach
 - A clipped shape is drawn by itself rather than in an instanced group.
 - A shape drawn with its own ``Shader`` program is offered the planes as
   ``x3d_ClipPlane`` (:ref:`x3d-shaders`) and clips itself with them, as
-  under X_ITE. The engine's terrain, vegetation and particle layers, which
-  draw with programs of their own, are not clipped.
+  under X_ITE. A ``ParticleSystem``'s particles are clipped in eye space. The
+  engine's terrain and vegetation layers, which draw with programs of their
+  own, are not clipped.
 - Planes only cut: the cut is not capped, so a solid shape is open where a
   plane passes through it.
 

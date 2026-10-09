@@ -859,6 +859,11 @@ class VRML97ShaderProgram(TextureLayersMixin, _ShadowUniformMixin):
                                self.wide_line_program, self.depth_program), values)
         self._enable_clip_distances(count)
 
+    def enable_clip_distances(self, count: int) -> None:
+        """Enable GL_CLIP_DISTANCE0 to count-1 and disable those after, for a
+        layer drawing with a program of its own that writes them"""
+        self._enable_clip_distances(count)
+
     def _enable_clip_distances(self, count: int) -> None:
         """Enable GL_CLIP_DISTANCE0 to count-1 and disable those after"""
         if count == self._clip_enabled:

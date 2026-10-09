@@ -138,6 +138,11 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     document; an Inline holds the scene its nodes were read into, which they
     hold only weakly (an Inline's nodes had no root, so were not a document's,
     and an Inline among them could not resolve a relative url)
+  - kept by choice where X_ITE contradicts the specification's normative
+    text (X_ITE phase, 2026-10-09, for the maintainer to confirm):
+    - ParticleSystem `colorKey` and `texCoordKey` are seconds of a particle's
+      age (19775-1, 40.4.5: "represents the time of the particle in
+      seconds"); X_ITE reads them as fractions of the particle's life
   - [ ] whole corpus against X_ITE (2026-10-07): median 4.9% of pixels unlike
     with the PBR pass, 1.8% with the VRML97 pass, whose worst were the fog
     documents it did not fog;
@@ -430,10 +435,16 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     The engine's `ParticleEmitter` takes the emitters (`source`) and models
     (`physics`) and has a colour ramp and line shape. `oglc-x3d-particles`
     - read differently from X_ITE: keys are seconds (X_ITE: fractions of the
-      life); a massless particle takes a force as an acceleration (X_ITE
-      applies none); VolumeEmitter `internal` FALSE emits from the boundary
-    - not drawn: lighting of the non-GEOMETRY types, the texture transform,
-      line width
+      life; kept by choice, below); VolumeEmitter `internal` FALSE emits from
+      the boundary
+    - 2026-10-09 (x3d-xfields): a massless particle takes no force or wind
+      (40.4.4, and X_ITE); under X3D's lighting QUAD/TRIANGLE/SPRITE with a
+      Material are lit by the Phong equation as X_ITE lights them (quad
+      normal +z, sprite facing the viewer; `ParticleLook.lit`,
+      `volumepass.upload_frame_lights`); the texture transform and
+      `LineProperties` width (a strip across the line) are drawn; ClipPlanes
+      clip the particles in eye space. The showcase's fountain emitter has a
+      mass
   - [x] prototype instances drawn: `grouping.of_types` passes an instance by
     its body's first node type (scene, groups, Switch, LOD, CADFace); before,
     an X3D document's ProtoInstance was never drawn
