@@ -200,6 +200,10 @@ Rules for each loader
        ``Context.OnAnchorElsewhere``, which opens nothing. An application that
        opens web pages overrides it and decides which of the document's urls
        it trusts.
+   * - STL, PLY, OFF (``loaders/meshfiles.py``)
+     - Reference nothing. A count in a header is checked against the bytes
+       that follow before anything is allocated for it, and a gzip document is
+       decompressed no further than the size limit.
    * - :ref:`MovieTexture <x3d-movies>` ``url``
      - Each entry is resolved by ``Loader.local_copy`` under the document's
        ``Resolver``: a file in the document's directory is read in place, a

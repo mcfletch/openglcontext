@@ -5,7 +5,8 @@ The viewer
 
 ``oglc-view`` opens a 3D scene and renders it with the :doc:`core-profile PBR
 renderer <pbr>`. You can look around the scene or walk through it. It opens
-glTF models, X3D and VRML97 worlds, Wavefront OBJ files and streamed 3D Tiles
+glTF and VRM models, X3D and VRML97 worlds, Wavefront OBJ, STL, PLY and OFF
+files and streamed 3D Tiles
 datasets. The viewer identifies the format from the source itself, so one
 command opens all of them.
 
@@ -53,7 +54,7 @@ Supported formats
    * - Source
      - Adapter
      - Description
-   * - ``.gltf`` ``.glb``
+   * - ``.gltf`` ``.glb`` ``.vrm`` ``.gltf.gz`` ``.glb.gz``
      - ``gltf``
      - A glTF 2.0 *model*: centred and framed, with its own cameras and animations.
        See :doc:`Loading glTF <gltf>`.
@@ -61,8 +62,8 @@ Supported formats
      - ``vrml97``
      - A VRML97 *world*: shown where it was authored, with its own sky, lights
        and ``Viewpoint`` nodes. See :doc:`VRML97 <vrml97>`.
-   * - ``.x3d`` ``.x3dz`` ``.x3dv`` ``.x3dvz`` ``.x3dj`` ``.x3db``, and ``.json``
-       whose top-level key is ``"X3D"``
+   * - ``.x3d`` ``.x3dz`` ``.x3dv`` ``.x3dvz`` ``.x3dj`` ``.x3djz`` ``.x3db``, each
+       with ``.gz`` appended, and ``.json`` whose top-level key is ``"X3D"``
      - ``x3d``
      - An X3D *world*, in any of its encodings: shown where it was authored,
        as a VRML97 world is. See :ref:`Loading X3D <x3d-worlds>`.
@@ -70,6 +71,10 @@ Supported formats
      - ``obj``
      - A Wavefront model. OBJ has no lights, cameras or sky, so the viewer
        supplies all three.
+   * - ``.stl`` ``.ply`` ``.off``, each also ``.gz``
+     - ``stl``, ``ply``, ``off``
+     - One mesh, framed as an OBJ is. A PLY of Gaussian splats is drawn as
+       splats. See :ref:`STL, PLY and OFF models <loading-meshfiles>`.
    * - ``.zip`` ``.tar`` ``.tar.gz`` ``.tgz`` ``.tar.bz2`` ``.tar.xz``, with
        ``#member``
      - the member's

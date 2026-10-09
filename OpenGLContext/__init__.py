@@ -90,12 +90,16 @@ VRMLContext( 'egl', 'OpenGLContext.eglvrmlcontext.VRMLContext' )
 VRMLContext( 'wgl', 'OpenGLContext.wglvrmlcontext.VRMLContext' )
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml','.wrl.gz'] )
-Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj'] )
-Loader( 'x3d', 'OpenGLContext.loaders.x3d.defaultHandler', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj','.x3db','.x3db.gz'] )
+Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj','.obj.gz'] )
+Loader( 'x3d', 'OpenGLContext.loaders.x3d.defaultHandler', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj','.x3djz','.x3db','.x3d.gz','.x3dv.gz','.x3dj.gz','.x3db.gz'] )
+Loader( 'stl', 'OpenGLContext.loaders.meshfiles.stlHandler', ['.stl','.stl.gz'] )
+Loader( 'ply', 'OpenGLContext.loaders.meshfiles.plyHandler', ['.ply','.ply.gz'] )
+Loader( 'off', 'OpenGLContext.loaders.meshfiles.offHandler', ['.off','.off.gz'] )
 
 # What `oglc-view` can open, keyed by file suffix and content type. One viewer
 # serves every format; the adapter is chosen from the source itself.
-Adapter( 'gltf', 'OpenGLContext.viewer.adapters.gltf.GLTFAdapter', ['.gltf','.glb','model/gltf+json','model/gltf-binary'] )
+# A VRM avatar is a GLB; the loader keeps its VRMC extensions in scene.extensions.
+Adapter( 'gltf', 'OpenGLContext.viewer.adapters.gltf.GLTFAdapter', ['.gltf','.glb','.gltf.gz','.glb.gz','.vrm','model/gltf+json','model/gltf-binary','model/vrm'] )
 Adapter( 'vrml97', 'OpenGLContext.viewer.adapters.vrml.VRMLAdapter', ['.wrl','.wrz','.vrml','.wrl.gz','model/vrml','x-world/x-vrml'] )
 Adapter( 'obj', 'OpenGLContext.viewer.adapters.obj.OBJAdapter', ['.obj','.obj.gz','model/obj'] )
 # X3D JSON is usually named .json, so a document of that name is recognised by
@@ -103,7 +107,12 @@ Adapter( 'obj', 'OpenGLContext.viewer.adapters.obj.OBJAdapter', ['.obj','.obj.gz
 # type; model/x3d-vrml is the registered name. The compressed binary encoding
 # is model/x3d+fastinfoset by registration and model/x3d+binary by ISO/IEC
 # 19776-3.
-Adapter( 'x3d', 'OpenGLContext.viewer.adapters.x3d.X3DAdapter', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj','.x3db','.x3db.gz','model/x3d+xml','model/x3d+vrml','model/x3d-vrml','model/x3d+json','model/x3d+fastinfoset','model/x3d+binary'] )
+Adapter( 'x3d', 'OpenGLContext.viewer.adapters.x3d.X3DAdapter', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj','.x3djz','.x3db','.x3d.gz','.x3dv.gz','.x3dj.gz','.x3db.gz','model/x3d+xml','model/x3d+vrml','model/x3d-vrml','model/x3d+json','model/x3d+fastinfoset','model/x3d+binary'] )
+# STL, PLY and OFF hold one mesh each (loaders.meshfiles); a PLY of 3D
+# Gaussian splats reads as a GaussianSplats node.
+Adapter( 'stl', 'OpenGLContext.viewer.adapters.meshfiles.STLAdapter', ['.stl','.stl.gz','model/stl'] )
+Adapter( 'ply', 'OpenGLContext.viewer.adapters.meshfiles.PLYAdapter', ['.ply','.ply.gz','model/ply'] )
+Adapter( 'off', 'OpenGLContext.viewer.adapters.meshfiles.OFFAdapter', ['.off','.off.gz','model/off'] )
 # A tileset is any .json, so the registry only claims the conventional name; a
 # document under another name is recognised by its content (loaders.formats).
 Adapter( 'tiles3d', 'OpenGLContext.viewer.adapters.tiles.TilesAdapter', ['tileset.json'] )

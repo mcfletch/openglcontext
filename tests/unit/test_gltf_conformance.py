@@ -225,7 +225,7 @@ def test_view_matches_baseline(spec, camera, tmp_path):
     diff = str(tmp_path / (slug + '_diff.png'))
     rendered, stats = R.render_view(spec, camera, url, out, R.DEFAULT_SIZE,
                                     R.DEFAULT_FRAMES, R.DEFAULT_DELAY)
-    assert rendered, 'the render of %s failed: %s' % (slug, stats.get('error'))
+    assert rendered, "%s drew no frame: %s" % (slug, stats.get('error'))
 
     result, stats = RR.compare(baseline, out, diff, RR.DIFF_THRESHOLD)
     assert not RR.is_regression(result, _tolerance_for(spec)), (

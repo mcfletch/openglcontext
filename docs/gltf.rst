@@ -148,10 +148,34 @@ animation:
 - Lights - ``KHR_lights_punctual`` directional, point and spot lights.
 
 - Animation - keyframed node transforms, skinning and morph targets.
-  ``KHR_animation_pointer`` animates material and texture-transform
-  properties, and ``KHR_node_visibility`` shows and hides nodes. A pointer
-  whose property cannot be set is logged once, with its path, and left
-  unanimated while the clip's other channels play.
+  ``KHR_animation_pointer`` drives these properties of the glTF Object Model:
+  a node's ``translation``, ``rotation``, ``scale``, ``weights`` and
+  ``weights/{i}`` and its ``KHR_node_visibility`` ``visible``; a material's
+  ``alphaCutoff``, ``emissiveFactor``, ``normalTexture/scale``,
+  ``occlusionTexture/strength``, the ``pbrMetallicRoughness`` factors
+  (``baseColorFactor`` with its alpha for a material that blends or masks),
+  every factor of the ``KHR_materials_*`` extensions the loader reads, and each
+  texture's ``KHR_texture_transform`` ``offset``, ``rotation`` and ``scale``
+  where the texture declares one; a punctual light's ``color``,
+  ``intensity``, ``range`` and spot cone angles; a perspective camera's
+  ``yfov``, ``znear`` and ``zfar``. A pointer to any other property is logged
+  once, with its path, and its channel left out while the clip's other
+  channels play.
+
+- Required extensions - a document whose ``extensionsRequired`` lists an
+  extension the loader does not read is reported, naming each, and loaded
+  without it. ``gltf.loader.SUPPORTED_EXTENSIONS`` is the set read, and
+  ``unread_required(document)`` lists what a parsed document requires
+  outside it.
+
+- Tangents - a primitive with texture coordinates and no ``TANGENT`` is given
+  tangents where its material reads directions in tangent space: a normal map,
+  a ``KHR_materials_clearcoat`` normal map, or ``KHR_materials_anisotropy``.
+
+- Visibility - ``KHR_node_visibility``. A hidden node is built with X3D's
+  ``visible`` false on its ``Transform``, so it and everything under it,
+  lights included, are left out of the frame and of the framing bounds until
+  an animation pointer, or the application, sets ``visible`` true.
 
 - Instancing - ``EXT_mesh_gpu_instancing``. Repeated meshes are also batched
   into one instanced draw when the file does not use the extension. See
@@ -169,8 +193,10 @@ animation:
   ``KHR_materials_diffuse_transmission``, ``KHR_materials_dispersion``,
   ``KHR_materials_retroreflection``, ``KHR_materials_volume_scatter`` (and
   ``KHR_materials_scatter``, its later name, which the writer writes),
-  ``KHR_texture_transform``, ``EXT_texture_webp``, and the legacy
-  ``KHR_materials_pbrSpecularGlossiness``, read as a
+  ``KHR_texture_transform``, ``EXT_texture_avif`` and ``EXT_texture_webp``
+  (each image preferred to the texture's core ``source`` where the installed
+  Pillow decodes its format, as ``PIL.features.check('avif')`` reports), and
+  the legacy ``KHR_materials_pbrSpecularGlossiness``, read as a
   ``SpecularGlossinessMaterial`` where the material has no
   ``pbrMetallicRoughness`` (which is drawn in its place where it has one, as
   X_ITE does) and written from one.
@@ -201,6 +227,40 @@ animation:
   ``DracoPy`` package is installed (``pip install DracoPy``, or
   ``OpenGLContext[draco]``). Without it, the loader skips a Draco-compressed
   primitive with a warning and loads the rest of the scene.
+
+- Buffer compression - ``KHR_meshopt_compression`` and
+  ``EXT_meshopt_compression``, decoded in NumPy with no further package: all
+  three modes (``ATTRIBUTES`` in bitstream versions 0 and 1, ``TRIANGLES``,
+  ``INDICES``) and all four filters (``OCTAHEDRAL``, ``QUATERNION``,
+  ``EXPONENTIAL``, ``COLOR``). The compressed view is decoded once per load,
+  whatever reads it: vertex attributes, indices, morph targets, animation
+  keyframes, instance transforms or images. A fallback buffer with no data of
+  its own is never read. A stream that does not decode to the layout its view
+  declares stops the load with the view's index and the reason.
+
+- Video textures - ``EXT_texture_video`` (a draft, from
+  github.com/takahirox/EXT_texture_video): a texture naming one of the
+  document's videos is a ``MovieTexture``, decoded on the GPU as
+  :ref:`x3d-movies` describes, looping from the start of the engine's clock. A
+  video given by ``uri`` is resolved under the document's policy; one in a
+  buffer view is written once, by its digest, to the asset cache, since the
+  decoder reads a file. A texture whose video is not in the document, or
+  whose reference the policy refuses, is drawn from its core ``source``; in a
+  context with no decoder the surface is drawn untextured, as any
+  ``MovieTexture`` is.
+  The writer writes a ``MovieTexture`` as such a texture, its uri relative to
+  the written file where the video is beside it, and requires the extension.
+
+- Material variants - ``KHR_materials_variants``, selected with
+  ``scene.select_variant()``. See :ref:`Material variants <gltf-variants>`.
+
+- Accessor types - ``KHR_accessor_float16`` and ``KHR_accessor_float64``
+  wherever a float accessor is allowed. Vertex attributes are drawn in single
+  precision; a double-precision attribute is logged when it is rounded.
+  Animation keyframes are read and interpolated in double precision.
+  ``KHR_mesh_quantization``: normalized byte and short positions, normals,
+  tangents, texture coordinates, colours and morph-target deltas are
+  dequantized; unnormalized integers are read as the integers they are.
 
 .. _gltf-gaussian-splats:
 
@@ -645,8 +705,9 @@ Current limitations
 ~~~~~~~~~~~~~~~~~~~
 
 - ``KHR_texture_basisu`` (KTX2 / Basis Universal) is not read. No transcoder
-  is available under a licence this project can use. The loader skips a
-  texture in that format.
+  is available under a licence this project can use. A texture carrying it is
+  drawn from its core ``source`` where the document gives one, and without the
+  texture where it does not.
 
 - ``KHR_draco_mesh_compression`` needs the optional ``DracoPy`` package.
   Without it, the loader skips a Draco-compressed primitive with a warning and
@@ -763,6 +824,36 @@ throw:
 
 The keyframes then set how far the wheel can turn, and the code sets only how
 far through that range it is. The artist controls the limits of the movement.
+
+.. _gltf-variants:
+
+Material variants
+~~~~~~~~~~~~~~~~~
+
+A document with ``KHR_materials_variants`` names sets of materials it can be
+drawn in, such as the colours a shoe is sold in. ``scene.variants`` lists the
+names in document order, and ``select_variant()`` dresses every primitive that
+maps the variant in its material for it:
+
+.. code-block:: python
+
+   scene = gltf.load_gltf( "shoe.glb" )
+   scene.variants                    # ('midnight', 'beach', 'street')
+   scene.select_variant( "beach" )   # or an index: scene.select_variant( 1 )
+   scene.variant                     # 'beach'
+   scene.select_variant( None )      # each primitive's own material again
+
+A primitive that does not map the active variant keeps its own material. One
+variant is active at a time. The materials of every variant are built when the
+document loads, so selecting one does no loading. A name the document does not
+declare raises ``KeyError``, an index outside the list ``IndexError``.
+Selecting sets the ``Shape``'s appearance, the mesh's appearance and the mesh's
+``solid`` flag, since a variant's material may be double-sided where the
+primitive's own is not.
+
+Each mesh keeps its mappings as ``mesh.materialVariants``, and the
+:ref:`writer <writing>` writes them back as ``KHR_materials_variants``, with the
+primitive's own material as its material whichever variant is selected.
 
 .. _assets:
 

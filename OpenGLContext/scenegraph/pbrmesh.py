@@ -293,6 +293,12 @@ class PBRMesh(x3d.X3DGeometryNode):
     #: its distance (:mod:`~OpenGLContext.scenegraph.fogcoordinate`); None for none.
     fog_depths: Optional[np.ndarray] = None
 
+    #: The glTF material variants this mesh's primitive maps, as a
+    #: :class:`~OpenGLContext.loaders.gltf.variants.PrimitiveVariants`; None for
+    #: none. ``GLTFScene.select_variant`` dresses the mesh from it, and the glTF
+    #: writer writes it back as ``KHR_materials_variants`` mappings.
+    materialVariants: Any = None
+
     #: The time, in seconds, :attr:`waveStyle` is evaluated at. A clock the
     #: frame advances rather than something authored, so it is an attribute
     #: and not a field.
