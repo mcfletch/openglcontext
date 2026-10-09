@@ -176,6 +176,9 @@ from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMateria
 from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint as OrthoViewpoint
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
 from OpenGLContext.scenegraph.viewpointgroup import ViewpointGroup as ViewpointGroup
+from OpenGLContext.scenegraph.volumedata import IsoSurfaceVolumeData as IsoSurfaceVolumeData
+from OpenGLContext.scenegraph.volumedata import SegmentedVolumeData as SegmentedVolumeData
+from OpenGLContext.scenegraph.volumedata import VolumeData as VolumeData
 from OpenGLContext.scenegraph.x3dgroups import CADAssembly as CADAssembly
 from OpenGLContext.scenegraph.x3dgroups import CADFace as CADFace
 from OpenGLContext.scenegraph.x3dgroups import CADLayer as CADLayer
@@ -454,6 +457,7 @@ __all__ = [
     'IntUniform4i',
     'IntegerSequencer',
     'IntegerTrigger',
+    'IsoSurfaceVolumeData',
     'KeySensor',
     'LOD',
     'LinePickSensor',
@@ -540,6 +544,7 @@ __all__ = [
     'ScalarDamper',
     'ScalarInterpolator',
     'ScreenCoverageLOD',
+    'SegmentedVolumeData',
     'Shader',
     'ShaderAttribute',
     'ShaderBuffer',
@@ -601,6 +606,7 @@ __all__ = [
     'Viewpoint',
     'ViewpointGroup',
     'VisibilitySensor',
+    'VolumeData',
     'VolumeEmitter',
     'VolumePickSensor',
     'WaveShaper',

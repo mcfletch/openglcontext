@@ -16,7 +16,7 @@ nodes upload (:mod:`OpenGLContext.scenegraph.cubemaptexture`,
 - NRRD (teem's "nearly raw raster data"): volumes of one to four
   components, raw, gzip, bzip2 or text encoded, attached or in a detached
   data file. Samples wider than a byte are scaled from their range in the
-  volume to 0..255.
+  volume to 0..255. :func:`nrrd_bytes` writes a uint8 volume as one.
 - A single picture holding six faces, read by :func:`cube_from_layout`: a
   horizontal cross (4x3 faces), a vertical cross (3x4), a strip of six in a
   row or a column, or 3x2.
@@ -35,6 +35,7 @@ allocated, and a file that does not hold what it says raises
 from __future__ import annotations
 
 import bz2
+import gzip
 import struct
 import zlib
 from collections.abc import Callable, Sequence
@@ -45,7 +46,7 @@ import numpy as np
 __all__ = [
     'MAX_TEXELS', 'TextureImageError', 'CubeFaces', 'Volume',
     'read_cube', 'read_volume', 'cube_from_layout', 'is_dds', 'is_ktx', 'is_nrrd',
-    'read_dds', 'read_ktx', 'read_nrrd',
+    'nrrd_bytes', 'read_dds', 'read_ktx', 'read_nrrd',
 ]
 
 #: The most texels a cube map or a volume read here may hold (all faces or
@@ -448,6 +449,37 @@ def read_nrrd(data: bytes,
         raise TextureImageError('NRRD data holds %d values of %d' % (len(values), count))
     volume = values.reshape(depth, height, width, channels)
     return 'volume', [_bytes(volume)]
+
+
+def nrrd_bytes(volume: np.ndarray, compress: bool = True) -> bytes:
+    """A uint8 volume as an NRRD file, gzip-encoded where ``compress``
+
+    ``volume`` is ``(depth, height, width)`` or ``(depth, height, width,
+    channels)`` with one to four channels; :func:`read_nrrd` reads it back as
+    the same array. The channels are written as the first axis, of kind
+    ``vector``.
+    """
+    volume = np.asarray(volume)
+    if volume.dtype != np.uint8:
+        raise ValueError('only uint8 volumes are written, not %s' % (volume.dtype,))
+    if volume.ndim == 3:
+        volume = volume[..., None]
+    if volume.ndim != 4 or not 1 <= volume.shape[3] <= 4:
+        raise ValueError('a volume of (depth, height, width[, 1 to 4 channels]), not %r'
+                         % (volume.shape,))
+    depth, height, width, channels = volume.shape
+    body = np.ascontiguousarray(volume).tobytes()
+    if channels == 1:
+        layout = 'dimension: 3\nsizes: %d %d %d\nkinds: domain domain domain\n' % (
+            width, height, depth)
+    else:
+        layout = 'dimension: 4\nsizes: %d %d %d %d\nkinds: vector domain domain domain\n' % (
+            channels, width, height, depth)
+    if compress:
+        body = gzip.compress(body, mtime=0)
+    header = 'NRRD0004\ntype: uint8\n%sencoding: %s\n\n' % (
+        layout, 'gzip' if compress else 'raw')
+    return header.encode('ascii') + body
 
 
 def _whole(text: str) -> int:

@@ -269,3 +269,31 @@ def test_a_viewpoints_scale_multiplies_the_speeds():
     assert context.manager.declared[0].walkSpeed == 18.0
     navigationinfo.apply(context, info, scale=0.5)
     assert context.manager.declared[0].walkSpeed == 3.0
+
+
+class Platform:
+    """What clip() sets: the near and far distances"""
+
+    def __init__(self):
+        self.near, self.far = 0.3, 100.0
+
+    def setClipping(self, near=None, far=None):
+        self.near = self.near if near is None else near
+        self.far = self.far if far is None else far
+
+
+@pytest.mark.parametrize('fields, expected', [
+    ({}, (0.125, 100.0)),
+    ({'avatarSize': [0.04, 1.6, 0.75], 'visibilityLimit': 50.0}, (0.02, 50.0)),
+])
+def test_the_near_plane_is_half_the_collision_radius(fields, expected):
+    """19775-1, 23.4.4: the near clipping plane at half avatarSize's first value"""
+    platform = Platform()
+    navigationinfo.clip(platform, NavigationInfo(**fields))
+    assert (platform.near, platform.far) == pytest.approx(expected)
+
+
+def test_a_scene_with_no_navigation_info_keeps_the_platforms_planes():
+    platform = Platform()
+    navigationinfo.clip(platform, None)
+    assert (platform.near, platform.far) == (0.3, 100.0)

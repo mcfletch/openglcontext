@@ -248,3 +248,31 @@ def test_a_picture_is_a_volume_one_slice_deep_bottom_row_first():
 def test_bytes_that_are_no_picture_are_refused():
     with pytest.raises(TextureImageError, match='PIL'):
         textureimages.read_volume(b'not an image at all')
+
+
+# -- writing NRRD ------------------------------------------------------------------
+
+@pytest.mark.parametrize('channels', [1, 2, 3, 4])
+@pytest.mark.parametrize('compress', [True, False])
+def test_a_volume_written_as_nrrd_reads_back_the_same(channels, compress):
+    volume = np.random.default_rng(channels).integers(
+        0, 256, (3, 4, 5, channels)).astype(np.uint8)
+    data = textureimages.nrrd_bytes(volume, compress=compress)
+    assert textureimages.is_nrrd(data)
+    kind, found = textureimages.read_nrrd(data)
+    assert kind == 'volume'
+    assert np.array_equal(found[0], volume)
+
+
+def test_a_three_dimensional_array_is_one_channel():
+    volume = np.arange(24, dtype=np.uint8).reshape(2, 3, 4)
+    found = textureimages.read_nrrd(textureimages.nrrd_bytes(volume))[1][0]
+    assert found.shape == (2, 3, 4, 1)
+    assert np.array_equal(found[..., 0], volume)
+
+
+def test_only_bytes_of_one_to_four_channels_are_written():
+    with pytest.raises(ValueError):
+        textureimages.nrrd_bytes(np.zeros((2, 2, 2, 5), np.uint8))
+    with pytest.raises(ValueError):
+        textureimages.nrrd_bytes(np.zeros((2, 2, 2), np.float32))
