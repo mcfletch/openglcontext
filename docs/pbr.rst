@@ -211,7 +211,11 @@ label, matched by each transform's ``mapping``; a single transform whose
 ``mapping`` is empty applies to every channel, as in VRML97.
 ``TextureTransform`` (centre, rotation, scale, translation) and
 ``TextureTransformMatrix3D`` (a 4×4 matrix of which the s and t rows are
-used, translation in the last column) are both read. One draw can use four
+used, translation in the last column) are both read. A ``TextureTransform``
+or ``TextureTransform3D`` is X3D's equation, Tc' = -C × S × R × C × T × Tc,
+with the rightmost applied to the coordinate first: translated, moved by the
+centre, rotated, scaled and moved back, as X_ITE reads it (the prose beside
+the equation in 19775-1 18.4.10 scales before rotating). One draw can use four
 distinct transforms; channels sharing a transform share one. The glTF loader
 turns each ``KHR_texture_transform``, including its ``texCoord`` override,
 into a ``TextureTransformMatrix3D`` under the label of the texture that
