@@ -38,6 +38,7 @@ pytest.importorskip("numpy")
 from OpenGLContext.bin import gltf_regression as R
 from OpenGLContext.testing import renderregression as RR
 from OpenGLContext.loaders import gltf_demos
+from OpenGLContext.loaders.gltf import fastdecode
 from OpenGLContext.testing.display import display_available
 
 
@@ -191,6 +192,29 @@ def test_baseline_was_rendered_for_this_view(spec, camera):
         "the %s baseline is of a different view: %s. Re-render it, review "
         "against the Khronos reference, then: oglc-gltf-regression --bless "
         "--only %s" % (spec.slug(camera), reason, spec.name))
+
+
+_SCENES = list(gltf_demos.iter_scenes())
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("spec", _SCENES, ids=[spec.name for spec in _SCENES])
+def test_an_animated_scene_pins_its_time(spec):
+    """A scene whose model animates is captured at a time the roster names.
+
+    Unpinned, the capture shows the pose the animation had reached when the
+    settle ended, which is later on a busy machine than on an idle one.
+    """
+    path = R.resolve_model(spec, gltf_demos.find_parthenon())
+    if path is None:
+        pytest.skip("model unavailable (offline / download failed)")
+    with open(path, 'rb') as handle:
+        data = handle.read()
+    document = (fastdecode.load_glb(data) if data[:4] == b'glTF'
+                else fastdecode.decode_gltf(data))
+    if document.animations:
+        assert spec.anim_time is not None, (
+            "%s animates and its roster entry pins no anim_time" % spec.name)
 
 
 @pytest.mark.slow
