@@ -651,6 +651,17 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         if self.failures.record(where, node, err):
             log.error('Failure in %s render: %s', where, describe(err))
 
+    def recoverFromFailedDraw(self, shader: Any) -> None:
+        """Put the pass's lit program back after a draw that raised.
+
+        A geometry binds a program of its own and its vertex array, and puts
+        the pass's program back when it has drawn; one that raised in between
+        leaves them bound, and the next shape's matrices would be set at the
+        lit program's uniform locations on the wrong program.
+        """
+        glBindVertexArray(0)
+        shader.use(lit=True)
+
     def reportFailures(self) -> None:
         """Say what this pass could not draw, if anything failed at all.
 
@@ -980,6 +991,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                     self._drawInstanceGroup(group, shader, prog, id_map)
                 except Exception as err:
                     self.renderFailed('instanced', group, err)
+                    self.recoverFromFailedDraw(shader)
                 else:
                     self.stats.instanceGroups += 1
                     self.stats.instances += len(group)
@@ -1019,6 +1031,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                     bvolume.debugRender()
             except Exception as err:
                 self.renderFailed('opaque', node, err)
+                self.recoverFromFailedDraw(shader)
             finally:
                 self._restoreShapeId(masked)
 
@@ -1089,6 +1102,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                         bvolume.debugRender()
                 except Exception as err:
                     self.renderFailed('transparent', node, err)
+                    self.recoverFromFailedDraw(shader)
                 finally:
                     self._restoreShapeId(masked)
         finally:
