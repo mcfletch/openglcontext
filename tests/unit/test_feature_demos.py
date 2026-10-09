@@ -42,6 +42,7 @@ DEMOS = {
     'x3d_shaders': 'x3d.rst',
     'x3d_geospatial': 'x3d.rst',
     'x3d_splats': 'x3d.rst',
+    'x3d_materials': 'x3d.rst',
 }
 
 #: Frames to run before the automatic exit captures.  Enough that a scene

@@ -1,0 +1,12 @@
+{
+  "frames": 40,
+  "git": "v3.0.0a4-873-g98fb1946-dirty",
+  "id": "demos/x3d_materials",
+  "licence": "BSD-3-Clause",
+  "module": "x3d_materials",
+  "producer": "script",
+  "size": [
+    1100,
+    680
+  ]
+}

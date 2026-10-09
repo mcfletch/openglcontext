@@ -326,6 +326,17 @@ mode is the front material's, and the fixed-function path draws both sides
 with the front material. A ``Box``, ``Sphere``, ``Cone`` or ``Cylinder``
 whose ``solid`` is false draws its inside.
 
+.. _x3d-xite:
+
+.. figure:: images/demos/x3d_materials.jpg
+   :alt: Spheres of extended materials on marble, instanced pillars, a sign and a banner
+
+   ``oglc-x3d-materials``: X_ITE's material extensions, modes and instances.
+
+``oglc-x3d-materials`` writes and opens ``x3d_materials.x3d``, and
+:doc:`tests/x3d_materials.py <tutorials/x3d_materials>` is the same scene as a
+tutorial script.
+
 X_ITE's material extension nodes (the ``X_ITE`` component, which a document
 names with ``<component name='X_ITE' level='1'/>``) go in a
 ``PhysicalMaterial``'s ``extensions``, one per glTF material extension, and

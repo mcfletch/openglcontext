@@ -661,6 +661,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `1 - depth` interpolant). Triangle sets, IndexedFaceSet, ElevationGrid;
     0.3% of pixels from X_ITE on the test document. Lines, points and the
     VRML97 renderer fog by distance
+  - [x] showcase `oglc-x3d-materials` (`tests/x3d_materials.py`, baseline
+    x3d_materials.png): every node of the stream in one document
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext
