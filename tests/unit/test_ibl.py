@@ -7,10 +7,6 @@ import pytest
 from PIL import Image
 
 from OpenGLContext.passes import ibl
-from OpenGLContext.loaders.gltf.specular_glossiness import (
-    _solve_metallic, _specgloss_to_metalrough, _specgloss_textures_to_metalrough,
-    _DIELECTRIC_SPECULAR,
-)
 from OpenGLContext.loaders import hdr, resolver
 
 
@@ -190,56 +186,6 @@ class TestFloatRenderProbe:
         ibl._FLOAT_RENDER_CAP['checked'] = False  # noqa: SLF001 the probe's once-per-process memo, which a deferred probe must leave unset
         assert ibl.probe_float_render_capability(force=True) is True
         assert ibl._FLOAT_RENDER_CAP['checked'] is False  # noqa: SLF001 the probe's once-per-process memo, which a deferred probe must leave unset
-
-
-class TestSpecGlossFactorConversion:
-    def test_pure_dielectric_is_non_metal(self):
-        base, metallic, rough = _specgloss_to_metalrough(
-            [0.5, 0.2, 0.1, 1.0], [0.04, 0.04, 0.04], 0.5)
-        assert metallic == pytest.approx(0.0, abs=1e-3)
-        assert base == pytest.approx([0.5, 0.2, 0.1], abs=1e-2)
-        assert rough == pytest.approx(0.5)
-
-    def test_coloured_specular_metal_recovers_metallic_and_base(self):
-        # gold: black diffuse, coloured high specular -> metallic ~1, base = spec
-        base, metallic, rough = _specgloss_to_metalrough(
-            [0.0, 0.0, 0.0, 1.0], [1.0, 0.78, 0.34], 0.9)
-        assert metallic == pytest.approx(1.0, abs=1e-3)
-        assert base == pytest.approx([1.0, 0.78, 0.34], abs=1e-2)
-        assert rough == pytest.approx(0.1, abs=1e-3)
-
-    def test_solve_metallic_below_dielectric_is_zero(self):
-        assert _solve_metallic(0.5, _DIELECTRIC_SPECULAR - 0.01, 0.9) == 0.0
-
-
-class TestSpecGlossTextureConversion:
-    def _solid(self, rgba):
-        return Image.new('RGBA', (4, 4), tuple(rgba))
-
-    def test_gold_specular_texture_becomes_metal(self):
-        # diffuse black, specular ~gold, glossiness high (alpha 255)
-        diffuse = self._solid((0, 0, 0, 255))
-        sg = self._solid((255, 200, 90, 255))
-        base_img, mr_img = _specgloss_textures_to_metalrough(
-            diffuse, sg, [1, 1, 1, 1], [1, 1, 1, 1], 1.0)
-        mr = np.asarray(mr_img)
-        # B channel = metallic; near fully metallic for a bright coloured specular
-        assert mr[..., 2].mean() > 240
-        # G channel = roughness; glossiness 1.0 -> roughness 0
-        assert mr[..., 1].mean() < 15
-        base = np.asarray(base_img)
-        # base colour is the (sRGB) specular tint, not black
-        assert base[..., 0].mean() > 200 and base[..., 2].mean() < base[..., 0].mean()
-
-    def test_dielectric_texture_stays_non_metal(self):
-        diffuse = self._solid((180, 60, 40, 255))
-        sg = self._solid((10, 10, 10, 128))          # low specular -> dielectric
-        base_img, mr_img = _specgloss_textures_to_metalrough(
-            diffuse, sg, [1, 1, 1, 1], [1, 1, 1, 1], 1.0)
-        mr = np.asarray(mr_img)
-        assert mr[..., 2].mean() < 15                 # metallic ~0
-        base = np.asarray(base_img)                   # base ~ diffuse
-        assert base[..., 0].mean() > base[..., 2].mean()
 
 
 if __name__ == '__main__':

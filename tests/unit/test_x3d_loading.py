@@ -15,6 +15,7 @@ import pytest
 from vrml import protofunctions
 from vrml import x3d as vrml_x3d
 from vrml.x3d import nodes as x3d
+from vrml.x3d import xite
 
 from OpenGLContext.loaders import formats
 from OpenGLContext.loaders.loader import Loader
@@ -91,7 +92,7 @@ def test_the_engines_classes_are_used_only_where_they_implement_the_declaration(
     found = prototypes()
     for name, cls in found.items():
         if name != 'X3DScene':
-            assert issubclass(cls, x3d.CONCRETE_NODES[name]), name
+            assert issubclass(cls, xite.declaration(name)), name
     assert found['Shape'] is basenodes.Shape
     assert 'SignalPdu' not in found
 
@@ -189,7 +190,7 @@ def test_the_documented_node_list_is_the_engines():
         component, names = item.split(' - ', 1)
         for name in re.split(r'[,\s]+', names.strip()):
             documented[name] = component.strip()
-    found = {name: x3d.CONCRETE_NODES[name].COMPONENT[0]
+    found = {name: xite.declaration(name).COMPONENT[0]
              for name in prototypes() if name != 'X3DScene'}
     assert documented == found
 

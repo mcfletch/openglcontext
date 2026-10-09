@@ -26,10 +26,11 @@ from OpenGL.GL import (
     glUseProgram, glActiveTexture, glBindTexture, glGetIntegerv,
     glGenBuffers, glBindBuffer, glBufferData, glBindBufferBase, glDeleteBuffers,
     glGetUniformBlockIndex, glUniformBlockBinding, glUniformMatrix4fv,
-    glUniform1fv, glUniform1iv, glUniform4fv,
+    glUniform1fv, glUniform1iv, glUniform3fv, glUniform4fv,
 )
 from OpenGL.GL import shaders as GL_shaders
 from vrml import cache
+from vrml.x3d import xite
 
 from OpenGLContext import contextresources, renderoptions
 from OpenGLContext.passes import flatcore
@@ -38,15 +39,21 @@ from OpenGLContext.passes.shaderpass import (
     VRML97ShaderProgram, link_program, load_fragment_source, resolve_shadow_config,
     preprocess_shader,
 )
+from OpenGLContext.scenegraph.materialextensions import extension_of
+from OpenGLContext.passes.scatter import (
+    SCATTER_UNIT, ScatterBuffer, has_volume_scatter, scatter_samples,
+)
 from OpenGLContext.passes.transmission import TransmissionBuffer
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.physicalmaterial import (
-    AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha, source_of,
-    two_sided,
+    NO_ATTENUATION, AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha,
+    source_of, two_sided,
     material_to_pbr, pbr_material,
 )
 from OpenGLContext.scenegraph.material_fields import read_material_fields
+from OpenGLContext.scenegraph.fogcoordinate import FOG_DEPTH_UNIT, bind_depths
+from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial
 from OpenGLContext.scenegraph.texgen import TexGen
 from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
 from OpenGLContext.scenegraph.texturelayers import drawn_singly, is_layered, texture_layers
@@ -163,11 +170,25 @@ _PBR_EXT_HAS = {
     'diffuseTransmission': 'hasDiffuseTransmissionMap',
 }
 
+#: Extension maps with no sampler of their own, each read through another
+#: extension map's sampler where the material has no map of that channel:
+#: the fragment stage's 32 samplers are all spoken for. Each host is a
+#: channel rarely used with its guest (a retroreflective sign with no
+#: iridescence map, skin with no anisotropy or clearcoat normal map); a
+#: material with both maps draws the host's, and the guest's factor alone.
+PBR_SHARED_CHANNELS = {
+    'retroreflection': 'iridescence',      # .r scales the retroreflection factor
+    'scatterStrength': 'anisotropy',       # .a scales the scatter strength
+    'multiscatterColor': 'clearcoatNormal',  # .rgb tints the multiscatter colour (sRGB)
+}
+
 #: The bit of the shader's ``materialTextures`` mask that says a map is
 #: sampled. The core maps take the bits ``uvFor`` in pbr.frag numbers them by,
-#: and the extension maps follow in the order of :data:`PBR_EXT_UNITS`.
+#: the extension maps follow in the order of :data:`PBR_EXT_UNITS`, and the
+#: shared ones after them.
 PBR_TEXTURE_BITS = {channel: 1 << index for index, channel in
-                    enumerate(list(PBR_UNITS) + list(PBR_EXT_UNITS))}
+                    enumerate(list(PBR_UNITS) + list(PBR_EXT_UNITS)
+                              + list(PBR_SHARED_CHANNELS))}
 
 # Highest unit any extension texture wants; the program needs a budget past it.
 _EXT_UNITS_MAX = max(PBR_EXT_UNITS.values()) if PBR_EXT_UNITS else 15
@@ -305,7 +326,9 @@ _DEFAULT_FACTORS: "dict[str, Any]" = dict(
     iridescence_thick_min=100.0, iridescence_thick_max=400.0,
     anisotropy_strength=0.0, anisotropy_rotation=0.0, dispersion=0.0,
     diffuse_transmission=0.0, diffuse_transmission_color=(1.0, 1.0, 1.0),
-    phong_ambient=0.0, phong_shininess=0.0,
+    phong_ambient=0.0, phong_shininess=0.0, retroreflection=0.0,
+    scatter_strength=0.0, scatter_anisotropy=0.0, multiscatter_color=(0.0, 0.0, 0.0),
+    scatter_distance=0.0,
 )
 
 
@@ -336,6 +359,14 @@ def phong_factors(material_node: Any) -> dict:
                 flags=PHONG_BIT)
 
 
+def _absorbing(distance: float) -> float:
+    """An attenuation distance as the shader reads it: 0 for no absorption
+
+    glTF's infinite default is held as :data:`NO_ATTENUATION`.
+    """
+    return 0.0 if distance >= NO_ATTENUATION else distance
+
+
 def _material_factors(material: Any) -> dict:
     """Uniform-ready factors for a PhysicalMaterial, an UnlitMaterial, a VRML97 Material, or None"""
     material = source_of(material)
@@ -347,13 +378,16 @@ def _material_factors(material: Any) -> dict:
             roughness=float(m.roughness), emissive=tuple(m.emissiveColor)[:3],
             occlusion=float(m.occlusionStrength), normal_scale=float(m.normalScale),
             emissive_strength=float(m.emissiveStrength), specular=float(m.specular),
-            specular_color=tuple(m.specularColor)[:3], clearcoat=float(m.clearcoat),
+            specular_color=tuple(float(value) * float(m.specularStrength)
+                                 for value in tuple(m.specularColor)[:3]),
+            clearcoat=float(m.clearcoat),
             clearcoat_roughness=float(m.clearcoatRoughness),
             sheen_color=tuple(m.sheenColor)[:3], sheen_roughness=float(m.sheenRoughness),
             ior=float(m.ior), thickness=float(m.thickness),
             attenuation_color=tuple(m.attenuationColor)[:3],
-            attenuation_distance=float(m.attenuationDistance),
-            flags=BAKED_LIGHT_BIT if m.bakedLight else 0,
+            attenuation_distance=_absorbing(float(m.attenuationDistance)),
+            flags=((BAKED_LIGHT_BIT if m.bakedLight else 0)
+                   | (VOLUME_SCATTER_BIT if has_volume_scatter(m) else 0)),
             iridescence=float(m.iridescence), iridescence_ior=float(m.iridescenceIor),
             iridescence_thick_min=float(m.iridescenceThicknessMin),
             iridescence_thick_max=float(m.iridescenceThicknessMax),
@@ -362,7 +396,22 @@ def _material_factors(material: Any) -> dict:
             dispersion=float(m.dispersion),
             diffuse_transmission=float(m.diffuseTransmission),
             diffuse_transmission_color=tuple(m.diffuseTransmissionColor)[:3],
+            retroreflection=float(m.retroreflection),
+            scatter_distance=(float(m.attenuationDistance)
+                              if extension_of(m, xite.VolumeMaterialExtension) is not None
+                              else 0.0),
+            scatter_strength=float(m.scatterStrength),
+            scatter_anisotropy=float(m.scatterAnisotropy),
+            multiscatter_color=tuple(m.multiscatterColor)[:3],
         )
+    if isinstance(material, SpecularGlossinessMaterial):
+        return dict(_DEFAULT_FACTORS, base_color=tuple(material.diffuseColor)[:3],
+                    metallic=0.0, roughness=float(material.glossiness),
+                    emissive=tuple(material.emissiveColor)[:3],
+                    occlusion=float(material.occlusionStrength),
+                    normal_scale=float(material.normalScale),
+                    specular_color=tuple(material.specularColor)[:3],
+                    flags=SPECULAR_GLOSSINESS_BIT)
     if isinstance(material, UnlitMaterial):
         # The unlit path draws the base colour; X3D calls it the emissive colour.
         # A document's colours are display values; glTF's are linear light.
@@ -422,10 +471,18 @@ BAKED_LIGHT_BIT = 64
 #: The bit saying the block is an X3D Material drawn by X3D's Phong equation
 #: (:func:`phong_factors`); the fragment shader reads it as ``phongMode``.
 PHONG_BIT = 128
+#: The bit saying the material scatters light beneath its surface
+#: (:mod:`~OpenGLContext.passes.scatter`); the shader reads ``volumeScatterMode``.
+VOLUME_SCATTER_BIT = 256
+#: The bit saying the block is a SpecularGlossinessMaterial: its roughness word
+#: is the glossiness, its specular colour the dielectric reflectance, and the
+#: specular-colour map's alpha scales the glossiness; the shader reads
+#: ``specGlossMode``.
+SPECULAR_GLOSSINESS_BIT = 512
 #: The bit saying an unlit block's colours are display values, as an X3D
 #: document gives them, rather than linear light; the fragment shader reads
 #: it as ``displayedMode``.
-DISPLAYED_BIT = 256
+DISPLAYED_BIT = 1024
 
 
 
@@ -486,9 +543,16 @@ def _pack_material_block(material: Any) -> np.ndarray:
     # them for two per-instance scalars (anisotropy strength + dispersion) for free.
     buf[30] = d.get('anisotropy_strength', 0.0)
     buf[31] = d.get('dispersion', 0.0)
-    # X3D's Phong at words 32..33 (of the 32..35 vec4); 36..43 are unused
+    # X3D's Phong at words 32..33 (of the 32..35 vec4); 34, 35 are unused
     buf[32] = d['phong_ambient']
     buf[33] = d['phong_shininess']
+    # retroreflection, scatter strength and anisotropy at 36..38; the
+    # multiscatter colour at 40..42
+    buf[36] = d['retroreflection']
+    buf[37] = d['scatter_strength']
+    buf[38] = d['scatter_anisotropy']
+    buf[39] = d['scatter_distance']
+    buf[40:43] = d['multiscatter_color']
     # iridescence vec4 (factor, ior, thicknessMin, thicknessMax) at words 44..47
     buf[44] = d.get('iridescence', 0.0)
     buf[45] = d.get('iridescence_ior', 1.3)
@@ -620,6 +684,12 @@ class PBRShaderProgram(VRML97ShaderProgram):
                 ext_textures_supported(self.texture_budget),
                 self.planar_reflection_supported, bool(self.shadow_cube_array),
                 self.MAX_SHADOW_LIGHTS) + LAYER_SAMPLERS_NEEDED <= self.texture_budget
+            # The volume-scatter buffer's sampler, where one is left after those.
+            self.volume_scatter_supported = pbr_fragment_samplers(
+                ext_textures_supported(self.texture_budget),
+                self.planar_reflection_supported, bool(self.shadow_cube_array),
+                self.MAX_SHADOW_LIGHTS) + (LAYER_SAMPLERS_NEEDED if self.layer_samplers_supported
+                                           else 0) + 1 <= self.texture_budget
             ext_defines = ['#define TEXTURE_LAYER_SAMPLERS %d'
                            % (1 if self.layer_samplers_supported else 0),
                            '#define TEXTURE_PROJECTORS %d'
@@ -628,6 +698,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
                            % (1 if ext_textures_supported(self.texture_budget) else 0),
                            '#define PBR_PLANAR_REFLECTION %d'
                            % (1 if self.planar_reflection_supported else 0),
+                           '#define PBR_VOLUME_SCATTER %d'
+                           % (1 if self.volume_scatter_supported else 0),
                            '#define PBR_ZONE_PROBES %d'
                            % (1 if self.zone_probes_supported else 0),
                            '#define MAX_ZONE_LAYERS %d' % (MAX_ZONE_LAYERS,)]
@@ -678,6 +750,10 @@ class PBRShaderProgram(VRML97ShaderProgram):
     #: Whether this driver has the texture unit the joint palette needs; False
     #: until a program has been compiled against a real context.
     skinning_supported: bool = False
+
+    #: Whether the fragment stage has a sampler for the volume-scatter buffer;
+    #: False until a program has been compiled against a real context.
+    volume_scatter_supported: bool = False
 
     #: Whether the fragment stage has samplers for a texture layer's cube map
     #: and 3D texture and for the texture projectors; False until a program
@@ -829,6 +905,38 @@ class PBRShaderProgram(VRML97ShaderProgram):
         for channel, unit in getattr(self, 'ext_channels', {}).items():
             self._set_uniform1i(_PBR_EXT_SAMPLER[channel], unit, self.program)
         self._set_uniform1i('materialTextures', 0, self.program)
+        self._set_uniform1i('scatterPass', 0, self.program)
+        self._set_uniform1i('fogDepths', FOG_DEPTH_UNIT, self.program)
+        self._set_uniform1i('hasFogDepths', 0, self.program)
+        if self.volume_scatter_supported:
+            self._set_uniform1i('scatterBuffer', SCATTER_UNIT, self.program)
+            self._set_uniform1i('hasScatterBuffer', 0, self.program)
+            samples, least = scatter_samples()
+            loc = self._get_location('scatterSamples[0]', self.program)
+            if loc != -1:
+                glUniform3fv(loc, len(samples), samples)
+            self._set_uniform1f('scatterMinRadius', least, self.program)
+
+    def set_fog_depths(self, owner: Any, depths: Optional[np.ndarray]) -> None:
+        """Fog the next draw by `owner`'s per-vertex FogCoordinate `depths`, or by distance
+
+        `depths` None fogs by distance, as every geometry without a
+        FogCoordinate is.
+        """
+        found = depths is not None and bind_depths(owner, depths)
+        self._set_uniform1i('hasFogDepths', 1 if found else 0, self.program)
+
+    def set_scatter_pass(self, drawing: bool) -> None:
+        """Whether the next draws fill the volume-scatter buffer rather than the frame"""
+        self._set_uniform1i('scatterPass', 1 if drawing else 0, self.program)
+
+    def bind_scatter_buffer(self, buffer: Optional[ScatterBuffer]) -> None:
+        """Have scattering materials read `buffer`, or nothing where it is None"""
+        if not self.volume_scatter_supported:
+            return
+        if buffer is not None:
+            buffer.bind()
+        self._set_uniform1i('hasScatterBuffer', 1 if buffer is not None else 0, self.program)
 
     # -- per-material uniform block (UBO) ----------------------------------
     def _init_material_block(self) -> None:
@@ -1178,6 +1286,17 @@ class PBRShaderProgram(VRML97ShaderProgram):
             tex = holder.cached(mode) if holder is not None else None
             if tex is not None and getattr(tex, 'texture', None):
                 found.append((channel, unit, tex.texture))
+        # A shared map takes its host's unit where the material leaves it free.
+        hosts = {channel for channel, _unit, _texture in found}
+        for guest, host in PBR_SHARED_CHANNELS.items():
+            holder = textures.get(guest)
+            shared = self.ext_channels.get(host)
+            if holder is None or shared is None or host in hosts or is_layered(holder):
+                continue
+            tex = holder.cached(mode)
+            if tex is not None and getattr(tex, 'texture', None):
+                found.append((guest, shared, tex.texture))
+                hosts.add(host)
         # Which maps are sampled is one uniform, a bit per map, rather than a
         # uniform per map: a draw of a new material sets one value.
         sampled = 0

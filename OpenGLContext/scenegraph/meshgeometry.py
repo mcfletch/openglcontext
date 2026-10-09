@@ -21,7 +21,9 @@ vertex shader, and a later set in the fragment shader where a
 `MultiTexture` layer reads it (:mod:`~OpenGLContext.scenegraph.texturelayers`).
 The `attrib` vertex attributes, one per coordinate, are drawn with the mesh
 for a shader to read by name (:mod:`~OpenGLContext.scenegraph.x3dshaders`).
-`FogCoordinate` is kept and not drawn.
+A `FogCoordinate`'s depths are the mesh's ``fog_depths``, one per vertex
+from the coordinate it was read from, which fog it in place of its distance
+in the PBR program (:mod:`~OpenGLContext.scenegraph.fogcoordinate`).
 
 Double-precision points (`CoordinateDouble`, `GeoCoordinate`,
 `GeoElevationGrid`) are built relative to the centre of their bounds,
@@ -43,6 +45,7 @@ from OpenGLContext.scenegraph import (
     boundingvolume, composedgeometry, coordinatedeform, texgen, x3dglsl,
 )
 from OpenGLContext.scenegraph.coordinates import fields as point_fields
+from OpenGLContext.scenegraph.fogcoordinate import vertex_depths
 from OpenGLContext.scenegraph.coordinates import points as scene_points
 from OpenGLContext.scenegraph.texturemapping import label_set
 
@@ -71,7 +74,7 @@ def _report(target: Any, message: str) -> None:
 def _sources(target: Any) -> Iterator[Any]:
     """`target` and each node whose fields its arrays are read from"""
     yield target
-    for name in ('coord', 'normal', 'tangent', 'color', 'texCoord'):
+    for name in ('coord', 'normal', 'tangent', 'color', 'texCoord', 'fogCoord'):
         child = getattr(target, name, None)
         if child:
             yield child
@@ -179,6 +182,10 @@ class MeshDrawn:
         found = mesh_from_primitive(arrays, solid=solid,
                                     vertex_attributes=arrays.vertex_attributes)
         found.origin = arrays.origin
+        fog = getattr(self, 'fogCoord', None)
+        if fog and len(getattr(fog, 'depth', ())):
+            found.fog_depths = vertex_depths(fog.depth, arrays.sources,
+                                             len(arrays.attributes['POSITION']))
         return found
 
     def drawOrigin(self, points: Any) -> Optional[np.ndarray]:

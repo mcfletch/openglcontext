@@ -15,7 +15,7 @@ from typing import Any, ClassVar, Optional
 
 from vrml import node
 from vrml import x3d as vrml_x3d
-from vrml.x3d import files, readers
+from vrml.x3d import files, readers, xite
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.loaders import base
@@ -52,7 +52,7 @@ def prototypes() -> "dict[str, type]":
     from OpenGLContext.scenegraph.scenegraph import X3DScene  # noqa: PLC0415 beside the registry
     found: "dict[str, type]" = {}
     for name, cls in basenodes.PROTOTYPES.items():
-        declared = x3d.CONCRETE_NODES.get(name)
+        declared = xite.declaration(name)
         if declared is not None and isinstance(cls, type) and issubclass(cls, declared):
             found[name] = cls
     for name, (module, attribute) in X3D_ONLY.items():

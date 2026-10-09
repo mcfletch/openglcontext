@@ -36,7 +36,7 @@ CHANNELS = (
     'transmission', 'iridescenceThickness', 'clearcoat', 'clearcoatRoughness',
     'thickness', 'anisotropy', 'specular', 'specularColor', 'sheenColor',
     'sheenRoughness', 'iridescence', 'clearcoatNormal', 'diffuseTransmissionColor',
-    'diffuseTransmission',
+    'diffuseTransmission', 'retroreflection', 'scatterStrength', 'multiscatterColor',
 )
 
 #: How many distinct transforms one draw's channels can use.

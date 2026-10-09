@@ -19,22 +19,34 @@ The node is a :class:`~OpenGLContext.scenegraph.shape.Shape`, so everything that
 reads a shape's geometry, appearance, material or pick flag reads this one
 unchanged; what differs is that it draws once per placement and bounds all of
 them. A set with no placements draws nothing.
+
+It is also X_ITE's `InstancedShape` (`vrml.x3d.xite`): where ``placements``
+is empty, instance i is placed as a Transform with the i-th of
+``translations``, ``rotations``, ``scales``, ``scaleOrientations`` and
+``centers``, a shorter list giving its last entry to the instances past its
+end (:func:`transform_placements`). ``placements``, set from code, takes the
+place of those fields where it is not empty.
 """
 from __future__ import annotations
 
 from typing import Any, Optional
 
 import numpy as np
-from vrml import field
+from vrml import cache, field
 
 from vrml.vrml97 import nodetypes
+from vrml.x3d import xite
 
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.shape import Shape
 
 __all__ = ['InstancedShape', 'InstancedModel', 'placement_matrices',
-           'model_parts']
+           'model_parts', 'transform_placements']
+
+#: The X3D fields an InstancedShape is placed by.
+X3D_PLACEMENT_FIELDS = ('translations', 'rotations', 'scales', 'scaleOrientations',
+                        'centers')
 
 
 def placement_matrices(translations: Any = None, rotations: Any = None,
@@ -92,22 +104,90 @@ def _rotation_matrices(quaternions: Any) -> np.ndarray:
     return out
 
 
-class InstancedShape(Shape):
+def _axis_angles(rotations: Any) -> np.ndarray:
+    """``(N,3,3)`` row-vector matrices of X3D ``(x, y, z, angle)`` rotations"""
+    values = np.asarray(rotations, dtype='d').reshape(-1, 4)
+    axes = values[:, :3]
+    lengths = np.linalg.norm(axes, axis=1, keepdims=True)
+    axes = np.where(lengths > 0, axes / np.where(lengths > 0, lengths, 1.0), (0.0, 0.0, 1.0))
+    half = values[:, 3] / 2.0
+    quaternions = np.concatenate([axes * np.sin(half)[:, None], np.cos(half)[:, None]], axis=1)
+    return _rotation_matrices(quaternions).astype('d')
+
+
+def _rows(values: Any, width: int, count: int, default: "tuple[float, ...]") -> np.ndarray:
+    """`count` rows of `values`, the last repeated past its end; `default` for none"""
+    array = np.asarray(values, dtype='d').reshape(-1, width)
+    if not len(array):
+        return np.tile(np.asarray(default, 'd'), (count, 1))
+    return array[np.minimum(np.arange(count), len(array) - 1)]
+
+
+def transform_placements(translations: Any, rotations: Any, scales: Any,
+                         scaleOrientations: Any, centers: Any) -> np.ndarray:
+    """``(N,4,4)`` row-vector placements, each a Transform of the lists' i-th entries
+
+    N is the longest list's length; a shorter list gives its last entry to
+    the instances past its end, and an empty one its Transform field's
+    default. Each placement is ``T C R SR S -SR -C`` (ISO/IEC 19775-1,
+    10.4.4), transposed for the row-vector convention.
+    """
+    count = max(len(np.asarray(values).reshape(-1)) // width
+                for values, width in ((translations, 3), (rotations, 4), (scales, 3),
+                                      (scaleOrientations, 4), (centers, 3)))
+    matrices = np.zeros((count, 4, 4), 'd')
+    if not count:
+        return matrices.astype('f')
+    translation = _rows(translations, 3, count, (0.0, 0.0, 0.0))
+    rotation = _axis_angles(_rows(rotations, 4, count, (0.0, 0.0, 1.0, 0.0)))
+    scale = _rows(scales, 3, count, (1.0, 1.0, 1.0))
+    orientation = _axis_angles(_rows(scaleOrientations, 4, count, (0.0, 0.0, 1.0, 0.0)))
+    center = _rows(centers, 3, count, (0.0, 0.0, 0.0))
+    # Row vectors: p @ (-C) @ (-SR) @ S @ SR @ R @ C @ T.
+    linear = (np.transpose(orientation, (0, 2, 1)) * scale[:, None, :]) @ orientation @ rotation
+    matrices[:, :3, :3] = linear
+    offset = -np.einsum('ni,nij->nj', center, linear) + center + translation
+    matrices[:, 3, :3] = offset
+    matrices[:, 3, 3] = 1.0
+    return matrices.astype('f')
+
+
+#: The key the placements the X3D fields make are kept under in vrml's cache.
+_FIELD_PLACEMENTS_KEY = 'instanced-shape-placements'
+
+
+class InstancedShape(Shape, xite.InstancedShape):
     """A shape and the set of local matrices to draw it at."""
 
+    PROTO = 'InstancedShape'
     placements = field.newField('placements', 'SFArray32', 1, list)
+    #: What an X3D document carries the engine's ``placements`` in.
+    x3dExtension = 'OpenGLContext'
 
     def instancePlacements(self) -> Optional[np.ndarray]:
         """The placements to draw at, or ``None`` when there are none.
 
-        ``None`` rather than an empty array is what the render pass reads to
-        mean "one draw, at the record's own matrix", so a shape with nothing
-        placed and a plain shape stay distinguishable.
+        ``placements`` where it is set, else those the X3D fields make,
+        kept in vrml's cache until one of them is set. ``None`` rather than
+        an empty array is what the render pass reads to mean "one draw, at
+        the record's own matrix", so a shape with nothing placed and a plain
+        shape stay distinguishable.
         """
         placements = self.placements
-        if placements is None or not len(placements):
-            return None
-        return np.asarray(placements, dtype='f').reshape(-1, 4, 4)
+        if placements is not None and len(placements):
+            return np.asarray(placements, dtype='f').reshape(-1, 4, 4)
+        found = self._fieldPlacements()
+        return found if len(found) else None
+
+    def _fieldPlacements(self) -> np.ndarray:
+        held = cache.CACHE.getData(self, _FIELD_PLACEMENTS_KEY)
+        if held is None:
+            held = transform_placements(*(getattr(self, name) for name in X3D_PLACEMENT_FIELDS))
+            holder = cache.CACHE.holder(self, held, _FIELD_PLACEMENTS_KEY)
+            for name in X3D_PLACEMENT_FIELDS:
+                holder.depend(self, name)
+        found: np.ndarray = held
+        return found
 
     def drawsNothing(self) -> bool:
         """True when nothing is placed, so there is nothing to draw.
@@ -118,8 +198,7 @@ class InstancedShape(Shape):
         *one* draw at the record's own matrix, which is right for a plain shape
         and would put a stray copy of this one at the set's origin.
         """
-        placements = self.placements
-        return placements is None or not len(placements)
+        return self.instancePlacements() is None
 
     def boundingVolume(self, mode: Any = None) -> Any:
         """A box around every placement of the geometry.
@@ -134,7 +213,8 @@ class InstancedShape(Shape):
         volume = self._placedVolume(mode)
         return boundingvolume.cacheVolume(
             self, volume,
-            ((self, 'geometry'), (self, 'placements'), (volume, None)),
+            ((self, 'geometry'), (self, 'placements'),
+             *((self, name) for name in X3D_PLACEMENT_FIELDS), (volume, None)),
         )
 
     def visiblePlacements(self, frustum: Any, matrix: Any,

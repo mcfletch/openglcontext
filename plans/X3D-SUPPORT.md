@@ -25,10 +25,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `ReceiverPdu`, `SignalPdu`, `TransmitterPdu`, `DISEntityManager`,
     `DISEntityTypeMapping`, which act only on a DIS network (IEEE 1278.1 PDUs
     over UDP), not implemented: a maintainer decision whether the engine
-    speaks DIS; `FogCoordinate`, which needs a per-vertex input and every one
-    of the 16 attribute locations GL 3.3 guarantees is taken (the table holds
-    no two semantics to one location): a maintainer decision between sharing
-    `TEXCOORD_3D`'s location 15 and a 17th location
+    speaks DIS. `FogCoordinate` is drawn (x3d-xnodes): its depths are read
+    from a buffer texture by `gl_VertexID`, taking no attribute location
 
 - Phase 1, pyvrml97 groundwork (§9.1)
   - [x] `ElevationGrid.xSpacing`/`zSpacing` 1.0, `NavigationInfo.type` `["WALK", "ANY"]`
@@ -700,6 +698,54 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
       `pitch` and `gain` are kept and not read
     - the node is bound to a context when a shape wearing it is first drawn
       there; a movie no drawn shape wears sends no events
+- X_ITE's own nodes (2026-10-09, branch x3d-xnodes). pyvrml97's
+  `vrml.x3d.xite` declares the X_ITE component, `ImageTextureAtlas` and the
+  fields X_ITE adds to PhysicalMaterial and Appearance, as X_ITE 16.4.3's
+  X3DUOM extension and component sources (MIT) give them; every encoding
+  reads and writes them, the writers add the `X_ITE` component statement
+  - [x] material extension nodes: one representation, the nodes. A
+    PhysicalMaterial's glTF extension values are kept in its `extensions`
+    nodes and read and set under the material's names
+    (`scenegraph.materialextensions`); the `OpenGLContext` metadata set
+    carries only the engine's own fields. attenuationDistance's default is
+    X_ITE's 1000000 (glTF's infinity). Retroreflection (MRM, view mirrored
+    about the normal, punctual and environment) and volume scatter (a float
+    buffer of the diffuse-transmission light drawn before the opaque
+    shapes, 55 Burley samples, `passes/scatter.py`) added to the PBR pass,
+    with KHR_materials_retroreflection and KHR_materials_volume_scatter /
+    KHR_materials_scatter read and written. The three new maps share the
+    samplers of the iridescence, anisotropy and clearcoat-normal maps. The
+    scatter buffer holds depth where X_ITE holds a shape id, so touching
+    scattering shapes share light weighted by distance. Against X_ITE: the
+    scatter test sphere 0.2% of pixels apart
+  - [x] SpecularGlossinessMaterial: the metallic/roughness program with no
+    metal, the specular colour as the dielectric reflectance and roughness
+    1 - glossiness (`SPECULAR_GLOSSINESS_BIT`); glTF's
+    KHR_materials_pbrSpecularGlossiness read as one where the material has no
+    pbrMetallicRoughness (X_ITE draws the fallback where there is one) and
+    written from one. The load-time conversion to metallic/roughness is gone.
+    Retroreflection and scatter factors are in
+    `materials.MATERIAL_EXTENSION_FIELDS`, so KHR_animation_pointer reaches
+    them
+  - [x] BlendMode and DepthMode (`scenegraph.rendermodes`): GL blend and
+    depth state around the shape's draw, put back after; a BlendMode makes
+    the shape blended (X_ITE's reading); a shape with either is drawn alone
+    and after the other opaque shapes. Against X_ITE the test document
+    differs only in UnlitMaterial's colour encoding
+  - [x] InstancedShape: the engine's InstancedShape is X_ITE's node; its
+    placements come from the five X3D lists (clamped to each list's last
+    entry, as X_ITE does) where `placements` is empty
+  - [x] ImageTextureAtlas (`texture3d.ImageTextureAtlas`, `atlas_volume`): the
+    tiles of one picture as slices, top row of each tile at t=0 as X_ITE
+    reads it; matches X_ITE's render of the test atlas (0.5% of pixels)
+  - [x] FogCoordinate (`scenegraph.fogcoordinate`): per-vertex depths from the
+    coordinate each vertex was read from, in a buffer texture the PBR vertex
+    shader reads by `gl_VertexID`; the depth is the fog share (X_ITE's
+    `1 - depth` interpolant). Triangle sets, IndexedFaceSet, ElevationGrid;
+    0.3% of pixels from X_ITE on the test document. Lines, points and the
+    VRML97 renderer fog by distance
+  - [x] showcase `oglc-x3d-materials` (`tests/x3d_materials.py`, baseline
+    x3d_materials.png): every node of the stream in one document
 - Phase 11, X_ITE compatibility: glTF extensions and file formats (branch
   x3d-xgltf, 2026-10-09). Audit of the 34 extensions on X_ITE's features page
   against the loader and writer code

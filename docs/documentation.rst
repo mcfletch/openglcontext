@@ -167,6 +167,14 @@ Installing the package puts these commands on your path:
    ``KHR_gaussian_splatting`` glTF, on a marble terrace, with keys to take
    the higher harmonics away, switch their shadows and write the vase as
    glTF. See :ref:`x3d-gaussian-splats`.
+``oglc-x3d-materials``
+   X_ITE's nodes read from a document: spheres of PhysicalMaterial with
+   material extension nodes (clearcoat, sheen, iridescence, glass,
+   anisotropy, a wax candle with volume scatter) and a
+   SpecularGlossinessMaterial, instanced pillars, a retroreflective sign,
+   blend and depth modes, a banner fogged by its FogCoordinate and a crate
+   wearing an ImageTextureAtlas, with keys to switch the retroreflection,
+   the scatter and the fog depths. See :ref:`x3d-xite`.
 ``oglc-x3d-volume``
    X3D's VolumeRendering component read from a document: three CT scans of
    an ammonite, generated, on marble plinths: one through a transfer

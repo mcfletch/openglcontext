@@ -50,6 +50,13 @@
 #define PBR_PLANAR_REFLECTION 0
 #endif
 
+// KHR_materials_volume_scatter's buffer (passes/scatter.py) is read from a
+// sampler of its own; pbrpass sets this to 1 where the fragment stage has one
+// left. At 0 a scattering material is drawn without its subsurface light.
+#ifndef PBR_VOLUME_SCATTER
+#define PBR_VOLUME_SCATTER 0
+#endif
+
 // A zone's own environment probe is a layer of a cube-map array the scene's
 // probe shares (GL 4.0 / ARB_texture_cube_map_array, enabled with the shadow
 // cube arrays). At 0 a zone scales the scene's environment and has no probe.
@@ -77,6 +84,8 @@ in vec2 vTexCoord1;      // second UV set (glTF TEXCOORD_1)
 in vec3 vTangent;
 in float vTangentW;
 in vec4 vColor;
+in float vFogDepth;      // X3D FogCoordinate depth, where hasFogDepths
+uniform bool hasFogDepths;
 in float vModelScale;   // world-space object scale for KHR_materials_volume thickness
 in vec3 vLocalPosition;  // the point, its normal and the camera in the shape's own space
 in vec3 vLocalNormal;
@@ -104,12 +113,13 @@ struct Material {
     float sheenRoughnessFactor; float ior;                 // KHR_materials_sheen / _ior
     float thicknessFactor;      float attenuationDistance; // KHR_materials_volume
     bool  unlitMode;                                       // KHR_materials_unlit
-    int   materialFlags;   // 64: the vertex colours are baked light; 128: X3D's Phong; 256: unlit as given
+    int   materialFlags;   // 64: the vertex colours are baked light; 128: X3D's Phong; 256: volume scatter; 512: specular-glossiness; 1024: unlit as given
     float anisotropyStrengthM; // KHR_materials_anisotropy (fill the pre-mat3 pad slots)
     float dispersionM;         // KHR_materials_dispersion
     vec4  phongM;          // X3D Material under phongMode: x ambientIntensity, y shininess
-    vec4  reservedA;       // unused
-    vec4  reservedB;       // unused
+    vec4  retroScatterM;   // x KHR_materials_retroreflection factor; y, z scatter strength,
+                           // anisotropy; w the volume's attenuation distance for scatter
+    vec4  multiscatterM;   // KHR_materials_volume_scatter: rgb multiscatter colour
     vec4  iridescence;     // KHR_materials_iridescence: factor, ior, thicknessMin, thicknessMax
     vec4  diffuseTransmissionM; // KHR_materials_diffuse_transmission: rgb colour, a factor
     vec4  anisotropyDirM;       // KHR_materials_anisotropy direction: xy = (cos, sin)
@@ -164,9 +174,9 @@ Material _M;
 // Material's own and its ambientIntensity and shininess in phongM
 // (pbrpass.phong_factors).
 #define phongMode            ((materialFlags & 128) != 0)
-// Flag 256: an unlit material whose colours are display values, as an X3D
+// Flag 1024: an unlit material whose colours are display values, as an X3D
 // document gives them (pbrpass.DISPLAYED_BIT), drawn as given.
-#define displayedMode        ((materialFlags & 256) != 0)
+#define displayedMode        ((materialFlags & 1024) != 0)
 #define phongAmbientIntensity _M.phongM.x
 #define phongShininess       _M.phongM.y
 // The slot (slotTexture) a Phong draw's specularTexture is read through where
@@ -181,6 +191,16 @@ uniform int phongSpecularSlot;
 #define anisotropyDirection  _M.anisotropyDirM.xy
 #define diffuseTransmissionColor   _M.diffuseTransmissionM.rgb
 #define diffuseTransmissionFactor  _M.diffuseTransmissionM.a
+#define retroreflectionFactor      _M.retroScatterM.x
+#define scatterStrengthFactor      _M.retroScatterM.y
+#define scatterAnisotropy          _M.retroScatterM.z
+#define multiscatterColorFactor    _M.multiscatterM.rgb
+#define scatterDistanceScale       _M.retroScatterM.w
+// Flag 256: the material has a VolumeScatterMaterialExtension (pbrpass.VOLUME_SCATTER_BIT).
+#define volumeScatterMode    ((materialFlags & 256) != 0)
+// Flag 512: a SpecularGlossinessMaterial (pbrpass.SPECULAR_GLOSSINESS_BIT):
+// roughnessFactor holds the glossiness and specularColorFactor the reflectance.
+#define specGlossMode        ((materialFlags & 512) != 0)
 
 // Each material channel's texture coordinates, set per draw from the
 // appearance's mapping labels and transforms (scenegraph/texturemapping.py).
@@ -207,6 +227,9 @@ uniform int phongSpecularSlot;
 #define CH_CLEARCOAT_NORMAL            17
 #define CH_DIFFUSE_TRANSMISSION_COLOR  18
 #define CH_DIFFUSE_TRANSMISSION        19
+#define CH_RETROREFLECTION             20
+#define CH_SCATTER_STRENGTH            21
+#define CH_MULTISCATTER_COLOR          22
 uniform int  channelCodes[4];
 uniform vec4 uvTransformRows[8];
 
@@ -360,6 +383,10 @@ uniform int materialTextures;
 #define hasClearcoatNormalMap ((materialTextures & 131072) != 0)
 #define hasDiffuseTransmissionColorMap ((materialTextures & 262144) != 0)
 #define hasDiffuseTransmissionMap ((materialTextures & 524288) != 0)
+// Maps read through another's sampler (pbrpass.PBR_SHARED_CHANNELS).
+#define hasRetroreflectionMap ((materialTextures & 1048576) != 0)
+#define hasScatterStrengthMap ((materialTextures & 2097152) != 0)
+#define hasMultiscatterColorMap ((materialTextures & 4194304) != 0)
 
 #if PBR_EXT_TEXTURES
 // KHR extension material textures (only compiled in when the sampler budget fits).
@@ -377,8 +404,79 @@ uniform sampler2D iridescenceMap; // .r scales iridescence factor
 uniform sampler2D clearcoatNormalMap; // tangent-space coat normal
 uniform sampler2D diffuseTransmissionColorMap; // .rgb transmitted colour (sRGB)
 uniform sampler2D diffuseTransmissionMap; // .a scales transmission factor
+#define retroreflectionMap iridescenceMap      // .r scales the retroreflection factor
+#define scatterStrengthMap anisotropyMap       // .a scales the scatter strength
+#define multiscatterColorMap clearcoatNormalMap  // .rgb tints the multiscatter colour (sRGB)
 #endif
 uniform mat4  projectionMatrix;        // shared with the vertex stage
+
+// KHR_materials_volume_scatter (passes/scatter.py). Drawing the scatter buffer,
+// a fragment writes the light its diffuse transmission takes in and its
+// distance in front of the eye; drawing the scene, a scattering fragment adds
+// that buffer's light around it, weighted by the Burley diffusion profile.
+uniform bool scatterPass;
+#if PBR_VOLUME_SCATTER
+uniform bool hasScatterBuffer;
+uniform sampler2D scatterBuffer;
+uniform vec3 scatterSamples[55];   // angle, radius, 1/pdf (scatter.scatter_samples)
+uniform float scatterMinRadius;
+
+vec3 scatterViewPosition(vec2 uv, float distance) {
+    // The view-space point at texture position uv and distance in front of
+    // the eye, through the projection the buffer was drawn with.
+    vec2 ndc = uv * 2.0 - 1.0;
+    float z = -distance;
+    float w = projectionMatrix[2][3] * z + projectionMatrix[3][3];
+    return vec3((ndc.x * w - projectionMatrix[2][0] * z - projectionMatrix[3][0]) / projectionMatrix[0][0],
+                (ndc.y * w - projectionMatrix[2][1] * z - projectionMatrix[3][1]) / projectionMatrix[1][1],
+                z);
+}
+vec3 burleySetup(vec3 radius) {
+    vec3 a = vec3(1.0) - 0.8;
+    vec3 s = 1.9 - vec3(1.0) + 3.5 * (a * a);
+    return 0.25 * INV_PI * radius / s;
+}
+vec3 burleyEval(vec3 d, float r) {
+    vec3 third = exp(-r / (3.0 * d));
+    return (third * third * third + third) / (4.0 * d);
+}
+vec3 subsurfaceLight(vec3 multiscatter, vec3 diffuseColor) {
+    vec3 scatterDistance = scatterDistanceScale * multiscatter;
+    float maxColor = max(max(scatterDistance.r, scatterDistance.g), scatterDistance.b);
+    vec4 clip = projectionMatrix * vec4(vPosition, 1.0);
+    vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+    vec2 texel = 1.0 / vec2(textureSize(scatterBuffer, 0));
+    vec4 center = textureLod(scatterBuffer, uv, 0.0);
+    if (center.a <= 0.0) return vec3(0.0);
+    vec3 here = scatterViewPosition(uv, center.a);
+    // The offset is a texel in clip space, half a texel in the buffer, as
+    // X_ITE measures it.
+    float metresPerPixel = distance(here, scatterViewPosition(uv + vec2(0.5 * texel.x, 0.0), center.a));
+    float reach = maxColor / max(metresPerPixel, 1e-8);
+    if (reach <= 1.0) return center.rgb * diffuseColor;
+    vec3 d = burleySetup(max(vec3(scatterMinRadius), scatterDistance / maxColor) * maxColor);
+    vec3 totalWeight = vec3(0.0);
+    vec3 total = vec3(0.0);
+    for (int i = 0; i < 55; i++) {
+        vec3 sample_ = scatterSamples[i];
+        float r = sample_.y * reach * texel.x;
+        vec2 at = uv + vec2(cos(sample_.x), sin(sample_.x)) * r;
+        vec4 found = textureLod(scatterBuffer, at, 0.0);
+        if (found.a <= 0.0) continue;
+        vec3 weight = burleyEval(d, distance(scatterViewPosition(at, found.a), here)) * sample_.z;
+        totalWeight += weight;
+        total += weight * found.rgb;
+    }
+    return total / max(totalWeight, vec3(1e-4)) * diffuseColor;
+}
+#endif
+// The share of light scattered once rather than many times, for a
+// multiscatter colour (KHR_materials_volume_scatter).
+vec3 multiToSingleScatter(vec3 multiscatter) {
+    vec3 s = 4.09712 + 4.20863 * multiscatter
+           - sqrt(9.59217 + (41.6808 + 17.7126 * multiscatter) * multiscatter);
+    return 1.0 - s * s;
+}
 
 // PBR texture maps
 uniform sampler2D baseColorTexture;
@@ -640,6 +738,10 @@ float spotAttenuation(int i, vec3 L) {
 // X3D's fog equation is written: displayed() and the Phong and unlit branches
 // call it at those two points.
 vec3 fogged(vec3 color) {
+    // A FogCoordinate's depth is the share of the fog colour itself, in
+    // place of the one the distance gives (X_ITE's reading).
+    if (hasFogDepths && fogMode > 0 && fogDensity > 0.0)
+        return mix(color, fogColor, clamp(vFogDepth, 0.0, 1.0));
     return x3dFogged(color, length(toViewer(vPosition)));
 }
 
@@ -808,7 +910,15 @@ void main() {
 
     float metallic = metallicFactor;
     float roughness = roughnessFactor;
-    if (hasMetallicRoughness) {
+    if (specGlossMode) {
+        // glTF's specular/glossiness: no metal, roughness 1 - glossiness, the
+        // glossiness scaled by the specular/glossiness map's alpha.
+        float glossiness = roughnessFactor;
+#if PBR_EXT_TEXTURES
+        if (hasSpecularColorMap) glossiness *= texture(specularColorMap, uvFor(CH_SPECULAR_COLOR)).a;
+#endif
+        roughness = 1.0 - glossiness;
+    } else if (hasMetallicRoughness) {
         vec4 mr = texture(metallicRoughnessTexture, uvFor(CH_METALLIC_ROUGHNESS));
         roughness *= mr.g;
         metallic *= mr.b;
@@ -935,7 +1045,11 @@ void main() {
     vec3 sheenColorEff = sheenColorFactor;
     float sheenRoughEff = sheenRoughnessFactor;
     float iridescenceEff = iridescenceFactor;
+    // KHR_materials_retroreflection: the specular lobes evaluated with the
+    // view mirrored about the normal, blended in by the factor.
+    float retroEff = retroreflectionFactor;
 #if PBR_EXT_TEXTURES
+    if (hasRetroreflectionMap) retroEff *= texture(retroreflectionMap, uvFor(CH_RETROREFLECTION)).r;
     if (hasSpecularMap)       specularWeight  *= texture(specularMap, uvFor(CH_SPECULAR)).a;
     if (hasSpecularColorMap)  specularColorEff *= toLinear(texture(specularColorMap, uvFor(CH_SPECULAR_COLOR)).rgb);
     if (hasSheenColorMap)     sheenColorEff   *= toLinear(texture(sheenColorMap, uvFor(CH_SHEEN_COLOR)).rgb);
@@ -948,7 +1062,7 @@ void main() {
     // scalar specularFactor is the grazing reflectance f90 -- NOT folded into F0.
     // Folding it in (the old code) only dimmed normal incidence and left grazing at
     // 1.0; carrying it as f90 dims the whole Fresnel curve, which is the spec.
-    vec3 dielF0 = min(iorF0 * specularColorEff, vec3(1.0));
+    vec3 dielF0 = min(specGlossMode ? specularColorEff : iorF0 * specularColorEff, vec3(1.0));
     vec3 F0 = mix(dielF0, albedo, metallic);
     float specF90 = mix(specularWeight, 1.0, metallic);   // metals keep f90 = 1
     // KHR_materials_iridescence: thin-film Fresnel (hue shifts with view angle; a
@@ -1017,6 +1131,17 @@ void main() {
     vec3 diffuseTransmit = diffuseTransColor;
     if (attenuationDistance > 0.0) diffuseTransmit *= attenuationColor;
 
+    // KHR_materials_volume_scatter: the light scattered once leaves the back
+    // lobes, and the buffer pass takes what scatters many times.
+    vec3 multiscatter = multiscatterColorFactor;
+#if PBR_EXT_TEXTURES
+    if (hasMultiscatterColorMap)
+        multiscatter *= toLinear(texture(multiscatterColorMap, uvFor(CH_MULTISCATTER_COLOR)).rgb);
+#endif
+    vec3 singleScatter = volumeScatterMode ? multiToSingleScatter(multiscatter) : vec3(0.0);
+    vec3 backShare = volumeScatterMode ? vec3(1.0) - singleScatter : vec3(1.0);
+    vec3 scatterLight = vec3(0.0);
+
     // --- per-light shadow factors (shaders/_shadow_inc.glsl) ---
     float lightShadow[MAX_LIGHTS];
     resolveShadows(lightShadow);
@@ -1066,7 +1191,17 @@ void main() {
             // reads white/desaturated as the factor rises, not doubly-teal.
             float NdotLback = max(dot(-N, L), 0.0);
             LoDiffuse += diffuseTransmit * diffuseTransFactorEff
-                       * INV_PI * NdotLback * radianceBase;
+                       * INV_PI * NdotLback * radianceBase * backShare;
+            if (scatterPass) {
+                // What enters the volume: lit from the front by the single
+                // scatter, and from behind through the volume.
+                vec3 inside = diffuseTransColor * INV_PI * radianceBase * singleScatter
+                            * (max(dot(N, L), 0.0)
+                               + NdotLback * volumeAttenuation * (vec3(1.0) - singleScatter));
+                scatterLight += inside * diffuseTransFactorEff
+                              * (vec3(1.0) - F_Schlick(max(dot(normalize(L + V), V), 0.0),
+                                                       dielF0, specF90));
+            }
         }
         if (NdotL <= 0.0) continue;      // the reflection lobes need a front-lit face
 
@@ -1089,6 +1224,23 @@ void main() {
         vec3 F = F_Schlick(VdotH, F0, specF90);
         vec3 spec = D * Vis * F;
         vec3 kd = (vec3(1.0) - F) * (1.0 - metallic);
+        if (retroEff > 0.0) {
+            // NdotV and NdotL are unchanged by the mirroring, so the visibility
+            // term is; the half vector and Fresnel are the mirrored view's.
+            vec3 Vr = reflect(-V, N);
+            vec3 Hr = normalize(L + Vr);
+            float Dr;
+            if (useAniso) {
+                float at = max(alphaR * (1.0 + anisotropy), 1e-5);
+                float ab = max(alphaR * (1.0 - anisotropy), 1e-5);
+                Dr = D_GGX_anisotropic(max(dot(N, Hr), 0.0), dot(aniT, Hr), dot(aniB, Hr), at, ab);
+            } else {
+                Dr = D_GGX(max(dot(N, Hr), 0.0), alphaR);
+            }
+            vec3 Fr = F_Schlick(max(dot(Vr, Hr), 0.0), F0, specF90);
+            spec = mix(spec, Dr * Vis * Fr, retroEff);
+            kd = mix(kd, (vec3(1.0) - Fr) * (1.0 - metallic), retroEff);
+        }
         // Diffuse reflection gives up its energy to the transmitted lobe above.
         vec3 diffuse = kd * albedo * INV_PI * (1.0 - diffuseTransFactorEff);
 
@@ -1176,6 +1328,12 @@ void main() {
         vec2 ab = iblMode == 2 ? texture(brdfLUT, vec2(NdotV, roughness)).rg
                                : envBRDFApprox(NdotV, roughness);
         ambSpecular = pre * (F0 * ab.x + specF90 * ab.y) * ao;
+        if (retroEff > 0.0) {
+            // Mirrored, the reflection is the light arriving from the eye's side.
+            vec3 Rr = normalize(e2w * reflect(-reflect(-V, reflectN), reflectN));
+            vec3 back = envRadiance(Rr, roughness) * mix(iblFill, 1.0, metallic);
+            ambSpecular = mix(ambSpecular, back * (F0 * ab.x + specF90 * ab.y) * ao, retroEff);
+        }
     } else {                           // off: flat ambient, no reflection
         ambSpecular = vec3(0.0);
     }
@@ -1210,7 +1368,18 @@ void main() {
     if (diffuseTransFactorEff > 0.0) {
         ambDiffuse *= (1.0 - diffuseTransFactorEff);
         ambDiffuse += diffuseTransmit * diffuseTransFactorEff
-                    * (1.0 - metallic) * ao * irrBack;
+                    * (1.0 - metallic) * ao * irrBack * backShare;
+        if (scatterPass) {
+            vec2 sab = envBRDFApprox(NdotV, roughness);
+            scatterLight += diffuseTransColor * diffuseTransFactorEff * singleScatter
+                          * (envIrradiance(Nw) + irrBack * volumeAttenuation * (vec3(1.0) - singleScatter))
+                          * (vec3(1.0) - (dielF0 * sab.x + specF90 * sab.y));
+        }
+    }
+    if (scatterPass) {
+        fragColor = vec4(scatterLight, -vPosition.z);
+        fragObjectId = encodeObjectId(effectiveObjectId());
+        return;
     }
 #if USE_CLEARCOAT
     if (ccFactorEff > 0.0) {           // clearcoat reflects the environment too
@@ -1300,6 +1469,17 @@ void main() {
 #endif
 
     vec3 color = diffuseTerm + specularTerm + emissive;
+#if PBR_VOLUME_SCATTER
+    if (volumeScatterMode && hasScatterBuffer) {
+        float scatterTransmission = transmissionFactor;
+#if PBR_EXT_TEXTURES
+        if (hasTransmissionMap) scatterTransmission *= texture(transmissionMap, uvFor(CH_TRANSMISSION)).r;
+#endif
+        color += subsurfaceLight(multiscatter, diffuseTransColor) * (1.0 - metallic)
+               * (1.0 - ccFactorEff * F_Schlick(NcdotV, 0.04)) * (1.0 - iridescenceEff)
+               * (1.0 - scatterTransmission);
+    }
+#endif
 
     // Camera exposure. Defaults to 1.0 (no change); scenes lit by absolute-unit
     // KHR_lights_punctual lights (candela/lux, values in the hundreds/thousands)
