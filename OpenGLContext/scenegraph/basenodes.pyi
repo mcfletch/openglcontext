@@ -31,6 +31,9 @@ from OpenGLContext.scenegraph.box import Box as Box
 from OpenGLContext.scenegraph.collision import Collision as Collision
 from OpenGLContext.scenegraph.coordinate import Coordinate as Coordinate
 from OpenGLContext.scenegraph.cubebackground import CubeBackground as CubeBackground
+from OpenGLContext.scenegraph.cubemaptexture import ComposedCubeMapTexture as ComposedCubeMapTexture
+from OpenGLContext.scenegraph.cubemaptexture import GeneratedCubeMapTexture as GeneratedCubeMapTexture
+from OpenGLContext.scenegraph.cubemaptexture import ImageCubeMapTexture as ImageCubeMapTexture
 from OpenGLContext.scenegraph.environmentlight import EnvironmentLight as EnvironmentLight
 from OpenGLContext.scenegraph.extrusions import Extrusion as Extrusion
 from OpenGLContext.scenegraph.extrusions import PolyCone as PolyCone
@@ -93,6 +96,7 @@ from OpenGLContext.scenegraph.meshgeometry import TriangleSet as TriangleSet
 from OpenGLContext.scenegraph.meshgeometry import TriangleStripSet as TriangleStripSet
 from OpenGLContext.scenegraph.mouseover import MouseOver as MouseOver
 from OpenGLContext.scenegraph.movietexture import MovieTexture as MovieTexture
+from OpenGLContext.scenegraph.multitexture import MultiTexture as MultiTexture
 from OpenGLContext.scenegraph.nurbs import Contour2D as Contour2D
 from OpenGLContext.scenegraph.nurbs import NurbsCurve as NurbsCurve
 from OpenGLContext.scenegraph.nurbs import NurbsCurve2D as NurbsCurve2D
@@ -118,6 +122,7 @@ from OpenGLContext.scenegraph.quadrics import Cone as Cone
 from OpenGLContext.scenegraph.quadrics import Cylinder as Cylinder
 from OpenGLContext.scenegraph.quadrics import Sphere as Sphere
 from OpenGLContext.scenegraph.reflector import PlanarReflector as PlanarReflector
+from OpenGLContext.scenegraph.renderedtexture import RenderedTexture as RenderedTexture
 from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
 from OpenGLContext.scenegraph.scenegraph import X3DScene as X3DScene
 class FloatUniform1f(_FloatUniform): ...
@@ -153,10 +158,16 @@ from OpenGLContext.scenegraph.simplebackground import SimpleBackground as Simple
 from OpenGLContext.scenegraph.spherebackground import SphereBackground as SphereBackground
 from OpenGLContext.scenegraph.switch import Switch as Switch
 from OpenGLContext.scenegraph.teapot import Teapot as Teapot
+from OpenGLContext.scenegraph.text.fontlibrary import FontLibrary as FontLibrary
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle as FontStyle
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle3D as FontStyle3D
 from OpenGLContext.scenegraph.text.text import Text as Text
+from OpenGLContext.scenegraph.texture3d import ComposedTexture3D as ComposedTexture3D
+from OpenGLContext.scenegraph.texture3d import ImageTexture3D as ImageTexture3D
+from OpenGLContext.scenegraph.texture3d import PixelTexture3D as PixelTexture3D
 from OpenGLContext.scenegraph.texturebackground import TextureBackground as TextureBackground
+from OpenGLContext.scenegraph.textureprojector import TextureProjector as TextureProjector
+from OpenGLContext.scenegraph.textureprojector import TextureProjectorParallel as TextureProjectorParallel
 from OpenGLContext.scenegraph.texturetransform import TextureTransform as TextureTransform
 from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import CADPart as CADPart
@@ -185,6 +196,10 @@ from OpenGLContext.scenegraph.x3dpointing import GeoTouchSensor as GeoTouchSenso
 from OpenGLContext.scenegraph.x3dpointing import PlaneSensor as PlaneSensor
 from OpenGLContext.scenegraph.x3dpointing import SphereSensor as SphereSensor
 from OpenGLContext.scenegraph.x3dpointing import TouchSensor as TouchSensor
+from OpenGLContext.scenegraph.x3drigidbody import CollidableOffset as CollidableOffset
+from OpenGLContext.scenegraph.x3drigidbody import CollidableShape as CollidableShape
+from OpenGLContext.scenegraph.x3drigidbody import CollisionSensor as CollisionSensor
+from OpenGLContext.scenegraph.x3drigidbody import RigidBodyCollection as RigidBodyCollection
 from OpenGLContext.scenegraph.x3druntime import ColorChaser as ColorChaser
 from OpenGLContext.scenegraph.x3druntime import ColorDamper as ColorDamper
 from OpenGLContext.scenegraph.x3druntime import CoordinateChaser as CoordinateChaser
@@ -224,8 +239,14 @@ from vrml.vrml97.basenodes import NavigationInfo as NavigationInfo
 from vrml.vrml97.basenodes import Normal as Normal
 from vrml.vrml97.basenodes import TextureCoordinate as TextureCoordinate
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
+from vrml.x3d.nodes import BallJoint as BallJoint
+from vrml.x3d.nodes import ClipPlane as ClipPlane
+from vrml.x3d.nodes import CollisionCollection as CollisionCollection
+from vrml.x3d.nodes import CollisionSpace as CollisionSpace
 from vrml.x3d.nodes import ColorRGBA as ColorRGBA
+from vrml.x3d.nodes import Contact as Contact
 from vrml.x3d.nodes import CoordinateDouble as CoordinateDouble
+from vrml.x3d.nodes import DoubleAxisHingeJoint as DoubleAxisHingeJoint
 from vrml.x3d.nodes import FillProperties as FillProperties
 from vrml.x3d.nodes import FloatVertexAttribute as FloatVertexAttribute
 from vrml.x3d.nodes import GeoMetadata as GeoMetadata
@@ -239,13 +260,25 @@ from vrml.x3d.nodes import MetadataFloat as MetadataFloat
 from vrml.x3d.nodes import MetadataInteger as MetadataInteger
 from vrml.x3d.nodes import MetadataSet as MetadataSet
 from vrml.x3d.nodes import MetadataString as MetadataString
+from vrml.x3d.nodes import MotorJoint as MotorJoint
 from vrml.x3d.nodes import MultiTextureCoordinate as MultiTextureCoordinate
 from vrml.x3d.nodes import MultiTextureTransform as MultiTextureTransform
 from vrml.x3d.nodes import PointProperties as PointProperties
+from vrml.x3d.nodes import RigidBody as RigidBody
+from vrml.x3d.nodes import SingleAxisHingeJoint as SingleAxisHingeJoint
+from vrml.x3d.nodes import SliderJoint as SliderJoint
 from vrml.x3d.nodes import Tangent as Tangent
+from vrml.x3d.nodes import TextureCoordinate3D as TextureCoordinate3D
+from vrml.x3d.nodes import TextureCoordinate4D as TextureCoordinate4D
 from vrml.x3d.nodes import TextureProperties as TextureProperties
+from vrml.x3d.nodes import TextureTransform3D as TextureTransform3D
 from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
 from vrml.x3d.nodes import TwoSidedMaterial as TwoSidedMaterial
+from vrml.x3d.nodes import UniversalJoint as UniversalJoint
+from vrml.x3d.picking import LinePickSensor as LinePickSensor
+from vrml.x3d.picking import PointPickSensor as PointPickSensor
+from vrml.x3d.picking import PrimitivePickSensor as PrimitivePickSensor
+from vrml.x3d.picking import VolumePickSensor as VolumePickSensor
 from vrml.x3d.runtime import BooleanFilter as BooleanFilter
 from vrml.x3d.runtime import BooleanSequencer as BooleanSequencer
 from vrml.x3d.runtime import BooleanToggle as BooleanToggle
@@ -274,6 +307,7 @@ __all__ = [
     'AudioEmitter',
     'AudioSource',
     'Background',
+    'BallJoint',
     'Billboard',
     'BooleanFilter',
     'BooleanSequencer',
@@ -286,15 +320,24 @@ __all__ = [
     'CADLayer',
     'CADPart',
     'Circle2D',
+    'ClipPlane',
+    'CollidableOffset',
+    'CollidableShape',
     'Collision',
+    'CollisionCollection',
+    'CollisionSensor',
+    'CollisionSpace',
     'Color',
     'ColorChaser',
     'ColorDamper',
     'ColorInterpolator',
     'ColorRGBA',
+    'ComposedCubeMapTexture',
     'ComposedShader',
+    'ComposedTexture3D',
     'Cone',
     'ConeEmitter',
+    'Contact',
     'Contour2D',
     'ContourPolyline2D',
     'Coordinate',
@@ -308,6 +351,7 @@ __all__ = [
     'CylinderSensor',
     'DirectionalLight',
     'Disk2D',
+    'DoubleAxisHingeJoint',
     'EaseInEaseOut',
     'ElevationGrid',
     'EnvironmentLight',
@@ -329,6 +373,7 @@ __all__ = [
     'FloatUniformm4x3',
     'FloatVertexAttribute',
     'Fog',
+    'FontLibrary',
     'FontStyle',
     'FontStyle3D',
     'ForcePhysicsModel',
@@ -336,6 +381,7 @@ __all__ = [
     'GLSLObject',
     'GLSLShader',
     'Gear',
+    'GeneratedCubeMapTexture',
     'GeoCoordinate',
     'GeoElevationGrid',
     'GeoLOD',
@@ -357,8 +403,10 @@ __all__ = [
     'HAnimSite',
     'IS',
     'ImageBasedLight',
+    'ImageCubeMapTexture',
     'ImageDataTexture',
     'ImageTexture',
+    'ImageTexture3D',
     'IndexedFaceSet',
     'IndexedLineSet',
     'IndexedPolygons',
@@ -376,6 +424,7 @@ __all__ = [
     'IntegerTrigger',
     'KeySensor',
     'LOD',
+    'LinePickSensor',
     'LineProperties',
     'LineSet',
     'LoadSensor',
@@ -390,8 +439,10 @@ __all__ = [
     'MetadataInteger',
     'MetadataSet',
     'MetadataString',
+    'MotorJoint',
     'MouseOver',
     'MovieTexture',
+    'MultiTexture',
     'MultiTextureCoordinate',
     'MultiTextureTransform',
     'NavigationInfo',
@@ -421,10 +472,12 @@ __all__ = [
     'PhysicalMaterial',
     'PickableGroup',
     'PixelTexture',
+    'PixelTexture3D',
     'PlanarReflector',
     'PlaneSensor',
     'PointEmitter',
     'PointLight',
+    'PointPickSensor',
     'PointProperties',
     'PointSet',
     'PolyCone',
@@ -438,11 +491,15 @@ __all__ = [
     'PositionDamper2D',
     'PositionInterpolator',
     'PositionInterpolator2D',
+    'PrimitivePickSensor',
     'ProgramShader',
     'ProximitySensor',
     'QuadSet',
     'ROUTE',
     'Rectangle2D',
+    'RenderedTexture',
+    'RigidBody',
+    'RigidBodyCollection',
     'ScalarChaser',
     'ScalarDamper',
     'ScalarInterpolator',
@@ -457,6 +514,8 @@ __all__ = [
     'ShaderSlice',
     'Shape',
     'SimpleBackground',
+    'SingleAxisHingeJoint',
+    'SliderJoint',
     'Sound',
     'Sphere',
     'SphereBackground',
@@ -478,8 +537,13 @@ __all__ = [
     'TextureBackground',
     'TextureBufferUniform',
     'TextureCoordinate',
+    'TextureCoordinate3D',
+    'TextureCoordinate4D',
+    'TextureProjector',
+    'TextureProjectorParallel',
     'TextureProperties',
     'TextureTransform',
+    'TextureTransform3D',
     'TextureTransformMatrix3D',
     'TextureUniform',
     'TimeSensor',
@@ -493,11 +557,13 @@ __all__ = [
     'TriangleStripSet',
     'TrimmedSurface',
     'TwoSidedMaterial',
+    'UniversalJoint',
     'UnlitMaterial',
     'Viewpoint',
     'ViewpointGroup',
     'VisibilitySensor',
     'VolumeEmitter',
+    'VolumePickSensor',
     'WindPhysicsModel',
     'WorldInfo',
     'X3DScene',

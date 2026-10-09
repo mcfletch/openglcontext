@@ -25,7 +25,7 @@ from OpenGL.GL import (
 )
 
 from OpenGLContext.arrays import array, asarray, dot
-from vrml.x3d.nodes import X3DEnvironmentalSensorNode
+from vrml.x3d.nodes import X3DEnvironmentalSensorNode, X3DPickSensorNode
 
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.disposal import PassResources
@@ -73,6 +73,7 @@ class MultiviewPassMixin( PassResources ):
         def chooseLevels( self, viewers: Sequence['lod.Viewer'] ) -> None: ...
         def faceBillboards( self, modelview: Any ) -> None: ...
         def gatherPaths( self ) -> 'GatheredPaths': ...
+        def refreshClipPlanes( self ) -> None: ...
         def renderSet( self, matrix: Any,
                        gathered: Optional['GatheredPaths'] = None ) -> list[Any]: ...
         def greatestDepth( self, toRender: Sequence[Any] ) -> float: ...
@@ -468,6 +469,8 @@ class MultiviewPassMixin( PassResources ):
         if frames:
             self.faceBillboards( frames[0].modelView )
         self.senseEnvironment( frames )
+        self.sensePicks()
+        self.refreshClipPlanes()
         # Kept for the frame: the shadow casters, each mirror view and each
         # zone capture read the same walk.
         gathered = self.gatherPaths()
@@ -507,6 +510,15 @@ class MultiviewPassMixin( PassResources ):
             return
         x3dsensors.sense( list( paths ), self.nodePaths, viewer,
                           [ frame.frustum.planes for frame in frames ] )
+
+    def sensePicks( self ) -> None:
+        """Tell the scene's pick sensors what their picking geometry touches
+        (:func:`OpenGLContext.scenegraph.x3dpicking.sense`)."""
+        paths = self.paths.get( X3DPickSensorNode )
+        if not paths:
+            return
+        from OpenGLContext.scenegraph import x3dpicking
+        x3dpicking.sense( list( paths ), self.nodePaths )
 
     @staticmethod
     def cameraPosition( frame: 'ViewFrame' ) -> Any:

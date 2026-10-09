@@ -155,10 +155,15 @@ already use:
    * - 12, 13
      - ``JOINTS_0``, ``WEIGHTS_0``
      - ``aJoints``, ``aWeights`` (vec4 each, skinning)
+   * - 15
+     - ``TEXCOORD_3D``
+     - ``aTexCoord3D`` (vec4: an X3D 3D texture's s, t, r, q)
 
-A shader of your own can use location 15 and above
+A shader of your own can use location 16 and above
 (``vertexsemantics.FIRST_FREE_LOCATION``) for inputs that have no name in this
-table.
+table, where the driver has more than the 16 locations GL guarantees. Location
+15 is fed only by a geometry with 3D texture coordinates, so a shader drawing
+other geometry may take it for an input of its own.
 
 .. rst-class:: technical
 
@@ -488,6 +493,13 @@ the state a frame or a pass starts from outright, so nothing an earlier frame
 left behind reaches it. The ``OGC151`` rule of :doc:`openglcontext-checks
 <checks>` holds the engine's draw code to these managers or a
 ``try``/``finally``.
+
+In the compatibility profile, ``glstate.load_matrix(matrix)`` and
+``glstate.multiply_matrix(matrix)`` set the fixed-function matrix through
+``glLoadMatrixd`` and ``glMultMatrixd`` for a float64 matrix, and through
+``glLoadMatrixf`` and ``glMultMatrixf`` for a float32 one. Path and modelview
+matrices are float64, so they reach GL without a copy, and a program that sets
+PyOpenGL's ``ERROR_ON_COPY`` runs.
 
 .. _passes:
 

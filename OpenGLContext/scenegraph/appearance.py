@@ -2,17 +2,39 @@
 from typing import Any
 
 from vrml.vrml97 import basenodes
+import numpy
 from OpenGL.GL import (
-    GL_MODULATE, GL_TEXTURE_2D, GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE,
-    glBindTexture, glColor3f, glDisable, glEnable, glTexEnvi,
+    GL_MODELVIEW, GL_MODULATE, GL_TEXTURE, GL_TEXTURE_2D, GL_TEXTURE_ENV,
+    GL_TEXTURE_ENV_MODE, glBindTexture, glColor3f, glDisable, glEnable, glLoadIdentity,
+    glLoadMatrixf, glMatrixMode, glTexEnvi,
 )
 from OpenGLContext.arrays import array 
 from OpenGLContext.scenegraph import polygonsort
+from OpenGLContext.scenegraph.texturelayers import drawn_singly, transform_matrix
 
 
 #: The token ``render`` hands back for a material's own base colour map, which
 #: ``renderPost`` unbinds.
 _MATERIAL_TEXTURE = object()
+#: The token ``render`` hands back for a texture matrix it loaded itself, which
+#: ``renderPost`` puts back to the identity.
+_TEXTURE_MATRIX = object()
+
+
+def _load_texture_matrix(transform: Any) -> Any:
+    """Load the fixed-function texture matrix from an X3D transform node with no
+    ``render`` of its own: a MultiTextureTransform's first entry,
+    TextureTransform3D, TextureTransformMatrix3D"""
+    entries = getattr(transform, 'textureTransform', None)
+    if entries is not None:
+        transform = next((entry for entry in entries if entry), None)
+    rows = numpy.identity(4, dtype='f')
+    rows[:3] = transform_matrix(transform)
+    glMatrixMode(GL_TEXTURE)
+    # GL reads the matrix a column at a time; these rows multiply a column.
+    glLoadMatrixf(numpy.ascontiguousarray(rows.T))
+    glMatrixMode(GL_MODELVIEW)
+    return _TEXTURE_MATRIX
 
 
 class Appearance(basenodes.Appearance):
@@ -81,7 +103,9 @@ class Appearance(basenodes.Appearance):
                     alpha = .5
             if self.textureTransform:
                 # only need this if we are textured
-                textureToken = self.textureTransform.render (mode=mode)
+                render = getattr(self.textureTransform, 'render', None)
+                textureToken = (render(mode=mode) if render is not None
+                                else _load_texture_matrix(self.textureTransform))
         else:
             textured = 0
             # A glTF material carries its base colour map itself rather than
@@ -98,7 +122,11 @@ class Appearance(basenodes.Appearance):
     def renderPost( self, textureToken: Any = None, mode: Any = None ) -> None:
         """Cleanup after rendering of this node has completed"""
         if self.texture:
-            if self.textureTransform:
+            if textureToken is _TEXTURE_MATRIX:
+                glMatrixMode(GL_TEXTURE)
+                glLoadIdentity()
+                glMatrixMode(GL_MODELVIEW)
+            elif self.textureTransform:
                 self.textureTransform.renderPost(textureToken,mode=mode)
             self.texture.renderPost(mode=mode)
         elif textureToken is _MATERIAL_TEXTURE:
@@ -126,7 +154,8 @@ class Appearance(basenodes.Appearance):
         transparent = appearance_alpha(self)[0] == 'BLEND'
         materialParams = None
         textureToken = []
-        if not transparent and self.texture:
+        # A texture the pass draws is asked for as it is drawn, not as it is sorted
+        if not transparent and self.texture and not drawn_singly( self.texture ):
             tex = self.texture.cached( mode )
             if tex:
                 textureToken = [tex.texture]

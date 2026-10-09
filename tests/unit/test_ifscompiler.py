@@ -141,12 +141,15 @@ class TestExpandedArrays:
         assert np.allclose(np.abs(normals[0]), [0, 0, 1], atol=1e-5)
 
     @pytest.mark.parametrize('per_vertex', [1, 0])
-    def test_generated_normals_face_the_clockwise_side_where_ccw_is_false(self, per_vertex):
-        """ccw false says the faces are wound clockwise seen from their front."""
-        _v, _c, front, _t = ArrayGeometryCompiler(_quad(normalPerVertex=per_vertex)).expandedArrays()
-        _v, _c, back, _t = ArrayGeometryCompiler(
-            _quad(normalPerVertex=per_vertex, ccw=False)).expandedArrays()
-        assert np.allclose(np.asarray(back), -np.asarray(front), atol=1e-5)
+    def test_calculated_normals_face_the_side_ccw_names(self, per_vertex):
+        # Counter-clockwise from +z: the normals point at +z. The same faces
+        # wound clockwise with ccw false face the same way.
+        ccw = ArrayGeometryCompiler(_quad(normalPerVertex=per_vertex)).expandedArrays()[2]
+        cw = ArrayGeometryCompiler(_quad(
+            normalPerVertex=per_vertex, ccw=False,
+            coordIndex=[0, 2, 1, -1, 0, 3, 2, -1])).expandedArrays()[2]
+        assert np.allclose(ccw, [0, 0, 1], atol=1e-5)
+        assert np.allclose(cw, [0, 0, 1], atol=1e-5)
 
     def test_parallel_faces_rounding_past_one_smooth_together(self):
         """Two faces whose unit normals' product rounds just past one."""

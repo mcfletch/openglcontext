@@ -172,16 +172,24 @@ class TTFRegistry( ttffiles.Registry ):
         """
         if fontStyle and fontStyle.family:
             for specifier in fontStyle.family:
-                try:
-                    if specifier.upper() in self.DEFAULT_FAMILY_SETS:
-                        return self.defaultFont( specifier, mode=mode )
-                    fontName = self.matchName( specifier, single=1)
-                except (KeyError,RuntimeError):
-                    pass
-                else:
-                    if fontName:
-                        return str( fontName )
+                fontName = self.familyName( specifier, mode=mode )
+                if fontName:
+                    return fontName
         return self.defaultFont( mode=mode )
+
+    def familyName( self, specifier: str, mode: Any = None ) -> str | None:
+        """The font-family name one of a FontStyle's family names resolves to, or None
+
+        A generic family (SERIF, SANS, TYPEWRITER) is the default font of that
+        kind; any other name is matched against the installed fonts.
+        """
+        try:
+            if specifier.upper() in self.DEFAULT_FAMILY_SETS:
+                return self.defaultFont( specifier, mode=mode )
+            fontName = self.matchName( specifier, single=1)
+        except (KeyError,RuntimeError):
+            return None
+        return str( fontName ) if fontName else None
 
     def modifiersFromStyle( self, fontStyle: Any, mode: Any = None ) -> tuple[int,int]:
         """Determine TTF modifiers (weight, italics flag) from fontStyle"""

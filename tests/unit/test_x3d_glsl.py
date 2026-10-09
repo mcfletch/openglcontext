@@ -304,8 +304,8 @@ class TestUniformValues:
 
 class TestAttributeLayout:
     def test_the_free_locations_come_first_then_the_per_instance_ones(self):
-        assert x3dglsl.attribute_locations(16) == [15, 5, 6, 7, 8, 9, 10, 14]
-        assert x3dglsl.attribute_locations(18)[:3] == [15, 16, 17]
+        assert x3dglsl.attribute_locations(16) == [5, 6, 7, 8, 9, 10, 14]
+        assert x3dglsl.attribute_locations(18)[:3] == [16, 17, 5]
 
     def test_no_location_the_engine_feeds_is_offered(self):
         engine = {entry.location for entry in vertexsemantics.SEMANTICS}
@@ -313,17 +313,17 @@ class TestAttributeLayout:
 
     def test_a_matrix_takes_a_run_of_locations(self):
         layout = x3dglsl.attribute_layout([('heat', 1), ('frame', 4), ('shear', 3)], 24)
-        assert layout == (('heat', 15), ('frame', 16), ('shear', 20))
+        assert layout == (('heat', 16), ('frame', 17), ('shear', 21))
         layout = x3dglsl.attribute_layout([('frame', 4), ('shear', 3)], 16)
         assert layout == (('frame', 5),)
 
     def test_an_attribute_that_does_not_fit_is_left_out(self):
         layout = x3dglsl.attribute_layout(
             [('a', 4), ('b', 4), ('c', 1), ('d', 1)], 16)
-        assert dict(layout) == {'a': 5, 'c': 15, 'd': 9}
+        assert dict(layout) == {'a': 5, 'c': 9, 'd': 10}
 
     def test_a_second_attribute_of_one_name_is_left_out(self):
-        assert x3dglsl.attribute_layout([('a', 1), ('a', 1)], 32) == (('a', 15),)
+        assert x3dglsl.attribute_layout([('a', 1), ('a', 1)], 32) == (('a', 16),)
 
     def test_a_float_attribute_groups_its_components(self):
         node = x3d.FloatVertexAttribute(name='heat', numComponents=2, value=[1, 2, 3, 4, 5])

@@ -119,6 +119,8 @@ OpenGLContext/
 │   ├── documentvalues.py  # A document's values, checked: JSONObject, a
 │   │                 # default or a bound and one report, or DocumentError
 │   │                 # for a part the document cannot be read without
+│   ├── textureimages.py  # Cube maps and volumes from DDS, KTX, NRRD and
+│   │                 # laid-out pictures -- no GL -- docs/x3d.rst
 │   ├── panorama.py   # Environment panoramas: which sources are (.hdr, .pic,
 │   │                 # .exr) and one decode for all of them -- docs/pbr.rst
 │   ├── notices.py    # A file's copyright and licence notices, as Notice
@@ -178,6 +180,10 @@ OpenGLContext/
 │   │                 # and the baseline a frame starts from -- docs/renderpasses.rst
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
+│   ├── texturelayerpass.py  # A texture layer chain's units and uniforms
+│   ├── generatedtextures.py # GeneratedCubeMapTexture and RenderedTexture
+│   │                 # drawn before the views; when, from where -- docs/x3d.rst
+│   ├── projectorpass.py     # The frame's texture projectors and their pictures
 │   ├── lightscope.py # Which lights light a draw: X3D/VRML97 light scope as
 │   │                 # a per-draw lightsOff mask -- no GL -- docs/x3d.rst
 │   ├── reflection.py # Planar reflections' arithmetic: which surfaces are
@@ -193,6 +199,10 @@ OpenGLContext/
 │   ├── renderstats.py # What a frame cost in shapes and draws, for the
 │   │                 # developer overlay -- docs/hud.rst
 │   ├── localfog.py   # Which LocalFog fogs a draw: its scope -- no GL
+│   ├── clipscope.py  # Which ClipPlanes clip a draw, in its own frame -- no GL
+│   │                 # -- docs/x3d.rst
+│   ├── clippass.py   # The pass's side: each draw given its planes, the
+│   │                 # shaders' clip distances or glClipPlane
 │   ├── zonepass.py   # The pass's side of zones: placing them each frame,
 │   │                 # what each draw is given, captures -- docs/zones-internals.rst
 │   ├── zonelayers.py # What zones give a draw, a camera, a listener -- no GL
@@ -209,6 +219,8 @@ OpenGLContext/
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
+│   ├── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics
+│   │                 # world, a sensor's touches, the joints -- no GL
 │   └── events.py     # Collision subscriptions: a callback per body, delivered
 │                     # once a frame, and a trigger's occupancy
 │                     # -- docs/physics.rst#physics-collisions
@@ -240,8 +252,14 @@ OpenGLContext/
 │   │                 # vrml.x3d.runtime's -- docs/x3d.rst
 │   ├── x3dsensors.py # X3D's environmental sensors told each frame what they
 │   │                 # sense: the viewer, a target, the views -- no GL
+│   ├── x3drigidbody.py  # X3D's RigidBodyCollection and CollisionSensor on the
+│   │                 # engine clock; collidables drawn where they are
 │   ├── x3dpointing.py   # X3D's pointing-device sensors told of each
 │   │                 # context's picked pointer -- no GL
+│   ├── x3dpicking.py # X3D's pick sensors told each frame what their picking
+│   │                 # geometry touches -- no GL -- docs/x3d.rst
+│   ├── pickgeometry.py  # Segments, points, boxes and solids against
+│   │                 # triangles, for the pick sensors -- NumPy only
 │   ├── anchor.py     # Anchor: a group whose geometry, clicked, asks the
 │   │                 # context to follow its url (Context.OnAnchor)
 │   ├── geospatial.py # X3D's Geospatial nodes: GeoLocation, GeoTransform,
@@ -275,6 +293,11 @@ OpenGLContext/
 │   │                 # lighting; KHR_materials_unlit loads as one
 │   ├── imagedata.py  # ImageDataTexture: a texture node for a decoded image
 │   ├── sampler.py    # A texture's wrap modes and filters (TextureProperties)
+│   ├── texturelayers.py  # The stage chain a MultiTexture, cube map or 3D
+│   │                 # texture is drawn as -- no GL -- docs/x3d.rst
+│   ├── multitexture.py, cubemaptexture.py, texture3d.py, renderedtexture.py
+│   │                 # X3D's MultiTexture, cube maps, 3D textures, RenderedTexture
+│   ├── textureprojector.py  # Where a TextureProjector casts -- no GL
 │   ├── texturemapping.py  # Which coordinate set and transform each material
 │   │                 # channel reads, from mapping labels -- no GL -- docs/pbr.rst
 │   ├── reflector.py  # PlanarReflector: a material's surfaces are mirrors
@@ -308,6 +331,8 @@ OpenGLContext/
 │   ├── terrain/      # Height fields and splat materials -- docs/terrain.rst
 │   ├── vegetation/   # Instanced cover and fields -- docs/vegetation.rst
 │   └── text/         # Text rendering and font providers -- docs/text.rst
+│       └── fontlibrary.py  # X3D's FontLibrary: a document's own font files,
+│                     # by family -- docs/text.rst#text-font-library
 ├── shaders/          # GLSL sources (.vert/.frag plus shared _*.glsl includes)
 ├── telemetry/        # A whole session to one file, and back -- docs/telemetry.rst
 ├── testing/          # The shipped test machinery conftest.py imports

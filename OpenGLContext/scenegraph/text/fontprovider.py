@@ -13,6 +13,27 @@ log = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def library_faces(fontStyle: Any, registry: Any, mode: Any = None) -> list[Any]:
+    """The FontLibrary faces of the first of ``fontStyle``'s families its document has
+
+    Empty where a name earlier in ``fontStyle.family`` is one the installed
+    fonts (``registry``) carry, or where the document's libraries carry none
+    of them (:mod:`OpenGLContext.scenegraph.text.fontlibrary`).
+    """
+    if not fontStyle or not getattr(fontStyle, 'family', None):
+        return []
+    from OpenGLContext.scenegraph.text import fontlibrary  # noqa: PLC0415 fontlibrary imports the context
+    if fontlibrary.document_fonts(fontStyle) is None:
+        return []
+    for specifier in fontStyle.family:
+        found = fontlibrary.faces_for(fontStyle, specifier)
+        if found:
+            return found
+        if registry.familyName(specifier, mode=mode):
+            return []
+    return []
+
+
 def matchFamily(fontStyle: Any, lookup: Callable[[str], T | None]) -> T | None:
     """The first font ``lookup`` can find for a name in ``fontStyle.family``
 
@@ -179,10 +200,12 @@ class FontProvider(object):
         """
         if not fontStyle:
             return None
+        from OpenGLContext.scenegraph.text import fontlibrary  # noqa: PLC0415 fontlibrary imports the context
         return (
             tuple(fontStyle.family),
             fontStyle.size,
             fontStyle.style,
+            fontlibrary.key(fontStyle),
         )
 
     def enumerate(self, mode: Any = None) -> Iterable[Any]:
@@ -239,11 +262,16 @@ class TTFFontProvider(FontProvider):
         """The font file for `fontStyle`, with the weight and italic flag asked
 
         The family's face of that weight and slant; else of any weight; else
-        any of the family's faces.
+        any of the family's faces. A family the style's document has from a
+        FontLibrary is its face of that slant and the nearest weight.
         """
         registry = cls.getTTFRegistry()
-        fontName = registry.fontNameFromStyle(fontStyle, mode=mode)
         weight, italics = registry.modifiersFromStyle(fontStyle, mode=mode)
+        library = library_faces(fontStyle, registry, mode)
+        if library:
+            from OpenGLContext.scenegraph.text import fontlibrary  # noqa: PLC0415 fontlibrary imports the context
+            return fontlibrary.nearest(library, weight, bool(italics)).path, weight, italics
+        fontName = registry.fontNameFromStyle(fontStyle, mode=mode)
         specificFonts = (registry.fontMembers(fontName, weight, italics)
                          or registry.fontMembers(fontName, None, italics)
                          or registry.fontMembers(fontName))

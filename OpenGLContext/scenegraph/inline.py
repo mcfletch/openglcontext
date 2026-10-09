@@ -14,6 +14,8 @@ is sent; each render pass walks them at the start of its next frame. X3D's `load
 false leaves the Inline empty, and setting it true reads the scene again.
 Setting `url` or `load` supersedes a read still under way.
 """
+import os
+import threading
 from collections.abc import Sequence
 from typing import Any, Optional
 
@@ -57,25 +59,70 @@ def prepare_scene_loading() -> None:
 def read_first(urls: Sequence[str], node: Any) -> Optional[tuple[Any, list[Any]]]:
     """The scene the first of `urls` that reads gives, and the nodes it is drawn as
 
-    Each url is resolved against the document `node` belongs to. None where
-    none reads.
+    Each url is resolved against the document `node` belongs to; a url that
+    leads to that document or one it is inlined into is not read
+    (:func:`inline_chain`). None where none reads.
     """
     from OpenGLContext.loaders import formats
     from OpenGLContext.loaders.loader import Loader
     root = protofunctions.root(node)
     baseURI = root.baseURI if root else None
+    within = node.__dict__.get(INLINE_CHAIN) or inline_chain(root)
     for u in urls:
         try:
             target = Loader.resolve(u, baseURI)
+            if _document_key(target) in within:
+                log.warning("url %s inlines itself, through the documents %s; not read",
+                            u, ' > '.join(within))
+                continue
             reader = formats.adapter_for(target)
-            native = reader.read(target)
+            # An Inline built while the document is read takes the chain it
+            # is in from here, before the document's root can carry it
+            _reading.chain = within + (_document_key(target),)
+            try:
+                native = reader.read(target)
+            finally:
+                _reading.chain = None
             nodes = reader.nodes(native)
         except (OSError, ValueError, SyntaxError) as err:
             log.info("url %s did not read: %s", u, err)
             continue
         log.info("loaded %s", u)
+        if native is not None and hasattr(native, '__dict__'):
+            native.__dict__[INLINE_CHAIN] = within + (_document_key(target),)
         return native, list(nodes)
     return None
+
+
+#: Where a document read by an Inline, and an Inline built in one, keep the
+#: documents it is inlined into.
+INLINE_CHAIN = '_inlineChain'
+
+#: The chain of the document this thread is reading, for the Inlines in it.
+_reading = threading.local()
+
+
+def _document_key(location: Any) -> str:
+    """A document's location as the inline chain compares it"""
+    text = str(location)
+    if '://' in text or text.startswith('data:'):
+        return text
+    return os.path.realpath(text)
+
+
+def inline_chain(root: Any) -> tuple[str, ...]:
+    """The documents `root` is inlined into, outermost first, with its own location last
+
+    A url leading back to one of them would read the documents again without
+    end, so an Inline does not read it.
+    """
+    if not root:
+        return ()
+    found = tuple(root.__dict__.get(INLINE_CHAIN, ()))
+    if found:
+        return found
+    base = getattr(root, 'baseURI', None)
+    return (_document_key(base),) if base else ()
 
 
 def redraw(contexts: Sequence[Any]) -> None:
@@ -128,6 +175,9 @@ class Inline(basenodes.Inline):
 
     def reload( self ) -> None:
         """Empty the Inline and, where `load` is true, read the scene from `url` again"""
+        chain = getattr( _reading, 'chain', None )
+        if chain:
+            self.__dict__[INLINE_CHAIN] = chain
         generation = self.__dict__['_generation'] = self.__dict__.get('_generation', 0) + 1
         if self.inlined:
             self.inlined = ()

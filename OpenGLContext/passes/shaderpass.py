@@ -17,7 +17,7 @@ from collections.abc import Callable, Iterable
 from typing import Any, Optional, TYPE_CHECKING
 
 from OpenGL.GL import (
-    GL_FALSE, GL_TRUE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_GEOMETRY_SHADER,
+    GL_CLIP_DISTANCE0, GL_FALSE, GL_TRUE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_GEOMETRY_SHADER,
     GL_INVALID_INDEX,
     GL_TEXTURE0, GL_TEXTURE_2D, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_CUBE_MAP,
     GL_TEXTURE_CUBE_MAP_ARRAY,
@@ -28,6 +28,7 @@ from OpenGL.GL import (
     glUniform2fv, glUniform3fv, glUniform4fv, glUniform4iv,
     glUniformMatrix3fv, glUniformMatrix4fv,
     glActiveTexture, glBindTexture, glGenSamplers, glSamplerParameteri, glBindSampler,
+    glDisable, glEnable,
     glGetUniformBlockIndex, glUniformBlockBinding,
 )
 from OpenGL.GL import shaders as GL_shaders
@@ -70,6 +71,7 @@ from OpenGLContext.passes.shadersource import (
     vertex_routing_source,
 )
 from OpenGLContext.passes.shaderpass_shadow import _ShadowUniformMixin
+from OpenGLContext.passes.texturelayerpass import LayerUnits, TextureLayersMixin
 from OpenGLContext.scenegraph.texturemapping import texture_transform_matrix
 
 
@@ -275,7 +277,7 @@ class ShaderAppearanceProgram(object):
         raise AttributeError(name)
 
 
-class VRML97ShaderProgram(_ShadowUniformMixin):
+class VRML97ShaderProgram(TextureLayersMixin, _ShadowUniformMixin):
     """Manages the VRML97 lighting shader program and uniforms.
 
     This class encapsulates shader compilation, uniform management,
@@ -447,6 +449,29 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                 validate=False, shadow_frag=True, views=views, strategy=strategy),
         }
 
+    #: Where the lit program reads texture layers: the diffuse texture's unit
+    #: and three more, and a unit each for a cube map and a 3D texture.
+    LAYER_UNITS = LayerUnits((0, 1, 2, 3), cube=10, volume=11)
+
+    def layer_units(self) -> LayerUnits:
+        """Where the lit program reads texture layers (:data:`LAYER_UNITS`)"""
+        return self.LAYER_UNITS
+
+    #: The unit the texture projectors' pictures are bound on.
+    PROJECTOR_UNIT = 12
+
+    def projector_unit(self) -> Optional[int]:
+        """The unit the lit program reads projectors' pictures from; None for none"""
+        return self.PROJECTOR_UNIT
+
+    def _init_lit_layers(self, program: int) -> None:
+        """Point the lit program's layer and projector samplers at their units, once"""
+        for slot, unit in enumerate(self.LAYER_UNITS.flat[1:], 1):
+            self._set_uniform1i('textureLayerMap%d' % slot, unit, program)
+        self.init_layer_samplers(program)
+        self._set_uniform1i('projectorImages', self.PROJECTOR_UNIT, program)
+        self._set_uniform1i('projectorCount', 0, program)
+
     def _init_program_set(self) -> None:
         """The one-time setup a newly compiled set of lit programs needs."""
         try:
@@ -454,6 +479,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                 self._shadow_program = prog
                 self._bind_program(prog)
                 self.init_shadow_samplers()
+            if self.program is not None:
+                self._bind_program(self.program)
+                self._init_lit_layers(self.program)
         finally:
             self._shadow_program = None
             self._bind_program(0)
@@ -804,8 +832,40 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                               program, _UPLOAD_DASHES)
 
     def unuse(self) -> None:
-        """Deactivate the shader program."""
+        """Deactivate the shader program, and the clip distances its draws enabled."""
         self._bind_program(0)
+        self._enable_clip_distances(0)
+
+    #: How many of GL_CLIP_DISTANCE0... are enabled; see set_clip_planes.
+    _clip_enabled = 0
+
+    def set_clip_planes(self, planes: Any) -> None:
+        """Clip the next draws by `planes`, (n, 4) in the drawn object's own frame
+
+        X3D's ClipPlane (``_clipplane_inc.glsl``): set on every program that
+        draws the scene's shapes and on the depth program, with the first
+        :data:`MAX_CLIP_PLANES` of them enabled as clip distances. An empty
+        array draws unclipped.
+        """
+        found = np.asarray(planes, dtype=np.float32).reshape(-1, 4)[:MAX_CLIP_PLANES]
+        count = len(found)
+        values: list[tuple[str, Any, Upload]] = [('clipPlaneCount', count, glUniform1i)]
+        if count:
+            padded = np.zeros((MAX_CLIP_PLANES, 4), dtype=np.float32)
+            padded[:count] = found
+            values.append(('clipPlanes', tuple(padded.ravel().tolist()), _UPLOAD_CLIP_PLANES))
+        self._set_on_programs((self.program, self.unlit_program, self.vertex_color_program,
+                               self.point_program, self.line_program,
+                               self.wide_line_program, self.depth_program), values)
+        self._enable_clip_distances(count)
+
+    def _enable_clip_distances(self, count: int) -> None:
+        """Enable GL_CLIP_DISTANCE0 to count-1 and disable those after"""
+        if count == self._clip_enabled:
+            return
+        for index in range(max(count, self._clip_enabled)):
+            (glEnable if index < count else glDisable)(GL_CLIP_DISTANCE0 + index)
+        self._clip_enabled = count
 
     def _get_location(self, name: str, program: Optional[int] = None) -> int:
         """Get uniform location, caching the result.
@@ -1279,6 +1339,13 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
 
 #: The longest dash pattern the wide-line program takes.
 MAX_DASHES = 8
+
+#: The planes one draw is clipped by: the clip distances every GL implementation has.
+MAX_CLIP_PLANES = 8
+
+
+def _UPLOAD_CLIP_PLANES(location: int, value: Any) -> None:
+    glUniform4fv(location, MAX_CLIP_PLANES, np.asarray(value, dtype=np.float32))
 
 
 def _UPLOAD_DASHES(location: int, value: Any) -> None:

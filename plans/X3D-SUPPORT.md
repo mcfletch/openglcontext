@@ -227,19 +227,43 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     alive. `boundingvolume.cacheVolume` depends on the cache entry holding a
     volume it is given (`holdVolume`), so a changed `Coordinate` reaches the
     shape and its groups
-  - [ ] `MultiTexture` (and `MultiTextureTransform` in use), `RenderedTexture`
+  - [x] `MultiTexture` (and `MultiTextureTransform` in use), `RenderedTexture`:
+    the stage chain (`scenegraph.texturelayers`, `shaders/_layers_inc.glsl`,
+    `passes.texturelayerpass`) in place of the base map, in both renderers,
+    up to four layers, coordinates and transforms by position, generators
+    per fragment (`texGenMake`); the PBR program reads 2D layers through the
+    base and three extension samplers, cube and 3D through samplers of their
+    own where the stage has room (`pbr_fragment_samplers`); compatibility
+    profile draws the first 2D layer. `RenderedTexture`
+    (`scenegraph.renderedtexture`, `passes.generatedtextures`) with the
+    engine's `update`, `viewpoint`, `scene`, `background`, `fog` fields
+    (X3D 4.1 declares none of them), `depthMap`; shapes wearing a chain or a
+    rendered texture are not batched
   - [x] `FillProperties`, `LineProperties`, `PointProperties`
     (`scenegraph.drawproperties`; the wide-line program's geometry stage
     `vrml97_wide_line.geom`, `_pointsize_inc.glsl`, `_fill_inc.glsl`, and the
     compatibility profile's line width, line stipple and polygon stipple)
   - [ ] `AcousticProperties` with Sound
-  - [ ] `ClipPlane`
-  - [ ] `FontLibrary`
+  - [x] `ClipPlane` (`passes.clipscope`, `passes.clippass`,
+    `_clipplane_inc.glsl`): planes in the drawn object's frame, so every
+    view, mirror and shadow map; up to 8 a draw, nearest groups first;
+    `glClipPlane` in the compatibility profile; clipped shapes are not
+    instanced; a Shader node's program and the terrain/vegetation/particle
+    layers are not clipped. Found on the way: `Box` and the quadrics ignored
+    `solid FALSE` (now drawn from inside, and kept apart when instancing)
+  - [x] `FontLibrary` (`scenegraph.text.fontlibrary`): the first url that is a
+    font, read on the loader pool under the document's url policy (http
+    fetched to the asset cache); a family of the document by `family` and
+    by the file's own name; `pillowtext.face` and `TTFFontProvider.matchFile`
+    take it in FontStyle.family order; provider keys and the Text cache
+    follow the document's `DocumentFonts.generation`
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
   - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)
   - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`)
   - [x] `LocalFog` (`passes.localfog`, per draw beside the light scope); unlit surfaces are fogged
-  - [x] `EnvironmentLight` from its coefficients as the scene's image-based light (`scenegraph.environmentlight`); its cube maps wait on Phase 8's CubeMapTexturing
+  - [x] `EnvironmentLight` from its coefficients as the scene's image-based light (`scenegraph.environmentlight`); its cube maps: `specularTexture` faces as the reflected environment with
+    halved levels, `diffuseTexture` as the irradiance's SH fit, the specular
+    cube convolved where neither coefficients nor diffuse map are given
   - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture
 - Phase 7, runtime (§9.10, §9.15, §9.16)
   - [x] event utilities, sequencers and `KeySensor` with their behaviour (`vrml.x3d.runtime`); the engine's `TimeTrigger` clock and `KeySensor` keys (`scenegraph/x3druntime.py`, `observeEvents`)
@@ -260,8 +284,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] the cascade: a field is reached once per cascade, through handlers and their outputs (`vrml.event`)
   - [x] `Collision`: `enabled` and `proxy` in the walk's collision world; `collideTime` and `isActive` from the avatar's touches (`physics.x3dcollision`)
   - [x] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor (`SensorTimer`; its multiplier is the sensor's `rate`)
-  - [ ] Picking: `LinePickSensor`, `PointPickSensor`, `PrimitivePickSensor`,
-    `VolumePickSensor`
+  - [x] Picking: `LinePickSensor`, `PointPickSensor`, `PrimitivePickSensor`,
+    `VolumePickSensor` (`vrml.x3d.picking` events and `sortOrder`;
+    `scenegraph.x3dpicking` once a frame from `multiviewpass.sensePicks`,
+    the arithmetic in `scenegraph.pickgeometry`); `pickedGeometry` is the
+    Shape; shapes need no PickableGroup to be picked; every PickableGroup on
+    the path filters; BOUNDS for a line gives the box entry, its face normal
+    and the place in the box as texture coordinate
 - Phase 8, engine-mapped components (§9.17)
   - [x] CADGeometry: `CADFace` (`x3dgroups`), `QuadSet`, `IndexedQuadSet`
     (`meshgeometry`, two triangles a quad)
@@ -274,11 +303,24 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `NurbsCurve2D`, `Contour2D` by `X3D_ONLY`, the registry keeping the
     VRML97 extension's nodes unchanged; `oglc-x3d-nurbs`. Open: the
     pre-standard `Basic/NURBS/originals` (controlPoint as MFVec3f) draw nothing
-  - [ ] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`,
-    `GeneratedCubeMapTexture`
-  - [ ] Texturing3D: `ImageTexture3D`, `ComposedTexture3D`, `PixelTexture3D`,
-    `TextureCoordinate3D`, `TextureCoordinate4D`, `TextureTransform3D`
-  - [ ] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
+  - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
+    (DDS, KTX 1.1, crosses and strips: `loaders.textureimages`),
+    `GeneratedCubeMapTexture` (drawn before the views from the shape's
+    origin, update NONE drawn once); sampled with the world reflection
+    vector; compatibility profile through reflection-map texgen
+  - [x] Texturing3D: `ImageTexture3D` (DDS, KTX, NRRD), `ComposedTexture3D`,
+    `PixelTexture3D` (`scenegraph.texture3d`, `texture.VolumeTexture`),
+    `TextureCoordinate3D`/`4D` as `TEXCOORD_3D` at location 15 (composed
+    geometry only; `IndexedFaceSet` reads its bounds), `TextureTransform3D`;
+    bounding-box coordinates by default; compatibility profile through
+    object-linear texgen
+  - [x] TextureProjection: `TextureProjector`, `TextureProjectorParallel`
+    (`scenegraph.textureprojector`, `passes.projectorpass`,
+    `shaders/_projectors_inc.glsl`): up to four, pictures in one array
+    texture, limited to their group as lights are through `lightsOff` bits 16+, modulating the
+    diffuse colour as X_ITE does; `shadows` and the compatibility profile
+    not drawn. Projectors and EnvironmentLight are no longer bound as
+    directional lamps
   - [x] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
     `ProgramShader`, `PackagedShader`, the vertex attributes
     (`scenegraph.x3dshaders`, `scenegraph.x3dglsl`): the first alternative
@@ -291,7 +333,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     X_ITE's binding names (`x3d_Vertex`, `x3d_ModelViewMatrix`,
     `x3d_NormalMatrix`, `x3d_LightSource[]`, `x3d_Material`,
     `x3d_Texture2D[]`, `x3d_TextureMatrix[]`, ...); `attrib` drawn into the
-    mesh at locations 15+, then the per-instance ones; GLSL 1.x translated to
+    mesh at locations 16+, then the per-instance ones (5 to 10 and 14, the
+    seven a 16-attribute driver offers); GLSL 1.x translated to
     3.30 core, run as written in the compatibility profile; the object id
     written beside the colour; `PackagedShader` of GLSL as one text with
     `X3D_<STAGE>_SHADER` macros, other languages passed over;
@@ -343,7 +386,10 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     an X3D document's ProtoInstance was never drawn
   - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
     `HAnimDisplacer`, `HAnimMotion`, `HAnimPose`
-  - [ ] RigidBodyPhysics: the 14 nodes on omi_physics
+  - [x] RigidBodyPhysics: the 14 nodes on omi_physics (`physics.x3drigid`, `scenegraph.x3drigidbody`); a collection a world stepped once a frame on the engine clock; collider and `set_contacts` pairs, a NULL side against the world; `CollisionSensor` contacts and intersections; the six joints and their `forceOutput`s
+    - omi_physics: compound shapes and flat-ended cylinders and cones; ball, hinge, slider, universal, two-axis hinge and motor joints from rows (compiled `solve_rows`); pair rules and `ContactParameters`; steady forces, exact rotation, per-body sleep
+    - not read: `finiteRotationAxis` (the whole turn is integrated exactly), `UniversalJoint` stop bounce and correction (X3D gives it no stops), the inertia's products off the diagonal
+    - Basic archive: the documents whose contacts pass through a `Script` (`BallBounce`, `BounceTrimesh`, `CarDemoMain`) do not collide
   - [ ] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
     `LayoutGroup`, `LayoutLayer`, `ScreenGroup`, `ScreenFontStyle`
   - [ ] Sound: the 4.0 audio graph (19 nodes) on omi_audio
@@ -394,7 +440,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     precision
   - [ ] VolumeRendering: the 13 nodes
   - [ ] GaussianSplats
-  - [ ] `MovieTexture` through the optional decoder
+  - [ ] `MovieTexture` decoded on the GPU through pyopengl-video
+    ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)).
+    No package that links FFmpeg at run time is used: PyAV was tried
+    (2026-10-08) and removed, since the FFmpeg a platform ships carries GPL
+    components. Until that decoder lands, a MovieTexture is kept with its
+    fields and drawn untextured; its timing is pyvrml97's
+    `vrml.x3d.media.MovieTexture` on `timesensor.Clocked`, ready for it
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext
@@ -1029,11 +1081,12 @@ What will not work, and why:
   so its output fields never change. Loading reports how many `Script` nodes a
   scene has, once per load.
 - `MovieTexture` without a decoder. The specification requires MPEG-1
-  (ISO/IEC 11172-1); content also uses MP4 and WebM. Decoding needs FFmpeg or similar,
-  which cannot be a hard dependency (licence and size). An optional extra
-  (PyAV, a BSD wrapper over a user-installed FFmpeg) supplies frames; without it
-  the texture shows a placeholder and loading says so. `MovieTexture`'s audio
-  goes to omi_audio when a decoder is present.
+  (ISO/IEC 11172-1); content also uses MP4 and WebM. Decoding is planned on
+  the GPU through pyopengl-video
+  ([GPU-VIDEO-DECODE.md](../../pyopengl-video/plans/GPU-VIDEO-DECODE.md)),
+  through each vendor's own library; nothing that links FFmpeg, PyAV or
+  GStreamer is used. Until then the texture draws nothing and its shape is
+  drawn untextured.
 - `StreamAudioSource`, `StreamAudioDestination`. These are defined in terms of
   WebRTC media streams, which a desktop engine does not have.
   `MicrophoneSource` maps to device capture where `miniaudio` offers it.

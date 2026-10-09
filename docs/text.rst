@@ -103,6 +103,38 @@ The FontStyle fields
 The ``string`` field is Unicode. Whether a non-English string renders depends
 on the chosen font having glyphs for it.
 
+.. _text-font-library:
+
+Fonts a document brings: FontLibrary
+------------------------------------
+
+X3D's ``FontLibrary`` names a TrueType or OpenType font file for its document
+(``OpenGLContext.scenegraph.text.fontlibrary``):
+
+.. code-block:: xml
+
+   <FontLibrary family="Signage" url='"fonts/Overpass-Regular.ttf" "fonts/Overpass.otf"'/>
+   <Shape><Text string='"EXIT"'><FontStyle family='"Signage" "SANS"'/></Text></Shape>
+
+- The first ``url`` that is a font is read in the background, under the
+  document's url policy: a file beside the document (or in a folder below
+  it), or one from the same origin as a served document, fetched into the
+  asset cache. ``load`` false reads nothing; setting ``url``, ``family`` or
+  ``load`` reads again, and a ``LoadSensor`` watching the library sees it
+  load or fail.
+- The font is then a family of that document by ``family``, and by the
+  family name the file gives itself, so ``FontStyle.family`` may name
+  either. Several ``FontLibrary`` nodes naming one family give it several
+  faces, and ``style`` chooses among them by weight and slant as it does for
+  installed fonts.
+- The names in ``FontStyle.family`` keep their order: an earlier name the
+  machine has a font for is used before a library's later one.
+- Only that document's FontStyles see the family; another document, or a
+  scene built in code with no FontLibrary, does not. A ``Text`` drawn before
+  its font arrives is drawn again in it.
+- The Pillow-drawn text reads TrueType and OpenType (CFF) fonts; the solid
+  and outline providers read TrueType outlines only.
+
 Font providers and formats
 --------------------------
 

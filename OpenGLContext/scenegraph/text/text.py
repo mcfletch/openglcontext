@@ -89,6 +89,11 @@ class Text( basenodes.Text ):
         holder.depend( self )
         holder.depend( self, 'fontStyle' )
         holder.depend( self, 'string' )
+        # A FontLibrary's font arriving, or changing, makes the text again
+        from OpenGLContext.scenegraph.text import fontlibrary
+        fonts = fontlibrary.document_fonts( self.effectiveFontStyle() or self )
+        if fonts is not None:
+            holder.depend( fonts, 'generation' )
         if self.fontStyle:
             for field in [
                 'style','family','size','format',

@@ -140,6 +140,12 @@ Installing the package puts these commands on your path:
    window, a swung gold vase, a swept brass rail, a bead riding a brick
    banner and a dart flying along a curve, with a key to change the
    ``NurbsSet``'s tessellation scale. See :doc:`NURBS <nurbs>`.
+``oglc-x3d-rigidbody``
+   X3D's RigidBodyPhysics nodes read from a document: brick crates falling
+   into a heap, a marble ball bounced by a sensor's contacts, a brass door
+   against its stop, a steel chain, a driven wheel, a cardan shaft, a piston
+   and a dumbbell. The p key pauses it and r starts it again. See
+   :ref:`x3d-rigid-bodies`.
 ``oglc-x3d-shaders``
    An X3D document whose shapes are drawn by their own GLSL: a toon-shaded
    sphere, a GLSL 1.20 marble column, a geometry stage, a packaged shader, a

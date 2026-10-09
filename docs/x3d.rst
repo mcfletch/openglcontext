@@ -97,6 +97,8 @@ implements these X3D nodes, by component:
 - CADGeometry - CADAssembly, CADFace, CADLayer, CADPart, IndexedQuadSet, QuadSet
 - Core - MetadataBoolean, MetadataDouble, MetadataFloat, MetadataInteger,
   MetadataSet, MetadataString, WorldInfo
+- CubeMapTexturing - ComposedCubeMapTexture, GeneratedCubeMapTexture,
+  ImageCubeMapTexture
 - EnvironmentalEffects - Background, Fog, LocalFog, TextureBackground
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
@@ -131,22 +133,30 @@ implements these X3D nodes, by component:
 - ParticleSystems - BoundedPhysicsModel, ConeEmitter, ExplosionEmitter,
   ForcePhysicsModel, ParticleSystem, PointEmitter, PolylineEmitter,
   SurfaceEmitter, VolumeEmitter, WindPhysicsModel
-- Picking - PickableGroup
+- Picking - LinePickSensor, PickableGroup, PointPickSensor, PrimitivePickSensor,
+  VolumePickSensor
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
-- Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
+- Rendering - ClipPlane, Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
   Normal, PointSet, Tangent, TriangleFanSet, TriangleSet, TriangleStripSet
+- RigidBodyPhysics - BallJoint, CollidableOffset, CollidableShape,
+  CollisionCollection, CollisionSensor, CollisionSpace, Contact,
+  DoubleAxisHingeJoint, MotorJoint, RigidBody, RigidBodyCollection,
+  SingleAxisHingeJoint, SliderJoint, UniversalJoint
 - Shaders - ComposedShader, FloatVertexAttribute, Matrix3VertexAttribute,
   Matrix4VertexAttribute, PackagedShader, ProgramShader, ShaderPart,
   ShaderProgram
 - Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
   PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - AudioClip, Sound
-- Text - FontStyle, Text
-- Texturing - ImageTexture, MovieTexture, MultiTextureCoordinate,
-  MultiTextureTransform, PixelTexture, TextureCoordinate, TextureProperties,
-  TextureTransform
-- Texturing3D - TextureTransformMatrix3D
+- Text - FontLibrary, FontStyle, Text
+- TextureProjection - TextureProjector, TextureProjectorParallel
+- Texturing - ImageTexture, MovieTexture, MultiTexture, MultiTextureCoordinate,
+  MultiTextureTransform, PixelTexture, RenderedTexture, TextureCoordinate,
+  TextureProperties, TextureTransform
+- Texturing3D - ComposedTexture3D, ImageTexture3D, PixelTexture3D,
+  TextureCoordinate3D, TextureCoordinate4D, TextureTransform3D,
+  TextureTransformMatrix3D
 - Time - TimeSensor
 
 .. x3d-implemented-end
@@ -211,8 +221,11 @@ A composed geometry's first texture coordinate set may come from a
 ``TextureCoordinateGenerator``: the PBR vertex shader makes it in the
 generator's ``mode`` (``OpenGLContext.scenegraph.texgen``), from the
 vertex's own or camera-space position or normal. A generator for a later
-set is reported once and not drawn, and the fixed-function and VRML97
-shader paths do not generate coordinates.
+set makes that set where a ``MultiTexture`` layer reads it, per fragment
+(see :ref:`x3d-texturing`), in both renderers; the fixed-function path does not
+generate coordinates. A ``TextureCoordinate3D`` or ``TextureCoordinate4D``
+in a composed geometry's ``MultiTextureCoordinate`` is its 3D texture
+coordinates (the first of them; it takes no 2D set's number).
 
 A grouping node or shape whose ``visible`` is false is not drawn, picked or
 shadowed, nor is anything under it; setting it takes effect on the next frame.
@@ -274,7 +287,160 @@ A geometry that is not ``solid`` draws its back faces with
 fields where its ``separateBackColor`` is true, through the PBR program: the
 shape is drawn a side at a time and is not batched with others. The alpha
 mode is the front material's, and the fixed-function path draws both sides
-with the front material.
+with the front material. A ``Box``, ``Sphere``, ``Cone`` or ``Cylinder``
+whose ``solid`` is false draws its inside.
+
+A ``FontLibrary`` reads a TrueType or OpenType file, under the document's url
+policy, as a font family its ``FontStyle`` nodes may name
+(:ref:`text-font-library`).
+
+Clip planes
+~~~~~~~~~~~
+
+An enabled ``ClipPlane`` cuts away part of its siblings in their parent group
+and of everything under them: a point is kept where the ``plane`` (a, b, c,
+d) gives a·x + b·y + c·z + d of zero or more, in the ClipPlane's own
+coordinate system, so a plane under a ``Transform`` moves and turns with it.
+ClipPlanes in nested groups all apply; one draw takes the eight whose groups
+are nearest it, and a warning names a draw that more reach
+(``OpenGLContext.passes.clipscope``).
+
+- The planes are handed to each draw in the drawn object's own frame
+  (``passes.clippass``), and every vertex shader that draws the scene's
+  shapes writes ``gl_ClipDistance`` from them (``_clipplane_inc.glsl``), so
+  they clip in each view, mirror and shadow map alike: what a plane cuts
+  away casts no shadow. Wide and dashed lines are clipped in their geometry
+  stage.
+- The compatibility profile clips with ``glClipPlane``, as many planes as
+  the context has (six at least).
+- A clipped shape is drawn by itself rather than in an instanced group.
+- A shape drawn with its own ``Shader`` program, and the engine's terrain,
+  vegetation and particle layers, which draw with programs of their own, are
+  not clipped.
+- Planes only cut: the cut is not capped, so a solid shape is open where a
+  plane passes through it.
+
+.. _x3d-texturing:
+
+Texturing
+~~~~~~~~~
+
+An appearance's ``texture`` may be a ``MultiTexture``, a cube map or a 3D
+texture as well as a 2D texture (``OpenGLContext.scenegraph.texturelayers``).
+Any of the three is drawn as a stage chain in place of the base colour map,
+in both renderers: the colour so far starts as the material's diffuse colour
+(a ``PhysicalMaterial``'s base colour, an ``UnlitMaterial``'s emissive
+colour, or the geometry's ``Color``), and each texture in turn combines with
+it by its ``mode``. A cube map or a 3D texture by itself is a chain of one
+that modulates. The chain's result is the surface's colour and alpha, which
+the material's lighting then shades. A shape drawn with a chain is drawn by
+itself, not batched with others.
+
+- ``MultiTexture``: up to four textures. For each, the first argument is the
+  texture's colour, or its ``source`` (``DIFFUSE``, ``SPECULAR`` or
+  ``FACTOR``, the node's ``color`` and ``alpha``), after its ``function``
+  (``COMPLEMENT``, ``ALPHA_REPLICATE``); the second is the colour so far.
+  ``mode`` names the operation, and a second after a comma for the alpha
+  (``"MODULATE,REPLACE"``); without one the alpha takes the same operation.
+  X3D 3's names without underscores (``MODULATEALPHA_ADDCOLOR``,
+  ``BLENDDIFFUSEALPHA``, ``DOTPRODUCT3``) are read as the names with them.
+  A missing mode is ``MODULATE``; an unknown one is reported once and read
+  as ``MODULATE``. Each stage's result is clamped to 0..1. The textures may
+  be cube maps and 3D textures as well as 2D textures, as
+  ``MultiTextureTeapot.x3d`` uses them; a fifth texture and a MultiTexture
+  inside a MultiTexture are reported once and left out.
+- Coordinates: layer i reads the geometry's texture coordinate node at
+  position i of its ``MultiTextureCoordinate`` (the last where there are
+  fewer), and the ``MultiTextureTransform`` entry at position i likewise; a
+  single coordinate node or transform serves every layer. A 2D layer reads
+  coordinate set 0 or 1 (a later set is read as set 0 and reported once), a
+  ``TextureCoordinateGenerator``'s coordinates made per fragment, or a 3D
+  set's s and t.
+- A cube map reads the world-space reflection of the view about the
+  surface, whatever coordinates the geometry gives it: it is an environment
+  the surface reflects. A 3D texture reads the geometry's 3D coordinates, a
+  generator's three coordinates (``COORD``, ``COORD_EYE``, the camera-space
+  modes and the noises), or, without either, its position across the
+  geometry's bounding box: s along x, t along y and r along z, 0 to 1.
+  ``TextureTransform3D`` and ``TextureTransformMatrix3D`` transform s, t and
+  r; a 4D coordinate is divided by its q.
+- The PBR program combines a ``PhysicalMaterial``'s or an
+  ``UnlitMaterial``'s chain in linear light, its textures decoded from sRGB
+  as base colour maps are; a ``Material``'s, drawn by X3D's Phong equation,
+  and the VRML97 renderer's combine the colours as they are given. The PBR
+  program reads a 2D layer through the base colour map's sampler and three
+  of the glTF extension maps' (a material drawn with a chain does not use
+  those maps), and one cube map and one 3D texture a draw, where the
+  driver's fragment stage has samplers left for them
+  (``pbrpass.LAYER_SAMPLERS_NEEDED``: a 32-sampler stage has). A driver
+  with 16 reads one 2D layer; what does not fit is reported once and left
+  out. The VRML97 renderer reads four 2D layers, a cube map and a 3D
+  texture.
+- The compatibility profile draws a MultiTexture's first 2D layer, combined
+  by its mode where the fixed-function texture environment has it
+  (``MODULATE``, ``REPLACE``, ``ADD``, ``ADD_SIGNED``, ``SUBTRACT``), a cube
+  map through the texture unit's reflection-map coordinates turned into world
+  space, and a 3D texture with its coordinates generated across the
+  geometry's bounds.
+
+``ComposedCubeMapTexture`` takes a 2D texture node a face: front is +Z, back
+-Z, left -X, right +X, top +Y and bottom -Y, each image lying on its face as
+a GL cube map face does (upright on the sides seen from outside the cube,
+the top's upper edge toward the back, the bottom's toward the front). Faces
+of different sizes are resampled to the largest, and the cube is drawn once
+all six have images. ``ImageCubeMapTexture`` reads a DDS cube map
+(uncompressed, or BC1 to BC3), a KTX 1.1 cube map (bytes, or S3TC), or one
+picture of the six faces: a horizontal cross (4:3, -X +Z +X -Z across the
+middle, +Y over +Z and -Y under it), a vertical cross (3:4, -Z under -Y and
+upside down), a strip of six in GL's order across or down, or 3x2
+(``OpenGLContext.loaders.textureimages``). KTX 2 and HDR cube maps are not
+read.
+
+``GeneratedCubeMapTexture`` is the scene drawn into a cube of ``size``
+texels a side from the local origin of the shape wearing it, along the world
+axes (``OpenGLContext.passes.generatedtextures``); ``RenderedTexture`` is
+the scene drawn into a ``width`` by ``height`` picture. Each frame draws,
+before any view, the ones the shapes drawn in the frame before wore, leaving
+those shapes out of the drawing, so a texture first shows the frame after
+its shape does (the pass asks for that frame). ``update`` ``NONE`` draws one
+once, the first time it is wanted, and keeps that drawing;
+``NEXT_FRAME_ONLY`` draws it once more and sets ``update`` to ``NONE``;
+``ALWAYS`` draws it with every frame the scene is drawn. A RenderedTexture
+draws from its ``viewpoint``, or without one from the camera's place; its
+``scene`` in place of the world, and its ``background`` and ``fog`` in place
+of the bound ones, where it has them; and with ``depthMap`` true it is the
+depth drawn, as grey, rather than the colour. X3D 4.1 declares
+RenderedTexture's file-output fields, which are kept and not acted on, and
+not these: ``update``, ``viewpoint``, ``scene``, ``background`` and ``fog``
+are the engine's, carried in a document in an ``OpenGLContext`` metadata
+set. Neither is drawn in the compatibility profile. A RenderedTexture is an
+ordinary 2D texture once drawn, and goes wherever one does.
+
+``ImageTexture3D`` reads a DDS or KTX volume, an NRRD volume of one to four
+components (raw, gzip, bzip2 or text, with a detached data file read beside
+its header; samples wider than a byte scaled from their range to 0..255), or
+one picture, a volume a slice deep, and sends ``width``, ``height``,
+``depth`` and ``colorDepth`` once read. ``ComposedTexture3D`` stacks its 2D
+textures as slices, resampled to the first's size; ``PixelTexture3D`` is
+its ``image``: components, width, height and depth, then the pixels s
+first, then t, then r (``OpenGLContext.scenegraph.texture3d``). The
+VolumeRendering documents' volumes load; volume rendering itself is a later
+component.
+
+A ``TextureProjector`` casts its ``texture`` from ``location`` along
+``direction`` through a perspective of ``fieldOfView`` (the smaller of the
+picture's two angles), and a ``TextureProjectorParallel`` straight along it
+across its ``fieldOfView`` rectangle; ``upVector`` turns the picture, and
+``nearDistance`` and ``farDistance``, where positive, bound its reach
+(``OpenGLContext.scenegraph.textureprojector``). Where it falls, on faces
+turned toward it, it modulates the surface's diffuse colour by its picture
+times its ``color``, weighted by the texel's alpha times ``intensity``, as
+X3D browsers draw it. Its ``global`` and scope are a light's, it lights
+nothing itself, and it sends ``aspectRatio`` when its picture is known. The
+first four that are on cast, each picture resampled to 512 texels a side
+(``OpenGLContext.passes.projectorpass``); the rest are reported once.
+``shadows`` is kept and not acted on, and the compatibility profile casts
+none.
 
 Lighting
 ~~~~~~~~
@@ -292,10 +458,16 @@ An ``EnvironmentLight`` with ``diffuseCoefficients`` (glTF's
 ``irradianceCoefficients``: nine RGB spherical-harmonic coefficients,
 multiplied by its ``color``) lights the scene as its image-based light, where
 the scene has no glTF image-based light of its own, with its ``intensity``
-and ``rotation`` (``OpenGLContext.scenegraph.environmentlight``). Its one
-specular level is made from the same coefficients, so smooth surfaces
-reflect a blurred environment; the cube-map textures, ``origin`` and
-``global`` are not read. It needs full image-based lighting
+and ``rotation`` (``OpenGLContext.scenegraph.environmentlight``). Its
+``specularTexture``, a ``ComposedCubeMapTexture`` or ``ImageCubeMapTexture``,
+is the environment smooth surfaces reflect, decoded from sRGB to linear
+light, each rougher level its faces averaged down by half; its
+``diffuseTexture`` is the irradiance over pi, read as its spherical-harmonic
+fit. The irradiance is the ``diffuseCoefficients`` where there are nine,
+else the diffuse cube map's, else the specular cube map convolved; without
+a specular cube map the one specular level is made from the irradiance, so
+smooth surfaces reflect a blurred environment. A ``GeneratedCubeMapTexture``,
+``origin`` and ``global`` are not read. It needs full image-based lighting
 (``ContextDefinition.ibl``).
 
 A document is lit by its own lights and its headlight: the PBR pass's
@@ -364,6 +536,147 @@ own in the walk's world (``gltf_world.collision_groups``). As the avatar
 touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
 each enabled group around it, and ``isActive FALSE`` when the touch ends
 (``OpenGLContext.physics.x3dcollision``).
+
+.. _x3d-rigid-bodies:
+
+Rigid bodies
+~~~~~~~~~~~~
+
+.. figure:: images/x3d/x3d_rigidbody.jpg
+   :alt: Brick crates, a marble ball, a brass door, a steel chain and wheel,
+         a cardan shaft and a dumbbell in a sandstone workshop
+
+   ``oglc-x3d-rigidbody``: every RigidBodyPhysics node in one document,
+   ``OpenGLContext/bin/x3d_rigidbody.x3d``. The p key pauses the collection
+   and r reads the document again.
+
+The RigidBodyPhysics component runs on omi_physics (:ref:`physics-x3d`). Each
+``RigidBodyCollection`` is a world of its own, stepped once a frame on the
+engine's clock in steps of 1/120 s (1/240 s where ``preferAccuracy`` is
+true), and at most 0.25 s a frame. A capture, whose clock advances a fixed
+step a frame, steps it the same way every run.
+
+- A ``RigidBody`` moves under the collection's ``gravity`` (unless
+  ``useGlobalGravity`` is false), its ``forces`` and ``torques`` (summed,
+  applied every step), and its contacts and joints. A ``fixed`` body does not
+  move and others meet it. A disabled body is left out of the collection.
+- ``position`` and ``orientation`` place the body's origin and
+  ``centerOfMass`` is where its mass is in its own frame; the body turns
+  about its mass. ``linearVelocity`` is the velocity of the centre of mass and
+  ``angularVelocity`` is in radians a second about world axes. Each is sent
+  as it changes, and a value sent to the body sets it.
+- ``mass`` is in kilograms. An ``inertia`` left at X3D's default, the
+  identity, is worked out from the ``massDensityModel``'s geometry, or else
+  from the body's collidables, at uniform density; any other ``inertia`` is
+  used as given, its diagonal (the products of inertia are not used).
+- ``autoDamp`` takes ``linearDampingFactor`` and ``angularDampingFactor`` of
+  the velocities each 1/60 s. ``useFiniteRotation`` turns the body through the
+  whole angle of its spin each step rather than to first order;
+  ``finiteRotationAxis`` is kept and not read, since the whole turn is
+  integrated exactly.
+- ``autoDisable`` (the body's, or else the collection's) lets a body rest
+  once it has been slower than ``disableLinearSpeed`` m/s and
+  ``disableAngularSpeed`` rad/s for ``disableTime`` seconds; a resting body
+  sends nothing until something wakes it. Without it a body never rests,
+  and the scene is drawn every frame.
+- The collection's ``iterations`` are the solver's, for contacts and joints;
+  ``errorCorrection`` is the fraction of an overlap or a joint's drift taken
+  out each step; ``constantForceMix`` the softness of every contact and
+  joint; ``contactSurfaceThickness`` the overlap a resting contact keeps
+  (at least 5 mm); ``maxCorrectionSpeed`` bounds how fast an overlap is
+  corrected (-1, the default, does not).
+
+Collidables:
+
+- A ``CollidableShape`` draws its ``shape`` where its ``translation`` and
+  ``rotation`` put it. Carried by a body (in its ``geometry``) its
+  ``translation`` and ``rotation`` are the body's, set as the body moves. A
+  ``CollidableOffset`` places the collidable it holds by that collidable's
+  own ``translation`` and ``rotation``, within the body.
+- A ``Box``, ``Sphere``, ``Cylinder`` and ``Cone`` collide as themselves, the
+  cylinder and cone with flat ends. Any other geometry with triangles
+  (``IndexedFaceSet``, the triangle sets, ``ElevationGrid``, ``Extrusion``)
+  collides as its triangles where it does not move and as their convex hull
+  where it does. A ``Transform`` routed from a body's ``position_changed``
+  and ``orientation_changed`` follows it, as documents do.
+
+What collides:
+
+- The collidables of the collection's ``collider`` collide with each other
+  at every step, with that ``CollisionCollection``'s parameters.
+- The ``Contact`` nodes sent to ``set_contacts`` (from a ``CollisionSensor``,
+  or made by a program) say which pairs collide over the next frame, and
+  how. The contact points are found again at each step. A contact whose
+  ``body2`` and ``geometry2`` are both NULL (or ``body1`` and ``geometry1``)
+  is against the world: a fixed surface through its ``position``, across its
+  ``contactNormal``.
+- Nothing else collides: two bodies that neither names pass through each
+  other. A body's own collidables, and two bodies a joint holds, never
+  collide.
+- A ``CollisionCollection``'s ``appliedParameters`` say which of its fields
+  apply: ``BOUNCE`` (``bounce``, the restitution, above ``minBounceSpeed``
+  m/s), ``FRICTION_COEFFICIENT-2`` (the second of ``frictionCoefficients``
+  across the first, else the first both ways; Coulomb coefficients, so X3D's
+  default of 0 is frictionless), ``USER_FRICTION`` (a ``Contact``'s
+  ``frictionDirection``), ``SPEED-1`` and ``SPEED-2`` (``surfaceSpeed``, a
+  surface that carries what touches it), ``SLIP-1`` and ``SLIP-2``
+  (``slipFactors``), ``ERROR_REDUCTION`` and ``CONSTANT_FORCE``
+  (``softnessErrorCorrection`` and ``softnessConstantForceMix``, else the
+  collection's own).
+- A ``CollisionSpace`` groups collidables in a collection; one whose
+  ``useGeometry`` is false collides its collidables as the boxes that bound
+  them.
+
+A ``CollisionSensor`` finds the touches among its collider's collidables
+each frame, where they stand, and sends a ``Contact`` per touching point in
+``contacts`` (``position``, ``contactNormal`` from ``geometry1`` toward
+``geometry2``, ``depth``, the bodies and the collider's parameters), the
+collidables touching in ``intersections``, and ``isActive``. An empty
+``contacts`` is sent once when the touching stops.
+
+Joints hold bodies of their collection; a joint whose ``body1`` or ``body2``
+is NULL holds the other body to the world. Anchors and axes are in world
+coordinates as the bodies stand when the collection is built, and angles in
+radians from there. Each sends the outputs its ``forceOutput`` names
+(``ALL``, or the fields by name; ``NONE``, the default, sends none), each
+frame they change:
+
+- ``BallJoint`` - a shared point; ``body1AnchorPoint`` and
+  ``body2AnchorPoint`` are where each body carries it, in world coordinates.
+- ``SingleAxisHingeJoint`` - turns about ``axis``; ``minAngle`` and
+  ``maxAngle`` stop it (the default -π to π is no stop), ``stopBounce`` and
+  ``stopErrorCorrection`` say how. ``angle`` and ``angleRate``.
+- ``DoubleAxisHingeJoint`` - a steered wheel: ``axis1`` on ``body1`` (stopped
+  by ``minAngle1`` and ``maxAngle1``, equal stops locking it) and ``axis2``
+  on ``body2``, each driven at ``desiredAngularVelocity1`` and ``2`` with at
+  most ``maxTorque1`` and ``2`` newton-metres. ``suspensionForce`` and
+  ``suspensionErrorCorrection`` make the anchor a spring along ``axis1``,
+  read as force mixing and error correction over 1/60 s; a
+  ``suspensionForce`` of 0 holds it rigid. ``hinge1Angle``,
+  ``hinge1AngleRate``, ``hinge2Angle``, ``hinge2AngleRate``, the anchors and
+  ``body1Axis`` and ``body2Axis``.
+- ``SliderJoint`` - slides along ``axis``; ``separation`` is how far
+  ``body2`` has slid since the collection was built, stopped at
+  ``minSeparation`` and ``maxSeparation`` metres; ``sliderForce`` pushes the
+  bodies apart along it each step. ``separation`` and ``separationRate``.
+- ``UniversalJoint`` - ``axis1`` on ``body1`` and ``axis2`` on ``body2`` stay
+  at the angle they start at, so a spin across both is carried through. The
+  anchors and axes. Its ``stop1Bounce`` and ``stop2Bounce`` are kept and not
+  read: X3D gives the joint no stops.
+- ``MotorJoint`` - turns ``body2`` against ``body1`` by ``axis1Torque`` to
+  ``axis3Torque`` about the first ``enabledAxes`` of ``motor1Axis`` to
+  ``motor3Axis``, which ``body1`` carries. ``motor1Angle`` to ``motor3Angle``
+  are worked out where ``autoCalc`` is true and are the ``axis1Angle`` to
+  ``axis3Angle`` given otherwise; ``motor1AngleRate`` to ``motor3AngleRate``.
+
+What a collection is built from is read again whenever it changes: its
+bodies, their mass, inertia, centre of mass and collidables, the joints and
+their anchors and axes, the collider. What changes from frame to frame --
+positions and velocities sent in, forces, gravity, motors, stops and the
+collision parameters -- is read every frame. Of the Basic archive's
+examples, the ones whose contacts pass through a ``Script`` (``BallBounce``,
+``BounceTrimesh``, ``CarDemoMain``) do not collide, since scripts are not
+run; the rest simulate as written.
 
 Humanoids
 ~~~~~~~~~
@@ -507,8 +820,76 @@ Sensors
   for the function, arrow and page keys, and ``shiftKey``, ``controlKey`` and
   ``altKey`` while those are held.
 - A ``StringSensor`` hears every character typed into its window.
+- The pick sensors are told once a frame what their ``pickingGeometry``
+  touches among the shapes under their ``pickTarget`` nodes
+  (:ref:`x3d-pick-sensors`).
 
 ``Context.observeEvents`` is how the sensors listen.
+
+.. _x3d-pick-sensors:
+
+Pick sensors
+~~~~~~~~~~~~
+
+``LinePickSensor``, ``PointPickSensor``, ``PrimitivePickSensor`` and
+``VolumePickSensor`` test their ``pickingGeometry``, in their own coordinate
+system, against every shape under their ``pickTarget`` nodes where the scene
+draws them (``OpenGLContext.scenegraph.x3dpicking``, with the arithmetic in
+``scenegraph.pickgeometry``). The events are pyvrml97's
+(``vrml.x3d.picking``). Each frame, after the views are placed, a sensor
+sends ``isActive TRUE`` when something is picked and ``isActive FALSE`` when
+nothing is, and ``pickedGeometry`` when the shapes chosen change.
+
+- ``pickedGeometry`` holds the picked ``Shape`` nodes. A shape placed twice
+  under the targets is two picks.
+- A shape under a ``PickableGroup`` whose ``pickable`` is false, or whose
+  ``objectType`` the sensor does not accept, is not picked; every
+  ``PickableGroup`` on the shape's path from the scene's root is asked. A
+  shape under none has the label ``ALL``. ``ALL`` on either side always
+  matches and ``NONE`` never does; otherwise ``MATCH_ANY`` wants a label in
+  common, ``MATCH_EVERY`` each of the sensor's labels among the group's, and
+  ``MATCH_ONLY_ONE`` exactly one in common.
+- ``sortOrder`` ``ANY`` sends the first shape found, ``CLOSEST`` (the
+  default) the nearest, ``ALL`` every one as found and ``ALL_SORTED`` every
+  one nearest first.
+- ``intersectionType`` ``BOUNDS`` (the default) tests against each shape's
+  bounding box; ``GEOMETRY`` against its triangles. ``GEOMETRY`` first
+  checks the box, so a shape out of reach costs a box test.
+- ``LinePickSensor`` takes an ``IndexedLineSet`` or ``LineSet``. With
+  ``GEOMETRY``, each crossing of a surface sends a ``pickedPoint``, the
+  surface's ``pickedNormal`` there and its ``pickedTextureCoordinate`` (z
+  0); with ``BOUNDS``, the point each segment enters the box, that face's
+  normal, and where in the box the point is, 0 to 1 on each axis. Distance
+  is measured along the line from its first point, so ``CLOSEST`` is the
+  first surface the line reaches.
+- ``PointPickSensor`` takes a ``PointSet`` and sends the ``pickedPoint`` of
+  those within a shape's box, or, with ``GEOMETRY``, within its triangles.
+- ``PrimitivePickSensor`` takes a ``Box``, ``Sphere``, ``Cylinder`` or
+  ``Cone`` centred on the sensor's origin; ``VolumePickSensor`` any geometry
+  with triangles, as a closed solid. With ``GEOMETRY`` a shape is picked
+  where its triangles meet the solid or it holds the solid within it.
+  Cylinders and cones are tested as solids of 32 sides. Distance is between
+  the centres of the two bounding boxes.
+- Points, normals and texture coordinates are in the sensor's coordinates,
+  in the order of ``pickedGeometry``.
+- Lines, points and text have no triangles: ``GEOMETRY`` does not pick them.
+  "Inside" a mesh is by its winding number, so an open surface has an inside
+  where it winds more than half way round.
+
+A sensor built in code works the same way; this one reports the first wall
+along a guard's line of sight:
+
+.. code-block:: python
+
+   from vrml.x3d import picking
+   from OpenGLContext.scenegraph.basenodes import Coordinate, IndexedLineSet
+
+   sight = picking.LinePickSensor(
+       pickingGeometry=IndexedLineSet(
+           coord=Coordinate(point=[(0, 1.6, 0), (0, 1.6, -50)]), coordIndex=[0, 1]),
+       pickTarget=[walls], intersectionType='GEOMETRY')
+   guard.children.append(sight)      # it looks from where the guard stands
+   # each frame after: sight.isActive, sight.pickedGeometry, sight.pickedPoint
 
 .. _x3d-geospatial:
 
@@ -718,9 +1099,9 @@ Vertex attributes
    ``Matrix4VertexAttribute`` a ``mat4``. They hold one value for each
    coordinate and are indexed as the coordinates are; one with fewer values
    is left out and reported. They are read at the locations the engine's own
-   arrays leave free: 15 and above, then 5 to 10 and 14, which the engine's
+   arrays leave free: 16 and above, then 5 to 10 and 14, which the engine's
    programs read only while drawing instances. A driver with 16 attribute
-   locations has eight for them, a matrix taking a run of three or four; an
+   locations has seven for them, a matrix taking a run of three or four; an
    attribute that does not fit is left out.
 
 GLSL 1.x

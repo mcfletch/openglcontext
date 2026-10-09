@@ -49,6 +49,10 @@ from OpenGL.GL import (
     glEnable,
     glGetIntegerv,
     glIsEnabled,
+    glLoadMatrixd,
+    glLoadMatrixf,
+    glMultMatrixd,
+    glMultMatrixf,
     glScissor,
     glUseProgram,
 )
@@ -59,10 +63,36 @@ __all__ = [
     'disabled',
     'enabled',
     'frame_baseline',
+    'load_matrix',
+    'multiply_matrix',
     'program',
     'scissor',
     'switched',
 ]
+
+def load_matrix(matrix: object) -> None:
+    """Make `matrix` the current fixed-function matrix, in its own precision
+
+    A path's and the compatibility pass's matrices are float64 and the core
+    pass's camera-relative ones float32; each goes to the entry point of its
+    own type (glLoadMatrixd or glLoadMatrixf), so neither is copied, and
+    neither trips PyOpenGL's ERROR_ON_COPY.
+    """
+    found = np.asarray(matrix)
+    if found.dtype == np.float32:
+        glLoadMatrixf(found)
+    else:
+        glLoadMatrixd(np.asarray(found, dtype=np.float64))
+
+
+def multiply_matrix(matrix: object) -> None:
+    """Multiply the current fixed-function matrix by `matrix`, in its own precision"""
+    found = np.asarray(matrix)
+    if found.dtype == np.float32:
+        glMultMatrixf(found)
+    else:
+        glMultMatrixd(np.asarray(found, dtype=np.float64))
+
 
 #: The binding query of each framebuffer target.
 _BINDINGS = {

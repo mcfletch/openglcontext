@@ -14,10 +14,13 @@ uniform mat4 projectionMatrix;
 out vec3 vColor;
 out vec3 vEyePosition;    // for the fog: its length, per fragment
 
+#include "_clipplane_inc.glsl"
+
 void main() {
     vec4 eyePosition = modelViewMatrix * vec4(aPosition, 1.0);
     vEyePosition = eyePosition.xyz;
     gl_Position = projectionMatrix * eyePosition;
+    clipByPlanes(aPosition);
     vColor = aColor;
     gl_PointSize = x3dPointSize(length(eyePosition.xyz));
 }

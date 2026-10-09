@@ -103,8 +103,8 @@ Games' *Fix Your Timestep*):
   groups, removes most of the O(N²) candidate pairs.
 
 - Narrow phase - analytic tests for pairs of primitives, and GJK with EPA for
-  convex against convex and convex against triangle (a moving body against a
-  static mesh).
+  convex against convex (cylinders and cones among them) and convex against
+  triangle (a moving body against a static mesh); a compound part by part.
 
 - Solver - sequential impulses (projected Gauss-Seidel) with warm starting and
   split-impulse position correction. Restitution and Coulomb friction combine
@@ -863,6 +863,55 @@ from the tileset's directory or URL and stands the colliders up:
 A table named outside the tileset's reach is refused, as every file a world
 names is (:doc:`untrusted`).
 
+.. _physics-joints:
+
+Joints, compound shapes and pair rules
+--------------------------------------
+
+``omi_physics`` holds bodies together with joints built from velocity
+constraint rows, solved together and warm started from the last step:
+``BallJoint``, ``HingeJoint``, ``SliderJoint``, ``UniversalJoint``,
+``TwoAxisHingeJoint`` (a steered, sprung wheel) and ``MotorJoint``, in
+``omi_physics.joints``. Each takes its anchor and axes in world coordinates
+as the bodies stand when ``world.add_joint_constraint`` adds it, stops an
+angle or a separation with a bounce, drives an axis with a motor of a given
+force or torque, and answers its angles, rates and anchors. Bodies a joint
+holds do not collide with each other.
+
+.. code-block:: python
+
+   from omi_physics.joints import HingeJoint
+
+   door = world.add_joint_constraint(HingeJoint(
+       frame, leaf, anchor=(0.0, 1.0, 0.5), axis=(0, 1, 0), lower=0.0, upper=1.6))
+   door.angle(world)
+
+A collider may be several shapes in one body: ``model.Shape.compound`` places
+each at an offset in the body's frame, and the body's mass is shared among
+them by volume. A ``cylinder`` has flat ends and narrows to a cone where
+``radiusTop`` is 0.
+
+``world.set_pair_rule(rule)`` decides, each step, which pairs collide and
+how: ``rule(a, b)`` answers False to let them pass through each other, None
+for their materials, or a ``model.ContactParameters`` (restitution and the
+speed below which nothing bounces, friction in two directions, a surface
+speed, slip, softness and error correction). ``world.set_force``,
+``set_torque``, ``set_exact_rotation`` and ``set_sleep`` push, spin and rest
+one body. The omi_physics README has the details.
+
+.. _physics-x3d:
+
+X3D rigid bodies
+~~~~~~~~~~~~~~~~
+
+An X3D document's ``RigidBodyCollection`` is an omi_physics world of its own
+(``OpenGLContext.physics.x3drigid``), stepped once a frame on the engine's
+clock: its bodies, their collidables as shapes and compounds, X3D's six joints
+on the joints above, and its ``CollisionCollection``\ s and routed ``Contact``
+nodes as a pair rule. A ``CollisionSensor`` reports touches without stepping
+anything. What each node does, and the units of its fields, are in
+:ref:`x3d-rigid-bodies`.
+
 .. _physics-debug:
 
 The debug overlay
@@ -870,7 +919,8 @@ The debug overlay
 
 ``OpenGLContext.physics.debugdraw.PhysicsDebugDraw`` draws the simulation as a
 wireframe overlay. A bit-flag mask selects what it draws: collision proxies,
-broad-phase AABBs, contact points and normals, joint connections, and each
+broad-phase AABBs, contact points and normals, joint connections (from each
+body to the anchor it carries), and each
 body's velocity, acceleration and angular-velocity vectors. Angular velocity
 is drawn at the body's corners, so opposite corners point opposite ways and
 the rotation is easy to see. Sleeping bodies are drawn in a different colour.

@@ -817,7 +817,11 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # signature still gates the *depth maps*, which are per caster set; the
         # world geometry is kept per caster, so one thing moving costs one
         # thing's work rather than the scene's.
-        sig = self._casterSignature(records)
+        # The ClipPlanes are part of what a depth map shows: one that moves
+        # or turns makes the maps again.
+        planes = getattr(self, 'clipPlanes', None)
+        sig = self._casterSignature(records) + (
+            (planes, planes.world.tobytes()) if planes else ())
         if sig != self._caster_sig:
             self._caster_sig = sig
             self._caster_points_raw, self._caster_aabb = \
@@ -1100,7 +1104,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # and this light's visible subset are both unchanged. Building the
         # key is O(N) id reads, cheaper than build_instance_groups' per-record
         # geometry/material key + winding computation.
-        key = (self._caster_sig, tuple(id(rec[4]) for rec in toRender))
+        key = (self._caster_sig, tuple(id(rec[4]) for rec in toRender),
+               getattr(self, "clipPlanes", None))
         cache = self._depth_grouping_cache
         if cache is None:
             cache = self._depth_grouping_cache = {}
@@ -1109,9 +1114,11 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             return hit
         from OpenGLContext.passes.instancing import build_instance_groups
         batch_key, instanceable = self.batchingFunctions()
+        clip_apart = getattr(self, 'clipApart', None)
         result = build_instance_groups(
             list(toRender), min_instances=self.instanceMinimum(),
-            key=batch_key, instanceable=instanceable)
+            key=batch_key, instanceable=instanceable,
+            apart=clip_apart if getattr(self, 'clipPlanes', None) else None)
         # Only a few distinct caster sets exist per frame (one per shadow-casting
         # light); clear rather than grow unbounded if the scene churns.
         if len(cache) >= 8:
@@ -1156,9 +1163,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             if grouping is None:
                 grouping = self._depthGrouping(toRender)
             groups, casters = grouping
+            clip = getattr(self, 'applyClipPlanes', None)
             for group in groups:
                 try:
                     shader.use_depth()
+                    if clip is not None:
+                        clip(shader, None, None)
                     self._renderDepthGroup(group, shader, depth_prog, light_view)
                 except Exception as err:
                     log.debug("instanced shadow depth failure: %s", err)
@@ -1176,11 +1186,16 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 # location, and raises where nothing does.
                 shader.use_depth()
                 shader.set_matrices(self.matrix, self.projection, program=depth_prog)
+                if clip is not None:
+                    clip(shader, record[4], record[2])
                 try:
                     record[5].Render(mode=self)
                 except Exception as err:
                     log.debug("shadow depth render failure: %s", err)
         finally:
+            end_clip = getattr(self, 'endClipPlanes', None)
+            if end_clip is not None:
+                end_clip(shader)
             glCullFace(saved_cull_mode)
             if saved_cull_enabled:
                 glEnable(GL_CULL_FACE)
