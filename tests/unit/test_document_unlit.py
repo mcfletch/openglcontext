@@ -173,3 +173,11 @@ def test_instanced_shapes_with_no_appearance_are_unlit(gl_context):
         image = drawn_image(context).astype(int)
     for column in (35, 42, 48, 54, 61):
         assert tuple(image[16, column]) == pytest.approx((51, 128, 77), abs=3), column
+
+
+def test_the_material_flag_bits_are_distinct():
+    """Each flag the material block carries has a bit of its own"""
+    from OpenGLContext.passes import pbrpass  # noqa: PLC0415 kept with its use
+    bits = [value for name, value in vars(pbrpass).items() if name.endswith('_BIT')]
+    assert len(bits) == len(set(bits))
+    assert all(bit and bit & (bit - 1) == 0 for bit in bits)
