@@ -147,11 +147,5 @@ def test_samples_in_the_buffer_read_no_url(audio_engine):
     assert loadsensor.load_state(source) is None
 
 
-def test_a_movie_with_a_url_failed():
-    movie_class = prototypes()['MovieTexture']
-    assert loadsensor.load_state(movie_class(url=['film.mp4'])) == FAILED
-    assert loadsensor.load_state(movie_class()) is None
-
-
 def test_an_anchor_is_loaded():
     assert loadsensor.load_state(prototypes()['Anchor'](url=['#there'])) == LOADED

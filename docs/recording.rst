@@ -23,7 +23,8 @@ encoder in the graphics driver:
 
    pip install OpenGLContext[video]
 
-The encoder is part of the graphics driver, so nothing else has to be
+The same extra plays an X3D ``MovieTexture`` through the GPU's decoder
+(:ref:`x3d-movies`). The encoder is part of the graphics driver, so nothing else has to be
 installed. These GPUs and platforms have an encoder pyopengl-video can use:
 
 .. list-table::

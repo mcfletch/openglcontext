@@ -281,6 +281,8 @@ class URLRead:
 
     #: The field the read fills.
     READ_FIELD = ' image'
+    #: The read's imports, made on the thread that asks for it.
+    prepareRead: Callable[[], None] = staticmethod(prepare_image_loading)
 
     def requestImage(self) -> None:
         """Read what `url` names, in the background"""
@@ -291,7 +293,7 @@ class URLRead:
             node.loadBackground,
             node.url,
             context.Context.allContexts,
-            prepare=prepare_image_loading,
+            prepare=self.prepareRead,
         )
 
     def copy(self, copier: Any = None) -> Any:

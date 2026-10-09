@@ -221,9 +221,13 @@ def test_a_documents_geo_touch_sensor_sends_the_hit_in_its_geo_system(gl_context
         context.OnDraw(force=1)
         synthetic.dispatch(context, {'type': 'mousemove', 'buttons': [], 'x': 32, 'y': 32,
                                      'pick': True})
-        for _ in range(3):
+        # A pick is read back once its fence signals: a frame or two after
+        # it is drawn on an idle machine, more on a busy one.
+        touch = scene.getDEF('T')
+        for _ in range(120):
             context.OnDraw(force=1)
-    touch = scene.getDEF('T')
+            if 'hitPoint_changed' in touch.__dict__:
+                break
     expected = geospatial.geo_coordinates(touch, touch.hitPoint_changed)[0]
     assert tuple(touch.hitGeoCoord_changed) == pytest.approx(tuple(expected))
     assert tuple(touch.hitPoint_changed)[2] == pytest.approx(1.5, abs=0.05)

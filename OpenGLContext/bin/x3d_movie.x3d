@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="4.0">
+  <head>
+    <component name="Texturing" level="3"/>
+    <meta name="title" content="X3D movie screens"/>
+    <meta name="creator" content="OpenGLContext"/>
+    <meta name="license" content="BSD-3-Clause"/>
+    <meta name="description" content="The room oglc-x3d-movie opens: three screens in brushed steel frames on a brick wall between plaster walls under a plaster ceiling, playing one film looped, reversed, and once from a key, the last through a MultiTexture."/>
+  </head>
+  <Scene>
+    <WorldInfo title="X3D movie screens" info='"The scene oglc-x3d-movie opens."'/>
+    <NavigationInfo type='"EXAMINE" "ANY"' headlight="false"/>
+    <Background skyColor="0.04 0.04 0.05"/>
+    <Viewpoint description="The screens" position="0 2.4 12.5"/>
+    <DirectionalLight direction="-0.2 -0.6 -1" intensity="0.9" color="1 0.96 0.9"/>
+    <PointLight location="0 4.4 2" intensity="0.8" radius="20" color="1 0.92 0.8"/>
+
+    <!-- The floor, in wood. -->
+    <Shape>
+      <Appearance>
+        <PhysicalMaterial metallic="0" roughness="0.7">
+          <ImageTexture containerField="baseTexture" url='"wood_base.png"'/>
+          <ImageTexture containerField="metallicRoughnessTexture" url='"wood_mr.png"'/>
+          <ImageTexture containerField="normalTexture" url='"wood_normal.png"'/>
+        </PhysicalMaterial>
+        <TextureTransform scale="4 6"/>
+      </Appearance>
+      <IndexedFaceSet coordIndex="0 1 2 3 -1" texCoordIndex="0 1 2 3 -1" solid="false">
+        <Coordinate point="-7 0 14  7 0 14  7 0 -5  -7 0 -5"/>
+        <TextureCoordinate point="0 0  1 0  1 1  0 1"/>
+      </IndexedFaceSet>
+    </Shape>
+
+    <!-- The brick wall the screens hang on. -->
+    <Transform translation="0 2.5 -5.3">
+      <Shape>
+        <Appearance>
+          <PhysicalMaterial metallic="0" roughness="1">
+            <ImageTexture containerField="baseTexture" url='"brick_base.png"'/>
+            <ImageTexture containerField="metallicRoughnessTexture" url='"brick_mr.png"'/>
+            <ImageTexture containerField="normalTexture" url='"brick_normal.png"'/>
+          </PhysicalMaterial>
+          <TextureTransform scale="5 2"/>
+        </Appearance>
+        <Box size="14 5 0.6"/>
+      </Shape>
+    </Transform>
+
+    <!-- Plaster walls to either side, and over the room. -->
+    <Transform translation="-7.3 2.5 0.5">
+      <Shape DEF="PlasterWall">
+        <Appearance DEF="Plaster">
+          <PhysicalMaterial metallic="0" roughness="0.9">
+            <ImageTexture containerField="baseTexture" url='"plaster_base.png"'/>
+            <ImageTexture containerField="metallicRoughnessTexture" url='"plaster_mr.png"'/>
+            <ImageTexture containerField="normalTexture" url='"plaster_normal.png"'/>
+          </PhysicalMaterial>
+          <TextureTransform scale="3 1.5"/>
+        </Appearance>
+        <Box size="0.6 5 12"/>
+      </Shape>
+    </Transform>
+    <Transform translation="7.3 2.5 0.5"><Shape USE="PlasterWall"/></Transform>
+
+    <!-- The plaster ceiling. -->
+    <Transform translation="0 5.3 0.5">
+      <Shape>
+        <Appearance USE="Plaster"/>
+        <Box size="15.2 0.6 12"/>
+      </Shape>
+    </Transform>
+
+    <!-- A brushed steel frame behind each screen. -->
+    <Transform translation="-4.3 2.4 -4.95">
+      <Shape DEF="Frame">
+        <Appearance>
+          <PhysicalMaterial metallic="0.6" roughness="0.4">
+            <ImageTexture containerField="baseTexture" url='"steel_base.png"'/>
+            <ImageTexture containerField="metallicRoughnessTexture" url='"steel_mr.png"'/>
+            <ImageTexture containerField="normalTexture" url='"steel_normal.png"'/>
+          </PhysicalMaterial>
+        </Appearance>
+        <Box size="3.6 2.2 0.1"/>
+      </Shape>
+    </Transform>
+    <Transform translation="0 2.4 -4.95"><Shape USE="Frame"/></Transform>
+    <Transform translation="4.3 2.4 -4.95"><Shape USE="Frame"/></Transform>
+
+    <!-- Left: the film looped, from when the scene loads. -->
+    <Transform translation="-4.3 2.4 -4.88">
+      <Shape>
+        <Appearance>
+          <UnlitMaterial emissiveColor="1 1 1"/>
+          <MovieTexture DEF="Looping" url='"film.mp4"' loop="true"/>
+        </Appearance>
+        <IndexedFaceSet DEF="ScreenFace" coordIndex="0 1 2 3 -1" texCoordIndex="0 1 2 3 -1">
+          <Coordinate point="-1.6 -0.9 0  1.6 -0.9 0  1.6 0.9 0  -1.6 0.9 0"/>
+          <TextureCoordinate point="0 0  1 0  1 1  0 1"/>
+        </IndexedFaceSet>
+      </Shape>
+    </Transform>
+
+    <!-- Centre: the film backwards, looped, through its own sampler. -->
+    <Transform translation="0 2.4 -4.88">
+      <Shape>
+        <Appearance>
+          <UnlitMaterial emissiveColor="1 1 1"/>
+          <MovieTexture DEF="Reversed" url='"film.mp4"' loop="true" speed="-1">
+            <TextureProperties boundaryModeS="CLAMP_TO_EDGE" boundaryModeT="CLAMP_TO_EDGE"
+                minificationFilter="AVG_PIXEL_AVG_MIPMAP" magnificationFilter="AVG_PIXEL"/>
+          </MovieTexture>
+        </Appearance>
+        <IndexedFaceSet USE="ScreenFace"/>
+      </Shape>
+    </Transform>
+
+    <!-- Right: the film once, from a key, its picture darkened toward the
+         edges by a second texture. Its startTime is before any time the scene
+         is drawn at, so it shows its first frame until the key starts it. -->
+    <Transform translation="4.3 2.4 -4.88">
+      <Shape>
+        <Appearance>
+          <UnlitMaterial emissiveColor="1 1 1"/>
+          <MultiTexture mode='"REPLACE" "MODULATE"'>
+            <MovieTexture DEF="Keyed" url='"film.mp4"' startTime="-100" repeatS="false" repeatT="false"/>
+            <ImageTexture url='"vignette.png"' repeatS="false" repeatT="false"/>
+          </MultiTexture>
+        </Appearance>
+        <IndexedFaceSet USE="ScreenFace"/>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>
