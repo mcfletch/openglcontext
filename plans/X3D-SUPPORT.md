@@ -375,7 +375,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     read as homogeneous (the corpus's and X_ITE's reading); `NurbsCurve`,
     `NurbsCurve2D`, `Contour2D` by `X3D_ONLY`, the registry keeping the
     VRML97 extension's nodes unchanged; `oglc-x3d-nurbs`. Open: the
-    pre-standard `Basic/NURBS/originals` (controlPoint as MFVec3f) draw nothing
+    pre-standard `Basic/NURBS/originals` (controlPoint as MFVec3f) draw nothing,
+    as in X_ITE, which reads `NurbsSurface` as an unknown node (2026-10-09)
   - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
     (DDS, KTX 1.1, KTX 2 of 8-bit and BC1-3 formats with zlib or no
     supercompression (2026-10-09 x3d-xfields; X_ITE also transcodes Basis
@@ -413,7 +414,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `x3d_NormalMatrix`, `x3d_LightSource[]`, `x3d_Material`,
     `x3d_Texture2D[]`, `x3d_TextureMatrix[]`, ...); `attrib` drawn into the
     mesh at locations 16+, then the per-instance ones (5 to 10 and 14, the
-    seven a 16-attribute driver offers); GLSL 1.x translated to
+    seven a 16-attribute driver offers); GLSL 1.x geometry stages are not
+    translated, and X_ITE (WebGL 2) runs no geometry stage at all; GLSL 1.x translated to
     3.30 core, run as written in the compatibility profile; the object id
     written beside the colour; `PackagedShader` of GLSL as one text with
     `X3D_<STAGE>_SHADER` macros, other languages passed over;
@@ -2168,7 +2170,8 @@ Review findings not taken as written, recorded 2026-10-07:
 - The generated stubs keep `**fields` on each constructor, documented as the
   extension fields a dialect or a prototype adds.
 - Bind stacks per `Layer` (§9.15) are pyvrml97's (`binding.place_layers`),
-  drawn by the engine's layer stack.
+  drawn by the engine's layer stack; X_ITE keeps a stack of each kind per
+  layer too (checked 2026-10-09, x3d-xfields).
 - pyvrml97 commit messages written before the commit-message rule are
   history and are not rewritten.
 - The followers' "first use wakes the node" sub-finding is how 19775-1
