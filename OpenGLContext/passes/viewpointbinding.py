@@ -153,7 +153,7 @@ def bind_scene_viewpoint(context: Any) -> None:
     info = binding.bound(sg, nodetypes.NavigationInfo)
     kind, seconds = navigationinfo.transition_of(info)
     if platform is None or not previous or previous is _defaults.get(sg):
-        view.moveTo(view_path, context)
+        view.moveTo(view_path, context, first=True)
         _remember(view, platform)
         return
     retained = getattr(previous, 'retainUserOffsets', False) and previous in _authored

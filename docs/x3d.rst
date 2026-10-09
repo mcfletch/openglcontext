@@ -1032,6 +1032,8 @@ Binding, viewpoints and navigation
   the line down through the eye, except under a ``Collision`` whose
   ``enabled`` is false, and through its ``proxy`` where it has one. A viewer
   with nothing below it falls.
+- The first viewpoint bound is the one the camera opens at, whatever its
+  ``jump``; one bound later with ``jump`` false leaves the camera where it is.
 - A viewpoint bound after the first is moved to as the bound NavigationInfo's
   ``transitionType`` and ``transitionTime`` say: ``LINEAR`` straight at a
   steady pace, ``ANIMATE`` easing in and out, ``TELEPORT`` at once; with no
