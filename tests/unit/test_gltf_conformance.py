@@ -223,12 +223,9 @@ def test_view_matches_baseline(spec, camera, tmp_path):
 
     out = str(tmp_path / (slug + '.png'))
     diff = str(tmp_path / (slug + '_diff.png'))
-    # render_view recomputes its own env prefix from spec.environment; the passed
-    # value is unused, so None is fine.
-    rendered, _stats = R.render_view(spec, camera, url, out, R.DEFAULT_SIZE,
-                                     R.DEFAULT_FRAMES, R.DEFAULT_DELAY, None)
-    if not rendered:
-        pytest.skip("render did not produce a frame (GL/network flake or timeout)")
+    rendered, stats = R.render_view(spec, camera, url, out, R.DEFAULT_SIZE,
+                                    R.DEFAULT_FRAMES, R.DEFAULT_DELAY)
+    assert rendered, "%s drew no frame: %s" % (slug, stats.get('error'))
 
     result, stats = RR.compare(baseline, out, diff, RR.DIFF_THRESHOLD)
     assert not RR.is_regression(result, _tolerance_for(spec)), (

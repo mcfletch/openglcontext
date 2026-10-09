@@ -36,7 +36,7 @@ from OpenGLContext.loaders.gltf.materials import (
 )
 from OpenGLContext.scenegraph.texturemapping import channel_labels, transform_for
 from OpenGLContext.loaders.resolver import Resolver
-from OpenGLContext.loaders.gltf.accessors import _read_floats, _read_normalized
+from OpenGLContext.loaders.gltf.accessors import _read_floats
 
 if TYPE_CHECKING:
     import pygltflib
@@ -540,7 +540,7 @@ def _sampler_values(g: "pygltflib.GLTF2", samp: "pygltflib.AnimationSampler",
     or the morph-target count for a ``weights`` channel -- all recovered from the
     total component count so a single reshape handles every path uniformly.
     """
-    raw = _read_normalized(g, samp.output, resolver)
+    raw = _read_floats(g, samp.output, resolver, precise=True)
     total = int(np.asarray(raw).size)
     divisor = (3 * times_len) if interp == 'CUBICSPLINE' else times_len
     if divisor <= 0 or total % divisor:
@@ -665,7 +665,7 @@ def _build_animations(g: "pygltflib.GLTF2", resolver: Resolver,
             samp = samplers[si]
             interp = getattr(samp, 'interpolation', None) or 'LINEAR'
             try:
-                times = _read_floats(g, samp.input, resolver).ravel()
+                times = _read_floats(g, samp.input, resolver, precise=True).ravel()
                 values = _sampler_values(g, samp, len(times), interp, resolver)
             except (ValueError, KeyError, IndexError) as err:
                 log.warning("glTF: skipping animation channel: %s", err)

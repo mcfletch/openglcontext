@@ -167,8 +167,11 @@ animation:
   ``KHR_materials_emissive_strength``, ``KHR_materials_unlit``,
   ``KHR_materials_iridescence``, ``KHR_materials_anisotropy``,
   ``KHR_materials_diffuse_transmission``, ``KHR_materials_dispersion``,
-  ``KHR_texture_transform``, ``EXT_texture_webp``, and the legacy
-  ``KHR_materials_pbrSpecularGlossiness`` (converted to metallic-roughness).
+  ``KHR_texture_transform``, ``EXT_texture_avif`` and ``EXT_texture_webp``
+  (each image preferred to the texture's core ``source`` where the installed
+  Pillow decodes its format, as ``PIL.features.check('avif')`` reports), and
+  the legacy ``KHR_materials_pbrSpecularGlossiness`` (converted to
+  metallic-roughness).
 
 - Zones - ``OGLC_zone``, this project's own extension: a node marking a region,
   with a shape from ``KHR_implicit_shapes`` (glTF 2.0) or the core ``shapes``
@@ -196,6 +199,27 @@ animation:
   ``DracoPy`` package is installed (``pip install DracoPy``, or
   ``OpenGLContext[draco]``). Without it, the loader skips a Draco-compressed
   primitive with a warning and loads the rest of the scene.
+
+- Buffer compression - ``KHR_meshopt_compression`` and
+  ``EXT_meshopt_compression``, decoded in NumPy with no further package: all
+  three modes (``ATTRIBUTES`` in bitstream versions 0 and 1, ``TRIANGLES``,
+  ``INDICES``) and all four filters (``OCTAHEDRAL``, ``QUATERNION``,
+  ``EXPONENTIAL``, ``COLOR``). The compressed view is decoded once per load,
+  whatever reads it: vertex attributes, indices, morph targets, animation
+  keyframes, instance transforms or images. A fallback buffer with no data of
+  its own is never read. A stream that does not decode to the layout its view
+  declares stops the load with the view's index and the reason.
+
+- Material variants - ``KHR_materials_variants``, selected with
+  ``scene.select_variant()``. See :ref:`Material variants <gltf-variants>`.
+
+- Accessor types - ``KHR_accessor_float16`` and ``KHR_accessor_float64``
+  wherever a float accessor is allowed. Vertex attributes are drawn in single
+  precision; a double-precision attribute is logged when it is rounded.
+  Animation keyframes are read and interpolated in double precision.
+  ``KHR_mesh_quantization``: normalized byte and short positions, normals,
+  tangents, texture coordinates, colours and morph-target deltas are
+  dequantized; unnormalized integers are read as the integers they are.
 
 .. _gltf-gaussian-splats:
 
@@ -640,8 +664,13 @@ Current limitations
 ~~~~~~~~~~~~~~~~~~~
 
 - ``KHR_texture_basisu`` (KTX2 / Basis Universal) is not read. No transcoder
-  is available under a licence this project can use. The loader skips a
-  texture in that format.
+  is available under a licence this project can use. A texture carrying it is
+  drawn from its core ``source`` where the document gives one, and without the
+  texture where it does not.
+
+- ``EXT_texture_video`` is not read: a video texture waits on the GPU video
+  decoder planned for ``pyopengl-video``. Its core ``source``, where there is
+  one, is drawn as a still image.
 
 - ``KHR_draco_mesh_compression`` needs the optional ``DracoPy`` package.
   Without it, the loader skips a Draco-compressed primitive with a warning and
@@ -758,6 +787,36 @@ throw:
 
 The keyframes then set how far the wheel can turn, and the code sets only how
 far through that range it is. The artist controls the limits of the movement.
+
+.. _gltf-variants:
+
+Material variants
+~~~~~~~~~~~~~~~~~
+
+A document with ``KHR_materials_variants`` names sets of materials it can be
+drawn in, such as the colours a shoe is sold in. ``scene.variants`` lists the
+names in document order, and ``select_variant()`` dresses every primitive that
+maps the variant in its material for it:
+
+.. code-block:: python
+
+   scene = gltf.load_gltf( "shoe.glb" )
+   scene.variants                    # ('midnight', 'beach', 'street')
+   scene.select_variant( "beach" )   # or an index: scene.select_variant( 1 )
+   scene.variant                     # 'beach'
+   scene.select_variant( None )      # each primitive's own material again
+
+A primitive that does not map the active variant keeps its own material. One
+variant is active at a time. The materials of every variant are built when the
+document loads, so selecting one does no loading. A name the document does not
+declare raises ``KeyError``, an index outside the list ``IndexError``.
+Selecting sets the ``Shape``'s appearance, the mesh's appearance and the mesh's
+``solid`` flag, since a variant's material may be double-sided where the
+primitive's own is not.
+
+Each mesh keeps its mappings as ``mesh.materialVariants``, and the
+:ref:`writer <writing>` writes them back as ``KHR_materials_variants``, with the
+primitive's own material as its material whichever variant is selected.
 
 .. _assets:
 

@@ -14,24 +14,35 @@ whose accessors share one buffer decodes it once.
 """
 from __future__ import annotations
 
+import logging
 import math
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
 from OpenGLContext.loaders.documentvalues import bounded
+from OpenGLContext.loaders.gltf import meshopt
 from OpenGLContext.loaders.resolver import Resolver, decode_data_uri, resolver_max
 
 if TYPE_CHECKING:
     import pygltflib
 
+log = logging.getLogger(__name__)
+
 
 # glTF accessor componentType enums (== GL type enums)
 _COMPONENT_FLOAT = 5126        # GL_FLOAT
+_COMPONENT_HALF = 5131         # GL_HALF_FLOAT, KHR_accessor_float16
+_COMPONENT_DOUBLE = 5130       # GL_DOUBLE, KHR_accessor_float64
 _COMPONENT_DTYPE = {
     5120: np.int8, 5121: np.uint8, 5122: np.int16,
     5123: np.uint16, 5125: np.uint32, _COMPONENT_FLOAT: np.float32,
+    _COMPONENT_HALF: np.float16, _COMPONENT_DOUBLE: np.float64,
 }
+#: The floating-point component types. An accessor of one of these is never
+#: dequantized, whatever its ``normalized`` flag says: both extensions forbid
+#: the flag on them.
+FLOAT_COMPONENTS = frozenset((_COMPONENT_HALF, _COMPONENT_FLOAT, _COMPONENT_DOUBLE))
 _TYPE_COUNT = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4,
                'MAT2': 4, 'MAT3': 9, 'MAT4': 16}
 
@@ -71,6 +82,11 @@ def _buffer_bytes(g: "pygltflib.GLTF2", buffer_index: int, resolver: Resolver) -
     buf = g.buffers[buffer_index]
     uri = getattr(buf, 'uri', None)
     data: bytes
+    if uri is None and meshopt.is_fallback_buffer(buf):
+        # Only meshopt views refer to it, and they decode from elsewhere; in a
+        # GLB, reading it as the binary chunk would hand back the wrong bytes.
+        raise ValueError("glTF buffer %d is a meshopt fallback with no data of "
+                         "its own" % (buffer_index,))
     if uri is None:
         data = g.binary_blob()
     elif uri.startswith('data:'):
@@ -80,6 +96,56 @@ def _buffer_bytes(g: "pygltflib.GLTF2", buffer_index: int, resolver: Resolver) -
     if cache is not None:
         cache[buffer_index] = data
     return data
+
+
+def view_bytes(g: "pygltflib.GLTF2", view_index: int, resolver: Resolver) -> memoryview:
+    """The bytes of buffer view ``view_index``, exactly its ``byteLength``.
+
+    A view carrying ``KHR_meshopt_compression`` or ``EXT_meshopt_compression``
+    is decompressed from the buffer its extension names (:mod:`meshopt`), once
+    per resolver; its own ``buffer`` is then a stand-in that is never read.
+    Every other view is a window on its buffer, checked to lie inside it.
+    """
+    views = g.bufferViews or []
+    if not 0 <= view_index < len(views):
+        raise ValueError("glTF bufferView %d does not exist" % (view_index,))
+    view = views[view_index]
+    extension = meshopt.view_extension(view)
+    if extension is None:
+        data = _buffer_bytes(g, view.buffer, resolver)
+        return _window(data, view.byteOffset or 0, view.byteLength,
+                       "bufferView %d" % (view_index,))
+    cache: Optional[dict[int, bytes]] = getattr(resolver, '_views', None)
+    if cache is None:                  # a stand-in resolver: decode on each read
+        cache = {}
+    if view_index not in cache:
+        source = extension.get('buffer')
+        if not isinstance(source, int) or not 0 <= source < len(g.buffers or []):
+            raise ValueError("glTF bufferView %d's meshopt data names buffer %r"
+                             % (view_index, source))
+        compressed = _window(_buffer_bytes(g, source, resolver),
+                             extension.get('byteOffset', 0) or 0,
+                             extension.get('byteLength'),
+                             "bufferView %d's meshopt data" % (view_index,))
+        try:
+            cache[view_index] = meshopt.decode_view(extension, bytes(compressed),
+                                                    view.byteLength)
+        except meshopt.MeshoptError as err:
+            raise ValueError("glTF bufferView %d: %s" % (view_index, err)) from err
+    return memoryview(cache[view_index])
+
+
+def _window(data: bytes, offset: int, length: Optional[int], what: str) -> memoryview:
+    """``length`` bytes of ``data`` from ``offset``, or a located error."""
+    if not isinstance(offset, int) or offset < 0 or offset > len(data):
+        raise ValueError("glTF %s starts at %r, outside its %d-byte buffer"
+                         % (what, offset, len(data)))
+    if length is None:
+        length = len(data) - offset
+    if not isinstance(length, int) or length < 0 or offset + length > len(data):
+        raise ValueError("glTF %s reads %r bytes at offset %d but its buffer holds "
+                         "only %d" % (what, length, offset, len(data)))
+    return memoryview(data)[offset:offset + length]
 
 
 def _accessor_base(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", resolver: Resolver,
@@ -99,8 +165,8 @@ def _accessor_base(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", resolver: Re
     if acc.bufferView is None:
         return np.zeros((count, ncomp), dtype=dtype)
     bv = g.bufferViews[acc.bufferView]
-    data = _buffer_bytes(g, bv.buffer, resolver)
-    offset = (bv.byteOffset or 0) + (acc.byteOffset or 0)
+    data = view_bytes(g, acc.bufferView, resolver)
+    offset = acc.byteOffset or 0
     item = dtype.itemsize * ncomp
     stride = bv.byteStride or item
     # A stride that is negative, zero, or does not divide the component size
@@ -114,7 +180,7 @@ def _accessor_base(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", resolver: Re
     span = (count - 1) * stride + item if count else 0
     if offset < 0 or offset + span > len(data):
         raise ValueError(
-            "glTF %s reads %d bytes at offset %d but its buffer holds "
+            "glTF %s reads %d bytes at offset %d but its buffer view holds "
             "only %d" % (_acc_label(index), span, offset, len(data)))
     if stride == item:
         flat = np.frombuffer(data, dtype=dtype, count=count * ncomp, offset=offset)
@@ -160,7 +226,7 @@ def declared_bounds(acc: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
             return None
         if getattr(acc, 'normalized', False) and \
                 getattr(acc, 'componentType', None) in _COMPONENT_DTYPE and \
-                acc.componentType != _COMPONENT_FLOAT:
+                acc.componentType not in FLOAT_COMPONENTS:
             # KHR_mesh_quantization: min/max are in the accessor's integers,
             # and the vertices are read normalized.
             corner = _normalize_array(
@@ -222,13 +288,11 @@ def _apply_sparse(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", sparse: "pygl
     n = _checked_count(sparse.count, "sparse accessor")
     si, sv = sparse.indices, sparse.values
     idx_dtype = np.dtype(_component_dtype(si.componentType))
-    ibv = g.bufferViews[si.bufferView]
-    idata = _buffer_bytes(g, ibv.buffer, resolver)
-    ioff = (ibv.byteOffset or 0) + (getattr(si, 'byteOffset', 0) or 0)
+    idata = view_bytes(g, si.bufferView, resolver)
+    ioff = getattr(si, 'byteOffset', 0) or 0
     indices = np.frombuffer(idata, dtype=idx_dtype, count=n, offset=ioff)
-    vbv = g.bufferViews[sv.bufferView]
-    vdata = _buffer_bytes(g, vbv.buffer, resolver)
-    voff = (vbv.byteOffset or 0) + (getattr(sv, 'byteOffset', 0) or 0)
+    vdata = view_bytes(g, sv.bufferView, resolver)
+    voff = getattr(sv, 'byteOffset', 0) or 0
     values = np.frombuffer(vdata, dtype=dtype, count=n * ncomp, offset=voff).reshape(n, ncomp)
     out = np.array(base, dtype=dtype)   # writable copy (frombuffer views are read-only)
     out[np.asarray(indices, dtype=np.intp)] = values
@@ -259,51 +323,54 @@ def _normalize_array(arr: np.ndarray, dtype: Optional[Any] = None) -> np.ndarray
     return out
 
 
-def _read_floats(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
-    shared = _shared(resolver, 'floats', index)
-    if shared is not None:
-        return shared
-    arr = _read_accessor(g, index, resolver).astype(np.float32)
-    return _keep(resolver, 'floats', index, np.ascontiguousarray(arr))
+def _read_floats(g: "pygltflib.GLTF2", index: int, resolver: Resolver,
+                 precise: bool = False) -> np.ndarray:
+    """Read an accessor as floats, honouring ``accessor.normalized``.
 
+    Float accessors of any width pass through; integer accessors are divided by
+    their type maximum only when flagged ``normalized`` (signed clamped to -1),
+    as ``KHR_mesh_quantization`` and the core specification say, and are
+    otherwise read as the integers they hold.
 
-def _read_normalized(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
-    """Read an accessor as float32, honoring ``accessor.normalized``.
-
-    Float accessors pass through; integer accessors are divided by their type
-    maximum only when flagged ``normalized`` (signed clamped to -1), matching the
-    glTF spec rather than assuming every integer attribute is normalized.
+    The result is float32, what a vertex buffer holds. ``precise`` returns
+    float64 instead, for animation keyframes, which ``KHR_accessor_float64``
+    requires to be interpolated in double precision; a double accessor read
+    without it is logged, since its values are rounded to single precision.
     """
-    shared = _shared(resolver, 'normalized', index)
+    kind = 'precise' if precise else 'floats'
+    shared = _shared(resolver, kind, index)
     if shared is not None:
         return shared
     acc = g.accessors[index]
     arr = _read_accessor(g, index, resolver)
-    if acc.componentType == _COMPONENT_FLOAT:
-        out = arr.astype(np.float32)
-    elif getattr(acc, 'normalized', False):
-        out = _normalize_array(arr)
-    else:
-        out = arr.astype(np.float32)
-    return _keep(resolver, 'normalized', index, np.ascontiguousarray(out))
+    out = _coerce_normalized(acc, arr, np.float64 if precise else np.float32)
+    if not precise and acc.componentType == _COMPONENT_DOUBLE:
+        log.warning("glTF %s holds double-precision values; they are drawn in "
+                    "single precision", _acc_label(index))
+    return _keep(resolver, kind, index, out)
 
 
-def _coerce_normalized(acc: "pygltflib.Accessor", arr: np.ndarray) -> np.ndarray:
-    """Apply :func:`_read_normalized`'s policy to an already-decoded array.
+def _read_normalized(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
+    """:func:`_read_floats` as float32, the form every vertex attribute takes."""
+    return _read_floats(g, index, resolver)
+
+
+def _coerce_normalized(acc: "pygltflib.Accessor", arr: np.ndarray,
+                       dtype: Any = np.float32) -> np.ndarray:
+    """Apply :func:`_read_floats`'s policy to an already-decoded array.
 
     The Draco path yields attribute values without the accessor's bufferView, but
     the accessor is still authoritative for componentType/normalized. Float
-    accessors pass through as float32; a ``normalized`` integer accessor divides by
-    its declared componentType's maximum (signed clamped to -1) -- the divisor comes
+    accessors pass through; a ``normalized`` integer accessor divides by its
+    declared componentType's maximum (signed clamped to -1) -- the divisor comes
     from the accessor, not the decoded array's dtype, so a Draco stream that hands
     back floats is normalized the same as one that hands back integers.
     """
-    if acc.componentType == _COMPONENT_FLOAT:
-        return np.ascontiguousarray(arr.astype(np.float32))
-    if getattr(acc, 'normalized', False):
-        return np.ascontiguousarray(
-            _normalize_array(arr, _component_dtype(acc.componentType)))
-    return np.ascontiguousarray(arr.astype(np.float32))
+    if acc.componentType not in FLOAT_COMPONENTS and getattr(acc, 'normalized', False):
+        arr = _normalize_array(arr, _component_dtype(acc.componentType))
+    # A copy: the decoded array may be a read-only view of the buffer, and the
+    # caller owns what it is handed.
+    return np.array(arr, dtype=dtype, order='C')
 
 
 def _colors_to_rgba(arr: np.ndarray) -> np.ndarray:

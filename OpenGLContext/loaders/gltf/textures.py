@@ -4,9 +4,11 @@ Turns a glTF ``texture`` (its ``source`` image, resolved via bufferView, ``data:
 URI or external URI, plus its ``sampler`` wrap/filter enums) into an
 :class:`~OpenGLContext.scenegraph.imagedata.ImageDataTexture`, with the sampler
 as a ``TextureProperties``, memoising by texture index. Images are normalised to RGBA on decode so grayscale
-and luminance-alpha sources sample correctly. ``EXT_texture_webp`` is honoured
-(Pillow decodes WebP); ``KHR_texture_basisu`` (KTX2/Basis) is intentionally not,
-as it needs a GPU-block transcoder Pillow lacks.
+and luminance-alpha sources sample correctly. ``EXT_texture_avif`` and
+``EXT_texture_webp`` images are preferred to the core ``source`` where the
+installed Pillow decodes the format (:func:`decodes`); ``KHR_texture_basisu``
+(KTX2/Basis) is not read, as it needs a GPU-block transcoder Pillow lacks, and a
+texture carrying it is drawn from its core ``source``.
 
 ``_TexInfo`` / ``_info`` wrap the raw textureInfo dicts that appear inside material
 extensions, giving them the ``.index`` / ``.texCoord`` / ``.extensions`` attribute
@@ -32,7 +34,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.sampler import sampler_of, texture_properties
-from OpenGLContext.loaders.gltf.accessors import _buffer_bytes
+from OpenGLContext.loaders.gltf.accessors import view_bytes
 from OpenGLContext.loaders.resolver import Resolver, decode_data_uri, resolver_max
 
 if TYPE_CHECKING:
@@ -63,10 +65,7 @@ def _image_bytes(g: "pygltflib.GLTF2", image_index: int,
     """The encoded bytes of an image, however the file supplies them."""
     img = g.images[image_index]
     if getattr(img, 'bufferView', None) is not None:
-        bv = g.bufferViews[img.bufferView]
-        data = _buffer_bytes(g, bv.buffer, resolver)
-        start = bv.byteOffset or 0
-        return bytes(data[start:start + bv.byteLength])
+        return bytes(view_bytes(g, img.bufferView, resolver))
     uri = getattr(img, 'uri', None)
     if uri and uri.startswith('data:'):
         return decode_data_uri(uri, resolver_max(resolver))
@@ -95,21 +94,45 @@ def _decode(raw: bytes) -> "Optional[Image.Image]":
     return pim
 
 
+#: The texture extensions whose image a texture prefers to its core ``source``,
+#: most preferred first, with the format each names.
+IMAGE_EXTENSIONS = (('EXT_texture_avif', 'image/avif'), ('EXT_texture_webp', 'image/webp'))
+
+#: Pillow's name for each format an extension may name.
+_PILLOW_FEATURES = {'image/avif': 'avif', 'image/webp': 'webp'}
+
+
+def decodes(mime_type: str) -> bool:
+    """Whether the installed Pillow decodes images of ``mime_type``.
+
+    PNG and JPEG always; AVIF and WebP where Pillow was built with them.
+    """
+    if mime_type in ('image/png', 'image/jpeg'):
+        return True
+    feature = _PILLOW_FEATURES.get(mime_type)
+    if feature is None:
+        return False
+    from PIL import features  # noqa: PLC0415 Pillow is imported where an image is read
+    return bool(features.check(feature))
+
+
 def _texture_source(tex: "pygltflib.Texture") -> Optional[int]:
     """The image index a texture's pixels come from, or None.
 
-    Normally ``texture.source``. When that is absent, fall back to
-    ``EXT_texture_webp`` -- a WebP image is the sole source when the extension is
-    *required* (the base ``source`` is then omitted), and Pillow decodes WebP, so
-    it loads like any other raster. ``KHR_texture_basisu`` (KTX2/Basis Universal)
-    is intentionally *not* consulted: it needs a GPU-block transcoder Pillow lacks.
+    The image an ``EXT_texture_avif`` or ``EXT_texture_webp`` extension names,
+    where Pillow decodes that format: the extension's image is what the
+    author meant, and the core ``source`` is the fallback for a reader without
+    it. Otherwise ``texture.source``, which a document requiring one of those
+    extensions may leave out. ``KHR_texture_basisu`` is never chosen.
     """
+    extensions = getattr(tex, 'extensions', None) or {}
+    for name, mime_type in IMAGE_EXTENSIONS:
+        block = extensions.get(name)
+        source = block.get('source') if isinstance(block, dict) else None
+        if isinstance(source, int) and not isinstance(source, bool) and decodes(mime_type):
+            return source
     if tex.source is not None:
         return int(tex.source)
-    webp = (getattr(tex, 'extensions', None) or {}).get('EXT_texture_webp')
-    if webp is not None:
-        source = webp.get('source')
-        return None if source is None else int(source)
     return None
 
 

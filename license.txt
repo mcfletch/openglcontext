@@ -31,6 +31,14 @@ Exceptions are as follows:
 
 	See tests/resources/3Dlabs-License.txt
 
+	The encoded streams and decoded values in
+	tests/unit/test_gltf_meshopt.py are taken from meshoptimizer's
+	test suite (demo/tests.cpp), under the MIT licence:
+		Copyright (c) 2016-2026 Arseny Kapoulkine
+	OpenGLContext/loaders/gltf/meshopt.py is written from the
+	KHR_meshopt_compression and EXT_meshopt_compression
+	specifications and copies no meshoptimizer code.
+
 Dependency copyright notices (note that all dependencies mentioned 
 here are optional, but depending on the OpenGLContext version may
 be included in the OpenGLContext distribution):

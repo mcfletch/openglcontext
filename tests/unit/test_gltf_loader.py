@@ -306,8 +306,8 @@ class TestSampleCatalog:
 
 
 class TestTextureSource:
-    """`_texture_source` resolves which image a texture samples, including the
-    EXT_texture_webp fallback used when the base ``source`` is omitted."""
+    """`_texture_source` resolves which image a texture samples: an
+    EXT_texture_webp image ahead of the core ``source``."""
 
     class _Tex:
         def __init__(self, source=None, extensions=None):
@@ -322,10 +322,11 @@ class TestTextureSource:
                         extensions={'EXT_texture_webp': {'source': 7}})
         assert gltf.textures._texture_source(tex) == 7  # noqa: SLF001 the texture source fallbacks, one extension block each
 
-    def test_base_source_wins_over_webp_extension(self):
+    def test_webp_extension_wins_over_the_fallback_source(self):
+        # The core source is the fallback for a reader without WebP.
         tex = self._Tex(source=2,
                         extensions={'EXT_texture_webp': {'source': 7}})
-        assert gltf.textures._texture_source(tex) == 2  # noqa: SLF001 the texture source fallbacks, one extension block each
+        assert gltf.textures._texture_source(tex) == 7  # noqa: SLF001 the texture source fallbacks, one extension block each
 
     def test_basisu_is_not_consulted(self):
         # KTX2/Basis needs a transcoder Pillow lacks, so it must NOT be treated

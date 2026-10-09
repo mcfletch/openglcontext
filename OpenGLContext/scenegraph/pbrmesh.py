@@ -290,6 +290,12 @@ class PBRMesh(x3d.X3DGeometryNode):
     #: render pass places the mesh by it (:meth:`meshOrigin`).
     origin: Optional[np.ndarray] = None
 
+    #: The glTF material variants this mesh's primitive maps, as a
+    #: :class:`~OpenGLContext.loaders.gltf.variants.PrimitiveVariants`; None for
+    #: none. ``GLTFScene.select_variant`` dresses the mesh from it, and the glTF
+    #: writer writes it back as ``KHR_materials_variants`` mappings.
+    materialVariants: Any = None
+
     #: The time, in seconds, :attr:`waveStyle` is evaluated at. A clock the
     #: frame advances rather than something authored, so it is an attribute
     #: and not a field.

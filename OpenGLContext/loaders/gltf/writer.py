@@ -45,9 +45,10 @@ from OpenGLContext import __version__ as _engine_version
 from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.loaders.gltf import hooks as _hooks
 from OpenGLContext.loaders.gltf.splats import splat_primitive
+from OpenGLContext.loaders.gltf import variants as variantsext
 from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.loaders.gltf.materials import GLTF_TEXTURE_KEYS, khr_transform_params
-from OpenGLContext.loaders.gltf.textures import gl_sampler
+from OpenGLContext.loaders.gltf.textures import IMAGE_EXTENSIONS, gl_sampler
 from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
@@ -151,8 +152,8 @@ class EncodedImage(ImageDataTexture):
     def from_path(cls, path: str, **named: Any) -> "EncodedImage":
         """Read an image file, taking its MIME type from the extension"""
         suffix = path.lower().rsplit('.', 1)[-1]
-        mime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-                'png': 'image/png', 'webp': 'image/webp'}.get(suffix, 'image/png')
+        mime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+                'webp': 'image/webp', 'avif': 'image/avif'}.get(suffix, 'image/png')
         with open(contained_source(path), 'rb') as handle:
             return cls(handle.read(), mime_type=mime, **named)
 
@@ -495,6 +496,11 @@ def _factor(value: Any) -> Any:
 
 # --- the writer ---------------------------------------------------------------
 
+#: The extension a texture needs for an image in each format the core does
+#: not allow.
+_IMAGE_EXTENSION = {mime: name for name, mime in IMAGE_EXTENSIONS}
+
+
 class GLTFWriter:
     """Builds a glTF 2.0 document and serializes it as GLB.
 
@@ -519,6 +525,9 @@ class GLTFWriter:
         self._nodes: list[dict] = []
         self._roots: list[int] = []
         self._extensions_used: set[str] = set()
+        self._extensions_required: set[str] = set()
+        #: Each image index written in a format only an extension allows.
+        self._image_extension: dict[int, str] = {}
         self._mesh_index: _IdentityCache[int] = _IdentityCache()
         #: Each material's glTF indices, one per alpha mode, cutoff and sidedness.
         self._material_index: _IdentityCache[dict[tuple, int]] = _IdentityCache()
@@ -528,6 +537,8 @@ class GLTFWriter:
         self.extras: dict = {}
         self._shapes: list[dict] = []
         self._sounds: list[GlobalSound] = []
+        #: KHR_materials_variants names, in the order the meshes first map them.
+        self._variant_names: list[str] = []
 
     # -- meshes ----------------------------------------------------------------
 
@@ -605,18 +616,46 @@ class GLTFWriter:
         mode = int(getattr(mesh, 'draw_mode', 4) or 0)
         if mode != 4:                                    # TRIANGLES is the default
             primitive['mode'] = mode
-        appearance = getattr(mesh, 'appearance', None)
+        dressed = getattr(mesh, 'materialVariants', None)
+        appearance, solid = (dressed.default if dressed is not None else
+                             (getattr(mesh, 'appearance', None),
+                              bool(getattr(mesh, 'solid', True))))
+        material = self._appearance_material(mesh, appearance, solid)
+        if material is not None:
+            primitive['material'] = material
+        if dressed is not None and dressed.by_name:
+            primitive.setdefault('extensions', {})[variantsext.EXTENSION] = {
+                'mappings': self._variant_mappings(mesh, dressed)}
+            self._extensions_used.add(variantsext.EXTENSION)
+        return primitive
+
+    def _appearance_material(self, mesh: Any, appearance: Any,
+                             solid: bool) -> Optional[int]:
+        """The material index for ``mesh`` drawn in ``appearance``, or None."""
         material = getattr(appearance, 'material', None)
         if isinstance(material, ChannelMaterial):
             # With the appearance's texture as the base map where it stands in
             # for the material's own.
             material = pbr_material(appearance)
-        if material:
-            primitive['material'] = self.add_material(
-                material, alpha=appearance_alpha(appearance),
-                double_sided=not bool(getattr(mesh, 'solid', True)),
-                coordinates=texture_coordinates(appearance, mesh))
-        return primitive
+        if not material:
+            return None
+        return self.add_material(
+            material, alpha=appearance_alpha(appearance), double_sided=not solid,
+            coordinates=texture_coordinates(appearance, mesh))
+
+    def _variant_mappings(self, mesh: Any, dressed: Any) -> list[dict]:
+        """``KHR_materials_variants`` mappings: one per material, listing the
+        variants (indices into the document's variant names) that choose it."""
+        by_material: dict[int, list[int]] = {}
+        for name, (appearance, solid) in dressed.by_name.items():
+            material = self._appearance_material(mesh, appearance, solid)
+            if material is None:
+                continue
+            if name not in self._variant_names:
+                self._variant_names.append(name)
+            by_material.setdefault(material, []).append(self._variant_names.index(name))
+        return [{'material': material, 'variants': sorted(variants)}
+                for material, variants in by_material.items()]
 
     # -- materials -------------------------------------------------------------
 
@@ -799,6 +838,13 @@ class GLTFWriter:
         if cached is not None:
             return cached
         entry: dict[str, Any] = {'source': image}
+        extension = self._image_extension.get(image)
+        if extension is not None:
+            # The only image there is, in a format the core does not allow, so
+            # the document requires the extension.
+            entry = {'extensions': {extension: {'source': image}}}
+            self._extensions_used.add(extension)
+            self._extensions_required.add(extension)
         if sampler is not None:
             entry['sampler'] = sampler
         self._textures.append(entry)
@@ -809,8 +855,9 @@ class GLTFWriter:
     def _add_image(self, holder: Any) -> int:
         """A texture's image: an ImageTexture's first URL as a uri, else embedded
 
-        An ``EncodedImage`` is embedded as its bytes; any other image is
-        encoded as PNG.
+        An ``EncodedImage`` is embedded as its bytes, an AVIF or WebP one
+        through its texture's ``EXT_texture_avif`` or ``EXT_texture_webp``
+        (:meth:`_add_texture`); any other image is encoded as PNG.
         """
         if isinstance(holder, x3d.ImageTexture):
             cached = self._image_index.get(holder)
@@ -827,7 +874,11 @@ class GLTFWriter:
                 return cached
             view = self._buffer.add_view(holder.data)
             self._images.append({'bufferView': view, 'mimeType': holder.mime_type})
-            return self._image_index.set(holder, len(self._images) - 1)
+            index = self._image_index.set(holder, len(self._images) - 1)
+            extension = _IMAGE_EXTENSION.get(holder.mime_type)
+            if extension is not None:
+                self._image_extension[index] = extension
+            return index
         image = holder.image
         cached = self._image_index.get(image)
         if cached is not None:
@@ -950,8 +1001,12 @@ class GLTFWriter:
         return index
 
     def _document_extensions(self) -> dict:
-        """The document-level blocks the zones and their sounds need."""
+        """The document-level blocks: material variant names, and what the zones
+        and their sounds need."""
         extensions: dict[str, Any] = {}
+        if self._variant_names:
+            extensions[variantsext.EXTENSION] = {
+                'variants': [{'name': name} for name in self._variant_names]}
         if self._shapes:
             extensions['KHR_implicit_shapes'] = {'shapes': self._shapes}
         if self._sounds:
@@ -1032,6 +1087,8 @@ class GLTFWriter:
                 doc[key] = value
         if self._extensions_used:
             doc['extensionsUsed'] = sorted(self._extensions_used)
+        if self._extensions_required:
+            doc['extensionsRequired'] = sorted(self._extensions_required)
         extensions = self._document_extensions()
         if extensions:
             doc['extensions'] = extensions

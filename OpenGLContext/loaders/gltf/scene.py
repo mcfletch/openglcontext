@@ -55,14 +55,17 @@ else:
     )
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
 from OpenGLContext.scenegraph.transform import MatrixTransform
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.loaders.gltf import lod as lodext
 from OpenGLContext.loaders.gltf.accessors import (
-    _buffer_bytes, decode_data_uri, _read_normalized, resolver_max,
+    decode_data_uri, _read_normalized, resolver_max, view_bytes,
 )
 from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf import hooks as hookreg
 from OpenGLContext.loaders.gltf import imagebased, zoning
+from OpenGLContext.loaders.gltf.materials import _build_appearance, _double_sided
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
+from OpenGLContext.loaders.gltf import variants as variantsext
 from OpenGLContext.loaders.gltf.notices import document_notices
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
@@ -187,6 +190,26 @@ class GLTFScene(object):
         self.zones: list = []
         # environment: the scene's EXT_lights_image_based light, or None.
         self.environment: Any = None
+        # material_variants: the document's KHR_materials_variants and the
+        # shapes a selection re-dresses; see select_variant.
+        self.material_variants = variantsext.MaterialVariants()
+
+    @property
+    def variants(self) -> tuple[str, ...]:
+        """The names of the document's material variants, in document order."""
+        return self.material_variants.names
+
+    @property
+    def variant(self) -> Optional[str]:
+        """The active material variant's name, or None for none."""
+        return self.material_variants.active
+
+    def select_variant(self, variant: "str | int | None") -> None:
+        """Draw the model in material variant ``variant``: a name from
+        :attr:`variants`, an index into it, or None for each primitive's own
+        material. A primitive the variant does not map keeps its own material.
+        """
+        self.material_variants.select(variant)
 
     def advance(self, when: float) -> bool:
         """Move whatever a hook asked to be moved to ``when``, in seconds.
@@ -615,6 +638,10 @@ class _SceneBuilder:
         # EXT_lights_image_based: the document's prefiltered environments, for
         # its scene and its zones to name.
         self.image_lights = imagebased.ImageLights(g, resolver)
+        # KHR_materials_variants: the names here, and each shape that maps one
+        # as mesh_shapes builds it.
+        self.material_variants = variantsext.MaterialVariants(
+            variantsext.variant_names(top_ext))
         self.emitter_nodes: dict = {}
         self._emitter_index: Optional[dict] = None
         self._zone_placed: list = []
@@ -635,6 +662,7 @@ class _SceneBuilder:
                 self.g, prim, self.resolver, self.appearances, self.tex_cache,
                 self.hooks, world)
             if shape is not None:
+                self._dress_variants(prim, shape)
                 shapes.append((shape, bounds))
                 if not casts and hasattr(shape, 'castShadow'):
                     shape.castShadow = False
@@ -652,6 +680,30 @@ class _SceneBuilder:
         if not dynamic:
             self.mesh_cache[key] = shapes
         return shapes
+
+    def _dress_variants(self, primitive: Any, shape: Any) -> None:
+        """Give a primitive's mesh its material variants, and the scene its shape.
+
+        Only a Shape holding a PBRMesh is re-dressed; a hook's result is
+        whatever the hook made it, and keeps the material it was given.
+        """
+        mesh = getattr(shape, 'geometry', None)
+        if not self.material_variants.names or not isinstance(mesh, PBRMesh):
+            return
+        mapped = variantsext.primitive_mappings(
+            primitive, len(self.material_variants.names), len(self.g.materials or []))
+        if not mapped:
+            return
+        dressed = variantsext.PrimitiveVariants(default=(shape.appearance, bool(mesh.solid)))
+        for variant, material in mapped.items():
+            appearance = self.appearances.get(material)
+            if appearance is None:
+                appearance = self.appearances[material] = _build_appearance(
+                    self.g, material, self.resolver, self.tex_cache)
+            dressed.by_name[self.material_variants.names[variant]] = (
+                appearance, not _double_sided(self.g, material))
+        mesh.materialVariants = dressed
+        self.material_variants.add(shape)
 
     def _record_part(self, world: np.ndarray, shape: Any,
                      bounds: tuple[np.ndarray, np.ndarray]) -> None:
@@ -943,10 +995,7 @@ class _SceneBuilder:
             views = self.g.bufferViews or []
             if not (0 <= audio.bufferView < len(views)):
                 return None
-            view = views[audio.bufferView]
-            data = _buffer_bytes(self.g, view.buffer, self.resolver)
-            start = view.byteOffset or 0
-            return data[start:start + view.byteLength]
+            return bytes(view_bytes(self.g, audio.bufferView, self.resolver))
         if not audio.uri:
             return None
         if audio.uri.startswith('data:'):
@@ -1152,6 +1201,7 @@ class _SceneBuilder:
         scene.hook_registrations = dict(self.hooks.registrations)
         scene.zones = list(self.zoning.zones)
         scene.environment = environment
+        scene.material_variants = self.material_variants
         top = getattr(g, 'extensions', None) or {}
         scene.extensions = top if isinstance(top, dict) else {}
         scene.notices = document_notices(g)

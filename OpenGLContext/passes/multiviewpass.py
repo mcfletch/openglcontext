@@ -540,7 +540,7 @@ class MultiviewPassMixin( PassResources ):
         self.sensePicks()
         self.refreshClipPlanes()
         active = self.activeFrame if self.activeFrame is not None else frames[0]
-        for view, viewFrames in self.framesByView( frames, active ):
+        for _view, viewFrames in self.framesByView( frames, active ):
             # Before the walk: a placed group moves the paths through it, for
             # this view's camera and rectangle. The walk is made again for a
             # view whose placement differs from the last one's; the active

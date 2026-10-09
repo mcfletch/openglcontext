@@ -80,10 +80,13 @@ the parts of glTF that the PBR renderer reads:
 - position, normal, UV, tangent and colour attributes;
 - metallic-roughness materials with their five texture channels and the
   ``KHR_materials_*`` factors;
-- embedded images with their samplers.
+- embedded images with their samplers;
+- a mesh's material variants (``mesh.materialVariants``, which the loader
+  fills from ``KHR_materials_variants``) as that extension's mappings.
 
 Index buffers are written as 16-bit values when the vertex count allows.
-Skinning, animation and morph targets are not written.
+Buffers are written uncompressed, whatever compression the source document
+used. Skinning, animation and morph targets are not written.
 
 A material's ``DEF`` is written as its glTF material name, so an application
 that finds a material by name in one document finds it by the same name in a
