@@ -191,6 +191,10 @@ class ZoneTable:
             if zone.shape.kind == zones.BOX:
                 self.box[index] = True
                 self.half[index] = zone.shape.params
+        # The two answers a box can have about each zone, made once and shared
+        # by every box that has one: a classification of many boxes is then
+        # a list for each box and nothing more.
+        self._answers = [((zone, False), (zone, True)) for zone in self.placed]
         # Each zone's reach -- its shape and its blend band -- as a box in the
         # world, so the zones a query could touch are found before any point
         # is carried into a zone's frame.
@@ -241,14 +245,16 @@ class ZoneTable:
         high_in = np.asarray(maximums, dtype='d').reshape(-1, 3)
         if not self.placed:
             return [[] for _ in range(len(low_in))]
-        found: list[list[tuple[PlacedZone, bool]]] = [[] for _ in range(len(low_in))]
         order = spatial_order(low_in, high_in)
+        # The answers in the curve's order, then put back in the boxes' own:
+        # one list a box, and no placeholder made for each first.
+        answers: list[list[tuple[PlacedZone, bool]]] = []
         for start in range(0, len(low_in), self.chunk):
             rows = order[start:start + self.chunk]
-            for row, answer in zip(rows.tolist(), self._classify_chunk(
-                    low_in[rows], high_in[rows]), strict=True):
-                found[row] = answer
-        return found
+            answers.extend(self._classify_chunk(low_in[rows], high_in[rows]))
+        position = np.empty_like(order)
+        position[order] = np.arange(len(order))
+        return [answers[at] for at in position.tolist()]
 
     def _classify_chunk(self, low_in: np.ndarray, high_in: np.ndarray
                         ) -> list[list[tuple[PlacedZone, bool]]]:
@@ -278,15 +284,16 @@ class ZoneTable:
         inside = np.all(low >= -half, axis=2) & np.all(high <= half, axis=2)
         found: list[list[tuple[PlacedZone, bool]]] = [[] for _ in range(count)]
         rows, columns = np.nonzero(near)
-        for row, at in zip(rows.tolist(), columns.tolist(), strict=True):
-            index = which[at]
-            zone = self.placed[index]
-            if self.box[index]:
-                within = bool(inside[row, at])
-            else:
+        # Python values for the loop, so each pair costs no numpy scalar.
+        answers = [self._answers[index] for index in which.tolist()]
+        box = self.box[which].tolist()
+        for row, at, within in zip(rows.tolist(), columns.tolist(),
+                                   inside[rows, columns].tolist(), strict=True):
+            if not box[at]:
+                shape = answers[at][0][0].shape
                 within = bool(np.all(zones._distance(
-                    zone.shape.kind, zone.shape.params, local[:, row, at]) <= 0.0))
-            found[row].append((zone, within))
+                    shape.kind, shape.params, local[:, row, at]) <= 0.0))
+            found[row].append(answers[at][within])
         return found
 
     def signed_distances(self, points: Any) -> np.ndarray:

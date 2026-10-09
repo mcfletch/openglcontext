@@ -1,7 +1,8 @@
 """End-to-end regression: async MRT picking resolves objectPaths (needs GL).
 
 Runs the core-profile shader/MRT pick path in a subprocess (GLFW), injects a
-click on a sphere, and checks the async readback delivers the object's path.
+click on a sphere, and checks the async readback delivers the object's path
+once the picks still in flight are flushed.
 Skips (not fails) when no usable GL context can be created.
 """
 import os
@@ -50,6 +51,9 @@ try:
             ev.pickPoint = (w // 2, h // 2)
             inst.addPickEvent(ev); inst.triggerPick()
         inst.OnDraw(force=1)
+    # How many frames the readback takes is a property of the machine's load;
+    # the test waits for it rather than counting frames.
+    inst.flushPendingPicks()
     ok = any(RESULT['hits'])
     sys.stderr.write('HITS=%r\n' % RESULT['hits'])
     os._exit(0 if ok else 2)

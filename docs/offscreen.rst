@@ -269,8 +269,10 @@ continuing, call ``flushPendingPicks()``:
 how many it waited for. A readback that completed during the frame counts as
 zero but is still delivered: an event dispatched while the context is
 drawing goes onto the event cascade queue, and the flush empties that queue
-as the next frame would. The call blocks. A loop that can handle the click
-whenever it arrives should keep drawing instead.
+as the next frame would. The call blocks, for up to 30 seconds a readback;
+one the GPU has not finished by then is dropped with a warning in the log. A
+loop that can handle the click whenever it arrives should keep drawing
+instead.
 
 Time
 ----

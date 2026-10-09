@@ -24,7 +24,8 @@ from OpenGL.GL import (
     GL_ALREADY_SIGNALED, GL_COLOR_ATTACHMENT1, GL_CONDITION_SATISFIED,
     GL_DEPTH_COMPONENT, GL_FLOAT, GL_MAP_READ_BIT, GL_PIXEL_PACK_BUFFER,
     GL_READ_FRAMEBUFFER, GL_READ_FRAMEBUFFER_BINDING, GL_RGBA, GL_STREAM_READ,
-    GL_SYNC_FLUSH_COMMANDS_BIT, GL_SYNC_GPU_COMMANDS_COMPLETE, GL_UNSIGNED_BYTE,
+    GL_SYNC_FLUSH_COMMANDS_BIT, GL_SYNC_GPU_COMMANDS_COMPLETE, GL_TIMEOUT_EXPIRED,
+    GL_UNSIGNED_BYTE,
     glBindBuffer, glBindFramebuffer, glBufferData, glClientWaitSync, glDeleteBuffers,
     glDeleteSync, glFenceSync, glGenBuffers, glGetIntegerv, glMapBufferRange, glReadBuffer,
     glReadPixels, glUnmapBuffer,
@@ -46,6 +47,10 @@ class _AsyncPickMixin(PassResources):
     _async_batches: Optional[list] = None
     _pbo_free: Optional[list] = None
     _ASYNC_MAX_INFLIGHT = 4
+    #: A blocking resolve waits for a pick's fence in slices of this many
+    #: nanoseconds, up to this many slices, before it drops the pick.
+    _FENCE_WAIT_SLICE_NS = 1_000_000_000
+    _FENCE_WAIT_SLICES = 30
 
     if TYPE_CHECKING:
         matrix: Any
@@ -292,18 +297,31 @@ class _AsyncPickMixin(PassResources):
             glBindBuffer(GL_PIXEL_PACK_BUFFER, 0)
         return data
 
+    def _waitForFence(self, fence: Any) -> bool:
+        """Whether ``fence`` signalled, waiting for it in one-second slices.
+
+        A slice that expires means the GPU is still busy, which on a loaded
+        machine can last several seconds, so the wait goes on for up to
+        ``_FENCE_WAIT_SLICES`` of them. ``GL_WAIT_FAILED`` ends it at once.
+        """
+        for _slice in range(self._FENCE_WAIT_SLICES):
+            status = glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT,
+                                      self._FENCE_WAIT_SLICE_NS)
+            if status in (GL_ALREADY_SIGNALED, GL_CONDITION_SATISFIED):
+                return True
+            if status != GL_TIMEOUT_EXPIRED:
+                return False
+        return False
+
     def _resolveBatch(self, mode: Any, b: dict, block: bool = False) -> None:
         """Read a batch's PBOs back to the CPU and dispatch its pick events."""
-        if block:
-            # Honour the wait status: on TIMEOUT_EXPIRED / WAIT_FAILED
-            # the GPU write hasn't landed, so reading the PBO would dispatch stale
-            # (or zero) ids as if the pick completed. Skip the batch instead.
-            status = glClientWaitSync(b['fence'], GL_SYNC_FLUSH_COMMANDS_BIT, 1_000_000_000)
-            if status not in (GL_ALREADY_SIGNALED, GL_CONDITION_SATISFIED):
-                log.warning(
-                    "pick fence did not signal (status=%s); dropping batch of %d "
-                    "event(s) rather than dispatch stale ids", status, b['n'])
-                return
+        if block and not self._waitForFence(b['fence']):
+            # The GPU write has not landed, so the PBO holds no ids; dispatching
+            # them would report a click on nothing.
+            log.warning(
+                "pick fence did not signal; dropping batch of %d event(s) "
+                "rather than dispatch ids that were never written", b['n'])
+            return
         n = b['n']
         # Read the PBOs by mapping them; glGetBufferSubData returns zeroes with
         # this PyOpenGL build, whereas glMapBufferRange gives the real bytes.

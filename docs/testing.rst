@@ -524,7 +524,10 @@ sets a rate other than the default 60, or ``0`` to use real time, and
 Everything that reads ``OpenGLContext.events.systemtime`` follows this
 clock, which includes every ``Timer`` and every ``TimeSensor``. Code that
 calls ``time.time()`` directly does not; call ``systemtime.systemTime()``
-instead to make it reproducible. State updated from ``OnIdle`` does not
+instead to make it reproducible. A background thread that changes the
+scene on a schedule waits until ``systemTime()`` reaches the next change
+rather than calling ``time.sleep()`` for the interval, as
+``tests/selectrendermode_threads.py`` does. State updated from ``OnIdle`` does not
 follow the clock either, because the main loop calls ``OnIdle`` as often as
 it can. Scripts that update their scene there are listed in
 ``RANDOMIZED_SCRIPTS`` in ``tests/test_all_scripts.py`` and are checked only
@@ -768,7 +771,8 @@ Cost that grows with the scene
 ``OpenGLContext.testing.scaling.check_scaling(prepare, n=..., most=...,
 factor=4, measure='time')`` builds the scene at ``n`` and at ``factor * n``
 with ``prepare(size)``, which returns the work as a callable, runs the work
-once at each size and then measures it, and fails where the larger costs more
+once at each size and then measures it, timing the two sizes in turn so
+that both see the same load, and fails where the larger costs more
 than ``most`` times the smaller. ``measure='count'`` takes the number the work
 returns (objects touched, records built) instead of its time; a count is the
 same on every machine and is the better measure where the work can give one.
@@ -783,7 +787,12 @@ independent of the scene about 1, and work growing as the square about 16:
        def prepare(objects):
            table, lows, highs = road(objects)
            return lambda: table.classify_many(lows, highs)
-       check_scaling(prepare, n=5000, most=6.0, repeat=3)
+       check_scaling(prepare, n=5000, most=6.0)
+
+The larger scene is the smaller one extended: a road four times as long and
+as wide as before, so the objects near any one of them are as many at both
+sizes. A scene that grows in every direction changes the work per object as
+well as the number of objects, and the ratio then measures both.
 
 ``tests/unit/test_scaling.py`` holds zone classification, the mirror planner
 and ground cover to it.
