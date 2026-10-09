@@ -392,9 +392,10 @@ itself, not batched with others.
   geometry's bounding box: s along x, t along y and r along z, 0 to 1.
   ``TextureTransform3D`` and ``TextureTransformMatrix3D`` transform s, t and
   r; a 4D coordinate is divided by its q.
-- The PBR program combines a ``PhysicalMaterial``'s or an
-  ``UnlitMaterial``'s chain in linear light, its textures decoded from sRGB
-  as base colour maps are; a ``Material``'s, drawn by X3D's Phong equation,
+- The PBR program combines a ``PhysicalMaterial``'s chain, and that of an
+  ``UnlitMaterial`` from glTF or code, in linear light, its textures decoded
+  from sRGB as base colour maps are; a ``Material``'s, drawn by X3D's Phong
+  equation, a document's ``UnlitMaterial`` or appearance with no material,
   and the VRML97 renderer's combine the colours as they are given. The PBR
   program reads a 2D layer through the base colour map's sampler and three
   of the glTF extension maps' (a material drawn with a chain does not use

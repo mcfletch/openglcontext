@@ -46,16 +46,14 @@ CASES = [
     # (mode, source, function, colours, expected)
     (b'"MODULATE" "MODULATE"', b'', b'', (b'0xFF8000', b'0x00FFFF'), (0, 128, 0)),
     (b'"MODULATE" "ADD"', b'', b'', (b'0x800000', b'0x008000'), (128, 128, 0)),
-    # The PBR program combines an unlit or physical surface's textures in
-    # linear light, the VRML97 one as they are displayed.
-    (b'"MODULATE" "SUBTRACT"', b'', b'', (b'0x808080', b'0xFF4000'),
-     {'vrml97': (127, 0, 0), 'pbr': (229, 0, 0)}),
+    # A document's unlit surface combines its textures as they are
+    # displayed, in both programs, as X_ITE does.
+    (b'"MODULATE" "SUBTRACT"', b'', b'', (b'0x808080', b'0xFF4000'), (127, 0, 0)),
     (b'"MODULATE" "REPLACE"', b'', b'', (b'0xFF0000', b'0x0000FF'), (0, 0, 255)),
     (b'"MODULATE" "SELECT_ARG2"', b'', b'', (b'0xFF0000', b'0x0000FF'), (255, 0, 0)),
     (b'"MODULATE" "MODULATE"', b'"" "FACTOR"', b'', (b'0xFFFFFF', b'0x0000FF'), (64, 128, 191)),
     (b'"REPLACE"', b'', b'"COMPLEMENT"', (b'0xFF0000',), (0, 255, 255)),
-    (b'"MODULATE" "ADDSIGNED"', b'', b'', (b'0x808080', b'0x404040'),
-     {'vrml97': (64, 64, 64), 'pbr': (0, 0, 0)}),
+    (b'"MODULATE" "ADDSIGNED"', b'', b'', (b'0x808080', b'0x404040'), (64, 64, 64)),
 ]
 
 
@@ -67,8 +65,6 @@ def test_a_multitexture_combines_its_layers_by_their_modes(
                + (b" source='" + source + b"'" if source else b'')
                + (b" function='" + function + b"'" if function else b'') + b'>'
                + b''.join(pixel(colour) for colour in colours) + b'</MultiTexture>')
-    if isinstance(expected, dict):
-        expected = expected[renderer]
     found = centre(drawn(square(texture), renderer))
     assert close(found, expected), (found, expected)
 
