@@ -906,9 +906,10 @@ class PBRMesh(x3d.X3DGeometryNode):
         gpu = self._gpu(mode)      # re-uploads morph-deformed buffers if stale
         self._apply_draw_state(mode)
         sp = getattr(mode, 'shader_program', None)
-        if sp is not None:
+        if sp is not None and hasattr(sp, 'set_skinning'):
             # The uniform outlives the draw that set it: a skinned caster
-            # before this one would otherwise pose it.
+            # before this one would otherwise pose it. The VRML97 program
+            # skins nothing and has no such uniform.
             sp.set_skinning(None)
         gpu.draw(mode)
         return True

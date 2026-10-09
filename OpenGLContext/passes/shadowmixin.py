@@ -154,6 +154,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
         def getModelView(self) -> np.ndarray: ...
         def frameGather(self) -> Any: ...
+        def renderFailed(self, where: str, node: Any, err: BaseException) -> None: ...
         def batchingFunctions(self) -> Batchers: ...
 
     use_shadows: bool = False
@@ -1171,7 +1172,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                         clip(shader, None, None)
                     self._renderDepthGroup(group, shader, depth_prog, light_view)
                 except Exception as err:
-                    log.debug("instanced shadow depth failure: %s", err)
+                    self.renderFailed('instanced shadow depth', group, err)
             # Every caster's light-space modelview in one product of the
             # stacked world matrices.
             modelviews = (np.asarray([record[2] for record in casters], dtype='f')
@@ -1191,7 +1192,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 try:
                     record[5].Render(mode=self)
                 except Exception as err:
-                    log.debug("shadow depth render failure: %s", err)
+                    self.renderFailed('shadow depth', record[5], err)
         finally:
             end_clip = getattr(self, 'endClipPlanes', None)
             if end_clip is not None:
