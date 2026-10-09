@@ -104,6 +104,8 @@ class Placement(NamedTuple):
     level: float
     #: Seconds the sound takes to reach the listener; 0 without Doppler.
     delay: float = 0.0
+    #: The head each ear hears it through, for HRTF panning; None for the gains alone.
+    head: Optional[spatial.HeadResponse] = None
 
 
 #: A sound not heard.
@@ -292,6 +294,13 @@ class Hearing:
             return 0.0
         return math.atan2(_dot(across, self.right), _dot(across, self.forward))
 
+    def elevation(self, point: Vec3) -> float:
+        """How far ``point`` is above the listener's horizontal plane, in radians"""
+        way, length = self.offset(point)
+        if length == 0.0:
+            return 0.0
+        return math.asin(max(-1.0, min(1.0, -_dot(way, self.up) / length)))
+
     def ears(self, point: Vec3, level: float, spatialize: bool = True) -> tuple[float, float]:
         """``level`` split between the ears for a sound at ``point``
 
@@ -336,6 +345,7 @@ class Placed(SoundNode):
         """Hear ``audio`` as ``placement`` says"""
         if isinstance(audio, graph.Panner):
             audio.set_gains(placement.left, placement.right)
+            audio.set_head(placement.head)
             audio.propagation_delay = placement.delay
         else:
             audio.gain = placement.level
@@ -388,8 +398,10 @@ class SpatialSound(Placed, x3d.SpatialSound):
     about `direction`), panned by the bearing from the listener. With
     `dopplerEnabled` the sound arrives the distance over the speed of sound
     late, up to :data:`MAX_PROPAGATION_DELAY`, so a sound moving toward or away
-    from the listener changes pitch. `enableHRTF` is not read: the pan is
-    equal power between two ears.
+    from the listener changes pitch. The pan is equal power between two ears;
+    with `enableHRTF` it is a spherical head's instead, as X_ITE asks for Web
+    Audio's HRTF panning: both ears at the level, the far one later and each
+    shadowed by the head (:func:`omi_audio.spatial.head_response`).
 
     Reference:
         https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/sound.html#SpatialSound
@@ -423,9 +435,13 @@ class SpatialSound(Placed, x3d.SpatialSound):
         if distance > 0.0 and length > 0.0:
             angle = math.acos(max(-1.0, min(1.0, _dot(axis, way) / (length * distance))))
         level = float(self.gain) * float(self.intensity) * self.positional().gain(distance, angle)
-        left, right = hearing.ears(location, level, bool(self.spatialize))
         delay = distance / SPEED_OF_SOUND if self.dopplerEnabled else 0.0
-        return Placement(left, right, level, min(delay, MAX_PROPAGATION_DELAY))
+        delay = min(delay, MAX_PROPAGATION_DELAY)
+        if self.enableHRTF and self.spatialize and level > 0.0 and math.isfinite(level):
+            head = spatial.head_response(hearing.azimuth(location), hearing.elevation(location))
+            return Placement(level, level, level, delay, head)
+        left, right = hearing.ears(location, level, bool(self.spatialize))
+        return Placement(left, right, level, delay)
 
 
 # ----------------------------------------------------------------------

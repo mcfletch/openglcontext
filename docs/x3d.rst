@@ -773,8 +773,11 @@ nodes.
        INVERSE, EXPONENTIAL with ``referenceDistance``, ``maxDistance``,
        ``rolloffFactor``) times the cone about ``direction``;
        ``dopplerEnabled`` delays it by its distance over 343 m/s, up to one
-       second; ``spatialize``; ``priority``. ``enableHRTF`` is not read: the
-       pan is equal power between two ears
+       second; ``spatialize``; ``priority``. The pan is equal power between
+       two ears; ``enableHRTF`` hears it through a spherical head instead
+       (``omi_audio.spatial.head_response``): both ears at the level, the far
+       one later by the interaural delay and each shelved by the head's
+       shadow
    * - ``AudioDestination``, ``StreamAudioDestination``
      - its ``children``, mixed and heard
      - ``gain``, the channel fields, ``maxChannelCount``, ``isActive``.

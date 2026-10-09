@@ -512,7 +512,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     while heard and running. The voice-based VRML97 `Sound` is replaced.
     `oglc-x3d-sound`
     - omi_audio: `BufferSource.start(offset)`, `Node.settle()`
-    - not read: `enableHRTF` (equal-power pan), `interauralDistance`,
+    - 2026-10-09 (x3d-xfields): `enableHRTF` hears a SpatialSound through
+      omi_audio's spherical head (`spatial.head_response`, `Panner.set_head`:
+      Woodworth's interaural delay, Brown and Duda's head shadow), where
+      X_ITE asks Web Audio for HRTF panning. `interauralDistance` and
+      `tailTime` are declared and not read in X_ITE either
+    - not read: `interauralDistance`,
       `tailTime`, `mediaDeviceID` and `streamIdentifier` of the destinations
       (one output, the device); a `ListenerPointSource` as an input is
       silence; a `Convolver`'s `buffer` is one channel (X3D gives it no channel
@@ -1248,7 +1253,7 @@ the component maps onto an existing OpenGLContext subsystem.
 | ParticleSystems | Full | engine particles |
 | Layering, Layout | Full | overlay UI and multi-view rendering |
 | Sound (classic `Sound`/`AudioClip`) | Full | omi_audio |
-| Sound (4.0 audio graph) | Full, less `enableHRTF`, `interauralDistance` and `tailTime`; see below | omi_audio processing graph |
+| Sound (4.0 audio graph) | Full, less `interauralDistance` and `tailTime`; see below | omi_audio processing graph |
 | Geospatial | Full, later phase | double-precision paths, terrain |
 | VolumeRendering | Full, less ShadedVolumeStyle `shadows` and `phaseFunction` | 3D textures, ray-marching pass |
 | GaussianSplats (4.1) | Full | a sorted-splat draw in the transparent pass; `KHR_gaussian_splatting` |
@@ -1279,8 +1284,9 @@ What will not work, and why:
   `StreamAudioSource` reads the audio input its first `streamIdentifier`
   names, as a `MicrophoneSource` reads `mediaDeviceID`'s. Both inputs open
   only where the application allows capture.
-- `SpatialSound.enableHRTF` and `ListenerPointSource.interauralDistance`. The
-  pan is equal power between two ears; there is no HRTF.
+- `ListenerPointSource.interauralDistance`. `SpatialSound.enableHRTF` hears
+  through a spherical head model rather than measured HRTFs, so the
+  pinnae's cues for front, back and height are not there.
 - DIS (`EspduTransform`, `SignalPdu`, …). These exchange IEEE 1278 network
   packets for military simulation; nothing in an engine for games and
   applications calls for it. The nodes parse and are inert.
