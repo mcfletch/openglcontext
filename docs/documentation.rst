@@ -195,6 +195,11 @@ Installing the package puts these commands on your path:
    viewpoint, a brass frame, and a wooden panel placed in pixels with text
    in a ``ScreenFontStyle`` and a button that shows and hides the inset.
    See :ref:`x3d-layers`.
+``oglc-x3d-movie``
+   X3D's ``MovieTexture`` read from a document and decoded on the GPU: one
+   film, drawn by the engine and recorded with the hardware encoder, on three
+   screens in a brick and plaster room, looped, reversed, and once from a
+   key inside a ``MultiTexture``. See :ref:`x3d-movies`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

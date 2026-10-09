@@ -62,8 +62,9 @@ dependencies = [
 # backend uses pygame-ce, so the whole stack standardizes on it.
 pygame = ["pygame-ce>=2.1.3"]
 glfw = ["glfw>=2.0"]
-# Recording what the engine draws to an H.264 video file. The encoder is the
-# one in the graphics driver; this brings in the bindings that reach it.
+# Recording what the engine draws to an H.264 video file, and playing a
+# MovieTexture's H.264 movie. The encoder and the decoder are the ones in the
+# graphics driver; this brings in the bindings that reach them.
 video = ["pyopengl-video>=1.0.0a1"]
 # gltf is now pretty much core to OpenGLContext...
 gltf = []
@@ -125,6 +126,7 @@ oglc-x3d-materials = "OpenGLContext.bin.x3d_materials:main"
 oglc-x3d-sound = "OpenGLContext.bin.x3d_sound:main"
 oglc-x3d-volume = "OpenGLContext.bin.x3d_volume:main"
 oglc-x3d-layering = "OpenGLContext.bin.x3d_layering:main"
+oglc-x3d-movie = "OpenGLContext.bin.x3d_movie:main"
 # Ship an application built on the engine as a Debian package: a relocatable
 # CPython and the application on top of it, under /opt.
 oglc-deb = "OpenGLContext.packaging.deb:main"
@@ -171,7 +173,8 @@ OpenGLContext = [
     "resources/environment/*.jpg",
     # The X3D documents `oglc-x3d`, `oglc-x3d-nurbs`, `oglc-x3d-shaders`,
     # `oglc-x3d-particles`, `oglc-x3d-rigidbody`, `oglc-x3d-sound`,
-    # `oglc-x3d-volume` and `oglc-x3d-layering` open, and the packaged shader
+    # `oglc-x3d-volume`, `oglc-x3d-layering` and `oglc-x3d-movie` open, and
+    # the film `oglc-x3d-movie` records, and the packaged shader
     # `oglc-x3d-shaders` reads.
     "bin/*.x3d", "bin/*.glsl",
     # The exception to the rule above: the demos' packaging recipe is read

@@ -386,6 +386,8 @@ OpenGLContext/
 │   ├── draw.py       # The GL renderer: one program, one batched buffer
 │   └── generate.py   # A settings page from a node's fields (UI_HINTS)
 ├── video/            # H.264 capture of the colour buffer -- docs/recording.rst
+│   └── playback.py   # A MovieTexture's movie decoded into one texture per
+│                     # context -- docs/x3d.rst#x3d-movies
 ├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.rst
 │   └── adapters/     # One per format: read it, and present it to a viewer
 ├── windowsystem/     # The window a Context draws in, one module per toolkit,
