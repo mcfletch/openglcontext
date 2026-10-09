@@ -9,6 +9,7 @@ from vrml import field
 from OpenGLContext import lighting
 from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort
 from OpenGLContext.scenegraph.physicalmaterial import two_sided
+from OpenGLContext.scenegraph.texturelayers import is_layered, texture_layers
 from OpenGLContext.arrays import array
 import traceback
 import logging
@@ -65,6 +66,8 @@ class Shape(basenodes.Shape):
         mode._lineProperties = getattr(self.appearance, 'lineProperties', None)
         mode._pointProperties = getattr(self.appearance, 'pointProperties', None)
         mode._fillProperties = getattr(self.appearance, 'fillProperties', None)
+        # The geometry a 3D texture spans in the compatibility profile
+        mode._texturedGeometry = self.geometry
 
     def fillStyle(self) -> drawproperties.FillStyle:
         """The appearance's FillProperties as drawn; the default for a
@@ -72,6 +75,23 @@ class Shape(basenodes.Shape):
         if getattr(type(self.geometry), 'meshArrays', None) is None:
             return drawproperties.FillStyle()
         return drawproperties.fill_style(getattr(self.appearance, 'fillProperties', None))
+
+    def _renderFilledFixed(self, lit: Any, textured: Any, mode: Any) -> None:
+        """Draw the geometry by the fixed-function state, or by the X3D shader that reads it
+
+        In the compatibility profile an appearance's X3D shader of GLSL 1.x
+        runs as written, its built-ins reading the material, lights,
+        matrices and arrays this pass has set (:mod:`~OpenGLContext.scenegraph.x3dshaders`).
+        """
+        drawn = None
+        if getattr(self.appearance, 'shaders', None):
+            drawn = self.appearance.drawProgram(mode, self)
+        try:
+            self.geometry.render(lit=lit, textured=textured, mode=mode)
+        finally:
+            if drawn is not None:
+                self.appearance.releaseProgram(drawn, mode)
+                glUseProgram(0)
 
     def _renderHatchFixed(self, fill: drawproperties.FillStyle, mode: Any) -> None:
         """Draw the geometry again through `fill`'s hatch, as a polygon stipple"""
@@ -123,7 +143,7 @@ class Shape(basenodes.Shape):
                     glDisable(GL_LIGHTING)
                 fill = self.fillStyle()
                 if fill.filled:
-                    self.geometry.render(lit=lit, textured=textured, mode=mode)
+                    self._renderFilledFixed(lit, textured, mode)
                 if textured:
                     self.appearance.renderPost(textureToken, mode=mode)
                 if fill.hatch:
@@ -171,6 +191,14 @@ class Shape(basenodes.Shape):
         if hasattr(shader_program, 'set_fill_style'):
             shader_program.set_fill_style(self.fillStyle())
 
+        if self.appearance and getattr(self.appearance, 'bringsProgram', False):
+            if not getattr(mode, 'visible', True):
+                # Selection paints every shape in its own id colour with the
+                # pass's own program; the appearance's would paint its own.
+                return self.geometry.render(textured=False, mode=mode)
+            if self._render_shader_appearance(mode):
+                return None
+            # No program of its own runs: drawn with its material and texture.
 
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
@@ -189,13 +217,6 @@ class Shape(basenodes.Shape):
             self._render_pbr(mode, shader_program, back=False)
             return
 
-        if self.appearance and getattr(self.appearance, 'bringsProgram', False):
-            if getattr(mode, 'visible', True):
-                return self._render_shader_appearance(mode)
-            # Selection paints every shape in its own id colour with the pass's
-            # own program; the appearance's shader would paint whatever it likes.
-            return self.geometry.render(textured=False, mode=mode)
-
         # Skip material/texture setup during selection rendering (mode.visible=False)
         # Selection uses solid colors with unlit shader, not materials
         textured = False
@@ -208,8 +229,15 @@ class Shape(basenodes.Shape):
             else:
                 shader_program.set_default_material()
 
+            # A MultiTexture, a cube map or a 3D texture is a chain of layers
+            # in place of the texture.
+            layered = self.appearance and is_layered(self.appearance.texture)
+            if hasattr(shader_program, 'set_texture_layers'):
+                shader_program.set_texture_layers(
+                    texture_layers(self.appearance, self.geometry) if layered else None,
+                    mode, self.geometry)
             # Set up texture if present
-            if self.appearance and self.appearance.texture:
+            if self.appearance and self.appearance.texture and not layered:
                 tex = self.appearance.texture.cached(mode)
                 if tex is not None:
                     shader_program.bind_texture(tex)
@@ -264,34 +292,42 @@ class Shape(basenodes.Shape):
                 float(getattr(self.geometry, 'wave_time', 0.0) or 0.0))
         self.geometry.render(textured=True, mode=mode)
 
-    def _render_shader_appearance(self, mode: Any) -> Any:
-        """Draw the geometry through the GLSL program the appearance carries.
+    def _render_shader_appearance(self, mode: Any) -> bool:
+        """Draw the geometry through the GLSL program the appearance brings; whether it did
 
-        A `Shader` appearance is an `Appearance` that brings its own program
-        instead of a material and a texture. The program is bound and given the
-        uniforms it names, then the geometry draws into it exactly as it would
-        into the pass's own: the vertex arrays go to the locations
-        `OpenGLContext.scenegraph.vertexsemantics` declares, and
-        `GLSLObject.compile` has bound the shader's inputs to match.
+        A `Shader` appearance carries a program instead of a material and a
+        texture; an X3D `Appearance` lists shaders, the first that runs
+        drawing in place of its material. The appearance's `drawProgram` binds
+        the program and gives it its uniforms, and answers what the geometry
+        draws into in place of the pass's programs, or None where no program
+        of its own runs. The vertex arrays go to the locations
+        `OpenGLContext.scenegraph.vertexsemantics` declares, which the
+        program's inputs are bound to.
         """
-        from OpenGLContext.passes.shaderpass import ShaderAppearanceProgram
-
         # What the pass expects bound for the shapes that follow this one; the
         # appearance's program replaces it for one draw and is put back after,
         # the same discipline the raw-GL layers follow.
         previous = mode.current_program() if hasattr(mode, 'current_program') else 0
-        _lit, _textured, _alpha, token = self.appearance.render(mode=mode)
-        if not token:
-            return
         pass_program = mode.shader_program
-        mode.shader_program = ShaderAppearanceProgram(token)
+        drawn = self.appearance.drawProgram(mode, self)
+        if drawn is None:
+            return False
+        mode.shader_program = drawn
         try:
             self.geometry.render(textured=True, mode=mode)
         finally:
             mode.shader_program = pass_program
-            self.appearance.renderPost(token, mode=mode)
+            self.appearance.releaseProgram(drawn, mode)
             if previous:
                 glUseProgram(previous)
+            # The program may have replaced the textures on the pass's units;
+            # the next shape binds its material's again.
+            forget = getattr(pass_program, 'release_coverage', None)
+            if forget is not None:
+                forget()
+            elif hasattr(pass_program, '_boundTextures'):
+                pass_program._boundTextures = None
+        return True
 
     def RenderTransparent(self, mode: Any) -> Any:
         if not self.geometry:

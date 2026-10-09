@@ -210,14 +210,14 @@ class ViewPlatform(object):
             (x, y, z) = position
             # shouldn't this last value be 1.0?
             # after all, this is supposed to be an object-space coordinate
-            self.position = array((x, y, z, 1.0), "f")
+            self.position = array((x, y, z, 1.0), "d")
         elif len(position) != 4:
             raise ValueError(
                 """ViewPlatform setPosition got a position value which is neither 3 nor 4 components in length: %r"""
                 % (position)
             )
         else:
-            self.position = array(position, "f")
+            self.position = array(position, "d")
 
     def setOrientation(
         self, orientation: Sequence[float] | Quaternion

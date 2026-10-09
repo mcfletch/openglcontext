@@ -5,8 +5,8 @@ allocations, uploads and compiles are counted by
 :func:`OpenGLContext.testing.stillframe.check_still_frame`. The scenes are the
 ones a game's still moment is made of: VRML97 primitives through both
 renderers, a field of shapes drawn as one instanced group, a mirror with
-bloom, shadows, text, X3D's line, point and fill properties, and X3D's NURBS
-geometry.
+bloom, shadows, text, X3D's line, point and fill properties, X3D's NURBS
+geometry, pick sensors and ClipPlanes.
 """
 import pytest
 
@@ -69,6 +69,68 @@ def _styled():
                             appearance=look)]
 
 
+def _picked():
+    """Primitives that a line and a sphere pick each frame"""
+    from vrml.x3d import picking  # noqa: PLC0415 kept with its use
+    group = basenodes.Group(children=_primitives())
+    line = basenodes.IndexedLineSet(coord=basenodes.Coordinate(point=[(-6, 0, -8), (6, 0, -8)]),
+                                    coordIndex=[0, 1])
+    return [group,
+            picking.LinePickSensor(pickingGeometry=line, pickTarget=[group],
+                                   intersectionType='GEOMETRY', sortOrder='ALL'),
+            picking.PrimitivePickSensor(pickingGeometry=basenodes.Sphere(radius=3),
+                                        pickTarget=[group], intersectionType='GEOMETRY')]
+
+
+def _clipped():
+    """Primitives cut by two ClipPlanes"""
+    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+    return [basenodes.Group(children=[x3d.ClipPlane(plane=(0, 1, 0, 0)),
+                                      x3d.ClipPlane(plane=(1, 0, 0, 1)), *_primitives()])]
+
+
+def _textured():
+    """A MultiTexture with a cube map, a 3D texture, a generated cube map and a
+    rendered texture drawn once, and a texture projector"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    pixel = b'<PixelTexture image="1 1 3 0xFF8000"/>'
+    sides = b''.join(b'<PixelTexture containerField="%s" image="1 1 3 0x00FF00"/>' % side
+                     for side in (b'frontTexture', b'backTexture', b'leftTexture',
+                                  b'rightTexture', b'topTexture', b'bottomTexture'))
+    square = (b'<IndexedTriangleSet index="0 1 2 0 2 3" solid="false">'
+              b'<Coordinate point="-1 -1 -6 1 -1 -6 1 1 -6 -1 1 -6"/></IndexedTriangleSet>')
+
+    def shape(texture, x):
+        return (b'<Transform translation="%d 0 0"><Shape><Appearance><Material/>%s'
+                b'</Appearance>%s</Shape></Transform>' % (x, texture, square))
+    body = (shape(b"<MultiTexture mode='\"MODULATE\" \"ADD\"'>" + pixel
+                  + b'<ComposedCubeMapTexture>' + sides + b'</ComposedCubeMapTexture>'
+                  + b'<PixelTexture3D image="1 1 1 2 0x40 0xC0"/></MultiTexture>', -3)
+            + shape(b'<GeneratedCubeMapTexture size="8"/>', 0)
+            + shape(b'<RenderedTexture width="8" height="8"/>', 3)
+            + b'<TextureProjector location="0 0 0" direction="0 0 -1">' + pixel
+            + b'</TextureProjector>')
+    return Loader.loads(b'<X3D version="4.0"><Scene>' + body + b'</Scene></X3D>', 'still.x3d')
+
+
+def _shaded():
+    """A box drawn by an X3D shader with a field, a light, a texture and an attribute"""
+    from tests.unit.test_x3d_shaders import GEOMETRIES, GREEN_HEAT, composed, document, load
+    fragment = """<![CDATA[#version 330 core
+uniform vec3 colour;
+uniform x3d_LightSourceParameters x3d_LightSource[x3d_MaxLights];
+uniform sampler2D x3d_Texture2D[x3d_MaxTextures];
+out vec4 c;
+void main() { c = vec4(colour * x3d_LightSource[0].color, 1.0) * texture(x3d_Texture2D[0], vec2(0.5)); }
+]]>"""
+    return load(document(
+        composed(fragment, fields='<field name="colour" type="SFColor" '
+                 'accessType="inputOutput" value="1 0 0"/>'),
+        geometry=GEOMETRIES['IndexedTriangleSet'] % GREEN_HEAT,
+        texture='<PixelTexture image="1 1 3 0xFFFFFF"/>',
+        scene='<DirectionalLight direction="0 0 -1"/>'))
+
+
 def _nurbs():
     """X3D NURBS surfaces, a sweep and a curve, through the mesh and line paths"""
     from tests.unit.test_mirrored_geometry import _x3d_patch, _x3d_sweep, _x3d_trimmed  # noqa: PLC0415 kept with its use
@@ -95,6 +157,13 @@ PBR = {'OPENGLCONTEXT_RENDERER': 'pbr'}
     pytest.param(_primitives, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='shadows'),
     pytest.param(_text, PBR, id='text'),
     pytest.param(_styled, PBR, id='line-point-fill-properties'),
+    pytest.param(_picked, PBR, id='pick-sensors'),
+    pytest.param(_clipped, dict(PBR, OPENGLCONTEXT_SHADOWS='1'), id='clip-planes'),
+    pytest.param(_textured, PBR, id='texture-layers-generated-projected-pbr'),
+    pytest.param(_textured, {'OPENGLCONTEXT_RENDERER': 'flat'},
+                 id='texture-layers-generated-projected-flat'),
+    pytest.param(_shaded, PBR, id='x3d-shader-pbr'),
+    pytest.param(_shaded, {'OPENGLCONTEXT_RENDERER': 'flat'}, id='x3d-shader-flat'),
     pytest.param(_nurbs, PBR, id='x3d-nurbs-pbr'),
     pytest.param(_nurbs, {'OPENGLCONTEXT_RENDERER': 'flat'}, id='x3d-nurbs-flat'),
 ])

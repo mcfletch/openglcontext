@@ -20,11 +20,14 @@ out vec3 vColor;
 out vec3 vEyePosition;    // for the fog: its length, per fragment
 out float vAlong;         // the distance along the polyline
 
+#include "_clipplane_inc.glsl"
+
 void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
     vec4 eyePosition = mv * vec4(aPosition, 1.0);
     vEyePosition = eyePosition.xyz;
     gl_Position = projectionMatrix * eyePosition;
+    clipByPlanes(aPosition);
     vColor = aColor;
     vAlong = aTexCoord.s;
 }

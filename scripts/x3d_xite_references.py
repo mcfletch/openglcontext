@@ -25,6 +25,11 @@ downloaded from npm once, at :data:`VERSION`, and checked against
 :data:`TARBALL_SHA256`. Each document and X_ITE are served from 127.0.0.1;
 nothing else is fetched.
 
+Each browser draws :data:`CHUNK` documents in a process of its own, killed if
+it outlasts a minute and :data:`LOAD_TIMEOUT` a document. A browser whose
+driver dies stops there; the documents it left undrawn are drawn again, five to
+a browser.
+
 The script reads only the standard library and Playwright, so the corpus's
 layout and the slug a document's files are named by are written out here as
 well as in ``OpenGLContext.bin.x3d_regression``;
@@ -34,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import datetime
 import functools
 import hashlib
@@ -327,6 +333,10 @@ class Renderer:
     def version(self) -> str:
         return str(self._browser.version)
 
+    def connected(self) -> bool:
+        """Whether the browser can still be reached"""
+        return bool(self._browser.is_connected())
+
     def render(self, relative: str, out: str) -> dict[str, Any]:
         """Draw the document at `relative` in the folder into the PNG `out`:
         ``ok``, the ``errors`` the page reported, and ``seconds``"""
@@ -368,11 +378,102 @@ def default_jobs() -> int:
     return max(1, (os.cpu_count() or 1) // 4)
 
 
+#: Documents one browser draws before it is closed and another opened.
+CHUNK = 25
+#: Whether each chunk is drawn by a process of its own. A browser driver that
+#: dies, or hangs, then costs that chunk alone, and its undrawn documents are
+#: drawn again in the next pass.
+ISOLATED = True
+
+
+class DriverLost(RuntimeError):
+    """The browser's driver has gone; nothing more can be drawn through it"""
+
+
+def chunks(documents: Sequence[Document], size: int) -> list[list[Document]]:
+    """`documents` in runs of at most `size`, each from one served folder"""
+    found: list[list[Document]] = []
+    by_root: dict[str, list[Document]] = {}
+    for document in documents:
+        by_root.setdefault(document.root, []).append(document)
+    for share in by_root.values():
+        found.extend(share[index:index + size] for index in range(0, len(share), size))
+    return found
+
+
+def drawn_since(document: Document, out_dir: str, since: float) -> Optional[bool]:
+    """Whether `document`'s record written since `since` says it drew; None for no such record"""
+    record = os.path.join(out_dir, document.slug + '.json')
+    try:
+        if os.path.getmtime(record) < since:
+            return None
+        with open(record, 'rb') as stream:
+            return bool(json.load(stream).get('ok'))
+    except (OSError, ValueError):
+        return None
+
+
+def draw_chunk(chunk: Sequence[Document], out_dir: str, size: tuple[int, int],
+               dist: str) -> None:
+    """Draw `chunk`, one folder's documents, in one browser; stop if its driver goes"""
+    root = chunk[0].root
+    with Renderer(root, dist, size) as renderer:
+        for document in chunk:
+            out = os.path.join(out_dir, document.slug + '.png')
+            report = renderer.render(os.path.relpath(document.path, root), out)
+            if not report['ok'] and not renderer.connected():
+                raise DriverLost('the browser driver went while drawing %s' % document.name)
+            record = dict(report, scene=document.name, x_ite=VERSION,
+                          chromium=renderer.version, size=list(size),
+                          rendered_at=datetime.datetime.now().isoformat(timespec='seconds'))
+            write_file(os.path.join(out_dir, document.slug + '.json'),
+                       json.dumps(record, indent=2).encode('utf-8'))
+            print('  %-5s %s' % ('OK' if report['ok'] else 'FAIL', document.name), flush=True)
+
+
+def run_chunk(chunk: Sequence[Document], out_dir: str, size: tuple[int, int],
+              dist: str) -> None:
+    """Draw `chunk`: in a process of its own where :data:`ISOLATED`, killed after
+    :data:`LOAD_TIMEOUT` and a minute for each document"""
+    if not ISOLATED:
+        with contextlib.suppress(DriverLost):
+            draw_chunk(chunk, out_dir, size, dist)
+        return
+    with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as stream:
+        json.dump({'documents': [list(document) for document in chunk], 'out': out_dir,
+                   'size': list(size), 'dist': dist}, stream)
+    try:
+        subprocess.run([sys.executable, os.path.abspath(__file__), '--worker', stream.name],
+                       timeout=len(chunk) * (LOAD_TIMEOUT + 60.0), check=False)
+    except subprocess.TimeoutExpired:
+        print('  a browser hung; its undrawn documents are drawn again', flush=True)
+    finally:
+        os.unlink(stream.name)
+
+
+def worker(path: str) -> int:
+    """Draw the chunk a parent wrote to `path`; 3 where the driver went"""
+    with open(path, encoding='utf-8') as stream:
+        given = json.load(stream)
+    chunk = [Document(*entry) for entry in given['documents']]
+    try:
+        draw_chunk(chunk, given['out'], tuple(given['size']), given['dist'])
+    except DriverLost as error:
+        print('  %s' % error, flush=True)
+        # Closing through a driver that has gone waits for it forever.
+        os._exit(3)
+    return 0
+
+
 def render_all(documents: Sequence[Document], out_dir: str, size: tuple[int, int],
                jobs: int, refresh: bool = False) -> Outcome:
     """Draw each document without a reference in `out_dir` (each, with `refresh`),
     `jobs` browsers at a time, installing the browser where something is to
-    be drawn"""
+    be drawn
+
+    Each browser draws :data:`CHUNK` documents. The documents a lost or hung
+    browser left undrawn are drawn again, five to a browser, once.
+    """
     wanted = [document for document in documents
               if refresh or not os.path.exists(os.path.join(out_dir, document.slug + '.png'))]
     if not wanted:
@@ -380,32 +481,18 @@ def render_all(documents: Sequence[Document], out_dir: str, size: tuple[int, int
     ensure_browser()
     dist = distribution()
     os.makedirs(out_dir, exist_ok=True)
-    by_root: dict[str, list[Document]] = {}
-    for document in wanted:
-        by_root.setdefault(document.root, []).append(document)
-    failed: list[str] = []
-
-    def draw(root: str, share: Sequence[Document]) -> None:
-        with Renderer(root, dist, size) as renderer:
-            for document in share:
-                out = os.path.join(out_dir, document.slug + '.png')
-                report = renderer.render(os.path.relpath(document.path, root), out)
-                record = dict(report, scene=document.name, x_ite=VERSION,
-                              chromium=renderer.version, size=list(size),
-                              rendered_at=datetime.datetime.now().isoformat(timespec='seconds'))
-                write_file(os.path.join(out_dir, document.slug + '.json'),
-                           json.dumps(record, indent=2).encode('utf-8'))
-                if not report['ok']:
-                    failed.append(document.name)
-                print('  %-5s %s' % ('OK' if report['ok'] else 'FAIL', document.name), flush=True)
-
-    workers = max(1, jobs)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(draw, root, share[index::workers])
-                   for root, share in by_root.items() for index in range(workers)
-                   if share[index::workers]]
-        for future in futures:
-            future.result()
+    since = time.time() - 1.0
+    remaining: Sequence[Document] = wanted
+    for size_of_chunk in (CHUNK, 5):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+            for future in [pool.submit(run_chunk, chunk, out_dir, size, dist)
+                           for chunk in chunks(remaining, size_of_chunk)]:
+                future.result()
+        remaining = [document for document in remaining
+                     if drawn_since(document, out_dir, since) is None]
+        if not remaining:
+            break
+    failed = [document.name for document in wanted if not drawn_since(document, out_dir, since)]
     return Outcome(len(wanted), sorted(failed))
 
 
@@ -419,6 +506,9 @@ def _parse_size(text: str) -> tuple[int, int]:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    given = list(sys.argv[1:] if argv is None else argv)
+    if given[:1] == ['--worker']:
+        return worker(given[1])
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--corpus', default=None, metavar='DIR',
                         help="the corpus directory (default: pyvrml97's, "
@@ -438,7 +528,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument('--size', type=_parse_size, default=DEFAULT_SIZE, metavar='WxH',
                         help='the size of each render (default: %dx%d, as Web3D renders)'
                         % DEFAULT_SIZE)
-    options = parser.parse_args(argv)
+    options = parser.parse_args(given)
     root = options.corpus or corpus_directory()
     documents = find_documents(root, options.archive or DEFAULT_ARCHIVES, options.only)
     if not documents:

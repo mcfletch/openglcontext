@@ -123,3 +123,18 @@ class TestTheSignalItself:
                                   signal=switch_module.SWITCH_CHANGE_SIGNAL,
                                   sender=switch)
         assert heard == []
+
+
+def test_a_group_inside_itself_is_walked_once(caplog) -> None:
+    """A document can put a group among its own descendants; the walk stops there"""
+    shape = Shape(geometry=Box())
+    inner = Group(children=[shape])
+    outer = Group(children=[inner])
+    inner.children.append(outer)
+    watcher = FlatPass.__new__(FlatPass)
+    watcher.nodePaths = {}
+    watcher.paths = {}
+    watcher.contexts = []
+    watcher.integrate(outer)
+    assert len(watcher.npFor(shape)) == 1
+    assert 'inside itself' in caplog.text

@@ -257,3 +257,15 @@ def test_a_document_with_none_has_x3ds_default_type():
     code = Navigating()
     navigationinfo.apply(code, None)
     assert code.manager.selected == []
+
+
+def test_a_viewpoints_scale_multiplies_the_speeds():
+    """A GeoViewpoint's scale, which follows the viewer's height"""
+    context = Navigating()
+    context.manager = SpeedManager()
+    info = NavigationInfo(speed=2.0)
+    _scene = sceneGraph(children=[info])
+    navigationinfo.apply(context, info, scale=3.0)
+    assert context.manager.declared[0].walkSpeed == 18.0
+    navigationinfo.apply(context, info, scale=0.5)
+    assert context.manager.declared[0].walkSpeed == 3.0

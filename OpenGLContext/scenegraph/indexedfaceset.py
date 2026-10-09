@@ -60,8 +60,9 @@ XXX This node needs some serious optimization.  Possible approaches:
 from typing import Any, Optional
 
 import numpy as np
-from OpenGLContext.scenegraph import coordinatebounded
+from OpenGLContext.scenegraph import coordinatebounded, coordinatedeform, coordinates
 from vrml.vrml97 import basenodes
+from vrml.x3d import nodes as x3d
 
 # The compile pipeline lives in ``ifscompiler``; re-exported here so importers
 # that used ``from ...indexedfaceset import IndexedPolygonsCompiler`` etc. keep
@@ -123,6 +124,21 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         have everything
             once tesselated, we have a simple "take" to get values
     """
+
+    def planeCoordinates(self) -> Any:
+        """The TextureCoordinate the face set's 2D texture coordinates are read from, or None
+
+        ``texCoord`` itself, or the first TextureCoordinate entry of a
+        MultiTextureCoordinate; None where there is none (a generator, a 3D
+        set), and the faces take X3D's default coordinates.
+        """
+        found = self.texCoord
+        if isinstance(found, x3d.MultiTextureCoordinate):
+            entries = [entry for entry in found.texCoord
+                       if isinstance(entry, x3d.TextureCoordinate)]
+            return entries[0] if entries else None
+        return found if isinstance(found, x3d.TextureCoordinate) else None
+
     #: Draws with the pass's lit programs alone, so one draw can serve every
     #: view of a frame that sees it; see :mod:`OpenGLContext.multiview.strategy`.
     multiviewShared = True
@@ -146,6 +162,9 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         textured -- can skip textureCoordinates if not
         transparent -- need to sort triangle geometry...
         """
+        deformer = coordinatedeform.deformer_for(self)
+        if deformer is not None:
+            return deformer.render(self, visible, lit, textured, transparent, mode)
         renderer = mode.cache.getData(self)
         if renderer is None:
             renderer = self.compile(visible, lit, textured, transparent, mode=mode)
@@ -180,9 +199,16 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
             mode=mode,
         )
 
+    def boundingVolume(self, mode: Any) -> Any:
+        """The coordinates' bounds; where they are deformed, the deformed set's"""
+        deformer = coordinatedeform.deformer_for(self)
+        if deformer is not None:
+            return deformer.boundingVolume(self, mode)
+        return super().boundingVolume(mode)
+
     # -- instancing -------------------------------------------------------
     def _hasGeometry(self) -> bool:
-        return bool(len(self.coordIndex) and self.coord and len(self.coord.point))
+        return bool(len(self.coordIndex) and self.coord and len(coordinates.points(self.coord)))
 
     def _instanceArrays(self) -> Optional[tuple[Any, Any, Any, Any]]:
         """Expanded (positions, normals, texcoords, colours) triangle soup for instancing.
@@ -209,6 +235,28 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         positions, normals, texcoords, colours = found
         return meshdata.arrays(positions, normals, texcoords, colours)
 
+    def composedArrays(self) -> Any:
+        """:meth:`meshArrays` with the coordinate index each vertex was read from
+
+        None where there is nothing to draw.
+        """
+        from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 meshdata reads the node path module
+        if not self._hasGeometry():
+            return None
+        found = ArrayGeometryCompiler(self).expandedArraysAndSources()
+        if found is None:
+            return None
+        (positions, colours, normals, texcoords), sources = found
+        if not self.ccw:
+            # The tessellation keeps the faces' own winding, which ccw false
+            # says is clockwise: turn each triangle round.
+            turned = np.arange(len(positions)).reshape(-1, 3)[:, [0, 2, 1]].ravel()
+            positions, sources = positions[turned], sources[turned]
+            normals = None if normals is None else np.asarray(normals)[turned]
+            texcoords = None if texcoords is None else np.asarray(texcoords)[turned]
+            colours = None if colours is None else np.asarray(colours)[turned]
+        return meshdata.arrays(positions, normals, texcoords, colours, sources=sources)
+
     def instanceContentKey(self) -> Optional[tuple[Any, ...]]:
         """Hashable signature so distinct-but-identical IFS nodes share one draw.
 
@@ -228,11 +276,12 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
                 h.update(np.ascontiguousarray(arr).tobytes())
 
         feed('coordIndex', self.coordIndex)
-        feed('point', self.coord.point if self.coord else None)
+        feed('point', coordinates.points(self.coord))
         feed('normalIndex', self.normalIndex)
         feed('normal', self.normal.vector if self.normal else None)
         feed('texCoordIndex', self.texCoordIndex)
-        feed('texCoord', self.texCoord.point if self.texCoord else None)
+        flat = self.planeCoordinates()
+        feed('texCoord', flat.point if flat else None)
         feed('colorIndex', self.colorIndex)
         feed('color', self.color.color if self.color else None)
         return ('IndexedFaceSet', h.hexdigest(),

@@ -120,6 +120,10 @@ CASES = {
     'ElevationGrid': lambda: basenodes.ElevationGrid(
         xDimension=3, zDimension=3, xSpacing=0.5, zSpacing=0.5,
         height=[0, 0.2, 0, 0.1, 0.5, 0.1, 0, 0.3, 0], solid=False),
+    'GeoElevationGrid': lambda: basenodes.GeoElevationGrid(
+        xDimension=3, zDimension=3, xSpacing=0.0000045, zSpacing=0.0000045,
+        height=[0, 0.2, 0, 0.1, 0.5, 0.1, 0, 0.3, 0], solid=False,
+        geoOrigin=basenodes.GeoOrigin(geoCoords=(0.0, 0.0, 0.0), rotateYUp=True)),
     'PBRMesh': lambda: PBRMesh(
         positions=np.array(TRIANGLE, 'f'), normals=np.array([(0, 0, 1)] * 3, 'f'),
         indices=np.array([0, 1, 2], np.uint32)),

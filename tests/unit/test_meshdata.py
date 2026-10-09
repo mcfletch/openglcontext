@@ -97,3 +97,17 @@ def test_flat_normals_are_each_triangles_own():
     assert np.allclose(normals[:, 0], normals[:, 1]) and np.allclose(normals[:, 1], normals[:, 2])
     faces = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
     assert (np.einsum('ij,ij->i', faces, normals[:, 0]) > 0).all()
+
+
+@pytest.mark.parametrize('geometry', [
+    basenodes.IndexedFaceSet(coord=QUAD, coordIndex=[0, 1, 2, 3, -1]),
+    basenodes.IndexedTriangleSet(coord=QUAD, index=[0, 1, 2, 0, 2, 3]),
+    basenodes.IndexedFaceSet(coord=QUAD, coordIndex=[3, 0, 1, -1, 1, 2, 3, -1],
+                             normalPerVertex=False),
+])
+def test_a_composed_geometry_names_the_coordinate_of_each_vertex(geometry):
+    """What a deformer of the coordinates moves each drawn vertex by."""
+    found = geometry.composedArrays()
+    points = np.asarray(QUAD.point)
+    np.testing.assert_allclose(found.attributes['POSITION'], points[found.sources])
+    assert set(found.sources.tolist()) == {0, 1, 2, 3}

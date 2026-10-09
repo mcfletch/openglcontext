@@ -3,7 +3,8 @@
 The sensors are pyvrml97's (:mod:`vrml.x3d.sensors`). Once a frame, after the
 views are placed, the pass calls :func:`sense` with every sensor's path:
 
-- a `ProximitySensor` is given the viewer's pose, the active view's camera;
+- a `ProximitySensor` or `GeoProximitySensor` is given the viewer's pose,
+  the active view's camera;
 - a `TransformSensor` is given its `targetObject`'s pose, from the first path
   the scene has to it, and is left where the scene does not draw the target;
 - a `VisibilitySensor` is in view where its box is within any view's frustum.
@@ -79,7 +80,7 @@ def sense(paths: Iterable[Any], nodePaths: Mapping[Any, Sequence[Any]],
         if not getattr(sensor, 'enabled', True):
             sensor.sense(False, None)
             continue
-        if isinstance(sensor, sensors.ProximitySensor):
+        if isinstance(sensor, (sensors.ProximitySensor, sensors.GeoProximitySensor)):
             sensor.observe(*pose_in(viewer, _matrix(path)))
         elif isinstance(sensor, sensors.TransformSensor):
             targets = [found for found in nodePaths.get(sensor.targetObject, ())

@@ -573,6 +573,9 @@ class ZonesMixin(PassResources):
         local_fog = getattr(self, 'applyLocalFog', None)
         if local_fog is not None:
             local_fog(shader, path)
+        clip = getattr(self, 'applyClipPlanes', None)
+        if clip is not None:
+            clip(shader, path, tmatrix)
         scope = self.lightScopes.mask(path)
         if not self._zones:
             self._applyLightsOff(shader, scope, program)
@@ -609,10 +612,14 @@ class ZonesMixin(PassResources):
         """
         if not members:
             return
-        # The group draws as one, in the LocalFog of the first of it.
+        # The group draws as one, in the LocalFog of the first of it; no
+        # ClipPlane clips a member of a group (ClipPlanes.apart).
         local_fog = getattr(self, 'applyLocalFog', None)
         if local_fog is not None:
             local_fog(shader, members[0][4])
+        clip = getattr(self, 'applyClipPlanes', None)
+        if clip is not None:
+            clip(shader, None, None)
         if not self._zones:
             scope = 0
             if self.lightScopes:

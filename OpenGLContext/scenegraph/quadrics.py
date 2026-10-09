@@ -90,6 +90,8 @@ class Quadric( nodetypes.Geometry, node.Node ):
             return self._render_shader(mode)
 
         # Legacy rendering path
+        from OpenGLContext.scenegraph.winding import apply_winding_cull
+        apply_winding_cull( mode, True, bool( getattr( self, 'solid', True ) ) )
         vbos = self._lod_vbos( mode )
         if vbos is None:
             return 1
@@ -134,7 +136,7 @@ class Quadric( nodetypes.Geometry, node.Node ):
         coords, indices, count = vbos
         return render_geometry(mode, GeometryArrays.interleaved(
             coords, VertexFormat.V3F_T2F_N3F, count=count, indices=indices,
-        ), owner=self, where=self.__class__.__name__)
+        ), owner=self, where=self.__class__.__name__, solid=bool( getattr( self, 'solid', True ) ))
 
     # -- distance level-of-detail -----------------------------------------
     def _lod_bounding_radius( self ) -> float:
@@ -241,7 +243,8 @@ class Sphere( basenodes.Sphere, Quadric ):
     def instanceContentKey( self ) -> tuple[Any, ...]:
         """Spheres of the same radius/tessellation share geometry -> one instanced
         draw (the molecular-model case: thousands of identical atoms)."""
-        return ('Sphere', round(float(self.radius), 6), round(float(self.phi), 6))
+        return ('Sphere', round(float(self.radius), 6), round(float(self.phi), 6),
+                bool(self.solid))
 
     def _instanceArrays( self ) -> tuple[Any, Any]:
         return self.compileArrays( 0 )
@@ -347,7 +350,7 @@ class Cone( basenodes.Cone, Quadric ):
 
     def instanceContentKey( self ) -> tuple[Any, ...]:
         return ('Cone', round(float(self.height), 6), round(float(self.bottomRadius), 6),
-                bool(self.bottom), bool(self.side))
+                bool(self.bottom), bool(self.side), bool(self.solid))
 
     def _instanceArrays( self ) -> tuple[Any, Any]:
         return self.cone( self.height, self.bottomRadius, self.bottom, self.side,
@@ -490,7 +493,7 @@ class Cylinder( basenodes.Cylinder, Quadric ):
 
     def instanceContentKey( self ) -> tuple[Any, ...]:
         return ('Cylinder', round(float(self.height), 6), round(float(self.radius), 6),
-                bool(self.bottom), bool(self.side), bool(self.top))
+                bool(self.bottom), bool(self.side), bool(self.top), bool(self.solid))
 
     def _instanceArrays( self ) -> tuple[Any, Any]:
         return Cone.cone( self.height, self.radius, self.bottom, self.side,

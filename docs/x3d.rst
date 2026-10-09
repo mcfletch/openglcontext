@@ -97,6 +97,8 @@ implements these X3D nodes, by component:
 - CADGeometry - CADAssembly, CADFace, CADLayer, CADPart, IndexedQuadSet, QuadSet
 - Core - MetadataBoolean, MetadataDouble, MetadataFloat, MetadataInteger,
   MetadataSet, MetadataString, WorldInfo
+- CubeMapTexturing - ComposedCubeMapTexture, GeneratedCubeMapTexture,
+  ImageCubeMapTexture
 - EnvironmentalEffects - Background, Fog, LocalFog, TextureBackground
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
@@ -104,7 +106,12 @@ implements these X3D nodes, by component:
 - Geometry2D - Arc2D, ArcClose2D, Circle2D, Disk2D, Polyline2D, Polypoint2D,
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
+- Geospatial - GeoCoordinate, GeoElevationGrid, GeoLOD, GeoLocation, GeoMetadata,
+  GeoOrigin, GeoPositionInterpolator, GeoProximitySensor, GeoTouchSensor,
+  GeoTransform, GeoViewpoint
 - Grouping - Group, StaticGroup, Switch, Transform
+- HAnim - HAnimDisplacer, HAnimHumanoid, HAnimJoint, HAnimMotion, HAnimPose,
+  HAnimSegment, HAnimSite
 - Followers - ColorChaser, ColorDamper, CoordinateChaser, CoordinateDamper,
   OrientationChaser, OrientationDamper, PositionChaser, PositionChaser2D,
   PositionDamper, PositionDamper2D, ScalarChaser, ScalarDamper,
@@ -123,23 +130,33 @@ implements these X3D nodes, by component:
   NurbsOrientationInterpolator, NurbsPatchSurface, NurbsPositionInterpolator,
   NurbsSet, NurbsSurfaceInterpolator, NurbsSweptSurface, NurbsSwungSurface,
   NurbsTextureCoordinate, NurbsTrimmedSurface
-- Picking - PickableGroup
+- ParticleSystems - BoundedPhysicsModel, ConeEmitter, ExplosionEmitter,
+  ForcePhysicsModel, ParticleSystem, PointEmitter, PolylineEmitter,
+  SurfaceEmitter, VolumeEmitter, WindPhysicsModel
+- Picking - LinePickSensor, PickableGroup, PointPickSensor, PrimitivePickSensor,
+  VolumePickSensor
 - PointingDeviceSensor - CylinderSensor, PlaneSensor, SphereSensor, TouchSensor
-- Rendering - Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
+- Rendering - ClipPlane, Color, ColorRGBA, Coordinate, CoordinateDouble, IndexedLineSet,
   IndexedTriangleFanSet, IndexedTriangleSet, IndexedTriangleStripSet, LineSet,
   Normal, PointSet, Tangent, TriangleFanSet, TriangleSet, TriangleStripSet
 - RigidBodyPhysics - BallJoint, CollidableOffset, CollidableShape,
   CollisionCollection, CollisionSensor, CollisionSpace, Contact,
   DoubleAxisHingeJoint, MotorJoint, RigidBody, RigidBodyCollection,
   SingleAxisHingeJoint, SliderJoint, UniversalJoint
+- Shaders - ComposedShader, FloatVertexAttribute, Matrix3VertexAttribute,
+  Matrix4VertexAttribute, PackagedShader, ProgramShader, ShaderPart,
+  ShaderProgram
 - Shape - Appearance, FillProperties, LineProperties, Material, PhysicalMaterial,
   PointProperties, Shape, TwoSidedMaterial, UnlitMaterial
 - Sound - AudioClip, Sound
-- Text - FontStyle, Text
-- Texturing - ImageTexture, MovieTexture, MultiTextureCoordinate,
-  MultiTextureTransform, PixelTexture, TextureCoordinate, TextureProperties,
-  TextureTransform
-- Texturing3D - TextureTransformMatrix3D
+- Text - FontLibrary, FontStyle, Text
+- TextureProjection - TextureProjector, TextureProjectorParallel
+- Texturing - ImageTexture, MovieTexture, MultiTexture, MultiTextureCoordinate,
+  MultiTextureTransform, PixelTexture, RenderedTexture, TextureCoordinate,
+  TextureProperties, TextureTransform
+- Texturing3D - ComposedTexture3D, ImageTexture3D, PixelTexture3D,
+  TextureCoordinate3D, TextureCoordinate4D, TextureTransform3D,
+  TextureTransformMatrix3D
 - Time - TimeSensor
 
 .. x3d-implemented-end
@@ -204,8 +221,11 @@ A composed geometry's first texture coordinate set may come from a
 ``TextureCoordinateGenerator``: the PBR vertex shader makes it in the
 generator's ``mode`` (``OpenGLContext.scenegraph.texgen``), from the
 vertex's own or camera-space position or normal. A generator for a later
-set is reported once and not drawn, and the fixed-function and VRML97
-shader paths do not generate coordinates.
+set makes that set where a ``MultiTexture`` layer reads it, per fragment
+(see :ref:`x3d-texturing`), in both renderers; the fixed-function path does not
+generate coordinates. A ``TextureCoordinate3D`` or ``TextureCoordinate4D``
+in a composed geometry's ``MultiTextureCoordinate`` is its 3D texture
+coordinates (the first of them; it takes no 2D set's number).
 
 A grouping node or shape whose ``visible`` is false is not drawn, picked or
 shadowed, nor is anything under it; setting it takes effect on the next frame.
@@ -267,7 +287,160 @@ A geometry that is not ``solid`` draws its back faces with
 fields where its ``separateBackColor`` is true, through the PBR program: the
 shape is drawn a side at a time and is not batched with others. The alpha
 mode is the front material's, and the fixed-function path draws both sides
-with the front material.
+with the front material. A ``Box``, ``Sphere``, ``Cone`` or ``Cylinder``
+whose ``solid`` is false draws its inside.
+
+A ``FontLibrary`` reads a TrueType or OpenType file, under the document's url
+policy, as a font family its ``FontStyle`` nodes may name
+(:ref:`text-font-library`).
+
+Clip planes
+~~~~~~~~~~~
+
+An enabled ``ClipPlane`` cuts away part of its siblings in their parent group
+and of everything under them: a point is kept where the ``plane`` (a, b, c,
+d) gives a·x + b·y + c·z + d of zero or more, in the ClipPlane's own
+coordinate system, so a plane under a ``Transform`` moves and turns with it.
+ClipPlanes in nested groups all apply; one draw takes the eight whose groups
+are nearest it, and a warning names a draw that more reach
+(``OpenGLContext.passes.clipscope``).
+
+- The planes are handed to each draw in the drawn object's own frame
+  (``passes.clippass``), and every vertex shader that draws the scene's
+  shapes writes ``gl_ClipDistance`` from them (``_clipplane_inc.glsl``), so
+  they clip in each view, mirror and shadow map alike: what a plane cuts
+  away casts no shadow. Wide and dashed lines are clipped in their geometry
+  stage.
+- The compatibility profile clips with ``glClipPlane``, as many planes as
+  the context has (six at least).
+- A clipped shape is drawn by itself rather than in an instanced group.
+- A shape drawn with its own ``Shader`` program, and the engine's terrain,
+  vegetation and particle layers, which draw with programs of their own, are
+  not clipped.
+- Planes only cut: the cut is not capped, so a solid shape is open where a
+  plane passes through it.
+
+.. _x3d-texturing:
+
+Texturing
+~~~~~~~~~
+
+An appearance's ``texture`` may be a ``MultiTexture``, a cube map or a 3D
+texture as well as a 2D texture (``OpenGLContext.scenegraph.texturelayers``).
+Any of the three is drawn as a stage chain in place of the base colour map,
+in both renderers: the colour so far starts as the material's diffuse colour
+(a ``PhysicalMaterial``'s base colour, an ``UnlitMaterial``'s emissive
+colour, or the geometry's ``Color``), and each texture in turn combines with
+it by its ``mode``. A cube map or a 3D texture by itself is a chain of one
+that modulates. The chain's result is the surface's colour and alpha, which
+the material's lighting then shades. A shape drawn with a chain is drawn by
+itself, not batched with others.
+
+- ``MultiTexture``: up to four textures. For each, the first argument is the
+  texture's colour, or its ``source`` (``DIFFUSE``, ``SPECULAR`` or
+  ``FACTOR``, the node's ``color`` and ``alpha``), after its ``function``
+  (``COMPLEMENT``, ``ALPHA_REPLICATE``); the second is the colour so far.
+  ``mode`` names the operation, and a second after a comma for the alpha
+  (``"MODULATE,REPLACE"``); without one the alpha takes the same operation.
+  X3D 3's names without underscores (``MODULATEALPHA_ADDCOLOR``,
+  ``BLENDDIFFUSEALPHA``, ``DOTPRODUCT3``) are read as the names with them.
+  A missing mode is ``MODULATE``; an unknown one is reported once and read
+  as ``MODULATE``. Each stage's result is clamped to 0..1. The textures may
+  be cube maps and 3D textures as well as 2D textures, as
+  ``MultiTextureTeapot.x3d`` uses them; a fifth texture and a MultiTexture
+  inside a MultiTexture are reported once and left out.
+- Coordinates: layer i reads the geometry's texture coordinate node at
+  position i of its ``MultiTextureCoordinate`` (the last where there are
+  fewer), and the ``MultiTextureTransform`` entry at position i likewise; a
+  single coordinate node or transform serves every layer. A 2D layer reads
+  coordinate set 0 or 1 (a later set is read as set 0 and reported once), a
+  ``TextureCoordinateGenerator``'s coordinates made per fragment, or a 3D
+  set's s and t.
+- A cube map reads the world-space reflection of the view about the
+  surface, whatever coordinates the geometry gives it: it is an environment
+  the surface reflects. A 3D texture reads the geometry's 3D coordinates, a
+  generator's three coordinates (``COORD``, ``COORD_EYE``, the camera-space
+  modes and the noises), or, without either, its position across the
+  geometry's bounding box: s along x, t along y and r along z, 0 to 1.
+  ``TextureTransform3D`` and ``TextureTransformMatrix3D`` transform s, t and
+  r; a 4D coordinate is divided by its q.
+- The PBR program combines a ``PhysicalMaterial``'s or an
+  ``UnlitMaterial``'s chain in linear light, its textures decoded from sRGB
+  as base colour maps are; a ``Material``'s, drawn by X3D's Phong equation,
+  and the VRML97 renderer's combine the colours as they are given. The PBR
+  program reads a 2D layer through the base colour map's sampler and three
+  of the glTF extension maps' (a material drawn with a chain does not use
+  those maps), and one cube map and one 3D texture a draw, where the
+  driver's fragment stage has samplers left for them
+  (``pbrpass.LAYER_SAMPLERS_NEEDED``: a 32-sampler stage has). A driver
+  with 16 reads one 2D layer; what does not fit is reported once and left
+  out. The VRML97 renderer reads four 2D layers, a cube map and a 3D
+  texture.
+- The compatibility profile draws a MultiTexture's first 2D layer, combined
+  by its mode where the fixed-function texture environment has it
+  (``MODULATE``, ``REPLACE``, ``ADD``, ``ADD_SIGNED``, ``SUBTRACT``), a cube
+  map through the texture unit's reflection-map coordinates turned into world
+  space, and a 3D texture with its coordinates generated across the
+  geometry's bounds.
+
+``ComposedCubeMapTexture`` takes a 2D texture node a face: front is +Z, back
+-Z, left -X, right +X, top +Y and bottom -Y, each image lying on its face as
+a GL cube map face does (upright on the sides seen from outside the cube,
+the top's upper edge toward the back, the bottom's toward the front). Faces
+of different sizes are resampled to the largest, and the cube is drawn once
+all six have images. ``ImageCubeMapTexture`` reads a DDS cube map
+(uncompressed, or BC1 to BC3), a KTX 1.1 cube map (bytes, or S3TC), or one
+picture of the six faces: a horizontal cross (4:3, -X +Z +X -Z across the
+middle, +Y over +Z and -Y under it), a vertical cross (3:4, -Z under -Y and
+upside down), a strip of six in GL's order across or down, or 3x2
+(``OpenGLContext.loaders.textureimages``). KTX 2 and HDR cube maps are not
+read.
+
+``GeneratedCubeMapTexture`` is the scene drawn into a cube of ``size``
+texels a side from the local origin of the shape wearing it, along the world
+axes (``OpenGLContext.passes.generatedtextures``); ``RenderedTexture`` is
+the scene drawn into a ``width`` by ``height`` picture. Each frame draws,
+before any view, the ones the shapes drawn in the frame before wore, leaving
+those shapes out of the drawing, so a texture first shows the frame after
+its shape does (the pass asks for that frame). ``update`` ``NONE`` draws one
+once, the first time it is wanted, and keeps that drawing;
+``NEXT_FRAME_ONLY`` draws it once more and sets ``update`` to ``NONE``;
+``ALWAYS`` draws it with every frame the scene is drawn. A RenderedTexture
+draws from its ``viewpoint``, or without one from the camera's place; its
+``scene`` in place of the world, and its ``background`` and ``fog`` in place
+of the bound ones, where it has them; and with ``depthMap`` true it is the
+depth drawn, as grey, rather than the colour. X3D 4.1 declares
+RenderedTexture's file-output fields, which are kept and not acted on, and
+not these: ``update``, ``viewpoint``, ``scene``, ``background`` and ``fog``
+are the engine's, carried in a document in an ``OpenGLContext`` metadata
+set. Neither is drawn in the compatibility profile. A RenderedTexture is an
+ordinary 2D texture once drawn, and goes wherever one does.
+
+``ImageTexture3D`` reads a DDS or KTX volume, an NRRD volume of one to four
+components (raw, gzip, bzip2 or text, with a detached data file read beside
+its header; samples wider than a byte scaled from their range to 0..255), or
+one picture, a volume a slice deep, and sends ``width``, ``height``,
+``depth`` and ``colorDepth`` once read. ``ComposedTexture3D`` stacks its 2D
+textures as slices, resampled to the first's size; ``PixelTexture3D`` is
+its ``image``: components, width, height and depth, then the pixels s
+first, then t, then r (``OpenGLContext.scenegraph.texture3d``). The
+VolumeRendering documents' volumes load; volume rendering itself is a later
+component.
+
+A ``TextureProjector`` casts its ``texture`` from ``location`` along
+``direction`` through a perspective of ``fieldOfView`` (the smaller of the
+picture's two angles), and a ``TextureProjectorParallel`` straight along it
+across its ``fieldOfView`` rectangle; ``upVector`` turns the picture, and
+``nearDistance`` and ``farDistance``, where positive, bound its reach
+(``OpenGLContext.scenegraph.textureprojector``). Where it falls, on faces
+turned toward it, it modulates the surface's diffuse colour by its picture
+times its ``color``, weighted by the texel's alpha times ``intensity``, as
+X3D browsers draw it. Its ``global`` and scope are a light's, it lights
+nothing itself, and it sends ``aspectRatio`` when its picture is known. The
+first four that are on cast, each picture resampled to 512 texels a side
+(``OpenGLContext.passes.projectorpass``); the rest are reported once.
+``shadows`` is kept and not acted on, and the compatibility profile casts
+none.
 
 Lighting
 ~~~~~~~~
@@ -285,10 +458,16 @@ An ``EnvironmentLight`` with ``diffuseCoefficients`` (glTF's
 ``irradianceCoefficients``: nine RGB spherical-harmonic coefficients,
 multiplied by its ``color``) lights the scene as its image-based light, where
 the scene has no glTF image-based light of its own, with its ``intensity``
-and ``rotation`` (``OpenGLContext.scenegraph.environmentlight``). Its one
-specular level is made from the same coefficients, so smooth surfaces
-reflect a blurred environment; the cube-map textures, ``origin`` and
-``global`` are not read. It needs full image-based lighting
+and ``rotation`` (``OpenGLContext.scenegraph.environmentlight``). Its
+``specularTexture``, a ``ComposedCubeMapTexture`` or ``ImageCubeMapTexture``,
+is the environment smooth surfaces reflect, decoded from sRGB to linear
+light, each rougher level its faces averaged down by half; its
+``diffuseTexture`` is the irradiance over pi, read as its spherical-harmonic
+fit. The irradiance is the ``diffuseCoefficients`` where there are nine,
+else the diffuse cube map's, else the specular cube map convolved; without
+a specular cube map the one specular level is made from the irradiance, so
+smooth surfaces reflect a blurred environment. A ``GeneratedCubeMapTexture``,
+``origin`` and ``global`` are not read. It needs full image-based lighting
 (``ContextDefinition.ibl``).
 
 A document is lit by its own lights and its headlight: the PBR pass's
@@ -299,6 +478,9 @@ attenuation[1] d + attenuation[2] d², 1)``, so it never lights a surface
 more than its intensity. That is VRML97's rule too, so it holds for a
 ``PointLight`` or ``SpotLight`` built in code; a glTF light falls off
 inverse-square.
+
+A ``DirectionalLight`` or ``SpotLight`` whose ``direction`` is ``0 0 0``
+lights nothing.
 
 In a document, an ``Appearance`` with no ``material`` is unlit: the shape is
 its texture's colour, or white; a ``Shape`` with no ``appearance`` is unlit
@@ -496,6 +678,24 @@ examples, the ones whose contacts pass through a ``Script`` (``BallBounce``,
 ``BounceTrimesh``, ``CarDemoMain``) do not collide, since scripts are not
 run; the rest simulate as written.
 
+Humanoids
+~~~~~~~~~
+
+The HAnim component's humanoids are drawn as transforms of their joints,
+sites and segments, their skin is posed by the joints through the engine's
+skinning, displacers morph it, and ``HAnimMotion`` and ``HAnimPose`` move the
+joints, as do interpolators routed to them. :ref:`characters-hanim` describes
+what is drawn and how each field is read.
+Particle systems
+~~~~~~~~~~~~~~~~
+
+``ParticleSystem``, its six emitters and its three physics models are drawn by
+the engine's particles: every ``geometryType``, colour and texture-coordinate
+ramps keyed by a particle's age in seconds, and the physics models applied in
+order. A ``GEOMETRY`` system is lit as a shape is; the other types are unlit.
+The :ref:`particle systems page <x3d-particles>` says how each field is read,
+and ``oglc-x3d-particles`` opens a document using every node.
+
 Inline
 ~~~~~~
 
@@ -602,12 +802,12 @@ Sensors
 ~~~~~~~
 
 - The environmental sensors are told once a frame what they sense
-  (``OpenGLContext.scenegraph.x3dsensors``): a ``ProximitySensor`` the
-  active view's camera, a ``TransformSensor`` its ``targetObject`` where the
+  (``OpenGLContext.scenegraph.x3dsensors``): a ``ProximitySensor`` or
+  ``GeoProximitySensor`` the active view's camera, a ``TransformSensor`` its ``targetObject`` where the
   scene draws it, and a ``VisibilitySensor`` whether its box is within any
   view's frustum.
-- The pointing-device sensors (``TouchSensor``, ``PlaneSensor``,
-  ``CylinderSensor``, ``SphereSensor``) are told of their context's picked
+- The pointing-device sensors (``TouchSensor``, ``GeoTouchSensor``,
+  ``PlaneSensor``, ``CylinderSensor``, ``SphereSensor``) are told of their context's picked
   pointer (``OpenGLContext.scenegraph.x3dpointing``). The sensors reached are
   the enabled ones beside the geometry under the pointer, in the lowest group
   on its path that has any; the primary button presses them, and a drag
@@ -620,16 +820,328 @@ Sensors
   for the function, arrow and page keys, and ``shiftKey``, ``controlKey`` and
   ``altKey`` while those are held.
 - A ``StringSensor`` hears every character typed into its window.
+- The pick sensors are told once a frame what their ``pickingGeometry``
+  touches among the shapes under their ``pickTarget`` nodes
+  (:ref:`x3d-pick-sensors`).
 
 ``Context.observeEvents`` is how the sensors listen.
+
+.. _x3d-pick-sensors:
+
+Pick sensors
+~~~~~~~~~~~~
+
+``LinePickSensor``, ``PointPickSensor``, ``PrimitivePickSensor`` and
+``VolumePickSensor`` test their ``pickingGeometry``, in their own coordinate
+system, against every shape under their ``pickTarget`` nodes where the scene
+draws them (``OpenGLContext.scenegraph.x3dpicking``, with the arithmetic in
+``scenegraph.pickgeometry``). The events are pyvrml97's
+(``vrml.x3d.picking``). Each frame, after the views are placed, a sensor
+sends ``isActive TRUE`` when something is picked and ``isActive FALSE`` when
+nothing is, and ``pickedGeometry`` when the shapes chosen change.
+
+- ``pickedGeometry`` holds the picked ``Shape`` nodes. A shape placed twice
+  under the targets is two picks.
+- A shape under a ``PickableGroup`` whose ``pickable`` is false, or whose
+  ``objectType`` the sensor does not accept, is not picked; every
+  ``PickableGroup`` on the shape's path from the scene's root is asked. A
+  shape under none has the label ``ALL``. ``ALL`` on either side always
+  matches and ``NONE`` never does; otherwise ``MATCH_ANY`` wants a label in
+  common, ``MATCH_EVERY`` each of the sensor's labels among the group's, and
+  ``MATCH_ONLY_ONE`` exactly one in common.
+- ``sortOrder`` ``ANY`` sends the first shape found, ``CLOSEST`` (the
+  default) the nearest, ``ALL`` every one as found and ``ALL_SORTED`` every
+  one nearest first.
+- ``intersectionType`` ``BOUNDS`` (the default) tests against each shape's
+  bounding box; ``GEOMETRY`` against its triangles. ``GEOMETRY`` first
+  checks the box, so a shape out of reach costs a box test.
+- ``LinePickSensor`` takes an ``IndexedLineSet`` or ``LineSet``. With
+  ``GEOMETRY``, each crossing of a surface sends a ``pickedPoint``, the
+  surface's ``pickedNormal`` there and its ``pickedTextureCoordinate`` (z
+  0); with ``BOUNDS``, the point each segment enters the box, that face's
+  normal, and where in the box the point is, 0 to 1 on each axis. Distance
+  is measured along the line from its first point, so ``CLOSEST`` is the
+  first surface the line reaches.
+- ``PointPickSensor`` takes a ``PointSet`` and sends the ``pickedPoint`` of
+  those within a shape's box, or, with ``GEOMETRY``, within its triangles.
+- ``PrimitivePickSensor`` takes a ``Box``, ``Sphere``, ``Cylinder`` or
+  ``Cone`` centred on the sensor's origin; ``VolumePickSensor`` any geometry
+  with triangles, as a closed solid. With ``GEOMETRY`` a shape is picked
+  where its triangles meet the solid or it holds the solid within it.
+  Cylinders and cones are tested as solids of 32 sides. Distance is between
+  the centres of the two bounding boxes.
+- Points, normals and texture coordinates are in the sensor's coordinates,
+  in the order of ``pickedGeometry``.
+- Lines, points and text have no triangles: ``GEOMETRY`` does not pick them.
+  "Inside" a mesh is by its winding number, so an open surface has an inside
+  where it winds more than half way round.
+
+A sensor built in code works the same way; this one reports the first wall
+along a guard's line of sight:
+
+.. code-block:: python
+
+   from vrml.x3d import picking
+   from OpenGLContext.scenegraph.basenodes import Coordinate, IndexedLineSet
+
+   sight = picking.LinePickSensor(
+       pickingGeometry=IndexedLineSet(
+           coord=Coordinate(point=[(0, 1.6, 0), (0, 1.6, -50)]), coordIndex=[0, 1]),
+       pickTarget=[walls], intersectionType='GEOMETRY')
+   guard.children.append(sight)      # it looks from where the guard stands
+   # each frame after: sight.isActive, sight.pickedGeometry, sight.pickedPoint
+
+.. _x3d-geospatial:
+
+Geospatial
+~~~~~~~~~~
+
+.. figure:: images/demos/x3d_geospatial.jpg
+   :alt: A green alpine valley between grey rock slopes under a pale sky, a hamlet of red-roofed huts on its floor
+
+   ``oglc-x3d-geospatial``: an X3D valley placed by latitude, longitude and height.
+
+``oglc-x3d-geospatial`` writes and opens ``x3d_geospatial.x3d``, and
+:doc:`tests/x3d_geospatial.py <tutorials/x3d_geospatial>` is the same scene
+as a tutorial: a valley near 46.55 N 7.98 E drawn as a ``GeoElevationGrid``,
+which a ``GeoLOD`` replaces with four finer tiles read from their own files
+within two and a half kilometres, a hamlet of huts each placed by a
+``GeoLocation``, a balloon on a ``GeoPositionInterpolator``'s loop, and
+three ``GeoViewpoint`` nodes, one given in UTM. Its keys: ``g`` prints where
+the viewer is, from a ``GeoProximitySensor``, and ``w`` writes the scene
+back as X3D in each encoding; clicking the ground prints its latitude,
+longitude and height, from a ``GeoTouchSensor``.
+
+The Geospatial nodes place content on the Earth. Each reads its coordinates
+in its ``geoSystem``: ``"GD"`` latitude, longitude and height in degrees and
+metres (longitude first with ``"longitude_first"``), ``"UTM"`` northing,
+easting and height in a zone such as ``"Z17"`` (``"S"`` for the southern
+hemisphere, easting first with ``"easting_first"``), or ``"GC"`` geocentric
+metres, on any of X3D's ellipsoids (``"WE"``, WGS84, by default). The
+conversions are ``vrml.x3d.geospatial``'s, in double precision.
+
+The scene's coordinates are geocentric metres less the node's ``GeoOrigin``,
+turned so the origin's up is +Y where its ``rotateYUp`` is true. A frame on
+the Earth has +Y up along the ellipsoid's normal, +X east and -Z north.
+
+- ``GeoLocation`` places its children in the frame at ``geoCoords``;
+  ``GeoTransform`` transforms them about the frame at ``geoCenter``.
+  Transforms and the camera are composed in double precision, and converted
+  to single precision only relative to the camera, so these place their
+  children to the millimetre anywhere on the Earth.
+- ``GeoCoordinate`` gives any coordinate-based geometry its points, and
+  ``GeoElevationGrid`` raises heights times ``yScale`` along the normal over
+  a grid stepping ``xSpacing`` along the longitude or easting and
+  ``zSpacing`` along the latitude or northing. Their points are single
+  precision relative to their ``GeoOrigin``: content within a few kilometres
+  of its origin is placed to the millimetre, and content with no origin to
+  about half a metre.
+- ``GeoViewpoint`` places the camera at ``position``, turned by
+  ``orientation`` from the frame there. Navigation is ``speedFactor`` times
+  faster ten metres above the ellipsoid than at its surface, and faster
+  again in proportion to the viewer's height above that.
+- ``GeoLOD`` draws ``rootNode`` and the scene ``rootUrl`` names from afar,
+  and within ``range`` metres of ``center`` the scenes ``child1Url`` to
+  ``child4Url`` name, read the first time the viewer comes that close.
+- ``GeoProximitySensor`` senses the viewer in a box about ``geoCenter`` and
+  sends its position in its ``geoSystem`` as ``geoCoord_changed``;
+  ``GeoTouchSensor`` sends the hit's as ``hitGeoCoord_changed``.
+- ``GeoPositionInterpolator`` interpolates along the globe between its
+  ``keyValue`` coordinates and sends the result as ``geovalue_changed`` and,
+  in the scene's coordinates, ``value_changed``.
+- ``GeoMetadata`` is kept and not drawn.
+
+.. _x3d-shaders:
+
+Programmable shaders
+~~~~~~~~~~~~~~~~~~~~
+
+.. figure:: images/demos/x3d_shaders.jpg
+   :alt: A toon-shaded copper sphere, a marble column, a gold sphere split along its faces and a striped block standing in a rippling pool, under a bar shading from violet to pale yellow
+
+   ``oglc-x3d-shaders``: shapes drawn by the GLSL their document carries.
+
+``oglc-x3d-shaders`` opens ``OpenGLContext/bin/x3d_shaders.x3d``, and
+:doc:`tests/x3d_shaders.py <tutorials/x3d_shaders>` is the same scene as a
+tutorial: a ``ComposedShader`` drawing a copper sphere in bands of light, a
+``ProgramShader`` written in GLSL 1.20 drawing a marble column, a gold sphere
+coming apart in a geometry stage, a ``PackagedShader`` striping a block, a
+bar coloured by a ``FloatVertexAttribute`` and a pool whose vertex stage moves
+its surface. Its keys: ``b`` steps the sphere's bands, ``a`` sends every
+shader ``activate``, and ``w`` writes the scene back as X3D.
+
+Choosing a shader
+   An ``Appearance``'s ``shaders`` lists alternatives in order of preference.
+   The first whose ``language`` is ``GLSL`` (or names none) and whose program
+   links draws the shape; it is sent ``isSelected TRUE``, each one passed over
+   ``isSelected FALSE``, and each that tried to link ``isValid``. While the
+   first that can run is still reading its sources, and where none runs, the
+   shape is drawn with its material and texture as if it listed no shaders.
+   ``Cg``, ``HLSL`` and a ``PackagedShader`` of any language but GLSL are
+   passed over. A shape drawn by its own shader is drawn alone, not in an
+   :doc:`instanced <instancing>` group.
+
+The nodes
+   A ``ComposedShader`` links its ``ShaderPart`` nodes, any number to a
+   stage. A part's ``type`` is ``VERTEX``, ``FRAGMENT``, ``GEOMETRY``,
+   ``TESS_CONTROL`` or ``TESS_EVALUATION``, in any case; a shader needs a
+   vertex and a fragment stage, and a part with no source is passed over. The
+   tessellation stages need a GL 4.0 context (``ContextDefinition.version``),
+   and a shape drawn with them is drawn as patches of three vertices. A
+   ``ProgramShader`` links its ``ShaderProgram`` nodes, a stage each, into one
+   program, and sets the fields each declares on it. A ``PackagedShader`` of
+   GLSL is one text compiled once for each stage whose macro it tests --
+   ``X3D_VERTEX_SHADER``, ``X3D_FRAGMENT_SHADER``, ``X3D_GEOMETRY_SHADER``,
+   ``X3D_TESS_CONTROL_SHADER``, ``X3D_TESS_EVALUATION_SHADER`` -- with that
+   macro defined; a text testing none holds a vertex and a fragment stage.
+
+Sources
+   A part's ``url`` is read on the :ref:`background load pool <background-loading>`,
+   resolved against its document under the document's
+   :doc:`policy <untrusted>`; the first url that reads is the source. A
+   ``data:`` URI, and shader text written into the url itself as some
+   authoring tools do, is read at once. X3D 4.1's ``sourceCode`` -- the text
+   inside the element, in the XML encoding -- is the source where there is no
+   url or none reads. ``load`` false leaves the url unread. A part records
+   its load state for a ``LoadSensor``.
+
+Linking (ISO/IEC 19775-1, I.5)
+   A program is linked once every part's source is to hand. A source that
+   changes after that is read and the running program is kept until the
+   shader is sent ``activate TRUE``, which links it again; a shader whose
+   first link failed is tried again when a source changes. A program is
+   linked for each arrangement of vertex attributes the shader's shapes have.
+
+Fields are uniforms
+   Each field a ``ComposedShader``, ``PackagedShader`` or ``ShaderProgram``
+   declares is the uniform of the same name, set again whenever the field is
+   set or routed to; an ``inputOnly`` field is the last event sent to it.
+   Values follow Annex I's Table I.3: ``SFBool`` and ``SFInt32`` are integers
+   (``bool``, ``int``), the float, double and time types ``float``, vectors
+   and colours ``vec2`` to ``vec4``, ``SFRotation`` a ``vec4``, ``SFMatrix3f``
+   and ``SFMatrix4f`` a ``mat3`` and ``mat4`` in X3D's column order, an
+   ``SFImage`` its integers, and each ``MF`` type an array. A value is
+   converted to the type the program declares, and an array cut to its
+   length. Strings are not set. A texture node in an ``SFNode`` field is the
+   sampler of the field's name; an ``MFNode`` field's are ``name[0]``,
+   ``name[1]``, .... A shader built in code declares its fields with
+   ``x3dshaders.declare_field(shader, 'colour', 'SFColor', (1, 0, 0))``.
+
+The browser's state
+   The program is given these where it declares them. They are the names X3D
+   browsers share; Annex I leaves naming them to the browser.
+
+   .. list-table::
+      :header-rows: 1
+      :widths: auto
+
+      * - Name
+        - Type
+        - What it is
+      * - ``x3d_Vertex``
+        - ``in vec4``
+        - the position (``w`` 1)
+      * - ``x3d_Normal``, ``x3d_Tangent``, ``x3d_Color``
+        - ``in vec3``, ``in vec4``, ``in vec4``
+        - the normal, the tangent, the colour (unset: ``(0, 0, 0, 1)``)
+      * - ``x3d_TexCoord`` (or ``x3d_TexCoord0``), ``x3d_TexCoord1``
+        - ``in vec4``
+        - the first and second texture coordinate sets
+      * - ``x3d_ModelViewMatrix``, ``x3d_ProjectionMatrix``, ``x3d_ModelViewProjectionMatrix``
+        - ``mat4``
+        - the shape's matrices
+      * - ``x3d_NormalMatrix``
+        - ``mat3``
+        - the inverse transpose of the model-view matrix's rotation
+      * - ``x3d_ViewMatrix``, ``x3d_CameraSpaceMatrix``
+        - ``mat4``
+        - world to eye, and eye to world
+      * - ``x3d_Viewport``
+        - ``ivec4``
+        - x, y, width, height
+      * - ``x3d_Material``
+        - ``x3d_MaterialParameters``, ``x3d_PhysicalMaterialParameters`` or ``x3d_UnlitMaterialParameters``
+        - the appearance's material; with none, unlit white
+      * - ``x3d_LightSource[x3d_MaxLights]``
+        - ``x3d_LightSourceParameters``
+        - the lights lighting the shape, in eye space; a slot with none is
+          ``type == x3d_NoneLight``
+      * - ``x3d_Texture2D[i]``, ``x3d_TextureCube[i]``, ``x3d_Texture3D[i]``
+        - ``sampler2D``, ``samplerCube``, ``sampler3D``
+        - the appearance's textures, in order (``x3d_MaxTextures`` is 4)
+      * - ``x3d_TextureMatrix[i]``
+        - ``mat4``
+        - each texture's transform
+
+   ``x3d_LightSourceParameters`` has ``int type`` (``x3d_DirectionalLight``,
+   ``x3d_PointLight``, ``x3d_SpotLight``), ``vec3 color``, ``float
+   intensity``, ``float ambientIntensity``, ``vec3 attenuation``, ``vec3
+   location``, ``vec3 direction``, ``float radius`` (-1 for a directional
+   light), ``float beamWidth``, ``float cutOffAngle`` (radians) and ``mat3
+   matrix``, which turns an eye-space vector into the light's own space,
+   where its radius is measured. ``x3d_MaterialParameters`` has
+   ``ambientIntensity``, ``diffuseColor``, ``specularColor``,
+   ``emissiveColor``, ``shininess``, ``occlusionStrength``, ``normalScale``
+   and ``transparency``; the physical one ``baseColor``, ``metallic`` and
+   ``roughness`` in place of the first four. The engine defines a structure
+   for a part that names it and does not define it, after the part's
+   ``#version``, with ``x3d_MaxLights`` (the renderer's light count),
+   ``x3d_MaxTextures`` and the light type numbers.
+
+   The engine's own input names (``aPosition``, ``aNormal``, ...,
+   :ref:`fixed-attribute-locations`) are bound as well.
+
+Vertex attributes
+   The ``attrib`` nodes of an ``IndexedFaceSet``, the triangle and quad sets
+   and an ``ElevationGrid`` are vertex inputs of their ``name``: a
+   ``FloatVertexAttribute`` of 1 to 4 ``numComponents`` a ``float`` to
+   ``vec4``, a ``Matrix3VertexAttribute`` a ``mat3`` and a
+   ``Matrix4VertexAttribute`` a ``mat4``. They hold one value for each
+   coordinate and are indexed as the coordinates are; one with fewer values
+   is left out and reported. They are read at the locations the engine's own
+   arrays leave free: 16 and above, then 5 to 10 and 14, which the engine's
+   programs read only while drawing instances. A driver with 16 attribute
+   locations has seven for them, a matrix taking a run of three or four; an
+   attribute that does not fit is left out.
+
+GLSL 1.x
+   A part with no ``#version``, or 1.00 to 1.30, is translated for a 3.30
+   core context: ``attribute`` and ``varying`` become ``in`` and ``out``;
+   ``texture2D`` and its relatives ``texture``; ``ftransform()``,
+   ``gl_Vertex``, ``gl_Normal``, ``gl_Color``, ``gl_MultiTexCoord0`` and the
+   built-in matrices (with their ``Inverse`` and ``Transpose`` forms) the X3D
+   names above; ``gl_TexCoord[]``, ``gl_FrontColor`` and ``gl_FogFragCoord``
+   outputs the next stage reads; ``gl_FragColor`` and ``gl_FragData[0]`` the
+   output at location 0; and ``gl_LightSource[]``, ``gl_FrontMaterial``,
+   ``gl_LightModel`` and ``gl_FrontLightProduct[]`` structures of the same
+   members the engine fills from the same lights and material. An identifier
+   3.30 reserves -- ``texture``, ``sample``, ``flat``, ... -- is renamed, and
+   a field of its name sets the renamed uniform. An ``#version 300 es`` part
+   is compiled as 3.30. A built-in with no translation fails to compile, and
+   the shader is passed over. GLSL 1.x geometry stages
+   (``GL_EXT_geometry_shader4``) are not translated.
+
+The compatibility profile
+   In a :doc:`compatibility profile <profiles>` a shader whose parts are all
+   GLSL 1.x runs as it is written, its built-ins reading the matrices,
+   lights, material and arrays the fixed-function pass has set; its fields
+   and texture fields are set as above. A shader using X3D's names is not
+   selected there, and the shape is drawn with its material.
+
+What a shader leaves alone
+   As 31.2.3.3 allows, the engine knows the shape's geometry as the document
+   gives it: its bounds, collisions and shadows are those of the undisplaced
+   geometry. The fragment stage writes the shape's object id beside its
+   colour, so picking finds the shape where it is drawn. Fog is not applied
+   (I.3.2), and the shape is blended and sorted by its material's
+   transparency.
 
 Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
 - ``CoordinateDouble`` is kept and not drawn.
-- ``FogCoordinate`` and the ``attrib`` vertex attributes are kept and not
-  drawn.
+- ``FogCoordinate`` is kept and not drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
 

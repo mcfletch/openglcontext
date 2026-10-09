@@ -237,7 +237,8 @@ opens, chosen as the scene loader chooses: another X3D or VRML97 world, an OBJ
 model, or a glTF model, which is drawn without its animations. Its ``url`` is
 resolved against the inlining document and held to the same directory or
 origin. X3D's ``load`` field false leaves the Inline empty until it is set
-true.
+true. A ``url`` leading back to the inlining document, or to one it is itself
+inlined into, is not read, and a warning names the chain of documents.
 
 VRML97 worlds
 -------------

@@ -24,7 +24,7 @@ from OpenGL.GL import (
 )
 from OpenGLContext import renderoptions
 from OpenGLContext.scenegraph import vertexsemantics
-from OpenGLContext.scenegraph import drawproperties
+from OpenGLContext.scenegraph import coordinatedeform, drawproperties
 from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
 from OpenGLContext.scenegraph.texturemapping import texture_mapping
 
@@ -115,8 +115,21 @@ def styled(appearance: Any) -> bool:
             or not drawproperties.fill_style(getattr(appearance, 'fillProperties', None)).plain)
 
 
+def drawn_alone(appearance: Any) -> bool:
+    """Whether a shape of `appearance` is drawn by itself rather than in an instanced group
+
+    A styled one (:func:`styled`), and one bringing a program of its own (an
+    X3D shader, the engine's `Shader`): the instanced draw is the pass's
+    program.
+    """
+    return styled(appearance) or bool(getattr(appearance, 'bringsProgram', False))
+
+
 def geometry_instance_key(shape: Any) -> Optional[tuple]:
     """Instance-batch key for a render path, or None if it has no geometry.
+
+    None too for a geometry whose coordinates are deformed as it is drawn
+    (:mod:`~OpenGLContext.scenegraph.coordinatedeform`): each is posed alone.
 
     Two records share a batch when they share geometry AND a compatible
     appearance. Identity (``id(...)``) captures the common cases cheaply: VRML
@@ -129,10 +142,10 @@ def geometry_instance_key(shape: Any) -> Optional[tuple]:
     common duplicated-geometry case.
     """
     geometry = getattr(shape, 'geometry', None)
-    if geometry is None:
+    if geometry is None or coordinatedeform.deformer_for(geometry) is not None:
         return None
     appearance = getattr(shape, 'appearance', None)
-    if styled(appearance):
+    if drawn_alone(appearance):
         return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
@@ -195,13 +208,13 @@ def geometry_texture_key(shape: Any) -> Optional[tuple]:
     Groups shapes that share geometry, textures and pass-level properties but
     differ by material FACTORS (colour, metallic, roughness) into one instanced
     draw; each instance then indexes its own material in the group's material
-    array. Returns None when there is no geometry.
+    array. Returns None when there is no geometry, or a deformed one.
     """
     geometry = getattr(shape, 'geometry', None)
-    if geometry is None:
+    if geometry is None or coordinatedeform.deformer_for(geometry) is not None:
         return None
     appearance = getattr(shape, 'appearance', None)
-    if styled(appearance):
+    if drawn_alone(appearance):
         return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
@@ -257,16 +270,16 @@ def geometry_content_key(shape: Any) -> Optional[tuple]:
     Like :func:`geometry_texture_key` but keys geometry by content hash instead of
     node identity, so two distinct nodes with identical vertex data collapse into
     one instanced draw. Falls back to node identity for geometry without vertex
-    arrays. Returns None when there is no geometry.
+    arrays. Returns None when there is no geometry, or a deformed one.
     """
     geometry = getattr(shape, 'geometry', None)
-    if geometry is None:
+    if geometry is None or coordinatedeform.deformer_for(geometry) is not None:
         return None
     content = _geometry_content_id(geometry)
     if content is None:
         content = id(geometry)
     appearance = getattr(shape, 'appearance', None)
-    if styled(appearance):
+    if drawn_alone(appearance):
         return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None
@@ -283,16 +296,16 @@ def geometry_content_instance_key(shape: Any) -> Optional[tuple]:
     path -- per-instance material factors are PBR-only), so a sphere field batches
     per (geometry-content, material): same-radius atoms sharing one Material node
     collapse into one draw, differently-coloured atoms into their own. Returns None
-    when there is no geometry.
+    when there is no geometry, or a deformed one.
     """
     geometry = getattr(shape, 'geometry', None)
-    if geometry is None:
+    if geometry is None or coordinatedeform.deformer_for(geometry) is not None:
         return None
     content = _geometry_content_id(geometry)
     if content is None:
         content = id(geometry)
     appearance = getattr(shape, 'appearance', None)
-    if styled(appearance):
+    if drawn_alone(appearance):
         return None
     material = getattr(appearance, 'material', None) if appearance is not None else None
     texture = getattr(appearance, 'texture', None) if appearance is not None else None

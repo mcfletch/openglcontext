@@ -24,6 +24,16 @@ const float NEAR_W = 1e-4;
 
 void emit(vec4 position, vec2 offset, int corner, float along) {
     gl_Position = position + vec4(offset * position.w, 0.0, 0.0);
+    // The ClipPlanes' distances at the segment's end, from the vertex stage
+    // (_clipplane_inc.glsl), with constant indices as GLSL 3.30 asks
+    gl_ClipDistance[0] = gl_in[corner].gl_ClipDistance[0];
+    gl_ClipDistance[1] = gl_in[corner].gl_ClipDistance[1];
+    gl_ClipDistance[2] = gl_in[corner].gl_ClipDistance[2];
+    gl_ClipDistance[3] = gl_in[corner].gl_ClipDistance[3];
+    gl_ClipDistance[4] = gl_in[corner].gl_ClipDistance[4];
+    gl_ClipDistance[5] = gl_in[corner].gl_ClipDistance[5];
+    gl_ClipDistance[6] = gl_in[corner].gl_ClipDistance[6];
+    gl_ClipDistance[7] = gl_in[corner].gl_ClipDistance[7];
     gColor = vColor[corner];
     gEyePosition = vEyePosition[corner];
     gAlong = along;

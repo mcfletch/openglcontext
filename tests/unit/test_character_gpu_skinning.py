@@ -114,6 +114,24 @@ class TestMeshState:
         assert mesh.deforms_vertices
         assert np.allclose(mesh.positions[:, 0], 5.0)
 
+    def test_a_morphed_mesh_the_shader_skins_holds_its_morph_unposed(self):
+        """The buffers of a mesh the shader skins hold the morphed rest pose:
+        the shader poses them, so posing them here as well poses them twice."""
+        mesh = PBRMesh(positions=np.array([[0, 1, 0], [0, -1, 0]], 'f'),
+                       normals=np.array([[0, 0, 1]] * 2, 'f'),
+                       morph_targets=[{'positions': np.array([[1, 0, 0], [1, 0, 0]], 'f')}],
+                       skin_joints=np.zeros((2, 4), 'u4'),
+                       skin_weights=np.array([[1, 0, 0, 0]] * 2, 'f'))
+        matrix = np.eye(4)
+        matrix[3, :3] = (5.0, 0.0, 0.0)
+        mesh.set_skin_matrices(matrix.reshape(1, 4, 4))
+
+        mesh.set_morph_weights([1.0])
+
+        assert mesh.skin_on_gpu
+        assert np.allclose(mesh.positions[:, 0], 1.0)
+        assert np.allclose(mesh.posed_positions()[:, 0], 6.0)
+
 
 # -- against a real driver --------------------------------------------------
 

@@ -191,7 +191,7 @@ class TestThePassMeasuresFromTheSamePoint:
         node = ScreenCoverageLOD(level=[away, Transform()],
                                  screenCoverage=[0.5, 0.0])
         rendering = _flat.FlatPass.__new__(_flat.FlatPass)
-        rendering.paths = {lod.LOD: [Path([node])]}
+        rendering.paths = {lod.Levelled: [Path([node])]}
 
         # The eye is two units from the geometry and a hundred from the origin.
         rendering.chooseLevels([lod.Viewer(_at(-98.0), 1.0)])

@@ -28,21 +28,23 @@ from collections.abc import Iterable
 from typing import Any, NamedTuple, Optional
 
 from OpenGL.GL import (
-    GL_ACTIVE_ATTRIBUTES, GL_FALSE, GL_FLOAT, GL_TRIANGLES,
-    GL_UNSIGNED_SHORT,
+    GL_ACTIVE_ATTRIBUTES, GL_FALSE, GL_FLOAT, GL_MAX_VERTEX_ATTRIBS, GL_TRIANGLES,
+    GL_UNSIGNED_SHORT, glGetIntegerv,
     glBindVertexArray, glDrawArrays, glDrawElements,
     glEnableVertexAttribArray, glGenVertexArrays, glGetActiveAttrib,
     glGetProgramiv, glVertexAttribPointer,
 )
 
+from OpenGLContext import contextresources
 from OpenGLContext.multiview.strategy import draw_arrays, draw_elements
-from OpenGLContext.scenegraph import vertexsemantics
+from OpenGLContext.scenegraph import vertexsemantics, x3dglsl
 from OpenGLContext.scenegraph.shadergeometry import (
     SHARED_LAYOUT, get_or_build_vao,
 )
 
 __all__ = [
-    'VertexArray', 'GeometryArrays', 'bind_geometry', 'draw_geometry',
+    'VertexArray', 'NamedArray', 'GeometryArrays', 'bind_geometry', 'bind_named',
+    'max_vertex_attributes', 'named_layout', 'draw_geometry',
     'render_geometry', 'MissingVertexInput', 'report_missing_inputs',
 ]
 
@@ -80,6 +82,71 @@ class VertexArray(NamedTuple):
     normalized: bool = False
 
 
+class NamedArray(NamedTuple):
+    """A vertex attribute a shader reads by name: an X3D `attrib` node's values
+
+    Placed at locations the engine's own arrays leave free
+    (:func:`named_layout`); a matrix takes a location a column.
+    """
+
+    name: str
+    buffer: Any
+    """The ``vbo.VBO`` holding one row of `width` floats a vertex."""
+    width: int
+    """Floats a vertex: 1 to 4, 9 for a 3x3 matrix, 16 for a 4x4."""
+    locations: int
+    """Locations it is read at: 1, or 3 or 4 for a matrix."""
+
+
+_MAX_ATTRIBUTES: dict[Any, int] = {}
+
+
+def max_vertex_attributes() -> int:
+    """``GL_MAX_VERTEX_ATTRIBS`` of the current context, asked once a context"""
+    key = contextresources.context_key()
+    found = _MAX_ATTRIBUTES.get(key)
+    if found is None:
+        found = _MAX_ATTRIBUTES[key] = int(glGetIntegerv(GL_MAX_VERTEX_ATTRIBS))
+    return found
+
+
+def _forget_context() -> None:
+    _MAX_ATTRIBUTES.pop(contextresources.context_key(), None)
+
+
+contextresources.on_context_lost(_forget_context)
+
+
+def named_layout(entries: Iterable[tuple[str, int]]) -> tuple[tuple[str, int], ...]:
+    """Where named attributes of (name, locations) are read in the current context
+
+    :func:`OpenGLContext.scenegraph.x3dglsl.attribute_layout` over this
+    context's locations; a program reading the same names binds them to the
+    same places.
+    """
+    widths = list(entries)
+    if not widths:
+        return ()
+    return x3dglsl.attribute_layout(widths, max_vertex_attributes())
+
+
+def bind_named(arrays: Iterable[NamedArray]) -> None:
+    """Record each named array into the bound vertex array object at its place"""
+    arrays = list(arrays)
+    places = dict(named_layout((entry.name, entry.locations) for entry in arrays))
+    for entry in arrays:
+        start = places.get(entry.name)
+        if start is None:
+            continue
+        columns = entry.width // entry.locations
+        entry.buffer.bind()
+        for column in range(entry.locations):
+            glEnableVertexAttribArray(start + column)
+            glVertexAttribPointer(start + column, columns, GL_FLOAT, GL_FALSE, entry.width * 4,
+                                  entry.buffer + column * columns * 4)
+        entry.buffer.unbind()
+
+
 class GeometryArrays(object):
     """The buffers a geometry offers, keyed by vertex semantic.
 
@@ -95,8 +162,11 @@ class GeometryArrays(object):
         draw_mode: int = GL_TRIANGLES,
         indices: Optional[Any] = None,
         index_type: int = GL_UNSIGNED_SHORT,
+        named: Iterable[NamedArray] = (),
     ) -> None:
         self.arrays = arrays
+        #: The vertex attributes a shader reads by name (:class:`NamedArray`).
+        self.named = tuple(named)
         self.count = count
         self.draw_mode = draw_mode
         self.indices = indices
@@ -115,8 +185,8 @@ class GeometryArrays(object):
 
     def buffers(self) -> tuple[Any, ...]:
         """Every buffer this describes, for cache-invalidation by identity."""
-        return tuple(entry.buffer for entry in self.arrays.values()) + (
-            self.indices,)
+        return tuple(entry.buffer for entry in self.arrays.values()) + tuple(
+            entry.buffer for entry in self.named) + (self.indices,)
 
     @classmethod
     def separate(
@@ -125,6 +195,7 @@ class GeometryArrays(object):
         draw_mode: int = GL_TRIANGLES,
         indices: Optional[Any] = None,
         index_type: int = GL_UNSIGNED_SHORT,
+        named: Iterable[NamedArray] = (),
         **buffers: Any
     ) -> 'GeometryArrays':
         """One buffer per attribute, named as the engine's geometry names them.
@@ -144,7 +215,7 @@ class GeometryArrays(object):
             for name, semantic, components in SEPARATE_KEYS
             if buffers.get(name) is not None
         }
-        return cls(arrays, count, draw_mode, indices, index_type)
+        return cls(arrays, count, draw_mode, indices, index_type, named)
 
     @classmethod
     def interleaved(
@@ -195,6 +266,7 @@ def bind_geometry(
                 entry.normalized and 1 or GL_FALSE, entry.stride,
                 entry.buffer + entry.offset,
             )
+        bind_named(arrays.named)
         if arrays.indices is not None:
             # The element-array binding is recorded in the vertex array object.
             arrays.indices.bind()
