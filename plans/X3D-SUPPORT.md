@@ -143,6 +143,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     - ParticleSystem `colorKey` and `texCoordKey` are seconds of a particle's
       age (19775-1, 40.4.5: "represents the time of the particle in
       seconds"); X_ITE reads them as fractions of the particle's life
+    - RigidBody `useFiniteRotation` changes how the rotation is calculated,
+      not whether the body may turn (37.4.8: "used to influence the way the
+      body's rotation is calculated ... more accurate for high rotation speed
+      bodies"); the engine integrates every turn exactly. X_ITE holds a body
+      with `useFiniteRotation` TRUE to `finiteRotationAxis`, a component-wise
+      angular factor
   - [ ] whole corpus against X_ITE (2026-10-07): median 4.9% of pixels unlike
     with the PBR pass, 1.8% with the VRML97 pass, whose worst were the fog
     documents it did not fog;
@@ -453,6 +459,11 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] RigidBodyPhysics: the 14 nodes on omi_physics (`physics.x3drigid`, `scenegraph.x3drigidbody`); a collection a world stepped once a frame on the engine clock; collider and `set_contacts` pairs, a NULL side against the world; `CollisionSensor` contacts and intersections; the six joints and their `forceOutput`s
     - omi_physics: compound shapes and flat-ended cylinders and cones; ball, hinge, slider, universal, two-axis hinge and motor joints from rows (compiled `solve_rows`); pair rules and `ContactParameters`; steady forces, exact rotation, per-body sleep
     - not read: `finiteRotationAxis` (the whole turn is integrated exactly), `UniversalJoint` stop bounce and correction (X3D gives it no stops), the inertia's products off the diagonal
+    - X_ITE 16.4.3 (2026-10-09, x3d-xfields): it reads neither the inertia
+      (Ammo's shape inertia replaces it) nor any joint's stop fields, and has
+      no UniversalJoint motion at all, so those stay as they are. Its
+      `useFiniteRotation` makes `finiteRotationAxis` Bullet's angular factor,
+      holding the body to turning about that axis; kept by choice (below)
     - Basic archive: the documents whose contacts pass through a `Script` (`BallBounce`, `BounceTrimesh`, `CarDemoMain`) do not collide
   - [x] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
     `LayoutGroup`, `LayoutLayer`, `ScreenGroup`, `ScreenFontStyle`
