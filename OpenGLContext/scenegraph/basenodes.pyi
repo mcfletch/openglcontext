@@ -90,6 +90,19 @@ from OpenGLContext.scenegraph.light import SpotLight as SpotLight
 from OpenGLContext.scenegraph.lod import LOD as LOD
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD as ScreenCoverageLOD
 from OpenGLContext.scenegraph.material import Material as Material
+from OpenGLContext.scenegraph.materialextensions import AnisotropyMaterialExtension as AnisotropyMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import ClearcoatMaterialExtension as ClearcoatMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import DiffuseTransmissionMaterialExtension as DiffuseTransmissionMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import DispersionMaterialExtension as DispersionMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import EmissiveStrengthMaterialExtension as EmissiveStrengthMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import IORMaterialExtension as IORMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import IridescenceMaterialExtension as IridescenceMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import RetroreflectionMaterialExtension as RetroreflectionMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import SheenMaterialExtension as SheenMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import SpecularMaterialExtension as SpecularMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import TransmissionMaterialExtension as TransmissionMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import VolumeMaterialExtension as VolumeMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import VolumeScatterMaterialExtension as VolumeScatterMaterialExtension
 from OpenGLContext.scenegraph.meshgeometry import ElevationGrid as ElevationGrid
 from OpenGLContext.scenegraph.meshgeometry import IndexedQuadSet as IndexedQuadSet
 from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleFanSet as IndexedTriangleFanSet
@@ -346,6 +359,7 @@ __all__ = [
     'AcousticProperties',
     'Analyser',
     'Anchor',
+    'AnisotropyMaterialExtension',
     'Appearance',
     'Arc2D',
     'ArcClose2D',
@@ -375,6 +389,7 @@ __all__ = [
     'ChannelSelector',
     'ChannelSplitter',
     'Circle2D',
+    'ClearcoatMaterialExtension',
     'ClipPlane',
     'CollidableOffset',
     'CollidableShape',
@@ -407,13 +422,16 @@ __all__ = [
     'Cylinder',
     'CylinderSensor',
     'Delay',
+    'DiffuseTransmissionMaterialExtension',
     'DirectionalLight',
     'Disk2D',
+    'DispersionMaterialExtension',
     'DoubleAxisHingeJoint',
     'DynamicsCompressor',
     'EaseInEaseOut',
     'EdgeEnhancementVolumeStyle',
     'ElevationGrid',
+    'EmissiveStrengthMaterialExtension',
     'EnvironmentLight',
     'EspduTransform',
     'ExplosionEmitter',
@@ -464,6 +482,7 @@ __all__ = [
     'HAnimPose',
     'HAnimSegment',
     'HAnimSite',
+    'IORMaterialExtension',
     'IS',
     'ImageBasedLight',
     'ImageCubeMapTexture',
@@ -485,6 +504,7 @@ __all__ = [
     'IntUniform4i',
     'IntegerSequencer',
     'IntegerTrigger',
+    'IridescenceMaterialExtension',
     'IsoSurfaceVolumeData',
     'KeySensor',
     'LOD',
@@ -573,6 +593,7 @@ __all__ = [
     'ROUTE',
     'Rectangle2D',
     'RenderedTexture',
+    'RetroreflectionMaterialExtension',
     'RigidBody',
     'RigidBodyCollection',
     'ScalarChaser',
@@ -592,12 +613,14 @@ __all__ = [
     'ShaderProgram',
     'ShaderSlice',
     'Shape',
+    'SheenMaterialExtension',
     'SilhouetteEnhancementVolumeStyle',
     'SimpleBackground',
     'SingleAxisHingeJoint',
     'SliderJoint',
     'Sound',
     'SpatialSound',
+    'SpecularMaterialExtension',
     'Sphere',
     'SphereBackground',
     'SphereSensor',
@@ -636,6 +659,7 @@ __all__ = [
     'TouchSensor',
     'Transform',
     'TransformSensor',
+    'TransmissionMaterialExtension',
     'TriangleFanSet',
     'TriangleSet',
     'TriangleSet2D',
@@ -650,7 +674,9 @@ __all__ = [
     'VisibilitySensor',
     'VolumeData',
     'VolumeEmitter',
+    'VolumeMaterialExtension',
     'VolumePickSensor',
+    'VolumeScatterMaterialExtension',
     'WaveShaper',
     'WindPhysicsModel',
     'WorldInfo',

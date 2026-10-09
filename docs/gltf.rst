@@ -167,6 +167,8 @@ animation:
   ``KHR_materials_emissive_strength``, ``KHR_materials_unlit``,
   ``KHR_materials_iridescence``, ``KHR_materials_anisotropy``,
   ``KHR_materials_diffuse_transmission``, ``KHR_materials_dispersion``,
+  ``KHR_materials_retroreflection``, ``KHR_materials_volume_scatter`` (and
+  ``KHR_materials_scatter``, its later name, which the writer writes),
   ``KHR_texture_transform``, ``EXT_texture_webp``, and the legacy
   ``KHR_materials_pbrSpecularGlossiness`` (converted to metallic-roughness).
 

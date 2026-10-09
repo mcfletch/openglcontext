@@ -370,10 +370,28 @@ channel name. The glTF loader builds these when it imports a model.
 ``emissiveTexture``, with no lighting; the glTF loader makes one for
 ``KHR_materials_unlit``.
 
+The glTF extensions' values and maps (``clearcoat``, ``sheenColor``,
+``ior``, ``transmission``, ``retroreflection``, ``multiscatterColor`` and the
+rest) are kept in X_ITE's material extension nodes, one per glTF extension,
+in the material's ``extensions`` field: a ``ClearcoatMaterialExtension``
+holds ``clearcoat``, ``clearcoatRoughness`` and their maps. The material's
+own names read and set them; setting one that is not the default adds the
+node of its type where the material has none, and editing the node's field
+is editing the material. ``materialextensions.MATERIAL_FIELDS`` names the
+node type and field of each. ``ior`` is ``IORMaterialExtension``'s
+``indexOfRefraction``, and ``iridescenceIor``, ``iridescenceThicknessMin``
+and ``iridescenceThicknessMax`` are ``IridescenceMaterialExtension``'s
+``iridescenceIndexOfRefraction``, ``iridescenceThicknessMinimum`` and
+``iridescenceThicknessMaximum``. ``attenuationDistance`` defaults to
+1000000, which stands for glTF's infinite distance; 0 also means no
+absorption.
+
 Written as X3D (``vrml.x3d.dump``), both materials write X3D's own fields as
-usual, and the fields X3D's nodes lack (the glTF extension factors and
-textures, the lightmap, the impostor views) in a ``MetadataSet`` named
-``OpenGLContext`` on the material's ``metadata``. An ``ImageDataTexture`` is
+usual, the extension nodes as X_ITE writes them (with the ``X_ITE``
+component statement, so X_ITE draws the material as the engine does), and
+the engine's own fields (the lightmap, baked light, the impostor views, a
+reflector) in a ``MetadataSet`` named ``OpenGLContext`` on the material's
+``metadata``. An ``ImageDataTexture`` is
 written as an ``ImageTexture`` whose URL is the image, upside down, as a PNG
 ``data:`` URL, so the same coordinates name the same texels; an
 ``EncodedImage`` is written in its own format. Read back with the engine's
@@ -445,9 +463,10 @@ Surface basics:
      - 1.5
      - index of refraction; sets the base reflectivity and how much glass bends
        the view
-   * - ``specular`` / ``specularColor``
-     - 1.0 / (1,1,1)
-     - strength and tint of the non-metal highlight
+   * - ``specular`` / ``specularColor`` / ``specularStrength``
+     - 1.0 / (1,1,1) / 1.0
+     - strength and tint of the non-metal highlight; ``specularStrength``
+       multiplies the tint, which may then exceed 1
 
 Optional lobes, each off at 0:
 
@@ -477,9 +496,9 @@ Optional lobes, each off at 0:
      - 0.0
      - volume thickness, for tinting transmitted light
    * - ``attenuationColor`` / ``attenuationDistance``
-     - (1,1,1) / 0
+     - (1,1,1) / 1000000
      - colour that light picks up passing through the volume, and over what
-       distance; 0 means no absorption
+       distance in metres; the default and 0 both mean no absorption
 
 Transparency and sidedness belong to the appearance and the geometry, as in
 X3D 4:
@@ -534,6 +553,49 @@ Further glTF material extensions, each off at its default:
      - 0.0, 1.3, 100 / 400
      - thin-film colour shift, as on a soap bubble; thickness in nanometres
        (``KHR_materials_iridescence``)
+   * - ``retroreflection``
+     - 0.0
+     - specular light sent back towards its source, as on road signs and
+       safety clothing (``KHR_materials_retroreflection``)
+   * - ``multiscatterColor``
+     - (0,0,0)
+     - light scattered beneath the surface, as in skin, wax and marble
+       (``KHR_materials_volume_scatter``); see below
+   * - ``scatterStrength`` / ``scatterAnisotropy``
+     - 0.0 / 0.0
+     - kept, read and written; the shading does not use them, as X_ITE's
+       does not
+
+A retroreflective surface evaluates its specular lobes, punctual and
+environment, with the view direction mirrored about the normal, and
+``retroreflection`` blends from the ordinary lobes (0) to those (1). The
+diffuse lobe, clearcoat and sheen are left as they are.
+
+A material with a ``VolumeScatterMaterialExtension`` scatters the light its
+diffuse transmission takes in (``diffuseTransmission``, which must be above
+0 for anything to scatter). Before the opaque shapes, the pass draws the
+scattering ones into a float buffer the size of the view: the light their
+diffuse transmission lobes take in from in front and, through the volume,
+from behind, and each fragment's distance from the eye
+(:mod:`~OpenGLContext.passes.scatter`). Each of their fragments then reads 55
+samples of that buffer around it and adds them, weighted by the Burley
+diffusion profile over the distance between the two points, times
+``diffuseTransmissionColor``. The profile reaches ``attenuationDistance``
+times ``multiscatterColor`` in each channel, so a scattering material wants a
+``VolumeMaterialExtension`` with a distance set. The light scattered many
+times leaves the back lobes. Samples are taken from any scattering shape the
+buffer holds, weighted by distance, so two such shapes touching on screen at
+the same depth share some light. The buffer needs one more fragment sampler
+than the texture layers leave on a 32-sampler driver, and a driver with
+fewer draws scattering materials without it.
+
+The fragment stage's 32 samplers are taken by the other maps, so the
+``retroreflectionTexture``, ``scatterStrengthTexture`` and
+``multiscatterColorTexture`` maps are read through the sampler of
+``iridescenceTexture``, ``anisotropyTexture`` and ``clearcoatNormalTexture``
+respectively, where the material has no map of that channel
+(``pbrpass.PBR_SHARED_CHANNELS``). A material with both draws the other map
+and the factor alone.
 
 Texture maps are the ``...Texture`` fields described above. Each map varies
 its property across the surface (see :ref:`Texture Maps <maps>` above). Where

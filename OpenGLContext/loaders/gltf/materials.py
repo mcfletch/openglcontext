@@ -27,7 +27,7 @@ from vrml.x3d import nodes as x3d
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.physicalmaterial import (
-    CHANNEL_FIELDS, PhysicalMaterial, uv_transform_matrix,
+    CHANNEL_FIELDS, NO_ATTENUATION, PhysicalMaterial, uv_transform_matrix,
 )
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext.loaders.documentvalues import DocumentValues
@@ -65,6 +65,9 @@ GLTF_TEXTURE_KEYS = {
     'anisotropy': 'anisotropyTexture',
     'diffuseTransmission': 'diffuseTransmissionTexture',
     'diffuseTransmissionColor': 'diffuseTransmissionColorTexture',
+    'retroreflection': 'retroreflectionTexture',
+    'scatterStrength': 'scatterStrengthTexture',
+    'multiscatterColor': 'multiscatterColorTexture',
 }
 
 
@@ -224,12 +227,26 @@ def _ext_diffuse_transmission(ext: dict, add: AddTexture, values: DocumentValues
 
 def _ext_volume(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('thickness', _info(ext.get('thicknessTexture')))
-    ad = ext.get('attenuationDistance')
-    # attenuationDistance defaults to +inf (no absorption); 0.0 is our sentinel.
     return {'thickness': _factor(values, ext, 'thicknessFactor', 0.0, minimum=0.0),
             'attenuationColor': tuple(ext.get('attenuationColor', [1, 1, 1])),
-            'attenuationDistance': (0.0 if ad is None else values.number(
-                ad, 0.0, 'KHR_materials_volume attenuationDistance', minimum=0.0))}
+            'attenuationDistance': _factor(values, ext, 'attenuationDistance', NO_ATTENUATION,
+                                           minimum=0.0)}
+
+
+def _ext_retroreflection(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
+    add('retroreflection', _info(ext.get('retroreflectionTexture')))  # .r
+    return {'retroreflection': _factor(values, ext, 'retroreflectionFactor', 0.0,
+                                       minimum=0.0, maximum=1.0)}
+
+
+def _ext_scatter(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
+    add('scatterStrength', _info(ext.get('scatterStrengthTexture')))      # .a
+    add('multiscatterColor', _info(ext.get('multiscatterColorTexture')))  # .rgb
+    return {'scatterStrength': _factor(values, ext, 'scatterStrengthFactor', 0.0,
+                                       minimum=0.0, maximum=1.0),
+            'multiscatterColor': tuple(ext.get('multiscatterColorFactor', [0, 0, 0]))[:3],
+            'scatterAnisotropy': _factor(values, ext, 'scatterAnisotropy', 0.0,
+                                         minimum=-1.0, maximum=1.0)}
 
 
 def _ext_anisotropy(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
@@ -258,6 +275,10 @@ _MATERIAL_EXT_HANDLERS = {
     'KHR_materials_volume': _ext_volume,
     'KHR_materials_anisotropy': _ext_anisotropy,
     'KHR_materials_dispersion': _ext_dispersion,
+    'KHR_materials_retroreflection': _ext_retroreflection,
+    # The extension's name in its draft, and the name it has since.
+    'KHR_materials_volume_scatter': _ext_scatter,
+    'KHR_materials_scatter': _ext_scatter,
 }
 
 _MATERIAL_EXT_DEFAULTS = dict(
@@ -267,8 +288,9 @@ _MATERIAL_EXT_DEFAULTS = dict(
     sheenRoughness=0.0, iridescence=0.0, iridescenceIor=1.3,
     iridescenceThicknessMin=100.0, iridescenceThicknessMax=400.0,
     transmission=0.0, diffuseTransmission=0.0, diffuseTransmissionColor=(1.0, 1.0, 1.0),
-    thickness=0.0, attenuationColor=(1.0, 1.0, 1.0), attenuationDistance=0.0,
-    anisotropyStrength=0.0, anisotropyRotation=0.0, dispersion=0.0,
+    thickness=0.0, attenuationColor=(1.0, 1.0, 1.0), attenuationDistance=NO_ATTENUATION,
+    anisotropyStrength=0.0, anisotropyRotation=0.0, dispersion=0.0, retroreflection=0.0,
+    scatterStrength=0.0, multiscatterColor=(0.0, 0.0, 0.0), scatterAnisotropy=0.0,
 )
 
 

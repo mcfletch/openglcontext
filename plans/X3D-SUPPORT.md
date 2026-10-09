@@ -617,6 +617,26 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     components. Until that decoder lands, a MovieTexture is kept with its
     fields and drawn untextured; its timing is pyvrml97's
     `vrml.x3d.media.MovieTexture` on `timesensor.Clocked`, ready for it
+- X_ITE's own nodes (2026-10-09, branch x3d-xnodes). pyvrml97's
+  `vrml.x3d.xite` declares the X_ITE component, `ImageTextureAtlas` and the
+  fields X_ITE adds to PhysicalMaterial and Appearance, as X_ITE 16.4.3's
+  X3DUOM extension and component sources (MIT) give them; every encoding
+  reads and writes them, the writers add the `X_ITE` component statement
+  - [x] material extension nodes: one representation, the nodes. A
+    PhysicalMaterial's glTF extension values are kept in its `extensions`
+    nodes and read and set under the material's names
+    (`scenegraph.materialextensions`); the `OpenGLContext` metadata set
+    carries only the engine's own fields. attenuationDistance's default is
+    X_ITE's 1000000 (glTF's infinity). Retroreflection (MRM, view mirrored
+    about the normal, punctual and environment) and volume scatter (a float
+    buffer of the diffuse-transmission light drawn before the opaque
+    shapes, 55 Burley samples, `passes/scatter.py`) added to the PBR pass,
+    with KHR_materials_retroreflection and KHR_materials_volume_scatter /
+    KHR_materials_scatter read and written. The three new maps share the
+    samplers of the iridescence, anisotropy and clearcoat-normal maps. The
+    scatter buffer holds depth where X_ITE holds a shape id, so touching
+    scattering shapes share light weighted by distance. Against X_ITE: the
+    scatter test sphere 0.2% of pixels apart
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

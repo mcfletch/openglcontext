@@ -2,10 +2,15 @@
 
 `PhysicalMaterial` is X3D 4's `PhysicalMaterial` with the glTF material
 extensions (clearcoat, sheen, specular, transmission, volume, iridescence,
-anisotropy, dispersion, diffuse transmission, emissive strength, ior) and the
-engine's own fields (lightmap, baked light, octahedral impostors, planar
-reflection) added in X3D's style. It goes in an `Appearance`'s `material`
-slot, and the PBR pass draws it with a Cook-Torrance BRDF.
+anisotropy, dispersion, diffuse transmission, emissive strength, ior,
+retroreflection, volume scatter) and the engine's own fields (lightmap, baked
+light, octahedral impostors, planar reflection). The extensions' values are
+kept in X_ITE's material extension nodes in its `extensions` field, and read
+and set under the material's own names
+(:mod:`~OpenGLContext.scenegraph.materialextensions`); the engine's fields
+are fields of the material, which an X3D document carries in an
+`OpenGLContext` metadata set. It goes in an `Appearance`'s `material` slot,
+and the PBR pass draws it with a Cook-Torrance BRDF.
 
 Each texture is an `SFNode` field holding an X3D texture node (an
 `ImageTexture`, or an `ImageDataTexture` for an image already decoded), with a
@@ -22,8 +27,11 @@ import numpy as np
 
 from vrml import cache, field, node, protofunctions
 from vrml.x3d import nodes as x3d
+from vrml.x3d import xite
 
 from OpenGLContext import lighting
+from OpenGLContext.scenegraph import materialextensions
+from OpenGLContext.scenegraph.materialextensions import ExtensionValue
 
 #: The texture field of each channel the PBR pass binds, by channel name.
 CHANNEL_FIELDS = {
@@ -47,6 +55,9 @@ CHANNEL_FIELDS = {
     'sheenRoughness': 'sheenRoughnessTexture',
     'diffuseTransmission': 'diffuseTransmissionTexture',
     'diffuseTransmissionColor': 'diffuseTransmissionColorTexture',
+    'retroreflection': 'retroreflectionTexture',
+    'scatterStrength': 'scatterStrengthTexture',
+    'multiscatterColor': 'multiscatterColorTexture',
 }
 
 #: The keys the material's versions are held under in vrml's global cache.
@@ -107,9 +118,8 @@ class ChannelMaterial:
             channels = {}
             holder = cache.CACHE.holder(self, None, _TEXTURES_KEY)
             for channel, name in self.CHANNELS.items():
-                declared = protofunctions.getField(self, name)
-                holder.depend(self, declared)
-                value = declared.fget(self)
+                materialextensions.depend_texture(holder, self, name)
+                value = getattr(self, name)
                 if value:
                     channels[channel] = value
             found = holder.data = types.MappingProxyType(channels)
@@ -144,6 +154,8 @@ class ChannelMaterial:
             for declared in protofunctions.getFields(self):
                 if not declared.name.startswith(' '):
                     holder.depend(self, declared)
+            if hasattr(self, 'extensions'):
+                materialextensions.depend(holder, self)
         return int(self.__dict__.get('_version', 0))
 
     def factorsChanged(self) -> None:
@@ -163,41 +175,50 @@ class ChannelMaterial:
         return base.cached(mode) if base is not None else None
 
 
-class PhysicalMaterial(ChannelMaterial, x3d.PhysicalMaterial):
+class PhysicalMaterial(ChannelMaterial, xite.PhysicalMaterial):
     """X3D's PhysicalMaterial, with the glTF extensions and the engine's fields"""
 
     PROTO = 'PhysicalMaterial'
 
-    # The glTF material extensions' factors.
-    emissiveStrength = field.newField('emissiveStrength', 'SFFloat', 1, 1.0)
-    specular = field.newField('specular', 'SFFloat', 1, 1.0)
-    specularColor = field.newField('specularColor', 'SFColor', 1, (1.0, 1.0, 1.0))
-    clearcoat = field.newField('clearcoat', 'SFFloat', 1, 0.0)
-    clearcoatRoughness = field.newField('clearcoatRoughness', 'SFFloat', 1, 0.0)
-    sheenColor = field.newField('sheenColor', 'SFColor', 1, (0.0, 0.0, 0.0))
-    sheenRoughness = field.newField('sheenRoughness', 'SFFloat', 1, 0.0)
-    ior = field.newField('ior', 'SFFloat', 1, 1.5)
+    # The glTF material extensions' values, kept in the extension nodes.
+    emissiveStrength = ExtensionValue('emissiveStrength')
+    specular = ExtensionValue('specular')
+    specularColor = ExtensionValue('specularColor')
+    #: A multiplier on `specularColor` (X_ITE's), which may then exceed 1.
+    specularStrength = ExtensionValue('specularStrength')
+    clearcoat = ExtensionValue('clearcoat')
+    clearcoatRoughness = ExtensionValue('clearcoatRoughness')
+    sheenColor = ExtensionValue('sheenColor')
+    sheenRoughness = ExtensionValue('sheenRoughness')
+    ior = ExtensionValue('ior')
     #: The fraction of light transmitted through the surface.
-    transmission = field.newField('transmission', 'SFFloat', 1, 0.0)
-    #: The volume's thickness and absorption. An `attenuationDistance` of 0 is
-    #: no absorption: the transmitted light is tinted by `baseColor` alone.
-    thickness = field.newField('thickness', 'SFFloat', 1, 0.0)
-    attenuationColor = field.newField('attenuationColor', 'SFColor', 1, (1.0, 1.0, 1.0))
-    attenuationDistance = field.newField('attenuationDistance', 'SFFloat', 1, 0.0)
+    transmission = ExtensionValue('transmission')
+    #: The volume's thickness and absorption: light falls to `attenuationColor`
+    #: after `attenuationDistance` metres inside it. 0 is no absorption, as
+    #: is the default, which stands for glTF's infinite distance.
+    thickness = ExtensionValue('thickness')
+    attenuationColor = ExtensionValue('attenuationColor')
+    attenuationDistance = ExtensionValue('attenuationDistance')
     #: Light passing through and diffusing: leaves, wax, skin. 0 is opaque.
-    diffuseTransmission = field.newField('diffuseTransmission', 'SFFloat', 1, 0.0)
-    diffuseTransmissionColor = field.newField(
-        'diffuseTransmissionColor', 'SFColor', 1, (1.0, 1.0, 1.0))
+    diffuseTransmission = ExtensionValue('diffuseTransmission')
+    diffuseTransmissionColor = ExtensionValue('diffuseTransmissionColor')
     #: The specular lobe's stretch, and its direction in radians.
-    anisotropyStrength = field.newField('anisotropyStrength', 'SFFloat', 1, 0.0)
-    anisotropyRotation = field.newField('anisotropyRotation', 'SFFloat', 1, 0.0)
+    anisotropyStrength = ExtensionValue('anisotropyStrength')
+    anisotropyRotation = ExtensionValue('anisotropyRotation')
     #: Wavelength-dependent refraction.
-    dispersion = field.newField('dispersion', 'SFFloat', 1, 0.0)
+    dispersion = ExtensionValue('dispersion')
     #: Thin-film interference; thickness in nanometres.
-    iridescence = field.newField('iridescence', 'SFFloat', 1, 0.0)
-    iridescenceIor = field.newField('iridescenceIor', 'SFFloat', 1, 1.3)
-    iridescenceThicknessMin = field.newField('iridescenceThicknessMin', 'SFFloat', 1, 100.0)
-    iridescenceThicknessMax = field.newField('iridescenceThicknessMax', 'SFFloat', 1, 400.0)
+    iridescence = ExtensionValue('iridescence')
+    iridescenceIor = ExtensionValue('iridescenceIor')
+    iridescenceThicknessMin = ExtensionValue('iridescenceThicknessMin')
+    iridescenceThicknessMax = ExtensionValue('iridescenceThicknessMax')
+    #: The blend from ordinary to retroreflective specular, 0 to 1.
+    retroreflection = ExtensionValue('retroreflection')
+    #: Subsurface scattering: the colour light scattered many times takes,
+    #: and the phase function's anisotropy, -1 to 1.
+    multiscatterColor = ExtensionValue('multiscatterColor')
+    scatterAnisotropy = ExtensionValue('scatterAnisotropy')
+    scatterStrength = ExtensionValue('scatterStrength')
 
     CHANNELS = CHANNEL_FIELDS
 
@@ -228,38 +249,44 @@ class PhysicalMaterial(ChannelMaterial, x3d.PhysicalMaterial):
     #: environment probe.
     reflector = field.newField('reflector', 'SFNode', 1, node.NULL)
 
-    # The extension and engine channels, in the pattern of X3D's baseTexture
-    # and baseTextureMapping.
+    # The engine's lightmap channel, in the pattern of X3D's baseTexture and
+    # baseTextureMapping, and the extensions' maps, kept in their nodes.
     lightmapTexture = _texture_field('lightmapTexture')
     lightmapTextureMapping = _mapping_field('lightmapTexture')
-    transmissionTexture = _texture_field('transmissionTexture')
-    transmissionTextureMapping = _mapping_field('transmissionTexture')
-    iridescenceTexture = _texture_field('iridescenceTexture')
-    iridescenceTextureMapping = _mapping_field('iridescenceTexture')
-    iridescenceThicknessTexture = _texture_field('iridescenceThicknessTexture')
-    iridescenceThicknessTextureMapping = _mapping_field('iridescenceThicknessTexture')
-    clearcoatTexture = _texture_field('clearcoatTexture')
-    clearcoatTextureMapping = _mapping_field('clearcoatTexture')
-    clearcoatRoughnessTexture = _texture_field('clearcoatRoughnessTexture')
-    clearcoatRoughnessTextureMapping = _mapping_field('clearcoatRoughnessTexture')
-    clearcoatNormalTexture = _texture_field('clearcoatNormalTexture')
-    clearcoatNormalTextureMapping = _mapping_field('clearcoatNormalTexture')
-    thicknessTexture = _texture_field('thicknessTexture')
-    thicknessTextureMapping = _mapping_field('thicknessTexture')
-    anisotropyTexture = _texture_field('anisotropyTexture')
-    anisotropyTextureMapping = _mapping_field('anisotropyTexture')
-    specularTexture = _texture_field('specularTexture')
-    specularTextureMapping = _mapping_field('specularTexture')
-    specularColorTexture = _texture_field('specularColorTexture')
-    specularColorTextureMapping = _mapping_field('specularColorTexture')
-    sheenColorTexture = _texture_field('sheenColorTexture')
-    sheenColorTextureMapping = _mapping_field('sheenColorTexture')
-    sheenRoughnessTexture = _texture_field('sheenRoughnessTexture')
-    sheenRoughnessTextureMapping = _mapping_field('sheenRoughnessTexture')
-    diffuseTransmissionTexture = _texture_field('diffuseTransmissionTexture')
-    diffuseTransmissionTextureMapping = _mapping_field('diffuseTransmissionTexture')
-    diffuseTransmissionColorTexture = _texture_field('diffuseTransmissionColorTexture')
-    diffuseTransmissionColorTextureMapping = _mapping_field('diffuseTransmissionColorTexture')
+    transmissionTexture = ExtensionValue('transmissionTexture')
+    transmissionTextureMapping = ExtensionValue('transmissionTextureMapping')
+    iridescenceTexture = ExtensionValue('iridescenceTexture')
+    iridescenceTextureMapping = ExtensionValue('iridescenceTextureMapping')
+    iridescenceThicknessTexture = ExtensionValue('iridescenceThicknessTexture')
+    iridescenceThicknessTextureMapping = ExtensionValue('iridescenceThicknessTextureMapping')
+    clearcoatTexture = ExtensionValue('clearcoatTexture')
+    clearcoatTextureMapping = ExtensionValue('clearcoatTextureMapping')
+    clearcoatRoughnessTexture = ExtensionValue('clearcoatRoughnessTexture')
+    clearcoatRoughnessTextureMapping = ExtensionValue('clearcoatRoughnessTextureMapping')
+    clearcoatNormalTexture = ExtensionValue('clearcoatNormalTexture')
+    clearcoatNormalTextureMapping = ExtensionValue('clearcoatNormalTextureMapping')
+    thicknessTexture = ExtensionValue('thicknessTexture')
+    thicknessTextureMapping = ExtensionValue('thicknessTextureMapping')
+    anisotropyTexture = ExtensionValue('anisotropyTexture')
+    anisotropyTextureMapping = ExtensionValue('anisotropyTextureMapping')
+    specularTexture = ExtensionValue('specularTexture')
+    specularTextureMapping = ExtensionValue('specularTextureMapping')
+    specularColorTexture = ExtensionValue('specularColorTexture')
+    specularColorTextureMapping = ExtensionValue('specularColorTextureMapping')
+    sheenColorTexture = ExtensionValue('sheenColorTexture')
+    sheenColorTextureMapping = ExtensionValue('sheenColorTextureMapping')
+    sheenRoughnessTexture = ExtensionValue('sheenRoughnessTexture')
+    sheenRoughnessTextureMapping = ExtensionValue('sheenRoughnessTextureMapping')
+    diffuseTransmissionTexture = ExtensionValue('diffuseTransmissionTexture')
+    diffuseTransmissionTextureMapping = ExtensionValue('diffuseTransmissionTextureMapping')
+    diffuseTransmissionColorTexture = ExtensionValue('diffuseTransmissionColorTexture')
+    diffuseTransmissionColorTextureMapping = ExtensionValue('diffuseTransmissionColorTextureMapping')
+    retroreflectionTexture = ExtensionValue('retroreflectionTexture')
+    retroreflectionTextureMapping = ExtensionValue('retroreflectionTextureMapping')
+    scatterStrengthTexture = ExtensionValue('scatterStrengthTexture')
+    scatterStrengthTextureMapping = ExtensionValue('scatterStrengthTextureMapping')
+    multiscatterColorTexture = ExtensionValue('multiscatterColorTexture')
+    multiscatterColorTextureMapping = ExtensionValue('multiscatterColorTextureMapping')
 
     #: What a glTF document's `extras` said of the material; the glTF writer
     #: writes it back.
@@ -302,6 +329,10 @@ class PhysicalMaterial(ChannelMaterial, x3d.PhysicalMaterial):
         GL.glMaterialf(face, GL.GL_SHININESS, float(shininess))
         return alpha
 
+
+#: The attenuation distance glTF's infinite default is held as: the
+#: VolumeMaterialExtension field's default.
+NO_ATTENUATION = 1000000.0
 
 #: The reflectance of a surface that is not a metal, seen head on: what glTF's
 #: metallic/roughness model gives every dielectric.

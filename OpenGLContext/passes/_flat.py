@@ -2193,8 +2193,13 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
             # out of the opaque pass unless transmission is disabled.
             transmissive = (self.transmissiveRecords(toRender)
                             if self.transmissionMode() != 'off' else set())
-            self.shaderRenderOpaque(toRender, id_map, skip=transmissive)
-            self.shaderRenderTransmissive(toRender, transmissive, id_map)
+            scattering = self.shaderRenderScatter(self.scatterRecords(toRender))
+            try:
+                self.shaderRenderOpaque(toRender, id_map, skip=transmissive)
+                self.shaderRenderTransmissive(toRender, transmissive, id_map)
+            finally:
+                if scattering:
+                    self.endScatter()
             self.shaderRenderTransparent(toRender, id_map)
 
             self.resetMeshDrawState()

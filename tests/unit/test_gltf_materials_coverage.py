@@ -165,7 +165,7 @@ class TestAMalformedMaterialExtension:
                            'KHR_materials_volume': {'thicknessFactor': -2,
                                                     'attenuationDistance': 'far'}})
         assert (float(mat.clearcoat), float(mat.clearcoatRoughness)) == (1.0, 0.0)
-        assert (float(mat.thickness), float(mat.attenuationDistance)) == (0.0, 0.0)
+        assert (float(mat.thickness), float(mat.attenuationDistance)) == (0.0, gmat.NO_ATTENUATION)
 
     def test_a_texture_transform_with_a_bad_uv_set_uses_the_texture_s(self):
         g, r = _g_with_images([_png()])

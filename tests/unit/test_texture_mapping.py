@@ -253,8 +253,10 @@ class TestTheChannelOrder:
     """The shader numbers channels as texturemapping.CHANNELS does."""
 
     def test_it_is_the_pass_texture_order(self):
-        from OpenGLContext.passes.pbrpass import PBR_EXT_UNITS, PBR_UNITS  # noqa: PLC0415 the pass is GL; the mapping is not
-        assert CHANNELS == tuple(PBR_UNITS) + tuple(PBR_EXT_UNITS)
+        from OpenGLContext.passes.pbrpass import (  # noqa: PLC0415 the pass is GL; the mapping is not
+            PBR_EXT_UNITS, PBR_SHARED_CHANNELS, PBR_UNITS,
+        )
+        assert CHANNELS == tuple(PBR_UNITS) + tuple(PBR_EXT_UNITS) + tuple(PBR_SHARED_CHANNELS)
 
     def test_the_shader_numbers_them_alike(self):
         from OpenGLContext.passes.shadersource import SHADER_DIR  # noqa: PLC0415 the pass is GL; the mapping is not

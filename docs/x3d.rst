@@ -171,6 +171,13 @@ implements these X3D nodes, by component:
   IsoSurfaceVolumeData, OpacityMapVolumeStyle, ProjectionVolumeStyle,
   SegmentedVolumeData, ShadedVolumeStyle, SilhouetteEnhancementVolumeStyle,
   ToneMappedVolumeStyle, VolumeData
+- X_ITE - AnisotropyMaterialExtension, ClearcoatMaterialExtension,
+  DiffuseTransmissionMaterialExtension, DispersionMaterialExtension,
+  EmissiveStrengthMaterialExtension, IORMaterialExtension,
+  IridescenceMaterialExtension, RetroreflectionMaterialExtension,
+  SheenMaterialExtension, SpecularMaterialExtension,
+  TransmissionMaterialExtension, VolumeMaterialExtension,
+  VolumeScatterMaterialExtension
 
 .. x3d-implemented-end
 
@@ -317,6 +324,16 @@ shape is drawn a side at a time and is not batched with others. The alpha
 mode is the front material's, and the fixed-function path draws both sides
 with the front material. A ``Box``, ``Sphere``, ``Cone`` or ``Cylinder``
 whose ``solid`` is false draws its inside.
+
+X_ITE's material extension nodes (the ``X_ITE`` component, which a document
+names with ``<component name='X_ITE' level='1'/>``) go in a
+``PhysicalMaterial``'s ``extensions``, one per glTF material extension, and
+are where the material keeps those values: ``ClearcoatMaterialExtension``,
+``SheenMaterialExtension``, ``IORMaterialExtension`` and the rest are the
+material's ``clearcoat``, ``sheenColor``, ``ior`` and so on, drawn as the
+:doc:`PBR renderer <pbr>` page describes, retroreflection and volume
+scattering among them. Routing to an extension node's field changes the
+material.
 
 A ``FontLibrary`` reads a TrueType or OpenType file, under the document's url
 policy, as a font family its ``FontStyle`` nodes may name
@@ -1714,8 +1731,9 @@ Writing
 
 ``vrml.x3d.dump(scene, path)`` writes a scene in the encoding the suffix
 names, and ``vrml.x3d.dumps(scene, encoding='xml')`` returns the text. A
-material's fields that X3D's node lacks are written in a ``MetadataSet``, and
-an image held in memory as an ``ImageTexture`` with a ``data:`` URL; see
+material's glTF extensions are written as X_ITE's material extension nodes,
+the engine's own fields in a ``MetadataSet``, and an image held in memory as
+an ``ImageTexture`` with a ``data:`` URL; see
 :doc:`PBR materials <pbr>`. A ``PBRMesh`` (a glTF mesh, or generated
 geometry) is written as an ``IndexedTriangleSet`` with ``Coordinate``,
 ``Normal``, ``Tangent``, ``Color`` or ``ColorRGBA`` and texture coordinates as

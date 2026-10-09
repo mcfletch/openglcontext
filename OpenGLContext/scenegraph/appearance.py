@@ -1,7 +1,7 @@
 """Appearance node based on VRML 97 model"""
 from typing import Any
 
-from vrml.vrml97 import basenodes
+from vrml.x3d import xite
 import numpy
 from OpenGL.GL import (
     GL_MODELVIEW, GL_MODULATE, GL_TEXTURE, GL_TEXTURE_2D, GL_TEXTURE_ENV,
@@ -37,7 +37,7 @@ def _load_texture_matrix(transform: Any) -> Any:
     return _TEXTURE_MATRIX
 
 
-class Appearance(basenodes.Appearance):
+class Appearance(xite.Appearance):
     """Specifies visual properties for geometry
 
     The appearance node specifies a set of appearance properties

@@ -52,7 +52,7 @@ from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.physicalmaterial import (
-    ChannelMaterial, appearance_alpha, pbr_material, source_of,
+    NO_ATTENUATION, ChannelMaterial, appearance_alpha, pbr_material, source_of,
 )
 from OpenGLContext.scenegraph.texturemapping import (
     channel_labels, coordinate_set, transform_for, transform_matrix,
@@ -380,13 +380,17 @@ _MATERIAL_EXTENSIONS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
     ('KHR_materials_transmission', {'transmissionFactor': ('transmission', 0.0)}),
     ('KHR_materials_volume', {'thicknessFactor': ('thickness', 0.0),
                               'attenuationColor': ('attenuationColor', (1.0, 1.0, 1.0)),
-                              'attenuationDistance': ('attenuationDistance', 0.0)}),
+                              'attenuationDistance': ('attenuationDistance', NO_ATTENUATION)}),
     ('KHR_materials_diffuse_transmission',
      {'diffuseTransmissionFactor': ('diffuseTransmission', 0.0),
       'diffuseTransmissionColorFactor': ('diffuseTransmissionColor', (1.0, 1.0, 1.0))}),
     ('KHR_materials_anisotropy', {'anisotropyStrength': ('anisotropyStrength', 0.0),
                                   'anisotropyRotation': ('anisotropyRotation', 0.0)}),
     ('KHR_materials_dispersion', {'dispersion': ('dispersion', 0.0)}),
+    ('KHR_materials_retroreflection', {'retroreflectionFactor': ('retroreflection', 0.0)}),
+    ('KHR_materials_scatter', {'scatterStrengthFactor': ('scatterStrength', 0.0),
+                               'multiscatterColorFactor': ('multiscatterColor', (0.0, 0.0, 0.0)),
+                               'scatterAnisotropy': ('scatterAnisotropy', 0.0)}),
     ('KHR_materials_iridescence',
      {'iridescenceFactor': ('iridescence', 0.0),
       'iridescenceIor': ('iridescenceIor', 1.3),
@@ -394,8 +398,8 @@ _MATERIAL_EXTENSIONS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
       'iridescenceThicknessMaximum': ('iridescenceThicknessMax', 400.0)}),
 )
 
-# attenuationDistance is +inf in glTF and 0.0 in PhysicalMaterial ("no absorption"),
-# so the sentinel must not be written as a literal distance of zero.
+# attenuationDistance is +inf in glTF; PhysicalMaterial holds that as
+# NO_ATTENUATION, and 0 also means no absorption, so neither is written.
 _SENTINEL_INFINITY = ('attenuationDistance',)
 
 # Which extension a factor belongs to, so a non-default factor pulls its whole
@@ -415,6 +419,9 @@ _MATERIAL_TEXTURE_EXTENSION = {
     'anisotropy': 'KHR_materials_anisotropy',
     'diffuseTransmission': 'KHR_materials_diffuse_transmission',
     'diffuseTransmissionColor': 'KHR_materials_diffuse_transmission',
+    'retroreflection': 'KHR_materials_retroreflection',
+    'scatterStrength': 'KHR_materials_scatter',
+    'multiscatterColor': 'KHR_materials_scatter',
 }
 
 # The textureInfo key each extension gives its channel.
@@ -771,7 +778,8 @@ class GLTFWriter:
             block: dict[str, Any] = {}
             for key, (attribute, default) in fields.items():
                 value = getattr(material, attribute, default)
-                if attribute in _SENTINEL_INFINITY and _close(value, 0.0):
+                if attribute in _SENTINEL_INFINITY and (_close(value, 0.0)
+                                                        or value >= NO_ATTENUATION):
                     continue
                 if not _close(value, default):
                     block[key] = _factor(value)
