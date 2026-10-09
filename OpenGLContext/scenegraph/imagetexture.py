@@ -279,14 +279,7 @@ class ImageURLField(fieldtypes.MFString):
     def __set__(self, client: Any, value: Any, notify: bool = True) -> Any:
         """Set the client's URL, then try to load the image"""
         value = super(ImageURLField, self).fset(client, value, notify=True)
-        loadsensor.set_load_state(client, loadsensor.LOADING)
-        background.load_in_background(
-            value,
-            client.loadBackground,
-            value,
-            context.Context.allContexts,
-            prepare=prepare_image_loading,
-        )
+        client.requestImage()
         return value
 
     fset = __set__
@@ -305,6 +298,25 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
 
     image = PILImage(" image", 1, None)
     url = ImageURLField("url", 1, list)
+
+    def requestImage(self) -> None:
+        """Read the image `url` names, in the background"""
+        loadsensor.set_load_state(self, loadsensor.LOADING)
+        background.load_in_background(
+            self.url,
+            self.loadBackground,
+            self.url,
+            context.Context.allContexts,
+            prepare=prepare_image_loading,
+        )
+
+    def copy(self, copier: Any = None) -> Any:
+        """A copy reading its own image: each instance of a prototype is a
+        copy of its body, made before the body's image has arrived"""
+        made = super().copy(copier)
+        if made is not self and made.url and made.__dict__.get(' image') is None:
+            made.requestImage()
+        return made
 
     def loadBackground(self, url: Any, contexts: Sequence[Any] = ()) -> Any:
         """Load an image from the given url in the background
