@@ -651,6 +651,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     the shape blended (X_ITE's reading); a shape with either is drawn alone
     and after the other opaque shapes. Against X_ITE the test document
     differs only in UnlitMaterial's colour encoding
+  - [x] InstancedShape: the engine's InstancedShape is X_ITE's node; its
+    placements come from the five X3D lists (clamped to each list's last
+    entry, as X_ITE does) where `placements` is empty
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

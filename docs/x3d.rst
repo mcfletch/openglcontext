@@ -172,7 +172,7 @@ implements these X3D nodes, by component:
   SegmentedVolumeData, ShadedVolumeStyle, SilhouetteEnhancementVolumeStyle,
   ToneMappedVolumeStyle, VolumeData
 - X_ITE - AnisotropyMaterialExtension, BlendMode, ClearcoatMaterialExtension,
-  DepthMode,
+  DepthMode, InstancedShape,
   DiffuseTransmissionMaterialExtension, DispersionMaterialExtension,
   EmissiveStrengthMaterialExtension, IORMaterialExtension,
   IridescenceMaterialExtension, RetroreflectionMaterialExtension,
@@ -355,6 +355,10 @@ does not have reads as the field's default. A shape with either is drawn by
 itself, not in an instanced group, and after the opaque shapes without one,
 so its depth test is made against them
 (:mod:`~OpenGLContext.scenegraph.rendermodes`).
+
+X_ITE's ``InstancedShape`` draws its shape at every place its
+``translations``, ``rotations``, ``scales``, ``scaleOrientations`` and
+``centers`` give, in one instanced draw (:doc:`instancing`).
 
 A ``FontLibrary`` reads a TrueType or OpenType file, under the document's url
 policy, as a font family its ``FontStyle`` nodes may name

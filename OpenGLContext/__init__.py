@@ -446,3 +446,4 @@ Node( 'VolumeScatterMaterialExtension', 'OpenGLContext.scenegraph.materialextens
 Node( 'SpecularGlossinessMaterial', 'OpenGLContext.scenegraph.specularglossiness.SpecularGlossinessMaterial' )
 Node( 'BlendMode', 'OpenGLContext.scenegraph.rendermodes.BlendMode' )
 Node( 'DepthMode', 'OpenGLContext.scenegraph.rendermodes.DepthMode' )
+Node( 'InstancedShape', 'OpenGLContext.scenegraph.instancedshape.InstancedShape' )

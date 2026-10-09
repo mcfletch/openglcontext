@@ -72,6 +72,7 @@ from OpenGLContext.scenegraph.indexedlineset import IndexedLineSet as IndexedLin
 from OpenGLContext.scenegraph.indexedpolygons import IndexedPolygons as IndexedPolygons
 from OpenGLContext.scenegraph.inline import Inline as Inline
 from OpenGLContext.scenegraph.inlinegeometry import InlineGeometry as InlineGeometry
+from OpenGLContext.scenegraph.instancedshape import InstancedShape as InstancedShape
 from OpenGLContext.scenegraph.interpolators import ColorInterpolator as ColorInterpolator
 from OpenGLContext.scenegraph.interpolators import CoordinateInterpolator as CoordinateInterpolator
 from OpenGLContext.scenegraph.interpolators import NormalInterpolator as NormalInterpolator
@@ -142,6 +143,8 @@ from OpenGLContext.scenegraph.quadrics import Cylinder as Cylinder
 from OpenGLContext.scenegraph.quadrics import Sphere as Sphere
 from OpenGLContext.scenegraph.reflector import PlanarReflector as PlanarReflector
 from OpenGLContext.scenegraph.renderedtexture import RenderedTexture as RenderedTexture
+from OpenGLContext.scenegraph.rendermodes import BlendMode as BlendMode
+from OpenGLContext.scenegraph.rendermodes import DepthMode as DepthMode
 from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
 from OpenGLContext.scenegraph.scenegraph import X3DScene as X3DScene
 class FloatUniform1f(_FloatUniform): ...
@@ -372,6 +375,7 @@ __all__ = [
     'BallJoint',
     'Billboard',
     'BiquadFilter',
+    'BlendMode',
     'BlendedVolumeStyle',
     'BooleanFilter',
     'BooleanSequencer',
@@ -423,6 +427,7 @@ __all__ = [
     'Cylinder',
     'CylinderSensor',
     'Delay',
+    'DepthMode',
     'DiffuseTransmissionMaterialExtension',
     'DirectionalLight',
     'Disk2D',
@@ -499,6 +504,7 @@ __all__ = [
     'IndexedTriangleStripSet',
     'Inline',
     'InlineGeometry',
+    'InstancedShape',
     'IntUniform1i',
     'IntUniform2i',
     'IntUniform3i',
