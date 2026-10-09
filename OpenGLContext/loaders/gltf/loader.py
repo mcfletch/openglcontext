@@ -17,10 +17,16 @@ import os
 from typing import TYPE_CHECKING, Optional, cast
 
 from OpenGLContext.loaders.resolver import (
-    check_size, checked_url, contained_source, read_contained, Resolver, fetch_url, DEFAULT_MAX_RESOURCE_BYTES,
+    check_size, checked_url, contained_source, gunzipped, read_contained, Resolver,
+    fetch_url, DEFAULT_MAX_RESOURCE_BYTES,
 )
 from OpenGLContext.loaders.gltf import fastdecode
-from OpenGLContext.loaders.gltf.scene import _build_scene, GLTFScene
+from OpenGLContext.loaders.gltf.scene import (
+    SUPPORTED_EXTENSIONS, _build_scene, GLTFScene, unread_required,
+)
+
+__all__ = ['SUPPORTED_EXTENSIONS', 'SharedDocument', 'load_gltf', 'load_gltf_url',
+           'parse_gltf', 'unread_required']
 
 if TYPE_CHECKING:
     import pygltflib
@@ -73,9 +79,10 @@ def _source_bytes(source: bytes | bytearray | str,
     if isinstance(source, (bytes, bytearray)):
         data = bytes(source)
         check_size(len(data), max_resource_bytes, 'glTF document')
-        return data, base_dir
+        return gunzipped(data, max_resource_bytes, 'glTF document'), base_dir
     path = contained_source(source)
-    return read_contained(path, max_resource_bytes), os.path.dirname(path)
+    data = read_contained(path, max_resource_bytes)
+    return gunzipped(data, max_resource_bytes, 'glTF document'), os.path.dirname(path)
 
 
 class SharedDocument:
@@ -161,7 +168,8 @@ def load_gltf_url(url: str, cache_dir: Optional[str] = None,
     External buffers/images referenced by a ``.gltf`` are resolved relative to the
     URL and confined to its origin. ``.glb`` files are self-contained.
     """
-    data = fetch_url(checked_url(url), cache_dir, max_resource_bytes)
+    data = gunzipped(fetch_url(checked_url(url), cache_dir, max_resource_bytes),
+                     max_resource_bytes, 'glTF document')
     if data[:4] == b'glTF':
         return load_gltf(data, max_resource_bytes=max_resource_bytes)  # GLB
     g = _decode_document(data)

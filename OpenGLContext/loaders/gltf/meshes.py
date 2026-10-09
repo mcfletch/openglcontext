@@ -196,8 +196,7 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
     # disables normal mapping when the tangent is zero). The glTF spec says the
     # client SHOULD compute tangents in that case; do so, mirroring the missing-
     # normal fallback above, so authored normal maps actually perturb the surface.
-    if (tangents is None and texcoords is not None
-            and 'normal' in getattr(material, 'textures', {})):
+    if tangents is None and texcoords is not None and _reads_tangents(material):
         tangents = estimate_tangents(positions, normals, texcoords, indices)
 
     morph_targets = _read_morph_targets(g, primitive, resolver, nverts)
@@ -222,6 +221,14 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
             # of the mesh cache exactly as a morphed or skinned mesh is kept out.
             shape._gltf_unshareable = True
     return shape, bounds
+
+
+def _reads_tangents(material: Any) -> bool:
+    """Whether a material reads directions in tangent space: a normal or
+    clearcoat normal map, or anisotropy, whose direction is the tangent's."""
+    textures = getattr(material, 'textures', {}) or {}
+    return ('normal' in textures or 'clearcoatNormal' in textures
+            or float(getattr(material, 'anisotropyStrength', 0.0) or 0.0) > 0.0)
 
 
 def _read_morph_targets(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",

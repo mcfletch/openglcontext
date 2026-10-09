@@ -7,8 +7,11 @@ keyboard/mouse. What format the source is in is worked out from the source
 itself, so one command opens them all:
 
 ===============================  ==============================================
-``.gltf`` ``.glb``               a glTF 2.0 model
+``.gltf`` ``.glb`` ``.vrm``      a glTF 2.0 model
 ``.wrl`` ``.wrz`` ``.vrml``      a VRML97 world
+``.x3d`` ``.x3dv`` ``.x3dj``     an X3D world
+``.obj`` ``.stl`` ``.ply``       one mesh
+``.off``                         one mesh
 ``.zip`` ``.tar.gz`` ``.tgz``    an archive; ``#member`` says what to open
 ===============================  ==============================================
 

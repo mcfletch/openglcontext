@@ -700,6 +700,92 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
       `pitch` and `gain` are kept and not read
     - the node is bound to a context when a shape wearing it is first drawn
       there; a movie no drawn shape wears sends no events
+- Phase 11, X_ITE compatibility: glTF extensions and file formats (branch
+  x3d-xgltf, 2026-10-09). Audit of the 34 extensions on X_ITE's features page
+  against the loader and writer code
+  - [x] `KHR_accessor_float16`, `KHR_accessor_float64` (Khronos draft PR
+    2397): component types 5131 and 5130 wherever a float accessor is read;
+    animation keyframes read and interpolated in float64
+    (`accessors._read_floats(precise=True)`); a double vertex attribute is
+    logged when rounded to single precision
+  - [x] `KHR_mesh_quantization` was partial: normalized positions, normals,
+    tangents and morph deltas were read as raw integers (a gltfpack mesh drew
+    127 to 65535 times too large, its tangents swamped the normal map); all
+    float reads now take the normalized policy (`_coerce_normalized`)
+  - [x] `KHR_meshopt_compression`, `EXT_meshopt_compression`:
+    `loaders.gltf.meshopt`, a NumPy decoder from the extension READMEs'
+    appendices; ambiguities resolved from meshoptimizer's MIT reference
+    decoder, no code copied. Every buffer-view read goes through
+    `accessors.view_bytes` (accessors, sparse, images, Draco, audio), which
+    decodes a compressed view once per load. Checked against meshoptimizer
+    0.2.30's encoder on 2,700 attribute streams (both versions, all levels
+    including XOR channels), 400 triangle and 400 index streams, and its
+    filters (within the one unit the spec allows; exponential exact): no
+    differences. 100k 12-byte vertices decode in about 0.02 s, 100k
+    triangles in about 0.05 s. Tests: meshoptimizer's own vectors, the
+    filters encoded by hand, built documents, Khronos BrainStem (both
+    variants) and MeshoptCubeTest (`network`). The writer writes buffers
+    uncompressed
+  - [x] `KHR_materials_variants`: `loaders.gltf.variants`;
+    `GLTFScene.variants`, `.variant`, `.select_variant(name | index | None)`
+    re-dress every primitive that maps the variant (appearance, mesh
+    appearance, `solid`); materials of every variant built at load. Each mesh
+    keeps `materialVariants`, which the writer writes back as mappings with
+    the default material. Tested with built documents, a GL frame, and
+    Khronos MaterialsVariantsShoe (`network`)
+  - [x] `EXT_texture_avif` through Pillow (12.3 here decodes AVIF;
+    `textures.decodes`); the AVIF or WebP image is now preferred to the core
+    `source`, which is the fallback (before, the core source won). The writer
+    writes an `EncodedImage` in AVIF or WebP through its extension and lists
+    it in `extensionsRequired` (a WebP image was written as a core image,
+    which is invalid)
+  - [x] `EXT_texture_video` (draft, github.com/takahirox/EXT_texture_video,
+    MIT): `textures.video_texture` makes a looping `MovieTexture` of the
+    named video (uri resolved under the document's policy; a buffer view
+    written once to the asset cache by digest); falls back to the core
+    `source`. Written back by the writer (relative uri beside the written
+    file; extension required). GL test draws `colours.mp4`'s frame
+  - [ ] `KHR_texture_basisu`: no KTX2/Basis transcoder under a usable licence
+    in Python; needs one (Binomial's basis_universal is Apache-2.0, C++, and
+    would be an optional compiled dependency). A texture carrying it draws its
+    core `source`
+  - left to the xnodes stream: `KHR_materials_retroreflection`,
+    `KHR_materials_volume_scatter`, `KHR_materials_pbrSpecularGlossiness`
+  - [x] X_ITE's file formats: STL, PLY (with 3D Gaussian splat PLY as
+    GaussianSplats) and OFF read by `loaders.meshfiles`, registered as Loader
+    and Adapter entries (so `Inline`, `SceneLoader` and `oglc-view` open
+    them); `.vrm` and `model/vrm` read as glTF; `.x3djz` and `.gz` appended to
+    X3D, glTF, OBJ and the mesh formats, decompressed under the resource limit
+    (`resolver.gunzipped`). Not read: SOG and SPZ (splat formats X_ITE reads
+    only with plug-ins), SVG (2D)
+  - [x] `KHR_animation_pointer` was partial (material factors, emissive
+    strength, texture transforms, a light's visibility): `animation.PointerTargets`
+    now resolves node TRS, weights and `weights/{i}`, node visibility,
+    `alphaCutoff`, normal scale, occlusion strength, base colour with alpha,
+    every `MATERIAL_EXTENSION_FIELDS` factor (the table moved from the writer
+    to `materials`), light colour, intensity, range and cone angles, camera
+    `yfov`, `znear`, `zfar`. An unresolved pointer is logged once. Not driven:
+    orthographic camera fields, `aspectRatio`, `EXT_lights_image_based`
+    intensity and rotation, `clearcoatNormalTexture/scale` (no engine field),
+    texture transforms a texture does not declare
+  - [x] `KHR_node_visibility` was partial: a hidden node was not built, so it
+    could not be shown. It is built with X3D `visible` false
+    (`_flat.integrate` prunes it, lights included) and left out of the
+    framing. CubeVisibility's capture pinned at t=0.25, since its blue cube
+    now blinks (reference_images `ee6c177`)
+  - [x] `extensionsRequired` was never read: an unread required extension is
+    reported (`scene.SUPPORTED_EXTENSIONS`, `unread_required`)
+  - [x] tangents were made only for a normal map; also for a clearcoat normal
+    map and anisotropy, which read the tangent's direction
+  - [ ] audit gaps left open: Draco attributes outside the Draco map and a
+    Draco primitive with an uncompressed fallback when DracoPy is absent;
+    `EXT_lights_image_based` mip levels placed on the probe's five fixed
+    levels rather than spread over roughness; `clearcoatNormalTexture.scale`
+    (no material field or shader input); instanced skinned or morphed meshes
+    are static; `KHR_xmp_json_ld` keeps four notice fields
+  - [x] `test_gltf_conformance` skipped every render: it passed `None` as the
+    window system, and a render that drew nothing was a skip. It passes no
+    backend now, and a render that draws nothing fails
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext

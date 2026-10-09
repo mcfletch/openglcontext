@@ -21,7 +21,7 @@ import numpy as np
 
 from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf.accessors import (
-    _buffer_bytes, _coerce_normalized, _colors_to_rgba,
+    _coerce_normalized, _colors_to_rgba, view_bytes,
 )
 
 if TYPE_CHECKING:
@@ -77,15 +77,7 @@ def _decode_blob(g: "pygltflib.GLTF2", ext: Any, resolver: Resolver) -> Any:
     bv_index = _ext_field(ext, 'bufferView')
     if bv_index is None:
         raise ValueError("KHR_draco_mesh_compression primitive has no bufferView")
-    bv = g.bufferViews[bv_index]
-    data = _buffer_bytes(g, bv.buffer, resolver)
-    start = bv.byteOffset or 0
-    end = start + (bv.byteLength or 0)
-    if bv.byteLength is None or end > len(data):
-        raise ValueError(
-            "glTF Draco bufferView %d reads %d bytes at offset %d but its buffer "
-            "holds only %d" % (bv_index, bv.byteLength or 0, start, len(data)))
-    return DracoPy.decode(bytes(data[start:end]))
+    return DracoPy.decode(bytes(view_bytes(g, bv_index, resolver)))
 
 
 def draco_arrays(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",

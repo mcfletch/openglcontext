@@ -55,14 +55,17 @@ else:
     )
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
 from OpenGLContext.scenegraph.transform import MatrixTransform
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.loaders.gltf import lod as lodext
 from OpenGLContext.loaders.gltf.accessors import (
-    _buffer_bytes, decode_data_uri, _read_normalized, resolver_max,
+    decode_data_uri, _read_normalized, resolver_max, view_bytes,
 )
 from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf import hooks as hookreg
 from OpenGLContext.loaders.gltf import imagebased, zoning
+from OpenGLContext.loaders.gltf.materials import _build_appearance, _double_sided
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
+from OpenGLContext.loaders.gltf import variants as variantsext
 from OpenGLContext.loaders.gltf.notices import document_notices
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
@@ -71,6 +74,7 @@ from OpenGLContext.loaders.gltf.transforms import (
 from OpenGLContext.loaders.gltf.animation import (
     Player, compute_world_matrices,
     _trs_animated_nodes, _build_animations, _register_morph, _register_skin,
+    PointerTargets,
 )
 
 log = logging.getLogger(__name__)
@@ -187,6 +191,26 @@ class GLTFScene(object):
         self.zones: list = []
         # environment: the scene's EXT_lights_image_based light, or None.
         self.environment: Any = None
+        # material_variants: the document's KHR_materials_variants and the
+        # shapes a selection re-dresses; see select_variant.
+        self.material_variants = variantsext.MaterialVariants()
+
+    @property
+    def variants(self) -> tuple[str, ...]:
+        """The names of the document's material variants, in document order."""
+        return self.material_variants.names
+
+    @property
+    def variant(self) -> Optional[str]:
+        """The active material variant's name, or None for none."""
+        return self.material_variants.active
+
+    def select_variant(self, variant: "str | int | None") -> None:
+        """Draw the model in material variant ``variant``: a name from
+        :attr:`variants`, an index into it, or None for each primitive's own
+        material. A primitive the variant does not map keeps its own material.
+        """
+        self.material_variants.select(variant)
 
     def advance(self, when: float) -> bool:
         """Move whatever a hook asked to be moved to ``when``, in seconds.
@@ -538,6 +562,33 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
     return light
 
 
+#: The extensions this loader reads, by name: what a document may list in
+#: ``extensionsRequired`` without a report. ``KHR_draco_mesh_compression``
+#: needs the optional DracoPy as well.
+SUPPORTED_EXTENSIONS = frozenset((
+    'EXT_lights_image_based', 'EXT_mesh_gpu_instancing', 'EXT_meshopt_compression',
+    'EXT_texture_avif', 'EXT_texture_video', 'EXT_texture_webp', 'KHR_accessor_float16',
+    'KHR_accessor_float64', 'KHR_animation_pointer', 'KHR_audio_emitter',
+    'KHR_draco_mesh_compression', 'KHR_gaussian_splatting', 'KHR_implicit_shapes',
+    'KHR_lights_punctual', 'KHR_materials_anisotropy', 'KHR_materials_clearcoat',
+    'KHR_materials_diffuse_transmission', 'KHR_materials_dispersion',
+    'KHR_materials_emissive_strength', 'KHR_materials_ior',
+    'KHR_materials_iridescence', 'KHR_materials_pbrSpecularGlossiness',
+    'KHR_materials_sheen', 'KHR_materials_specular', 'KHR_materials_transmission',
+    'KHR_materials_unlit', 'KHR_materials_variants', 'KHR_materials_volume',
+    'KHR_mesh_quantization', 'KHR_meshopt_compression', 'KHR_node_visibility',
+    'KHR_texture_transform', 'KHR_xmp_json_ld', 'MSFT_lod', 'MSFT_screencoverage',
+    'OGLC_hook', 'OGLC_materials_baked_light', 'OGLC_zone', 'OMI_environment_sky',
+    'OMI_physics_gravity',
+))
+
+
+def unread_required(g: "pygltflib.GLTF2") -> list[str]:
+    """The extensions a document requires that this loader does not read."""
+    required = getattr(g, 'extensionsRequired', None) or []
+    return sorted(str(name) for name in required if name not in SUPPORTED_EXTENSIONS)
+
+
 class _SceneBuilder:
     """Builds a :class:`GLTFScene` from a parsed glTF document.
 
@@ -553,6 +604,11 @@ class _SceneBuilder:
     def __init__(self, g: "pygltflib.GLTF2", resolver: Resolver,
                  pointer_time: Optional[float] = None) -> None:
         self.g = g
+        unread = unread_required(g)
+        if unread:
+            log.warning("glTF document lists in extensionsRequired %s, which this "
+                        "loader does not read; what depends on them is drawn "
+                        "without them", ', '.join(unread))
         self.resolver = resolver
         #: One Appearance per glTF material index, shared by its primitives.
         self.appearances: dict = {}
@@ -605,6 +661,13 @@ class _SceneBuilder:
         self.values = DocumentValues(logger=log)
         self.lod_alternatives: set = lodext.alternative_ids(g, self.values)
         self._coarser_levels = 0
+        # How many hidden (KHR_node_visibility) nodes the walk is inside: what
+        # is built there is not counted in the framing.
+        self._hiding = 0
+        # KHR_animation_pointer's targets beyond nodes and materials: the light
+        # nodes built for each punctual light, and each camera node's camera.
+        self.light_nodes: dict[int, list] = {}
+        self.camera_indices: list[int] = []
         # The OGLC_hook kinds this document's materials and nodes name, and the
         # hook_data they write. One runner for the whole load, so an unknown
         # kind is reported once rather than once per primitive.
@@ -615,6 +678,10 @@ class _SceneBuilder:
         # EXT_lights_image_based: the document's prefiltered environments, for
         # its scene and its zones to name.
         self.image_lights = imagebased.ImageLights(g, resolver)
+        # KHR_materials_variants: the names here, and each shape that maps one
+        # as mesh_shapes builds it.
+        self.material_variants = variantsext.MaterialVariants(
+            variantsext.variant_names(top_ext))
         self.emitter_nodes: dict = {}
         self._emitter_index: Optional[dict] = None
         self._zone_placed: list = []
@@ -635,6 +702,7 @@ class _SceneBuilder:
                 self.g, prim, self.resolver, self.appearances, self.tex_cache,
                 self.hooks, world)
             if shape is not None:
+                self._dress_variants(prim, shape)
                 shapes.append((shape, bounds))
                 if not casts and hasattr(shape, 'castShadow'):
                     shape.castShadow = False
@@ -653,6 +721,30 @@ class _SceneBuilder:
             self.mesh_cache[key] = shapes
         return shapes
 
+    def _dress_variants(self, primitive: Any, shape: Any) -> None:
+        """Give a primitive's mesh its material variants, and the scene its shape.
+
+        Only a Shape holding a PBRMesh is re-dressed; a hook's result is
+        whatever the hook made it, and keeps the material it was given.
+        """
+        mesh = getattr(shape, 'geometry', None)
+        if not self.material_variants.names or not isinstance(mesh, PBRMesh):
+            return
+        mapped = variantsext.primitive_mappings(
+            primitive, len(self.material_variants.names), len(self.g.materials or []))
+        if not mapped:
+            return
+        dressed = variantsext.PrimitiveVariants(default=(shape.appearance, bool(mesh.solid)))
+        for variant, material in mapped.items():
+            appearance = self.appearances.get(material)
+            if appearance is None:
+                appearance = self.appearances[material] = _build_appearance(
+                    self.g, material, self.resolver, self.tex_cache)
+            dressed.by_name[self.material_variants.names[variant]] = (
+                appearance, not _double_sided(self.g, material))
+        mesh.materialVariants = dressed
+        self.material_variants.add(shape)
+
     def _record_part(self, world: np.ndarray, shape: Any,
                      bounds: tuple[np.ndarray, np.ndarray]) -> None:
         """Note where one drawn primitive ended up, and how much of it there is.
@@ -661,7 +753,7 @@ class _SceneBuilder:
         the model: it is the same part, drawn instead. Recording it would frame
         the camera on a scene counted several times over.
         """
-        if self._coarser_levels:
+        if self._coarser_levels or self._hiding:
             return
         minimum, maximum = _world_box(world, bounds)
         positions = getattr(getattr(shape, 'geometry', None), 'positions', None)
@@ -703,20 +795,21 @@ class _SceneBuilder:
         # ``group.children`` was O(n^2) in the node/primitive count.
         children = list(group.children)
         node_ext = getattr(node, 'extensions', None) or {}
-        # KHR_node_visibility: an invisible node -- or any descendant of one --
-        # contributes no drawn geometry or light and isn't counted in the framing
-        # bounds. Visibility is the AND of this node's flag and its ancestors'
-        # (the spec requires a node drawn only if it and every ancestor is visible),
-        # so the flag threads down the recursion as `parent_visible`. The authored
-        # initial flag may itself be a KHR_animation_pointer target baked in above.
+        # KHR_node_visibility: a hidden node is built with X3D's `visible` false
+        # on its Transform, which leaves it and everything under it, lights
+        # included, out of the frame until something shows it (an animation
+        # pointer, or the application). A node is drawn only where it and every
+        # ancestor is visible, so `node_visible` threads down the recursion;
+        # what is not drawn is not counted in the framing bounds.
         node_visible = parent_visible
         node_casts = parent_casts and _casts_shadow(node)   # parent_casts: an MSFT_lod alternative of a marked node
         placements: Optional[np.ndarray] = None
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
-            if isinstance(nv, dict):
-                node_visible = node_visible and self.values.flag(
-                    nv.get('visible'), True, 'KHR_node_visibility visible')
+            if isinstance(nv, dict) and not self.values.flag(
+                    nv.get('visible'), True, 'KHR_node_visibility visible'):
+                group.visible = False
+                node_visible = False
             gi_ext = node_ext.get('EXT_mesh_gpu_instancing')
             if gi_ext:
                 placements = gpu_instance_placements(
@@ -724,11 +817,13 @@ class _SceneBuilder:
         lod_ids = lodext.level_ids(
             node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None,
             self.values, own=node_index)
-        if lod_ids and node.mesh is not None and node_visible and placements is None:
+        hidden_here = parent_visible and not node_visible
+        self._hiding += hidden_here
+        if lod_ids and node.mesh is not None and placements is None:
             children.append(self._lod_node(node, node_index, lod_ids, world,
                                            ancestry, node_visible, group,
                                            node_casts))
-        elif (node.mesh is not None and node_visible and placements is not None
+        elif (node.mesh is not None and placements is not None
               and not self._mesh_shareable(node.mesh)):
             # A hook whose result stands for one copy is run for each
             # placement, and each copy is placed on its own.
@@ -738,7 +833,7 @@ class _SceneBuilder:
                     children.append(MatrixTransform(localMatrix=placement,
                                                     children=[shape]))
                     self._record_part(placed, shape, bounds)
-        elif node.mesh is not None and node_visible:
+        elif node.mesh is not None:
             shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
                 # One node per mesh primitive holding every placement, sharing
@@ -756,16 +851,19 @@ class _SceneBuilder:
                 _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
         if getattr(node, 'camera', None) is not None and self.g.cameras:
             self.cameras.append((world, self.g.cameras[node.camera]))
-        if isinstance(node_ext, dict) and self.light_defs and node_visible:
+            self.camera_indices.append(node.camera)
+        if isinstance(node_ext, dict) and self.light_defs:
             li = (node_ext.get('KHR_lights_punctual', {}) or {}).get('light')
             if li is not None and 0 <= li < len(self.light_defs):
                 light = _light_node(self.light_defs[li], world, node_casts)
                 if light is not None:
                     children.append(light)
-                    self.node_light[node_index] = light   # for KHR_animation_pointer visibility
+                    self.node_light[node_index] = light
+                    self.light_nodes.setdefault(li, []).append(light)
                     wpos = (None if isinstance(light, DirectionalLight) else
                             tuple(float(v) for v in (np.array([0, 0, 0, 1.0]) @ world)[:3]))
-                    self.light_meter.append((light, wpos))
+                    if node_visible:
+                        self.light_meter.append((light, wpos))
         if self.audio_document.emitters:
             children.extend(self._audio_emitters(node))
         zone = self.zoning.zone_for(node, node_index)
@@ -773,6 +871,7 @@ class _SceneBuilder:
             children.append(zone)
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
+        self._hiding -= hidden_here
         return self._place(node, node_index, group, children, world)
 
     def _place(self, node: Any, node_index: int, group: "Transform",
@@ -943,10 +1042,7 @@ class _SceneBuilder:
             views = self.g.bufferViews or []
             if not (0 <= audio.bufferView < len(views)):
                 return None
-            view = views[audio.bufferView]
-            data = _buffer_bytes(self.g, view.buffer, self.resolver)
-            start = view.byteOffset or 0
-            return data[start:start + view.byteLength]
+            return bytes(view_bytes(self.g, audio.bufferView, self.resolver))
         if not audio.uri:
             return None
         if audio.uri.startswith('data:'):
@@ -1127,8 +1223,13 @@ class _SceneBuilder:
             radius = float(np.linalg.norm(framed.maximum - framed.minimum) / 2.0) or 1.0
         poses = _camera_poses(self.cameras)
         viewpoints = _viewpoints_for_poses(poses, self.scene_graph, self.used_defs)
-        animations = _build_animations(
-            g, self.resolver, self.node_transforms, self.node_light, self.appearances)
+        by_camera: dict[int, list] = {}
+        for camera, viewpoint in zip(self.camera_indices, viewpoints):
+            by_camera.setdefault(camera, []).append(viewpoint)
+        animations = _build_animations(g, self.resolver, PointerTargets(
+            g, node_transforms=self.node_transforms, node_morph=self.node_morph,
+            appearances=self.appearances, lights=self.light_nodes,
+            viewpoints=by_camera))
         scene = GLTFScene(root, center, radius,
                           camera=(poses[0] if poses else None), cameras=poses,
                           viewpoints=viewpoints, sceneGraph=self.scene_graph,
@@ -1152,6 +1253,7 @@ class _SceneBuilder:
         scene.hook_registrations = dict(self.hooks.registrations)
         scene.zones = list(self.zoning.zones)
         scene.environment = environment
+        scene.material_variants = self.material_variants
         top = getattr(g, 'extensions', None) or {}
         scene.extensions = top if isinstance(top, dict) else {}
         scene.notices = document_notices(g)
