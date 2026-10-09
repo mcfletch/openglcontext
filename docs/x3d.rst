@@ -1033,9 +1033,13 @@ Sensors
   the enabled ones beside the geometry under the pointer, in the lowest group
   on its path that has any; the primary button presses them, and a drag
   continues on or off their geometry until it is released. The scene's and
-  the application's own handlers receive the same events. The hit is the picked point, with no
-  normal or texture coordinate. Picking (``ContextDefinition.pickEnabled``)
-  has to be on.
+  the application's own handlers receive the same events. The hit is the
+  picked point. A ``TouchSensor`` or ``GeoTouchSensor`` also sends
+  ``hitNormal_changed``, the vertex normals interpolated across the triangle
+  under the pointer, and ``hitTexCoord_changed``, the first texture
+  coordinate set there before any texture transform, both in the sensor's
+  coordinates; geometry with no triangles sends its own +z and (0, 0).
+  Picking (``ContextDefinition.pickEnabled``) has to be on.
 - A ``KeySensor`` hears every key its window receives, including keys a
   program has bound itself: ``keyPress`` for a character, ``actionKeyPress``
   for the function, arrow and page keys, and ``shiftKey``, ``controlKey`` and

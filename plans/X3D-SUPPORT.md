@@ -325,7 +325,7 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] NavigationInfo `speed` (relative to X3D's 1), `avatarSize` for the walking avatar, the viewpoint transitions and `transitionComplete`
   - [x] `centerOfRotation` (the examine pivot with nothing picked), `retainUserOffsets`, `viewAll`
   - [x] environmental sensors (`vrml.x3d.sensors`, sensed once a frame by `scenegraph.x3dsensors`)
-  - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit has no normal or texture coordinate)
+  - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit's normal and first texture coordinate from the triangle under the pointer, `surface_at`, as X_ITE sends them, 2026-10-09 x3d-xfields)
   - [x] `TimeSensor` (`vrml.x3d.timesensor`): start, stop, pause, resume, and the engine's `rate`; polled by the context's time manager
   - [x] `LoadSensor` (`vrml.x3d.loadsensor`); `Inline` and `ImageTexture` record their load state
   - [x] `Anchor`: a group; `#viewpoint` bound, other urls through `Context.OnAnchor`
