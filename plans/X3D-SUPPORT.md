@@ -15,6 +15,20 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   `prototypes()` against `vrml.x3d.nodes.CONCRETE_NODES`: 124 of 266). Below,
   under the phase each belongs to; a grouping node or geometry left to its
   declaration draws nothing (a `StaticGroup`'s children are not drawn)
+  - 2026-10-09 rerun (x3d-gaps, on x3d-complete with Sound): 29 of 266. Other
+    streams' components: VolumeRendering (13), GaussianSplats, Layering and
+    Layout (`Layer`, `LayerSet`, `Layout`, `LayoutGroup`, `LayoutLayer`,
+    `ScreenFontStyle`, `ScreenGroup`, `Viewport`). Done here:
+    `AcousticProperties`, `TextureCoordinateGenerator` (registered; already
+    read), `EspduTransform` (standAlone: a Transform; pyvrml97 gives it
+    `LocalMatrices`). Left: `Script` (no script execution, §14);
+    `ReceiverPdu`, `SignalPdu`, `TransmitterPdu`, `DISEntityManager`,
+    `DISEntityTypeMapping`, which act only on a DIS network (IEEE 1278.1 PDUs
+    over UDP), not implemented: a maintainer decision whether the engine
+    speaks DIS; `FogCoordinate`, which needs a per-vertex input and every one
+    of the 16 attribute locations GL 3.3 guarantees is taken (the table holds
+    no two semantics to one location): a maintainer decision between sharing
+    `TEXCOORD_3D`'s location 15 and a 17th location
 
 - Phase 1, pyvrml97 groundwork (§9.1)
   - [x] `ElevationGrid.xSpacing`/`zSpacing` 1.0, `NavigationInfo.type` `["WALK", "ANY"]`
@@ -415,8 +429,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] prototype instances drawn: `grouping.of_types` passes an instance by
     its body's first node type (scene, groups, Switch, LOD, CADFace); before,
     an X3D document's ProtoInstance was never drawn
-  - [ ] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
-    `HAnimDisplacer`, `HAnimMotion`, `HAnimPose`
+  - [x] HAnim: `HAnimHumanoid`, `HAnimJoint`, `HAnimSegment`, `HAnimSite`,
+    `HAnimDisplacer`, `HAnimMotion`, `HAnimPose` (landed; see the entry above)
   - [x] RigidBodyPhysics: the 14 nodes on omi_physics (`physics.x3drigid`, `scenegraph.x3drigidbody`); a collection a world stepped once a frame on the engine clock; collider and `set_contacts` pairs, a NULL side against the world; `CollisionSensor` contacts and intersections; the six joints and their `forceOutput`s
     - omi_physics: compound shapes and flat-ended cylinders and cones; ball, hinge, slider, universal, two-axis hinge and motor joints from rows (compiled `solve_rows`); pair rules and `ContactParameters`; steady forces, exact rotation, per-body sleep
     - not read: `finiteRotationAxis` (the whole turn is integrated exactly), `UniversalJoint` stop bounce and correction (X3D gives it no stops), the inertia's products off the diagonal

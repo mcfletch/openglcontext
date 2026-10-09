@@ -139,6 +139,18 @@ class CADPart(Transforming, x3d.CADPart):
     """
 
 
+class EspduTransform(Transforming, x3d.EspduTransform):
+    """X3D's DIS EspduTransform: an entity placed as a Transform is
+
+    In `networkMode` standAlone, X3D's default, its fields are set from the
+    scene and it places its children as a Transform does. The DIS network,
+    which networkReader and networkWriter name, is neither read nor written.
+
+    Reference:
+        https://www.web3d.org/specifications/X3Dv4Draft/ISO-IEC19775-1v4.1-CD/Part01/components/dis.html#EspduTransform
+    """
+
+
 class MatrixTransform( Transform ):
     """Transform driven by an explicit local matrix rather than TRS fields.
 

@@ -99,6 +99,7 @@ implements these X3D nodes, by component:
   MetadataSet, MetadataString, WorldInfo
 - CubeMapTexturing - ComposedCubeMapTexture, GeneratedCubeMapTexture,
   ImageCubeMapTexture
+- DIS - EspduTransform
 - EnvironmentalEffects - Background, Fog, LocalFog, TextureBackground
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
@@ -157,7 +158,7 @@ implements these X3D nodes, by component:
 - TextureProjection - TextureProjector, TextureProjectorParallel
 - Texturing - ImageTexture, MovieTexture, MultiTexture, MultiTextureCoordinate,
   MultiTextureTransform, PixelTexture, RenderedTexture, TextureCoordinate,
-  TextureProperties, TextureTransform
+  TextureCoordinateGenerator, TextureProperties, TextureTransform
 - Texturing3D - ComposedTexture3D, ImageTexture3D, PixelTexture3D,
   TextureCoordinate3D, TextureCoordinate4D, TextureTransform3D,
   TextureTransformMatrix3D
@@ -1261,6 +1262,18 @@ What a shader leaves alone
    colour, so picking finds the shape where it is drawn. Fog is not applied
    (I.3.2), and the shape is blended and sorted by its material's
    transparency.
+
+DIS
+~~~
+
+An ``EspduTransform`` places its children by its ``translation``,
+``rotation``, ``scale``, ``scaleOrientation`` and ``center`` as a
+``Transform`` does, which is what its ``networkMode`` standAlone (the
+default) asks for. The DIS network is neither read nor written: in
+networkReader or networkWriter mode it places its children by the same
+fields, and ``ReceiverPdu``, ``SignalPdu``, ``TransmitterPdu``,
+``DISEntityManager`` and ``DISEntityTypeMapping`` are kept as their
+declarations and do nothing.
 
 Kept and not drawn
 ~~~~~~~~~~~~~~~~~~

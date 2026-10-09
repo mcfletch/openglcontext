@@ -170,6 +170,7 @@ from OpenGLContext.scenegraph.textureprojector import TextureProjectorParallel a
 from OpenGLContext.scenegraph.texturetransform import TextureTransform as TextureTransform
 from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import CADPart as CADPart
+from OpenGLContext.scenegraph.transform import EspduTransform as EspduTransform
 from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMaterial
 from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint as OrthoViewpoint
@@ -290,6 +291,7 @@ from vrml.x3d.nodes import SliderJoint as SliderJoint
 from vrml.x3d.nodes import Tangent as Tangent
 from vrml.x3d.nodes import TextureCoordinate3D as TextureCoordinate3D
 from vrml.x3d.nodes import TextureCoordinate4D as TextureCoordinate4D
+from vrml.x3d.nodes import TextureCoordinateGenerator as TextureCoordinateGenerator
 from vrml.x3d.nodes import TextureProperties as TextureProperties
 from vrml.x3d.nodes import TextureTransform3D as TextureTransform3D
 from vrml.x3d.nodes import TextureTransformMatrix3D as TextureTransformMatrix3D
@@ -386,6 +388,7 @@ __all__ = [
     'EaseInEaseOut',
     'ElevationGrid',
     'EnvironmentLight',
+    'EspduTransform',
     'ExplosionEmitter',
     'Extrusion',
     'FillProperties',
@@ -578,6 +581,7 @@ __all__ = [
     'TextureCoordinate',
     'TextureCoordinate3D',
     'TextureCoordinate4D',
+    'TextureCoordinateGenerator',
     'TextureProjector',
     'TextureProjectorParallel',
     'TextureProperties',
