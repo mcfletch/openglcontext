@@ -134,14 +134,14 @@ void main() {
         resolveShadows(lightShadow);
         // The pass's flat ambient fill (sceneAmbient, zero under X3D's rules)
         // beside each light's own ambient term
-        finalColor = clamp(emissiveColor + ambientIntensity * matDiffuse * sceneAmbient
-                           + phongLights(normal, viewDir, vPosition, matDiffuse,
-                                         ambientIntensity * matDiffuse, specularColor,
-                                         shininess, lightShadow),
-                           0.0, 1.0);
+        finalColor = emissiveColor + ambientIntensity * matDiffuse * sceneAmbient
+                     + phongLights(normal, viewDir, vPosition, matDiffuse,
+                                   ambientIntensity * matDiffuse, specularColor,
+                                   shininess, lightShadow);
     }
 
-    fragColor = vec4(x3dFogged(finalColor, length(toViewer(vPosition))), alpha);
+    // X3D fogs the lights' sum, and the display clamps what results (17.2.2.5)
+    fragColor = vec4(clamp(x3dFogged(finalColor, length(toViewer(vPosition))), 0.0, 1.0), alpha);
     // Per-instance id when instancing, else the per-draw uniform.
     fragObjectId = encodeObjectId(instancingEnabled ? vObjectId : objectId);
 }

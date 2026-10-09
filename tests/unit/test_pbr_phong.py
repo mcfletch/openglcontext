@@ -134,6 +134,27 @@ def test_specular_does_not_ask_for_the_light_in_front(gl_context, renderer):
     assert specular(light, b'0.01', renderer) == pytest.approx(expected, abs=4)
 
 
+@pytest.mark.parametrize('renderer', ['pbr', 'vrml97'])
+@pytest.mark.parametrize('colours', [b"", b"<Color color='1 0.5 0'/>"])
+def test_fog_fades_the_lights_sum_before_it_is_clamped(gl_context, renderer, colours):
+    """applyFog(emissive + the lights' sum) (17.2.2.5): two lights giving
+    (2, 1, 0), half fogged to black, is (1, 0.5, 0), its hue kept"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    face = (b"<IndexedFaceSet coordIndex='0 1 2 3' colorPerVertex='false'>"
+            b"<Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/>" + colours
+            + b"</IndexedFaceSet>")
+    text = (b"<X3D version='3.3'><Scene><Viewpoint position='0 0 0'/>"
+            b"<Fog fogType='LINEAR' color='0 0 0' visibilityRange='6'/>"
+            b"<DirectionalLight direction='0 0 -1'/><Shape><Appearance>"
+            b"<Material diffuseColor='1 0.5 0'/></Appearance>" + face
+            + b"</Shape></Scene></X3D>")
+    with scene_context(Loader.loads(text, 'a.x3d'), size=(32, 32), renderer=renderer) as context:
+        drawn_image(context)
+        centre = tuple(drawn_image(context)[16, 16].astype(int))
+    assert centre == pytest.approx((255, 128, 0), abs=4)
+
+
 def test_a_glTF_light_has_no_ambient():
     import numpy as np  # noqa: PLC0415 kept with its use
     from OpenGLContext.loaders.gltf import scene  # noqa: PLC0415 kept with its use

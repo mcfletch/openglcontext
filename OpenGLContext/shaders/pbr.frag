@@ -770,7 +770,8 @@ void main() {
         vec3 color = emitted + occlusionShare()
                    * phongLights(N, V, vPosition, diffuse, phongAmbientIntensity * diffuse,
                                  specularColorFactor, phongShininess, shadows);
-        fragColor = vec4(shown(fogged(clamp(color, 0.0, 1.0))), alpha);
+        // X3D fogs the lights' sum, and the display clamps what results
+        fragColor = vec4(shown(clamp(fogged(color), 0.0, 1.0)), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());
         return;
     }
