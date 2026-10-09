@@ -727,6 +727,11 @@ SLOW_SCRIPTS = {
     'shader_instanced_mapped.py': SLOW_TIMEOUT,
     'shader_instanced.py': SLOW_TIMEOUT,
     'test_shader_comprehensive.py': SLOW_TIMEOUT,
+    # The X3D showcases generate their meshes, maps and volumes before the
+    # first frame: 25 s alone, more beside a busy suite.
+    'x3d_materials.py': SLOW_TIMEOUT,
+    'x3d_splats.py': SLOW_TIMEOUT,
+    'x3d_volume.py': SLOW_TIMEOUT,
 }
 
 # Scripts that require GLUT specifically (the GLUT backend or GLUT draw helpers
