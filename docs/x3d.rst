@@ -1369,5 +1369,12 @@ Writing
 names, and ``vrml.x3d.dumps(scene, encoding='xml')`` returns the text. A
 material's fields that X3D's node lacks are written in a ``MetadataSet``, and
 an image held in memory as an ``ImageTexture`` with a ``data:`` URL; see
-:doc:`PBR materials <pbr>`. pyvrml97's ``vrml.x3d`` documentation covers
+:doc:`PBR materials <pbr>`. A ``PBRMesh`` (a glTF mesh, or generated
+geometry) is written as an ``IndexedTriangleSet`` with ``Coordinate``,
+``Normal``, ``Tangent``, ``Color`` or ``ColorRGBA`` and texture coordinates as
+it has them (a ``MultiTextureCoordinate`` labelled ``TEXCOORD_0`` and
+``TEXCOORD_1`` where it has two sets), and its shader attributes as
+``FloatVertexAttribute`` nodes; a mesh of points is a ``PointSet`` and one of
+lines an ``IndexedLineSet``. A skinned or morphed mesh is written in its rest
+pose, without its joints, weights or targets. pyvrml97's ``vrml.x3d`` documentation covers
 writing in full.

@@ -162,8 +162,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] a Box's bottom face was turned 180 degrees from X3D's rule
     (`tests/unit/test_box_texture_faces.py`). X_ITE 16.4.3 turns both its top and
     bottom faces 180 degrees from the rule
-  - [ ] a `PBRMesh` is written to X3D as an empty `<PBRMesh/>`: its arrays are not
-    fields, so the mesh is lost
+  - [x] a `PBRMesh` is written to X3D as an empty `<PBRMesh/>`: its arrays are not
+    fields, so the mesh is lost. 2026-10-09 (x3d-gaps): `PBRMesh.x3dEquivalent()`
+    writes an `IndexedTriangleSet` (Coordinate, Normal, Tangent, Color or
+    ColorRGBA, TextureCoordinate or a two-set MultiTextureCoordinate,
+    FloatVertexAttribute), a `PointSet` or an `IndexedLineSet`; read back,
+    every corner has its values (`tests/unit/test_pbrmesh_x3d_writing.py`).
+    Skin and morph targets are not written
 - [ ] At merge: rebuild pyvrml97's accelerator in the main checkout
   (`accelerate/`, `setup.py build_ext --inplace` or a reinstall); its
   `fieldaccel2` announces sets through `vrml.event.announce` (pyvrml97

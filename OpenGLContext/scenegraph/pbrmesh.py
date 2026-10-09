@@ -18,6 +18,7 @@ from typing import Any, Optional
 import numpy as np
 from OpenGL.GL import (
     GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_POINTS, GL_FLOAT, GL_FALSE, GL_UNSIGNED_INT,
+    GL_LINES, GL_LINE_LOOP, GL_LINE_STRIP,
     GL_ELEMENT_ARRAY_BUFFER, GL_CCW, GL_CW,
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
     glEnableVertexAttribArray, glVertexAttribPointer,
@@ -234,6 +235,17 @@ class _MeshGPU(object):
 #: Sent from a :class:`PBRMesh` when its own :attr:`~PBRMesh.appearance` is
 #: set, with the new appearance as ``value``.
 APPEARANCE_CHANGE_SIGNAL = 'PBRMesh.appearance'
+
+
+def _line_index(mode: int, corners: np.ndarray) -> list[int]:
+    """An IndexedLineSet's `coordIndex` for GL line `corners` drawn in `mode`"""
+    if mode == GL_LINES:
+        pairs = corners[:len(corners) // 2 * 2].reshape(-1, 2)
+        return np.concatenate([pairs, np.full((len(pairs), 1), -1)], axis=1).ravel().tolist()
+    run = corners.tolist()
+    if mode == GL_LINE_LOOP and run:
+        run.append(run[0])
+    return run + [-1] if len(run) >= 2 else []
 
 
 class PBRMesh(x3d.X3DGeometryNode):
@@ -624,6 +636,71 @@ class PBRMesh(x3d.X3DGeometryNode):
             lens[lens == 0] = 1.0
             nrm = nrm / lens
         return pos, nrm, tan, uvs
+
+    # -- X3D -----------------------------------------------------------------
+    def x3dEquivalent(self) -> Any:
+        """The standard X3D geometry the X3D writers write in this mesh's place
+
+        Triangles (of any of the three triangle modes) are an
+        ``IndexedTriangleSet`` with a ``Coordinate``, and a ``Normal``,
+        ``Tangent``, ``Color`` (``ColorRGBA`` where an alpha is not 1) and
+        texture coordinates where the mesh has them: a ``TextureCoordinate``,
+        or a ``MultiTextureCoordinate`` whose entries' ``mapping`` labels are
+        ``TEXCOORD_0``, ``TEXCOORD_1`` and, for 3D coordinates, a
+        ``TextureCoordinate4D``. A shader's vertex attributes are
+        ``FloatVertexAttribute`` nodes in ``attrib``. Points are a
+        ``PointSet`` and lines an ``IndexedLineSet``. A deformed mesh is
+        written in its rest pose; morph targets and skin weights are not
+        written.
+        """
+        positions = self._rest(self.positions, '_base_positions')
+        coord = x3d.Coordinate(point=np.zeros((0, 3), np.float32) if positions is None
+                               else positions)
+        colors = None
+        if self.colors is not None:
+            colors = (x3d.Color(color=self.colors[:, :3]) if np.all(self.colors[:, 3] == 1.0)
+                      else x3d.ColorRGBA(color=self.colors))
+        count = 0 if positions is None else len(positions)
+        corners = (np.arange(count, dtype=np.int64) if self.indices is None
+                   else self.indices.astype(np.int64))
+        if self.draw_mode == GL_POINTS:
+            return x3d.PointSet(coord=coord, color=colors)
+        if self.draw_mode in (GL_LINES, GL_LINE_STRIP, GL_LINE_LOOP):
+            return x3d.IndexedLineSet(coord=coord, color=colors, colorPerVertex=True,
+                                      coordIndex=_line_index(self.draw_mode, corners))
+        from OpenGLContext.scenegraph import composedgeometry  # noqa: PLC0415 beside meshArrays
+        if self.draw_mode == GL_TRIANGLE_STRIP:
+            corners = corners[composedgeometry.strips([len(corners)])]
+        elif self.draw_mode == GL_TRIANGLE_FAN:
+            corners = corners[composedgeometry.fans([len(corners)])]
+        normals = self._rest(self.normals, '_base_normals')
+        tangents = self._rest(self.tangents, '_base_tangents')
+        return x3d.IndexedTriangleSet(
+            coord=coord, index=corners.ravel(), solid=bool(self.solid), ccw=True,
+            normalPerVertex=True, colorPerVertex=True, color=colors,
+            normal=x3d.Normal(vector=normals) if normals is not None else None,
+            tangent=x3d.Tangent(vector=tangents) if tangents is not None else None,
+            texCoord=self._x3dCoordinates(),
+            attrib=[x3d.FloatVertexAttribute(name=name, numComponents=values.shape[1],
+                                             value=values.ravel())
+                    for name, values, _locations in self.vertex_attributes])
+
+    def _rest(self, current: Any, base: str) -> Any:
+        """The rest-pose copy of an array where the mesh has been deformed, else the array"""
+        rest = getattr(self, base, None)
+        return current if rest is None else rest
+
+    def _x3dCoordinates(self) -> Any:
+        """The texture coordinate node of :meth:`x3dEquivalent`, or None"""
+        texcoords = self._rest(self.texcoords, '_base_texcoords')
+        sets = [values for values in (texcoords, self.texcoords1) if values is not None]
+        if self.texcoords3d is None and len(sets) <= 1:
+            return x3d.TextureCoordinate(point=sets[0]) if sets else None
+        entries: list[Any] = [x3d.TextureCoordinate(point=values, mapping='TEXCOORD_%d' % number)
+                              for number, values in enumerate(sets)]
+        if self.texcoords3d is not None:
+            entries.append(x3d.TextureCoordinate4D(point=self.texcoords3d))
+        return x3d.MultiTextureCoordinate(texCoord=entries)
 
     # -- bounding volume (frustum culling + shadow occluder points) ---------
     def meshArrays(self) -> Any:
