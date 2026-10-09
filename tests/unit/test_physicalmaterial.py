@@ -11,7 +11,8 @@ from PIL import Image
 from vrml import node
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.passes.pbrpass import PBR_EXT_UNITS, PBR_UNITS
+from OpenGLContext.passes.pbrpass import PBR_EXT_UNITS, PBR_SHARED_CHANNELS, PBR_UNITS
+from OpenGLContext.scenegraph.materialextensions import ExtensionValue
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.physicalmaterial import (
@@ -50,9 +51,11 @@ class TestTheNode:
 
 class TestTextureChannels:
     def test_every_channel_the_pass_binds_has_a_field(self):
-        assert set(CHANNEL_FIELDS) == set(PBR_UNITS) | set(PBR_EXT_UNITS)
+        assert set(CHANNEL_FIELDS) == (set(PBR_UNITS) | set(PBR_EXT_UNITS)
+                                       | set(PBR_SHARED_CHANNELS))
         for channel, name in CHANNEL_FIELDS.items():
-            assert isinstance(getattr(PhysicalMaterial, name), node.SFNode), channel
+            declared = getattr(PhysicalMaterial, name)
+            assert isinstance(declared, (node.SFNode, ExtensionValue)), channel
             assert hasattr(PhysicalMaterial, name + 'Mapping'), channel
 
     def test_x3d_names_the_core_channels(self):

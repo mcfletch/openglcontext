@@ -100,7 +100,7 @@ implements these X3D nodes, by component:
 - CubeMapTexturing - ComposedCubeMapTexture, GeneratedCubeMapTexture,
   ImageCubeMapTexture
 - DIS - EspduTransform
-- EnvironmentalEffects - Background, Fog, LocalFog, TextureBackground
+- EnvironmentalEffects - Background, Fog, FogCoordinate, LocalFog, TextureBackground
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
 - EnvironmentalSensor - ProximitySensor, TransformSensor, VisibilitySensor
@@ -162,7 +162,7 @@ implements these X3D nodes, by component:
 - Texturing - ImageTexture, MovieTexture, MultiTexture, MultiTextureCoordinate,
   MultiTextureTransform, PixelTexture, RenderedTexture, TextureCoordinate,
   TextureCoordinateGenerator, TextureProperties, TextureTransform
-- Texturing3D - ComposedTexture3D, ImageTexture3D, PixelTexture3D,
+- Texturing3D - ComposedTexture3D, ImageTexture3D, ImageTextureAtlas, PixelTexture3D,
   TextureCoordinate3D, TextureCoordinate4D, TextureTransform3D,
   TextureTransformMatrix3D
 - Time - TimeSensor
@@ -171,6 +171,14 @@ implements these X3D nodes, by component:
   IsoSurfaceVolumeData, OpacityMapVolumeStyle, ProjectionVolumeStyle,
   SegmentedVolumeData, ShadedVolumeStyle, SilhouetteEnhancementVolumeStyle,
   ToneMappedVolumeStyle, VolumeData
+- X_ITE - AnisotropyMaterialExtension, BlendMode, ClearcoatMaterialExtension,
+  DepthMode, InstancedShape,
+  DiffuseTransmissionMaterialExtension, DispersionMaterialExtension,
+  EmissiveStrengthMaterialExtension, IORMaterialExtension,
+  IridescenceMaterialExtension, RetroreflectionMaterialExtension,
+  SheenMaterialExtension, SpecularMaterialExtension,
+  SpecularGlossinessMaterial, TransmissionMaterialExtension,
+  VolumeMaterialExtension, VolumeScatterMaterialExtension
 
 .. x3d-implemented-end
 
@@ -329,6 +337,51 @@ mode is the front material's, and the fixed-function path draws both sides
 with the front material. A ``Box``, ``Sphere``, ``Cone`` or ``Cylinder``
 whose ``solid`` is false draws its inside.
 
+.. _x3d-xite:
+
+.. figure:: images/demos/x3d_materials.jpg
+   :alt: Spheres of extended materials on marble, instanced pillars, a sign and a banner
+
+   ``oglc-x3d-materials``: X_ITE's material extensions, modes and instances.
+
+``oglc-x3d-materials`` writes and opens ``x3d_materials.x3d``, and
+:doc:`tests/x3d_materials.py <tutorials/x3d_materials>` is the same scene as a
+tutorial script.
+
+X_ITE's material extension nodes (the ``X_ITE`` component, which a document
+names with ``<component name='X_ITE' level='1'/>``) go in a
+``PhysicalMaterial``'s ``extensions``, one per glTF material extension, and
+are where the material keeps those values: ``ClearcoatMaterialExtension``,
+``SheenMaterialExtension``, ``IORMaterialExtension`` and the rest are the
+material's ``clearcoat``, ``sheenColor``, ``ior`` and so on, drawn as the
+:doc:`PBR renderer <pbr>` page describes, retroreflection and volume
+scattering among them. Routing to an extension node's field changes the
+material. X_ITE's ``SpecularGlossinessMaterial`` is glTF's
+specular/glossiness material, drawn as the :doc:`PBR renderer <pbr>` page
+describes.
+
+X_ITE's ``BlendMode`` and ``DepthMode`` go in an ``Appearance``'s
+``blendMode`` and ``depthMode``. A ``BlendMode`` names the blend factors
+(``ZERO``, ``ONE``, ``SRC_COLOR``, ``ONE_MINUS_SRC_COLOR``, ``DST_COLOR``,
+``ONE_MINUS_DST_COLOR``, ``SRC_ALPHA``, ``ONE_MINUS_SRC_ALPHA``,
+``DST_ALPHA``, ``ONE_MINUS_DST_ALPHA``, ``SRC_ALPHA_SATURATE`` and the
+``CONSTANT_...`` ones against ``blendColor``) and the equations
+(``FUNC_ADD``, ``FUNC_SUBTRACT``, ``FUNC_REVERSE_SUBTRACT``, ``MIN``,
+``MAX``) for colour and alpha, and makes its shapes blended, drawn with the
+transparent ones back to front. A ``DepthMode`` names whether the depth test
+runs (``depthTest``), its comparison (``depthFunction``: ``NEVER``,
+``LESS``, ``EQUAL``, ``LESS_EQUAL``, ``GREATER``, ``NOT_EQUAL``,
+``GREATER_EQUAL``, ``ALWAYS``), whether depth is written (``depthMask``),
+the ``depthRange`` and a ``polygonOffset`` (factor, units). A name OpenGL
+does not have reads as the field's default. A shape with either is drawn by
+itself, not in an instanced group, and after the opaque shapes without one,
+so its depth test is made against them
+(:mod:`~OpenGLContext.scenegraph.rendermodes`).
+
+X_ITE's ``InstancedShape`` draws its shape at every place its
+``translations``, ``rotations``, ``scales``, ``scaleOrientations`` and
+``centers`` give, in one instanced draw (:doc:`instancing`).
+
 A ``FontLibrary`` reads a TrueType or OpenType file, under the document's url
 policy, as a font family its ``FontStyle`` nodes may name
 (:ref:`text-font-library`).
@@ -405,9 +458,10 @@ itself, not batched with others.
   geometry's bounding box: s along x, t along y and r along z, 0 to 1.
   ``TextureTransform3D`` and ``TextureTransformMatrix3D`` transform s, t and
   r; a 4D coordinate is divided by its q.
-- The PBR program combines a ``PhysicalMaterial``'s or an
-  ``UnlitMaterial``'s chain in linear light, its textures decoded from sRGB
-  as base colour maps are; a ``Material``'s, drawn by X3D's Phong equation,
+- The PBR program combines a ``PhysicalMaterial``'s chain, and that of an
+  ``UnlitMaterial`` from glTF or code, in linear light, its textures decoded
+  from sRGB as base colour maps are; a ``Material``'s, drawn by X3D's Phong
+  equation, a document's ``UnlitMaterial`` or appearance with no material,
   and the VRML97 renderer's combine the colours as they are given. The PBR
   program reads 2D layers through samplers the draw's material leaves free
   (``pbrpass.draw_slots``): the base colour map's, three of the glTF
@@ -462,6 +516,13 @@ are the engine's, carried in a document in an ``OpenGLContext`` metadata
 set. The compatibility profile draws both with the fixed-function pipeline,
 as it draws the scene. A RenderedTexture is an ordinary 2D texture once
 drawn, and goes wherever one does.
+
+X_ITE's ``ImageTextureAtlas`` reads one picture from its ``url`` and cuts
+it into ``slicesOverX`` tiles across and ``slicesOverY`` down; the first
+``numberOfSlices`` tiles, left to right along each row from the top row
+down, are the volume's slices from r=0 up, each with its tile's top row at
+t=0, as X_ITE reads it. Its ``width``, ``height``, ``depth`` and
+``colorDepth`` are sent once it has read.
 
 ``ImageTexture3D`` reads a DDS, KTX 1.1 or KTX 2 volume, an NRRD volume of one to four
 components (raw, gzip, bzip2 or text, with a detached data file read beside
@@ -641,6 +702,15 @@ Fog and backgrounds
 A ``Fog`` or ``LocalFog`` fades the colour as it is displayed, after tone
 mapping, by X3D's equation: a ``LINEAR`` fog leaves an object
 ``(visibilityRange - distance) / visibilityRange`` of its own colour.
+
+A geometry's ``FogCoordinate`` gives each coordinate a ``depth``, 0 to 1,
+which is the share of the fog colour it takes in place of the share its
+distance gives, interpolated across each face, as X_ITE reads it; a list
+shorter than the coordinates gives its last depth to the rest. It is read by
+the triangle and quad sets, ``IndexedFaceSet`` and ``ElevationGrid`` drawn
+by the PBR renderer; the depths reach the vertex shader in a buffer texture
+read by vertex index, and such a shape is drawn by itself rather than in an
+instanced group. Lines, points and the VRML97 renderer fog by distance.
 
 An enabled ``LocalFog`` fogs the siblings in its parent group and their
 descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);
@@ -1021,6 +1091,18 @@ Binding, viewpoints and navigation
   and ``avatarSize`` (radius, eye height, step height) sizes the walking
   avatar in the world's own units. These are applied again whenever they
   change.
+- In a context with no declared modes, a document whose NavigationInfo has
+  ``WALK`` (in capitals) as its first type keeps its viewer on the ground
+  (``OpenGLContext.move.terrainfollow``), as X_ITE does. Down is the bound
+  viewpoint's -Y axis. When a viewpoint is bound the viewer is put on the
+  ground below it, its eye ``avatarSize[1]`` above it; after that it falls
+  at 9.80665 m/s² when above that height and steps up a rise lower than
+  ``avatarSize[2]``. Ground is any drawn shape within ``avatarSize[0]`` of
+  the line down through the eye, except under a ``Collision`` whose
+  ``enabled`` is false, and through its ``proxy`` where it has one. A viewer
+  with nothing below it falls.
+- The first viewpoint bound is the one the camera opens at, whatever its
+  ``jump``; one bound later with ``jump`` false leaves the camera where it is.
 - A viewpoint bound after the first is moved to as the bound NavigationInfo's
   ``transitionType`` and ``transitionTime`` say: ``LINEAR`` straight at a
   steady pace, ``ANIMATE`` easing in and out, ``TELEPORT`` at once; with no
@@ -1717,7 +1799,6 @@ Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
-- ``FogCoordinate`` is kept and not drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
 
@@ -1856,8 +1937,9 @@ Writing
 
 ``vrml.x3d.dump(scene, path)`` writes a scene in the encoding the suffix
 names, and ``vrml.x3d.dumps(scene, encoding='xml')`` returns the text. A
-material's fields that X3D's node lacks are written in a ``MetadataSet``, and
-an image held in memory as an ``ImageTexture`` with a ``data:`` URL; see
+material's glTF extensions are written as X_ITE's material extension nodes,
+the engine's own fields in a ``MetadataSet``, and an image held in memory as
+an ``ImageTexture`` with a ``data:`` URL; see
 :doc:`PBR materials <pbr>`. A ``PBRMesh`` (a glTF mesh, or generated
 geometry) is written as an ``IndexedTriangleSet`` with ``Coordinate``,
 ``Normal``, ``Tangent``, ``Color`` or ``ColorRGBA`` and texture coordinates as

@@ -199,11 +199,15 @@ animation:
   ``KHR_materials_emissive_strength``, ``KHR_materials_unlit``,
   ``KHR_materials_iridescence``, ``KHR_materials_anisotropy``,
   ``KHR_materials_diffuse_transmission``, ``KHR_materials_dispersion``,
+  ``KHR_materials_retroreflection``, ``KHR_materials_volume_scatter`` (and
+  ``KHR_materials_scatter``, its later name, which the writer writes),
   ``KHR_texture_transform``, ``EXT_texture_avif`` and ``EXT_texture_webp``
   (each image preferred to the texture's core ``source`` where the installed
   Pillow decodes its format, as ``PIL.features.check('avif')`` reports), and
-  the legacy ``KHR_materials_pbrSpecularGlossiness`` (converted to
-  metallic-roughness).
+  the legacy ``KHR_materials_pbrSpecularGlossiness``, read as a
+  ``SpecularGlossinessMaterial`` where the material has no
+  ``pbrMetallicRoughness`` (which is drawn in its place where it has one, as
+  X_ITE does) and written from one.
 
 - Zones - ``OGLC_zone``, this project's own extension: a node marking a region,
   with a shape from ``KHR_implicit_shapes`` (glTF 2.0) or the core ``shapes``

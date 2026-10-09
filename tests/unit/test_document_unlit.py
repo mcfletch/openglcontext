@@ -117,3 +117,67 @@ def test_an_unlit_material_is_its_emissive_colour(gl_context, renderer):
         drawn_image(context)
         red, green, blue = drawn_image(context).astype(int)[16, 16]
     assert red > 245 and 110 < green < 200 and blue < 10
+
+
+COLOURED = (b"<IndexedFaceSet coordIndex='0 1 2 3' colorPerVertex='false'>"
+            b"<Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/>"
+            b"<Color color='0.2 0.5 0.3'/></IndexedFaceSet>")
+PLAIN = (b"<IndexedFaceSet coordIndex='0 1 2 3'>"
+         b"<Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/></IndexedFaceSet>")
+
+
+@pytest.mark.parametrize('renderer', ['pbr', 'vrml97'])
+@pytest.mark.parametrize('shape', [
+    b"<Shape>" + COLOURED + b"</Shape>",
+    b"<Shape><Appearance/>" + COLOURED + b"</Shape>",
+    b"<Shape><Appearance><UnlitMaterial/></Appearance>" + COLOURED + b"</Shape>",
+    b"<Shape><Appearance><UnlitMaterial emissiveColor='0.2 0.5 0.3'/></Appearance>"
+    + PLAIN + b"</Shape>",
+])
+def test_unlit_colours_are_drawn_as_given(gl_context, renderer, shape):
+    """X3D's unlit colours are display values, as X_ITE draws them: 0.2 is 51"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b"<X3D version='4.0'><Scene><Viewpoint position='0 0 0'/>"
+                         + shape + b"</Scene></X3D>", 'a.x3d')
+    with scene_context(scene, size=(32, 32), renderer=renderer) as context:
+        drawn_image(context)
+        centre = drawn_image(context)[16, 16].astype(int)
+    assert tuple(centre) == pytest.approx((51, 128, 77), abs=3)
+
+
+def test_an_unlit_material_built_in_code_is_linear():
+    """glTF's KHR_materials_unlit loads as an UnlitMaterial outside a document:
+    its colour is linear light"""
+    from OpenGLContext.passes.pbrpass import DISPLAYED_BIT, pack_material_block  # noqa: PLC0415 kept with its use
+    from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial  # noqa: PLC0415 kept with its use
+    flags = int(pack_material_block(UnlitMaterial()).view('int32')[29])
+    assert not flags & DISPLAYED_BIT
+
+
+def test_instanced_shapes_with_no_appearance_are_unlit(gl_context):
+    """One Shape used twice is drawn as one instanced batch, unlit as given
+    (Vrml2Sourcebook Siggraph98Course/Log's flames)"""
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    square = (b"<IndexedFaceSet coordIndex='0 1 2 3' colorPerVertex='false'>"
+              b"<Coordinate point='-1 -1 0 1 -1 0 1 1 0 -1 1 0'/>"
+              b"<Color color='0.2 0.5 0.3'/></IndexedFaceSet>")
+    uses = b"".join(b"<Transform translation='%d 0 0'><Shape USE='S'/></Transform>" % x
+                    for x in (-4, -2, 2, 4))
+    scene = Loader.loads(
+        b"<X3D version='3.3'><Scene><Viewpoint position='0 0 12'/>"
+        b"<Shape DEF='S'>" + square + b"</Shape>" + uses + b"</Scene></X3D>", 'a.x3d')
+    with scene_context(scene, size=(96, 32), instancing=True) as context:
+        drawn_image(context)
+        image = drawn_image(context).astype(int)
+    for column in (35, 42, 48, 54, 61):
+        assert tuple(image[16, column]) == pytest.approx((51, 128, 77), abs=3), column
+
+
+def test_the_material_flag_bits_are_distinct():
+    """Each flag the material block carries has a bit of its own"""
+    from OpenGLContext.passes import pbrpass  # noqa: PLC0415 kept with its use
+    bits = [value for name, value in vars(pbrpass).items() if name.endswith('_BIT')]
+    assert len(bits) == len(set(bits))
+    assert all(bit and bit & (bit - 1) == 0 for bit in bits)

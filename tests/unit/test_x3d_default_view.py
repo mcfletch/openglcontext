@@ -98,6 +98,15 @@ class TestTheDefaultViewpoint:
         viewpointbinding.bind_scene_viewpoint(context)
         assert context.platform.frustum == before
 
+    def test_the_first_viewpoint_is_stood_at_whatever_its_jump(self):
+        """jump FALSE keeps the user's view, and before the first bind there is
+        none: X_ITE opens at the viewpoint (Savage's Sovremenny)"""
+        scene = X3DScene(children=[Transform()])
+        scene.viewpointPaths = (_Path((scene, Viewpoint(position=(5, 0, 0), jump=False))),)
+        context = FakeContext(scene)
+        viewpointbinding.bind_scene_viewpoint(context)
+        assert tuple(context.platform.position[:3]) == pytest.approx((5, 0, 0))
+
     def test_a_viewpoint_arriving_later_is_jumped_to(self):
         scene = X3DScene(children=[Transform()])
         context = FakeContext(scene)

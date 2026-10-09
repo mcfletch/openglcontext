@@ -15,7 +15,7 @@ from typing import Any, ClassVar, Optional
 
 from vrml import node
 from vrml import x3d as vrml_x3d
-from vrml.x3d import files, readers
+from vrml.x3d import files, readers, xite
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.loaders import base
@@ -52,7 +52,7 @@ def prototypes() -> "dict[str, type]":
     from OpenGLContext.scenegraph.scenegraph import X3DScene  # noqa: PLC0415 beside the registry
     found: "dict[str, type]" = {}
     for name, cls in basenodes.PROTOTYPES.items():
-        declared = x3d.CONCRETE_NODES.get(name)
+        declared = xite.declaration(name)
         if declared is not None and isinstance(cls, type) and issubclass(cls, declared):
             found[name] = cls
     for name, (module, attribute) in X3D_ONLY.items():
@@ -79,7 +79,8 @@ class ContainedPrototypes:
         self.depth = depth
         self.scenes: dict[str, Any] = {} if scenes is None else scenes
 
-    def __call__(self, urls: Sequence[str], baseURL: str, name: str) -> Optional[type]:
+    def __call__(self, urls: Sequence[str], baseURL: str,
+                 name: str) -> Optional[type]:  # noqa: ARG002 ExternResolver's signature; the file, not this name, says which prototype
         if self.depth >= files.MAX_PROTOTYPE_DEPTH or not baseURL:
             return None
         resolver = (Resolver(base_url=baseURL) if is_url(baseURL)
@@ -91,9 +92,10 @@ class ContainedPrototypes:
             scene = self._scene(resolver, reference, baseURL)
             if scene is None:
                 continue
-            found = scene.getProto(fragment or name)
+            # With no #name, the file's first PROTO (19775-1 4.9.3)
+            found = scene.getProto(fragment) if fragment else files.first_prototype(scene)
             if found is not None and found not in node.PENDING_PROTOTYPES:
-                return found  # type: ignore[no-any-return]  # a prototype class the scene declared
+                return found
         return None
 
     def _scene(self, resolver: Resolver, reference: str, baseURL: str) -> Any:

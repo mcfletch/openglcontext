@@ -1,8 +1,8 @@
 """A glTF material written as X3D and read back.
 
 X3D's PhysicalMaterial has the core channels; the glTF extension factors and
-textures and the engine's own fields travel in a `MetadataSet` named
-'OpenGLContext', and a decoded image is written as an `ImageTexture` with a
+textures travel as X_ITE's material extension nodes, the engine's own fields
+in a `MetadataSet` named 'OpenGLContext', and a decoded image is written as an `ImageTexture` with a
 `data:` URL. Read with the engine's material classes, the material is the
 one that was written.
 """
