@@ -20,9 +20,11 @@ from collections.abc import Sequence
 from typing import Any, ClassVar, IO, Optional
 from OpenGL._bytes import as_8_bit
 from OpenGLContext.loaders.resolver import (
+    CheckedURL,
     Resolver,
     checked_url,
     contained_source,
+    fetch_to_cache,
     fetch_url,
     _ALLOWED_URL_SCHEMES,
     DEFAULT_MAX_RESOURCE_BYTES,
@@ -230,6 +232,51 @@ class _Loader(object):
         path = contained_source(local_path(url))
         file = open(path, "rb")
         return (path, file, path, None)
+
+    def local_copy(
+        self,
+        url: bytes | str | Sequence[bytes | str],
+        baseURL: Optional[str] = None,
+    ) -> tuple[str, str]:
+        """The first entry of ``url`` as a file on this machine: (resolved URL, path)
+
+        For a resource read in place rather than into memory, such as a movie
+        read a sample at a time. A document's reference is held to
+        ``baseURL``'s policy as :meth:`get_reference` holds it: a file under
+        the document's directory is answered where it is, and a same-origin
+        http(s) reference is downloaded into the on-disk cache, size-capped as
+        any reference is. With no ``baseURL`` an entry is a top-level source:
+        a local file, or an http(s) URL downloaded into the cache. The file
+        itself is not read.
+
+        raises IOError where no entry names a file that is there
+        """
+        entries = [as_unicode(url)] if isinstance(url, (bytes, str)) else [
+            as_unicode(entry) for entry in url]
+        for entry in entries:
+            try:
+                found = self._local_copy(entry, baseURL)
+            except IOError as err:
+                log.warning("Failing url %s (base %s): %s", entry, baseURL, err)
+                continue
+            if os.path.isfile(found[1]):
+                return found
+            log.warning("Failing url %s (base %s): no such file", entry, baseURL)
+        raise IOError("""Unable to find a file for url %s""" % (entries,))
+
+    def _local_copy(self, entry: str, baseURL: Optional[str]) -> tuple[str, str]:
+        """One entry of :meth:`local_copy`"""
+        if baseURL:
+            resolver = self._resolver(baseURL)
+            target = resolver.resolve(entry)
+            if isinstance(target, CheckedURL):
+                return str(target), str(fetch_to_cache(
+                    target, max_bytes=resolver.max_resource_bytes))
+            return str(target), str(target)
+        if url_scheme(entry) in _ALLOWED_URL_SCHEMES:
+            return entry, str(fetch_to_cache(checked_url(entry)))
+        path = contained_source(local_path(entry))
+        return str(path), str(path)
 
     #: Handler for each filename extension, shared by every Loader.
     loadedHandlers: ClassVar[dict[str, Any]] = {}

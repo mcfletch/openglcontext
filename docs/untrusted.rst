@@ -195,6 +195,12 @@ Rules for each loader
      - Reference nothing. A count in a header is checked against the bytes
        that follow before anything is allocated for it, and a gzip document is
        decompressed no further than the size limit.
+   * - :ref:`MovieTexture <x3d-movies>` ``url``
+     - Each entry is resolved by ``Loader.local_copy`` under the document's
+       ``Resolver``: a file in the document's directory is read in place, a
+       sample at a time, and a same-origin http(s) entry is downloaded into
+       the asset cache, size-capped as any reference is. A refused entry is
+       logged and the next one tried.
    * - Wavefront OBJ (``loaders/obj.py``)
      - ``mtllib`` and texture references go through the same ``Loader``, so they
        are restricted to the model's directory.
