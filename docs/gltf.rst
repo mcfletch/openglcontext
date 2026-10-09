@@ -197,6 +197,22 @@ animation:
   ``OpenGLContext[draco]``). Without it, the loader skips a Draco-compressed
   primitive with a warning and loads the rest of the scene.
 
+.. _gltf-gaussian-splats:
+
+- Gaussian splats - ``KHR_gaussian_splatting``. A primitive carrying it is
+  read as a ``GaussianSplats`` node, X3D 4.1's, and drawn as
+  :ref:`x3d-gaussian-splats` describes: ``POSITION``, ``ROTATION``,
+  ``SCALE``, ``OPACITY`` and the spherical-harmonic attributes in any
+  component type the extension allows, ``colorSpace`` as the node's
+  ``colorSpace``, and the node's transform placing and turning the splats.
+  The primitive's material is not used. A kernel, colour space, projection
+  or sorting method the extension does not define is reported, and the
+  splats are drawn with the ``ellipse`` kernel, sRGB, perspective
+  projection and camera-distance order. A primitive missing a required
+  attribute is reported and drawn as points. The writer
+  (``write_glb``, ``GLTFWriter``) writes a ``GaussianSplats`` node as such a
+  primitive, with float attributes.
+
 glTF nodes become ``Transform`` nodes, and meshes become ``Shape`` nodes with a
 PBR mesh geometry and a PBR material. A loaded model is an ordinary
 OpenGLContext scenegraph that you can inspect and modify.

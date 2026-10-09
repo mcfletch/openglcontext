@@ -120,6 +120,7 @@ oglc-x3d-nurbs = "OpenGLContext.bin.x3d_nurbs:main"
 oglc-x3d-rigidbody = "OpenGLContext.bin.x3d_rigidbody:main"
 oglc-x3d-shaders = "OpenGLContext.bin.x3d_shaders_demo:main"
 oglc-x3d-particles = "OpenGLContext.bin.x3d_particles:main"
+oglc-x3d-splats = "OpenGLContext.bin.x3d_splats:main"
 # Ship an application built on the engine as a Debian package: a relocatable
 # CPython and the application on top of it, under /opt.
 oglc-deb = "OpenGLContext.packaging.deb:main"

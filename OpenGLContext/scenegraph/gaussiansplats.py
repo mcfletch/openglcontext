@@ -2,7 +2,8 @@
 
 ISO/IEC 19775-1 4.1, component GaussianSplats; the field semantics and the
 colour formula are KHR_gaussian_splatting's, which a glTF primitive with that
-extension loads into the same node (:func:`from_arrays`).
+extension loads into the same node (:mod:`OpenGLContext.loaders.gltf.splats`).
+The facts followed are in ``specs/gaussian-splats.md``.
 
 A splat set is drawn in the transparent pass with the rest of the blended
 geometry: one instanced draw of four vertices per splat. The vertex stage
@@ -16,13 +17,16 @@ Costs, for N splats:
 - The fields are packed once per change (:class:`~splatmath.SplatSet`) and
   uploaded as two buffer textures: 48 bytes a splat, and 8 to 96 bytes of
   half-float coefficients for degree 0 to 3.
-- The order is a 16-bit radix sort of the splats' eye depths, linear in N
-  (about 15 ms for a million splats here), and an upload of 4 bytes a splat.
-  It is made again only when the view turns more than :data:`SORT_TOLERANCE`
-  in the splats' frame or the splats change; moving without turning keeps it.
-  Each context keeps :data:`ORDER_SLOTS` orders, so several views, a mirror's
-  camera or a light's view each find their own rather than sorting each
-  other's away.
+- The order is a 16-bit radix sort of the splats' distances from the camera
+  (eye depths under an orthographic view), linear in N (about 15 ms for a
+  million splats here), and an upload of 4 bytes a splat. It is made again
+  only when the camera has moved more than :data:`SORT_TOLERANCE` times its
+  distance from the splats' box, or the splats change; turning the camera
+  where it stands keeps it (:class:`~splatmath.DepthOrder`). Each context
+  keeps :data:`ORDER_SLOTS` orders, so several views or a mirror's camera
+  each find their own rather than sorting each other's away.
+- A shadow map's draw keeps only the cores and depth-tests them, so it uses
+  the splats in their own order and sorts nothing.
 - A still frame uploads and sorts nothing.
 
 The node's other fields: ``visible`` false draws nothing; ``castShadow``
@@ -76,8 +80,10 @@ HARMONIC_FIELDS = tuple(
 #: The fields a splat set is packed from.
 DATA_FIELDS = ('positions', 'orientations', 'scales', 'opacities') + HARMONIC_FIELDS
 
-#: How far the view may turn in the splats' frame before they are sorted
-#: again, in radians. Below it the order drawn is the last one sorted.
+#: How far the camera may move before the splats are sorted again, as a
+#: fraction of its distance from their box: about the angle in radians the
+#: move turns the direction to the nearest splat by. Below it the order drawn
+#: is the last one sorted.
 SORT_TOLERANCE = math.radians(0.25)
 
 #: Orders kept per context, each for whichever view last used it.
@@ -138,12 +144,12 @@ _PROGRAM_OWNER = _Programs()
 class GaussianSplats(nodetypes.Rendering, x3d.GaussianSplats):
     """X3D's GaussianSplats, drawn with the transparent geometry
 
-    :attr:`drawn` is the application's switch; :attr:`failed` is set where
-    the draw could not be made, after which the node draws nothing and the
-    failure has been logged once.
+    An application sets :attr:`drawn` false to leave the node undrawn.
+    :attr:`failed` is set where the draw could not be made, after which the
+    node draws nothing and the failure has been logged once.
     """
 
-    #: Whether the node draws; the application's switch.
+    #: Whether the node draws; false leaves it undrawn.
     drawn: bool = True
     #: Whether making or issuing the draw failed; the node then draws nothing.
     failed: bool = False

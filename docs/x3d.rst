@@ -103,6 +103,7 @@ implements these X3D nodes, by component:
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
 - EnvironmentalSensor - ProximitySensor, TransformSensor, VisibilitySensor
+- GaussianSplats - GaussianSplats
 - Geometry2D - Arc2D, ArcClose2D, Circle2D, Disk2D, Polyline2D, Polypoint2D,
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, Extrusion, IndexedFaceSet, Sphere
@@ -950,6 +951,89 @@ the Earth has +Y up along the ellipsoid's normal, +X east and -Z north.
   ``keyValue`` coordinates and sends the result as ``geovalue_changed`` and,
   in the scene's coordinates, ``value_changed``.
 - ``GeoMetadata`` is kept and not drawn.
+
+.. _x3d-gaussian-splats:
+
+Gaussian splats
+~~~~~~~~~~~~~~~
+
+.. figure:: images/demos/x3d_splats.jpg
+   :alt: A brass vase on a sandstone plinth, a clipped green hedge and a steel ball on a black marble terrace, the vase and the hedge drawn as Gaussian splats
+
+   ``oglc-x3d-splats``: a vase and a hedge made of Gaussian splats, over meshes.
+
+``oglc-x3d-splats`` writes and opens ``x3d_splats.x3d``, and
+:doc:`tests/x3d_splats.py <tutorials/x3d_splats>` is the same scene as a
+tutorial: a brass vase that is a ``GaussianSplats`` node in the document,
+its spherical harmonics fitted to how polished brass looks from every side,
+and a hedge read from a ``KHR_gaussian_splatting`` glTF the document
+``Inline``\ s, on a marble terrace beside a sandstone plinth and a steel
+ball. Its keys: ``d`` takes the vase's harmonics above degree 0 away and
+gives them back, ``s`` switches both sets' ``castShadow``, ``g`` writes the
+vase as a glTF and ``w`` writes the scene back as X3D in each encoding.
+
+A ``GaussianSplats`` node is a set of 3D Gaussians, one per value of
+``positions``: each is spread along its own axes by ``scales`` (metres, one
+deviation), turned by ``orientations`` (unit quaternions, x y z w), and
+drawn with ``opacities`` from 0 to 1. Its colour is
+``sphericalHarmonicsDegree0Coef0`` and, where they are given, the
+coefficients of degrees 1 to 3, read along the direction from the camera to
+the splat; the colour is display-referred, so the scene's lights, fog,
+exposure and tone mapping do not change it. ``colorSpace`` says whether
+those colours are sRGB (``SRGB_REC709_DISPLAY``, the default) or linear
+(``LIN_REC709_DISPLAY``). The formulas are ``KHR_gaussian_splatting``'s,
+and the facts the engine follows are in ``specs/gaussian-splats.md``.
+
+- The number of splats is the length of ``positions``, shortened to any
+  shorter ``scales``, ``orientations`` or ``opacities``, and a warning
+  names the field. An empty ``orientations`` is no turn and an empty
+  ``opacities`` is opaque. A splat with a value that is not finite is left
+  out.
+- The harmonics read are those of the highest degree that every lower
+  degree and every splat has whole; with none, splats are mid grey.
+- Each splat's covariance is projected through the camera by the Jacobian
+  of the projection at its centre, and drawn as a quad over its ellipse to
+  three deviations. A splat smaller than a pixel is drawn a pixel wide.
+- The splats of one node are sorted back to front by their distance from
+  the camera (by depth along the view under an ``OrthoViewpoint``), with a
+  radix sort, and blended over the opaque scene and among the other
+  transparent shapes by the node's origin. The order is kept until the
+  camera has moved more than about a quarter of a degree as seen from the
+  nearest splat, or the fields change: turning the camera on the spot does
+  not sort again, and a still frame sorts and uploads nothing. Splats of two
+  nodes that overlap on screen are blended node by node.
+- The harmonics turn with the node: a ``Transform`` rotation turns the
+  colour with the splats, and a scale stretches them without bending it.
+- ``castShadow`` true draws each splat's core, where its opacity reaches
+  one half, into the shadow maps of every light that casts shadows; the
+  thinner fringe casts none. ``visible`` false draws nothing and casts
+  nothing. The splats are not lit and receive no shadows.
+- ``pointerEvents`` true makes the cores pickable, with the picked point
+  on the core; false leaves the node out of picking.
+- ``bboxSize`` and ``bboxCenter`` replace the box computed from every
+  splat's ellipsoid to three deviations.
+
+Both renderers draw the splats, through a GLSL 3.30 program of their own
+that reads them from buffer textures, so a compatibility-profile context of
+OpenGL 3.3 or later draws them as a core one does. Where the context is
+older, or a draw fails, the node logs the error once and draws nothing from
+then on. A driver holding fewer texels in a buffer texture than the set
+needs draws as many splats as fit and logs how many.
+
+The costs, for N splats: 48 bytes a splat for the geometry and 8 to 96 bytes
+for the half-float coefficients of degree 0 to 3, uploaded when a field
+changes; a sort linear in N (about 15 ms for a million splats) and an upload
+of 4 bytes a splat when the camera moves far enough to change the order;
+one instanced draw of four vertices a splat. A shadow map draws the cores
+without sorting.
+
+A glTF primitive carrying ``KHR_gaussian_splatting`` is read as the same
+node, by ``Loader``, ``Inline`` and ``oglc-view`` alike, and
+``OpenGLContext.loaders.gltf.writer`` writes the node back as one; see
+:ref:`gltf-gaussian-splats`. ``OpenGLContext.scenegraph.splatmath`` holds
+the arithmetic with no GL, including ``fit_harmonics``, which fits
+coefficients to a colour that varies with the view, and ``facing``, which
+lays a splat across a surface's normal.
 
 .. _x3d-shaders:
 

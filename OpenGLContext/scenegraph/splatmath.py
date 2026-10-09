@@ -1,4 +1,4 @@
-"""Gaussian splats' arithmetic: covariance, colour, footprint and draw order -- no GL
+"""Gaussian splats' arithmetic, with no GL: covariance, colour, footprint, draw order, fitting
 
 A splat is a 3D Gaussian: a centre, a covariance made from three scales and a
 rotation, an opacity, and a colour that varies with the direction it is seen
