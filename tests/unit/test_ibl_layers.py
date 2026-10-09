@@ -56,6 +56,14 @@ class TestATurnedLight:
             for face, got in enumerate(light.specular_faces(0))])
         assert errors.mean() < 0.005
 
+    def test_an_edit_moves_the_version(self):
+        light = _light()
+        before = light.version
+        light.intensity = 2.0
+        turned = light.version
+        light.rotation = (0.0, 0.6, 0.0, 0.8)
+        assert len({before, turned, light.version}) == 3
+
     def test_an_unturned_light_is_its_own_faces(self):
         faces = _faces(8)
         light = ImageBasedLight(specular=[faces])
@@ -96,7 +104,7 @@ class TestALightInALayer:
         """A light's mips span roughness 0 to 1 whatever their count, as
         EXT_lights_image_based maps them; the probe's levels read each
         roughness from the two mips either side of it."""
-        for count in (2, 3, 9):
+        for count in (2, 3, 8):
             light = ImageBasedLight(specular=[
                 _faces(max(1, IBLProbe.PRE_SIZE >> level), level / (count - 1))
                 for level in range(count)],
@@ -129,18 +137,36 @@ class TestALightInALayer:
         assert rough[2].mean() > 0.02     # +Y takes light from +X
 
 
-class TestRoughnessMips:
-    def test_a_probe_level_reads_the_mips_either_side_of_its_roughness(self):
-        assert ibl.roughness_mips(9, 5) == [
-            (0, 0, 0.0), (2, 2, 0.0), (4, 4, 0.0), (6, 6, 0.0), (8, 8, 0.0)]
-        assert ibl.roughness_mips(2, 5) == [
-            (0, 0, 0.0), (0, 1, 0.25), (0, 1, 0.5), (0, 1, 0.75), (1, 1, 0.0)]
+class TestATurnedLightInALayer:
+    def test_the_probe_turns_and_scales_it_as_the_light_reads(self, probe):
+        """Drawn into a layer on the GPU, a turned light's faces are the ones
+        ImageBasedLight.specular_faces reads on the CPU."""
+        size = 32
+        faces = [np.full((size, size, 3), 0.1 * (face + 1), 'f4') for face in range(6)]
+        light = ImageBasedLight(
+            specular=[faces], intensity=2.0,
+            rotation=(0.0, math.sin(math.pi / 4), 0.0, math.cos(math.pi / 4)),
+            irradianceCoefficients=[(0.5, 0.5, 0.5)] + [(0.0, 0.0, 0.0)] * 8)
+        assert probe.upload_light(light, layer=1)
+        _irradiance, mips = probe.read_layer(1)
+        expected = light.specular_faces(0)
+        middle = IBLProbe.PRE_SIZE // 2
+        for face in range(6):
+            assert mips[0][face][middle, middle] == pytest.approx(
+                expected[face][size // 2, size // 2], abs=0.02), face
+
+
+class TestRoughnessLod:
+    def test_a_probe_level_reads_the_light_at_its_roughness(self):
+        assert [ibl.roughness_lod(level, 9, 5) for level in range(5)] == [0, 2, 4, 6, 8]
+        assert [ibl.roughness_lod(level, 2, 5) for level in range(5)] == [
+            0, 0.25, 0.5, 0.75, 1]
 
     def test_a_single_mip_serves_every_level(self):
-        assert ibl.roughness_mips(1, 3) == [(0, 0, 0.0)] * 3
+        assert [ibl.roughness_lod(level, 1, 3) for level in range(3)] == [0, 0, 0]
 
     def test_a_single_level_reads_the_sharpest_mip(self):
-        assert ibl.roughness_mips(4, 1) == [(0, 0, 0.0)]
+        assert ibl.roughness_lod(0, 4, 1) == 0.0
 
 
 class TestConvolvingALayer:

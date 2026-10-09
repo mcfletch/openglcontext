@@ -184,6 +184,7 @@ class ZonesMixin(PassResources):
     _imageLights: Optional[dict[Any, Any]] = None
     #: What the scene's own image-based light was last uploaded against.
     _sceneLightMark: Any = None
+    _lightVersions: Optional[dict[Any, int]] = None
     _zoneWarned = False
     #: The environment zones stacked for testing all at once, remade when the
     #: zones move.
@@ -745,7 +746,9 @@ class ZonesMixin(PassResources):
         schedule = self._zoneCaptures
         if schedule is None:
             schedule = self._zoneCaptures = CaptureSchedule()
-        if schedule.reserve(light):
+        if schedule.reserve(light) or (
+                schedule.layer(light) is not None
+                and self._uploadedLights().get(light) != light.version):
             self._waitingLights()[light] = light
             self._askForFrame()
         layer = schedule.layer(light)
@@ -782,19 +785,23 @@ class ZonesMixin(PassResources):
             probe.grow(schedule.layers)
         if schedule is not None:
             waiting = self._waitingLights()
+            uploaded = self._uploadedLights()
             for key, light in list(waiting.items()):
                 layer = schedule.layer_of(key)
-                if layer is None or schedule.layer(key) is not None:
+                current = uploaded.get(key) == light.version
+                if layer is None or (schedule.layer(key) is not None and current):
                     del waiting[key]
                 elif probe.upload_light(light, layer):
                     del waiting[key]
-                    schedule.finished(key)
+                    uploaded[key] = light.version
+                    if schedule.layer(key) is None:
+                        schedule.finished(key)
                     self._probeVersion += 1
         scene = self.sceneImageLight()
         if scene is not None and getattr(scene, 'generated', None) is not None:
             self._convolveGenerated(probe, scene)
             return
-        mark = (id(scene), probe.lost, id(probe.prefilter))
+        mark = (scene, getattr(scene, 'version', 0), probe.lost, probe.prefilter)
         if scene is not None and mark != self._sceneLightMark:
             if probe.upload_light(scene, 0):
                 self._sceneLightMark = mark
@@ -826,6 +833,12 @@ class ZonesMixin(PassResources):
         if self._imageLights is None:
             self._imageLights = {}
         return self._imageLights
+
+    def _uploadedLights(self) -> dict[Any, int]:
+        """The version each image-based light was last uploaded at."""
+        if self._lightVersions is None:
+            self._lightVersions = {}
+        return self._lightVersions
 
     def sceneImageLight(self) -> Any:
         """The image-based light the scene itself is lit by, or None.

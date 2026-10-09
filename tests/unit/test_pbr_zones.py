@@ -746,6 +746,40 @@ class TestImageLightsWhileZonesMove:
         assert probe.uploads == [1]
 
 
+class TestAnImageLightEdited:
+    """An image light's intensity or rotation set (a KHR_animation_pointer
+    channel driving it) puts it in its layer again."""
+
+    def test_a_zones_light_is_uploaded_again(self):
+        light = ImageBasedLight()
+        lit = Zone(size=(10, 10, 10), settings=[ZoneEnvironment(light=light)])
+        zoned = ZonedPass([(lit, at(0))])
+        probe = zoned._ibl_probe = ImageProbe()
+        zoned._zoneLighting = ('full', probe)
+        placed = zoned.placeZones()[0]
+        zoned.zoneProbeLayer(placed)
+        zoned.uploadImageLights(probe)
+        zoned.zoneProbeLayer(placed)
+        zoned.uploadImageLights(probe)
+        assert probe.uploads == [1]
+        light.intensity = 2.0
+        assert zoned.zoneProbeLayer(placed) == 1.0
+        zoned.uploadImageLights(probe)
+        assert probe.uploads == [1, 1]
+
+    def test_the_scenes_light_is_uploaded_again(self):
+        light = ImageBasedLight()
+        zoned = ZonedPass([])
+        zoned.paths[ImageBasedLight] = [FakePath([light], at(0))]
+        probe = ImageProbe()
+        zoned.uploadImageLights(probe)
+        zoned.uploadImageLights(probe)
+        assert probe.uploads == [0]
+        light.rotation = (0.0, 0.6, 0.0, 0.8)
+        zoned.uploadImageLights(probe)
+        assert probe.uploads == [0, 0]
+
+
 class TestAnObjectChangingInPlace:
     def test_an_object_scaled_where_it_stands_is_classified_again(self):
         zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]), at(0))])
