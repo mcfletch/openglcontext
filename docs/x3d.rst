@@ -1004,6 +1004,10 @@ and the facts the engine follows are in ``specs/gaussian-splats.md``.
   nodes that overlap on screen are blended node by node.
 - The harmonics turn with the node: a ``Transform`` rotation turns the
   colour with the splats, and a scale stretches them without bending it.
+- Splats blend in the frame's display values. A ``LIN_REC709_DISPLAY``
+  set's colours are encoded for the display one splat at a time, before
+  blending, so where its translucent splats overlap the result differs a
+  little from blending the linear values first.
 - ``castShadow`` true draws each splat's core, where its opacity reaches
   one half, into the shadow maps of every light that casts shadows; the
   thinner fringe casts none. ``visible`` false draws nothing and casts
