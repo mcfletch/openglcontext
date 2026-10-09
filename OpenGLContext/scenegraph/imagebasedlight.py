@@ -193,6 +193,11 @@ class ImageBasedLight(nodetypes.Children, node.Node):
         super().__init__(**named)
         #: The mip chain: for each level, six linear ``(n, n, 3)`` faces.
         self.specular: list[list[np.ndarray]] = list(specular or [])
+        #: A cube map the render pass draws and convolves in place of the
+        #: faces (an EnvironmentLight's GeneratedCubeMapTexture); None.
+        self.generated: Any = None
+        #: The colour the generated cube is scaled by, beside :attr:`intensity`.
+        self.tint: tuple[float, ...] = (1.0, 1.0, 1.0)
 
     @property
     def rotated(self) -> bool:

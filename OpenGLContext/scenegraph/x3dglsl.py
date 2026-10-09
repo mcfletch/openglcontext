@@ -43,6 +43,7 @@ __all__ = [
     'per_vertex',
     'light_parameters', 'headlight_parameters', 'legacy_light_parameters',
     'material_parameters', 'legacy_material_parameters', 'X3D_INPUTS',
+    'MAX_CLIP_PLANES', 'fog_parameters', 'clip_plane_parameters',
 ]
 
 #: The stages a `ShaderPart` or `ShaderProgram` `type` names, in pipeline order.
@@ -54,6 +55,8 @@ LANGUAGES = ('GLSL', '')
 #: The texture units a shader's appearance textures are offered in:
 #: `x3d_Texture2D[i]`, `x3d_TextureCube[i]`, `x3d_TextureMatrix[i]`.
 MAX_TEXTURES = 4
+#: How many clip planes a shader is offered as `x3d_ClipPlane`, X_ITE's count.
+MAX_CLIP_PLANES = 6
 
 #: What a translated fragment stage writes its colour to.
 LEGACY_OUTPUT = 'oglc_FragColor'
@@ -182,6 +185,11 @@ _STRUCTS = {
         'struct x3d_UnlitMaterialParameters {\n'
         '    vec3 emissiveColor; float normalScale; float transparency;\n'
         '};\n'),
+    'x3d_FogParameters': (
+        'struct x3d_FogParameters {\n'
+        '    int type; vec3 color; float visibilityStart; float visibilityRange;\n'
+        '    mat3 matrix;\n'
+        '};\n'),
 }
 
 
@@ -194,6 +202,10 @@ def _definitions(stage: str, max_lights: int) -> str:
         ('x3d_DirectionalLight', 1),
         ('x3d_PointLight', 2),
         ('x3d_SpotLight', 3),
+        ('x3d_MaxClipPlanes', MAX_CLIP_PLANES),
+        ('x3d_NoneFog', 0),
+        ('x3d_LinearFog', 1),
+        ('x3d_ExponentialFog', 2),
     ))
 
 
@@ -727,6 +739,44 @@ def headlight_parameters() -> "dict[str, Any]":
         'radius': -1.0, 'beamWidth': 0.0, 'cutOffAngle': 0.0,
         'matrix': np.eye(3, dtype=np.float32),
     }
+
+
+#: `x3d_Fog.type` for each of :mod:`~OpenGLContext.scenegraph.fog`'s modes:
+#: X3D's LINEAR and EXPONENTIAL, and the engine's own curve as exponential.
+_FOG_TYPES = {2: 1, 3: 2, 1: 2}
+
+
+def fog_parameters(mode: int, density: float, color: Any) -> "dict[str, Any]":
+    """`x3d_FogParameters` for the fog a pass draws with
+
+    `mode`, `density` and `color` are what the pass gives its own programs
+    (``set_fog``): the range is the reciprocal of `density`, in eye space, so
+    `matrix` is the identity. Type 0 (``x3d_NoneFog``) where there is no fog.
+    """
+    density = float(density)
+    kind = _FOG_TYPES.get(int(mode), 0) if density > 0.0 else 0
+    return {
+        'type': kind,
+        'color': np.asarray(color, np.float32).reshape(-1)[:3],
+        'visibilityStart': 0.0,
+        'visibilityRange': 1.0 / density if kind else 0.0,
+        'matrix': np.eye(3, dtype=np.float32),
+    }
+
+
+def clip_plane_parameters(planes: Any) -> np.ndarray:
+    """`x3d_ClipPlane[]` for eye-space `planes`, (n, 4) as (a, b, c, d) keeping a·x + b·y + c·z + d >= 0
+
+    X_ITE's form: the unit normal and a distance w, a point v kept where
+    dot(v, normal) >= w; slots past the planes are zero, which keep everything.
+    """
+    found = np.zeros((MAX_CLIP_PLANES, 4), np.float32)
+    for row, plane in enumerate(np.asarray(planes, np.float64).reshape(-1, 4)[:MAX_CLIP_PLANES]):
+        length = float(np.linalg.norm(plane[:3]))
+        if length > 0:
+            found[row, :3] = plane[:3] / length
+            found[row, 3] = -plane[3] / length
+    return found
 
 
 def legacy_light_parameters(light: "dict[str, Any]") -> "dict[str, Any]":

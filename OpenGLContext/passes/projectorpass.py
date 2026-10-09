@@ -11,7 +11,8 @@ projector past the first four is reported once and casts nothing. Its scope
 is a light's, and its bit of the program's ``lightsOff`` is
 :data:`PROJECTOR_SCOPE_BIT` plus its slot.
 
-The compatibility profile casts no projectors.
+The compatibility profile casts them through texture units
+(:mod:`OpenGLContext.passes.fixedprojectors`).
 """
 from __future__ import annotations
 

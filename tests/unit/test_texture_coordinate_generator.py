@@ -58,7 +58,7 @@ def test_a_composed_geometry_with_a_generator_carries_it():
 CHECKER = b'''<PixelTexture repeatS="false" repeatT="false" image="2 1 3 0xFF0000 0x00FF00"/>'''
 
 
-def drawn(mode, eye=b'0.5 0.5 2'):
+def drawn(mode, eye=b'0.5 0.5 2', profile='core'):
     from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
     from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
     scene = Loader.loads(b'''<X3D version="4.0"><Scene>
@@ -69,7 +69,9 @@ def drawn(mode, eye=b'0.5 0.5 2'):
           <TextureCoordinateGenerator mode="''' + mode + b'''"/>
         </IndexedTriangleSet></Shape>
     </Scene></X3D>''', 'scene.x3d')
-    with scene_context(scene, size=(64, 64)) as context:
+    with scene_context(scene, size=(64, 64),
+                       environment={'OPENGLCONTEXT_PROFILE': profile}) as context:
+        drawn_image(context)
         return drawn_image(context).astype(int)
 
 
@@ -103,3 +105,31 @@ def test_the_local_modes_are_given_the_camera_in_the_shapes_space(gl_context):
     value = (ctypes.c_float * 3)()
     glGetUniformfv(shader.program, glGetUniformLocation(shader.program, 'texGenLocalEye'), value)
     assert list(value) == pytest.approx([-1.0, 2.0, 5.0])
+
+
+def test_the_fixed_function_pipeline_generates_coord(gl_context_compat):
+    image = drawn(b'COORD', profile='compatibility')
+    left, right = image[32, 22], image[32, 42]
+    assert left[0] > left[1] + 100
+    assert right[1] > right[0] + 100
+
+
+def test_the_fixed_function_pipeline_generates_eye_coordinates(gl_context_compat):
+    image = drawn(b'COORD_EYE', eye=b'0 0.5 2', profile='compatibility')
+    assert image.reshape(-1, 3).max(axis=0)[:2].min() > 100
+
+
+@pytest.mark.parametrize('mode, gl_mode', [
+    ('COORD', 'GL_OBJECT_LINEAR'), ('COORD_EYE', 'GL_EYE_LINEAR'),
+    ('CAMERA_SPACE_POSITION', 'GL_EYE_LINEAR'), ('CAMERA_SPACE_NORMAL', 'GL_NORMAL_MAP'),
+    ('CAMERA_SPACE_REFLECTION_VECTOR', 'GL_REFLECTION_MAP'), ('SPHERE', 'GL_SPHERE_MAP'),
+    ('SPHERE_LOCAL', 'GL_SPHERE_MAP'),
+])
+def test_each_mode_the_fixed_function_pipeline_has(mode, gl_mode):
+    found = texgen.fixed_function(texgen.TexGen(texgen.MODES[mode], (0.0,) * 8))
+    assert found == gl_mode
+
+
+@pytest.mark.parametrize('mode', ['NOISE', 'NOISE_EYE', 'SPHERE_REFLECT', 'SPHERE_REFLECT_LOCAL'])
+def test_the_modes_it_has_not_are_none(mode):
+    assert texgen.fixed_function(texgen.TexGen(texgen.MODES[mode], (0.0,) * 8)) is None

@@ -26,7 +26,7 @@ from __future__ import annotations
 import os
 import logging
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 
@@ -50,7 +50,8 @@ from OpenGL.GL import (
     glCopyImageSubData,
     glGenVertexArrays, glDeleteVertexArrays, glBindVertexArray,
     glDrawArrays, glViewport, glUseProgram, glEnable, glDisable, glIsEnabled,
-    glGetIntegerv, glGetUniformLocation, glUniform1i, glUniform1f,
+    glGetIntegerv, glGetUniformLocation, glUniform1i, glUniform1f, glUniform3f,
+    glUniformMatrix3fv, GL_FALSE,
     glGetString, GL_VERSION,
 )
 from OpenGL.GL import shaders as GL_shaders
@@ -404,6 +405,32 @@ def _uni1f(prog: int, name: str, value: float) -> None:
         glUniform1f(loc, float(value))
 
 
+class EnvironmentRead(NamedTuple):
+    """How a convolution reads its environment cube: turned and scaled
+
+    ``turn`` is a 3x3 rotation, as :class:`~OpenGLContext.scenegraph.imagebasedlight.ImageBasedLight`
+    turns its faces (a direction ``d`` reads the cube at ``d @ turn``);
+    ``scale`` multiplies each channel.
+    """
+
+    turn: Any = None
+    scale: tuple[float, float, float] = (1.0, 1.0, 1.0)
+
+
+#: The environment read as it is.
+PLAIN_READ = EnvironmentRead()
+
+
+def _read_uniforms(prog: int, read: EnvironmentRead) -> None:
+    loc = glGetUniformLocation(prog, 'envTurn')
+    if loc != -1:
+        turn = np.identity(3) if read.turn is None else np.asarray(read.turn, np.float64)
+        glUniformMatrix3fv(loc, 1, GL_FALSE, np.ascontiguousarray(turn, np.float32))
+    loc = glGetUniformLocation(prog, 'envScale')
+    if loc != -1:
+        glUniform3f(loc, *(float(value) for value in read.scale))
+
+
 class IBLProbe(object):
     """Precomputed IBL textures (irradiance + prefiltered-specular cubes + BRDF LUT).
 
@@ -650,8 +677,8 @@ class IBLProbe(object):
         return layer if self.arrayed else None
 
     def _fill_irradiance(self, fbo: int, irr_prog: int, env: Optional[int],
-                         layer: int) -> None:
-        """Convolve the cube ``env`` into the irradiance map's ``layer``."""
+                         layer: int, read: EnvironmentRead = PLAIN_READ) -> None:
+        """Convolve the cube ``env``, read as ``read`` says, into the irradiance map's ``layer``."""
         irradiance = self.irradiance
         if irradiance is None:
             return
@@ -660,6 +687,7 @@ class IBLProbe(object):
             glActiveTexture(GL_TEXTURE0)
             glBindTexture(GL_TEXTURE_CUBE_MAP, env or 0)
             _uni1i(prog, 'envMap', 0)
+            _read_uniforms(prog, read)
         self._render_cube_faces(fbo, irr_prog, irradiance, self.IRR_SIZE, 0,
                                 setup=bind_env, layer=self._layer(layer))
 
@@ -669,11 +697,15 @@ class IBLProbe(object):
         self._fill_prefilter(fbo, pre_prog, self.env, 0)
 
     def _fill_prefilter(self, fbo: int, pre_prog: int, env: Optional[int],
-                        layer: int) -> None:
-        """Prefilter the cube ``env`` into the specular map's ``layer``, every mip."""
+                        layer: int, read: EnvironmentRead = PLAIN_READ,
+                        resolution: Optional[int] = None) -> None:
+        """Prefilter the cube ``env``, read as ``read`` says and of ``resolution``
+        texels a side (:attr:`ENV_SIZE` without), into the specular map's
+        ``layer``, every mip."""
         prefilter = self.prefilter
         if prefilter is None:
             return
+        side = float(resolution or self.ENV_SIZE)
         for lvl in range(self.PRE_LEVELS):
             size = max(1, self.PRE_SIZE >> lvl)
             roughness = lvl / float(max(1, self.PRE_LEVELS - 1))
@@ -683,7 +715,8 @@ class IBLProbe(object):
                 glBindTexture(GL_TEXTURE_CUBE_MAP, env or 0)
                 _uni1i(prog, 'envMap', 0)
                 _uni1f(prog, 'roughness', roughness)
-                _uni1f(prog, 'envResolution', float(self.ENV_SIZE))
+                _uni1f(prog, 'envResolution', side)
+                _read_uniforms(prog, read)
             self._render_cube_faces(fbo, pre_prog, prefilter, size, lvl,
                                     setup=bind_env_rough, layer=self._layer(layer))
 
@@ -789,6 +822,17 @@ class IBLProbe(object):
         program._set_uniform1f('prefilterMaxLod', self.max_lod, program.program)
 
     # -- layers past the scene's --------------------------------------------
+    def convolve_scene(self, env: int, size: int, read: EnvironmentRead = PLAIN_READ) -> bool:
+        """Fill the scene's own layer 0 from the mip-mapped cube ``env`` of
+        ``size`` texels a side, read as ``read`` says: an EnvironmentLight's
+        generated cube map. Returns whether it was filled."""
+        if not self.ready:
+            return False
+        if self._convolveInto(env, 0, read, size):
+            self.studio = False
+            return True
+        return False
+
     def convolve(self, env: int, layer: int) -> bool:
         """Fill ``layer`` of the arrays from the environment cube ``env``.
 
@@ -802,6 +846,10 @@ class IBLProbe(object):
         """
         if not self.arrayed or not 0 < layer < self.layers or not self.ready:
             return False
+        return self._convolveInto(env, layer, PLAIN_READ, None)
+
+    def _convolveInto(self, env: int, layer: int, read: EnvironmentRead,
+                      resolution: Optional[int]) -> bool:
         prev_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
         prev_vp = glGetIntegerv(GL_VIEWPORT)
         prev_program = int(glGetIntegerv(GL_CURRENT_PROGRAM))
@@ -820,8 +868,8 @@ class IBLProbe(object):
             glBindVertexArray(vao)
             fbo = glGenFramebuffers(1)
             glBindFramebuffer(GL_FRAMEBUFFER, fbo)
-            self._fill_irradiance(fbo, irr_prog, env, layer)
-            self._fill_prefilter(fbo, pre_prog, env, layer)
+            self._fill_irradiance(fbo, irr_prog, env, layer, read)
+            self._fill_prefilter(fbo, pre_prog, env, layer, read, resolution)
             return True
         except Exception as err:
             log.error("IBL layer %d could not be filled: %s", layer, err)

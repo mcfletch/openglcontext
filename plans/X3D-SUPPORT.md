@@ -138,6 +138,17 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     document; an Inline holds the scene its nodes were read into, which they
     hold only weakly (an Inline's nodes had no root, so were not a document's,
     and an Inline among them could not resolve a relative url)
+  - kept by choice where X_ITE contradicts the specification's normative
+    text (X_ITE phase, 2026-10-09, for the maintainer to confirm):
+    - ParticleSystem `colorKey` and `texCoordKey` are seconds of a particle's
+      age (19775-1, 40.4.5: "represents the time of the particle in
+      seconds"); X_ITE reads them as fractions of the particle's life
+    - RigidBody `useFiniteRotation` changes how the rotation is calculated,
+      not whether the body may turn (37.4.8: "used to influence the way the
+      body's rotation is calculated ... more accurate for high rotation speed
+      bodies"); the engine integrates every turn exactly. X_ITE holds a body
+      with `useFiniteRotation` TRUE to `finiteRotationAxis`, a component-wise
+      angular factor
   - [ ] whole corpus against X_ITE (2026-10-07): median 4.9% of pixels unlike
     with the PBR pass, 1.8% with the VRML97 pass, whose worst were the fog
     documents it did not fog;
@@ -308,7 +319,7 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] Interchange geometry: the six triangle sets, `ElevationGrid` (with `creaseAngle`), `LineSet`; `ColorRGBA`, `Tangent`, `MultiTextureCoordinate` mapping labels (`composedgeometry`, `meshgeometry`); data nodes registered as their declarations
   - [x] Geometry2D: Rectangle2D, TriangleSet2D, Disk2D, ArcClose2D as meshes; Circle2D, Arc2D, Polyline2D, Polypoint2D through `DrawnAs` (`loaders.x3d.X3D_ONLY` for the name the NURBS trim curve holds)
   - [x] `Extrusion` rebased on X3D's declaration (its engine fields carried as `OpenGLContext` metadata)
-  - [x] `TextureCoordinateGenerator` for a composed geometry's first set (`scenegraph.texgen`, the PBR vertex shader)
+  - [x] `TextureCoordinateGenerator` for a composed geometry's first set (`scenegraph.texgen`, the PBR vertex shader); in the compatibility profile by `glTexGen` for COORD, COORD_EYE, the camera-space modes and SPHERE (2026-10-09 x3d-xfields, `texgen.fixed_function`, `shape._fixed_texgen`)
   - [x] point/spot `radius`: a cut-off in the shader paths; unbounded for a light made in code, 100 for a document's, a glTF light's `range`
   - [x] `IndexedFaceSet` and the primitives onto the same arrays; `CoordinateDouble` rebased to a float32 origin
     (2026-10-09, x3d-gaps): `IndexedFaceSet` is a `MeshDrawn` whose
@@ -353,7 +364,10 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (`scenegraph.renderedtexture`, `passes.generatedtextures`) with the
     engine's `update`, `viewpoint`, `scene`, `background`, `fog` fields
     (X3D 4.1 declares none of them), `depthMap`; shapes wearing a chain or a
-    rendered texture are not batched
+    rendered texture are not batched. 2026-10-09 (x3d-xfields): the
+    compatibility profile draws RenderedTexture and GeneratedCubeMapTexture
+    through the fixed-function pipeline (`_drawViewFixed`,
+    `renderViewLegacy(records)`), its background turned by the drawing's view
   - [x] `FillProperties`, `LineProperties`, `PointProperties`
     (`scenegraph.drawproperties`; the wide-line program's geometry stage
     `vrml97_wide_line.geom`, `_pointsize_inc.glsl`, `_fill_inc.glsl`, and the
@@ -372,7 +386,10 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `_clipplane_inc.glsl`): planes in the drawn object's frame, so every
     view, mirror and shadow map; up to 8 a draw, nearest groups first;
     `glClipPlane` in the compatibility profile; clipped shapes are not
-    instanced; a Shader node's program and the terrain/vegetation/particle
+    instanced; a Shader node's program is offered the planes as X_ITE's
+    `x3d_ClipPlane[6]` in eye space and the fog as `x3d_Fog` (2026-10-09
+    x3d-xfields, `x3dglsl.clip_plane_parameters`, `fog_parameters`; Annex
+    I.3.2 leaves applying both to the program); the terrain/vegetation/particle
     layers are not clipped. Found on the way: `Box` and the quadrics ignored
     `solid FALSE` (now drawn from inside, and kept apart when instancing)
   - [x] `FontLibrary` (`scenegraph.text.fontlibrary`): the first url that is a
@@ -382,12 +399,20 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     take it in FontStyle.family order; provider keys and the Text cache
     follow the document's `DocumentFonts.generation`
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
+  - [x] `Material`'s `ambientTexture` (.rgb on the ambient term), `shininessTexture` (.a on the shininess) and `specularTexture` (.rgb on the specular colour) in the PBR program's Phong branch, as X_ITE (2026-10-09 x3d-xfields): on the lightmap, metallic/roughness and specular colour channels (`AppearanceMaterial.PHONG_CHANNELS`); without the extension maps the specular map borrows a free sampler, the split-sum table's for a Phong draw (`pbrpass.draw_slots`). Not in the VRML97 renderer
+  - [x] MultiTexture on a 16-sampler driver (2026-10-09 x3d-xfields): 2D layers borrow the lightmap's sampler, and for a Phong draw the metallic/roughness map's and the split-sum table's (`slotTexture` in pbr.frag): four layers for a Material, two for a PhysicalMaterial. A fifth layer and nested MultiTexture are left out, as X_ITE leaves them
   - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)
-  - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`)
+  - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`); `transparency` of both backgrounds: the sky and ground at `1 - transparency` over transparent black, the sides their own alpha, as X_ITE (`spherebackground.sky_alpha`, 2026-10-09 x3d-xfields)
   - [x] `LocalFog` (`passes.localfog`, per draw beside the light scope); unlit surfaces are fogged
   - [x] `EnvironmentLight` from its coefficients as the scene's image-based light (`scenegraph.environmentlight`); its cube maps: `specularTexture` faces as the reflected environment with
     halved levels, `diffuseTexture` as the irradiance's SH fit, the specular
-    cube convolved where neither coefficients nor diffuse map are given
+    cube convolved where neither coefficients nor diffuse map are given;
+    2026-10-09 (x3d-xfields): a `GeneratedCubeMapTexture` drawn from `origin`
+    (`generatedtextures.capture_centre`, `requestGenerated`) and convolved on
+    the GPU into the scene layer, turned and scaled
+    (`IBLProbe.convolve_scene`, `EnvironmentRead`); `global` false scopes it
+    by `lightsOff` bit 24 (`ZonesMixin.environmentScopes`). X_ITE ignores
+    `diffuseCoefficients` and `diffuseTexture`; the engine reads them
   - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture
 - Phase 7, runtime (§9.10, §9.15, §9.16)
   - [x] event utilities, sequencers and `KeySensor` with their behaviour (`vrml.x3d.runtime`); the engine's `TimeTrigger` clock and `KeySensor` keys (`scenegraph/x3druntime.py`, `observeEvents`)
@@ -401,10 +426,10 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] NavigationInfo `speed` (relative to X3D's 1), `avatarSize` for the walking avatar, the viewpoint transitions and `transitionComplete`
   - [x] `centerOfRotation` (the examine pivot with nothing picked), `retainUserOffsets`, `viewAll`
   - [x] environmental sensors (`vrml.x3d.sensors`, sensed once a frame by `scenegraph.x3dsensors`)
-  - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit has no normal or texture coordinate)
+  - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit's normal and first texture coordinate from the triangle under the pointer, `surface_at`, as X_ITE sends them, 2026-10-09 x3d-xfields)
   - [x] `TimeSensor` (`vrml.x3d.timesensor`): start, stop, pause, resume, and the engine's `rate`; polled by the context's time manager
-  - [x] `LoadSensor` (`vrml.x3d.loadsensor`); `Inline` and `ImageTexture` record their load state
-  - [x] `Anchor`: a group; `#viewpoint` bound, other urls through `Context.OnAnchor`
+  - [x] `LoadSensor` (`vrml.x3d.loadsensor`); every url node records its load state (2026-10-09 x3d-xfields: audio sources when first heard, `Anchor` loaded through `loadState()`; no children and a failure report as X_ITE does)
+  - [x] `Anchor`: a group; `#viewpoint` bound, other urls through `Context.OnAnchor`; 2026-10-09 (x3d-xfields): X_ITE's following (`scenegraph.anchor.anchor_targets`, `follow`): a world the document may reach loaded in place through `sceneLoader`, its fragment's viewpoint bound, the next url on failure; pages, refused urls and `target=` other than `_self` to `Context.OnAnchorElsewhere`, which opens nothing. `autoRefresh` not read
   - [x] the cascade: a field is reached once per cascade, through handlers and their outputs (`vrml.event`)
   - [x] `Collision`: `enabled` and `proxy` in the walk's collision world; `collideTime` and `isActive` from the avatar's touches (`physics.x3dcollision`)
   - [x] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor (`SensorTimer`; its multiplier is the sensor's `rate`)
@@ -426,9 +451,13 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     read as homogeneous (the corpus's and X_ITE's reading); `NurbsCurve`,
     `NurbsCurve2D`, `Contour2D` by `X3D_ONLY`, the registry keeping the
     VRML97 extension's nodes unchanged; `oglc-x3d-nurbs`. Open: the
-    pre-standard `Basic/NURBS/originals` (controlPoint as MFVec3f) draw nothing
+    pre-standard `Basic/NURBS/originals` (controlPoint as MFVec3f) draw nothing,
+    as in X_ITE, which reads `NurbsSurface` as an unknown node (2026-10-09)
   - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
-    (DDS, KTX 1.1, crosses and strips: `loaders.textureimages`),
+    (DDS, KTX 1.1, KTX 2 of 8-bit and BC1-3 formats with zlib or no
+    supercompression (2026-10-09 x3d-xfields; X_ITE also transcodes Basis
+    Universal, which needs a transcoder this engine does not carry; X_ITE
+    reads no HDR cube map), crosses and strips: `loaders.textureimages`),
     `GeneratedCubeMapTexture` (drawn before the views from the shape's
     origin, update NONE drawn once); sampled with the world reflection
     vector; compatibility profile through reflection-map texgen
@@ -442,9 +471,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     (`scenegraph.textureprojector`, `passes.projectorpass`,
     `shaders/_projectors_inc.glsl`): up to four, pictures in one array
     texture, limited to their group as lights are through `lightsOff` bits 16+, modulating the
-    diffuse colour as X_ITE does; `shadows` and the compatibility profile
-    not drawn. Projectors and EnvironmentLight are no longer bound as
-    directional lamps
+    diffuse colour as X_ITE does; `shadows` not drawn (X_ITE neither; nor
+    does it cast more than four). Projectors and EnvironmentLight are no
+    longer bound as directional lamps. 2026-10-09 (x3d-xfields): the
+    compatibility profile casts them, a texture unit each from unit 1, the
+    picture baked to X_ITE's factor (`passes.fixedprojectors`); it bound
+    projectors and EnvironmentLights as GL lamps and failed the view
   - [x] Shaders: `ComposedShader`, `ShaderPart`, `ShaderProgram`,
     `ProgramShader`, `PackagedShader`, the vertex attributes
     (`scenegraph.x3dshaders`, `scenegraph.x3dglsl`): the first alternative
@@ -458,7 +490,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `x3d_NormalMatrix`, `x3d_LightSource[]`, `x3d_Material`,
     `x3d_Texture2D[]`, `x3d_TextureMatrix[]`, ...); `attrib` drawn into the
     mesh at locations 16+, then the per-instance ones (5 to 10 and 14, the
-    seven a 16-attribute driver offers); GLSL 1.x translated to
+    seven a 16-attribute driver offers); GLSL 1.x geometry stages are not
+    translated, and X_ITE (WebGL 2) runs no geometry stage at all; GLSL 1.x translated to
     3.30 core, run as written in the compatibility profile; the object id
     written beside the colour; `PackagedShader` of GLSL as one text with
     `X3D_<STAGE>_SHADER` macros, other languages passed over;
@@ -501,10 +534,16 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     The engine's `ParticleEmitter` takes the emitters (`source`) and models
     (`physics`) and has a colour ramp and line shape. `oglc-x3d-particles`
     - read differently from X_ITE: keys are seconds (X_ITE: fractions of the
-      life); a massless particle takes a force as an acceleration (X_ITE
-      applies none); VolumeEmitter `internal` FALSE emits from the boundary
-    - not drawn: lighting of the non-GEOMETRY types, the texture transform,
-      line width
+      life; kept by choice, below); VolumeEmitter `internal` FALSE emits from
+      the boundary
+    - 2026-10-09 (x3d-xfields): a massless particle takes no force or wind
+      (40.4.4, and X_ITE); under X3D's lighting QUAD/TRIANGLE/SPRITE with a
+      Material are lit by the Phong equation as X_ITE lights them (quad
+      normal +z, sprite facing the viewer; `ParticleLook.lit`,
+      `volumepass.upload_frame_lights`); the texture transform and
+      `LineProperties` width (a strip across the line) are drawn; ClipPlanes
+      clip the particles in eye space. The showcase's fountain emitter has a
+      mass
   - [x] prototype instances drawn: `grouping.of_types` passes an instance by
     its body's first node type (scene, groups, Switch, LOD, CADFace); before,
     an X3D document's ProtoInstance was never drawn
@@ -513,6 +552,11 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] RigidBodyPhysics: the 14 nodes on omi_physics (`physics.x3drigid`, `scenegraph.x3drigidbody`); a collection a world stepped once a frame on the engine clock; collider and `set_contacts` pairs, a NULL side against the world; `CollisionSensor` contacts and intersections; the six joints and their `forceOutput`s
     - omi_physics: compound shapes and flat-ended cylinders and cones; ball, hinge, slider, universal, two-axis hinge and motor joints from rows (compiled `solve_rows`); pair rules and `ContactParameters`; steady forces, exact rotation, per-body sleep
     - not read: `finiteRotationAxis` (the whole turn is integrated exactly), `UniversalJoint` stop bounce and correction (X3D gives it no stops), the inertia's products off the diagonal
+    - X_ITE 16.4.3 (2026-10-09, x3d-xfields): it reads neither the inertia
+      (Ammo's shape inertia replaces it) nor any joint's stop fields, and has
+      no UniversalJoint motion at all, so those stay as they are. Its
+      `useFiniteRotation` makes `finiteRotationAxis` Bullet's angular factor,
+      holding the body to turning about that axis; kept by choice (below)
     - Basic archive: the documents whose contacts pass through a `Script` (`BallBounce`, `BounceTrimesh`, `CarDemoMain`) do not collide
   - [x] Layering, Layout: `Layer`, `LayerSet`, `Viewport`, `Layout`,
     `LayoutGroup`, `LayoutLayer`, `ScreenGroup`, `ScreenFontStyle`
@@ -572,7 +616,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     while heard and running. The voice-based VRML97 `Sound` is replaced.
     `oglc-x3d-sound`
     - omi_audio: `BufferSource.start(offset)`, `Node.settle()`
-    - not read: `enableHRTF` (equal-power pan), `interauralDistance`,
+    - 2026-10-09 (x3d-xfields): `enableHRTF` hears a SpatialSound through
+      omi_audio's spherical head (`spatial.head_response`, `Panner.set_head`:
+      Woodworth's interaural delay, Brown and Duda's head shadow), where
+      X_ITE asks Web Audio for HRTF panning. `interauralDistance` and
+      `tailTime` are declared and not read in X_ITE either
+    - not read: `interauralDistance`,
       `tailTime`, `mediaDeviceID` and `streamIdentifier` of the destinations
       (one output, the device); a `ListenerPointSource` as an input is
       silence; a `Convolver`'s `buffer` is one channel (X3D gives it no channel
@@ -1342,7 +1391,7 @@ the component maps onto an existing OpenGLContext subsystem.
 | ParticleSystems | Full | engine particles |
 | Layering, Layout | Full | overlay UI and multi-view rendering |
 | Sound (classic `Sound`/`AudioClip`) | Full | omi_audio |
-| Sound (4.0 audio graph) | Full, less `enableHRTF`, `interauralDistance` and `tailTime`; see below | omi_audio processing graph |
+| Sound (4.0 audio graph) | Full, less `interauralDistance` and `tailTime`; see below | omi_audio processing graph |
 | Geospatial | Full, later phase | double-precision paths, terrain |
 | VolumeRendering | Full, less ShadedVolumeStyle `shadows` and `phaseFunction` | 3D textures, ray-marching pass |
 | GaussianSplats (4.1) | Full | a sorted-splat draw in the transparent pass; `KHR_gaussian_splatting` |
@@ -1374,8 +1423,9 @@ What will not work, and why:
   `StreamAudioSource` reads the audio input its first `streamIdentifier`
   names, as a `MicrophoneSource` reads `mediaDeviceID`'s. Both inputs open
   only where the application allows capture.
-- `SpatialSound.enableHRTF` and `ListenerPointSource.interauralDistance`. The
-  pan is equal power between two ears; there is no HRTF.
+- `ListenerPointSource.interauralDistance`. `SpatialSound.enableHRTF` hears
+  through a spherical head model rather than measured HRTFs, so the
+  pinnae's cues for front, back and height are not there.
 - DIS (`EspduTransform`, `SignalPdu`, …). These exchange IEEE 1278 network
   packets for military simulation; nothing in an engine for games and
   applications calls for it. The nodes parse and are inert.
@@ -2231,7 +2281,8 @@ Review findings not taken as written, recorded 2026-10-07:
 - The generated stubs keep `**fields` on each constructor, documented as the
   extension fields a dialect or a prototype adds.
 - Bind stacks per `Layer` (§9.15) are pyvrml97's (`binding.place_layers`),
-  drawn by the engine's layer stack.
+  drawn by the engine's layer stack; X_ITE keeps a stack of each kind per
+  layer too (checked 2026-10-09, x3d-xfields).
 - pyvrml97 commit messages written before the commit-message rule are
   history and are not rewritten.
 - The followers' "first use wakes the node" sub-finding is how 19775-1

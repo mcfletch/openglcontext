@@ -980,22 +980,29 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     def OnAnchor(self, anchor: Any, url: Sequence[str], parameter: Sequence[str]) -> bool:
         """An ``Anchor``'s geometry was clicked: follow its `url`; whether it was followed
 
-        A ``#name`` url binds the viewpoint the scene names so. Any other url
-        is left alone: opening another document is the application's
-        choice, made by overriding this. `parameter` is the Anchor's.
+        Each url is followed in turn as
+        :func:`~OpenGLContext.scenegraph.anchor.anchor_targets` reads it, as
+        X_ITE follows them: a viewpoint of this scene is bound; another world
+        the document may reach is loaded by :attr:`sceneLoader` and replaces
+        the scene, its fragment's viewpoint bound, or the next url is tried
+        where it does not load; anything else goes to
+        :meth:`OnAnchorElsewhere`. `parameter` is the Anchor's.
         """
-        target = url[0] if url else ''
-        if not target.startswith('#'):
-            log.info('Anchor url %r not followed: OnAnchor opens no documents', list(url))
-            return False
-        graph = self.getSceneGraph()
-        viewpoint = graph.getDEF(target[1:]) if graph else None
-        if viewpoint is None:
-            log.info('Anchor url %r names no node of the scene', target)
-            return False
-        viewpoint.set_bind = True
-        self.triggerRedraw(1)
-        return True
+        from OpenGLContext.scenegraph import anchor as anchors  # noqa: PLC0415 cycle: scenegraph imports context
+        return anchors.follow(self, anchor, anchors.anchor_targets(anchor, url, parameter))
+
+    def OnAnchorElsewhere(self, anchor: Any, url: str, target: str) -> bool:
+        """An ``Anchor`` names a page, a world its document may not reach, or a
+        `target` window; whether the application followed it
+
+        The engine opens nothing outside the world itself: this logs the url
+        and answers False. An application that opens web pages or other
+        windows overrides it, choosing what of the document's urls it trusts
+        (:doc:`untrusted`).
+        """
+        log.info('Anchor url %r (target %r) not followed: OnAnchorElsewhere opens nothing',
+                 url, target)
+        return False
 
     def OnNextViewpoint(self, event: Any = None) -> None:
         """Bind the scene's next viewpoint after the bound one"""

@@ -48,8 +48,20 @@ class RenderedTexture(x3d.RenderedTexture):
         return False
 
     def render(self, visible: int = 1, lit: int = 1, mode: Any = None) -> Optional[int]:
-        """Nothing: the compatibility profile does not draw generated textures"""
-        return None
+        """Bind the picture for the fixed-function pipeline; 0 (opaque), or None
+        with nothing drawn yet"""
+        if not visible:
+            return None
+        tex = self.cached(mode)
+        if tex is None:
+            return None
+        from OpenGL import GL  # noqa: PLC0415 only the fixed-function pipeline draws this way
+        GL.glBindTexture(GL.GL_TEXTURE_2D, tex.texture)
+        GL.glEnable(GL.GL_TEXTURE_2D)
+        GL.glTexEnvi(GL.GL_TEXTURE_ENV, GL.GL_TEXTURE_ENV_MODE, GL.GL_MODULATE)
+        return 0
 
     def renderPost(self, mode: Any = None) -> None:
-        """Nothing to undo"""
+        """Switch the fixed-function 2D texture off again"""
+        from OpenGL import GL  # noqa: PLC0415 only the fixed-function pipeline draws this way
+        GL.glDisable(GL.GL_TEXTURE_2D)

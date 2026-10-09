@@ -1,5 +1,14 @@
-"""Gradient-sphere background node"""
+"""Gradient-sphere background node
+
+An X3D ``Background`` or ``TextureBackground`` with a ``transparency`` draws
+its sky and ground over a clear of transparent black, at ``1 - transparency``
+opacity, and not at all at 1; the image sides keep their own alpha
+(:func:`sky_alpha`). The colour buffer's alpha is left at that opacity, so a
+window composited with its alpha shows what is behind it.
+"""
+import contextlib
 import numpy as np
+from collections.abc import Iterator
 from typing import Any, Optional
 
 from OpenGLContext.arrays import *
@@ -51,6 +60,51 @@ def _vertex_array() -> int:
     if found is None:
         found = _vertex_arrays[key] = int(glGenVertexArrays(1))
     return found
+
+def sky_alpha(node: Any) -> float:
+    """How opaque `node`'s sky and ground are: ``1 - transparency``, in [0, 1]"""
+    transparency = float(getattr(node, 'transparency', 0.0) or 0.0)
+    # numpy's clip: the star import above names numpy's min and max
+    return 1.0 - float(np.clip(transparency, 0.0, 1.0))
+
+
+def clear_for(alpha: float) -> None:
+    """Clear colour, depth and stencil; to transparent black under a sky less than opaque"""
+    bits = GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT
+    if alpha >= 1.0:
+        glClear(bits)
+        return
+    previous = [float(value) for value in glGetFloatv(GL_COLOR_CLEAR_VALUE)]
+    glClearColor(0.0, 0.0, 0.0, 0.0)
+    try:
+        glClear(bits)
+    finally:
+        glClearColor(*previous)
+
+
+@contextlib.contextmanager
+def blended(alpha: float) -> Iterator[None]:
+    """Draw the block at `alpha` over the colour buffer, as X_ITE composites a
+    transparent background; nothing changes for an opaque one"""
+    if alpha >= 1.0:
+        yield
+        return
+    blending = bool(glIsEnabled(GL_BLEND))
+    functions = [int(glGetIntegerv(name)) for name in (
+        GL_BLEND_SRC_RGB, GL_BLEND_DST_RGB, GL_BLEND_SRC_ALPHA, GL_BLEND_DST_ALPHA)]
+    colour = [float(value) for value in glGetFloatv(GL_BLEND_COLOR)]
+    glEnable(GL_BLEND)
+    glBlendColor(0.0, 0.0, 0.0, alpha)
+    glBlendFuncSeparate(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA,
+                        GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA)
+    try:
+        yield
+    finally:
+        glBlendFuncSeparate(*functions)
+        glBlendColor(*colour)
+        if not blending:
+            glDisable(GL_BLEND)
+
 
 MINANGLE = pi*1.0/4
 MAXANGLE = pi*3.0/4
@@ -204,11 +258,13 @@ class _SphereBackground( object ):
                 else:
                     # see note on compile's return value/store value
                     dl = dl[1]
+                alpha = sky_alpha(self)
                 if clear:
-                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+                    clear_for(alpha)
                 if dl:
-                    if callable( dl ):
-                        dl()
+                    if callable( dl ) and alpha > 0.0:
+                        with blended(alpha):
+                            dl()
                     return 1
         return 0
 
@@ -406,11 +462,14 @@ class _SphereBackground( object ):
                     if fld.name != 'bound':
                         holder.depend(self, fld)
 
+        alpha = sky_alpha(self)
         if clear:
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+            clear_for(alpha)
 
         if shader_data is None:
             return 0
+        if alpha <= 0.0:
+            return 1
 
         vertices_vbo, colors_vbo, vertex_count = shader_data
 
@@ -468,8 +527,9 @@ class _SphereBackground( object ):
 
             # Render as triangle strips - each segment's worth
             segment_size = vertex_count // int(SEGMENTS)
-            for i in range(int(SEGMENTS)):
-                glDrawArrays(GL_TRIANGLE_STRIP, i * segment_size, segment_size)
+            with blended(alpha):
+                for i in range(int(SEGMENTS)):
+                    glDrawArrays(GL_TRIANGLE_STRIP, i * segment_size, segment_size)
 
             # Cleanup
             if locations['aPosition'] != -1:

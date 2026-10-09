@@ -12,7 +12,10 @@ nodes upload (:mod:`OpenGLContext.scenegraph.cubemaptexture`,
   BC3. Only the first mip level is read.
 - KTX 1.1 (Khronos): cube maps, volumes and single images of unsigned bytes
   (luminance, alpha, red, RG, RGB, RGBA, BGR, BGRA) or of the S3TC formats.
-  KTX 2 is not read.
+- KTX 2 (Khronos): the same, by Vulkan format (R8, R8G8, R8G8B8, B8G8R8,
+  R8G8B8A8, B8G8R8A8, UNORM or SRGB, and BC1 to BC3), uncompressed or
+  supercompressed by zlib. Basis Universal and Zstandard supercompression are
+  not read. Only the first mip level is read.
 - NRRD (teem's "nearly raw raster data"): volumes of one to four
   components, raw, gzip, bzip2 or text encoded, attached or in a detached
   data file. Samples wider than a byte are scaled from their range in the
@@ -45,8 +48,8 @@ import numpy as np
 
 __all__ = [
     'MAX_TEXELS', 'TextureImageError', 'CubeFaces', 'Volume',
-    'read_cube', 'read_volume', 'cube_from_layout', 'is_dds', 'is_ktx', 'is_nrrd',
-    'nrrd_bytes', 'read_dds', 'read_ktx', 'read_nrrd',
+    'read_cube', 'read_volume', 'cube_from_layout', 'is_dds', 'is_ktx', 'is_ktx2', 'is_nrrd',
+    'nrrd_bytes', 'read_dds', 'read_ktx', 'read_ktx2', 'read_nrrd',
 ]
 
 #: The most texels a cube map or a volume read here may hold (all faces or
@@ -345,6 +348,72 @@ def read_ktx(data: bytes) -> tuple[str, list[np.ndarray]]:
     return 'image', [np.ascontiguousarray(pixels[::-1])]
 
 
+# -- KTX 2 ---------------------------------------------------------------------
+
+_KTX2_MAGIC = b'\xabKTX 20\xbb\r\n\x1a\n'
+
+#: Each Vulkan format read here, UNORM and SRGB alike: (channels, byte order).
+_KTX2_PLAIN = {9: (1, 'L'), 15: (1, 'L'), 16: (2, 'LA'), 22: (2, 'LA'),
+               23: (3, 'RGB'), 29: (3, 'RGB'), 30: (3, 'BGR'), 36: (3, 'BGR'),
+               37: (4, 'RGBA'), 43: (4, 'RGBA'), 44: (4, 'BGRA'), 50: (4, 'BGRA')}
+#: The S3TC Vulkan formats: (bytes a block, Pillow's BCn decoder).
+_KTX2_BLOCKS = {131: (8, 1), 132: (8, 1), 133: (8, 1), 134: (8, 1),
+                135: (16, 2), 136: (16, 2), 137: (16, 3), 138: (16, 3)}
+#: The supercompression schemes, by number.
+_KTX2_SCHEMES = {1: 'Basis Universal (BasisLZ)', 2: 'Zstandard'}
+
+
+def is_ktx2(data: bytes) -> bool:
+    """Whether ``data`` starts as a KTX 2 file does"""
+    return data[:12] == _KTX2_MAGIC
+
+
+def read_ktx2(data: bytes) -> tuple[str, list[np.ndarray]]:
+    """The kind of image a KTX 2 file holds and its pixels, as :func:`read_dds` answers
+
+    A 2D image is answered top row first, as KTX 2 holds it; a volume's slices
+    are turned so their first row is t=0; cube faces are as the file holds
+    them, as KTX 1.1's are.
+    """
+    if not is_ktx2(data) or len(data) < 104:
+        raise TextureImageError('not a KTX 2 file')
+    (vk_format, _type_size, width, height, depth, layers, faces, _levels,
+     scheme) = struct.unpack_from('<9I', data, 12)
+    if scheme in _KTX2_SCHEMES or (vk_format == 0 and scheme != 3):
+        raise TextureImageError('KTX 2 %s is not read' % (
+            _KTX2_SCHEMES.get(scheme, 'Basis Universal (UASTC)'),))
+    if scheme not in (0, 3):
+        raise TextureImageError('KTX 2 supercompression %d is not read' % (scheme,))
+    if vk_format in _KTX2_BLOCKS:
+        form = _block_format(*_KTX2_BLOCKS[vk_format])
+    elif vk_format in _KTX2_PLAIN:
+        form = _order_format(*_KTX2_PLAIN[vk_format])
+    else:
+        raise TextureImageError('KTX 2 Vulkan format %d is not read' % (vk_format,))
+    height, slices = max(1, height), max(1, depth)
+    count = max(1, layers) * max(1, faces) * slices
+    _check_size(width, height, count)
+    offset, length, unpacked = struct.unpack_from('<3Q', data, 80)
+    if offset + length > len(data):
+        raise TextureImageError('a KTX 2 file cut short')
+    level = bytes(data[offset:offset + length])
+    image_size = form.size(width, height)
+    if scheme == 3:
+        try:
+            level = zlib.decompressobj().decompress(level, image_size * count)
+        except zlib.error as err:
+            raise TextureImageError('a KTX 2 level that does not inflate: %s' % (err,)) from err
+    if len(level) < image_size * count or unpacked < image_size * count:
+        raise TextureImageError('a KTX 2 file cut short')
+    images = [form.decode(level[at:at + image_size], width, height)
+              for at in range(0, image_size * count, image_size)]
+    if faces == 6:
+        return 'cube', [np.ascontiguousarray(face) for face in images[:6]]
+    if depth > 1:
+        return 'volume', [np.ascontiguousarray(np.stack(images[:slices])[:, ::-1])]
+    return 'image', [np.ascontiguousarray(images[0])]
+
+
 # -- NRRD ----------------------------------------------------------------------
 
 _NRRD_TYPES = {
@@ -522,8 +591,8 @@ def read_cube(data: bytes) -> list[np.ndarray]:
     A picture is laid out as :func:`cube_from_layout` reads. Raises
     :class:`TextureImageError` for anything else.
     """
-    if is_dds(data) or is_ktx(data):
-        kind, found = read_dds(data) if is_dds(data) else read_ktx(data)
+    if is_dds(data) or is_ktx(data) or is_ktx2(data):
+        kind, found = _read_container(data)
         if kind == 'cube':
             return found
         if kind == 'image':
@@ -541,8 +610,8 @@ def read_volume(data: bytes,
     """
     if is_nrrd(data):
         return read_nrrd(data, fetch)[1][0]
-    if is_dds(data) or is_ktx(data):
-        kind, found = read_dds(data) if is_dds(data) else read_ktx(data)
+    if is_dds(data) or is_ktx(data) or is_ktx2(data):
+        kind, found = _read_container(data)
         if kind == 'volume':
             return found[0]
         if kind == 'image':
@@ -550,6 +619,15 @@ def read_volume(data: bytes,
         raise TextureImageError('a cube map is not a volume')
     picture = _picture(data)
     return np.ascontiguousarray(picture[None, ::-1])
+
+
+def _read_container(data: bytes) -> tuple[str, list[np.ndarray]]:
+    """A DDS, KTX 1.1 or KTX 2 file's kind and pixels"""
+    if is_dds(data):
+        return read_dds(data)
+    if is_ktx2(data):
+        return read_ktx2(data)
+    return read_ktx(data)
 
 
 def _picture(data: bytes) -> np.ndarray:

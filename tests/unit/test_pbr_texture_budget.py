@@ -71,3 +71,30 @@ class TestExtTextureLoaderParse:
         mats = self._materials('ClearCoatTest')
         assert any('clearcoat' in getattr(m, 'textures', {}) for m in mats)
         assert any('clearcoatRoughness' in getattr(m, 'textures', {}) for m in mats)
+
+
+class TestDrawSlots:
+    """Which samplers a draw borrows for a Phong specular map and 2D layers"""
+
+    def test_a_phong_draw_on_sixteen_samplers_frees_three(self):
+        found = pbrpass.draw_slots((), (), phong=True, specular=False)
+        assert found == pbrpass.DrawSlots(None, (0, pbrpass.SLOT_LIGHTMAP,
+                                                 pbrpass.SLOT_METALLIC_ROUGHNESS,
+                                                 pbrpass.SLOT_BRDF))
+
+    def test_a_physical_draw_frees_only_the_lightmaps(self):
+        found = pbrpass.draw_slots(('metallicRoughness',), (), phong=False, specular=False)
+        assert found.layers == (0, pbrpass.SLOT_LIGHTMAP)
+
+    def test_a_sampled_lightmap_is_not_lent(self):
+        assert pbrpass.draw_slots(('lightmap',), (), False, False).layers == (0,)
+
+    def test_the_specular_map_takes_the_first_free_sampler(self):
+        found = pbrpass.draw_slots(('lightmap', 'metallicRoughness'), (), True, True)
+        assert found == pbrpass.DrawSlots(pbrpass.SLOT_BRDF, (0,))
+
+    def test_the_specular_map_has_its_own_sampler_with_the_extension_maps(self):
+        ext = pbrpass.ext_texture_channels(32)
+        found = pbrpass.draw_slots((), ext, True, True)
+        assert found.specular is None
+        assert found.layers[:4] == (0, 1, 2, 3)

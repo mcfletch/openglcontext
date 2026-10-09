@@ -175,3 +175,45 @@ def test_a_projector_sends_its_pictures_proportions(gl_context):
     with scene_context(scene, size=(16, 16)) as context:
         context.OnDraw(force=1)
         assert scene.getDEF('P').aspectRatio == pytest.approx(2.0)
+
+
+# -- the compatibility profile: each projector a fixed-function texture unit --
+
+def drawn_compat(body, size=64):
+    from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    scene = Loader.loads(b'<X3D version="4.0"><Scene><Background skyColor="0 0 0"/>'
+                         b'<Viewpoint position="0 0 2.4"/>' + body + b'</Scene></X3D>',
+                         'scene.x3d')
+    with scene_context(scene, size=(size, size),
+                       environment={'OPENGLCONTEXT_PROFILE': 'compatibility'}) as context:
+        context.OnDraw(force=1)
+        return drawn_image(context).astype(int)
+
+
+def test_the_compatibility_profile_casts_a_projectors_picture(gl_context_compat):
+    image = drawn_compat(projector() + SQUARE)
+    assert close(tuple(image[32, 32]), (255, 0, 0)), tuple(image[32, 32])
+    assert close(tuple(image[32, 6]), (255, 255, 255)), tuple(image[32, 6])
+
+
+def test_the_compatibility_profile_casts_by_colour_and_intensity(gl_context_compat):
+    image = drawn_compat(projector(b'intensity="0.5" color="1 1 0"') + SQUARE)
+    found = tuple(image[32, 32])
+    # mix(1, red times yellow, 0.5): full red, half green, half blue
+    assert close(found, (255, 128, 128), tolerance=10), found
+
+
+def test_the_compatibility_profile_keeps_a_projector_to_its_scope(gl_context_compat):
+    body = b'<Group>' + projector(b'global="false"') + b'</Group>' + SQUARE
+    image = drawn_compat(body)
+    assert close(tuple(image[32, 32]), (255, 255, 255)), tuple(image[32, 32])
+
+
+def test_the_cast_factor_is_x_ites_mix():
+    from OpenGLContext.passes.fixedprojectors import cast_factor  # noqa: PLC0415 kept with its use
+    picture = np.array([[[255, 0, 0, 255], [255, 0, 0, 0]]], np.uint8)
+    found = cast_factor(picture, (1.0, 1.0, 0.0), 0.5)
+    assert found.dtype == np.uint8
+    assert tuple(found[0, 0]) == (255, 128, 128)
+    assert tuple(found[0, 1]) == (255, 255, 255)
