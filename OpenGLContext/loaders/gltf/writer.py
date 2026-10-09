@@ -59,11 +59,12 @@ from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.physicalmaterial import (
-    ChannelMaterial, appearance_alpha, pbr_material, source_of,
+    NO_ATTENUATION, ChannelMaterial, appearance_alpha, pbr_material, source_of,
 )
 from OpenGLContext.scenegraph.texturemapping import (
     channel_labels, coordinate_set, transform_for, transform_matrix,
 )
+from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from vrml.x3d import nodes as x3d
 
@@ -371,8 +372,8 @@ def _kind_for(array: np.ndarray, name: str, allowed: Sequence[int]) -> str:
 # reader's too (materials.MATERIAL_EXTENSION_FIELDS).
 _MATERIAL_EXTENSIONS = MATERIAL_EXTENSION_FIELDS
 
-# attenuationDistance is +inf in glTF and 0.0 in PhysicalMaterial ("no absorption"),
-# so the sentinel must not be written as a literal distance of zero.
+# attenuationDistance is +inf in glTF; PhysicalMaterial holds that as
+# NO_ATTENUATION, and 0 also means no absorption, so neither is written.
 _SENTINEL_INFINITY = ('attenuationDistance',)
 
 # Which extension a factor belongs to, so a non-default factor pulls its whole
@@ -392,6 +393,9 @@ _MATERIAL_TEXTURE_EXTENSION = {
     'anisotropy': 'KHR_materials_anisotropy',
     'diffuseTransmission': 'KHR_materials_diffuse_transmission',
     'diffuseTransmissionColor': 'KHR_materials_diffuse_transmission',
+    'retroreflection': 'KHR_materials_retroreflection',
+    'scatterStrength': 'KHR_materials_scatter',
+    'multiscatterColor': 'KHR_materials_scatter',
 }
 
 # The textureInfo key each extension gives its channel.
@@ -645,7 +649,7 @@ class GLTFWriter:
                      double_sided: bool = False,
                      coordinates: "Optional[dict[str, tuple[int, Optional[dict]]]]" = None,
                      ) -> int:
-        """Write a `PhysicalMaterial` or `UnlitMaterial` as a glTF material
+        """Write a `PhysicalMaterial`, `SpecularGlossinessMaterial` or `UnlitMaterial` as a glTF material
 
         alpha -- the alpha mode and cutoff, which X3D puts on the Appearance
         double_sided -- True for geometry that is not `solid`
@@ -714,19 +718,35 @@ class GLTFWriter:
                 entry['name'] = name
             self._carry_extras(entry, _with_impostor(material))
             return entry
-        pbr = {
-            'baseColorFactor': [float(c) for c in material.baseColor] + [alpha],
-            'metallicFactor': float(material.metallic),
-            'roughnessFactor': float(material.roughness),
-        }
-        base_color = texture_info('baseColor')
-        if base_color is not None:
-            pbr['baseColorTexture'] = base_color
-        metallic_roughness = texture_info('metallicRoughness')
-        if metallic_roughness is not None:
-            pbr['metallicRoughnessTexture'] = metallic_roughness
-
-        entry = {'pbrMetallicRoughness': pbr}
+        glossy = isinstance(source_of(material), SpecularGlossinessMaterial)
+        if glossy:
+            # The specular/glossiness workflow, with no metallic/roughness
+            # fallback: a reader draws it as written or not at all.
+            block: dict[str, Any] = {
+                'diffuseFactor': [float(c) for c in material.diffuseColor] + [alpha],
+                'specularFactor': [float(c) for c in material.specularColor],
+                'glossinessFactor': float(material.glossiness),
+            }
+            for channel, key in (('baseColor', 'diffuseTexture'),
+                                 ('specularColor', 'specularGlossinessTexture')):
+                found = texture_info(channel)
+                if found is not None:
+                    block[key] = found
+            entry = {'extensions': {'KHR_materials_pbrSpecularGlossiness': block}}
+            self._extensions_used.add('KHR_materials_pbrSpecularGlossiness')
+        else:
+            pbr = {
+                'baseColorFactor': [float(c) for c in material.baseColor] + [alpha],
+                'metallicFactor': float(material.metallic),
+                'roughnessFactor': float(material.roughness),
+            }
+            base_color = texture_info('baseColor')
+            if base_color is not None:
+                pbr['baseColorTexture'] = base_color
+            metallic_roughness = texture_info('metallicRoughness')
+            if metallic_roughness is not None:
+                pbr['metallicRoughnessTexture'] = metallic_roughness
+            entry = {'pbrMetallicRoughness': pbr}
         if name:
             entry['name'] = name
         emissive = [float(c) for c in getattr(material, 'emissiveColor', (0, 0, 0))]
@@ -746,11 +766,11 @@ class GLTFWriter:
         if emissive_texture is not None:
             entry['emissiveTexture'] = emissive_texture
 
-        extensions = self._material_extensions(material, texture_info)
+        extensions = {} if glossy else self._material_extensions(material, texture_info)
         extensions.update(self._hook_extension(
             getattr(material, 'hook', None) or _reflector_hook(material)))
         if extensions:
-            entry['extensions'] = extensions
+            entry.setdefault('extensions', {}).update(extensions)
             self._extensions_used.update(extensions)
         self._carry_extras(entry, _with_impostor(material))
         return entry
@@ -791,7 +811,8 @@ class GLTFWriter:
             block: dict[str, Any] = {}
             for key, (attribute, default) in fields.items():
                 value = getattr(material, attribute, default)
-                if attribute in _SENTINEL_INFINITY and _close(value, 0.0):
+                if attribute in _SENTINEL_INFINITY and (_close(value, 0.0)
+                                                        or value >= NO_ATTENUATION):
                     continue
                 if not _close(value, default):
                     block[key] = _factor(value)

@@ -217,6 +217,15 @@ same geometry batch together, so a hundred tiles of one forest are still one
 draw. The set is picked and depth-sorted as a whole, and its limits are listed
 under :ref:`instancing-limits`.
 
+It is also X_ITE's X3D ``InstancedShape`` (the ``X_ITE`` component). Where
+``placements`` is empty, instance i is placed as a ``Transform`` with the
+i-th of ``translations``, ``rotations`` (axis and angle), ``scales``,
+``scaleOrientations`` and ``centers``; a shorter list gives its last entry to
+the instances past its end and an empty one its ``Transform`` default
+(``transform_placements``). An X3D document reads and writes those fields;
+``placements`` set from code takes their place and is written in an
+``OpenGLContext`` metadata set.
+
 .. rst-class:: technical
 
 The node is in ``scenegraph/instancedshape.py``. Code that walks a scenegraph

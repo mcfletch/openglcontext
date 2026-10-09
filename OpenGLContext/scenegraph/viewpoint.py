@@ -35,13 +35,18 @@ class Placing:
         """What navigation speeds are multiplied by with the viewer at `position`"""
         return 1.0
 
-    def moveTo( cls, path: Any, context: Any ) -> None:
-        """Given a node-path to a viewpoint, move context's platform there"""
+    def moveTo( cls, path: Any, context: Any, first: bool = False ) -> None:
+        """Given a node-path to a viewpoint, move context's platform there
+
+        A viewpoint whose `jump` is false leaves the camera where it is, but
+        for the `first` bound, before which there is no view of the user's to
+        keep (X_ITE alike).
+        """
         node = path[-1]
         platform = context.platform
         if not platform:
             platform = context.platform = context.getViewPlatform()
-        if node.jump:
+        if node.jump or first:
             node.placeOn( platform, path )
             if getattr( node, 'viewAll', False ):
                 framed = node.framing( context, platform )

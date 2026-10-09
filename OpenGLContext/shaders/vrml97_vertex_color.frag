@@ -74,12 +74,12 @@ void main() {
 
     float lightShadow[MAX_LIGHTS];
     resolveShadows(lightShadow);
-    vec3 finalColor = clamp(emissiveColor + ambientIntensity * matDiffuse * sceneAmbient
-                            + phongLights(normal, viewDir, vPosition, matDiffuse,
-                                          ambientIntensity * matDiffuse, specularColor,
-                                          shininess, lightShadow),
-                            0.0, 1.0);
+    vec3 finalColor = emissiveColor + ambientIntensity * matDiffuse * sceneAmbient
+                      + phongLights(normal, viewDir, vPosition, matDiffuse,
+                                    ambientIntensity * matDiffuse, specularColor,
+                                    shininess, lightShadow);
 
-    fragColor = vec4(x3dFogged(finalColor, length(toViewer(vPosition))), alpha);
+    // X3D fogs the lights' sum, and the display clamps what results (17.2.2.5)
+    fragColor = vec4(clamp(x3dFogged(finalColor, length(toViewer(vPosition))), 0.0, 1.0), alpha);
     fragObjectId = encodeObjectId(objectId);
 }

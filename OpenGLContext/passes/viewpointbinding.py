@@ -153,7 +153,7 @@ def bind_scene_viewpoint(context: Any) -> None:
     info = binding.bound(sg, nodetypes.NavigationInfo)
     kind, seconds = navigationinfo.transition_of(info)
     if platform is None or not previous or previous is _defaults.get(sg):
-        view.moveTo(view_path, context)
+        view.moveTo(view_path, context, first=True)
         _remember(view, platform)
         return
     retained = getattr(previous, 'retainUserOffsets', False) and previous in _authored
@@ -222,6 +222,11 @@ def _restore_offset(view: Any, platform: Any) -> None:
     if offset is not None:
         platform.setPosition(np.array(platform.position, 'd')[:3] + offset[0])
         platform.setOrientation(platform.quaternion * offset[1])
+
+
+def in_transition(context: Any) -> bool:
+    """Whether `context`'s camera is moving to a newly bound viewpoint"""
+    return context in _moving
 
 
 def _step_transition(context: Any, sg: Any) -> None:

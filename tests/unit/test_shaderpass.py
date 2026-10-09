@@ -137,33 +137,24 @@ class _TexNode:
 
 
 def _reference_texture_matrix(node):
-    """The original hand-written five-matrix construction, kept here as an
-    independent oracle for the collapsed texture_transform_matrix()."""
+    """X3D's equation, Tc' = -C x S x R x C x T x Tc (18.4.10), as five
+    matrices: an independent oracle for texture_transform_matrix()"""
     if node is None:
         return np.eye(3, dtype='f')
     tx, ty = node.translation
     cx, cy = node.center
-    angle = node.rotation
+    c, s = cos(node.rotation), sin(node.rotation)
     sx, sy = node.scale
-    m = np.eye(3, dtype='f')
-    if cx != 0 or cy != 0:
-        m = m @ np.array([[1, 0, cx], [0, 1, cy], [0, 0, 1]], dtype='f')
-    if angle != 0:
-        c, s = cos(angle), sin(angle)
-        m = m @ np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]], dtype='f')
-    if sx != 1 or sy != 1:
-        m = m @ np.array([[sx, 0, 0], [0, sy, 0], [0, 0, 1]], dtype='f')
-    if cx != 0 or cy != 0:
-        m = m @ np.array([[1, 0, -cx], [0, 1, -cy], [0, 0, 1]], dtype='f')
-    if tx != 0 or ty != 0:
-        m = m @ np.array([[1, 0, tx], [0, 1, ty], [0, 0, 1]], dtype='f')
-    return m
+    minus_c = np.array([[1, 0, -cx], [0, 1, -cy], [0, 0, 1]], dtype='f')
+    scale = np.array([[sx, 0, 0], [0, sy, 0], [0, 0, 1]], dtype='f')
+    rotate = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]], dtype='f')
+    plus_c = np.array([[1, 0, cx], [0, 1, cy], [0, 0, 1]], dtype='f')
+    translate = np.array([[1, 0, tx], [0, 1, ty], [0, 0, 1]], dtype='f')
+    return minus_c @ scale @ rotate @ plus_c @ translate
 
 
 class TestTextureTransformMatrix(unittest.TestCase):
-    """3m: the collapsed texture_transform_matrix() builder must be identical to
-    the original five hand-written matrices it replaced, and it is now a pure
-    function callable without a GL context (the old tests could not call it)."""
+    """texture_transform_matrix() is X3D's equation, with no GL context"""
 
     def test_identity_for_none(self) -> None:
         np.testing.assert_array_almost_equal(
@@ -184,12 +175,19 @@ class TestTextureTransformMatrix(unittest.TestCase):
                 texture_transform_matrix(node), _reference_texture_matrix(node),
                 err_msg=f'mismatch for {vars(node)}')
 
-    def test_center_pivots_rotation(self) -> None:
-        """A rotation about a non-zero center leaves that center fixed in UV."""
-        node = _TexNode(center=(0.5, 0.5), rotation=pi / 2)
-        m = texture_transform_matrix(node)
-        fixed = m @ np.array([0.5, 0.5, 1.0], dtype='f')
-        np.testing.assert_array_almost_equal(fixed[:2], [0.5, 0.5])
+    def test_scale_follows_rotation(self) -> None:
+        """The coordinate is rotated, then scaled, as X_ITE reads the
+        equation: (1, 0) turned a quarter is (0, 1), which a scale of
+        (2, 1) leaves alone"""
+        node = _TexNode(rotation=pi / 2, scale=(2.0, 1.0))
+        moved = texture_transform_matrix(node) @ np.array([1.0, 0.0, 1.0], dtype='f')
+        np.testing.assert_array_almost_equal(moved[:2], [0.0, 1.0])
+
+    def test_rotation_turns_about_the_negated_center(self) -> None:
+        """-C x R x C fixes the coordinate -center"""
+        node = _TexNode(center=(0.25, 0.5), rotation=0.7)
+        fixed = texture_transform_matrix(node) @ np.array([-0.25, -0.5, 1.0], dtype='f')
+        np.testing.assert_array_almost_equal(fixed[:2], [-0.25, -0.5])
 
 
 class TestSetUniformCollapse(unittest.TestCase):

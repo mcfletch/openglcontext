@@ -24,7 +24,7 @@ from OpenGL.GL import (
 )
 from OpenGLContext import renderoptions
 from OpenGLContext.scenegraph import vertexsemantics
-from OpenGLContext.scenegraph import coordinatedeform, drawproperties
+from OpenGLContext.scenegraph import coordinatedeform, drawproperties, rendermodes
 from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
 from OpenGLContext.scenegraph.texturemapping import texture_mapping
 
@@ -118,11 +118,13 @@ def styled(appearance: Any) -> bool:
 def drawn_alone(appearance: Any) -> bool:
     """Whether a shape of `appearance` is drawn by itself rather than in an instanced group
 
-    A styled one (:func:`styled`), and one bringing a program of its own (an
+    A styled one (:func:`styled`), one bringing a program of its own (an
     X3D shader, the engine's `Shader`): the instanced draw is the pass's
-    program.
+    program; and one with a BlendMode or DepthMode, whose state is set
+    around its own draw (:mod:`~OpenGLContext.scenegraph.rendermodes`).
     """
-    return styled(appearance) or bool(getattr(appearance, 'bringsProgram', False))
+    return (styled(appearance) or bool(getattr(appearance, 'bringsProgram', False))
+            or rendermodes.has_modes(appearance))
 
 
 def geometry_instance_key(shape: Any) -> Optional[tuple]:
@@ -144,6 +146,8 @@ def geometry_instance_key(shape: Any) -> Optional[tuple]:
     geometry = getattr(shape, 'geometry', None)
     if geometry is None or coordinatedeform.deformer_for(geometry) is not None:
         return None
+    if getattr(geometry, 'fogCoord', None):
+        return None     # its fog depths are set for its own draw
     appearance = getattr(shape, 'appearance', None)
     if drawn_alone(appearance):
         return None
@@ -213,6 +217,8 @@ def geometry_texture_key(shape: Any) -> Optional[tuple]:
     geometry = getattr(shape, 'geometry', None)
     if geometry is None or coordinatedeform.deformer_for(geometry) is not None:
         return None
+    if getattr(geometry, 'fogCoord', None):
+        return None     # its fog depths are set for its own draw
     appearance = getattr(shape, 'appearance', None)
     if drawn_alone(appearance):
         return None
@@ -428,8 +434,8 @@ def group_material_table(group: Any) -> tuple[list, list]:
 
     Returns (materials, indices): ``materials`` lists the group's distinct
     materials, each member's being what
-    :func:`~OpenGLContext.scenegraph.physicalmaterial.pbr_material` answers for its
-    appearance, in first-seen order; ``indices[i]`` is member i's slot in that
+    :func:`~OpenGLContext.passes.pbrpass.drawn_material` answers for its
+    appearance and geometry, in first-seen order; ``indices[i]`` is member i's slot in that
     list. This is what the material-array UBO is packed from and what the
     per-instance material-index attribute carries.
 
@@ -441,12 +447,13 @@ def group_material_table(group: Any) -> tuple[list, list]:
     are one slot -- and the group key has already settled that a group's
     textures agree.
     """
-    from OpenGLContext.scenegraph.physicalmaterial import pbr_material
+    from OpenGLContext.passes.pbrpass import drawn_material
     materials: list = []
     slot: dict = {}
     indices: list = []
     for rec in group.members:
-        material = pbr_material(getattr(rec[5], 'appearance', None))
+        material = drawn_material(getattr(rec[5], 'appearance', None),
+                                  getattr(rec[5], 'geometry', None))
         k = _material_content_key(material)
         if k not in slot:
             slot[k] = len(materials)

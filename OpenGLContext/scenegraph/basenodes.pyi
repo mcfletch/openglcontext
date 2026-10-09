@@ -39,6 +39,7 @@ from OpenGLContext.scenegraph.extrusions import PolyCone as PolyCone
 from OpenGLContext.scenegraph.extrusions import PolyCylinder as PolyCylinder
 from OpenGLContext.scenegraph.fog import Fog as Fog
 from OpenGLContext.scenegraph.fog import LocalFog as LocalFog
+from OpenGLContext.scenegraph.fogcoordinate import FogCoordinate as FogCoordinate
 from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats as GaussianSplats
 from OpenGLContext.scenegraph.gear import Gear as Gear
 from OpenGLContext.scenegraph.geometry2d import Arc2D as Arc2D
@@ -72,6 +73,7 @@ from OpenGLContext.scenegraph.indexedlineset import IndexedLineSet as IndexedLin
 from OpenGLContext.scenegraph.indexedpolygons import IndexedPolygons as IndexedPolygons
 from OpenGLContext.scenegraph.inline import Inline as Inline
 from OpenGLContext.scenegraph.inlinegeometry import InlineGeometry as InlineGeometry
+from OpenGLContext.scenegraph.instancedshape import InstancedShape as InstancedShape
 from OpenGLContext.scenegraph.interpolators import ColorInterpolator as ColorInterpolator
 from OpenGLContext.scenegraph.interpolators import CoordinateInterpolator as CoordinateInterpolator
 from OpenGLContext.scenegraph.interpolators import NormalInterpolator as NormalInterpolator
@@ -90,6 +92,19 @@ from OpenGLContext.scenegraph.light import SpotLight as SpotLight
 from OpenGLContext.scenegraph.lod import LOD as LOD
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD as ScreenCoverageLOD
 from OpenGLContext.scenegraph.material import Material as Material
+from OpenGLContext.scenegraph.materialextensions import AnisotropyMaterialExtension as AnisotropyMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import ClearcoatMaterialExtension as ClearcoatMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import DiffuseTransmissionMaterialExtension as DiffuseTransmissionMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import DispersionMaterialExtension as DispersionMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import EmissiveStrengthMaterialExtension as EmissiveStrengthMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import IORMaterialExtension as IORMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import IridescenceMaterialExtension as IridescenceMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import RetroreflectionMaterialExtension as RetroreflectionMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import SheenMaterialExtension as SheenMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import SpecularMaterialExtension as SpecularMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import TransmissionMaterialExtension as TransmissionMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import VolumeMaterialExtension as VolumeMaterialExtension
+from OpenGLContext.scenegraph.materialextensions import VolumeScatterMaterialExtension as VolumeScatterMaterialExtension
 from OpenGLContext.scenegraph.meshgeometry import ElevationGrid as ElevationGrid
 from OpenGLContext.scenegraph.meshgeometry import IndexedQuadSet as IndexedQuadSet
 from OpenGLContext.scenegraph.meshgeometry import IndexedTriangleFanSet as IndexedTriangleFanSet
@@ -129,6 +144,8 @@ from OpenGLContext.scenegraph.quadrics import Cylinder as Cylinder
 from OpenGLContext.scenegraph.quadrics import Sphere as Sphere
 from OpenGLContext.scenegraph.reflector import PlanarReflector as PlanarReflector
 from OpenGLContext.scenegraph.renderedtexture import RenderedTexture as RenderedTexture
+from OpenGLContext.scenegraph.rendermodes import BlendMode as BlendMode
+from OpenGLContext.scenegraph.rendermodes import DepthMode as DepthMode
 from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
 from OpenGLContext.scenegraph.scenegraph import X3DScene as X3DScene
 class FloatUniform1f(_FloatUniform): ...
@@ -161,6 +178,7 @@ from OpenGLContext.scenegraph.shaders import TextureBufferUniform as TextureBuff
 from OpenGLContext.scenegraph.shaders import TextureUniform as TextureUniform
 from OpenGLContext.scenegraph.shape import Shape as Shape
 from OpenGLContext.scenegraph.simplebackground import SimpleBackground as SimpleBackground
+from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial as SpecularGlossinessMaterial
 from OpenGLContext.scenegraph.spherebackground import SphereBackground as SphereBackground
 from OpenGLContext.scenegraph.switch import Switch as Switch
 from OpenGLContext.scenegraph.teapot import Teapot as Teapot
@@ -171,6 +189,7 @@ from OpenGLContext.scenegraph.text.fontstyle3d import ScreenFontStyle as ScreenF
 from OpenGLContext.scenegraph.text.text import Text as Text
 from OpenGLContext.scenegraph.texture3d import ComposedTexture3D as ComposedTexture3D
 from OpenGLContext.scenegraph.texture3d import ImageTexture3D as ImageTexture3D
+from OpenGLContext.scenegraph.texture3d import ImageTextureAtlas as ImageTextureAtlas
 from OpenGLContext.scenegraph.texture3d import PixelTexture3D as PixelTexture3D
 from OpenGLContext.scenegraph.texturebackground import TextureBackground as TextureBackground
 from OpenGLContext.scenegraph.textureprojector import TextureProjector as TextureProjector
@@ -346,6 +365,7 @@ __all__ = [
     'AcousticProperties',
     'Analyser',
     'Anchor',
+    'AnisotropyMaterialExtension',
     'Appearance',
     'Arc2D',
     'ArcClose2D',
@@ -357,6 +377,7 @@ __all__ = [
     'BallJoint',
     'Billboard',
     'BiquadFilter',
+    'BlendMode',
     'BlendedVolumeStyle',
     'BooleanFilter',
     'BooleanSequencer',
@@ -375,6 +396,7 @@ __all__ = [
     'ChannelSelector',
     'ChannelSplitter',
     'Circle2D',
+    'ClearcoatMaterialExtension',
     'ClipPlane',
     'CollidableOffset',
     'CollidableShape',
@@ -407,13 +429,17 @@ __all__ = [
     'Cylinder',
     'CylinderSensor',
     'Delay',
+    'DepthMode',
+    'DiffuseTransmissionMaterialExtension',
     'DirectionalLight',
     'Disk2D',
+    'DispersionMaterialExtension',
     'DoubleAxisHingeJoint',
     'DynamicsCompressor',
     'EaseInEaseOut',
     'EdgeEnhancementVolumeStyle',
     'ElevationGrid',
+    'EmissiveStrengthMaterialExtension',
     'EnvironmentLight',
     'EspduTransform',
     'ExplosionEmitter',
@@ -434,6 +460,7 @@ __all__ = [
     'FloatUniformm4x3',
     'FloatVertexAttribute',
     'Fog',
+    'FogCoordinate',
     'FontLibrary',
     'FontStyle',
     'FontStyle3D',
@@ -464,12 +491,14 @@ __all__ = [
     'HAnimPose',
     'HAnimSegment',
     'HAnimSite',
+    'IORMaterialExtension',
     'IS',
     'ImageBasedLight',
     'ImageCubeMapTexture',
     'ImageDataTexture',
     'ImageTexture',
     'ImageTexture3D',
+    'ImageTextureAtlas',
     'IndexedFaceSet',
     'IndexedLineSet',
     'IndexedPolygons',
@@ -479,12 +508,14 @@ __all__ = [
     'IndexedTriangleStripSet',
     'Inline',
     'InlineGeometry',
+    'InstancedShape',
     'IntUniform1i',
     'IntUniform2i',
     'IntUniform3i',
     'IntUniform4i',
     'IntegerSequencer',
     'IntegerTrigger',
+    'IridescenceMaterialExtension',
     'IsoSurfaceVolumeData',
     'KeySensor',
     'LOD',
@@ -573,6 +604,7 @@ __all__ = [
     'ROUTE',
     'Rectangle2D',
     'RenderedTexture',
+    'RetroreflectionMaterialExtension',
     'RigidBody',
     'RigidBodyCollection',
     'ScalarChaser',
@@ -592,12 +624,15 @@ __all__ = [
     'ShaderProgram',
     'ShaderSlice',
     'Shape',
+    'SheenMaterialExtension',
     'SilhouetteEnhancementVolumeStyle',
     'SimpleBackground',
     'SingleAxisHingeJoint',
     'SliderJoint',
     'Sound',
     'SpatialSound',
+    'SpecularGlossinessMaterial',
+    'SpecularMaterialExtension',
     'Sphere',
     'SphereBackground',
     'SphereSensor',
@@ -636,6 +671,7 @@ __all__ = [
     'TouchSensor',
     'Transform',
     'TransformSensor',
+    'TransmissionMaterialExtension',
     'TriangleFanSet',
     'TriangleSet',
     'TriangleSet2D',
@@ -650,7 +686,9 @@ __all__ = [
     'VisibilitySensor',
     'VolumeData',
     'VolumeEmitter',
+    'VolumeMaterialExtension',
     'VolumePickSensor',
+    'VolumeScatterMaterialExtension',
     'WaveShaper',
     'WindPhysicsModel',
     'WorldInfo',

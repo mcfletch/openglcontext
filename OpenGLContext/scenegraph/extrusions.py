@@ -409,14 +409,34 @@ class Extrusion(SweptGeometry, x3d.Extrusion):
 
     def build(self) -> Any:
         from opengl_extrusions import vrml97_extrusion
+        spine = np.asarray(self.spine, dtype='d')
         return vrml97_extrusion(
             cross_section=np.asarray(self.crossSection, dtype='d'),
-            spine=np.asarray(self.spine, dtype='d'),
-            scale=np.asarray(self.scale, dtype='d'),
-            orientation=np.asarray(self.orientation, dtype='d'),
+            spine=spine,
+            scale=_by_spine_point(self.scale, spine, 2),
+            orientation=_by_spine_point(self.orientation, spine, 4),
             begin_cap=bool(self.beginCap), end_cap=bool(self.endCap),
             ccw=bool(self.ccw), crease_angle=float(self.creaseAngle),
             texture=self._texture_mode())
+
+
+def _by_spine_point(value: Any, spine: np.ndarray, width: int) -> np.ndarray:
+    """An Extrusion's `scale` or `orientation`, one entry per distinct spine point
+
+    Spine point i takes entry ``min(i, count - 1)``, as X_ITE reads them, so
+    a list shorter than the spine carries its last entry on and a longer one
+    is cut; one entry, or none, is left for the library to apply throughout.
+    A closed spine's repeated last point is its first, and has no entry of
+    its own.
+    """
+    values = np.asarray(value, dtype='d').reshape(-1, width)
+    if len(values) <= 1:
+        return values
+    steps = len(spine)
+    if steps > 2 and np.array_equal(spine[0], spine[-1]):
+        steps -= 1
+    chosen: np.ndarray = values[np.minimum(np.arange(steps), len(values) - 1)]
+    return chosen
 
 
 def _contour(value: Any) -> np.ndarray:

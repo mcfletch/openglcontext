@@ -239,7 +239,7 @@ def prepare_image_loading() -> None:
     Image.init()
 
 
-def _decode_picture(file: Any, baseURL: str) -> Any:
+def decode_picture(file: Any, baseURL: str) -> Any:
     """The picture in `file`, decoded now
 
     Decoded here rather than by whoever first looks at the pixels: PIL reads
@@ -372,7 +372,7 @@ class ImageTexture(URLRead, _Texture, basenodes.ImageTexture):
             if contexts, iterate through the list calling
             context.triggerRedraw(1)
         """
-        found = load_first(self, url, _decode_picture)
+        found = load_first(self, url, decode_picture)
         if found is None:
             loadsensor.set_load_state(self, loadsensor.FAILED)
             log.warning(
