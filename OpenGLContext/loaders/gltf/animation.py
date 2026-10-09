@@ -557,6 +557,47 @@ def _sampler_values(g: "pygltflib.GLTF2", samp: "pygltflib.AnimationSampler",
     return np.ascontiguousarray(raw, dtype='d').reshape(divisor, total // divisor)
 
 
+def own_texture_transform(appearance: Any, channel: str) -> Optional[Any]:
+    """The ``TextureTransformMatrix3D`` that moves ``channel``'s texture and
+    no other, or None where the channel has no texture or another kind of
+    transform.
+
+    A texture with no transform is given one, of the identity, through the
+    coordinate set it reads; one sharing a transform with another channel (the
+    loader makes one per distinct transform) is given a copy of its own. Each
+    is a new entry of the appearance's ``MultiTextureTransform`` under a new
+    mapping label, which the channel's ``...TextureMapping`` field is set to.
+    """
+    material = getattr(appearance, 'material', None)
+    labels = channel_labels(material)
+    label = labels.get(channel)
+    fields = getattr(material, 'CHANNELS', None)
+    if label is None or not fields or channel not in fields:
+        return None
+    transform = transform_for(appearance, label) if label else None
+    if transform is not None and not isinstance(transform, x3d.TextureTransformMatrix3D):
+        return None
+    shared = any(other != channel and found == label for other, found in labels.items())
+    if transform is not None and not shared:
+        return transform
+    current = getattr(appearance, 'textureTransform', None)
+    if current and not isinstance(current, x3d.MultiTextureTransform):
+        return None
+    entries = list(current.textureTransform) if current else []
+    taken = {str(getattr(entry, 'mapping', '')) for entry in entries}
+    coordinates = label.split(':')[0] or 'TEXCOORD_0'
+    index = len(entries)
+    while '%s:%d' % (coordinates, index) in taken:
+        index += 1
+    mapping = '%s:%d' % (coordinates, index)
+    matrix = (np.array(transform.matrix, 'f') if transform is not None
+              else khr_transform_matrix())
+    own = x3d.TextureTransformMatrix3D(mapping=mapping, matrix=matrix)
+    appearance.textureTransform = x3d.MultiTextureTransform(textureTransform=entries + [own])
+    setattr(material, fields[channel] + 'Mapping', mapping)
+    return own
+
+
 #: Each glTF textureInfo key's channel.
 _TEXTURE_KEY_CHANNEL = {key: channel for channel, key in GLTF_TEXTURE_KEYS.items()}
 
@@ -565,17 +606,16 @@ def _texture_transform_setter(appearance: Any, texture_key: str,
                               component: str) -> "Optional[Callable[..., None]]":
     """A setter for one component of a texture's KHR_texture_transform, or None
 
-    The transform is the ``TextureTransformMatrix3D`` the loader made for the
-    channel's mapping label. Setting one component keeps the others, which
-    are read back from the matrix.
+    The transform is the channel's own ``TextureTransformMatrix3D``
+    (:func:`own_texture_transform`), made where the texture declared none.
+    Setting one component keeps the others, which are read back from the
+    matrix.
     """
     channel = _TEXTURE_KEY_CHANNEL.get(texture_key)
-    material = getattr(appearance, 'material', None)
-    label = channel_labels(material).get(channel) if channel else None
-    if label is None or component not in ('offset', 'rotation', 'scale'):
+    if channel is None or component not in ('offset', 'rotation', 'scale'):
         return None
-    transform = transform_for(appearance, label)
-    if not isinstance(transform, x3d.TextureTransformMatrix3D):
+    transform = own_texture_transform(appearance, channel)
+    if transform is None:
         return None
 
     def set_transform(value: Any) -> None:
@@ -611,9 +651,15 @@ _LIGHT_POINTERS: dict[tuple[str, ...], str] = {('color',): 'color', ('intensity'
                    ('range',): 'radius', ('spot', 'innerConeAngle'): 'beamWidth',
                    ('spot', 'outerConeAngle'): 'cutOffAngle'}
 
-#: Camera properties -> the Viewpoint's field or the value beside it.
-_CAMERA_POINTERS: dict[tuple[str, ...], str] = {('perspective', 'yfov'): 'fieldOfView',
-                    ('perspective', 'znear'): 'near', ('perspective', 'zfar'): 'far'}
+#: Camera properties -> the viewpoint's field or the value beside it.
+_CAMERA_POINTERS: dict[tuple[str, ...], str] = {
+    ('perspective', 'yfov'): 'fieldOfView', ('perspective', 'znear'): 'near',
+    ('perspective', 'zfar'): 'far', ('perspective', 'aspectRatio'): 'aspectRatio',
+    ('orthographic', 'znear'): 'nearDistance', ('orthographic', 'zfar'): 'farDistance'}
+
+#: An orthographic camera's magnifications -> their place in the window
+#: ``(-xmag, -ymag, xmag, ymag)``.
+_MAGNIFICATIONS: dict[tuple[str, ...], int] = {('orthographic', 'xmag'): 0, ('orthographic', 'ymag'): 1}
 
 _NODE_TRS = ('translation', 'rotation', 'scale')
 _VISIBILITY = ('extensions', 'KHR_node_visibility', 'visible')
@@ -639,13 +685,15 @@ class PointerTargets:
 
     The scene builder fills it as it builds: each node's transform and morph
     setters, each punctual light's nodes (one per node that carries it), each
-    camera's viewpoints, each material's appearance. :meth:`setter` resolves a
+    camera's viewpoints, each material's appearance, and the document's
+    image-based lights. :meth:`setter` resolves a
     pointer against it.
     """
 
     def __init__(self, g: "pygltflib.GLTF2", node_transforms: Optional[dict] = None,
                  node_morph: Optional[dict] = None, appearances: Optional[dict] = None,
-                 lights: Optional[dict] = None, viewpoints: Optional[dict] = None) -> None:
+                 lights: Optional[dict] = None, viewpoints: Optional[dict] = None,
+                 image_lights: Any = None) -> None:
         self.g = g
         self.node_transforms = node_transforms if node_transforms is not None else {}
         self.node_morph = node_morph if node_morph is not None else {}
@@ -654,6 +702,9 @@ class PointerTargets:
         self.lights: dict[int, list] = lights if lights is not None else {}
         #: camera index -> the Viewpoints built for it
         self.viewpoints: dict[int, list] = viewpoints if viewpoints is not None else {}
+        #: The document's EXT_lights_image_based lights, read by index
+        #: (``imagebased.ImageLights``), or None
+        self.image_lights = image_lights
 
     def setter(self, pointer: str) -> Optional[Callable[[Any], None]]:
         """A ``setter(value)`` for the property ``pointer`` names, or None where
@@ -668,6 +719,9 @@ class PointerTargets:
                 return self._camera(int(tokens[1]), tuple(tokens[2:]))
             if tokens[:3] == ['extensions', 'KHR_lights_punctual', 'lights'] and len(tokens) >= 5:
                 return self._light(int(tokens[3]), tuple(tokens[4:]))
+            if tokens[:3] == ['extensions', 'EXT_lights_image_based', 'lights'] \
+                    and len(tokens) == 5:
+                return self._image_light(int(tokens[3]), tokens[4])
         except (ValueError, IndexError, TypeError, AttributeError):
             return None
         return None
@@ -769,9 +823,26 @@ class PointerTargets:
                 assign(value)
         return set_lights
 
+    def _image_light(self, index: int, name: str) -> Optional[Callable[[Any], None]]:
+        light = self.image_lights.light(index) if self.image_lights is not None else None
+        if light is None or name not in ('intensity', 'rotation'):
+            return None
+        return _assign(light, name)
+
     def _camera(self, index: int, path: tuple[str, ...]) -> Optional[Callable[[Any], None]]:
-        field = _CAMERA_POINTERS.get(path)
         viewpoints = self.viewpoints.get(index, [])
+        axis = _MAGNIFICATIONS.get(path)
+        if axis is not None and viewpoints:
+            def set_magnification(value: Any, viewpoints: list = viewpoints,
+                                  axis: int = axis) -> None:
+                magnification = float(_values(value)[0])
+                for viewpoint in viewpoints:
+                    window = [float(v) for v in viewpoint.fieldOfView]
+                    if len(window) >= 4:
+                        window[axis], window[axis + 2] = -magnification, magnification
+                        viewpoint.fieldOfView = window
+            return set_magnification
+        field = _CAMERA_POINTERS.get(path)
         if field is None or not viewpoints:
             return None
 
@@ -782,9 +853,13 @@ class PointerTargets:
 
 
 def pointer_is_rotation(pointer: str) -> bool:
-    """Whether a pointer names a node's rotation, which is interpolated as a quaternion."""
+    """Whether a pointer names a quaternion, which is interpolated as one: a
+    node's rotation or an image-based light's."""
     tokens = [token for token in pointer.split('/') if token]
-    return len(tokens) == 3 and tokens[0] == 'nodes' and tokens[2] == 'rotation'
+    if len(tokens) == 3 and tokens[0] == 'nodes':
+        return tokens[2] == 'rotation'
+    return (len(tokens) == 5 and tokens[:3] == ['extensions', 'EXT_lights_image_based', 'lights']
+            and tokens[4] == 'rotation')
 
 
 def _pointer_node_trs(pointer: Any) -> Optional[int]:

@@ -207,6 +207,56 @@ class TestPointerSetter:
             setter(value)
             assert check(khr_transform_params(transform.matrix)), comp
 
+    def _untransformed(self, mapping='', shared=False):
+        """An appearance whose base colour map has no transform (or, with
+        ``shared``, the one its emissive map has too)."""
+        from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+        from OpenGLContext.loaders.gltf.materials import khr_transform_matrix  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.appearance import Appearance  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.imagedata import ImageDataTexture  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial  # noqa: PLC0415 kept with its use
+        material = PhysicalMaterial(baseTexture=ImageDataTexture(), baseTextureMapping=mapping,
+                                    emissiveTexture=ImageDataTexture(),
+                                    emissiveTextureMapping=mapping)
+        appearance = Appearance(material=material)
+        if shared:
+            appearance.textureTransform = x3d.MultiTextureTransform(textureTransform=[
+                x3d.TextureTransformMatrix3D(mapping=mapping,
+                                             matrix=khr_transform_matrix(scale=(2.0, 2.0)))])
+        return appearance, material
+
+    @pytest.mark.parametrize('mapping, coordinates', [('', 'TEXCOORD_0'),
+                                                      ('TEXCOORD_1', 'TEXCOORD_1')])
+    def test_a_texture_without_a_transform_is_given_one(self, mapping, coordinates):
+        from OpenGLContext.loaders.gltf.materials import khr_transform_params  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.texturemapping import transform_for  # noqa: PLC0415 kept with its use
+        appearance, material = self._untransformed(mapping)
+        ptr = ('/materials/0/pbrMetallicRoughness/baseColorTexture/extensions/'
+               'KHR_texture_transform/offset')
+        self._targets(appearances={0: appearance}).setter(ptr)([0.5, 0.25])
+        label = material.baseTextureMapping
+        assert label.startswith(coordinates + ':')
+        assert khr_transform_params(transform_for(appearance, label).matrix)['offset'] == \
+            pytest.approx([0.5, 0.25])
+        assert material.emissiveTextureMapping == mapping
+        assert transform_for(appearance, mapping) is None
+
+    def test_a_shared_transform_is_split_for_the_animated_texture(self):
+        from OpenGLContext.loaders.gltf.materials import khr_transform_params  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.texturemapping import transform_for  # noqa: PLC0415 kept with its use
+        appearance, material = self._untransformed('TEXCOORD_0:0', shared=True)
+        ptr = ('/materials/0/pbrMetallicRoughness/baseColorTexture/extensions/'
+               'KHR_texture_transform/offset')
+        self._targets(appearances={0: appearance}).setter(ptr)([0.5, 0.25])
+        moved = khr_transform_params(
+            transform_for(appearance, material.baseTextureMapping).matrix)
+        kept = khr_transform_params(
+            transform_for(appearance, material.emissiveTextureMapping).matrix)
+        assert material.baseTextureMapping != material.emissiveTextureMapping
+        assert moved['offset'] == pytest.approx([0.5, 0.25])
+        assert moved['scale'] == pytest.approx([2.0, 2.0])
+        assert kept['offset'] == pytest.approx([0.0, 0.0])
+
     def test_a_texture_without_a_transform_cannot_be_animated(self):
         appearance, _transform = self._transformed()
         ptr = '/materials/0/normalTexture/extensions/KHR_texture_transform/offset'
