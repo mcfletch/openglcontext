@@ -368,7 +368,10 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     VRML97 extension's nodes unchanged; `oglc-x3d-nurbs`. Open: the
     pre-standard `Basic/NURBS/originals` (controlPoint as MFVec3f) draw nothing
   - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
-    (DDS, KTX 1.1, crosses and strips: `loaders.textureimages`),
+    (DDS, KTX 1.1, KTX 2 of 8-bit and BC1-3 formats with zlib or no
+    supercompression (2026-10-09 x3d-xfields; X_ITE also transcodes Basis
+    Universal, which needs a transcoder this engine does not carry; X_ITE
+    reads no HDR cube map), crosses and strips: `loaders.textureimages`),
     `GeneratedCubeMapTexture` (drawn before the views from the shape's
     origin, update NONE drawn once); sampled with the world reflection
     vector; compatibility profile through reflection-map texgen

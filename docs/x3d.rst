@@ -437,8 +437,10 @@ all six have images. ``ImageCubeMapTexture`` reads a DDS cube map
 picture of the six faces: a horizontal cross (4:3, -X +Z +X -Z across the
 middle, +Y over +Z and -Y under it), a vertical cross (3:4, -Z under -Y and
 upside down), a strip of six in GL's order across or down, or 3x2
-(``OpenGLContext.loaders.textureimages``). KTX 2 and HDR cube maps are not
-read.
+(``OpenGLContext.loaders.textureimages``). It reads a KTX 2 cube map too, of
+8-bit Vulkan formats (R8 to R8G8B8A8 and B8G8R8 to B8G8R8A8, UNORM or SRGB)
+or BC1 to BC3, uncompressed or zlib-supercompressed; Basis Universal and
+Zstandard KTX 2 files, and HDR cube maps, are not read.
 
 ``GeneratedCubeMapTexture`` is the scene drawn into a cube of ``size``
 texels a side from the local origin of the shape wearing it, along the world
@@ -460,7 +462,7 @@ are the engine's, carried in a document in an ``OpenGLContext`` metadata
 set. Neither is drawn in the compatibility profile. A RenderedTexture is an
 ordinary 2D texture once drawn, and goes wherever one does.
 
-``ImageTexture3D`` reads a DDS or KTX volume, an NRRD volume of one to four
+``ImageTexture3D`` reads a DDS, KTX 1.1 or KTX 2 volume, an NRRD volume of one to four
 components (raw, gzip, bzip2 or text, with a detached data file read beside
 its header; samples wider than a byte scaled from their range to 0..255), or
 one picture, a volume a slice deep, and sends ``width``, ``height``,

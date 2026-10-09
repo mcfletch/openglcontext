@@ -276,3 +276,59 @@ def test_only_bytes_of_one_to_four_channels_are_written():
         textureimages.nrrd_bytes(np.zeros((2, 2, 2, 5), np.uint8))
     with pytest.raises(ValueError):
         textureimages.nrrd_bytes(np.zeros((2, 2, 2), np.float32))
+
+
+def ktx2(width, height, level, *, vk_format=37, faces=1, depth=0, scheme=0, uncompressed=None):
+    """A KTX 2 file of one level: the identifier, the header, the index and ``level``"""
+    level_at = 80 + 24
+    header = struct.pack('<9I', vk_format, 1, width, height, depth, 0, faces, 1, scheme)
+    index = struct.pack('<4I2Q', 0, 0, 0, 0, 0, 0)
+    levels = struct.pack('<3Q', level_at, len(level),
+                         len(level) if uncompressed is None else uncompressed)
+    return b'\xabKTX 20\xbb\r\n\x1a\n' + header + index + levels + level
+
+
+def rgba_faces(colours, side=2):
+    return b''.join(bytes(colour + (255,)) * (side * side) for colour in colours)
+
+
+def test_a_ktx2_cube_map_gives_six_faces():
+    found = textureimages.read_cube(ktx2(2, 2, rgba_faces(FACE_COLOURS), faces=6))
+    assert len(found) == 6
+    assert [tuple(face[0, 0, :3]) for face in found] == FACE_COLOURS
+
+
+def test_a_ktx2_cube_map_squeezed_by_zlib():
+    import zlib  # noqa: PLC0415 kept with its use
+    raw = rgba_faces(FACE_COLOURS)
+    found = textureimages.read_cube(ktx2(2, 2, zlib.compress(raw), faces=6, scheme=3,
+                                         uncompressed=len(raw)))
+    assert [tuple(face[1, 1, :3]) for face in found] == FACE_COLOURS
+
+
+def test_a_ktx2_of_bgr_bytes():
+    found = textureimages.read_cube(ktx2(1, 1, b''.join(
+        bytes(colour[::-1]) for colour in FACE_COLOURS), vk_format=36, faces=6))
+    assert tuple(found[0][0, 0]) == FACE_COLOURS[0]
+
+
+def test_a_ktx2_volume():
+    slices = rgba_faces(FACE_COLOURS[:3], side=2)
+    volume = textureimages.read_volume(ktx2(2, 2, slices, depth=3))
+    assert volume.shape == (3, 2, 2, 4)
+    assert tuple(volume[2, 0, 0, :3]) == FACE_COLOURS[2]
+
+
+@pytest.mark.parametrize('kwargs, message', [
+    (dict(vk_format=0, scheme=1), 'Basis'),
+    (dict(scheme=2), 'Zstandard'),
+    (dict(vk_format=97), 'format'),
+])
+def test_a_ktx2_the_reader_does_not_decode_is_refused(kwargs, message):
+    with pytest.raises(TextureImageError, match=message):
+        textureimages.read_cube(ktx2(1, 1, b'\0' * 24, faces=6, **kwargs))
+
+
+def test_a_ktx2_cut_short_is_refused():
+    with pytest.raises(TextureImageError):
+        textureimages.read_cube(ktx2(2, 2, b'\0' * 10, faces=6))
