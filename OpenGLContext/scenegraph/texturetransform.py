@@ -22,20 +22,25 @@ class TextureTransform(basenodes.TextureTransform):
     """
     def transform( self, mode: Any = None, translate: int = 1,
                    scale: int = 1, rotate: int = 1 ) -> None:
-        ''' Perform the actual alteration of the current matrix '''
-        if translate and any(self.translation):
-            x,y = self.translation
-            glTranslatef(x,y,0)
-        if (rotate or scale) and any(self.center):
+        """Multiply the current matrix by X3D's Tc' = -C x S x R x C x T x Tc
+
+        The matrix is the one :func:`texturemapping.texture_transform_matrix`
+        gives the shader passes.
+        """
+        centred = (rotate or scale) and any(self.center)
+        if centred:
             cx,cy = self.center
-            glTranslatef(cx,cy,0)
-        if rotate and self.rotation:
-            glRotatef( self.rotation * RADTODEG, 0,0,1)
+            glTranslatef(-cx,-cy,0)
         if scale and not allclose(self.scale, NULLSCALE):
             sx,sy = self.scale
             glScalef( sx,sy,1.0 )
-        if (rotate or scale) and any(self.center):
-            glTranslatef( -cx,-cy,0)
+        if rotate and self.rotation:
+            glRotatef( self.rotation * RADTODEG, 0,0,1)
+        if centred:
+            glTranslatef( cx,cy,0)
+        if translate and any(self.translation):
+            x,y = self.translation
+            glTranslatef(x,y,0)
     def render(
         self,
         mode: Any = None, # the renderpass object

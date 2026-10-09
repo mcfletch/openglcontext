@@ -54,11 +54,17 @@ A ``Material`` read from a VRML97 or X3D document is drawn by X3D's Phong
 equation (ISO/IEC 19775-1, 17.2.2.5): the emissive colour, plus for each light
 its ``ambientIntensity`` times the Material's ``ambientIntensity`` and diffuse
 colour, its diffuse and its Blinn-Phong specular terms, on the colour values as
-given and without the tone map, bloom on or off. A ``Color`` node replaces the
+given and without the tone map, bloom on or off. The specular term,
+(N·H) to the power 128 × ``shininess``, is computed whichever side of the
+face the light is on, and a ``shininess`` of 0 gives the whole specular
+colour, as X_ITE draws it. A ``Color`` node replaces the
 diffuse colour, a texture multiplies it, a normal map turns the normal, an
 occlusion map scales the lights' sum, and fog is X3D's. Image-based lighting,
 lightmaps and planar reflections are not read for such a shape. An appearance
-with no ``Material`` is unlit: white, times its texture or a ``Color`` node.
+with no ``Material``, a Shape with no Appearance and a document's
+``UnlitMaterial`` are unlit: white (or the emissive colour), times its
+texture or a ``Color`` node, on the colour values as given. An
+``UnlitMaterial`` built in code or read from glTF is linear light.
 A ``Material`` built in code is converted instead: its diffuse colour
 becomes the base colour and its shininess sets the roughness, lit in linear
 light with a flat ambient term.
@@ -211,7 +217,11 @@ label, matched by each transform's ``mapping``; a single transform whose
 ``mapping`` is empty applies to every channel, as in VRML97.
 ``TextureTransform`` (centre, rotation, scale, translation) and
 ``TextureTransformMatrix3D`` (a 4×4 matrix of which the s and t rows are
-used, translation in the last column) are both read. One draw can use four
+used, translation in the last column) are both read. A ``TextureTransform``
+or ``TextureTransform3D`` is X3D's equation, Tc' = -C × S × R × C × T × Tc,
+with the rightmost applied to the coordinate first: translated, moved by the
+centre, rotated, scaled and moved back, as X_ITE reads it (the prose beside
+the equation in 19775-1 18.4.10 scales before rotating). One draw can use four
 distinct transforms; channels sharing a transform share one. The glTF loader
 turns each ``KHR_texture_transform``, including its ``texCoord`` override,
 into a ``TextureTransformMatrix3D`` under the label of the texture that

@@ -113,7 +113,7 @@ struct Material {
     float sheenRoughnessFactor; float ior;                 // KHR_materials_sheen / _ior
     float thicknessFactor;      float attenuationDistance; // KHR_materials_volume
     bool  unlitMode;                                       // KHR_materials_unlit
-    int   materialFlags;   // 64: the vertex colours are baked light; 128: X3D's Phong
+    int   materialFlags;   // 64: the vertex colours are baked light; 128: X3D's Phong; 256: volume scatter; 512: specular-glossiness; 1024: unlit as given
     float anisotropyStrengthM; // KHR_materials_anisotropy (fill the pre-mat3 pad slots)
     float dispersionM;         // KHR_materials_dispersion
     vec4  phongM;          // X3D Material under phongMode: x ambientIntensity, y shininess
@@ -174,6 +174,9 @@ Material _M;
 // Material's own and its ambientIntensity and shininess in phongM
 // (pbrpass.phong_factors).
 #define phongMode            ((materialFlags & 128) != 0)
+// Flag 1024: an unlit material whose colours are display values, as an X3D
+// document gives them (pbrpass.DISPLAYED_BIT), drawn as given.
+#define displayedMode        ((materialFlags & 1024) != 0)
 #define phongAmbientIntensity _M.phongM.x
 #define phongShininess       _M.phongM.y
 // The slot (slotTexture) a Phong draw's specularTexture is read through where
@@ -822,10 +825,14 @@ void main() {
     // X3D's MultiTexture, or a cube map or 3D texture, in place of the base
     // map (_layers_inc.glsl): it starts from the diffuse colour as Phong
     // reads it, or as the metallic/roughness model does in linear light.
+    // A Phong or displayed-unlit surface's colours are display values, as given
+    bool given = phongMode || displayedMode;
     vec4 layered;
     bool hasLayers = textureLayered(
-        phongMode ? (hasVertexColor ? vColor.rgb : baseColorFactor) : albedo, alpha,
-        phongMode ? specularColorFactor : vec3(1.0), !phongMode,
+        phongMode ? (hasVertexColor ? vColor.rgb : baseColorFactor)
+                  : (displayedMode ? baseColorFactor * (hasVertexColor ? vColor.rgb : vec3(1.0))
+                                   : albedo), alpha,
+        phongMode ? specularColorFactor : vec3(1.0), !given,
         gl_FrontFacing ? normalize(vNormal) : -normalize(vNormal), layered);
     if (hasLayers) {
         albedo = layered.rgb;
@@ -834,14 +841,24 @@ void main() {
     // X3D's texture projectors (_projectors_inc.glsl) cast onto the diffuse colour.
     vec3 projected = projectedColor((eyeToWorld * vec4(vPosition, 1.0)).xyz,
                                     mat3(eyeToWorld) * (gl_FrontFacing ? vNormal : -vNormal));
-    if (!phongMode) albedo *= sRGBToLinear(projected);
+    if (!given) albedo *= sRGBToLinear(projected);
 
     if (alphaMode == 1 && alpha < alphaCutoff) discard;  // MASK
 
     // KHR_materials_unlit: emit base color directly (no lighting)
     if (unlitMode) {
-        vec3 unlit = shown(fogMode == 1 ? linearToSRGB(fogged(albedo))
-                                        : fogged(linearToSRGB(albedo)));
+        vec3 unlit;
+        if (displayedMode) {
+            // X3D's unlit colour as given: the texture times the colour
+            vec3 drawn = projected * (hasLayers ? albedo
+                       : baseColorFactor * (hasVertexColor ? vColor.rgb : vec3(1.0))
+                         * (hasBaseColor ? baseTex.rgb : vec3(1.0)));
+            unlit = shown(fogMode == 1 ? linearToSRGB(fogged(sRGBToLinear(drawn)))
+                                       : fogged(drawn));
+        } else {
+            unlit = shown(fogMode == 1 ? linearToSRGB(fogged(albedo))
+                                       : fogged(linearToSRGB(albedo)));
+        }
         fragColor = vec4(unlit, alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());   // unlit is still pickable
         return;
@@ -885,7 +902,8 @@ void main() {
         vec3 color = emitted + occlusionShare()
                    * phongLights(N, V, vPosition, diffuse, ambient, specular, shininess,
                                  shadows);
-        fragColor = vec4(shown(fogged(clamp(color, 0.0, 1.0))), alpha);
+        // X3D fogs the lights' sum, and the display clamps what results
+        fragColor = vec4(shown(clamp(fogged(color), 0.0, 1.0)), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());
         return;
     }

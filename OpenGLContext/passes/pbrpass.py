@@ -332,6 +332,19 @@ _DEFAULT_FACTORS: "dict[str, Any]" = dict(
 )
 
 
+def drawn_material(appearance: Any, geometry: Any, back: bool = False) -> Any:
+    """What a shape of `appearance` and `geometry` is drawn with
+
+    The appearance's material (:func:`pbr_material`); for a shape with no
+    appearance, unlit white under X3D's lighting rules
+    (:mod:`OpenGLContext.lighting`) and None, the engine's lit neutral grey,
+    under its own.
+    """
+    if appearance:
+        return pbr_material(appearance, back)
+    return _DOCUMENT_UNLIT if lighting.x3d_lit(geometry) else None
+
+
 def phong_factors(material_node: Any) -> dict:
     """The block of an X3D Material drawn by X3D's Phong equation (:data:`PHONG_BIT`)
 
@@ -401,13 +414,16 @@ def _material_factors(material: Any) -> dict:
                     flags=SPECULAR_GLOSSINESS_BIT)
     if isinstance(material, UnlitMaterial):
         # The unlit path draws the base colour; X3D calls it the emissive colour.
+        # A document's colours are display values; glTF's are linear light.
+        displayed = material is _DOCUMENT_UNLIT or lighting.x3d_lit(material)
         return dict(_DEFAULT_FACTORS, base_color=tuple(material.emissiveColor)[:3],
-                    normal_scale=float(material.normalScale), unlit=1)
+                    normal_scale=float(material.normalScale), unlit=1,
+                    flags=DISPLAYED_BIT if displayed else 0)
     if isinstance(material, AppearanceMaterial):
         if material.x3dLit:
             if not material.material:
                 # X3D: an appearance with no material is unlit, white times its texture
-                return dict(_DEFAULT_FACTORS, unlit=1)
+                return dict(_DEFAULT_FACTORS, unlit=1, flags=DISPLAYED_BIT)
             if hasattr(material.material, 'diffuseColor'):
                 return phong_factors(material.material)
         material = material.material
@@ -463,6 +479,10 @@ VOLUME_SCATTER_BIT = 256
 #: specular-colour map's alpha scales the glossiness; the shader reads
 #: ``specGlossMode``.
 SPECULAR_GLOSSINESS_BIT = 512
+#: The bit saying an unlit block's colours are display values, as an X3D
+#: document gives them, rather than linear light; the fragment shader reads
+#: it as ``displayedMode``.
+DISPLAYED_BIT = 1024
 
 
 
@@ -1321,10 +1341,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         rules (:mod:`OpenGLContext.lighting`), and in the engine's lit neutral
         grey under its own.
         """
-        if appearance:
-            material = pbr_material(appearance, back)
-        else:
-            material = _DOCUMENT_UNLIT if lighting.x3d_lit(geometry) else None
+        material = drawn_material(appearance, geometry, back)
         # The coordinates depend on the geometry as well as the appearance, so
         # they are set before the same-material early-out, as are the texture
         # layers, which are bound after the material's maps share their units.

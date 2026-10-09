@@ -249,8 +249,8 @@ def transform_matrix(transform: Any) -> np.ndarray:
     """A texture transform node as three rows applied to ``(s, t, r, 1)``
 
     ``TextureTransform`` as its 2D composition with r untouched;
-    ``TextureTransform3D`` the same composition in three dimensions (the
-    centre, the rotation, the scale, the centre back, then the translation);
+    ``TextureTransform3D`` the same composition in three dimensions, X3D's
+    -C x S x R x C x T applied to the coordinate;
     ``TextureTransformMatrix3D`` its matrix, read as
     :mod:`~OpenGLContext.scenegraph.texturemapping` reads it. Any other node,
     and None, is no transform.
@@ -262,8 +262,8 @@ def transform_matrix(transform: Any) -> np.ndarray:
         return rows
     if isinstance(transform, x3d.TextureTransform3D):
         centre = np.asarray(transform.center, np.float64)
-        matrix: np.ndarray = (_translate(centre) @ _rotate(transform.rotation)
-                              @ _scale(transform.scale) @ _translate(-centre)
+        matrix: np.ndarray = (_translate(-centre) @ _scale(transform.scale)
+                              @ _rotate(transform.rotation) @ _translate(centre)
                               @ _translate(transform.translation))
         return np.asarray(matrix[:3], np.float32)
     if isinstance(transform, x3d.TextureTransform):

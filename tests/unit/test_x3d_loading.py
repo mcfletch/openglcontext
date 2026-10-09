@@ -241,6 +241,16 @@ def test_an_external_prototype_beside_the_document_is_read(tmp_path):
     assert scene.getDEF('J').size == 2.0
 
 
+def test_an_external_prototype_url_with_no_name_takes_the_files_first(tmp_path):
+    """19775-1 4.9.3: the file's first PROTO, whatever its name
+    (ConformanceNist EXTERNPROTO/first_proto)"""
+    (tmp_path / 'joints.x3d').write_bytes(DEFINITION.replace(b'name="Joint"', b'name="First"'))
+    (tmp_path / 'world.x3d').write_bytes(EXTERN.replace(b'%s#Joint', b'%s') % b'joints.x3d')
+    scene = Loader.load(str(tmp_path / 'world.x3d'))
+    assert len(protofunctions.getSceneGraph(scene.getDEF('J')).children) == 1
+    assert scene.getDEF('J').size == 2.0
+
+
 def test_an_external_prototype_outside_the_documents_folder_is_not_read(tmp_path, caplog):
     (tmp_path / 'joint.x3d').write_bytes(DEFINITION)
     (tmp_path / 'inner').mkdir()

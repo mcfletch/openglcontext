@@ -271,3 +271,23 @@ def test_every_swept_node_draws_in_a_core_profile(name, make):
     with _drawn(make(), 'core'):
         assert glGetError() == GL_NO_ERROR, 'GL reported an error drawing %s' % name
 
+
+
+#: A ring of eight points whose last repeats its first: a closed spine.
+_RING = [(np.cos(a), np.sin(a), 0.0) for a in np.linspace(0, 2 * np.pi, 9)]
+_RING[-1] = _RING[0]
+
+
+@pytest.mark.parametrize('scale, orientation', [
+    ([(0.5, 0.5)] * 9, [(0, 0, 1, 0)] * 9),       # one per listed point, the repeat too
+    ([(0.5, 0.5)] * 3, [(0, 0, 1, 0)] * 2),       # fewer: the last carries on
+    ([(0.5, 0.5)] * 12, [(0, 0, 1, 0)] * 12),     # more: the extra are not read
+])
+def test_an_extrusion_reads_scale_and_orientation_by_spine_point(scale, orientation):
+    """Spine point i takes value min(i, count - 1), as X_ITE reads them; a closed
+    spine's repeated point is the first again (ConformanceNist PROTO/fivedeepnesting)"""
+    from OpenGLContext.scenegraph.basenodes import Extrusion  # noqa: PLC0415 kept with its use
+    node = Extrusion(spine=_RING, scale=scale, orientation=orientation,
+                     crossSection=[(0.2, 0), (0, 0.2), (-0.2, 0), (0, -0.2), (0.2, 0)])
+    arrays = node.meshArrays()
+    assert arrays is not None and len(arrays.attributes['POSITION'])

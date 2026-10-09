@@ -189,8 +189,10 @@ Rules for each loader
      - Each URL an ``ExternProtoDeclare`` names is resolved and read through a
        ``Resolver`` built from the document's own location
        (``loaders.x3d.ContainedPrototypes``), and so is each file those name,
-       eight files deep at most. A URL the resolver refuses is logged and the
-       next one tried; the prototype's instances are then empty.
+       eight files deep at most. A URL's ``#name`` says which of the file's
+       prototypes it is; with none, it is the file's first ``PROTO``. A URL
+       the resolver refuses is logged and the next one tried; the
+       prototype's instances are then empty.
    * - :doc:`X3D <x3d>` and VRML97 ``Anchor``
      - A url the document's Anchor follows is resolved through a ``Resolver``
        built from the document's own location
