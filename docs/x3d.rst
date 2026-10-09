@@ -1801,6 +1801,10 @@ Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
+- An instance of an ``EXTERNPROTO`` whose file could not be read is kept and
+  written. It stands for no node: a ``Shape`` holding one as its geometry
+  draws nothing, and one holding it as its appearance is drawn with the
+  default appearance.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
 
