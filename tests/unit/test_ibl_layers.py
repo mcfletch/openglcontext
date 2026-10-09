@@ -92,10 +92,55 @@ class TestALightInALayer:
         after, _mips = probe.read_layer(1)
         assert all(np.array_equal(a, b) for a, b in zip(before, after))
 
-    def test_a_light_with_fewer_mips_repeats_its_roughest(self, probe):
-        assert probe.upload_light(_light(0.5, levels=2), layer=3)
-        _irradiance, mips = probe.read_layer(3)
-        assert np.allclose(mips[4][0], 0.5, atol=1e-3)
+    def test_the_lights_mips_are_spread_over_roughness(self, probe):
+        """A light's mips span roughness 0 to 1 whatever their count, as
+        EXT_lights_image_based maps them; the probe's levels read each
+        roughness from the two mips either side of it."""
+        for count in (2, 3, 9):
+            light = ImageBasedLight(specular=[
+                _faces(max(1, IBLProbe.PRE_SIZE >> level), level / (count - 1))
+                for level in range(count)],
+                irradianceCoefficients=[(0.5, 0.5, 0.5)] + [(0.0, 0.0, 0.0)] * 8)
+            assert probe.upload_light(light, layer=3)
+            _irradiance, mips = probe.read_layer(3)
+            for level, faces in enumerate(mips):
+                roughness = level / (IBLProbe.PRE_LEVELS - 1)
+                assert np.allclose(faces[0], roughness, atol=2e-3), (count, level)
+
+
+    def test_an_unfiltered_environment_is_prefiltered_for_each_roughness(self, probe):
+        """A light whose one level is the environment itself (an
+        EnvironmentLight's specularTexture) is GGX-filtered into every level:
+        sharp at roughness 0, spread across the faces at roughness 1."""
+        size = 32
+        faces = [np.full((size, size, 3), 1.0 if face == 0 else 0.0, 'f4')
+                 for face in range(6)]
+        light = ImageBasedLight(
+            specular=[faces],
+            irradianceCoefficients=[(0.5, 0.5, 0.5)] + [(0.0, 0.0, 0.0)] * 8)
+        light.prefiltered = False
+        assert probe.upload_light(light, layer=2)
+        _irradiance, mips = probe.read_layer(2)
+        sharp, rough = mips[0], mips[-1]
+        middle = IBLProbe.PRE_SIZE // 2
+        assert sharp[0][middle, middle] == pytest.approx((1, 1, 1), abs=0.02)
+        assert sharp[1][middle, middle] == pytest.approx((0, 0, 0), abs=0.02)
+        assert rough[0].mean() < 0.9
+        assert rough[2].mean() > 0.02     # +Y takes light from +X
+
+
+class TestRoughnessMips:
+    def test_a_probe_level_reads_the_mips_either_side_of_its_roughness(self):
+        assert ibl.roughness_mips(9, 5) == [
+            (0, 0, 0.0), (2, 2, 0.0), (4, 4, 0.0), (6, 6, 0.0), (8, 8, 0.0)]
+        assert ibl.roughness_mips(2, 5) == [
+            (0, 0, 0.0), (0, 1, 0.25), (0, 1, 0.5), (0, 1, 0.75), (1, 1, 0.0)]
+
+    def test_a_single_mip_serves_every_level(self):
+        assert ibl.roughness_mips(1, 3) == [(0, 0, 0.0)] * 3
+
+    def test_a_single_level_reads_the_sharpest_mip(self):
+        assert ibl.roughness_mips(4, 1) == [(0, 0, 0.0)]
 
 
 class TestConvolvingALayer:

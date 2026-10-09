@@ -198,6 +198,11 @@ class ImageBasedLight(nodetypes.Children, node.Node):
         self.generated: Any = None
         #: The colour the generated cube is scaled by, beside :attr:`intensity`.
         self.tint: tuple[float, ...] = (1.0, 1.0, 1.0)
+        #: Whether :attr:`specular` is already convolved for each roughness.
+        #: False where its one level is the environment itself (an
+        #: EnvironmentLight's specularTexture), which the renderer
+        #: GGX-filters for each roughness as it uploads it.
+        self.prefiltered = True
 
     @property
     def rotated(self) -> bool:

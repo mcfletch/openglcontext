@@ -23,6 +23,7 @@ rasteriser fallback and the degraded tier, and is a correct fix in its own right
 """
 from __future__ import annotations
 
+import math
 import os
 import logging
 from collections.abc import Callable
@@ -403,6 +404,25 @@ def _uni1f(prog: int, name: str, value: float) -> None:
     loc = glGetUniformLocation(prog, name)
     if loc != -1:
         glUniform1f(loc, float(value))
+
+
+def roughness_mips(count: int, levels: int) -> list[tuple[int, int, float]]:
+    """For each of a probe's ``levels``, the two of a light's ``count`` mips
+    it is blended from and the weight of the second.
+
+    Both chains span perceptual roughness 0 to 1 evenly, as
+    ``EXT_lights_image_based`` lays out a light's mips and as the probe's own
+    prefilter and ``pbr.frag``'s lookup (``lod = roughness * maxLod``) lay out
+    the probe's. Probe level ``j`` is roughness ``j / (levels - 1)``, which
+    falls at ``j * (count - 1) / (levels - 1)`` in the light's chain.
+    """
+    out = []
+    for level in range(levels):
+        at = level * (count - 1) / (levels - 1) if levels > 1 and count > 1 else 0.0
+        low = int(math.floor(at))
+        weight = at - low
+        out.append((low, low + 1, weight) if weight > 1e-9 else (low, low, 0.0))
+    return out
 
 
 class EnvironmentRead(NamedTuple):
@@ -849,7 +869,7 @@ class IBLProbe(object):
         return self._convolveInto(env, layer, PLAIN_READ, None)
 
     def _convolveInto(self, env: int, layer: int, read: EnvironmentRead,
-                      resolution: Optional[int]) -> bool:
+                      resolution: Optional[int], irradiance: bool = True) -> bool:
         prev_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
         prev_vp = glGetIntegerv(GL_VIEWPORT)
         prev_program = int(glGetIntegerv(GL_CURRENT_PROGRAM))
@@ -868,7 +888,8 @@ class IBLProbe(object):
             glBindVertexArray(vao)
             fbo = glGenFramebuffers(1)
             glBindFramebuffer(GL_FRAMEBUFFER, fbo)
-            self._fill_irradiance(fbo, irr_prog, env, layer, read)
+            if irradiance:
+                self._fill_irradiance(fbo, irr_prog, env, layer, read)
             self._fill_prefilter(fbo, pre_prog, env, layer, read, resolution)
             return True
         except Exception as err:
@@ -893,8 +914,10 @@ class IBLProbe(object):
         ``light`` is an :class:`~OpenGLContext.scenegraph.imagebasedlight.ImageBasedLight`:
         its specular mip chain goes into the prefiltered map, resampled to
         this probe's size, and its irradiance is evaluated from its
-        coefficients into the irradiance map. A light with fewer mips than
-        the probe repeats its roughest for the rest. Nothing is drawn. Layer
+        coefficients into the irradiance map. The light's mips span roughness
+        0 to 1 whatever their count, and each probe level is blended from the
+        two either side of its roughness (:func:`roughness_mips`). Nothing is
+        drawn. Layer
         0 of a plain-cube probe is its only one. Returns whether it was filled.
         """
         if not self.ready or self.irradiance is None or self.prefilter is None:
@@ -910,16 +933,27 @@ class IBLProbe(object):
             for face, pixels in enumerate(light.irradiance_faces(self.IRR_SIZE)):
                 self._upload_face(target, 0, layer, face, pixels)
             glBindTexture(target, self.prefilter)
-            count = len(light.specular)
-            for level in range(self.PRE_LEVELS):
+
+            def resized(pixels: np.ndarray, size: int) -> np.ndarray:
+                if pixels.shape[0] == size:
+                    return pixels
+                return np.stack([np.asarray(Image.fromarray(
+                    np.ascontiguousarray(pixels[..., channel])).resize(
+                        (size, size), Image.Resampling.BILINEAR))
+                    for channel in range(3)], -1)
+
+            if not getattr(light, 'prefiltered', True):
+                return self._prefilter_light(light, layer)
+            spread = roughness_mips(len(light.specular), self.PRE_LEVELS)
+            for level, (low, high, weight) in enumerate(spread):
                 size = max(1, self.PRE_SIZE >> level)
-                for face, pixels in enumerate(
-                        light.specular_faces(min(level, count - 1))):
-                    if pixels.shape[0] != size:
-                        pixels = np.stack([np.asarray(Image.fromarray(
-                            np.ascontiguousarray(pixels[..., channel])).resize(
-                                (size, size), Image.Resampling.BILINEAR))
-                            for channel in range(3)], -1)
+                lows = light.specular_faces(low)
+                highs = light.specular_faces(high) if weight else lows
+                for face, (sharp, rough) in enumerate(zip(lows, highs)):
+                    pixels = resized(sharp, size)
+                    if weight:
+                        pixels = (pixels * (1.0 - weight)
+                                  + resized(rough, size) * weight)
                     self._upload_face(target, level, layer, face, pixels)
             if layer == 0:
                 self.studio = False
@@ -929,6 +963,27 @@ class IBLProbe(object):
             return False
         finally:
             glBindTexture(target, 0)
+
+    def _prefilter_light(self, light: Any, layer: int) -> bool:
+        """GGX-filter the environment that is ``light``'s one specular level
+        into ``layer``'s prefiltered map, every level, through a mip-mapped
+        cube made for it and released after."""
+        faces = light.specular_faces(0)
+        size = int(faces[0].shape[0])
+        env = self._make_cube(size, levels=max(1, size.bit_length()))
+        try:
+            glBindTexture(GL_TEXTURE_CUBE_MAP, env)
+            for face, pixels in enumerate(faces):
+                self._upload_face(GL_TEXTURE_CUBE_MAP, 0, 0, face, pixels)
+            glGenerateMipmap(GL_TEXTURE_CUBE_MAP)
+            glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
+            filled = self._convolveInto(env, layer, PLAIN_READ, size,
+                                        irradiance=False)
+        finally:
+            glDeleteTextures([env])
+        if filled and layer == 0:
+            self.studio = False
+        return filled
 
     def read_layer(self, layer: int = 0) -> tuple[list[np.ndarray], list[list[np.ndarray]]]:
         """The irradiance faces and the prefiltered mip chain of one layer, as float RGB.
