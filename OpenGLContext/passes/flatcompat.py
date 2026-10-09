@@ -1,7 +1,10 @@
 """The compatibility-profile flat pass: the fixed-function pipeline
 
 Lighting and materials go through ``glLight*`` and ``glMaterial*``, and
-geometry is drawn from display lists and client-side vertex arrays.  The
+geometry is drawn from display lists and client-side vertex arrays. Each draw
+is lit by the lights whose scope holds it and whose `radius` reaches its
+bounds; the others are switched off for it (:mod:`~OpenGLContext.passes.lightscope`).
+The
 core-profile pass is :mod:`OpenGLContext.passes.flatcore`; which of the two
 renders a given context is decided in
 :mod:`OpenGLContext.passes.renderpass`, not chosen by the caller.
@@ -11,7 +14,7 @@ from typing import Any
 
 from . import _flat
 from OpenGLContext.move import navigationinfo
-from OpenGLContext.passes import glstate
+from OpenGLContext.passes import glstate, lightscope
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot, allclose
@@ -136,6 +139,7 @@ class FlatPass( _flat.FlatPass ):
             self.renderTransparent( frame.toRender )
             self.resetMeshDrawState()
         finally:
+            self.restoreLegacyLights()
             self._endView( frame )
 
     def legacyBackgroundRender( self, vp: Any, matrix: Any ) -> None:
@@ -179,12 +183,25 @@ class FlatPass( _flat.FlatPass ):
         self.legacyNormalRescale()
         return super( FlatPass, self ).renderGeometry( mvmatrix )
 
+    #: The bits of the lights :meth:`legacyLightRender` enabled, those of
+    #: them with a radius as world spheres, and the bits switched off for the
+    #: draw being made (:meth:`applyLegacyLights`).
+    _legacyLit = 0
+    _legacyReach: lightscope.Reaching = ()
+    _legacyOff = 0
+
     def legacyLightRender( self, matrix: Any ) -> None:
-        """Do legacy light-rendering operation"""
-        # okay, now visible presentations
+        """Enable a GL light for each light of the scene, then the headlight
+
+        Records the scoped lights and those with a radius, which
+        :meth:`applyLegacyLights` switches off per draw.
+        """
         for remaining in range(0,self.MAX_LIGHTS-1):
             glDisable( GL_LIGHT0 + remaining )
         bound = 0
+        lit = 0
+        placed = []
+        paths = []
         for path in self.paths.get( nodetypes.Light, ()):
             tmatrix = path.transformMatrix()
 
@@ -193,10 +210,17 @@ class FlatPass( _flat.FlatPass ):
             self.renderPath = path
             glstate.load_matrix( localMatrix )
 
-            path[-1].Light( GL_LIGHT0+bound, mode=self )
+            if path[-1].Light( GL_LIGHT0+bound, mode=self ):
+                lit |= 1 << bound
+                placed.append( (bound, path[-1], tmatrix) )
+            paths.append( path )
             bound += 1
             if bound >= (self.MAX_LIGHTS-1):
                 break
+        self._legacyLit = lit
+        self._legacyOff = 0
+        self._legacyReach = lightscope.reaching_lights( placed )
+        self.lightScopes = self.lightScopes.following( lightscope.scoped_lights( paths ) )
         if self.hasHeadlight( bound ):
             from OpenGLContext.scenegraph import light
             l = light.DirectionalLight( direction = (0,0,-1.0))
@@ -204,6 +228,34 @@ class FlatPass( _flat.FlatPass ):
             l.Light( GL_LIGHT0 + bound, mode = self )
         self.matrix = matrix
     
+    def applyLegacyLights( self, path: Any, tmatrix: Any, bvolume: Any ) -> None:
+        """Switch off the lights whose scope or radius leaves out the draw of `path`"""
+        lit = self._legacyLit
+        if not lit:
+            return
+        mask = self.lightScopes.mask( path )
+        if self._legacyReach:
+            low, high = self.worldBox( tmatrix, bvolume )
+            mask |= lightscope.reach_mask( self._legacyReach, low, high )
+        self._switchLegacyLights( mask & lit )
+
+    def restoreLegacyLights( self ) -> None:
+        """Switch back on every light a draw switched off"""
+        self._switchLegacyLights( 0 )
+
+    def _switchLegacyLights( self, mask: int ) -> None:
+        changed = mask ^ self._legacyOff
+        slot = 0
+        while changed:
+            if changed & 1:
+                if mask & (1 << slot):
+                    glDisable( GL_LIGHT0 + slot )
+                else:
+                    glEnable( GL_LIGHT0 + slot )
+            changed >>= 1
+            slot += 1
+        self._legacyOff = mask
+
     def renderOpaque( self, toRender: Sequence[Any] ) -> None:
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
@@ -215,6 +267,7 @@ class FlatPass( _flat.FlatPass ):
                 glMatrixMode(GL_MODELVIEW)
                 glstate.load_matrix( mvmatrix )
                 self.applyFixedClipPlanes( path, _tmatrix )
+                self.applyLegacyLights( path, _tmatrix, bvolume )
                 try:
                     node.Render( mode = self )
                     if debugFrustum:

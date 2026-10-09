@@ -9,16 +9,28 @@ The render pass binds lights to slots in the order of their paths. For each
 draw it sets a `lightsOff` mask, one bit per slot, and :func:`scope_mask`
 gives the bits for the scoped lights the draw is outside. :class:`ScopeMasks`
 keeps each path's bits while the same lights are scoped.
+
+A point or spot light's `radius` is a cut-off per fragment in the shader
+paths. The fixed-function pipeline has none, so the compatibility profile
+switches a light off for each draw whose bounds its radius does not reach:
+:func:`reaching_lights` gives each bounded light's sphere in world
+coordinates, and :func:`reach_mask` the bits for a draw's world box.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Sequence
 from typing import Any, TypeAlias
 
-__all__ = ['ScopeMasks', 'is_global', 'scope_mask', 'scoped_lights']
+import numpy as np
+
+__all__ = ['ScopeMasks', 'is_global', 'reach_mask', 'reaching_lights', 'scope_mask',
+           'scoped_lights']
 
 #: (slot, the light's ancestors from the root) for each scoped light.
 Scoped: TypeAlias = 'tuple[tuple[int, tuple[Any, ...]], ...]'
+#: (slot, centre, radius) in world coordinates for each light with a radius.
+Reaching: TypeAlias = 'tuple[tuple[int, np.ndarray, float], ...]'
 
 
 def is_global(light: Any) -> bool:
@@ -35,6 +47,40 @@ def scoped_lights(light_paths: Iterable[Sequence[Any]], first: int = 0) -> Scope
     """
     return tuple((slot, tuple(path[:-1])) for slot, path in enumerate(light_paths, first)
                  if not is_global(path[-1]))
+
+
+def reaching_lights(bound: Iterable[tuple[int, Any, Any]]) -> Reaching:
+    """The bound lights with a finite `radius`, each as a sphere in world coordinates
+
+    `bound` is (slot, light, the light's world matrix) for each bound light.
+    The radius is in the light's own coordinates, so it is scaled by the
+    matrix's largest axis, as the shader paths scale it.
+    """
+    found = []
+    for slot, light, matrix in bound:
+        radius = float(getattr(light, 'radius', math.inf))
+        location = getattr(light, 'location', None)
+        if location is None or not math.isfinite(radius):
+            continue
+        placed = np.asarray(matrix, dtype=np.float64)
+        centre = np.append(np.asarray(location, dtype=np.float64), 1.0) @ placed
+        scale = float(np.linalg.norm(placed[:3, :3], axis=1).max())
+        found.append((slot, centre[:3], radius * scale))
+    return tuple(found)
+
+
+def reach_mask(reaching: Reaching, low: Any, high: Any) -> int:
+    """One bit per light of `reaching` whose sphere misses the box `low` to `high`"""
+    mask = 0
+    if not reaching:
+        return mask
+    low = np.asarray(low, dtype=np.float64)
+    high = np.asarray(high, dtype=np.float64)
+    for slot, centre, radius in reaching:
+        nearest = np.clip(centre, low, high)
+        if float(np.dot(nearest - centre, nearest - centre)) > radius * radius:
+            mask |= 1 << slot
+    return mask
 
 
 def scope_mask(scoped: Scoped, path: Sequence[Any]) -> int:

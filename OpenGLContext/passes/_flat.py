@@ -2176,6 +2176,13 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
 #            l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
     
+    def applyLegacyLights( self, path: Any, tmatrix: Any, bvolume: Any ) -> None:
+        """Switch off the fixed-function lights leaving out the draw of `path`; none here
+
+        The compatibility pass's lights are scoped and bounded per draw
+        (:meth:`OpenGLContext.passes.flatcompat.FlatPass.applyLegacyLights`).
+        """
+
     def renderGeometry( self, mvmatrix: Any ) -> None:
         """Draw everything visible from ``mvmatrix``, and nothing else
 
@@ -2224,6 +2231,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, ClipPlanesMix
                     self.renderPath = path
                     glstate.load_matrix( mvmatrix )
                     self.applyFixedClipPlanes( path, _tmatrix )
+                    self.applyLegacyLights( path, _tmatrix, bvolume )
                     try:
                         node.RenderTransparent( mode = self )
                         if debugFrustum:

@@ -216,7 +216,12 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] `Appearance.texture` as a PhysicalMaterial's or UnlitMaterial's base map where theirs is NULL (X3D 4, 17.2.2.4 and 17.2.2.6; `physicalmaterial.AppearanceTextured`)
   - [x] docs/x3d.rst with the implemented-node list, held to `prototypes()` by a test
   - [x] light scope: `global` false lights only its parent group's descendants (`passes.lightscope`, the per-draw `lightsOff` mask); the engine's DirectionalLight made in code is global; VRML97 dialect default `global FALSE`
-  - [ ] the fixed-function pipeline's light scope and radius
+  - [x] the fixed-function pipeline's light scope and radius (2026-10-09,
+    branch x3d-gaps): the compatibility pass switches each GL light off for a
+    draw outside its scope or past its radius, measured to the shape's world
+    box (`lightscope.reaching_lights`, `reach_mask`;
+    `flatcompat.FlatPass.applyLegacyLights`); a shape partly within the
+    radius is lit all over
   - [x] content that draws nothing: `StaticGroup` (`x3dgroups`),
     `InlineGeometry` (`scenegraph.inlinegeometry`, a file's shapes joined by
     `scenegraph.meshdata.merged_arrays` from each geometry's `meshArrays()`);

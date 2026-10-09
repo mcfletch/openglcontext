@@ -504,10 +504,14 @@ engine's to one built in code; ``x3d`` and ``engine`` apply one set to every
 scene.
 
 A point or spot light's ``radius`` is how far it reaches in its own
-coordinates: nothing past it is lit, in the shader paths. A light a document
-builds has VRML97's and X3D's 100 unless the document sets another; one made
-in code reaches everywhere unless given one; a glTF light's is its ``range``.
-The fixed-function path has no such cut-off.
+coordinates: nothing past it is lit. A light a document builds has VRML97's
+and X3D's 100 unless the document sets another; one made in code reaches
+everywhere unless given one; a glTF light's is its ``range``. The shader
+paths cut the light off per fragment. The compatibility profile's
+fixed-function lights have no cut-off, so that pass switches a light off for
+each draw its radius does not reach, measured to the shape's bounding box,
+and for each draw outside its scope (``passes.lightscope.reach_mask``); a
+shape partly within the radius is lit all over.
 
 Fog and backgrounds
 ~~~~~~~~~~~~~~~~~~~

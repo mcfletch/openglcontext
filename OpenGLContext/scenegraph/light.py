@@ -249,8 +249,8 @@ class DirectionalLight (basenodes.DirectionalLight, Light):
     With `global` true it lights the whole scene; with it false, only the
     descendants of its parent grouping node (:mod:`OpenGLContext.passes.lightscope`).
     True for one made in code, false for one a VRML97 world or an X3D
-    document builds unless the document says otherwise. The fixed-function
-    pipeline lights the whole scene either way.
+    document builds unless the document says otherwise. The compatibility
+    profile switches the light off for each draw outside its scope.
 
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#DirectionalLight
     '''

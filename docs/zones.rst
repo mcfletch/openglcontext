@@ -390,8 +390,8 @@ Limits
   (material and per-vertex colour), in the PBR pass and the flat core pass
   alike. The terrain, vegetation and water shaders read no punctual lights, so
   a ``ZoneLights`` changes nothing they draw, and neither does the
-  compatibility-profile pass, whose fixed-function lights are not masked per
-  draw.
+  compatibility-profile pass, whose fixed-function lights are switched per
+  draw only by their scope and radius.
 - Audio has one listener, at the main view's camera.
 
 Examples
