@@ -5,7 +5,10 @@ Demonstrates use of "named transforms", objects which
 use push/pop of the name-stack to report selection during
 the rendermode.SelectRenderMode pass.
 
-Background thread perturbs the object positions.
+Background thread perturbs the object positions every half second of the
+session clock (OpenGLContext.events.systemtime) rather than of the wall
+clock. A capture's clock counts frames, so its first move falls due once
+half a second of frames has been drawn, however long they took.
 '''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
@@ -15,6 +18,8 @@ import time
 import random
 import threading
 from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.events import systemtime
+from OpenGLContext import entropy
 
 class TestContext( BaseContext ):
     def OnInit( self ):
@@ -28,8 +33,7 @@ class TestContext( BaseContext ):
             node = self.objects.children[-1].children[-1],
             function = self.OnClick2,
         )
-        r = threading.Thread( target = self.randomiser )
-        r.setDaemon(1)
+        r = threading.Thread( target = self.randomiser, daemon = True )
         r.start()
     def getSceneGraph( self ):
         return self.objects
@@ -70,21 +74,33 @@ class TestContext( BaseContext ):
             )
             objects.append( t)
         self.objects.children = objects
+    MOVE_INTERVAL = 0.5
     def randomiser( self ):
+        """Nudge every sphere each MOVE_INTERVAL seconds of the session clock
+
+        The thread waits on systemtime rather than sleeping for the interval,
+        so its moves fall due when a Timer's would: on the wall clock
+        normally, and on the frame-counting clock of a capture. Its own random
+        stream keeps the nudges the same whatever else draws numbers.
+        """
+        nudges = entropy.randomizer( 'selectrendermode_threads' )
+        due = systemtime.systemTime() + self.MOVE_INTERVAL
         while self:
+            if systemtime.systemTime() < due:
+                time.sleep( .01 )
+                continue
+            due += self.MOVE_INTERVAL
             self.lockScenegraph()
             try:
                 for object in self.objects.children:
                     a,b,c = object.translation
-                    f = random.random()*.05 - (.025)
+                    f = nudges.random()*.05 - (.025)
                     object.translation = (a+f,b+f,c+f)
             finally:
                 self.unlockScenegraph()
             if self:
                 self.triggerRedraw(1)
-            time.sleep( .5 )
-            
-    
+
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

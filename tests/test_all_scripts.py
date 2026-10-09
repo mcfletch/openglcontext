@@ -81,12 +81,7 @@ CAPTURE_SEED = 4242
 # picture turns on something neither of those settles -- and when it advances
 # its own state, it has to do so from the frame rather than from OnIdle, which
 # the main loop calls as often as it has room for.
-RANDOMIZED_SCRIPTS = [
-    # Its background thread moves every sphere each half second of wall
-    # time, which is what the demo shows; how many moves land before the
-    # capture depends on how busy the machine is.
-    'selectrendermode_threads.py',
-]
+RANDOMIZED_SCRIPTS: list[str] = []
 
 # Single source of truth for the visual-diff tolerance. The gate
 # is percentage-based, not pixel-exact: cross-GPU rasterization, anti-aliasing
