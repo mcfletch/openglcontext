@@ -2,8 +2,10 @@
 
 A floor fills the whole window, lit by the full environment probe and a
 shadow-casting sun, and four zones cross it, so every one of its fragments
-weighs four zones. The same frame is drawn with and without the zones, and the
-median frame time is printed as one JSON line.
+weighs four zones. Each mode named gets a window of its own, and the windows
+are drawn in turn, a frame of each, so that whatever else the GPU and the CPU
+are doing falls on every mode alike. The median frame time of each is printed
+as one JSON line.
 
 Modes:
 
@@ -13,7 +15,7 @@ Modes:
 ``probes``  four zones each lit by an image-based light of its own, so every
             fragment samples four probe layers of the arrays.
 
-Usage:  python tests/helpers/_zone_cost_harness.py FRAMES [plain|zones|probes]
+Usage:  python tests/helpers/_zone_cost_harness.py FRAMES MODE [MODE ...]
 
 Exits 3 where no GL context can be made, and 1 with a traceback for any other
 failure.
@@ -55,12 +57,10 @@ except ImportError:                 # the harness drives GLFW's event loop itsel
 WARMUP = 15
 
 
-def main() -> None:
-    frames = int(sys.argv[1]) if len(sys.argv) > 1 else 90
-    mode = sys.argv[2] if len(sys.argv) > 2 else 'zones'
+def harness(mode):
+    """A context drawing the floor in ``mode``, and the list its frames end on."""
     if mode not in ('plain', 'zones', 'probes'):
         raise ValueError('no zone cost mode %r' % (mode,))
-
     Base = testingcontext.getInteractive()
     drawn = []
 
@@ -99,18 +99,27 @@ def main() -> None:
     # Large enough that the frame is the fragments' cost.
     context = Harness(size=(1600, 1000))
     context.deferRedraw = True
-    timings = []
+    return context, drawn
+
+
+def main() -> None:
+    frames = int(sys.argv[1]) if len(sys.argv) > 1 else 90
+    modes = sys.argv[2:] or ['zones']
+    contexts = [harness(mode) for mode in modes]
+    timings = {mode: [] for mode in modes}
     for frame in range(frames + WARMUP):
-        glfw.poll_events()
-        del drawn[:]
-        start = time.perf_counter()
-        context.OnDraw(force=1)
-        if drawn and frame >= WARMUP:
-            timings.append((drawn[-1] - start) * 1000.0)
-    ordered = sorted(timings)
-    median = ordered[len(ordered) // 2] if ordered else 0.0
-    print(json.dumps({'mode': mode, 'frames': len(ordered),
-                      'median_ms': round(median, 4)}))
+        for mode, (context, drawn) in zip(modes, contexts):
+            glfw.poll_events()
+            del drawn[:]
+            start = time.perf_counter()
+            context.OnDraw(force=1)
+            if drawn and frame >= WARMUP:
+                timings[mode].append((drawn[-1] - start) * 1000.0)
+    for mode in modes:
+        ordered = sorted(timings[mode])
+        median = ordered[len(ordered) // 2] if ordered else 0.0
+        print(json.dumps({'mode': mode, 'frames': len(ordered),
+                          'median_ms': round(median, 4)}))
     sys.stdout.flush()              # os._exit skips buffer flushing
     os._exit(0)
 
