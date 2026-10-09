@@ -77,6 +77,23 @@ def render_scene(monkeypatch):
     yield from glrender.render_scene_factory(monkeypatch)
 
 
+@pytest.fixture
+def sixteen_samplers(monkeypatch):
+    """The PBR program compiled as for a fragment stage of 16 samplers, GL 3.3's least
+
+    Two modules draw what such a driver draws: a Phong material's maps and
+    a MultiTexture's layers, through the samplers a draw leaves free.
+    """
+    from OpenGL.GL import GL_MAX_TEXTURE_IMAGE_UNITS  # noqa: PLC0415 kept with its use
+
+    from OpenGLContext.passes import pbrpass  # noqa: PLC0415 kept with its use
+    real = pbrpass.glGetIntegerv
+
+    def reported(name):
+        return 16 if name == GL_MAX_TEXTURE_IMAGE_UNITS else real(name)
+    monkeypatch.setattr(pbrpass, 'glGetIntegerv', reported)
+
+
 @pytest.fixture(scope='session')
 def posix_modes(tmp_path_factory):
     """Whether this filesystem enforces the POSIX mode a directory asks for.

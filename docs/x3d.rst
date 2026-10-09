@@ -302,8 +302,15 @@ node where it has one. Without a ``diffuseTexture``, the
 appearance's ``texture`` is the base colour map. In the same way it is a
 ``PhysicalMaterial``'s base map without a ``baseTexture``, and an
 ``UnlitMaterial``'s emissive map without an ``emissiveTexture``, in drawing
-and in a glTF written from the scene. ``ambientTexture``,
-``shininessTexture`` and ``specularTexture`` are kept and not drawn.
+and in a glTF written from the scene. Under X3D's lighting a ``Material``'s
+``ambientTexture`` multiplies its ambient term by the map's colour, its
+``specularTexture`` the specular colour by the map's colour, and its
+``shininessTexture`` the ``shininess`` by the map's alpha, each through its
+own ``...TextureMapping`` label, as X_ITE draws them. The PBR program reads
+them through samplers a Phong draw has no other use for: the lightmap's, the
+metallic/roughness map's, and the specular colour map's where the extension
+maps are compiled in or else the split-sum table's
+(``pbrpass.draw_slots``). The VRML97 renderer draws the diffuse map alone.
 A texture is sampled with its ``TextureProperties`` filters where it has
 one. Without, a document's image smaller than 16 texels on its longer side
 (``sampler.SMALL_IMAGE``) is sampled from its nearest texel, so a small
@@ -396,14 +403,17 @@ itself, not batched with others.
   ``UnlitMaterial``'s chain in linear light, its textures decoded from sRGB
   as base colour maps are; a ``Material``'s, drawn by X3D's Phong equation,
   and the VRML97 renderer's combine the colours as they are given. The PBR
-  program reads a 2D layer through the base colour map's sampler and three
-  of the glTF extension maps' (a material drawn with a chain does not use
-  those maps), and one cube map and one 3D texture a draw, where the
-  driver's fragment stage has samplers left for them
-  (``pbrpass.LAYER_SAMPLERS_NEEDED``: a 32-sampler stage has). A driver
-  with 16 reads one 2D layer; what does not fit is reported once and left
-  out. The VRML97 renderer reads four 2D layers, a cube map and a 3D
-  texture.
+  program reads 2D layers through samplers the draw's material leaves free
+  (``pbrpass.draw_slots``): the base colour map's, three of the glTF
+  extension maps' where the driver has samplers for them (a material drawn
+  with a chain does not use those maps), the lightmap's, and for a
+  ``Material`` under X3D's lighting the metallic/roughness map's and the
+  split-sum table's. So a 16-sampler driver reads four 2D layers for a
+  ``Material``, two for a ``PhysicalMaterial`` or ``UnlitMaterial``. One
+  cube map and one 3D texture a draw are read where the fragment stage has
+  samplers left for them (``pbrpass.LAYER_SAMPLERS_NEEDED``). What does not
+  fit is reported once and left out. The VRML97 renderer reads four 2D
+  layers, a cube map and a 3D texture.
 - The compatibility profile draws a MultiTexture's first 2D layer, combined
   by its mode where the fixed-function texture environment has it
   (``MODULATE``, ``REPLACE``, ``ADD``, ``ADD_SIGNED``, ``SUBTRACT``), a cube

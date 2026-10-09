@@ -14,8 +14,8 @@ from __future__ import annotations
 import logging
 import weakref
 from types import MappingProxyType
-from collections.abc import Iterator, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Optional
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
 import numpy as np
 
@@ -184,8 +184,61 @@ PROJECTOR_UNIT = 34
 #: program: a cube map, a 3D texture and the projectors' images.
 LAYER_SAMPLERS_NEEDED = 3
 #: The extension maps whose samplers read a texture layer's 2D texture, in
-#: slot order after the base colour map (``layerTexture2D`` in pbr.frag).
+#: slot order after the base colour map (``slotTexture`` in pbr.frag).
 LAYER_CHANNELS = ('transmission', 'iridescenceThickness', 'clearcoat')
+
+#: The slots of ``slotTexture`` in pbr.frag: 2D samplers a draw reads a
+#: texture through when its material leaves them free. 0 is the base colour
+#: map's and 1 to 3 the :data:`LAYER_CHANNELS`' (where the extension maps are
+#: compiled in); then the lightmap's, the metallic/roughness map's, and the
+#: split-sum table's, which a Phong draw does not read.
+SLOT_BASE = 0
+SLOT_LIGHTMAP = 4
+SLOT_METALLIC_ROUGHNESS = 5
+SLOT_BRDF = 6
+#: The unit the split-sum table's sampler is pointed at while a draw borrows it.
+BORROWED_BRDF_UNIT = 35
+
+
+class DrawSlots(NamedTuple):
+    """Which samplers one draw reads its extra 2D textures through"""
+
+    #: The slot a Phong material's ``specularTexture`` is read through where
+    #: the specular colour map's own sampler is not compiled in; None where
+    #: that sampler reads it, or none was free, or there is no such map.
+    specular: Optional[int]
+    #: The slots of the texture layers' 2D textures, in order.
+    layers: tuple[int, ...]
+
+
+def draw_slots(sampled: Iterable[str], ext: Iterable[str], phong: bool,
+               specular: bool) -> DrawSlots:
+    """The slots a draw reads its specular map and 2D layers through
+
+    `sampled` names the channels the material's own maps are bound on, `ext`
+    the extension channels compiled in; `phong` says the draw is a Material
+    under X3D's lighting, and `specular` that it has a ``specularTexture``.
+    The lightmap's sampler is free where no lightmap is sampled; a Phong draw
+    also frees the metallic/roughness map's, where no ``shininessTexture`` is
+    on it, and the split-sum table's. A specular map without its own sampler
+    takes the first free one, and the layers the rest after the base colour
+    map's and the extension maps'.
+    """
+    sampled = set(sampled)
+    ext = set(ext)
+    free = []
+    if 'lightmap' not in sampled:
+        free.append(SLOT_LIGHTMAP)
+    if phong:
+        if 'metallicRoughness' not in sampled:
+            free.append(SLOT_METALLIC_ROUGHNESS)
+        free.append(SLOT_BRDF)
+    found = None
+    if phong and specular and 'specularColor' not in ext and free:
+        found = free.pop(0)
+    layers = (SLOT_BASE,) + tuple(
+        index + 1 for index, channel in enumerate(LAYER_CHANNELS) if channel in ext)
+    return DrawSlots(found, layers + tuple(free))
 
 
 def pbr_fragment_samplers(ext: bool, planar: bool, cube_array: bool,
@@ -619,12 +672,56 @@ class PBRShaderProgram(VRML97ShaderProgram):
         use; the cube map and 3D texture on units of their own where the
         stage has samplers for them.
         """
-        flat = (PBR_UNITS['baseColor'],) + tuple(
-            self.ext_channels[channel] for channel in LAYER_CHANNELS
-            if channel in self.ext_channels)
+        return self.slot_units(draw_slots((), self.ext_channels, False, False).layers)
+
+    def slot_unit(self, slot: int) -> int:
+        """The texture unit `slot`'s sampler reads (``slotTexture`` in pbr.frag)"""
+        if slot == SLOT_LIGHTMAP:
+            return PBR_UNITS['lightmap']
+        if slot == SLOT_METALLIC_ROUGHNESS:
+            return PBR_UNITS['metallicRoughness']
+        if slot == SLOT_BRDF:
+            return BORROWED_BRDF_UNIT
+        if slot == SLOT_BASE:
+            return PBR_UNITS['baseColor']
+        return self.ext_channels[LAYER_CHANNELS[slot - 1]]
+
+    def slot_units(self, slots: Sequence[int]) -> LayerUnits:
+        """The layer units of a draw whose 2D layers read `slots`"""
+        flat = tuple(self.slot_unit(slot) for slot in slots)
         if not self.layer_samplers_supported:
-            return LayerUnits(flat)
-        return LayerUnits(flat, LAYER_CUBE_UNIT, LAYER_VOLUME_UNIT)
+            return LayerUnits(flat, slots=tuple(slots))
+        return LayerUnits(flat, LAYER_CUBE_UNIT, LAYER_VOLUME_UNIT, tuple(slots))
+
+    def _draw_slots(self, material: Any) -> DrawSlots:
+        """The slots this draw of `material` reads its extra 2D textures through"""
+        sampled = [channel for channel, bit in PBR_TEXTURE_BITS.items() if self._sampled & bit]
+        phong = (isinstance(material, AppearanceMaterial) and material.x3dLit
+                 and hasattr(material.material, 'diffuseColor'))
+        specular = phong and 'specularColor' in (getattr(material, 'textures', None) or {})
+        return draw_slots(sampled, self.ext_channels, phong, specular)
+
+    def _bind_borrowed(self, material: Any, slots: DrawSlots, mode: Any) -> None:
+        """Bind a Phong specular map on its borrowed slot, and point the
+        split-sum table's sampler where this draw wants it"""
+        borrowing = slots.specular == SLOT_BRDF or SLOT_BRDF in slots.layers
+        self._set_uniform1i('brdfLUT', BORROWED_BRDF_UNIT if borrowing else IBL_UNITS['brdf'],
+                            self.program)
+        if slots.specular is None:
+            self._set_uniform1i('phongSpecularSlot', -1, self.program)
+            return
+        holder = material.textures.get('specularColor')
+        tex = holder.cached(mode) if holder is not None else None
+        if tex is None or not getattr(tex, 'texture', None):
+            self._set_uniform1i('phongSpecularSlot', -1, self.program)
+            return
+        glActiveTexture(GL_TEXTURE0 + self.slot_unit(slots.specular))
+        glBindTexture(GL_TEXTURE_2D, tex.texture)
+        glActiveTexture(GL_TEXTURE0)
+        self._set_uniform1i('phongSpecularSlot', slots.specular, self.program)
+        # The unit holds a map of this draw's, which the next material's own
+        # binds have to put back
+        self._boundTextures = None
 
     def projector_unit(self) -> Optional[int]:
         """The unit the program reads projectors' pictures from; None where it has no sampler"""
@@ -699,6 +796,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         for channel, unit in IBL_UNITS.items():
             self._set_uniform1i(_IBL_SAMPLER[channel], unit, self.program)
         self._set_uniform1i('transmissionTexture', TransmissionBuffer.UNIT, self.program)
+        self._set_uniform1i('phongSpecularSlot', -1, self.program)
         self._set_uniform1i('hasTransmissionBackdrop', 0, self.program)
         if self.planar_reflection_supported:
             self._set_uniform1i('planarReflection', REFLECTION_UNIT, self.program)
@@ -1073,6 +1171,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     #: The ``materialTextures`` bits :meth:`bind_pbr_textures` last set.
     _sampled: int = 0
+    #: The slots :meth:`configure_appearance` last gave a draw's extra textures.
+    _slots: DrawSlots = DrawSlots(None, (SLOT_BASE,))
 
     @staticmethod
     def layerBits() -> int:
@@ -1124,7 +1224,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
         if (material is self._appearance_material
                 and appearance is self._appearance_seen
                 and self.transmission_mode == self._appearance_tmode):
-            self.set_texture_layers(layers, mode, geometry)
+            self.set_texture_layers(layers, mode, geometry,
+                                    units=self.slot_units(self._slots.layers))
             return
         self._appearance_material = material
         self._appearance_seen = appearance
@@ -1154,7 +1255,10 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self.set_alpha(alpha, code, cutoff)
             self.set_transmission(0.0)
         self.bind_pbr_textures(material, mode)
-        if self.set_texture_layers(layers, mode, geometry):
+        self._slots = self._draw_slots(material)
+        self._bind_borrowed(material, self._slots, mode)
+        if self.set_texture_layers(layers, mode, geometry,
+                                   units=self.slot_units(self._slots.layers)):
             # Units the layers took from extension maps are not sampled as them,
             # and the next material binds its own maps on them again.
             self._set_uniform1i('materialTextures', self._sampled & ~self.layerBits(),

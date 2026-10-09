@@ -219,3 +219,19 @@ def test_a_lit_material_shades_the_chains_colour(gl_context, renderer):
     found = centre(drawn(square(texture, material=lit), renderer))
     # The headlight full on the square: the chain's red, shaded.
     assert found[0] > 200 and found[1] < 40 and found[2] < 40, found
+
+
+@pytest.mark.parametrize('material, layers', [
+    (b'<UnlitMaterial emissiveColor="1 1 1"/>', 2),
+    (b'<Material diffuseColor="1 1 1"/>', 4),
+])
+def test_more_than_one_2d_layer_with_sixteen_samplers(gl_context, sixteen_samplers,
+                                                     material, layers):
+    """The lightmap's sampler, and a Phong draw's metallic/roughness and
+    split-sum table ones, carry layers"""
+    colours = (b'0xFFFFFF',) * (layers - 1) + (b'0x00FF00',)
+    texture = (b"<MultiTexture mode='" + b' '.join([b'"MODULATE"'] * (layers - 1))
+               + b' "REPLACE"\'>' + b''.join(pixel(colour) for colour in colours)
+               + b'</MultiTexture>')
+    found = centre(drawn(square(texture, material=material), 'pbr'))
+    assert found[1] > 150 and found[0] < 10 and found[2] < 10, found

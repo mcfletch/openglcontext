@@ -306,6 +306,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     take it in FontStyle.family order; provider keys and the Text cache
     follow the document's `DocumentFonts.generation`
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
+  - [x] `Material`'s `ambientTexture` (.rgb on the ambient term), `shininessTexture` (.a on the shininess) and `specularTexture` (.rgb on the specular colour) in the PBR program's Phong branch, as X_ITE (2026-10-09 x3d-xfields): on the lightmap, metallic/roughness and specular colour channels (`AppearanceMaterial.PHONG_CHANNELS`); without the extension maps the specular map borrows a free sampler, the split-sum table's for a Phong draw (`pbrpass.draw_slots`). Not in the VRML97 renderer
+  - [x] MultiTexture on a 16-sampler driver (2026-10-09 x3d-xfields): 2D layers borrow the lightmap's sampler, and for a Phong draw the metallic/roughness map's and the split-sum table's (`slotTexture` in pbr.frag): four layers for a Material, two for a PhysicalMaterial. A fifth layer and nested MultiTexture are left out, as X_ITE leaves them
   - [x] `TwoSidedMaterial` and `backMaterial` (`physicalmaterial.side_material`, the shape drawn a side at a time)
   - [x] `TextureBackground` (`scenegraph.texturebackground`, sharing `background.SkyAndCube`); `transparency` of both backgrounds: the sky and ground at `1 - transparency` over transparent black, the sides their own alpha, as X_ITE (`spherebackground.sky_alpha`, 2026-10-09 x3d-xfields)
   - [x] `LocalFog` (`passes.localfog`, per draw beside the light scope); unlit surfaces are fogged
