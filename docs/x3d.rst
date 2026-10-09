@@ -250,8 +250,12 @@ A composed geometry's first texture coordinate set may come from a
 generator's ``mode`` (``OpenGLContext.scenegraph.texgen``), from the
 vertex's own or camera-space position or normal. A generator for a later
 set makes that set where a ``MultiTexture`` layer reads it, per fragment
-(see :ref:`x3d-texturing`), in both renderers; the fixed-function path does not
-generate coordinates. A ``TextureCoordinate3D`` or ``TextureCoordinate4D``
+(see :ref:`x3d-texturing`), in both renderers. The compatibility profile
+makes the first set with ``glTexGen``: ``COORD`` object-linear,
+``COORD_EYE`` and ``CAMERA_SPACE_POSITION`` eye-linear,
+``CAMERA_SPACE_NORMAL`` and ``CAMERA_SPACE_REFLECTION_VECTOR`` the normal and
+reflection maps, ``SPHERE`` and ``SPHERE_LOCAL`` the sphere map; the noises
+and the refracting sphere maps generate nothing there. A ``TextureCoordinate3D`` or ``TextureCoordinate4D``
 in a composed geometry's ``MultiTextureCoordinate`` is its 3D texture
 coordinates (the first of them; it takes no 2D set's number).
 

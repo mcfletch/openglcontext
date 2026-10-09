@@ -243,7 +243,7 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
   - [x] Interchange geometry: the six triangle sets, `ElevationGrid` (with `creaseAngle`), `LineSet`; `ColorRGBA`, `Tangent`, `MultiTextureCoordinate` mapping labels (`composedgeometry`, `meshgeometry`); data nodes registered as their declarations
   - [x] Geometry2D: Rectangle2D, TriangleSet2D, Disk2D, ArcClose2D as meshes; Circle2D, Arc2D, Polyline2D, Polypoint2D through `DrawnAs` (`loaders.x3d.X3D_ONLY` for the name the NURBS trim curve holds)
   - [x] `Extrusion` rebased on X3D's declaration (its engine fields carried as `OpenGLContext` metadata)
-  - [x] `TextureCoordinateGenerator` for a composed geometry's first set (`scenegraph.texgen`, the PBR vertex shader)
+  - [x] `TextureCoordinateGenerator` for a composed geometry's first set (`scenegraph.texgen`, the PBR vertex shader); in the compatibility profile by `glTexGen` for COORD, COORD_EYE, the camera-space modes and SPHERE (2026-10-09 x3d-xfields, `texgen.fixed_function`, `shape._fixed_texgen`)
   - [x] point/spot `radius`: a cut-off in the shader paths; unbounded for a light made in code, 100 for a document's, a glTF light's `range`
   - [x] `IndexedFaceSet` and the primitives onto the same arrays; `CoordinateDouble` rebased to a float32 origin
     (2026-10-09, x3d-gaps): `IndexedFaceSet` is a `MeshDrawn` whose
