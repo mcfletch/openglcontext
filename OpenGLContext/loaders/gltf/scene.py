@@ -847,18 +847,23 @@ class _SceneBuilder:
               and not self._mesh_shareable(node.mesh)):
             # A hook whose result stands for one copy is run for each
             # placement, and each copy is placed on its own.
+            copies = []
             for placement in placements:
                 placed = placement @ world
                 for shape, bounds in self.mesh_shapes(node.mesh, placed, node_casts):
                     children.append(MatrixTransform(localMatrix=placement,
                                                     children=[shape]))
                     self._record_part(placed, shape, bounds)
+                    copies.append((shape, bounds))
+            self._register_deformation(node, node_index, copies)
         elif node.mesh is not None:
             shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
                 # One node per mesh primitive holding every placement, sharing
                 # the mesh's geometry and appearance -> one render record, and
-                # one instanced draw that other tiles' copies batch into.
+                # one instanced draw that other tiles' copies batch into. The
+                # shared geometry is what a morph or a skin deforms, so every
+                # copy moves with it.
                 for shape, bounds in shapes:
                     children.append(self._instanced(node, shape, placements))
                     for placement in placements:
@@ -867,8 +872,7 @@ class _SceneBuilder:
                 for shape, bounds in shapes:
                     children.append(shape)
                     self._record_part(world, shape, bounds)
-                _register_morph(node, node_index, shapes, self.g, self.node_morph)
-                _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
+            self._register_deformation(node, node_index, shapes)
         if getattr(node, 'camera', None) is not None and self.g.cameras:
             self.cameras.append((world, self.g.cameras[node.camera]))
             self.camera_indices.append(node.camera)
@@ -942,6 +946,11 @@ class _SceneBuilder:
                     and not self.hooks.shareable(materials[index]):
                 return False
         return True
+
+    def _register_deformation(self, node: Any, node_index: int, shapes: list) -> None:
+        """Bind the node's morph weights and skin to the geometry of ``shapes``."""
+        _register_morph(node, node_index, shapes, self.g, self.node_morph)
+        _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
 
     def _instanced(self, node: Any, shape: Any, placements: np.ndarray) -> Any:
         """Every placement of one primitive as a single instanced draw.
