@@ -812,10 +812,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `alphaCutoff`, normal scale, occlusion strength, base colour with alpha,
     every `MATERIAL_EXTENSION_FIELDS` factor (the table moved from the writer
     to `materials`), light colour, intensity, range and cone angles, camera
-    `yfov`, `znear`, `zfar`. An unresolved pointer is logged once. Not driven:
-    orthographic camera fields, `aspectRatio`, `EXT_lights_image_based`
-    intensity and rotation, `clearcoatNormalTexture/scale` (no engine field),
-    texture transforms a texture does not declare
+    `yfov`, `znear`, `zfar`. An unresolved pointer is logged once. The rest
+    landed on x3d-xgltf2 (below)
   - [x] `KHR_node_visibility` was partial: a hidden node was not built, so it
     could not be shown. It is built with X3D `visible` false
     (`_flat.integrate` prunes it, lights included) and left out of the
@@ -825,12 +823,39 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     reported (`scene.SUPPORTED_EXTENSIONS`, `unread_required`)
   - [x] tangents were made only for a normal map; also for a clearcoat normal
     map and anisotropy, which read the tangent's direction
-  - [ ] audit gaps left open: Draco attributes outside the Draco map and a
-    Draco primitive with an uncompressed fallback when DracoPy is absent;
-    `EXT_lights_image_based` mip levels placed on the probe's five fixed
-    levels rather than spread over roughness; `clearcoatNormalTexture.scale`
-    (no material field or shader input); instanced skinned or morphed meshes
-    are static; `KHR_xmp_json_ld` keeps four notice fields
+  - [x] audit gaps closed on x3d-xgltf2 (2026-10-09):
+    - Draco: an attribute outside the extension's map is read from its
+      accessor (`meshes._primitive_arrays`); without DracoPy a primitive whose
+      accessors hold the uncompressed data draws from them; without either,
+      one warning per load
+    - image-based lights: a light's mips span roughness 0 to 1 whatever their
+      count (EXT_lights_image_based README: "the various mip levels evenly
+      map to roughness values from 0 to 1"); `ibl.roughness_lod` places each
+      of the probe's five levels in the light's chain and `ibl_resample.frag`
+      draws it trilinearly, turned and scaled on the GPU (the CPU turn of a
+      256 chain took 156 ms; the GPU draw makes an animated light
+      affordable). The probe's own prefilter and `pbr.frag`'s lookup already
+      use `lod = roughness * (levels - 1)`, as the sample viewer and X_ITE
+      do. An EnvironmentLight's `specularTexture` was box-filtered into a mip
+      chain; it is now GGX-filtered by the probe, as X_ITE filters it
+      (`ImageBasedLight.prefiltered`). X_ITE reads only an
+      EXT_lights_image_based light's first mip and prefilters it itself; we
+      read the document's mips, as the extension specifies
+    - `PhysicalMaterial.clearcoatNormalScale`: loaded, written, material
+      block word 19, scales the coat normal's x and y in `pbr.frag`, driven by
+      `KHR_animation_pointer`. X_ITE has no such field and draws the coat
+      normal map at full strength; the glTF spec is followed
+    - pointers: an orthographic camera is an `OrthoViewpoint`
+      (`-xmag, -ymag, xmag, ymag`, as X_ITE builds it) with `xmag`, `ymag`,
+      `znear`, `zfar` driven; `aspectRatio` kept beside the Viewpoint and
+      driven (the projection follows the window, as X_ITE's does);
+      `EXT_lights_image_based` `intensity` and `rotation` (slerped), the
+      light uploaded again when its `version` moves; a texture with no
+      transform, or one sharing a transform, is given its own
+      (`animation.own_texture_transform`)
+    - EXT_mesh_gpu_instancing: the node's morph weights and skin are bound to
+      the instanced geometry, so every instance deforms
+  - [ ] `KHR_xmp_json_ld` keeps four notice fields
   - [x] `test_gltf_conformance` skipped every render: it passed `None` as the
     window system, and a render that drew nothing was a skip. It passes no
     backend now, and a render that draws nothing fails

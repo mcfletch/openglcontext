@@ -261,3 +261,78 @@ def test_skinning_changes_rendered_frame(skin_glb, tmp_path):
     assert frames[0.0].any(), "bind-pose frame is all black"
     diff = np.abs(frames[0.0] - frames[1.0]).max(axis=2)
     assert (diff > 10).mean() > 0.05, "skinning did not change the rendered frame"
+
+
+def _instanced(glb, translations=((-1.5, 0.0, 0.0), (1.5, 0.0, 0.0))):
+    """``glb`` with its node 0 put down at each of ``translations`` through
+    EXT_mesh_gpu_instancing."""
+    g = GLTF2.load_from_bytes(glb)
+    blob = bytearray(g.binary_blob())
+    while len(blob) % 4:
+        blob.append(0)
+    offsets = np.asarray(translations, '<f4')
+    g.bufferViews.append(BufferView(buffer=0, byteOffset=len(blob),
+                                    byteLength=offsets.nbytes))
+    blob += offsets.tobytes()
+    g.accessors.append(Accessor(bufferView=len(g.bufferViews) - 1, componentType=5126,
+                                count=len(offsets), type='VEC3'))
+    g.nodes[0].extensions = {'EXT_mesh_gpu_instancing': {
+        'attributes': {'TRANSLATION': len(g.accessors) - 1}}}
+    g.extensionsUsed = list(g.extensionsUsed or []) + ['EXT_mesh_gpu_instancing']
+    g.buffers[0].byteLength = len(blob)
+    g.set_binary_blob(bytes(blob))
+    return b"".join(g.save_to_bytes())
+
+
+class TestInstancedDeformation:
+    """An EXT_mesh_gpu_instancing node's morph weights and skin drive every copy."""
+
+    @staticmethod
+    def _instanced_mesh(scene):
+        from OpenGLContext.scenegraph.instancedshape import InstancedShape
+        stack = [scene.group]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, InstancedShape):
+                return node.geometry
+            stack.extend(getattr(node, 'children', None) or [])
+        raise AssertionError('no instanced shape')
+
+    def test_an_instanced_mesh_is_morphed(self):
+        from OpenGLContext.loaders.gltf import load_gltf
+        scene = load_gltf(_instanced(_morph_cube_glb()))
+        mesh = self._instanced_mesh(scene)
+        before = np.array(mesh.positions)
+        scene.player(0, loop=False).evaluate(1.0)
+        assert np.allclose(mesh.positions, before * 2.0, atol=1e-5)
+
+    def test_an_instanced_mesh_is_skinned(self):
+        from OpenGLContext.loaders.gltf import load_gltf
+        scene = load_gltf(_instanced(_skinned_bar_glb()))
+        mesh = self._instanced_mesh(scene)
+        player = scene.player(0, loop=False)
+        player.evaluate(0.0)
+        rest = np.array(mesh.posed_positions())
+        player.evaluate(1.0)
+        assert not np.allclose(mesh.posed_positions(), rest)
+
+    def test_instanced_morph_changes_rendered_frame(self, tmp_path):
+        glb = tmp_path / 'morph_instanced.glb'
+        glb.write_bytes(_instanced(_morph_cube_glb()))
+        frames = {t: _frame(str(glb), str(tmp_path / ('m_%s.png' % t)), t)
+                  for t in (0.0, 1.0)}
+
+        def coverage(a):
+            # the green cubes, against a blue sky and a sand-coloured ground
+            red, green, blue = (a[..., channel].astype(int) for channel in range(3))
+            return ((green > red + 30) & (green > blue + 30)).mean()
+        assert coverage(frames[1.0]) > coverage(frames[0.0]) + 0.05
+
+    def test_instanced_skinning_changes_rendered_frame(self, tmp_path):
+        glb = tmp_path / 'skin_instanced.glb'
+        glb.write_bytes(_instanced(_skinned_bar_glb()))
+        frames = {t: _frame(str(glb), str(tmp_path / ('s_%s.png' % t)), t)
+                  for t in (0.0, 1.0)}
+        assert frames[0.0].any()
+        diff = np.abs(frames[0.0] - frames[1.0]).max(axis=2)
+        assert (diff > 10).mean() > 0.05

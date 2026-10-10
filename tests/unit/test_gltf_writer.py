@@ -317,6 +317,12 @@ class TestTexturesRoundTrip:
         assert round(float(got.normalScale), 4) == 0.5
         assert round(float(got.occlusionStrength), 4) == 0.25
 
+    def test_the_clearcoat_normal_scale_survives(self):
+        material = PhysicalMaterial(clearcoat=1.0, clearcoatNormalScale=0.5)
+        material.clearcoatNormalTexture = ImageDataTexture(image=_image())
+        got = _only_shape(_quad_with(material)).appearance.material
+        assert round(float(got.clearcoatNormalScale), 4) == 0.5
+
     def test_the_second_uv_set_selection_survives(self):
         material = PhysicalMaterial(baseTextureMapping='TEXCOORD_1')
         material.baseTexture = ImageDataTexture(image=_image())

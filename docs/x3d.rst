@@ -641,8 +641,8 @@ multiplied by its ``color``) lights the scene as its image-based light, where
 the scene has no glTF image-based light of its own, with its ``intensity``
 and ``rotation`` (``OpenGLContext.scenegraph.environmentlight``). Its
 ``specularTexture``, a ``ComposedCubeMapTexture`` or ``ImageCubeMapTexture``,
-is the environment smooth surfaces reflect, decoded from sRGB to linear
-light, each rougher level its faces averaged down by half; its
+is the environment surfaces reflect, decoded from sRGB to linear light and
+GGX-filtered by the probe for each roughness, as X_ITE filters it; its
 ``diffuseTexture`` is the irradiance over pi, read as its spherical-harmonic
 fit. The irradiance is the ``diffuseCoefficients`` where there are nine,
 else the diffuse cube map's, else the specular cube map convolved; without

@@ -16,7 +16,8 @@ from OpenGLContext.loaders.gltf.writer import _pack_glb
 TRIANGLE = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], np.float32)
 
 
-def _document(pointer, start, end, visible=None, morph=False, extra_extensions=None):
+def _document(pointer, start, end, visible=None, morph=False, extra_extensions=None,
+              camera=None, images=None, scene_extensions=None):
     """The document, with a pointer channel from ``start`` to ``end`` over 1 s."""
     start = np.atleast_1d(np.asarray(start, np.float32))
     end = np.atleast_1d(np.asarray(end, np.float32))
@@ -56,8 +57,8 @@ def _document(pointer, start, end, visible=None, morph=False, extra_extensions=N
                   {'extensions': {'KHR_lights_punctual': {'light': 0}},
                    'translation': [0, 2, 0]},
                   {'camera': 0, 'translation': [0, 0, 5]}],
-        'cameras': [{'type': 'perspective',
-                     'perspective': {'yfov': 0.8, 'znear': 0.1, 'zfar': 100.0}}],
+        'cameras': [camera or {'type': 'perspective',
+                               'perspective': {'yfov': 0.8, 'znear': 0.1, 'zfar': 100.0}}],
         'meshes': [mesh],
         'materials': [{'pbrMetallicRoughness': {'baseColorFactor': [1, 1, 1, 1]},
                        'alphaMode': 'BLEND',
@@ -69,6 +70,10 @@ def _document(pointer, start, end, visible=None, morph=False, extra_extensions=N
                             'path': 'pointer', 'extensions': {
                                 'KHR_animation_pointer': {'pointer': pointer}}}}]}],
     }
+    if images:
+        doc['images'] = images
+    if scene_extensions:
+        doc['scenes'][0]['extensions'] = scene_extensions
     return _pack_glb(doc, bytes(blob))
 
 
@@ -154,6 +159,8 @@ class TestMaterials:
         ('extensions/KHR_materials_ior/ior', 1.25, lambda s: s.appearance.material.ior),
         ('extensions/KHR_materials_clearcoat/clearcoatFactor', 0.5,
          lambda s: s.appearance.material.clearcoat),
+        ('extensions/KHR_materials_clearcoat/clearcoatNormalTexture/scale', 0.5,
+         lambda s: s.appearance.material.clearcoatNormalScale),
         ('extensions/KHR_materials_transmission/transmissionFactor', 0.5,
          lambda s: s.appearance.material.transmission),
         ('extensions/KHR_materials_iridescence/iridescenceThicknessMaximum', 300.0,
@@ -223,6 +230,86 @@ class TestCameras:
         scene = _played('/cameras/0/perspective/%s' % name, [2.0], [3.0])
         attribute = {'znear': 'near', 'zfar': 'far'}[name]
         assert np.isclose(getattr(scene.viewpoints[0], attribute), 3.0)
+
+
+ORTHOGRAPHIC = {'type': 'orthographic',
+                'orthographic': {'xmag': 2.0, 'ymag': 1.0, 'znear': 0.5, 'zfar': 50.0}}
+
+
+class TestOrthographicCameras:
+    def test_an_orthographic_camera_is_an_ortho_viewpoint(self):
+        from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint
+        scene = load_gltf(_document('/cameras/0/orthographic/xmag', [2.0], [2.0],
+                                    camera=ORTHOGRAPHIC))
+        viewpoint = scene.viewpoints[0]
+        assert isinstance(viewpoint, OrthoViewpoint)
+        assert np.allclose(viewpoint.fieldOfView, [-2, -1, 2, 1])
+        assert np.isclose(viewpoint.nearDistance, 0.5)
+        assert np.isclose(viewpoint.farDistance, 50.0)
+
+    @pytest.mark.parametrize('name, window', [
+        ('xmag', [-3, -1, 3, 1]), ('ymag', [-2, -3, 2, 3])])
+    def test_magnification(self, name, window):
+        scene = _played('/cameras/0/orthographic/%s' % name, [1.0], [3.0],
+                        camera=ORTHOGRAPHIC)
+        assert np.allclose(scene.viewpoints[0].fieldOfView, window)
+
+    @pytest.mark.parametrize('name, field', [('znear', 'nearDistance'), ('zfar', 'farDistance')])
+    def test_clipping_distances(self, name, field):
+        scene = _played('/cameras/0/orthographic/%s' % name, [2.0], [3.0],
+                        camera=ORTHOGRAPHIC)
+        assert np.isclose(getattr(scene.viewpoints[0], field), 3.0)
+
+
+def test_the_aspect_ratio_travels_with_the_viewpoint():
+    scene = _played('/cameras/0/perspective/aspectRatio', [1.0], [1.5])
+    assert np.isclose(scene.viewpoints[0].aspectRatio, 1.5)
+
+
+def _image_light_extension():
+    """An EXT_lights_image_based light of one 1x1 white mip, the scene lit by it."""
+    import base64
+    import io
+    from PIL import Image
+    out = io.BytesIO()
+    Image.new('RGB', (1, 1), (255, 255, 255)).save(out, format='PNG')
+    uri = 'data:image/png;base64,' + base64.b64encode(out.getvalue()).decode()
+    return uri, {'EXT_lights_image_based': {'lights': [{
+        'intensity': 1.0, 'rotation': [0, 0, 0, 1],
+        'irradianceCoefficients': [[0.5, 0.5, 0.5]] + [[0, 0, 0]] * 8,
+        'specularImageSize': 1, 'specularImages': [[0, 0, 0, 0, 0, 0]]}]}}
+
+
+class TestImageBasedLights:
+    def _scene(self, pointer, start, end, t=1.0):
+        uri, extensions = _image_light_extension()
+        glb = _document(pointer, start, end, extra_extensions=extensions,
+                        images=[{'uri': uri}],
+                        scene_extensions={'EXT_lights_image_based': {'light': 0}})
+        scene = load_gltf(glb)
+        player = scene.player(0, loop=False)
+        assert player is not None and player.animation.pointer_channels, pointer
+        player.evaluate(t)
+        return scene
+
+    def test_intensity(self):
+        scene = self._scene('/extensions/EXT_lights_image_based/lights/0/intensity',
+                            [1.0], [2.5])
+        assert np.isclose(scene.environment.intensity, 2.5)
+
+    def test_rotation(self):
+        half = float(np.sqrt(0.5))
+        scene = self._scene('/extensions/EXT_lights_image_based/lights/0/rotation',
+                            [0, 0, 0, 1], [0, half, 0, half])
+        assert np.allclose(scene.environment.rotation, [0, half, 0, half])
+
+    def test_rotation_is_interpolated_as_a_quaternion(self):
+        half = float(np.sqrt(0.5))
+        scene = self._scene('/extensions/EXT_lights_image_based/lights/0/rotation',
+                            [0, 0, 0, 1], [0, half, 0, half], t=0.25)
+        angle = np.pi / 16
+        assert np.allclose(scene.environment.rotation,
+                           [0, np.sin(angle), 0, np.cos(angle)], atol=1e-5)
 
 
 def test_an_unsupported_pointer_is_reported(caplog):

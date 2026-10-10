@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from typing import Any, Optional
 
 import numpy as np
-from vrml import field, node
+from vrml import cache, field, node, protofunctions
 from vrml.vrml97 import nodetypes
 
 __all__ = ['ImageBasedLight', 'face_directions', 'sh_irradiance', 'sh_fit',
@@ -175,6 +175,10 @@ def _sample(faces: Sequence[np.ndarray], directions: np.ndarray) -> np.ndarray:
     return out
 
 
+#: Where an ImageBasedLight's version watches its fields, in vrml's cache.
+_VERSION_KEY = 'image-light-version'
+
+
 class ImageBasedLight(nodetypes.Children, node.Node):
     """One ``EXT_lights_image_based`` light, decoded; see the module docstring."""
 
@@ -198,6 +202,22 @@ class ImageBasedLight(nodetypes.Children, node.Node):
         self.generated: Any = None
         #: The colour the generated cube is scaled by, beside :attr:`intensity`.
         self.tint: tuple[float, ...] = (1.0, 1.0, 1.0)
+        #: Whether :attr:`specular` is already convolved for each roughness.
+        #: False where its one level is the environment itself (an
+        #: EnvironmentLight's specularTexture), which the renderer
+        #: GGX-filters for each roughness as it uploads it.
+        self.prefiltered = True
+
+    @property
+    def version(self) -> int:
+        """A count that moves whenever a field of the light is set: what the
+        render pass compares to put the light in its probe layer again."""
+        if cache.CACHE.getData(self, _VERSION_KEY) is None:
+            self.__dict__['_version'] = int(self.__dict__.get('_version', 0)) + 1
+            holder = cache.CACHE.holder(self, True, _VERSION_KEY)
+            for declared in protofunctions.getFields(self):
+                holder.depend(self, declared)
+        return int(self.__dict__['_version'])
 
     @property
     def rotated(self) -> bool:

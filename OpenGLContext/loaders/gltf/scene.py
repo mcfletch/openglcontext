@@ -47,11 +47,11 @@ if TYPE_CHECKING:
     # points), so mypy cannot see them there; take the types from their defining
     # modules.
     from OpenGLContext.scenegraph.transform import Transform
-    from OpenGLContext.scenegraph.viewpoint import Viewpoint
+    from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint, Viewpoint
     from OpenGLContext.scenegraph.light import DirectionalLight, PointLight, SpotLight
 else:
     from OpenGLContext.scenegraph.basenodes import (
-        Transform, Viewpoint, DirectionalLight, PointLight, SpotLight,
+        Transform, Viewpoint, OrthoViewpoint, DirectionalLight, PointLight, SpotLight,
     )
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
 from OpenGLContext.scenegraph.transform import MatrixTransform
@@ -373,25 +373,35 @@ def gpu_instance_placements(g: "pygltflib.GLTF2", ext_dict: Optional[dict],
 
 
 def _one_camera_pose(world: np.ndarray, cam: "pygltflib.Camera") -> dict:
-    """World pose + perspective params for a single (world_matrix, camera_def).
+    """World pose and projection of a single (world_matrix, camera_def).
 
     World matrices are row-vector (p' = p @ M). A glTF camera looks down its
-    local -Z with +Y up; we report world-space position/forward/up.
+    local -Z with +Y up; we report world-space position/forward/up. An
+    orthographic camera adds ``orthographic``, its ``(xmag, ymag)``; a
+    perspective one its ``aspectRatio`` (None where it declares none).
     """
     pos = (np.array([0, 0, 0, 1.0]) @ world)[:3]
     forward = (np.array([0, 0, -1.0, 0.0]) @ world)[:3]
     up = (np.array([0, 1.0, 0, 0.0]) @ world)[:3]
-    persp = getattr(cam, 'perspective', None)
+    ortho = getattr(cam, 'orthographic', None) if getattr(cam, 'type', None) == 'orthographic' \
+        else None
+    persp = None if ortho is not None else getattr(cam, 'perspective', None)
+    projection = ortho if ortho is not None else persp
     fov = float(persp.yfov) if (persp and persp.yfov) else np.pi / 4.0
-    near = float(persp.znear) if (persp and persp.znear) else None
-    far = float(persp.zfar) if (persp and getattr(persp, 'zfar', None)) else None
-    return {
+    near = float(projection.znear) if (projection and projection.znear) else None
+    far = float(projection.zfar) if (projection and getattr(projection, 'zfar', None)) else None
+    pose = {
         'name': getattr(cam, 'name', None) or 'camera',
         'position': tuple(float(v) for v in pos),
         'forward': tuple(float(v) for v in (forward / (np.linalg.norm(forward) or 1))),
         'up': tuple(float(v) for v in (up / (np.linalg.norm(up) or 1))),
         'fov': fov, 'near': near, 'far': far,
+        'aspectRatio': float(persp.aspectRatio) if (persp and persp.aspectRatio) else None,
     }
+    if ortho is not None:
+        pose['orthographic'] = (float(ortho.xmag if ortho.xmag is not None else 1.0),
+                                float(ortho.ymag if ortho.ymag is not None else 1.0))
+    return pose
 
 
 def _camera_poses(cameras: list) -> list:
@@ -400,24 +410,34 @@ def _camera_poses(cameras: list) -> list:
 
 
 def _viewpoints_for_poses(poses: list, scene_graph: SceneGraph, used_defs: set) -> list:
-    """Build one root-space ``Viewpoint`` node per camera pose, in order.
+    """Build one root-space viewpoint node per camera pose, in order.
 
-    Each Viewpoint is authored in world space (the loader already resolved the
-    camera's world pose), so mounted directly under the scene root it reproduces
-    the glTF camera exactly. It is DEF-registered under the camera's name (made
-    unique) so it is addressable, and carries ``near``/``far`` beside its fields
-    for :meth:`Viewpoint.moveTo` to apply. Prefer names over indices, per the
-    glTF-camera intent.
+    Each is authored in world space (the loader already resolved the camera's
+    world pose), so mounted directly under the scene root it reproduces the
+    glTF camera exactly. It is DEF-registered under the camera's name (made
+    unique) so it is addressable. A perspective camera is a ``Viewpoint``
+    carrying ``near``/``far`` beside its fields for :meth:`Viewpoint.moveTo`
+    to apply, and ``aspectRatio``, which the projection does not follow: it
+    takes the viewport's shape, as X_ITE does. An orthographic camera is an
+    ``OrthoViewpoint`` whose window is ``(-xmag, -ymag, xmag, ymag)``.
     """
     viewpoints: list = []
     for i, pose in enumerate(poses):
-        vp = Viewpoint(
-            position=tuple(pose['position']),
-            orientation=look_orientation(pose['forward'], pose['up']),
-            fieldOfView=pose['fov'],
-            description=pose.get('name') or 'camera',
-        )
-        _beside_fields(vp, near=pose.get('near'), far=pose.get('far'))
+        position = tuple(pose['position'])
+        orientation = look_orientation(pose['forward'], pose['up'])
+        description = str(pose.get('name') or 'camera')
+        vp: Any
+        if 'orthographic' in pose:
+            xmag, ymag = pose['orthographic']
+            vp = OrthoViewpoint(fieldOfView=[-xmag, -ymag, xmag, ymag],
+                                nearDistance=pose.get('near') or -1.0,
+                                farDistance=pose.get('far') or -1.0, position=position,
+                                orientation=orientation, description=description)
+        else:
+            vp = Viewpoint(fieldOfView=pose['fov'], position=position,
+                           orientation=orientation, description=description)
+            _beside_fields(vp, near=pose.get('near'), far=pose.get('far'),
+                           aspectRatio=pose.get('aspectRatio'))
         scene_graph.regDefName(
             _unique_def(_def_name(pose.get('name'), i), used_defs), vp)
         viewpoints.append(vp)
@@ -827,18 +847,23 @@ class _SceneBuilder:
               and not self._mesh_shareable(node.mesh)):
             # A hook whose result stands for one copy is run for each
             # placement, and each copy is placed on its own.
+            copies = []
             for placement in placements:
                 placed = placement @ world
                 for shape, bounds in self.mesh_shapes(node.mesh, placed, node_casts):
                     children.append(MatrixTransform(localMatrix=placement,
                                                     children=[shape]))
                     self._record_part(placed, shape, bounds)
+                    copies.append((shape, bounds))
+            self._register_deformation(node, node_index, copies)
         elif node.mesh is not None:
             shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
                 # One node per mesh primitive holding every placement, sharing
                 # the mesh's geometry and appearance -> one render record, and
-                # one instanced draw that other tiles' copies batch into.
+                # one instanced draw that other tiles' copies batch into. The
+                # shared geometry is what a morph or a skin deforms, so every
+                # copy moves with it.
                 for shape, bounds in shapes:
                     children.append(self._instanced(node, shape, placements))
                     for placement in placements:
@@ -847,8 +872,7 @@ class _SceneBuilder:
                 for shape, bounds in shapes:
                     children.append(shape)
                     self._record_part(world, shape, bounds)
-                _register_morph(node, node_index, shapes, self.g, self.node_morph)
-                _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
+            self._register_deformation(node, node_index, shapes)
         if getattr(node, 'camera', None) is not None and self.g.cameras:
             self.cameras.append((world, self.g.cameras[node.camera]))
             self.camera_indices.append(node.camera)
@@ -922,6 +946,11 @@ class _SceneBuilder:
                     and not self.hooks.shareable(materials[index]):
                 return False
         return True
+
+    def _register_deformation(self, node: Any, node_index: int, shapes: list) -> None:
+        """Bind the node's morph weights and skin to the geometry of ``shapes``."""
+        _register_morph(node, node_index, shapes, self.g, self.node_morph)
+        _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
 
     def _instanced(self, node: Any, shape: Any, placements: np.ndarray) -> Any:
         """Every placement of one primitive as a single instanced draw.
@@ -1229,7 +1258,7 @@ class _SceneBuilder:
         animations = _build_animations(g, self.resolver, PointerTargets(
             g, node_transforms=self.node_transforms, node_morph=self.node_morph,
             appearances=self.appearances, lights=self.light_nodes,
-            viewpoints=by_camera))
+            viewpoints=by_camera, image_lights=self.image_lights))
         scene = GLTFScene(root, center, radius,
                           camera=(poses[0] if poses else None), cameras=poses,
                           viewpoints=viewpoints, sceneGraph=self.scene_graph,
