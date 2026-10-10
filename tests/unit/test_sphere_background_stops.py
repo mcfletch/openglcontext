@@ -127,3 +127,38 @@ class TestSkyAndGroundPastTheSouthPole:
             skyColor=[BLUE, CYAN, WHITE], skyAngle=[1.0, 4.0],
             groundColor=[(0.2, 0.1, 0.0), (0.4, 0.2, 0.0)], groundAngle=[0.5],
         )))
+
+
+class TestCountsTheSpecificationDoesNotGive:
+    """X3D asks for one more colour than angles. With fewer, X_ITE draws no
+    sky (or no ground) at all; with more, the extra colours are not used.
+    Basic/StudentProjects/FishingLure has two sky angles and one colour."""
+
+    def test_too_few_sky_colours_draw_no_sky(self):
+        found = Background(skyColor=[BLUE], skyAngle=[1.3, 1.57],
+                           groundColor=[CYAN], groundAngle=[1.3, 1.57]).colorSet()
+        assert len(found) == 0
+
+    def test_too_few_sky_colours_leave_the_ground(self):
+        found = Background(skyColor=[BLUE], skyAngle=[1.3, 1.57],
+                           groundColor=[CYAN, WHITE], groundAngle=[1.0]).colorSet()
+        angles = [float(stop[0]) for stop in found]
+        assert min(angles) >= pi / 2 - 1e-5, angles
+        assert all(tuple(stop[1:]) in (CYAN, WHITE) for stop in found)
+
+    def test_too_few_ground_colours_leave_the_sky(self):
+        found = Background(skyColor=[BLUE, CYAN], skyAngle=[1.0],
+                           groundColor=[WHITE], groundAngle=[0.5, 1.0]).colorSet()
+        assert all(tuple(stop[1:]) != WHITE for stop in found)
+        assert abs(float(found[-1][0]) - pi) < 1e-5
+
+    def test_extra_sky_colours_are_not_used(self):
+        given = Background(skyColor=[BLUE, CYAN, WHITE, WHITE], skyAngle=[1.0, 2.0])
+        expected = Background(skyColor=[BLUE, CYAN, WHITE], skyAngle=[1.0, 2.0])
+        assert given.colorSet().tolist() == expected.colorSet().tolist()
+
+    def test_extra_ground_colours_are_not_used(self):
+        given = Background(skyColor=[BLUE], groundColor=[CYAN, WHITE, BLUE],
+                           groundAngle=[1.0])
+        expected = Background(skyColor=[BLUE], groundColor=[CYAN, WHITE], groundAngle=[1.0])
+        assert given.colorSet().tolist() == expected.colorSet().tolist()

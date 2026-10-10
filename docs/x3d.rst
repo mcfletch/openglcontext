@@ -730,7 +730,9 @@ group of shapes takes the LocalFog of the first of them.
 A ``Background``'s sky and ground colours are drawn on a sphere. One
 ``groundColor`` with no ``groundAngle`` is a ground of that colour from the
 nadir to the horizon, as one ``skyColor`` with no ``skyAngle`` is a sky all
-over. Each of its six images is drawn over them, turned as X3D turns it, once
+over. X3D gives one colour more than angles; as X_ITE draws them, colours
+past that are not used, and a sky or ground with no more colours than angles
+is not drawn. Each of its six images is drawn over them, turned as X3D turns it, once
 that image has loaded; a side with no image, or a transparent part of one,
 shows the sky and ground. A ``TextureBackground`` is drawn the same way from
 its six ``...Texture`` sides. A side is an ``ImageTexture`` or a
@@ -1809,6 +1811,10 @@ Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
+- An instance of an ``EXTERNPROTO`` whose file could not be read is kept and
+  written. It stands for no node: a ``Shape`` holding one as its geometry
+  draws nothing, and one holding it as its appearance is drawn with the
+  default appearance.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
 
@@ -1840,18 +1846,22 @@ checkout, not by the installed engine:
 Playwright's headless Chromium where it is missing, and draws with WebGL in
 software (SwiftShader), so a render does not depend on the machine's GPU.
 X_ITE is downloaded from npm once, at a pinned version checked by its
-SHA-256, and served with the documents from 127.0.0.1. Each document is
-captured half a second after X_ITE reports it loaded; its ``<slug>.json``
-records the X_ITE and Chromium versions and the errors the page reported.
+SHA-256, and served with the documents from 127.0.0.1. The page runs on
+the clock ``oglc-x3d-regression`` draws by: its ``Date`` stands just before
+2000-01-01 while the document and the files it names arrive, then steps by a
+sixtieth of a second for each frame drawn, and the frame captured is the one
+at the world time ``x3d_regression.capture_time()`` gives for the
+regression's frame count. A looping TimeSensor, an interpolator or a viewer
+falling under gravity is at the same point in X_ITE's render as in ours. The
+``<slug>.json`` records the X_ITE and Chromium versions, the world time
+drawn at and the errors the page reported.
 ``--jobs`` sets how many browsers draw at a time (a quarter of the
 processors by default, as SwiftShader runs threads of its own), and
 ``--archive`` names any archive under ``--corpus``. The script prints
 ``FAIL`` beside a document it could not draw and exits 1 when there is one.
 
 The difference counts pixels more than 32 apart in a channel. It is for the
-reader of the report and fails no run. X_ITE draws a document at the
-browser's clock, and ours at a fixed time in 2000 (below), so an animated
-document is at a different point of its animation in the two.
+reader of the report and fails no run.
 
 .. code-block:: bash
 

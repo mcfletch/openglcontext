@@ -291,3 +291,12 @@ def test_an_extrusion_reads_scale_and_orientation_by_spine_point(scale, orientat
                      crossSection=[(0.2, 0), (0, 0.2), (-0.2, 0), (0, -0.2), (0.2, 0)])
     arrays = node.meshArrays()
     assert arrays is not None and len(arrays.attributes['POSITION'])
+
+
+def test_an_extrusion_of_a_two_point_cross_section_is_a_ribbon():
+    """Savage's documents sweep a line: two triangles per spine segment, no caps"""
+    from OpenGLContext.scenegraph.basenodes import Extrusion  # noqa: PLC0415 kept with its use
+    node = Extrusion(crossSection=[(-1, 0), (1, 0)], spine=[(0, 0, 0), (0, 1, 0), (0, 2, 0)])
+    arrays = node.meshArrays()
+    assert arrays is not None
+    assert len(arrays.indices) // 3 == 4
