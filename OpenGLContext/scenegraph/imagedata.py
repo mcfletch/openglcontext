@@ -13,6 +13,7 @@ from typing import Any, Optional
 from vrml import cache
 from vrml.x3d import nodes as x3d
 
+from OpenGLContext.loaders import basisu
 from OpenGLContext.scenegraph.imagetexture import PILImage, _Texture
 from OpenGLContext.scenegraph.sampler import sampler_of, texture_properties
 
@@ -24,7 +25,13 @@ ROUGHNESS_KEY = 'mean-roughness'
 
 
 class ImageDataTexture(_Texture, x3d.X3DTexture2DNode):
-    """An X3D 2D texture whose image is a decoded PIL image"""
+    """An X3D 2D texture whose image is a decoded PIL image
+
+    The image may instead be a Basis Universal file
+    (:class:`~OpenGLContext.loaders.basisu.BasisImage`), which is uploaded in
+    a block format the context samples, as glTF's ``KHR_texture_basisu``
+    textures are.
+    """
 
     PROTO = 'ImageDataTexture'
     #: glTF's images, and the images the engine generates, put texture
@@ -66,17 +73,27 @@ class ImageDataTexture(_Texture, x3d.X3DTexture2DNode):
 
 
 def x3d_image(image: Any, format: str, **options: Any) -> bytes:
-    """`image` encoded in `format`, upside down, for an X3D `ImageTexture`"""
+    """`image` encoded in `format`, upside down, for an X3D `ImageTexture`
+
+    A Basis Universal image is written as its level 0 pixels.
+    """
     import io  # noqa: PLC0415 only an X3D writer asks
     from PIL import ImageOps  # noqa: PLC0415 only an X3D writer asks
+    if isinstance(image, basisu.BasisImage):
+        image = image.pil()
     stream = io.BytesIO()
     ImageOps.flip(image).save(stream, format, **options)
     return stream.getvalue()
 
 
 def green_mean(image: Any) -> float:
-    """The mean of a PIL image's green channel, from 0 to 1"""
+    """The mean of a PIL image's green channel, from 0 to 1
+
+    A Basis Universal image is measured at level 0.
+    """
     from PIL import ImageStat  # noqa: PLC0415 PIL only when a map is measured
+    if isinstance(image, basisu.BasisImage):
+        image = image.pil()
     if image.mode not in ('RGB', 'RGBA', 'RGBX'):
         image = image.convert('RGB')
     # The channel alone, so an alpha of 0 weighs nothing into the reduction.

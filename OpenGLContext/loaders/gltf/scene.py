@@ -67,6 +67,7 @@ from OpenGLContext.loaders.gltf.materials import _build_appearance, _double_side
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
 from OpenGLContext.loaders.gltf import variants as variantsext
 from OpenGLContext.loaders.gltf.notices import document_notices
+from OpenGLContext.loaders.gltf.textures import basisu_notice
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
     look_orientation,
@@ -584,7 +585,9 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
 
 #: The extensions this loader reads, by name: what a document may list in
 #: ``extensionsRequired`` without a report. ``KHR_draco_mesh_compression``
-#: needs the optional DracoPy as well.
+#: needs the optional DracoPy as well, and ``KHR_texture_basisu`` the optional
+#: opengl_basisu, whose absence is reported by
+#: :func:`~OpenGLContext.loaders.gltf.textures.basisu_notice`.
 SUPPORTED_EXTENSIONS = frozenset((
     'EXT_lights_image_based', 'EXT_mesh_gpu_instancing', 'EXT_meshopt_compression',
     'EXT_texture_avif', 'EXT_texture_video', 'EXT_texture_webp', 'KHR_accessor_float16',
@@ -597,7 +600,7 @@ SUPPORTED_EXTENSIONS = frozenset((
     'KHR_materials_sheen', 'KHR_materials_specular', 'KHR_materials_transmission',
     'KHR_materials_unlit', 'KHR_materials_variants', 'KHR_materials_volume',
     'KHR_mesh_quantization', 'KHR_meshopt_compression', 'KHR_node_visibility',
-    'KHR_texture_transform', 'KHR_xmp_json_ld', 'MSFT_lod', 'MSFT_screencoverage',
+    'KHR_texture_basisu', 'KHR_texture_transform', 'KHR_xmp_json_ld', 'MSFT_lod', 'MSFT_screencoverage',
     'OGLC_hook', 'OGLC_materials_baked_light', 'OGLC_zone', 'OMI_environment_sky',
     'OMI_physics_gravity',
 ))
@@ -629,6 +632,9 @@ class _SceneBuilder:
             log.warning("glTF document lists in extensionsRequired %s, which this "
                         "loader does not read; what depends on them is drawn "
                         "without them", ', '.join(unread))
+        notice = basisu_notice(g)
+        if notice is not None:
+            log.warning(notice)
         self.resolver = resolver
         #: One Appearance per glTF material index, shared by its primitives.
         self.appearances: dict = {}

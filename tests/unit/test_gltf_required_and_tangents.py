@@ -63,8 +63,8 @@ def _mesh(scene):
 
 class TestRequired:
     def test_an_unread_required_extension_is_reported(self, caplog):
-        load_gltf(_document(required=['KHR_texture_basisu', 'EXT_made_up']))
-        assert 'KHR_texture_basisu' in caplog.text and 'EXT_made_up' in caplog.text
+        load_gltf(_document(required=['EXT_made_up', 'EXT_made_up_too']))
+        assert 'EXT_made_up_too' in caplog.text and 'EXT_made_up' in caplog.text
 
     def test_a_read_required_extension_is_not(self, caplog):
         load_gltf(_document(required=['KHR_mesh_quantization', 'KHR_meshopt_compression']))
@@ -73,7 +73,8 @@ class TestRequired:
     @pytest.mark.parametrize('name', [
         'KHR_accessor_float16', 'KHR_accessor_float64', 'KHR_materials_variants',
         'KHR_meshopt_compression', 'EXT_meshopt_compression', 'EXT_texture_avif',
-        'KHR_draco_mesh_compression', 'KHR_animation_pointer', 'KHR_node_visibility'])
+        'KHR_draco_mesh_compression', 'KHR_animation_pointer', 'KHR_node_visibility',
+        'KHR_texture_basisu'])
     def test_the_list_holds_what_the_loader_reads(self, name):
         assert name in SUPPORTED_EXTENSIONS
 

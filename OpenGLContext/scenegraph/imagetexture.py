@@ -9,7 +9,7 @@ from OpenGL.GLU import *
 from OpenGL.error import GLError
 from OpenGLContext import texture, context
 from OpenGLContext.scenegraph.sampler import apply_sampler, sampler_of
-from OpenGLContext.loaders import background
+from OpenGLContext.loaders import background, basisu
 
 from PIL import Image
 
@@ -74,8 +74,18 @@ class _Texture(nodetypes.Texture, node.Node):
         """Create a new texture-holding object
 
         Uses the TextureCache to try to minimise the
-        number of textures created
+        number of textures created. A Basis Universal image is a
+        :class:`~OpenGLContext.texture.BasisTexture` of its own.
         """
+        if isinstance(image, basisu.BasisImage):
+            return mode.context.textureCache.getTexture(
+                image,
+                texture.BasisTexture,
+                mode=mode,
+                repeating=(self.repeatS or self.repeatT),
+                atlasable=False,
+                topFirst=self.TOP_FIRST,
+            )
         return mode.context.textureCache.getTexture(
             image,
             texture.Texture,
@@ -174,10 +184,13 @@ class _Texture(nodetypes.Texture, node.Node):
     def hasAlpha(self) -> bool:
         """Whether the image this node holds has an alpha channel, read without GL
 
-        A PIL image with an alpha band or a transparent palette entry, or an
-        SFImage of two or four components. False until an image is loaded.
+        A PIL image with an alpha band or a transparent palette entry, a Basis
+        Universal file storing alpha, or an SFImage of two or four components.
+        False until an image is loaded.
         """
         image = self.image
+        if isinstance(image, basisu.BasisImage):
+            return image.has_alpha
         if isinstance(image, Image.Image):
             return 'A' in image.getbands() or 'transparency' in image.info
         try:
@@ -232,9 +245,18 @@ def decode_picture(file: Any, baseURL: str) -> Any:
     Decoded here rather than by whoever first looks at the pixels: PIL reads
     lazily, so an image left undecoded holds the file it came from open --
     six of them for a cubemap -- and does its reading on the thread that
-    draws.
+    draws. A Basis Universal file (KTX 2 or ``.basis``) is a
+    :class:`~OpenGLContext.loaders.basisu.BasisImage`, which raises the
+    extra to install where opengl_basisu is not.
     """
-    image = Image.open(file)
+    return decode_image_bytes(file.read())
+
+
+def decode_image_bytes(data: bytes) -> Any:
+    """A PIL image, or a Basis Universal image, of a picture file's bytes"""
+    if basisu.is_basis(data):
+        return basisu.open_image(data)
+    image = Image.open(BytesIO(data))
     image.load()
     return image
 
@@ -380,12 +402,10 @@ class ImageTexture(URLRead, _Texture, basenodes.ImageTexture):
 
     def loadFromData(self, data: bytes, url: Any = None) -> Any:
         """Load (synchronously) from given data"""
-        fh = BytesIO(data)
         if url is None:
             url = "memory:%s" % (hash(data),)
         try:
-            image = Image.open(fh)
-            image.load()
+            image = decode_image_bytes(data)
         except Exception as err:
             # As in loadBackground: bytes that are not the image they claim to
             # be are a warning and no texture, whatever the decoder made of them.

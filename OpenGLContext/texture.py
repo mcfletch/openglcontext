@@ -8,7 +8,9 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB import texture_non_power_of_two
 from OpenGL.extensions import available
+from OpenGLContext import contextresources
 from OpenGLContext.arrays import ArrayType
+from OpenGLContext.loaders import basisu
 from PIL import Image
 import weakref
 import logging
@@ -228,8 +230,12 @@ class Texture(object):
         then ensurePow2 to make the image a valid size for OpenGL,
         then calls self.store(...) with the appropriate arguments.
 
-        Returns the number of components in the image
+        Returns the number of components in the image. A Basis Universal
+        image (:class:`~OpenGLContext.loaders.basisu.BasisImage`) is stored as
+        its level 0 pixels; :class:`BasisTexture` uploads it compressed.
         """
+        if isinstance(image, basisu.BasisImage):
+            image = image.pil()
         if isinstance(image, ArrayType):
             image = NumpyAdapter(image)
         else:
@@ -302,6 +308,98 @@ class Texture(object):
         return image
 
 
+#: What each GL context offers for Basis Universal textures, keyed by the
+#: context (:func:`~OpenGLContext.contextresources.context_key`) and dropped as
+#: it dies.
+_CAPABILITIES: dict[contextresources.ContextKey, basisu.Capabilities] = {}
+
+
+@contextresources.on_context_lost
+def _forget_capabilities() -> None:
+    """Drop the answer for the context being torn down."""
+    _CAPABILITIES.pop(contextresources.context_key(), None)  # type: ignore[arg-type]  # None is never a key and pops nothing
+
+
+def compressed_capabilities() -> basisu.Capabilities:
+    """The current context's extensions, version and kind, asked once per context
+
+    With no context current the answer is a context offering no compressed
+    format, and it is not remembered.
+    """
+    key = contextresources.context_key()
+    if key is None:
+        return basisu.Capabilities()
+    found = _CAPABILITIES.get(key)
+    if found is None:
+        found = _CAPABILITIES[key] = _query_capabilities()
+    return found
+
+
+def _query_capabilities() -> basisu.Capabilities:
+    from OpenGL import extensions as glextensions  # noqa: PLC0415 kept with the one query that needs it
+    version = glextensions.GLQuerier.getVersion()
+    names = glextensions.GLQuerier.getExtensions() or ()
+    text = glGetString(GL_VERSION) or b''
+    return basisu.Capabilities(
+        frozenset(name.decode('latin-1') if isinstance(name, bytes) else str(name)
+                  for name in names),
+        (int(version[0]), int(version[1])) if version else (0, 0),
+        es=bytes(text).startswith(b'OpenGL ES'),
+    )
+
+
+class BasisTexture(Texture):
+    """A 2D texture holding a Basis Universal image in a format the context samples
+
+    The image (:class:`~OpenGLContext.loaders.basisu.BasisImage`) is
+    transcoded to the best block format the context's extensions and version
+    offer (:func:`compressed_capabilities`), or to RGBA8 where it offers none,
+    and every mip level the file holds is uploaded: compressed ones with
+    ``glCompressedTexImage2D``. ``mip_levels`` is how many, which tells
+    :func:`~OpenGLContext.scenegraph.sampler.apply_sampler` not to generate
+    them; ``target_format`` is the format's name (``'bc7'``, ``'rgba8'``).
+
+    ``topFirst`` false, a VRML97 or X3D texture, puts the image's bottom row at
+    t=0; a block format's rows cannot be turned over, so that texture is RGBA8.
+    The texture is written whole by :meth:`store_basis`; :meth:`update` does
+    not apply to it.
+    """
+
+    def __init__(self, image: basisu.BasisImage, topFirst: bool = False) -> None:
+        super().__init__(topFirst=topFirst)
+        self.mip_levels = 0
+        self.target_format = ''
+        self.store_basis(image)
+
+    def store_basis(self, image: basisu.BasisImage) -> None:
+        """Transcode and upload ``image``, replacing whatever the texture held"""
+        target, levels = basisu.plan(image, compressed_capabilities(), top_first=self.topFirst)
+        glBindTexture(GL_TEXTURE_2D, self.texture)
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+        for level in levels:
+            if level.compressed:
+                # PyOpenGL's wrapper passes the array's byte count as
+                # imageSize; its stub lists imageSize as an argument.
+                glCompressedTexImage2D(
+                    GL_TEXTURE_2D, level.level, level.internal_format, level.width,
+                    level.height, 0, level.data)  # type: ignore[call-arg]  # the wrapper computes imageSize
+            else:
+                glTexImage2D(GL_TEXTURE_2D, level.level, level.internal_format, level.width,
+                             level.height, 0, level.gl_format, level.gl_type, level.data)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, len(levels) - 1)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                        GL_LINEAR_MIPMAP_LINEAR if len(levels) > 1 else GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+        self.mip_levels = len(levels)
+        self.target_format = target
+        self.components = 4 if image.has_alpha else 3
+        # No format to update with: a block format takes no glTexSubImage2D of pixels.
+        self.format = None
+
+
 class CubeTexture(Texture):
     """Texture class for use with Cube samplers"""
 
@@ -343,6 +441,8 @@ class CubeTexture(Texture):
             raise ValueError("Need six non-null images")
         prepared = []
         for key, image in our_images:
+            if isinstance(image, basisu.BasisImage):
+                image = image.pil()
             if isinstance(image, ArrayType):
                 prepared.append((key, NumpyAdapter(image)))
             else:

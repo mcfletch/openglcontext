@@ -125,6 +125,9 @@ OpenGLContext/
 │   │                 # for a part the document cannot be read without
 │   ├── textureimages.py  # Cube maps and volumes from DDS, KTX, NRRD and
 │   │                 # laid-out pictures -- no GL -- docs/x3d.rst
+│   ├── basisu.py     # Basis Universal KTX 2 and .basis files through the
+│   │                 # optional opengl_basisu: the image, and the formats
+│   │                 # to upload it in -- no GL -- docs/gltf.rst#gltf-basisu
 │   ├── panorama.py   # Environment panoramas: which sources are (.hdr, .pic,
 │   │                 # .exr) and one decode for all of them -- docs/pbr.rst
 │   ├── notices.py    # A file's copyright and licence notices, as Notice

@@ -66,6 +66,11 @@ glfw = ["glfw>=2.0"]
 # MovieTexture's H.264 movie. The encoder and the decoder are the ones in the
 # graphics driver; this brings in the bindings that reach them.
 video = ["pyopengl-video>=1.0.0a1"]
+# Basis Universal textures: glTF's KHR_texture_basisu and KTX 2 or .basis files
+# named by X3D texture nodes, transcoded to the block formats the GPU samples.
+# opengl_basisu compiles Binomial's transcoder (Apache-2.0) into a wheel. Not
+# in `all` until opengl_basisu is on PyPI, where `dev` installs from.
+basisu = ["opengl_basisu>=0.1.0a1"]
 # gltf is now pretty much core to OpenGLContext...
 gltf = []
 draco = ["DracoPy>=1.4"]

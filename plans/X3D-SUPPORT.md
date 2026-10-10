@@ -379,9 +379,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     as in X_ITE, which reads `NurbsSurface` as an unknown node (2026-10-09)
   - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
     (DDS, KTX 1.1, KTX 2 of 8-bit and BC1-3 formats with zlib or no
-    supercompression (2026-10-09 x3d-xfields; X_ITE also transcodes Basis
-    Universal, which needs a transcoder this engine does not carry; X_ITE
-    reads no HDR cube map), crosses and strips: `loaders.textureimages`),
+    supercompression (2026-10-09 x3d-xfields), and Basis Universal through the
+    optional opengl_basisu (2026-10-09 x3d-xbasisu; X_ITE reads no HDR cube
+    map), crosses and strips: `loaders.textureimages`),
     `GeneratedCubeMapTexture` (drawn before the views from the shape's
     origin, update NONE drawn once); sampled with the world reflection
     vector; compatibility profile through reflection-map texgen
@@ -793,10 +793,22 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     written once to the asset cache by digest); falls back to the core
     `source`. Written back by the writer (relative uri beside the written
     file; extension required). GL test draws `colours.mp4`'s frame
-  - [ ] `KHR_texture_basisu`: no KTX2/Basis transcoder under a usable licence
-    in Python; needs one (Binomial's basis_universal is Apache-2.0, C++, and
-    would be an optional compiled dependency). A texture carrying it draws its
-    core `source`
+  - [x] `KHR_texture_basisu` (2026-10-09 x3d-xbasisu): the new sibling
+    `opengl_basisu` (MIT; Cython C++ extension compiling basis_universal v2_50's
+    transcoder and Zstandard decoder, Apache-2.0 and BSD, vendored unmodified)
+    is the optional extra `OpenGLContext[basisu]`. `loaders.basisu` opens the
+    KTX 2 image (`BasisImage`) and plans the upload from the context's
+    extensions and version (BC7/BC1/BC3, ETC1/ETC2, ASTC 4x4, else RGBA8);
+    `texture.BasisTexture` uploads every mip level with
+    `glCompressedTexImage2D`; `apply_sampler` keeps a texture's own mips. The
+    Basis image is preferred to the core `source`, which is the fallback for a
+    file that does not transcode. Without opengl_basisu: the fallback, and one
+    warning per document naming the extra. The writer writes a Basis image
+    back under the extension. The KTX 2 reader in `loaders.textureimages`
+    hands Basis payloads (and `.basis` files) to it too, so
+    `ImageCubeMapTexture`, `ImageTexture3D` (a 2D array as a volume) and
+    `ImageTexture` (RGBA8, turned to X3D's lower-left origin) read them. GL
+    test draws each target format's quadrants (`test_basisu_gl.py`)
   - left to the xnodes stream: `KHR_materials_retroreflection`,
     `KHR_materials_volume_scatter`, `KHR_materials_pbrSpecularGlossiness`
   - [x] X_ITE's file formats: STL, PLY (with 3D Gaussian splat PLY as
