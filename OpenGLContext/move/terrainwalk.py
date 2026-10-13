@@ -329,7 +329,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         self.standAvatarOnTerrain()
 
     def syncAvatarToCamera(self, heading: bool = True,
-                           eye: Optional[Sequence[float]] = None) -> None:
+                           eye: Optional[Sequence[float]] = None,
+                           pitch: bool = False) -> None:
         """Seat the avatar on the terrain under the free-fly camera.
 
         The physics form asks the world whether there is anything underfoot and
@@ -339,14 +340,14 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         ``heading`` takes the camera's bearing along with its position, as in
         the physics form; a freshly spawned avatar keeps the heading it was
         spawned with.  ``eye`` seats it at a pose read before the spawn moved
-        the camera.
+        the camera.  ``pitch`` keeps the camera's look up or down.
         """
         platform = self.physicsPlatform
         if platform is None:
             return
         if heading:
             platform.yaw = self.yawFromPlatform()
-        platform.pitch = 0.0
+        platform.pitch = self.pitchFromPlatform() if pitch else 0.0
         platform.bind_eye(tuple(self.platform.position[:3]) if eye is None
                           else tuple(eye))
         self.standAvatarOnTerrain()

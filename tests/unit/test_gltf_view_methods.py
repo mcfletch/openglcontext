@@ -26,6 +26,7 @@ from OpenGLContext.scenegraph.light import DirectionalLight, PointLight
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.viewpoint import Viewpoint
+from OpenGLContext.scenegraph.basenodes import sceneGraph
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.loaders.sceneloader import SceneLoader
 from OpenGLContext.loaders.gltf import animation as anim_mod
@@ -875,14 +876,13 @@ class TestRequestAndPollExtras:
 
 
 class TestCycleViewpointPhysics:
-    def test_cycle_teleports_the_walking_avatar_to_the_new_viewpoint(self):
+    def _walking(self, moved):
         inst = _inst()
-        vp0, vp1 = Viewpoint(), Viewpoint()
-        inst.viewpoints = [vp0, vp1]
-        inst._cameraNames = ['front', 'side']
+        inst.viewpoints = [Viewpoint(), Viewpoint(), Viewpoint()]
+        inst.document = sceneGraph(children=inst.viewpoints)   # one bind stack
+        inst._cameraNames = ['front', 'side', 'back']
         inst.cameraIndex = 0
-        vp0.set_bind = True
-        moved = {}
+        inst.viewpoints[0].set_bind = True
         inst.physicsPlatform = types.SimpleNamespace(
             yaw=0.0, pitch=0.0,
             character=types.SimpleNamespace(grounded=True),
@@ -894,11 +894,27 @@ class TestCycleViewpointPhysics:
         inst._animationNames = []
         inst._animationIndex = 0
         inst._animationPlaying = True
-        inst.getSceneGraph = lambda: types.SimpleNamespace(boundViewpoint=vp0)
+        inst.getSceneGraph = lambda: types.SimpleNamespace(
+            boundViewpoint=inst.viewpoints[0])
         inst.triggerRedraw = lambda _n: None
-        inst.previousCamera()                                   # wraps 0 -> 1
-        assert inst.cameraIndex == 1
-        assert 'eye' in moved                              # avatar teleported
+        return inst
+
+    def test_cycling_leaves_the_avatar_to_the_bind(self):
+        """The frame that moves the camera to the viewpoint seats the avatar
+        (``PhysicsWalkMixin.OnViewpointBound``)"""
+        moved = {}
+        inst = self._walking(moved)
+        inst.previousCamera()                                   # wraps 0 -> 2
+        assert inst.cameraIndex == 2
+        assert inst.viewpoints[2].isBound is True
+        assert moved == {}
+
+    def test_two_presses_before_a_frame_step_two_cameras(self):
+        inst = self._walking({})
+        inst.nextCamera()
+        inst.nextCamera()
+        assert inst.cameraIndex == 2
+        assert inst.viewpoints[2].isBound is True
 
 
 class TestPhysicsSeams:

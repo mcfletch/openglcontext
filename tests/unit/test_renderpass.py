@@ -21,7 +21,6 @@ class TestDefaultRenderPassesSceneSwap(unittest.TestCase):
         ctx = mock.MagicMock()
         ctx.getSceneGraph.return_value = sg
         ctx.contextDefinition.profile = profile
-        ctx.allContexts = []
         return ctx
 
     def test_first_call_creates_flat_for_current_scenegraph(self) -> None:
@@ -33,7 +32,9 @@ class TestDefaultRenderPassesSceneSwap(unittest.TestCase):
             FlatPassCls.return_value.scene = sg
             runner(ctx)
 
-        FlatPassCls.assert_called_once_with(sg, ctx.allContexts)
+        (scene, contexts), _named = FlatPassCls.call_args
+        self.assertIs(scene, sg)
+        self.assertEqual([reference() for reference in contexts], [ctx])
         self.assertIs(self.renderpass.FLAT.scene, sg)
 
     def test_swapping_scenegraph_rebuilds_flat(self) -> None:
@@ -58,6 +59,8 @@ class TestDefaultRenderPassesSceneSwap(unittest.TestCase):
             self.assertIs(self.renderpass.FLAT, flat_b)
 
         self.assertEqual(FlatPassCls.call_count, 2)
+        flat_a.release.assert_called_once_with()
+        flat_b.release.assert_not_called()
 
     def test_same_scenegraph_reuses_flat(self) -> None:
         """When the scenegraph is unchanged, FLAT is reused."""

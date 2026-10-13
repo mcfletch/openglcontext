@@ -55,6 +55,7 @@ from typing import (
     TYPE_CHECKING, Any, List, NamedTuple, Optional, Sequence, Tuple, cast,
 )
 
+from vrml.field import Field
 from vrml.protofunctions import getField
 
 from OpenGLContext import renderoptions
@@ -109,7 +110,8 @@ def _isSet(definition: Any, name: str) -> bool:
     Reading the field would run its default and settle it, so the field is
     asked instead.
     """
-    return bool(getField(definition, name).fhas(definition))
+    declared = getField(definition, name)
+    return isinstance(declared, Field) and bool(declared.fhas(definition))
 
 
 class KeyBinding(NamedTuple):
@@ -289,7 +291,6 @@ class SceneViewerMixin( CaptionMixin,
         def setupPhysics(self, enable: bool = False) -> bool: ...
         def enablePhysics(self, on: bool = True) -> bool: ...
         def stepPhysics(self, dt: Optional[float] = None) -> None: ...
-        def moveAvatarToViewpoint(self, viewpoint: Any) -> None: ...
         def getNavigation(self) -> Any: ...
 
     # -- start-up ---------------------------------------------------------
@@ -842,15 +843,16 @@ class SceneViewerMixin( CaptionMixin,
         self.cameraIndex = index
 
     def cycleViewpoint(self, delta: int) -> None:
-        """Bind the next camera along, and take the avatar with you.
+        """Bind the camera ``delta`` along from the bound one.
 
-        In walk mode the avatar owns the camera, so it has to go to the chosen
-        viewpoint too -- otherwise its pose snaps the view straight back.
+        The frame that follows moves the view there
+        (:func:`OpenGLContext.passes.viewpointbinding.bind_scene_viewpoint`),
+        and a walked avatar with it.
         """
         if not self.viewpoints:
             return
-        graph = self.getSceneGraph()
-        current = getattr(graph, 'boundViewpoint', None) if graph else None
+        from vrml.x3d import binding  # noqa: PLC0415 beside its one use
+        current = binding.bound(self.viewpoints[0])
         try:
             index = self.viewpoints.index(current)
         except ValueError:
@@ -858,7 +860,6 @@ class SceneViewerMixin( CaptionMixin,
         following = (index + delta) % len(self.viewpoints)
         self.viewpoints[following].set_bind = True
         self.cameraIndex = following
-        self.moveAvatarToViewpoint(self.viewpoints[following])
         self.updateOverlay()
         self.triggerRedraw(1)
 

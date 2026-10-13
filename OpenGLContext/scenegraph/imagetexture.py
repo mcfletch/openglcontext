@@ -261,33 +261,73 @@ def decode_image_bytes(data: bytes) -> Any:
     return image
 
 
+#: How much of a URL a log line carries: a ``data:`` URL holds its whole image.
+URL_LOG_LENGTH = 96
+
+
+def brief(url: Any) -> str:
+    """A URL, or each of several, cut to :data:`URL_LOG_LENGTH` for a log line"""
+    if not isinstance(url, (bytes, str)):
+        return '[%s]' % ', '.join(brief(entry) for entry in url)
+    text = url.decode('utf-8', 'replace') if isinstance(url, bytes) else url
+    return text if len(text) <= URL_LOG_LENGTH else text[:URL_LOG_LENGTH] + '...'
+
+
+def _is_data_url(url: Any) -> bool:
+    text = url.decode('utf-8', 'replace') if isinstance(url, bytes) else str(url)
+    return text[:5].lower() == 'data:'
+
+
+def _open(single: Any, baseURI: Any) -> Optional[tuple[str, str, Any]]:
+    """(URL, file name, open file) for one entry of a url; None for one that names nothing
+
+    A ``data:`` URL holds its own bytes, so it reads no file and asks no
+    host, wherever its document came from. Its size is held to the
+    resolver's limit before it is decoded.
+    """
+    from OpenGLContext.loaders import resolver
+    from OpenGLContext.loaders.loader import Loader
+
+    if _is_data_url(single):
+        text = single.decode('utf-8', 'replace') if isinstance(single, bytes) else str(single)
+        try:
+            data = resolver.decode_data_uri(text, resolver.DEFAULT_MAX_RESOURCE_BYTES)
+        except ValueError as err:
+            raise IOError(str(err)) from err
+        return 'data:', '', BytesIO(data)
+    result = Loader(single, baseURL=baseURI)
+    if not result:
+        return None
+    baseURL, filename, file, _headers = result
+    return baseURL, filename, file
+
+
 def load_first(node: Any, url: Any, decode: Callable[[Any, str], Any]) -> Optional[tuple[Any, str, str]]:
     """The first entry of `url` that fetches and decodes: (decoded, its URL, its file name)
 
-    Each entry is read relative to `node`'s root's base URL and handed, as
-    an open file, to ``decode(file, url)``. An entry that cannot be fetched,
-    or whose bytes `decode` raises on -- truncated, another format, or a few
-    dozen bytes declaring a billion pixels -- is reported and the next is
-    tried. None where none is read.
+    Each entry is read relative to `node`'s root's base URL, or from the
+    entry itself where it is a ``data:`` URL, and handed, as an open file, to
+    ``decode(file, url)``. An entry that cannot be fetched, or whose bytes
+    `decode` raises on -- truncated, another format, or a few dozen bytes
+    declaring a billion pixels -- is reported and the next is tried. None
+    where none is read.
     """
-    from OpenGLContext.loaders.loader import Loader
-
     baseNode = protofunctions.root(node)
     baseURI = baseNode.baseURI if baseNode else None
     for single in ([url] if isinstance(url, (bytes, str)) else list(url)):
         try:
-            result = Loader(single, baseURL=baseURI)
+            opened = _open(single, baseURI)
         except IOError as err:
-            log.warning("Unable to fetch the image at %s: %s", single, err)
+            log.warning("Unable to fetch the image at %s: %s", brief(single), brief(str(err)))
             continue
-        if not result:
+        if opened is None:
             continue
-        baseURL, filename, file, headers = result
+        baseURL, filename, file = opened
         try:
             with contextlib.closing(file):
                 decoded = decode(file, baseURL)
         except Exception as err:
-            log.warning("Unable to decode the image at %s: %s", single, err)
+            log.warning("Unable to decode the image at %s: %s", brief(single), err)
             continue
         return decoded, baseURL, filename
     return None
@@ -377,7 +417,7 @@ class ImageTexture(URLRead, _Texture, basenodes.ImageTexture):
             loadsensor.set_load_state(self, loadsensor.FAILED)
             log.warning(
                 """Unable to load any image from the url %s for the node %s""",
-                url,
+                brief(url),
                 str(self),
             )
             return None

@@ -29,6 +29,7 @@ from OpenGLContext.scenegraph.billboard import Billboard as Billboard
 from OpenGLContext.scenegraph.box import Box as Box
 from OpenGLContext.scenegraph.collision import Collision as Collision
 from OpenGLContext.scenegraph.coordinate import Coordinate as Coordinate
+from OpenGLContext.scenegraph.coordinatedeformer import CoordinateDeformer as CoordinateDeformer
 from OpenGLContext.scenegraph.cubebackground import CubeBackground as CubeBackground
 from OpenGLContext.scenegraph.cubemaptexture import ComposedCubeMapTexture as ComposedCubeMapTexture
 from OpenGLContext.scenegraph.cubemaptexture import GeneratedCubeMapTexture as GeneratedCubeMapTexture
@@ -422,6 +423,7 @@ __all__ = [
     'Coordinate',
     'CoordinateChaser',
     'CoordinateDamper',
+    'CoordinateDeformer',
     'CoordinateDouble',
     'CoordinateInterpolator',
     'CoordinateInterpolator2D',

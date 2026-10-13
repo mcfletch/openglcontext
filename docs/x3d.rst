@@ -171,6 +171,7 @@ implements these X3D nodes, by component:
   IsoSurfaceVolumeData, OpacityMapVolumeStyle, ProjectionVolumeStyle,
   SegmentedVolumeData, ShadedVolumeStyle, SilhouetteEnhancementVolumeStyle,
   ToneMappedVolumeStyle, VolumeData
+- OpenGLContext - CoordinateDeformer
 - X_ITE - AnisotropyMaterialExtension, BlendMode, ClearcoatMaterialExtension,
   DepthMode, InstancedShape,
   DiffuseTransmissionMaterialExtension, DispersionMaterialExtension,
@@ -181,6 +182,13 @@ implements these X3D nodes, by component:
   VolumeMaterialExtension, VolumeScatterMaterialExtension
 
 .. x3d-implemented-end
+
+``OpenGLContext`` is the engine's own component, for nodes X3D has no node
+for. A document names it with ``<component name='OpenGLContext' level='1'/>``
+(``COMPONENT OpenGLContext:1`` in the ClassicVRML encoding), and the writers
+write a scene holding one of its nodes with that statement. A browser without
+the component does not read such a document. ``CoordinateDeformer`` is
+described in :doc:`NURBS <nurbs>`.
 
 Geometry
 ~~~~~~~~
@@ -630,6 +638,10 @@ once, from the ``s`` key, inside a ``MultiTexture`` that darkens its edges.
 ``OpenGLContext/bin/x3d_movie_film.x3d`` drawn by the engine offscreen and
 encoded with pyopengl-video's hardware encoder (:doc:`recording`), in a
 process of its own, the first time the command runs.
+``oglc-x3d-movie holiday.mp4`` plays that file on the three screens instead: an
+MP4 with an H.264 track, copied beside a copy of the document, since a
+``MovieTexture`` reads a local file from its document's directory. The screens
+are 16:9 and the picture fills them.
 :doc:`tests/x3d_movie.py <tutorials/x3d_movie>` is the same scene as a
 tutorial.
 
@@ -770,7 +782,12 @@ The RigidBodyPhysics component runs on omi_physics (:ref:`physics-x3d`). Each
 ``RigidBodyCollection`` is a world of its own, stepped once a frame on the
 engine's clock in steps of 1/120 s (1/240 s where ``preferAccuracy`` is
 true), and at most 0.25 s a frame. A capture, whose clock advances a fixed
-step a frame, steps it the same way every run.
+step a frame, steps it the same way every run. A collection is stepped, and a
+``CollisionSensor`` senses, through each context that draws the scene it is
+in: one taken out of the scene, or left in a scene the context has been given
+another in place of, stops. Code that steps a node outside a drawn scene
+calls its ``bind(context)`` and ``unbindContext(context)``, or ``advance(seconds)``
+and ``sense()`` itself.
 
 - A ``RigidBody`` moves under the collection's ``gravity`` (unless
   ``useGlobalGravity`` is false), its ``forces`` and ``torques`` (summed,
@@ -994,6 +1011,16 @@ Every source and processing node runs from ``startTime`` to a later
 and a source not ``enabled`` is silent. Each node with a ``channelCount``
 output sends the channels it renders. ``tailTime`` is not read.
 
+Only what is heard is rendered. A ``Sound`` or ``SpatialSound`` past the
+voice budget (``AudioSettings.voices``), out of range, or behind surfaces
+that pass nothing is silent, and the nodes only it reads are not rendered
+while it is: their ``channelCount`` stays as it last was, a clip, buffer or
+oscillator among them keeps time, and a ``Delay``, ``BiquadFilter``,
+``Convolver``, ``DynamicsCompressor`` or ``WaveShaper`` starts from silence
+when the sound is heard again. An ``Analyser`` whose data is being read is
+rendered whether or not it is heard. :ref:`audio-stress` measures what a
+document's sound costs.
+
 A ``Shape`` whose ``Appearance`` has an enabled ``AcousticProperties`` is a
 surface sound meets (``OpenGLContext.audio.acoustics``). Its ``absorption``,
 ``diffuse`` and ``specular`` are read as shares of the sound energy striking
@@ -1100,9 +1127,11 @@ Binding, viewpoints and navigation
   context with no declared modes keeps its own navigation. A positive
   ``visibilityLimit`` is the far clipping distance. ``speed`` scales the
   declared modes' speeds relative to X3D's default of 1 (2 doubles them),
-  and ``avatarSize`` (radius, eye height, step height) sizes the walking
-  avatar in the world's own units. These are applied again whenever they
-  change.
+  and with them the distance the free-fly navigator steps for a key press,
+  which is what moves the camera of a context with no declared modes: a
+  quarter of a unit at a ``speed`` of 1. ``avatarSize`` (radius, eye
+  height, step height) sizes the walking avatar in the world's own units.
+  These are applied again whenever they change.
 - In a context with no declared modes, a document whose NavigationInfo has
   ``WALK`` (in capitals) as its first type keeps its viewer on the ground
   (``OpenGLContext.move.terrainfollow``), as X_ITE does. Down is the bound
@@ -1119,7 +1148,10 @@ Binding, viewpoints and navigation
   ``transitionType`` and ``transitionTime`` say: ``LINEAR`` straight at a
   steady pace, ``ANIMATE`` easing in and out, ``TELEPORT`` at once; with no
   NavigationInfo, ``LINEAR`` over a second. ``transitionComplete`` is sent on
-  arrival (``viewpointbinding.ViewpointTransition``).
+  arrival (``viewpointbinding.ViewpointTransition``). Where an avatar is
+  walked, the transition ends at the avatar's eye once it has been placed at
+  the viewpoint (``OnViewpointBound`` in :doc:`physics`). Each bind and each
+  arrival is :ref:`marked <marks-engine>` in the session's telemetry.
 - A viewpoint with ``viewAll`` places the camera, looking the viewpoint's
   way, where the whole scene's bounding sphere is in view. One with
   ``retainUserOffsets`` returns, when bound again, to where the user had
@@ -1198,7 +1230,8 @@ bottom first, each number once; a number naming no layer, and a layer whose
   lines, points) is measured at its origin.
 - Several views (:doc:`multiview`) each draw the whole stack, and the Layout
   nodes are placed for each view's camera and rectangle in turn: the scene
-  is walked again for each view they move in.
+  is walked again for each view they move in. A view styled
+  ``ViewStyle(layers=False)`` draws the layer navigation drives alone.
 
 A ``Layout`` places a rectangle in its parent's and gives the children of
 its ``LayoutGroup`` or ``LayoutLayer`` a coordinate system centred on it
@@ -1256,7 +1289,9 @@ Sensors
   under the pointer, and ``hitTexCoord_changed``, the first texture
   coordinate set there before any texture transform, both in the sensor's
   coordinates; geometry with no triangles sends its own +z and (0, 0).
-  Picking (``ContextDefinition.pickEnabled``) has to be on.
+  Picking (``ContextDefinition.pickEnabled``) has to be on. The
+  :doc:`cannon game <tutorials/using_physics>` has three thumb-wheels,
+  each a ``PlaneSensor`` beside a drum on a ``LayoutLayer``.
 - A ``KeySensor`` hears every key its window receives, including keys a
   program has bound itself: ``keyPress`` for a character, ``actionKeyPress``
   for the function, arrow and page keys, and ``shiftKey``, ``controlKey`` and
@@ -1341,11 +1376,10 @@ Geospatial
 .. figure:: images/demos/x3d_geospatial.jpg
    :alt: A green alpine valley between grey rock slopes under a pale sky, a hamlet of red-roofed huts on its floor
 
-   ``oglc-x3d-geospatial``: an X3D valley placed by latitude, longitude and height.
+   ``tests/x3d_geospatial.py``: an X3D valley placed by latitude, longitude and height.
 
-``oglc-x3d-geospatial`` writes and opens ``x3d_geospatial.x3d``, and
-:doc:`tests/x3d_geospatial.py <tutorials/x3d_geospatial>` is the same scene
-as a tutorial: a valley near 46.55 N 7.98 E drawn as a ``GeoElevationGrid``,
+:doc:`tests/x3d_geospatial.py <tutorials/x3d_geospatial>` writes and opens
+``x3d_geospatial.x3d``: a valley near 46.55 N 7.98 E drawn as a ``GeoElevationGrid``,
 which a ``GeoLOD`` replaces with four finer tiles read from their own files
 within two and a half kilometres, a hamlet of huts each placed by a
 ``GeoLocation``, a balloon on a ``GeoPositionInterpolator``'s loop, and
@@ -1382,7 +1416,11 @@ the Earth has +Y up along the ellipsoid's normal, +X east and -Z north.
 - ``GeoViewpoint`` places the camera at ``position``, turned by
   ``orientation`` from the frame there. Navigation is ``speedFactor`` times
   faster ten metres above the ellipsoid than at its surface, and faster
-  again in proportion to the viewer's height above that.
+  again in proportion to the viewer's height above that: the declared
+  modes' speeds and the free-fly navigator's step are both multiplied, with
+  or without a NavigationInfo. Heights are above the ellipsoid and not the
+  ground, so a scene in the mountains wants a ``speedFactor`` well under 1:
+  at 1,500 metres a factor of 1 is 151 times the engine's own speeds.
 - ``GeoLOD`` draws ``rootNode`` and the scene ``rootUrl`` names from afar,
   and within ``range`` metres of ``center`` the scenes ``child1Url`` to
   ``child4Url`` name, read the first time the viewer comes that close.

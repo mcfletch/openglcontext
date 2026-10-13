@@ -8,7 +8,8 @@ from a mirror. What is left passes through it (:func:`transmission`).
 :class:`Acoustics` holds a frame's surfaces in world coordinates and answers
 two questions:
 
-- :meth:`Acoustics.occlusion` - the gain on a sound reaching the listener
+- :meth:`Acoustics.occlusion` (and :meth:`Acoustics.occlusions`, for many
+  sources at once) - the gain on a sound reaching the listener
   along the straight path from the source: the square root of the product of
   each crossed surface's transmission, since the shares are of energy and a
   gain scales amplitude; :class:`~OpenGLContext.audio.x3dgraph.SoundGraph`
@@ -41,7 +42,7 @@ from OpenGLContext.scenegraph import meshdata
 if TYPE_CHECKING:
     from OpenGLContext.passes.zonelayers import Reverb
 
-__all__ = ['Acoustics', 'MAX_DECAY', 'SABINE', 'Surface', 'properties_of', 'reflection',
+__all__ = ['Acoustics', 'MAX_DECAY', 'MAX_TESTS', 'SABINE', 'Surface', 'properties_of', 'reflection',
            'transmission']
 
 #: A point, as three numbers or more (a homogeneous position's fourth is ignored).
@@ -57,6 +58,20 @@ MAX_DECAY = 10.0
 #: How near either end of the path a crossing may be and still not count, as
 #: a share of its length: a source or listener on a surface is not behind it.
 _ENDS = 1e-6
+
+
+#: The most source and triangle pairs :meth:`Acoustics.occlusions` tests at
+#: once; each pair takes a few hundred bytes while it is tested.
+MAX_TESTS = 65536
+
+
+def _cross(first: NDArray[np.float64], second: NDArray[np.float64]) -> NDArray[np.float64]:
+    """The cross product along the last axis, the others broadcast"""
+    found = np.empty(np.broadcast_shapes(first.shape, second.shape))
+    found[..., 0] = first[..., 1] * second[..., 2] - first[..., 2] * second[..., 1]
+    found[..., 1] = first[..., 2] * second[..., 0] - first[..., 0] * second[..., 2]
+    found[..., 2] = first[..., 0] * second[..., 1] - first[..., 1] * second[..., 0]
+    return found
 
 
 def properties_of(shape: Any) -> Any:
@@ -120,6 +135,10 @@ class Acoustics:
         self._owners: NDArray[np.int64] = np.zeros(0, dtype=np.int64)
         self._low: Optional[NDArray[np.float64]] = None
         self._high: Optional[NDArray[np.float64]] = None
+        #: Each triangle's first corner and the two edges from it.
+        self._first: NDArray[np.float64] = np.zeros((0, 3))
+        self._edge1: NDArray[np.float64] = np.zeros((0, 3))
+        self._edge2: NDArray[np.float64] = np.zeros((0, 3))
 
     def __bool__(self) -> bool:
         return bool(self.surfaces)
@@ -162,16 +181,36 @@ class Acoustics:
             self._passes = np.zeros(0)
             self._owners = np.zeros(0, dtype=np.int64)
             self._low = self._high = None
+        self._first = self._triangles[:, 0]
+        self._edge1 = self._triangles[:, 1] - self._first
+        self._edge2 = self._triangles[:, 2] - self._first
 
     def occlusion(self, source: Point, listener: Point) -> float:
         """The gain on a sound at `source` reaching `listener` through the surfaces"""
-        if not len(self._triangles):
-            return 1.0
-        start = np.asarray(source, dtype=np.float64)[:3]
-        way = np.asarray(listener, dtype=np.float64)[:3] - start
-        hit, distance = self._crossed(start, way)
-        if not hit.any():
-            return 1.0
+        return float(self.occlusions([source], listener)[0])
+
+    def occlusions(self, sources: Sequence[Point] | NDArray[Any],
+                   listener: Point) -> NDArray[np.float64]:
+        """The gain on a sound at each of `sources` reaching `listener`: (n,)
+
+        Every source is tested against every triangle in one pass, at most
+        :data:`MAX_TESTS` pairs at a time.
+        """
+        gains = np.ones(len(sources))
+        count = len(self._triangles)
+        if not count or not len(sources):
+            return gains
+        starts = np.asarray(sources, dtype=np.float64)[:, :3]
+        end = np.asarray(listener, dtype=np.float64)[:3]
+        step = max(1, MAX_TESTS // count)
+        for first in range(0, len(starts), step):
+            hit, distance = self._crossed(starts[first:first + step], end)
+            for row in np.flatnonzero(hit.any(axis=1)):
+                gains[first + row] = self._passed(hit[row], distance[row])
+        return gains
+
+    def _passed(self, hit: NDArray[np.bool_], distance: NDArray[np.float64]) -> float:
+        """The gain through the triangles `hit`, each crossed at `distance` along the path"""
         # A path through an edge or a corner meets each triangle sharing it at
         # one distance: that is one crossing of the surface.
         owners, distance = self._owners[hit], distance[hit]
@@ -181,22 +220,21 @@ class Acoustics:
         new[1:] = (owners[1:] != owners[:-1]) | (np.diff(distance) > _ENDS)
         return math.sqrt(float(np.prod(self._passes[owners[new]])))
 
-    def _crossed(self, start: NDArray[np.float64],
-                 way: NDArray[np.float64]) -> tuple[NDArray[np.bool_], NDArray[np.float64]]:
-        """Which triangles the segment from `start` along `way` crosses, and at what
-        share of its length (Moller-Trumbore)"""
-        first = self._triangles[:, 0]
-        edge1 = self._triangles[:, 1] - first
-        edge2 = self._triangles[:, 2] - first
-        across = np.cross(way, edge2)
-        determinant = np.einsum('ij,ij->i', edge1, across)
+    def _crossed(self, starts: NDArray[np.float64],
+                 end: NDArray[np.float64]) -> tuple[NDArray[np.bool_], NDArray[np.float64]]:
+        """Which triangles each segment from `starts` (n, 3) to `end` crosses, and at
+        what share of its length: each (n, triangles) (Moller-Trumbore)"""
+        first, edge1, edge2 = self._first, self._edge1, self._edge2
+        way = end - starts
+        across = _cross(way[:, None, :], edge2[None])
+        determinant = np.einsum('tj,ntj->nt', edge1, across)
         usable = np.abs(determinant) > 1e-12
         inverse = np.divide(1.0, determinant, out=np.zeros_like(determinant), where=usable)
-        offset = start - first
-        u = np.einsum('ij,ij->i', offset, across) * inverse
-        turned = np.cross(offset, edge1)
-        v = (turned @ way) * inverse
-        t = np.einsum('ij,ij->i', edge2, turned) * inverse
+        offset = starts[:, None, :] - first[None]
+        u = np.einsum('ntj,ntj->nt', offset, across) * inverse
+        turned = _cross(offset, edge1[None])
+        v = np.einsum('ntj,nj->nt', turned, way) * inverse
+        t = np.einsum('tj,ntj->nt', edge2, turned) * inverse
         found: NDArray[np.bool_] = (usable & (u >= 0.0) & (v >= 0.0) & (u + v <= 1.0)
                                     & (t > _ENDS) & (t < 1.0 - _ENDS))
         return found, t

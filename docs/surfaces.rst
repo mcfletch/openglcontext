@@ -82,6 +82,10 @@ from 0 to 1.
      - ``size=256, colour=STEEL, roughness=0.28``
      - A metal brushed along one direction. ``GOLD``, ``COPPER``, ``STEEL``,
        ``BRONZE`` and ``SILVER`` are metals' reflectance colours.
+   * - ``knurled``
+     - ``size=256, colour=SILVER, count=8, roughness=0.18``
+     - A metal knurled into diamonds, ``count`` across the texture: the grip
+       of a thumb-wheel or a tool handle.
 
 ``polish``, ``glaze`` and ``roughness`` are the surface's roughness: 0 is a
 mirror finish, 1 fully matte.
@@ -176,9 +180,11 @@ Triangles wind counter-clockwise seen from the side the normals face.
        normals and tangents turn with it.
    * - ``merge(parts)``
      - One mesh of several, for one shape.
-   * - ``shape(geometry, material, translation=(0, 0, 0), rotation=(0, 1, 0, 0))``
+   * - ``shape(geometry, material, translation=(0, 0, 0), rotation=(0, 1, 0, 0), texture=None)``
      - A ``Transform`` holding the geometry as a ``PBRMesh`` wearing the
        material, placed in the scene. ``rotation`` is VRML97's axis and angle.
+       ``texture`` is a texture node for the appearance, a ``MovieTexture``
+       for one.
 
 A wall with an opening in it is a few panels round the opening, each started
 where it sits on the wall, so the courses of brick run straight across:
@@ -285,6 +291,10 @@ in milliseconds:
      - 3
      - 4
      - 13
+   * - ``knurled``
+     - 3
+     - 9
+     - 28
 
 ``pbr_material`` adds about 20 ms at 512, for the normal map and the encoding.
 Each material uploads its own three textures, so make a surface once and share

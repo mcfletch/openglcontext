@@ -437,6 +437,14 @@ reflector is set to, the materials carrying them, and where they go.
      - The round window on the right wall between ``replace`` and a shaded
        glass mirror.
 
+``oglc-mirrors --movie-url URL`` hangs a 4.8 m by 2.7 m screen on the wall
+behind the starting viewpoint, facing the far mirror, and loops the movie at
+``URL`` on it. ``URL`` is a local path or an http(s) URL, which is downloaded
+into the engine's cache first and may be up to 256 MiB (:doc:`untrusted`).
+The screen is a ``MovieTexture`` (:ref:`x3d-movies`) on an unlit material, so
+the mirrors, the floor and the pool reflect a moving picture. Without a
+decoder for the window's context the screen is drawn untextured.
+
 ``tools/blender/demos/mirrors.glb``, in a checkout of the OpenGLContext
 repository (``tools/`` is not in the installed package), is the same kind of
 hall authored in Blender, every mirror tagged with the add-on's panel: the floor, the far mirror

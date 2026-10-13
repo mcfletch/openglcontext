@@ -300,3 +300,84 @@ def test_a_scene_with_no_navigation_info_keeps_the_platforms_planes():
     platform = Platform()
     navigationinfo.clip(platform, None)
     assert (platform.near, platform.far) == (0.3, 100.0)
+
+
+class FreeFly:
+    """What the free-fly manager is scaled by: the distance a key press steps"""
+
+    STEPDISTANCE = 0.25
+
+
+class Classic:
+    """A context with no declared movement modes: the free-fly manager moves its camera"""
+
+    def __init__(self):
+        self.movementManager = FreeFly()
+
+    def getNavigation(self):
+        return None
+
+
+def test_speed_scales_the_free_fly_step_without_compounding():
+    context = Classic()
+    fast, slow = NavigationInfo(speed=4.0), NavigationInfo(speed=0.5)
+    _scene = sceneGraph(children=[fast, slow])
+    navigationinfo.apply(context, fast)
+    assert context.movementManager.STEPDISTANCE == 1.0
+    navigationinfo.apply(context, slow)
+    assert context.movementManager.STEPDISTANCE == 0.125
+    assert FreeFly.STEPDISTANCE == 0.25
+
+
+def test_a_viewpoints_scale_multiplies_the_free_fly_step():
+    context = Classic()
+    info = NavigationInfo(speed=2.0)
+    _scene = sceneGraph(children=[info])
+    navigationinfo.apply(context, info, scale=10.0)
+    assert context.movementManager.STEPDISTANCE == 5.0
+    navigationinfo.apply(context, info, scale=1.0)
+    assert context.movementManager.STEPDISTANCE == 0.5
+
+
+def test_a_viewpoints_scale_applies_with_no_navigation_info():
+    context = Classic()
+    navigationinfo.apply(context, None, scale=10.0)
+    assert context.movementManager.STEPDISTANCE == 2.5
+    walking = Navigating()
+    walking.manager = SpeedManager()
+    navigationinfo.apply(walking, None, scale=10.0)
+    assert walking.manager.declared[1].flySpeed == 80.0
+
+
+def test_a_step_the_player_changes_is_scaled_from():
+    """The free-fly manager's faster and slower keys multiply its step"""
+    context = Classic()
+    info = NavigationInfo(speed=2.0)
+    _scene = sceneGraph(children=[info])
+    navigationinfo.apply(context, info)
+    context.movementManager.STEPDISTANCE *= 1.5
+    info.speed = 4.0
+    navigationinfo.apply(context, info)
+    assert context.movementManager.STEPDISTANCE == 1.5
+
+
+def test_a_free_fly_manager_bound_later_is_scaled():
+    context = Classic()
+    info = NavigationInfo(speed=2.0)
+    _scene = sceneGraph(children=[info])
+    navigationinfo.apply(context, info)
+    context.movementManager = FreeFly()
+    navigationinfo.apply(context, info)
+    assert context.movementManager.STEPDISTANCE == 0.5
+
+
+def test_a_context_its_free_fly_manager_refers_to_is_let_go():
+    import gc
+    import weakref
+    context = Classic()
+    context.movementManager.context = context
+    navigationinfo.apply(context, NavigationInfo(speed=2.0))
+    gone = weakref.ref(context)
+    del context
+    gc.collect()
+    assert gone() is None

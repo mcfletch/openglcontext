@@ -120,6 +120,44 @@ class TestOcclusion:
         assert found.occlusion((0, 0, -5), (0, 0, 5)) == pytest.approx(math.sqrt(0.5))
 
 
+class TestOcclusions:
+    """Many sources at once agree with each on its own."""
+
+    SOURCES = ((0, 0, -5), (20, 0, -5), (0.5, 0.5, -5), (0, 0, 0), (0, 0, 5), (1, 0, -9))
+
+    def heard(self):
+        found = acoustics.Acoustics()
+        found.update([(surface(basenodes.Box(size=(4, 4, 4)), absorption=0.5), placed()),
+                      (wall(specular=0.75), placed(z=-4)),
+                      (wall(absorption=1.0), placed(x=1, z=-8))])
+        return found
+
+    def test_each_source_is_heard_as_it_is_alone(self):
+        found = self.heard()
+        together = found.occlusions(self.SOURCES, (0, 0, 5))
+        assert together.shape == (len(self.SOURCES),)
+        assert together.tolist() == [found.occlusion(source, (0, 0, 5))
+                                     for source in self.SOURCES]
+        assert len(set(together.tolist())) > 3
+
+    def test_sources_taken_a_few_at_a_time_are_heard_the_same(self, monkeypatch):
+        found = self.heard()
+        whole = found.occlusions(self.SOURCES, (0, 0, 5))
+        monkeypatch.setattr(acoustics, 'MAX_TESTS', 1)
+        assert found.occlusions(self.SOURCES, (0, 0, 5)).tolist() == whole.tolist()
+
+    def test_no_sources_are_no_gains(self):
+        assert self.heard().occlusions((), (0, 0, 5)).shape == (0,)
+
+    def test_with_no_surfaces_every_source_is_heard_whole(self):
+        assert acoustics.Acoustics().occlusions(self.SOURCES, (0, 0, 5)).tolist() == [1.0] * 6
+
+    def test_a_homogeneous_position_is_read_by_its_first_three(self):
+        found = self.heard()
+        assert found.occlusions([(0, 0, -5, 1)], (0, 0, 5, 1)).tolist() == [
+            found.occlusion((0, 0, -5), (0, 0, 5))]
+
+
 class TestReverb:
     ROOM = (10.0, 4.0, 8.0)
 

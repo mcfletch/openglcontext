@@ -499,6 +499,10 @@ layer can update its hover state.
   last panel, and its key-up would reach the scene's own Escape handler,
   which quits every OpenGLContext application. Likewise, the release of a
   click that dismisses a dialog does not pick what was behind the dialog.
+- While a mouse button is down whose press went to the scene, the pointer's
+  moves go to the scene too, and the overlay's controls are not hovered. A
+  drag begun on a drag sensor or in a view crosses a button or a splitter
+  and carries on. ``draggingBelow()`` says whether one is under way.
 - When a panel takes the input, the scene is sent a release for every key it
   was holding. The real release goes to the panel, and an application that
   tracks held keys itself, as a movement mode or a game's steering does, has

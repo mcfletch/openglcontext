@@ -118,8 +118,8 @@ Installing the package puts these commands on your path:
 ``oglc-mirrors``
    A hall of mirrors: a polished marble floor, a large wall mirror, a corridor
    of small mirrors, a pool and a window that shows only its reflection, with
-   keys to switch reflections and change their budget. See
-   :doc:`Reflections <reflections>`.
+   keys to switch reflections and change their budget. ``--movie-url`` adds a
+   screen playing a movie. See :doc:`Reflections <reflections>`.
 ``oglc-audio-demo``
    Demonstrates sound: collisions, events, fading areas and a pitch that
    follows the simulation. See :ref:`Sound <audio-demos>`.
@@ -144,6 +144,11 @@ Installing the package puts these commands on your path:
    window, a swung gold vase, a swept brass rail, a bead riding a brick
    banner and a dart flying along a curve, with a key to change the
    ``NurbsSet``'s tessellation scale. See :doc:`NURBS <nurbs>`.
+``oglc-deformer``
+   ``CoordinateDeformer`` read from an X3D document: a marble NURBS column
+   bent, twisted and swollen by an animated lattice, and a brass NURBS
+   capsule carried through a lattice with a narrow neck, with a key to hide
+   the lattices. See :doc:`NURBS <nurbs>`.
 ``oglc-x3d-rigidbody``
    X3D's RigidBodyPhysics nodes read from a document: brick crates falling
    into a heap, a marble ball bounced by a sensor's contacts, a brass door
@@ -154,11 +159,6 @@ Installing the package puts these commands on your path:
    An X3D document whose shapes are drawn by their own GLSL: a toon-shaded
    sphere, a GLSL 1.20 marble column, a geometry stage, a packaged shader, a
    vertex-attribute heat bar and a rippling pool. See :ref:`x3d-shaders`.
-``oglc-x3d-geospatial``
-   An alpine valley placed by latitude, longitude and height: a
-   ``GeoElevationGrid`` under a ``GeoLOD`` of finer tiles, a hamlet of
-   ``GeoLocation`` huts, a balloon on a ``GeoPositionInterpolator`` and three
-   ``GeoViewpoint`` nodes, one in UTM. See :ref:`x3d-geospatial`.
 ``oglc-x3d-particles``
    X3D's particle systems read from a document: a brazier, a fountain, a
    firework, snow in gusting wind, a sphere shedding sparks and gold beads
@@ -193,6 +193,11 @@ Installing the package puts these commands on your path:
    raising a meter, with keys to pause the bell, shape and filter the pipe,
    swap the chimes between the ears and move the listener. See :ref:`X3D
    sound <x3d-sound>`.
+``oglc-x3d-sound-stress``
+   What a scene's sound costs: a document of 128 sounding stations using
+   every node and mode of the Sound component, played through a silent
+   device, and the time each frame and each audio block took. See
+   :ref:`audio-stress`.
 ``oglc-x3d-layering``
    X3D's Layering and Layout nodes read from a document: a courtyard in
    layer 0, a plan view of it in an inset viewport through its own
@@ -203,7 +208,8 @@ Installing the package puts these commands on your path:
    X3D's ``MovieTexture`` read from a document and decoded on the GPU: one
    film, drawn by the engine and recorded with the hardware encoder, on three
    screens in a brick and plaster room, looped, reversed, and once from a
-   key inside a ``MultiTexture``. See :ref:`x3d-movies`.
+   key inside a ``MultiTexture``. An MP4 file named on the command line is
+   played in the film's place. See :ref:`x3d-movies`.
 ``oglc-lod``
    A marble hall of metal orbs on plinths, each a chain of four levels of
    detail: one row built in code, one written to glTF with ``MSFT_lod`` and

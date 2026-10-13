@@ -485,8 +485,15 @@ class OverlayStackMixin(_Host):
           this the ordinary case rather than a corner: a key held while a panel
           opens goes on delivering presses, and those belong to the panel while
           the key itself does not.
+        * The pointer's moves go with a mouse button the far side holds. A
+          drag begun in the scene -- a drag sensor, a view being orbited --
+          crosses the overlay's controls without hovering them and goes on
+          being heard there until the button comes up.
         """
         claim = _claimKey(event)
+        if claim is None and getattr(event, 'type', None) == 'mousemove' \
+                and self.draggingBelow():
+            return False
         stack = self._overlays
         if stack is None or not stack.visible:
             sunk = False
@@ -507,6 +514,15 @@ class OverlayStackMixin(_Host):
         # A press the overlay took takes its release with it, wherever the
         # stack has got to by now; anything else follows what is on screen.
         return bool(self._holding.pop(claim, None)) or sunk
+
+    def draggingBelow(self) -> bool:
+        """Whether a mouse button is down whose press went past the overlay
+
+        The wheel's notches arrive as buttons and are not counted: a notch is
+        not held.
+        """
+        return any(kind == 'mousebutton' and not taken and button not in (WHEEL_UP, WHEEL_DOWN)
+                   for (kind, button), taken in self._holding.items())
 
     def _routeToOverlay(self, stack: OverlayStack, event: Any) -> bool:
         kind = getattr(event, 'type', None)

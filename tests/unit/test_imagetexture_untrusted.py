@@ -56,6 +56,74 @@ def rubbish(tmp_path):
     return str(path)
 
 
+def _data_url(data, mediatype='image/png'):
+    import base64  # noqa: PLC0415 kept with its one use
+    return 'data:%s;base64,%s' % (mediatype, base64.b64encode(data).decode('ascii'))
+
+
+class TestLoadingFromADataUrl:
+    """The X3D writers write an image held in memory as a ``data:`` URL."""
+
+    def _png(self):
+        stream = io.BytesIO()
+        Image.new('RGB', (4, 3), (10, 200, 30)).save(stream, 'PNG')
+        return stream.getvalue()
+
+    def test_an_image_in_the_url_loads(self):
+        texture = basenodes.ImageTexture()
+
+        texture.loadBackground([_data_url(self._png())])
+
+        assert texture.image is not None
+        assert texture.image.size == (4, 3)
+
+    def test_it_loads_in_a_document_read_from_a_file(self, tmp_path):
+        from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
+        path = tmp_path / 'scene.x3dv'
+        path.write_text('#X3D V4.0 utf8\nPROFILE Interchange\nShape { appearance Appearance { '
+                        'texture DEF T ImageTexture { url "%s" } } geometry Box {} }\n'
+                        % _data_url(self._png()))
+        scene = Loader.load(str(path))
+        texture = scene.getDEF('T')
+
+        texture.loadBackground(texture.url)
+
+        assert texture.image is not None
+        assert texture.image.size == (4, 3)
+
+    def test_a_decompression_bomb_is_refused(self, caplog):
+        texture = basenodes.ImageTexture()
+
+        texture.loadBackground([_data_url(_png(30000, 30000))])
+
+        assert texture.image is None
+        assert 'Unable to decode the image' in caplog.text
+
+    def test_a_malformed_url_is_only_a_warning(self, caplog):
+        texture = basenodes.ImageTexture()
+
+        texture.loadBackground(['data:image/png;base64'])
+
+        assert texture.image is None
+        assert 'Unable to fetch the image at data:image/png;base64' in caplog.text
+
+    def test_the_log_does_not_carry_the_image(self, caplog):
+        texture = basenodes.ImageTexture()
+        url = _data_url(b'not a png at all' * 200)
+
+        texture.loadBackground([url])
+
+        assert texture.image is None
+        assert len(caplog.text) < 600
+
+    def test_the_next_url_is_tried_after_one_that_fails(self):
+        texture = basenodes.ImageTexture()
+
+        texture.loadBackground([_data_url(b'rubbish'), _data_url(self._png())])
+
+        assert texture.image.size == (4, 3)
+
+
 class TestLoadingFromAUrl:
     def test_an_ordinary_image_loads(self, real_png):
         texture = basenodes.ImageTexture()

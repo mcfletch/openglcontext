@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """X3D movies: one film on three screens, looped, reversed and started by a key.
 
-    oglc-x3d-movie [--directory DIR] [--remake]
+    oglc-x3d-movie [--directory DIR] [--remake] [movie]
 
     s      start the right-hand screen's film
     p      pause or resume the left-hand screen's film
@@ -17,6 +17,10 @@ The film is drawn by the engine from ``x3d_movie_film.x3d`` and encoded with
 pyopengl-video's hardware H.264 encoder (:func:`make_film`), in a process of
 its own with an offscreen context. Playing it needs a decoder pyopengl-video
 drives for the window's context: see docs/x3d.rst, "Movies".
+
+``movie`` names an MP4 file with an H.264 track for the screens to play in
+place of that film (:func:`chosen_film`). The screens are 16:9 and the picture
+fills them.
 """
 from __future__ import annotations
 
@@ -28,8 +32,8 @@ from collections.abc import Sequence
 from typing import Any, ClassVar, Optional
 
 __all__ = ['DOCUMENT', 'FILM', 'FILM_FPS', 'FILM_SECONDS', 'FILM_SIZE', 'FilmUnavailable',
-           'MATERIALS', 'MovieScene', 'main', 'make_film', 'prepare', 'record_film',
-           'vignette']
+           'MATERIALS', 'MovieScene', 'NAMED', 'chosen_film', 'main', 'make_film',
+           'prepare', 'record_film', 'vignette']
 
 #: The room.
 DOCUMENT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'x3d_movie.x3d')
@@ -42,6 +46,9 @@ FILM_SECONDS = 4
 #: The surfaces the room names, each written as ``<name>_base.png``,
 #: ``<name>_mr.png`` and ``<name>_normal.png``.
 MATERIALS = ('wood', 'brick', 'plaster', 'steel')
+#: The directory, under the room's, that a movie named on the command line is
+#: shown from.
+NAMED = 'named'
 #: The exit status of a film process that found no encoder.
 NO_ENCODER = 3
 
@@ -100,14 +107,16 @@ def prepare(directory: str, force: bool = False) -> str:
 def make_film(path: str, force: bool = False, timeout: float = 120.0) -> str:
     """The film at `path`, recorded by :func:`record_film` in a process of its own
 
-    A film already there is kept unless `force`. The process opens an
-    offscreen context, which on Linux is an EGL context the VA-API encoder can
-    read from, with none of the parent's rendering variables. Raises :class:`FilmUnavailable` with the reason where no film
-    was made. Returns `path`.
+    A film already there is kept unless `force`, and the directory is made
+    where it is missing. The process opens an offscreen context, which on
+    Linux is an EGL context the VA-API encoder can read from, with none of the
+    parent's rendering variables. Raises :class:`FilmUnavailable` with the
+    reason where no film was made. Returns `path`.
     """
     from OpenGLContext import renderoptions  # noqa: PLC0415 kept with its use
     if os.path.exists(path) and not force:
         return path
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     try:
         # The rendering variables a capture carries (a frame count to exit
         # after, above all) would end the recording early.
@@ -122,6 +131,24 @@ def make_film(path: str, force: bool = False, timeout: float = 120.0) -> str:
         raise FilmUnavailable(lines[-1] if lines else 'the film process exited %d'
                               % result.returncode)
     return path
+
+
+def chosen_film(directory: str, movie: Optional[str] = None,
+                remake: bool = False) -> tuple[str, str]:
+    """The room's directory and the film its screens play
+
+    With no `movie`, the film is :func:`make_film`'s in `directory`, recorded
+    again where `remake`. A `movie` is shown from the :data:`NAMED` directory
+    under `directory`: the document reads ``film.mp4`` beside itself, and the
+    copy made there leaves the film made here in place. Raises
+    :class:`FilmUnavailable` where `movie` is not a file or the film could
+    not be made.
+    """
+    if movie is None:
+        return directory, make_film(os.path.join(directory, 'film.mp4'), force=remake)
+    if not os.path.isfile(movie):
+        raise FilmUnavailable('%s is not a file' % (movie,))
+    return os.path.join(directory, NAMED), movie
 
 
 def record_film(path: str) -> int:  # pragma: no cover - runs in the film process, with an encoder
@@ -212,25 +239,32 @@ class MovieScene:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    """Open the room in a window, making the film first where it is not there"""
+    """Open the room in a window, playing the movie named or the film made here"""
     parser = argparse.ArgumentParser(
         prog='oglc-x3d-movie', description=(__doc__ or '').split('\n')[0],
         epilog=MovieScene.help(), formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('movie', nargs='?', help='an MP4 file with an H.264 track to play '
+                        'on the screens (default: the film recorded here)')
     parser.add_argument('--directory', help='where the document, its images and the film '
-                        'are written (default: the user cache directory)')
+                        'are written (default: the user cache directory); a movie named '
+                        'is copied to its "%s" directory' % NAMED)
     parser.add_argument('--remake', action='store_true', help='record the film again')
     parser.add_argument('--film', help=argparse.SUPPRESS)
     options = parser.parse_args(argv)
+    if options.movie and options.remake:
+        parser.error('--remake records the film made here, and %s was named to play instead'
+                     % (options.movie,))
     if options.film:                            # pragma: no cover - the film process
         return record_film(options.film)
     from OpenGLContext import testingcontext, userpaths  # noqa: PLC0415 a window only for main
     from OpenGLContext.contextdefinition import ContextDefinition  # noqa: PLC0415 a window only for main
     from OpenGLContext.events import systemtime  # noqa: PLC0415 a window only for main
-    directory = options.directory or os.path.join(userpaths.cachedirectory(), 'x3d-movie')
     try:
-        film = make_film(os.path.join(directory, 'film.mp4'), force=options.remake)
+        directory, film = chosen_film(
+            options.directory or os.path.join(userpaths.cachedirectory(), 'x3d-movie'),
+            options.movie, options.remake)
     except FilmUnavailable as err:
-        print('The film could not be made: %s' % (err,))
+        print('No film to play: %s' % (err,))
         return 1
     base: Any = testingcontext.getInteractive()
 

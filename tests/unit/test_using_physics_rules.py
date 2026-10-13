@@ -362,3 +362,224 @@ class TestTheCannonsFrames:
         looking = tuple(sees[i] * math.cos(angle) + cross[i] * math.sin(angle)
                         + (x, y, z)[i] * dot * (1 - math.cos(angle)) for i in range(3))
         assert looking == pytest.approx(along(bearing, elevation), abs=1e-6)
+
+
+
+def drag(wheel, pixels):
+    """Press the wheel's drum and drag ``pixels`` up it."""
+    from vrml.x3d import pointing  # noqa: PLC0415 kept with its use
+
+    def ray(height):
+        return pointing.Ray((0.0, height, 500.0), (0.0, 0.0, -1.0))
+
+    wheel.sensor.pointerPress(pointing.Hit((0.0, 0.0, 0.0)), ray(0.0))
+    wheel.sensor.pointerDrag(None, ray(pixels))
+
+
+class TestTheScales:
+    """A wheel's turn read as the value it sets, and the value as the turn."""
+
+    def test_there_is_one_for_each_field_of_the_aim_over_its_limits(self):
+        assert [(scale.name, scale.limits) for scale in game.SCALES] == [
+            ('bearing', game.BEARING_LIMIT), ('elevation', game.ELEVATION_LIMIT),
+            ('power', game.POWER_LIMIT)]
+
+    def test_each_names_the_keys_that_step_its_field(self):
+        for scale in game.SCALES:
+            up, down = scale.keys
+            assert game.AIM_KEYS[up][scale.name] > 0 > game.AIM_KEYS[down][scale.name]
+
+    @pytest.mark.parametrize('scale', game.SCALES, ids=lambda scale: scale.name)
+    def test_the_limits_are_one_whole_turn_and_the_whole_travel_apart(self, scale):
+        low, high = scale.limits
+        assert (scale.turn(low), scale.turn(high)) == (0.0, 1.0)
+        assert scale.value(0.0) == low
+        assert scale.value(game.TRAVEL) == pytest.approx(high)
+        assert scale.value(game.TRAVEL / 2.0) == pytest.approx((low + high) / 2.0)
+
+    def test_the_travel_is_most_of_the_windows_height(self):
+        assert 0.7 * game.SIZE[1] <= game.TRAVEL <= 0.9 * game.SIZE[1]
+
+    def test_a_drag_past_the_end_of_the_travel_reads_as_the_limit(self):
+        bearing = game.SCALES[0]
+        assert bearing.value(game.TRAVEL * 2.0) == game.BEARING_LIMIT[1]
+        assert bearing.value(-5.0) == game.BEARING_LIMIT[0]
+
+
+class TestTheWheels:
+    """The three thumb-wheels: a drag on one sets the aim, and the aim sets all three."""
+
+    @pytest.fixture
+    def turned(self):
+        return []
+
+    @pytest.fixture
+    def wheels(self, turned):
+        return game.Wheels(lambda name, value: turned.append((name, value)))
+
+    def test_there_is_a_wheel_for_each_scale(self, wheels):
+        assert [wheel.scale for wheel in wheels.wheels] == list(game.SCALES)
+
+    def test_each_sensor_is_dragged_up_and_down_the_travel_and_not_across(self, wheels):
+        for wheel in wheels.wheels:
+            assert tuple(wheel.sensor.minPosition) == (0.0, 0.0)
+            assert tuple(wheel.sensor.maxPosition) == (0.0, game.TRAVEL)
+
+    def test_a_pixel_of_drag_is_a_key_press_or_so(self, wheels, turned):
+        wheels.show(game.Aim(bearing=0.0))
+        drag(wheels.wheels[0], 1.0)
+        assert 0.0 < turned[-1][1] <= 1.5 * game.TURN
+
+    def test_dragging_a_wheel_up_raises_its_field(self, wheels, turned):
+        wheels.show(game.Aim(bearing=0.0))
+        drag(wheels.wheels[0], game.TRAVEL / 10.0)
+        assert [name for name, _value in turned] == ['bearing']
+        low, high = game.BEARING_LIMIT
+        assert turned[-1][1] == pytest.approx((high - low) / 10.0, abs=1e-4)
+
+    def test_a_drag_carries_on_from_the_value_shown(self, wheels, turned):
+        wheels.show(game.Aim(elevation=40.0))
+        low, high = game.ELEVATION_LIMIT
+        drag(wheels.wheels[1], -game.TRAVEL / 10.0)
+        assert turned[-1] == ('elevation', pytest.approx(40.0 - (high - low) / 10.0, abs=1e-4))
+
+    def test_a_drag_stops_at_the_limit(self, wheels, turned):
+        wheels.show(game.Aim(bearing=50.0))
+        drag(wheels.wheels[0], game.TRAVEL)
+        assert turned[-1] == ('bearing', pytest.approx(game.BEARING_LIMIT[1]))
+
+    def test_a_drag_to_one_side_changes_nothing_more(self, wheels, turned):
+        from vrml.x3d import pointing  # noqa: PLC0415 kept with its use
+        wheels.show(game.Aim(power=20.0))
+        sensor = wheels.wheels[2].sensor
+        sensor.pointerPress(pointing.Hit((0, 0, 0)), pointing.Ray((0, 0, 500), (0, 0, -1)))
+        sensor.pointerDrag(None, pointing.Ray((300.0, 0, 500), (0, 0, -1)))
+        assert turned[-1] == ('power', pytest.approx(20.0))
+
+    def test_the_aim_turns_each_drum_and_is_written_under_it(self, wheels):
+        wheels.show(game.Aim(bearing=-12.5, elevation=33.0, power=21.0))
+        for wheel, value in zip(wheels.wheels, (-12.5, 33.0, 21.0)):
+            # The face of the drum goes up as the value does
+            assert tuple(wheel.drum.rotation) == pytest.approx(
+                (1, 0, 0, -2.0 * math.pi * wheel.scale.turn(value)))
+        assert [list(wheel.label.string) for wheel in wheels.wheels] == [
+            ['bearing  q a', '-12.5 deg'], ['elevation  w s', '33.0 deg'],
+            ['power  e d', '21.0 m/s']]
+
+    def test_a_whole_turn_of_the_drum_is_the_whole_scale(self, wheels):
+        wheel = wheels.wheels[2]
+        wheel.show(game.POWER_LIMIT[0])
+        assert wheel.drum.rotation[3] == pytest.approx(0.0)
+        wheel.show(game.POWER_LIMIT[1])
+        assert abs(wheel.drum.rotation[3]) == pytest.approx(2.0 * math.pi)
+
+    def test_a_value_shown_during_a_drag_leaves_the_drag_where_it_started(self, wheels):
+        wheels.show(game.Aim(bearing=0.0))
+        wheel = wheels.wheels[0]
+        started = wheel.sensor.offset[1]
+        drag(wheel, 30.0)
+        wheels.show(game.Aim(bearing=10.0))
+        assert wheel.sensor.offset[1] == pytest.approx(started)
+        assert wheel.drum.rotation[3] == pytest.approx(-2.0 * math.pi * wheel.scale.turn(10.0))
+
+    def test_the_layers_are_drawn_over_the_scene(self, wheels):
+        assert list(wheels.layers.order) == [0, 1]
+        assert len(wheels.layers.layers) == 1
+
+    def test_the_panel_stands_at_the_left_of_its_view_half_way_up(self, wheels):
+        layout = wheels.layer.layout
+        assert list(layout.align) == ['LEFT', 'CENTER']
+        assert tuple(layout.size) == pytest.approx(wheels.size)
+
+    def test_a_wheel_turned_while_aiming_moves_the_cannon(self):
+        course = game.Game(random.Random(3))
+        wheels = game.Wheels(course.set_aim)
+        wheels.show(course.aim)
+        drag(wheels.wheels[0], game.TRAVEL / 8.0)
+        assert course.aim.bearing == pytest.approx(15.0, abs=1e-4)
+        assert tuple(course.course.gun.turn.rotation) == pytest.approx(
+            (0, 1, 0, math.radians(15.0)), abs=1e-5)
+
+    def test_a_wheel_turned_while_the_ball_is_in_the_air_moves_nothing(self):
+        course = game.Game(random.Random(3))
+        wheels = game.Wheels(course.set_aim)
+        wheels.show(course.aim)
+        course.fire()
+        drag(wheels.wheels[2], 100.0)
+        assert course.aim.power == game.Aim().power
+
+
+@pytest.mark.usefixtures('gl_context')
+class TestTheWheelsOnTheScreen:
+    """The panel in the cannon's view of the four, dragged with the pointer."""
+
+    WIDTH, HEIGHT = game.SIZE
+
+    @pytest.fixture
+    def played(self):
+        from OpenGLContext.context import MultiViewContext  # noqa: PLC0415 GL
+        from OpenGLContext.testing.scenes import scene_context  # noqa: PLC0415 GL
+        course = game.Game(random.Random(3))
+        wheels = game.Wheels(course.set_aim)
+        wheels.show(course.aim)
+        setup = game.TestContext.setupViews
+
+        class Quad(MultiViewContext):
+            game = course
+            setupViews = setup
+
+        with scene_context([*course.course.nodes, wheels.layers], base=Quad,
+                           size=game.SIZE) as context:
+            context.OnDraw(force=1)
+            yield context, course, wheels
+
+    def panel(self, wheels):
+        """The panel's left, bottom, width and height in the window, from the bottom left:
+        it is in the bottom right view."""
+        width, height = wheels.size
+        return (self.WIDTH / 2 + game.INSET, self.HEIGHT / 4 - height / 2, width, height)
+
+    def pointer(self, context, wheels, kind, rise, until, **record):
+        """Send the pointer ``rise`` pixels above the middle of the bearing wheel's
+        drum, and draw until ``until()``."""
+        from OpenGLContext.events import synthetic  # noqa: PLC0415 kept with its use
+        left, bottom, width, height = self.panel(wheels)
+        x = round(left + width / 2 - game.PITCH)
+        y = round(bottom + height / 2 + game.RISE + rise)
+        synthetic.dispatch(context, {'type': kind, 'x': x, 'y': y, 'pick': True, **record})
+        for _ in range(120):
+            context.OnDraw(force=1)
+            if until():
+                return
+        raise AssertionError('the %s %s pixels up was not sensed' % (kind, rise))
+
+    def test_the_panel_is_in_the_cannons_view_alone(self, played):
+        from OpenGLContext.testing.scenes import drawn_image  # noqa: PLC0415 GL
+        context, _course, wheels = played
+        image = drawn_image(context)
+        left, bottom, _width, _height = self.panel(wheels)
+        x, y = round(left + 5), round(bottom + 5)
+        wood = image[self.HEIGHT - 1 - y, x].astype(int)
+        # The panel is wood: redder than it is blue, which no sky is
+        assert wood[0] > wood[2] + 20
+        for across, up in ((-self.WIDTH // 2, 0), (0, self.HEIGHT // 2),
+                           (-self.WIDTH // 2, self.HEIGHT // 2)):
+            elsewhere = image[self.HEIGHT - 1 - (y + up), x + across].astype(int)
+            assert abs(elsewhere - wood).sum() > 30
+
+    def test_dragging_the_bearing_wheel_up_turns_the_cannon(self, played):
+        context, course, wheels = played
+        sensor = wheels.wheels[0].sensor
+        # A pick reads the frame before, so the first move only warms the id buffer
+        self.pointer(context, wheels, 'mousemove', 0, lambda: True, buttons=[])
+        self.pointer(context, wheels, 'mousemove', 0, sensor.over, buttons=[])
+        self.pointer(context, wheels, 'mousebutton', 0, sensor.active, button=0, state=1)
+        rise = round(game.TRAVEL / 10.0)
+        self.pointer(context, wheels, 'mousemove', rise,
+                     lambda: course.aim.bearing != 0.0, buttons=[0])
+        self.pointer(context, wheels, 'mousebutton', rise, lambda: not sensor.active(),
+                     button=0, state=0)
+        low, high = game.BEARING_LIMIT
+        assert course.aim.bearing == pytest.approx((high - low) / 10.0, abs=0.5)
+        assert sensor.offset[1] == pytest.approx(
+            game.SCALES[0].turn(course.aim.bearing) * game.TRAVEL, abs=1e-3)

@@ -12,6 +12,12 @@ made a mirror (see docs/reflections.rst):
 * the pool is water, which is a mirror whatever it is made of;
 * the window is a reflector that replaces its surface's shading.
 
+``--movie-url URL`` hangs a screen on the wall behind the starting viewpoint,
+facing the far mirror, and loops the movie at ``URL`` on it: a local path, or
+an http(s) URL downloaded into the engine's cache (docs/untrusted.rst). The
+screen is a ``MovieTexture``, so it needs a decoder pyopengl-video drives for
+the window's context (docs/x3d.rst, "Movies").
+
 Keys:
 
 ``r``
@@ -37,7 +43,9 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Optional
+
+import numpy as np
 
 from OpenGLContext.bin.mirrorhall import BAYS, Hall
 from OpenGLContext.scenegraph import basenodes, surfaces
@@ -47,7 +55,8 @@ from OpenGLContext.scenegraph.water import BREEZE, RIPPLE, water_surface
 
 log = logging.getLogger(__name__)
 
-__all__ = ['BOUNCES', 'BUDGETS', 'INTERVALS', 'POOL', 'MirrorHall', 'main']
+__all__ = ['BOUNCES', 'BUDGETS', 'INTERVALS', 'POOL', 'SCREEN', 'MirrorHall', 'arguments',
+           'main', 'screen_panel']
 
 #: The ``reflectionViews`` the ``b`` key steps through; 0 is the strategy's own.
 BUDGETS: tuple[int, ...] = (0, 1, 2, 4)
@@ -63,12 +72,28 @@ POOL = BREEZE.varied(name='pool', amplitude=0.004, wavelength=0.45, speed=0.35,
 #: The corridor intervals the ``i`` key steps through.
 INTERVALS: tuple[int, ...] = (3, 1, 6)
 
+#: The movie screen's width and height in metres, 16:9.
+SCREEN: tuple[float, float] = (4.8, 2.7)
+
+
+def screen_panel(width: float, height: float) -> surfaces.Geometry:
+    """A ``width`` by ``height`` rectangle whose texture coordinates span one picture
+
+    The picture's first row is at the bottom, as a ``MovieTexture`` holds it.
+    """
+    flat = surfaces.panel(width, height)
+    across = np.asarray(flat.positions)[:, :2] / np.array([width, height], 'f') + 0.5
+    return flat._replace(texcoords=across.astype('f'))
+
 
 class MirrorHall:
     """The hall, and what each key does to it; no GL.
 
     :attr:`children` is the scene. :meth:`press` applies a key to the hall and
     to the context's definition and answers what it now is, as one line.
+
+    ``movie`` is the URL of a movie to loop on a screen on the near wall;
+    :attr:`screen` is its ``MovieTexture``, or None where none was named.
     """
 
     #: The keys :meth:`press` answers, and what each does.
@@ -80,7 +105,10 @@ class MirrorHall:
         'o': 'the window: only its reflection, or shaded glass',
     }
 
-    def __init__(self) -> None:
+    def __init__(self, movie: Optional[str] = None) -> None:
+        #: The screen's MovieTexture; None with no movie named.
+        self.screen: Any = None
+        self._movie = movie
         #: The far wall's mirror: silvered, redrawn every other frame.
         self.mirror = PlanarReflector(interval=2, priority=2.0)
         #: One reflector the corridor's ten mirrors share.
@@ -120,7 +148,18 @@ class MirrorHall:
                                   style=POOL, on_gpu=True)
         scene.append(basenodes.Shape(geometry=self.pool, appearance=self.pool.appearance))
         scene += hall.basin(1.5, 5.5, -6.0, -2.0)
+        if self._movie:
+            scene += self._hang_screen(hall, self._movie)
         return scene
+
+    def _hang_screen(self, hall: Hall, movie: str) -> list[Any]:
+        """The screen on the near wall, looping ``movie``, in a bronze frame."""
+        from OpenGLContext.scenegraph.movietexture import MovieTexture  # noqa: PLC0415 only with a movie named
+        from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial  # noqa: PLC0415 only with a movie named
+        self.screen = MovieTexture(url=[movie], loop=True, repeatS=False, repeatT=False)
+        return hall.hang(screen_panel(*SCREEN), UnlitMaterial(emissiveColor=(1.0, 1.0, 1.0)),
+                         'near', along=BAYS['near'][0], height=2.2,
+                         frame=hall.finish.bronze, border=0.15, texture=self.screen)
 
     # -- the keys ----------------------------------------------------------
     def press(self, key: str, definition: Any) -> str:
@@ -167,16 +206,24 @@ class MirrorHall:
         return '\n'.join('  %s -- %s' % item for item in cls.KEYS.items())
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Open the hall in a window; ``--help`` prints the keys and exits."""
-    import argparse
-    argparse.ArgumentParser(
+def arguments(argv: Optional[list[str]] = None) -> Any:
+    """The command line, parsed: ``movie_url`` is the movie named, or None"""
+    import argparse  # noqa: PLC0415 only the command parses arguments
+    parser = argparse.ArgumentParser(
         prog='oglc-mirrors',
         description=(__doc__ or '').split('\n\n')[0],
         epilog='keys:\n' + MirrorHall.help(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-    ).parse_args(argv)
-    from OpenGLContext import testingcontext
+    )
+    parser.add_argument('--movie-url', metavar='URL', help='a movie to loop on a screen on '
+                        'the wall behind the starting viewpoint: a local path or an '
+                        'http(s) URL')
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Open the hall in a window; ``--help`` prints the keys and exits."""
+    options = arguments(argv)
     from OpenGLContext.contextdefinition import ContextDefinition
     from OpenGLContext.context import Context as BaseContext
 
@@ -185,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         renderer = 'pbr'
 
         def OnInit(self) -> None:
-            self.hall = MirrorHall()
+            self.hall = MirrorHall(movie=options.movie_url)
             self.sg = basenodes.sceneGraph(children=self.hall.children)
             for key in MirrorHall.KEYS:
                 self.addEventHandler('keypress', name=key, function=self.OnKey)

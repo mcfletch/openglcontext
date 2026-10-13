@@ -95,11 +95,17 @@ class ViewStyle:
 
     ``grid`` rules the view with the scene's
     :class:`~OpenGLContext.multiview.grid.Grid`, where the scene has one.
+
+    ``layers`` draws the scene's X3D layer stack in the view. False draws the
+    layer navigation drives and none of the others, for a view of the world
+    beside one that carries a panel of controls; a pick in the view then
+    reaches that layer alone.
     """
 
     background: bool | tuple[float, ...] = True
     wireframe: bool = False
     grid: bool = False
+    layers: bool = True
 
     def __post_init__(self) -> None:
         if not isinstance(self.background, bool) and len(self.background) not in (3, 4):

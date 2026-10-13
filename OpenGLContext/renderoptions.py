@@ -35,7 +35,7 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Any, Optional
 
-from vrml import protofunctions
+from vrml import field, protofunctions
 
 log = logging.getLogger(__name__)
 
@@ -256,7 +256,7 @@ def _value(source: Any, name: str) -> Any:
         declared = protofunctions.getField(found, name)
     except AttributeError:
         return None
-    if not declared.fhas(found):
+    if not isinstance(declared, field.Field) or not declared.fhas(found):
         return None
     return getattr(found, name, None)
 

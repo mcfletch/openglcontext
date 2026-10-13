@@ -48,6 +48,7 @@ def test_the_same_seed_is_the_same_surface():
     (lambda: surfaces.brick(SIZE), True),
     (lambda: surfaces.plaster(SIZE), True),
     (lambda: surfaces.brushed_metal(SIZE, surfaces.GOLD), True),
+    (lambda: surfaces.knurled(SIZE), True),
     (lambda: surfaces.sandstone(SIZE), True),
     (lambda: surfaces.wood(SIZE), True),
     (lambda: surfaces.marble_tiles(SIZE), False),
@@ -134,6 +135,26 @@ def test_brushing_streaks_run_along_one_direction():
     along = np.abs(np.diff(rough, axis=1)).mean()
     across = np.abs(np.diff(rough, axis=0)).mean()
     assert across > 2.0 * along
+
+
+def test_a_knurl_is_metal_cut_into_diamonds_both_ways_across():
+    maps = surfaces.knurled(SIZE, count=4)
+    assert maps.metallic.min() == 1.0
+    height = maps.height
+    assert height.min() == 0.0 and height.max() > 0.9
+    # The cuts cross on both diagonals, so the relief is the same either way up
+    assert np.allclose(height, height.T)
+    assert np.allclose(height, height[::-1])
+    # ...and it repeats ``count`` times across the texture
+    assert np.allclose(height, np.roll(height, SIZE // 4, axis=1))
+    assert not np.allclose(height, np.roll(height, SIZE // 8, axis=1))
+
+
+def test_a_knurls_cuts_are_rougher_than_its_points():
+    maps = surfaces.knurled(SIZE, count=4, roughness=0.2)
+    points, cuts = maps.height > 0.8, maps.height < 0.1
+    assert maps.roughness[points].mean() < maps.roughness[cuts].mean()
+    assert maps.roughness[points].mean() == pytest.approx(0.2, abs=0.05)
 
 
 def test_a_flat_height_is_a_normal_straight_out():

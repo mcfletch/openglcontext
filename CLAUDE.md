@@ -79,8 +79,13 @@ OpenGLContext/
 │   └── vehicle.py    # A road vehicle's motor, tyres, wind and impacts as
 │                     # scene nodes -- docs/audio.rst#audio-vehicle
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.rst
-│   └── mirrorhall.py # The room oglc-mirrors hangs its mirrors in; scenery,
-│                     # not a command
+│   ├── mirrorhall.py # The room oglc-mirrors hangs its mirrors in; scenery,
+│   │                 # not a command
+│   ├── x3d_geospatial_demo.py  # The valley tests/x3d_geospatial.py opens,
+│   │                 # as an X3D Geospatial document; scenery, not a command
+│   └── x3d_sound_stress.py  # oglc-x3d-sound-stress: a document of many
+│                     # sounds, and the frame and block time playing it costs
+│                     # -- docs/audio.rst#audio-stress
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
 │   └── hanim.py      # X3D HAnim's arithmetic: names and levels, skin weights,
 │                     # BVH channels, poses, limits -- no GL -- docs/characters.rst#characters-hanim
@@ -261,6 +266,8 @@ OpenGLContext/
 │   ├── nurbsx3d.py   # X3D's NURBS geometry, trims, texture coordinates and
 │   │                 # NurbsSet, drawn as meshes and lines
 │   ├── nurbsinterpolators.py  # X3D's three NURBS interpolators -- no GL
+│   ├── coordinatedeformer.py  # The VRML97 NURBS extension's CoordinateDeformer:
+│   │                 # coordinates moved through a NURBS volume -- docs/nurbs.rst
 │   ├── nurbseval.py  # X3D's NURBS field rules; curves, surfaces, trims and
 │   │                 # sweeps evaluated -- no GL
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes

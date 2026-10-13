@@ -480,6 +480,77 @@ def test_a_collection_steps_through_its_contexts_queue_on_the_engines_clock(monk
     assert context.redraws >= 30
 
 
+def test_an_unbound_collection_stops_stepping(monkeypatch):
+    from OpenGLContext.events import systemtime  # noqa: PLC0415 kept with its use
+    now = [100.0]
+    monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
+    graph = falling()
+    collection, body = graph.getDEF('C'), graph.getDEF('B')
+    context = QueueContext()
+    collection.bind(context)
+    context.renderQueue.run()
+    collection.unbindContext(context)
+    now[0] += FRAME
+    context.renderQueue.run()
+    assert len(context.renderQueue) == 0
+    assert body.position[1] == pytest.approx(2.0)
+
+
+def test_a_collection_bound_again_steps_once_a_frame(monkeypatch):
+    from OpenGLContext.events import systemtime  # noqa: PLC0415 kept with its use
+    monkeypatch.setattr(systemtime, 'systemTime', lambda: 100.0)
+    collection = falling().getDEF('C')
+    context = QueueContext()
+    collection.bind(context)
+    collection.unbindContext(context)
+    collection.bind(context)
+    context.renderQueue.run()
+    assert len(context.renderQueue) == 1
+    collection.unbindContext(context)
+    context.renderQueue.run()
+    collection.bind(context)
+    assert len(context.renderQueue) == 1
+
+
+SENSED = b'''<CollisionSensor DEF="S"><CollisionCollection containerField="collider">
+    <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+    </CollisionCollection></CollisionSensor>'''
+
+
+def test_a_scene_no_longer_drawn_stops_stepping(gl_context):
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    first, second = falling(SENSED), falling(SENSED)
+    with scene_context(first, size=(32, 32)) as context:
+        drawn_image(context)
+        assert len(context.renderQueue) == 2
+        for _ in range(3):
+            context.sg = second if context.sg is first else first
+            drawn_image(context)
+            context.renderQueue.run()
+            assert len(context.renderQueue) == 2
+        drawn = context.sg.getDEF('B')
+        other = (first if context.sg is second else second).getDEF('B')
+        before = float(other.position[1])
+        for _ in range(5):
+            context.renderQueue.run()
+            drawn_image(context)
+        assert float(other.position[1]) == before
+        assert float(drawn.position[1]) < 2.0
+
+
+def test_a_collection_taken_out_of_its_scene_stops_stepping(gl_context):
+    from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+    graph = falling()
+    with scene_context(graph, size=(32, 32)) as context:
+        drawn_image(context)
+        assert len(context.renderQueue) == 1
+        graph.children.remove(graph.getDEF('C'))
+        context.renderQueue.run()
+        assert len(context.renderQueue) == 0
+        graph.children.append(graph.getDEF('C'))
+        assert len(context.renderQueue) == 1
+
+
 def test_a_sensor_senses_each_frame():
     graph = scene(BALL + b'''<CollisionSensor DEF="S"><CollisionCollection containerField="collider">
         <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>

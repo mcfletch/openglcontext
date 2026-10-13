@@ -302,6 +302,47 @@ class TestBadSurfaces:
         with pytest.raises(NurbsError):
             tessellate_surface(_surface(uDimension=5))
 
+    def test_too_few_control_points_are_refused(self):
+        with pytest.raises(NurbsError):
+            tessellate_surface(_surface(controlPoint=_PLANE[:-1]))
+
+    def test_control_points_past_the_net_are_left_out(self, caplog):
+        """Published worlds carry them: ci_animated_patch66.wrl declares a 6 by 6
+        net and gives 64 points, the first 36 of which are the net"""
+        surface = _surface(controlPoint=_PLANE + [[9.0, 9.0, 9.0]] * 3)
+        found = tessellate_surface(surface, u_step=4, v_step=4)
+        expected = tessellate_surface(_surface(), u_step=4, v_step=4)
+        assert np.array_equal(found.positions, expected.positions)
+        assert np.array_equal(found.indices, expected.indices)
+        said = [r.message for r in caplog.records if 'control points' in r.message]
+        assert len(said) == 1
+        assert 'carries 19 control points for a 4 by 4 net' in said[0]
+
+    def test_a_surface_built_again_says_what_is_wrong_once(self, caplog):
+        """An animated surface is tessellated every frame"""
+        surface = _surface(controlPoint=_PLANE + [[9.0, 9.0, 9.0]])
+        for _ in range(3):
+            tessellate_surface(surface, u_step=4, v_step=4)
+        assert len([r for r in caplog.records if 'control points' in r.message]) == 1
+
+    def test_a_node_that_cannot_be_tessellated_says_so_once(self, caplog):
+        surface = _surface(uDimension=5)
+        for _ in range(3):
+            assert surface.meshArrays() is None
+        assert len([r for r in caplog.records if 'Cannot tessellate' in r.message]) == 1
+
+    def test_a_different_fault_is_said_as_well(self, caplog):
+        surface = _surface(uDimension=5)
+        surface.meshArrays()
+        surface.uDimension = 6
+        surface.meshArrays()
+        assert len([r for r in caplog.records if 'Cannot tessellate' in r.message]) == 2
+
+    def test_each_node_says_its_own_fault(self, caplog):
+        for _ in range(2):
+            _surface(uDimension=5).meshArrays()
+        assert len([r for r in caplog.records if 'Cannot tessellate' in r.message]) == 2
+
     def test_a_knot_vector_that_implies_no_degree_is_refused(self):
         with pytest.raises(NurbsError):
             tessellate_surface(_surface(uKnot=[0, 0, 0, 0, 1]))
@@ -383,3 +424,42 @@ class TestTrimPrimitives:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestBounds:
+    """A NURBS with positive weights lies inside its control points' hull."""
+
+    def test_a_surface_is_bounded_by_its_control_points(self):
+        volume = _surface().boundingVolume()
+        assert np.allclose(volume.center, [1.5, 1.5, 0.0])
+        assert np.allclose(volume.size, [3.0, 3.0, 0.0])
+
+    def test_the_bounds_follow_the_control_points(self):
+        surface = _surface()
+        surface.boundingVolume()
+        surface.controlPoint = [[2.0 * x, y, z] for x, y, z in _PLANE]
+        assert np.allclose(surface.boundingVolume().size, [6.0, 3.0, 0.0])
+
+    def test_the_bounds_are_kept_between_edits(self):
+        surface = _surface()
+        assert surface.boundingVolume() is surface.boundingVolume()
+
+    def test_a_trimmed_surface_is_bounded_by_its_surfaces_control_points(self):
+        inner = _surface()
+        trimmed = nurbs.TrimmedSurface(surface=inner, trimmingContour=_rings(_CCW))
+        assert np.allclose(trimmed.boundingVolume().size, [3.0, 3.0, 0.0])
+        inner.controlPoint = [[x, 2.0 * y, z] for x, y, z in _PLANE]
+        assert np.allclose(trimmed.boundingVolume().size, [3.0, 6.0, 0.0])
+        trimmed.surface = _surface(controlPoint=[[x, y, 1.0] for x, y, _ in _PLANE])
+        assert np.allclose(trimmed.boundingVolume().center, [1.5, 1.5, 1.0])
+
+    def test_a_curve_is_bounded_by_its_control_points(self):
+        curve = nurbs.NurbsCurve(knot=[0, 0, 1, 1], controlPoint=[[0, 0, 0], [2, 4, 0]])
+        assert np.allclose(curve.boundingVolume().center, [1.0, 2.0, 0.0])
+        curve.controlPoint = [[0, 0, 0], [2, 4, 6]]
+        assert np.allclose(curve.boundingVolume().size, [2.0, 4.0, 6.0])
+
+    def test_nothing_to_draw_has_empty_bounds(self):
+        from OpenGLContext.scenegraph import boundingvolume
+        for empty in (nurbs.NurbsSurface(), nurbs.NurbsCurve(), nurbs.TrimmedSurface()):
+            assert type(empty.boundingVolume()) is boundingvolume.BoundingVolume

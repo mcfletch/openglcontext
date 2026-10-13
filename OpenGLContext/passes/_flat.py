@@ -18,7 +18,7 @@ import contextlib
 import threading
 import weakref
 from types import MappingProxyType
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard,layering
@@ -199,6 +199,9 @@ class SGObserver( object ):
     #: ``__init__`` because a pass may be built by a subclass or a test harness
     #: that never reaches this one, and a gather must work on any of them.
     _pathGeneration = 0
+    #: Weakrefs to the contexts this pass draws for; none for a pass built
+    #: without ``__init__``.
+    contexts: Sequence[Any] = ()
     #: The ``(N,8,4)`` array :meth:`_boundingArrays` stacks corners into, kept
     #: so a frame allocates nothing for a scene whose size has not changed.
     _pointsBuffer: Optional[Any] = None
@@ -230,8 +233,10 @@ class SGObserver( object ):
         """Initialize the FlatPass for this scene and set of contexts
 
         - ``scene`` - the scenegraph to manage as a flattened hierarchy
-        - ``contexts`` - set of (weakrefs to) contexts to be serviced, normally
-          a reference to ``Context.allContexts``
+        - ``contexts`` - weakrefs to the contexts this pass draws for. A node
+          with a ``bind`` method is bound to each as it comes into the scene,
+          and one with an ``unbindContext`` method unbound from each as it leaves
+          (:meth:`release`)
         """
         self.scene = scene
         self.contexts = contexts
@@ -293,6 +298,19 @@ class SGObserver( object ):
                         log.warning( '%s is inside itself; it is drawn once', child )
                         continue
                     todo.append( (child,path) )
+    def release( self, nodes: Optional[Iterable[Any]] = None ) -> None:
+        """Unbind ``nodes`` from this pass's contexts; every node it holds, given none.
+
+        What :meth:`integrate` bound: a node stepped or told of events through
+        a context stops when the context no longer draws it.
+        """
+        contexts = [ context for context in ( ref() for ref in self.contexts )
+                     if context is not None ]
+        for node in list( self.nodePaths if nodes is None else nodes ):
+            unbind = getattr( node, 'unbindContext', None )
+            if unbind is not None:
+                for context in contexts:
+                    unbind( context )
     def npFor( self, node: Any ) -> list[Any]:
         """The paths ending at ``node``, a record made for it if it has none."""
         current = self.nodePaths.get( node )
@@ -412,6 +430,7 @@ class SGObserver( object ):
         with how long the session has run rather than with what is on screen.
         """
         dropped = []
+        gone: list[Any] = []
         for _key, values in self.paths.items():
             live = []
             for v in values:
@@ -434,6 +453,8 @@ class SGObserver( object ):
                 paths[:] = live
             else:
                 del self.nodePaths[node]
+                gone.append( node )
+        self.release( gone )
         # Drop the removed paths' persistent picking ids so a later pick can't
         # resolve a stale object.
         sel_map = getattr( self, '_sel_id_map', None )

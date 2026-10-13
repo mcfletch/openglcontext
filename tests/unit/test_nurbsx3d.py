@@ -181,6 +181,53 @@ class TestPatchSurface:
         assert len(far.positions) < len(near.positions)
 
 
+    def test_a_surfaces_origin_is_known_without_a_mesh(self, monkeypatch):
+        """A surface drawn at a distance level is not also built at full detail"""
+        found = patch()
+        built = []
+        original = nurbsx3d.SurfaceDrawn.buildMesh
+        monkeypatch.setattr(nurbsx3d.SurfaceDrawn, 'buildMesh',
+                            lambda self, level=0: built.append(level) or original(self, level))
+        assert found.meshOrigin() is None
+        found.levelMesh(2)
+        assert built == [2]
+        assert found.levelMesh(0).origin is None
+
+
+    def test_a_surface_is_bounded_by_its_control_net_without_a_mesh(self, monkeypatch):
+        found = patch()
+        built = []
+        original = nurbsx3d.SurfaceDrawn.buildMesh
+        monkeypatch.setattr(nurbsx3d.SurfaceDrawn, 'buildMesh',
+                            lambda self, level=0: built.append(level) or original(self, level))
+        volume = found.boundingVolume()
+        assert built == []
+        assert np.allclose(volume.center, [1.5, 1.5, 0.0])
+        assert np.allclose(volume.size, [3.0, 3.0, 0.0])
+        assert found.boundingVolume() is volume
+
+    def test_the_bounds_hold_the_mesh_and_follow_the_control_points(self):
+        found = patch()
+        found.controlPoint.point = [(x, y, 2.0 if (x, y) == (1, 1) else 0.0)
+                                    for y in range(4) for x in range(4)]
+        volume = found.boundingVolume()
+        low = np.asarray(volume.center) - np.asarray(volume.size) / 2.0
+        high = np.asarray(volume.center) + np.asarray(volume.size) / 2.0
+        positions = np.asarray(found.mesh().positions)
+        assert (positions >= low - 1e-5).all() and (positions <= high + 1e-5).all()
+        assert np.allclose(volume.size, [3.0, 3.0, 2.0])
+
+    def test_weighted_points_are_bounded_where_they_are(self):
+        """A weighted control point is given multiplied by its weight"""
+        found = patch('weight="%s"' % ' '.join(['2'] * 16))
+        assert np.allclose(found.boundingVolume().size, [1.5, 1.5, 0.0])
+
+    def test_a_surface_with_nothing_to_draw_has_empty_bounds(self):
+        from OpenGLContext.scenegraph import boundingvolume
+        found = read('<NurbsPatchSurface/>')
+        assert type(found.boundingVolume()) is boundingvolume.BoundingVolume
+
+
 def _area(mesh):
     p = np.asarray(mesh.positions, dtype=float)
     tri = np.asarray(mesh.indices).reshape(-1, 3)
