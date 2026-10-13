@@ -28,7 +28,6 @@ a compatibility profile context.
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 import sys
-from OpenGLContext import testingcontext
 try:
     from PIL.Image import open
 except ImportError:
@@ -71,7 +70,8 @@ class TestContext( BaseContext ):
     different images can have different convolutions applied.
     """)
         if not glInitImagingARB():
-            sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
+            print("No ARB Imaging extension available")
+            sys.exit( 1 )
         self.imageIDs = [
             self.loadImage (),
             self.loadImage ( convolve = False ),
@@ -231,4 +231,6 @@ class TestContext( BaseContext ):
     
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'profile':'compatibility'
+    })
