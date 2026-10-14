@@ -33,6 +33,9 @@ frame drawn, :data:`CAPTURE_FRAMES` and one more, as the engine's capture
 clock does. A looping TimeSensor, an interpolator or a viewer falling under
 gravity is then at the same point in both renders.
 
+X_ITE's StraightenHorizon browser option is off, so a document is seen from
+its Viewpoint's ``orientation`` as written, roll included.
+
 Each browser draws :data:`CHUNK` documents in a process of its own, killed if
 it outlasts a minute and :data:`LOAD_TIMEOUT` a document. A browser whose
 driver dies stops there; the documents it left undrawn are drawn again, five to
@@ -290,7 +293,10 @@ def harness_page(size: tuple[int, int]) -> str:
     frames up to the one captured
 
     X_ITE's splash screen is off: it fades out on the wall clock, which the
-    captured frame is no longer drawn at a fixed interval after.
+    captured frame is no longer drawn at a fixed interval after. Its
+    StraightenHorizon option is off as well: with it on, the EXAMINE viewer
+    turns a bound viewpoint until the world's y axis is up, and a document
+    whose Viewpoint looks at a z-up part is drawn on its side.
     """
     width, height = size
     clock = _CLOCK_SCRIPT % {'start': WORLD_START * 1000.0, 'fps': CAPTURE_FPS,
@@ -309,6 +315,7 @@ const canvas = document.getElementById('canvas');
 window.done = false;
 canvas.addEventListener('load', () => { window.done = true; });
 canvas.addEventListener('error', () => { window.done = 'error'; });
+canvas.browser.setBrowserOption('StraightenHorizon', false);
 canvas.setAttribute('src', new URLSearchParams(location.search).get('scene'));
 </script></body></html>
 ''' % (clock, width, height, _MAXIMUM_FRAME_RATE)

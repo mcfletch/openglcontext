@@ -138,6 +138,13 @@ def test_the_harness_puts_the_page_on_the_capture_clock_before_x_ite(tool):
     assert 'async function settle(frames, timeout)' in page
 
 
+def test_the_harness_leaves_a_viewpoints_roll_as_the_document_gives_it(tool):
+    page = tool.harness_page((792, 465))
+    option = "setBrowserOption('StraightenHorizon', false)"
+    assert option in page
+    assert page.index(option) < page.index("canvas.setAttribute('src'")
+
+
 class TestTheServer:
     def get(self, server, path):
         with urllib.request.urlopen('%s/%s' % (server.url, path), timeout=5) as response:

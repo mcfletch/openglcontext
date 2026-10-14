@@ -2535,14 +2535,16 @@ maintainer):
 - Extrusion caps: creaseAngle smooths across any two adjacent faces
   (13.2.3), the caps' edges among them; X_ITE shades the caps apart from
   the sides (test_ccw 15%, test_begincap 3.7%)
-- Viewpoint orientation: X_ITE's EXAMINE viewer straightens the horizon of a
-  bound viewpoint (its StraightenHorizon browser option, on by default), so
-  a viewpoint with roll is turned upright; 23.4.x places the view as the
-  Viewpoint's orientation says. The NIST STEP documents (25 of them, 4 to
-  7%) have rolled viewpoints for their z-up parts
 
 Resolved without change:
 
+- Viewpoint orientation: X_ITE's EXAMINE viewer straightens the horizon of a
+  bound viewpoint (its StraightenHorizon browser option, on by default), so
+  a viewpoint with roll is turned until y is up; 23.4.x places the view as
+  the Viewpoint's orientation says. `scripts/x3d_xite_references.py`
+  switches the option off (2026-10-14). Of the 1181 references it changes
+  the 24 NIST STEP documents with rolled viewpoints for their z-up parts,
+  drawn again: they were 4 to 7% from ours and are now at most 0.64%
 - PixelTexture filtering: X_ITE samples any texture with no
   TextureProperties and fewer than 16 texels on its longer side by nearest
   texel, linear otherwise; `sampler.SMALL_IMAGE` is the same rule

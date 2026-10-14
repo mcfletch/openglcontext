@@ -416,13 +416,27 @@ def run(args: argparse.Namespace) -> int:
                           args.diff_threshold, drawn)
     return renderregression.exit_status(counts, report)
 
+def auto_bless_threshold(record:dict[str,Any], out_dir:str, threshold:float) -> bool:
+    """Is the error on this item vs. X_ITE < threshold(%)"""
+    json_source = os.path.join(out_dir,record['slug']) + '.json'
+    with open(json_source) as handle:
+        content = handle.read()
+    content = json.loads(content)
+    # reference difference is in % rather than fraction...
+    if (content.get('reference_difference') or 100) < threshold:
+        return True 
+    return False
 
-def bless(out_dir: str, baseline_root: str, parts: Sequence[str]) -> int:
+
+def bless(out_dir: str, baseline_root: str, parts: Sequence[str], threshold=.5) -> int:
     """Make the renders in `out_dir` baselines: every one, or those whose
     document's name contains one of `parts`; 1 where there were none"""
+    # not parts or any(part in record.get('scene', '') for part in parts)
+
     promoted = renderregression.promote(
         out_dir, baseline_root,
-        lambda _slug, record: not parts or any(part in record.get('scene', '') for part in parts))
+        lambda _slug, record: auto_bless_threshold(record, out_dir, threshold)
+    )
     for slug in promoted:
         print('  BLESS %s' % slug)
     if not promoted:
