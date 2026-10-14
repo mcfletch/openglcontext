@@ -428,7 +428,7 @@ def auto_bless_threshold(record:dict[str,Any], out_dir:str, threshold:float) -> 
     return False
 
 
-def bless(out_dir: str, baseline_root: str, parts: Sequence[str], threshold=.5) -> int:
+def bless(out_dir: str, baseline_root: str, parts: Sequence[str], threshold: float = 0.5) -> int:
     """Make the renders in `out_dir` baselines: every one, or those whose
     document's name contains one of `parts`; 1 where there were none"""
     # not parts or any(part in record.get('scene', '') for part in parts)
