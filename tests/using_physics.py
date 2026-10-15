@@ -5,21 +5,16 @@
 
 This tutorial walks through the process of creating a game using the 
 OpenGLContext renderer and the omi_physics engine for simulating a 
-physical environment.
+physical environment. We use convenience methods to create the geometry
+for the world with reasonable textures.
 
 As with any game, the first question is what we're going to build.
 To keep it simple, we'll use a classic game that's been available
 on computers since the early 80s. It's a canon game where you try
 to hit a target on a platform by controlling your canon's bearing,
-elevation and power.
-
-Most of the code in this tutorial is about the game itself, since 
-the rendering and physics are handled by the engine.
-
-We'll create a class that models the Game itself, it's responsible
-for tracking the Game's attempts, win state, loss state, and 
-generating the (randomised) worlds. We'll use the :py:mod:`OpenGLContext.surfaces` 
-module to generate simple cartoonish structures for the game.
+elevation and power. More advanced versions of the game might add
+barriers, different cannon ball types, trick shots around corners
+and the like, but we're going to build just the base game here.
 
 The rules are approximately these:
 
@@ -32,6 +27,7 @@ The rules are approximately these:
 
 When the player wins, we display a "wash" over the screen and a
 space causes the next game to play.
+
 '''
 from __future__ import annotations
 
@@ -94,7 +90,7 @@ BARREL = 2.0
 CANNON_HALF, TARGET_HALF = 2.0, 1.25
 
 #: Seconds the world advances in one step.  A ball at full power crosses
-#: less than its own radius in a step, so it cannot pass through a surface.
+#: less than  its own radius in a step, so it cannot pass through a surface.
 STEP = 1.0 / 240.0
 
 #: Where the camera sits in the barrel's frame: behind the pivot, above the
@@ -125,6 +121,11 @@ TURN, RAISE, PUSH = 0.2, 0.2, 0.2
 BEARING_LIMIT = (-60.0, 60.0)
 ELEVATION_LIMIT = (-10.0, 85.0)
 POWER_LIMIT = (5.0, 40.0)
+
+#: How loud the report is at the least and the most power: a gentle shot is
+#: plainly audible, a hard one is at full volume, and the 14 dB between them is
+#: heard as a clear change rather than a nudge.
+REPORT_GAIN = (0.2, 1.0)
 
 #: How far a thumb-wheel is dragged for one whole turn, in pixels: most of the
 #: window's height.
@@ -168,13 +169,13 @@ def looks() -> dict[str, Any]:
         'mark': PhysicalMaterial(baseColor=(0.8, 0.08, 0.06), metallic=0.0, roughness=0.5),
         'steel': PhysicalMaterial(baseColor=surfaces.STEEL, metallic=1.0, roughness=0.25),
         'bronze': PhysicalMaterial(baseColor=surfaces.BRONZE, metallic=1.0, roughness=0.35),
-        'panel': surfaces.pbr_material(surfaces.wood(128), baseColor=(0.3, 0.3, 0.3),
-                                       metallic=0.0),
+        'panel': surfaces.pbr_material(
+            surfaces.brushed_metal(128, colour=(0.35, 0.36, 0.37), roughness=0.6)),
         'knurl': surfaces.pbr_material(surfaces.knurled(256, count=8), relief=6.0,
                                        baseColor=(0.8, 0.8, 0.8)),
         'chrome': PhysicalMaterial(baseColor=surfaces.STEEL, metallic=1.0, roughness=0.3),
         'recess': PhysicalMaterial(baseColor=(0.02, 0.02, 0.02), metallic=0.0, roughness=0.9),
-        'paint': Material(diffuseColor=(0, 0, 0), emissiveColor=(1.0, 0.95, 0.82)),
+        'paint': Material(diffuseColor=(0.02, 0.02, 0.02)),
     }
 
 '''Model a single platform as to where it is and how large it is.'''
@@ -188,6 +189,13 @@ class Platform:
     half: float
 
 
+def report_gain(power: float) -> float:
+    """The report's gain at ``power``: audible at the least, full at the most."""
+    low, high = POWER_LIMIT
+    fraction = (min(max(power, low), high) - low) / (high - low)
+    return REPORT_GAIN[0] + (REPORT_GAIN[1] - REPORT_GAIN[0]) * fraction
+
+
 class Report:
     """The sound of the cannon firing, made from arithmetic.
 
@@ -198,7 +206,8 @@ class Report:
     `reverberated` puts the tail of an open field behind it.  The clip is made
     once, and each shot plays it from the muzzle through an emitter, so it is
     placed in the stereo field and falls off with the distance from the
-    camera.'''
+    camera.  Its gain rises with the shot's power, so a gentle shot is audible
+    and a hard one is at full volume.'''
     """
 
     def __init__(self, sample_rate: int | None = None) -> None:
@@ -209,13 +218,15 @@ class Report:
         self.emitter = audiomodel.AudioEmitter(positional=audiomodel.PositionalProperties(
             refDistance=3.0, rolloffFactor=0.8))
 
-    def play(self, engine: Any, position: Any) -> Any:
-        """Start the report at ``position``; None where there is no engine to play it."""
+    def play(self, engine: Any, position: Any, power: float) -> Any:
+        """Start the report at ``position``, as loud as ``power`` asks.
+
+        None where there is no engine to play it."""
         if engine is None:
             return None
         return engine.play(self.clip, emitter=self.emitter,
                            position=tuple(float(part) for part in position),
-                           gain=1.0, priority=1.0)
+                           gain=report_gain(power), priority=1.0)
 
 
 @dataclass
@@ -246,6 +257,8 @@ class Scale:
     unit: str
     limits: tuple[float, float]
     keys: tuple[str, str]
+    #: Whether the wheel also reads the value as a percentage of its scale.
+    fraction: bool = False
 
     def turn(self, value: float) -> float:
         """How far round the wheel is at ``value``: 0 at the lower limit, 1 at the upper."""
@@ -258,11 +271,12 @@ class Scale:
         return min(max(low + travel / TRAVEL * (high - low), low), high)
 
 
-#: The three wheels, in the order they stand on the panel.
+#: The three wheels, in the order they stand on the panel.  The power wheel
+#: reads as a percentage of its scale as well as in metres per second.
 SCALES = (
     Scale('bearing', 'deg', BEARING_LIMIT, ('q', 'a')),
     Scale('elevation', 'deg', ELEVATION_LIMIT, ('w', 's')),
-    Scale('power', 'm/s', POWER_LIMIT, ('e', 'd')),
+    Scale('power', 'm/s', POWER_LIMIT, ('e', 'd'), fraction=True),
 )
 
 
@@ -341,8 +355,11 @@ class Wheel:
         if value != self.shown:
             self.shown = value
             self.drum.rotation = (1, 0, 0, -2.0 * math.pi * turn)
+            reading = '%.1f %s' % (value, self.scale.unit)
+            if self.scale.fraction:
+                reading += '  %d%%' % round(100.0 * turn)
             self.label.string = ['%s  %s %s' % (self.scale.name, *self.scale.keys),
-                                 '%.1f %s' % (value, self.scale.unit)]
+                                 reading]
         if not self.sensor.active():
             self.sensor.offset = (0, turn * TRAVEL, 0)
 
@@ -845,7 +862,7 @@ class TestContext(BaseContext):
             self.lay_out()
             self.frameViews()
         elif self.game.ball is not None:
-            self.report.play(self.engine, self.game.muzzle)
+            self.report.play(self.engine, self.game.muzzle, self.game.aim.power)
             self.shot.children = [self.game.ball.transform]
             self.trail.point = [self.game.muzzle, self.game.muzzle]
         self.update()
@@ -867,6 +884,11 @@ class TestContext(BaseContext):
         the barrel's frame puts it.  `look_through` moves the window's camera
         to it, which is done again each frame because the frame turns.'''
         game.course.gun.look_through(self)
+        '''The report is played directly rather than through a scene `Sound`,
+        so nothing else moves the engine's listener.  The camera is the
+        listener, and it has just moved, so the ears follow it here.'''
+        if self.engine is not None:
+            self.engine.listen(self.getViewPlatform())
         self.loaded.translation = game.muzzle
         if game.state == 'flying':
             path = list(self.trail.point)

@@ -9,6 +9,7 @@ import math
 import random
 import sys
 
+import numpy as np
 import pytest
 
 from OpenGLContext.physics.gltf_world import node_mesh
@@ -238,14 +239,114 @@ class TestTheReport:
         late = float(abs(clip.samples[-self.RATE // 10:]).max())
         assert late < 0.3 * loud
 
+    def test_the_report_grows_louder_with_the_power(self):
+        low, high = game.POWER_LIMIT
+        assert game.report_gain(low) == pytest.approx(game.REPORT_GAIN[0])
+        assert game.report_gain(high) == pytest.approx(game.REPORT_GAIN[1])
+        assert game.report_gain(low) < game.report_gain((low + high) / 2) < game.report_gain(high)
+        # The step from the gentlest shot to the hardest is heard as a change,
+        # not a nudge: a good few decibels, about a doubling of loudness
+        quiet, loud = game.REPORT_GAIN
+        assert 20.0 * math.log10(loud / quiet) >= 10.0
+        # Beyond the limits it stays within them rather than running away
+        assert game.report_gain(low - 100.0) == pytest.approx(game.REPORT_GAIN[0])
+        assert game.report_gain(high + 100.0) == pytest.approx(game.REPORT_GAIN[1])
+
     def test_playing_the_report_starts_a_voice_in_the_engine(self, engine):
         report = game.Report(self.RATE)
-        assert report.play(engine, (0.0, 3.0, 0.0)) is not None
+        assert report.play(engine, (0.0, 3.0, 0.0), game.POWER_LIMIT[1]) is not None
         engine.mixer.mix(self.RATE // 10)
         assert engine.mixer.active_voices > 0
 
     def test_a_report_with_no_engine_is_silence_and_no_error(self):
-        assert game.Report(self.RATE).play(None, (0.0, 0.0, 0.0)) is None
+        assert game.Report(self.RATE).play(None, (0.0, 0.0, 0.0), game.POWER_LIMIT[1]) is None
+
+
+class _NoWindowCannon(game.TestContext):
+    """A cannon context with no window: it only answers for the camera's platform."""
+
+    def getViewPlatform(self):
+        return self.platform
+
+
+def heard_context(rate=8000):
+    """The cannon's context, its ears at the camera, updated once.
+
+    Built without a window: the scene nodes ``update`` writes to are stand-ins,
+    and the engine is real over a silent device, so what it mixes is the mix.
+    """
+    from types import SimpleNamespace
+
+    from omi_audio.device import NullDevice
+    from omi_audio.engine import AudioEngine
+
+    from OpenGLContext.move import viewplatform
+
+    context = object.__new__(_NoWindowCannon)
+    context.game = game.Game(random.Random(3))
+    context.platform = viewplatform.ViewPlatform()
+    context.engine = AudioEngine(device=NullDevice(sample_rate=rate), voices=4)
+    context.loaded = SimpleNamespace(translation=None, children=[])
+    context.trail = SimpleNamespace(point=[])
+    context.line = SimpleNamespace(coordIndex=[])
+    context.waiting = []
+    context.wheels = game.Wheels(context.game.set_aim)
+    context.readout = SimpleNamespace(lines=[])
+    context.message = ''
+    context.report = game.Report(rate)
+    context.update()
+    return context
+
+
+def peak_dbfs(context, power, blocks=12, frames=1024):
+    """The loudest sample one shot mixes, in dBFS."""
+    context.report.play(context.engine, context.game.muzzle, power)
+    peak = 0.0
+    for _ in range(blocks):
+        peak = max(peak, float(np.abs(context.engine.mixer.mix(frames)).max()))
+    return 20.0 * math.log10(max(peak, 1e-9))
+
+
+#: Floor for the shot on its own: below this it is lost on ordinary hardware.
+AUDIBLE_DBFS = -30.0
+
+
+class TestTheReportReachesTheCamera:
+    """The shot is played straight into the engine, so the ears follow the camera.
+
+    Nothing else moves the listener here, so the report is only audible if the
+    context puts the listener where the camera is each frame.
+    """
+
+    RATE = 8000
+
+    @pytest.fixture
+    def heard(self):
+        made = []
+
+        def build():
+            context = heard_context(self.RATE)
+            made.append(context)
+            return context
+
+        yield build
+        for context in made:
+            context.engine.close()
+
+    def test_the_listener_moves_to_the_camera(self, heard):
+        context = heard()
+        camera = list(context.platform.position)[:3]
+        assert list(context.engine.listener.position) == pytest.approx(camera)
+
+    def test_the_least_power_is_audible(self, heard):
+        assert peak_dbfs(heard(), game.POWER_LIMIT[0]) > AUDIBLE_DBFS
+
+    def test_the_most_power_is_louder_than_the_least(self, heard):
+        quiet = peak_dbfs(heard(), game.POWER_LIMIT[0])
+        loud = peak_dbfs(heard(), game.POWER_LIMIT[1])
+        # The two are told apart by ear: a span of about a doubling of loudness
+        assert loud > quiet + 10.0
+        assert quiet > AUDIBLE_DBFS
 
 
 class TestTheLimitOnShots:
@@ -464,7 +565,20 @@ class TestTheWheels:
                 (1, 0, 0, -2.0 * math.pi * wheel.scale.turn(value)))
         assert [list(wheel.label.string) for wheel in wheels.wheels] == [
             ['bearing  q a', '-12.5 deg'], ['elevation  w s', '33.0 deg'],
-            ['power  e d', '21.0 m/s']]
+            ['power  e d', '21.0 m/s  46%']]
+
+    def test_only_the_power_wheel_reads_its_share_of_the_scale(self, wheels):
+        wheels.show(game.Aim(bearing=-12.5, elevation=33.0, power=21.0))
+        assert '%' not in wheels.wheels[0].label.string[1]
+        assert '%' not in wheels.wheels[1].label.string[1]
+        assert wheels.wheels[2].label.string[1].endswith('46%')
+
+    def test_the_power_wheel_reads_the_ends_of_its_scale(self, wheels):
+        wheel = wheels.wheels[2]
+        wheel.show(game.POWER_LIMIT[0])
+        assert list(wheel.label.string) == ['power  e d', '5.0 m/s  0%']
+        wheel.show(game.POWER_LIMIT[1])
+        assert list(wheel.label.string) == ['power  e d', '40.0 m/s  100%']
 
     def test_a_whole_turn_of_the_drum_is_the_whole_scale(self, wheels):
         wheel = wheels.wheels[2]
@@ -559,13 +673,30 @@ class TestTheWheelsOnTheScreen:
         image = drawn_image(context)
         left, bottom, _width, _height = self.panel(wheels)
         x, y = round(left + 5), round(bottom + 5)
-        wood = image[self.HEIGHT - 1 - y, x].astype(int)
-        # The panel is wood: redder than it is blue, which no sky is
-        assert wood[0] > wood[2] + 20
+        panel = image[self.HEIGHT - 1 - (y + 30):self.HEIGHT - 1 - y - 5,
+                      x:x + 30].reshape(-1, 3).astype(int)
+        metal = panel.mean(axis=0)
+        # The panel is brushed metal: grey, so no channel leads, and mid-bright
+        assert float(metal.max() - metal.min()) < 25.0
+        assert 80.0 < float(metal.mean()) < 220.0
         for across, up in ((-self.WIDTH // 2, 0), (0, self.HEIGHT // 2),
                            (-self.WIDTH // 2, self.HEIGHT // 2)):
             elsewhere = image[self.HEIGHT - 1 - (y + up), x + across].astype(int)
-            assert abs(elsewhere - wood).sum() > 30
+            assert abs(elsewhere - metal).sum() > 30.0
+
+    def test_the_reading_under_the_wheels_is_dark_on_the_panel(self, played):
+        from OpenGLContext.testing.scenes import drawn_image  # noqa: PLC0415 GL
+        context, _course, wheels = played
+        image = drawn_image(context)
+        left, bottom, width, _height = self.panel(wheels)
+        # The reading is written under the wheels, low in the panel
+        rows = slice(round(self.HEIGHT - 1 - (bottom + 55)),
+                     round(self.HEIGHT - 1 - (bottom + 30)))
+        band = image[rows, round(left):round(left + width)].reshape(-1, 3).astype(int)
+        ink = band.mean(axis=1)
+        assert float(np.median(ink)) > 150.0     # the panel behind is bright
+        assert float(ink.min()) < 90.0           # the ink is dark against it
+        assert float((ink < 90.0).mean()) > 0.02
 
     def test_dragging_the_bearing_wheel_up_turns_the_cannon(self, played):
         context, course, wheels = played
