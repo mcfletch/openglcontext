@@ -28,6 +28,7 @@ a compatibility profile context.
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 import sys
+from OpenGLContext import testingcontext
 try:
     from PIL.Image import open
 except ImportError:
@@ -71,7 +72,7 @@ class TestContext( BaseContext ):
     """)
         if not glInitImagingARB():
             print("No ARB Imaging extension available")
-            sys.exit( 1 )
+            sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
         self.imageIDs = [
             self.loadImage (),
             self.loadImage ( convolve = False ),

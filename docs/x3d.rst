@@ -1935,7 +1935,10 @@ reader of the report and fails no run.
 - ``--bless`` draws nothing: it makes the renders already in the output
   directory, as the report shows them, the baselines, with their records --
   every one, or those whose name contains a ``PART`` -- and leaves a render
-  that failed.
+  that failed. With ``--bless-within PCT`` it takes only the renders that
+  differ from their reference by less than ``PCT`` percent of their pixels,
+  the figure each row of the report shows; a render with no reference is
+  left.
 - The exit status counts only the documents drawn in that run; a row left
   from an earlier run is shown as not drawn. ``--report-only`` counts every
   row.
@@ -1961,6 +1964,9 @@ reader of the report and fails no run.
      - draw only the documents whose name contains ``PART`` (repeatable)
    * - ``--bless [PART ...]``
      - make the renders already drawn the baselines, as above
+   * - ``--bless-within PCT``
+     - with ``--bless``, only the renders within ``PCT`` percent of their
+       reference
    * - ``--report-only``
      - rebuild the report from the renders already drawn
    * - ``--jobs N``
