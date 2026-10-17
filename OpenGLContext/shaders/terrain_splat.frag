@@ -22,8 +22,8 @@ uniform vec3  sunDirEye;            // normalized, eye space (points FROM surfac
 uniform vec3  sunColor;
 uniform vec3  skyColor;            // hemispheric ambient (up)
 uniform vec3  groundAmbient;      // hemispheric ambient (down)
-uniform float fogDensity;
-uniform vec3  fogColor;
+// fogMode, fogDensity, fogColor and x3dFogged().
+#include "_x3d_fog_inc.glsl"
 
 out vec4 fragColor;
 
@@ -73,10 +73,11 @@ void main(){
     vec3 ambient = albedo * mix(groundAmbient, skyColor, up) * (0.55 + 0.45*sh);
     vec3 color = direct + ambient;
 
-    if(fogDensity>0.0){
-        float fog = 1.0-exp(-fogDensity*length(toViewer(vEyePos)));
-        color = mix(color, fogColor, clamp(fog,0.0,1.0));
-    }
-    color = aces(color);
-    fragColor = vec4(linearToSRGB(color), 1.0);
+    // The aerial haze (mode 1) is mixed in linear light; X3D's Fog (modes 2 and 3) is
+    // mixed into the colour as displayed, as pbr.frag does.
+    float eyeDistance = length(toViewer(vEyePos));
+    if(fogMode==1) color = x3dFogged(color, eyeDistance);
+    vec3 shown = linearToSRGB(aces(color));
+    if(fogMode>1) shown = x3dFogged(shown, eyeDistance);
+    fragColor = vec4(shown, 1.0);
 }

@@ -24,7 +24,7 @@ from OpenGL.GL import (
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
 )
 from OpenGLContext.scenegraph.instancedgl import (
-    load_program, texture_rgba, delete_gl, setup_instance_attribs,
+    FOG_UNIFORMS, load_program, texture_rgba, delete_gl, setup_instance_attribs,
     instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
     InstancedVegBase, _BIG, LOD_NEAR, LOD_FAR)
@@ -158,7 +158,7 @@ class InstancedMeshLOD(InstancedVegBase):
             self._sp.append(dict(buf=ibuf, o=(ov, onc, tex(sd["o_tex"])), b=(bv, bnc, tex(sd["b_tex"]))))
         self.U = {x: glGetUniformLocation(self._prog, x) for x in
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",
-                   "skyAmbient", "groundAmbient", "fogDensity", "fogColor",
+                   "skyAmbient", "groundAmbient", *FOG_UNIFORMS,
                    "uLodStart", "uLodEnd", "uUpEye")}
         self._commit_constants("veg_mesh.vert", "veg_mesh.frag")
         self._gl = self._prog
@@ -168,8 +168,6 @@ class InstancedMeshLOD(InstancedVegBase):
         glUniform3f(U["sunColor"], 1.25, 1.18, 1.02)
         glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66)
         glUniform3f(U["groundAmbient"], 0.14, 0.16, 0.11)
-        glUniform1f(U["fogDensity"], 0.00016)
-        glUniform3f(U["fogColor"], 0.46, 0.58, 0.76)
         glUniform1f(U["uLodStart"], LOD_NEAR)
         glUniform1f(U["uLodEnd"], LOD_FAR)
 

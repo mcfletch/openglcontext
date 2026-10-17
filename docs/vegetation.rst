@@ -235,6 +235,18 @@ making, and leaves the cover empty until the next ``update``. ``dispose()``
 deletes the GL objects of every node and stops the worker; call it with the GL
 context current.
 
+.. _vegetation-fog:
+
+Fog
+~~~
+
+Trees and ground cover are fogged by the scene's bound ``Fog`` node
+(:ref:`Fog <fog>`), with the same curve and colour as the rest of the scene, so
+plants fade into the haze at the distance the ground and the sky do. With no
+``Fog`` bound they are fogged by the engine's aerial haze: density 0.00016 per
+metre, colour ``(0.46, 0.58, 0.76)`` in linear light. A bound ``Fog`` with a
+``visibilityRange`` of 0 is no fog. The terrain takes its fog the same way.
+
 Every instanced vegetation node, the terrain and the particle emitters have a
 ``drawn`` attribute, True by default. Set it False and the node draws nothing
 and casts no shadow until it is set True again; a profiling run leaves one

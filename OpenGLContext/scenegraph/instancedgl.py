@@ -28,17 +28,50 @@ from OpenGL.GL import (
     glDeleteBuffers, glDeleteProgram, glDeleteTextures, glDeleteVertexArrays,
     glEnableVertexAttribArray, glGenBuffers, glGenTextures,
     glGenerateMipmap, glGetIntegerv, glGetUniformLocation, glTexImage2D, glTexParameteri,
-    glUniform1i, glUniform1ui, glUniform4iv, glUseProgram,
+    glUniform1f, glUniform1i, glUniform1ui, glUniform3f, glUniform4iv, glUseProgram,
     glVertexAttribDivisor, glVertexAttribPointer,
 )
 from OpenGL.GL.shaders import compileProgram, compileShader
 
+from OpenGLContext.scenegraph.fog import FOG_DENSITY
 from OpenGLContext.scenegraph.walk import reachable
 
 log = logging.getLogger(__name__)
 
 # OpenGLContext/shaders (this file lives in OpenGLContext/scenegraph/).
 SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shaders')
+
+
+#: The uniforms the fragment shaders of the instanced layers take their fog from
+#: (``_x3d_fog_inc.glsl``).
+FOG_UNIFORMS = ("fogMode", "fogDensity", "fogColor")
+
+#: The fog a layer is drawn in where the scene binds no Fog node: the engine's aerial
+#: haze, as a (mode, density per metre, colour in linear light).
+DEFAULT_FOG: "tuple[int, float, Sequence[float]]" = (FOG_DENSITY, 0.00016, (0.46, 0.58, 0.76))
+
+
+def frame_fog(mode: Any) -> "tuple[int, float, Sequence[float]]":
+    """The ``(mode, density, colour)`` this frame's instanced layers are fogged by.
+
+    The scene's bound Fog node, as the pass hands it to every other shader, or
+    :data:`DEFAULT_FOG` where the scene binds none. A bound Fog with no visible range is
+    no fog.
+    """
+    current = getattr(mode, 'currentFog', None)
+    path = current() if current is not None else None
+    if path is None:
+        return DEFAULT_FOG
+    found: "tuple[int, float, Sequence[float]]" = path[-1].fogParameters(path.transformMatrix())
+    return found
+
+
+def upload_fog(U: "dict[str, int]", fog: "tuple[int, float, Sequence[float]]") -> None:
+    """Send ``fog``, a :func:`frame_fog` answer, to the bound program's :data:`FOG_UNIFORMS`."""
+    fog_mode, density, colour = fog
+    glUniform1i(U["fogMode"], int(fog_mode))
+    glUniform1f(U["fogDensity"], float(density))
+    glUniform3f(U["fogColor"], *(float(value) for value in tuple(colour)[:3]))
 
 
 def load_program(vert_name: str, frag_name: str) -> int:

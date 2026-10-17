@@ -124,6 +124,15 @@ same grain.
 
 .. _controlmap:
 
+.. _terrain-fog:
+
+Fog
+~~~
+
+A ``SplatTerrain`` is fogged by the scene's bound ``Fog`` node
+(:ref:`Fog <fog>`), as the vegetation on it is (:ref:`vegetation fog
+<vegetation-fog>`). With none bound it is fogged by the engine's aerial haze.
+
 Ground materials: the control map
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

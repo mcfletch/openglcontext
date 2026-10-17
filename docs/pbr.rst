@@ -871,7 +871,9 @@ fog leaves an object ``(visibilityRange - distance) / visibilityRange`` of its
 own colour, at its distance from the viewer. Both passes fog lit, unlit and
 vertex-coloured shapes, points and lines; text and the overlay are not
 fogged. X3D's
-``LocalFog`` fogs only its own group (:doc:`X3D <x3d>`).
+``LocalFog`` fogs only its own group (:doc:`X3D <x3d>`). The instanced
+:ref:`vegetation <vegetation-fog>` and the :ref:`splat terrain <terrain-fog>`
+are fogged by the bound ``Fog`` too.
 
 Choosing a fog curve
 ~~~~~~~~~~~~~~~~~~~~
