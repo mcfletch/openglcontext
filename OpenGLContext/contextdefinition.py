@@ -203,6 +203,13 @@ class ContextDefinition( node.Node ):
     #: shadow output reproducible (env: OPENGLCONTEXT_SHADOW_CASCADES).
     shadowCascades = field.newField( "shadowCascades", "SFInt32", 1,
                                      lambda: int(renderoptions.env_number('OPENGLCONTEXT_SHADOW_CASCADES', 0, integer=True)))
+    #: How far from the camera, in scene units, a directional light's shadows are made.
+    #: The cascades are fitted to that distance and the shadows fade out over its last
+    #: fifth, so a caster entering the set drawn that far away arrives without a
+    #: shadow popping in. 0 fits them to the farthest caster
+    #: (env: OPENGLCONTEXT_SHADOW_DISTANCE).
+    shadowDistance = field.newField( "shadowDistance", "SFFloat", 1,
+                                     lambda: float(renderoptions.env_number('OPENGLCONTEXT_SHADOW_DISTANCE', 0.0)))
     #: Lights the shader will bind in one frame. Lower is faster in a scene
     #: with many lights; the shader's own ceiling still applies.
     #: (env: OPENGLCONTEXT_MAXIMUM_LIGHTS)
@@ -380,6 +387,8 @@ class ContextDefinition( node.Node ):
         'shadowsSoft': {'label': 'Soft shadows'},
         'shadowCascades': {'label': 'Shadow cascades', 'minimum': 0,
                            'maximum': 4, 'step': 1},
+        'shadowDistance': {'label': 'Shadow distance', 'minimum': 0.0,
+                           'maximum': 1000.0, 'step': 10.0},
         'maximumLights': {'label': 'Lights', 'minimum': 0, 'maximum': 8,
                           'step': 1},
         'bloom': {'label': 'Bloom'},
@@ -428,7 +437,7 @@ class ContextDefinition( node.Node ):
     #: Fields a settings screen shows under "Rendering", in the order they
     #: should read: the expensive things first, the diagnostics last.
     RENDERING_FIELDS = (
-        'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
+        'shadows', 'shadowsSoft', 'shadowCascades', 'shadowDistance', 'maximumLights',
         'bloom', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
         'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',

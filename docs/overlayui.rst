@@ -209,6 +209,12 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - Cascades for a directional light. 0 lets the pass choose from VRAM and frame
        rate; a fixed value makes shadow output reproducible.
      - ``OPENGLCONTEXT_SHADOW_CASCADES``
+   * - ``shadowDistance``
+     - float, 0–1000
+     - How far from the camera a directional light's shadows are made, with the
+       cascades fitted to it and a fade over its last fifth. 0 fits them to the
+       farthest caster.
+     - ``OPENGLCONTEXT_SHADOW_DISTANCE``
    * - ``maximumLights``
      - int, 0–8
      - Lights bound in one frame, the headlight among them. The shader's own

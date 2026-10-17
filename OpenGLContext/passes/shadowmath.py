@@ -11,6 +11,7 @@ without a GL context.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from typing import Optional, Union
 
@@ -190,6 +191,18 @@ def frustum_corners_world(camera_view: Matrix4, camera_projection: Matrix4,
                 world = clip @ inv
                 corners.append(world[:3] / world[3])
     return np.asarray(corners, dtype='d')
+
+
+#: The share of a shadow distance, at its far end, over which shadows fade out.
+SHADOW_FADE = 0.2
+
+
+def shadow_fade(distance: float) -> Optional[tuple[float, float]]:
+    """The eye depths between which a shadow fades from full to nothing for a shadow
+    ``distance``, or None where there is no limit (zero, negative or not finite)."""
+    if not (math.isfinite(distance) and distance > 0.0):
+        return None
+    return distance * (1.0 - SHADOW_FADE), float(distance)
 
 
 def cascade_splits(near: float, far: float, count: int, blend: float = 0.5) -> list:

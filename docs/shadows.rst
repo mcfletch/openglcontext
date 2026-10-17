@@ -64,9 +64,12 @@ control them:
    * - ``OPENGLCONTEXT_SHADOW_CASCADES=n``
      - fix the number of cascades for directional lights; the default, 0,
        adapts it to the frame rate
+   * - ``OPENGLCONTEXT_SHADOW_DISTANCE=metres``
+     - how far from the camera directional shadows are made (default 0:
+       as far as the farthest caster); see :ref:`shadows-distance`
 
 Each variable sets the default of a ``ContextDefinition`` field
-(``shadows``, ``shadowsSoft``, ``shadowCascades``), which a settings screen
+(``shadows``, ``shadowsSoft``, ``shadowCascades``, ``shadowDistance``), which a settings screen
 can change while the program runs. See :doc:`environment` and
 :ref:`overlayui-settings`.
 
@@ -142,6 +145,18 @@ shadows are sharp. Farther slices cover more ground at lower detail.
 By default the number of slices adapts to the frame rate. Set
 ``OPENGLCONTEXT_SHADOW_CASCADES`` to fix it when you need identical output on
 every run (see :ref:`shadows-reproducible`).
+
+.. _shadows-distance:
+
+By default the slices span the depth of the farthest shadow caster, so a scene
+with one caster a long way off spreads every slice thin. ``ContextDefinition.shadowDistance``
+(``OPENGLCONTEXT_SHADOW_DISTANCE``) names the distance from the camera, in scene
+units, past which shadows are not made: the slices are fitted to it, casters
+beyond it are not drawn into them, and the shadows fade out over the last fifth
+of it. A scene that streams its casters in at a radius sets the distance a little
+inside that radius, and the shadows of a caster arriving at the edge of the set
+start at nothing. The field applies to the camera the slices are fitted to;
+in another view of a :doc:`multi-view <multiview>` window the shadows are not faded.
 
 With :doc:`several views <multiview>` in one window, the slices are fitted to
 the active view's camera, and every view reads the same maps. Where the active

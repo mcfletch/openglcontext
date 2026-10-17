@@ -42,6 +42,7 @@ class _ShadowUniformMixin:
 
         def _set_uniform1f(self, name: str, value: float, program: Optional[int]) -> None: ...
 
+        def _set_uniform2f(self, name: str, value: Any, program: Optional[int]) -> None: ...
         def _set_uniform3f(self, name: str, value: Any, program: Optional[int]) -> None: ...
 
         def _get_location(self, name: str, program: Optional[int]) -> int: ...
@@ -192,14 +193,19 @@ class _ShadowUniformMixin:
 
     def bind_csm_slot(self, slot: int, light_index: int,
                       matrices_eye: Any, splits: Any,
-                      bias_terms: Any = None) -> None:
-        """Point a slot at a directional light's cascades (array layer block)."""
+                      bias_terms: Any = None,
+                      fade: Optional[tuple[float, float]] = None) -> None:
+        """Point a slot at a directional light's cascades (array layer block).
+
+        ``fade`` is the eye depths between which its shadows fade out, or None for none."""
         if slot >= self.MAX_SHADOW_LIGHTS or self._shadow_prog is None:
             return
         self._set_uniform1i(f'shadowLightIndex[{slot}]', light_index, self._shadow_prog)
         self._set_uniform1i(f'shadowKind[{slot}]', self.SHADOW_KIND['directional'], self._shadow_prog)
         count = min(len(matrices_eye), self.MAX_CASCADES)
         self._set_uniform1i(f'cascadeCount[{slot}]', count, self._shadow_prog)
+        start, end = fade if fade is not None else (0.0, 0.0)
+        self._set_uniform2f(f'cascadeFade[{slot}]', (float(start), float(end)), self._shadow_prog)
         for c in range(count):
             self._set_cascade_matrix(slot, c, matrices_eye[c])
             idx = slot * self.MAX_CASCADES + c
