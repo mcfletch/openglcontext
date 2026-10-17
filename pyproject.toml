@@ -427,6 +427,7 @@ open_audit_sanctioned = [
     "OpenGLContext.scenegraph.tilesterrain",
     "OpenGLContext.scenegraph.vegetation.clumps",
     "OpenGLContext.scenegraph.vegetation.cover",
+    "OpenGLContext.scenegraph.vegetation.field",
     "OpenGLContext.scenegraph.vegetation.nearmesh",
     "OpenGLContext.ui.pictures",
     "OpenGLContext.viewer.adapters",

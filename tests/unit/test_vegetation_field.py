@@ -434,3 +434,39 @@ class TestTheForestStandsInItsOwnShade:
         field = self._field(shade=self._shade())
         field.update((-200.0, 0.0, 0.0))
         assert field.impostors[0].shades is not None
+
+
+class TestFittedCardWidth:
+    """A card is as wide as its mesh, so a tree does not change shape as the two cross-fade."""
+
+    def species(self, tmp_path, foliage_width, card_alpha, card_pixels=(100, 200), height=1.0):
+        from PIL import Image
+
+        from OpenGLContext.scenegraph.vegetation.field import TreeSpecies
+
+        rng = np.random.default_rng(3)
+        leaves = np.stack([rng.uniform(-foliage_width / 2, foliage_width / 2, 4000),
+                           rng.uniform(0.1, height, 4000),
+                           rng.uniform(-foliage_width / 2, foliage_width / 2, 4000)], axis=1)
+        trunk = np.array([[0.0, 0.0, 0.0], [0.0, height, 0.0], [0.01, 0.0, 0.0]])
+        np.savez(tmp_path / 'tree.npz', oP=trunk, bP=leaves)
+        alpha = np.zeros(card_pixels[::-1], np.uint8)
+        inset = int(card_pixels[0] * (1 - card_alpha) / 2)
+        alpha[:, inset:card_pixels[0] - inset] = 255
+        Image.fromarray(np.dstack([np.full(alpha.shape + (3,), 90, np.uint8), alpha]), 'RGBA').save(
+            tmp_path / 'card.png')
+        return TreeSpecies(name='t', mesh=str(tmp_path / 'tree.npz'), solid=['oP'], foliage=['bP'],
+                           impostor=str(tmp_path / 'card.png'))
+
+    def test_the_card_shows_the_tree_as_wide_as_the_mesh_is(self, tmp_path):
+        tree = self.species(tmp_path, foliage_width=0.6, card_alpha=0.5)
+        # The foliage is 0.6 wide, less its trimmed tips, and the card draws half of its width.
+        assert tree.fitted_card_width() == pytest.approx(2 * 0.59, abs=0.06)
+
+    def test_a_card_that_fills_its_picture_is_as_wide_as_the_mesh(self, tmp_path):
+        tree = self.species(tmp_path, foliage_width=0.8, card_alpha=1.0)
+        assert tree.fitted_card_width() == pytest.approx(0.79, abs=0.04)
+
+    def test_the_width_is_a_fraction_of_the_mesh_height(self, tmp_path):
+        tall = self.species(tmp_path, foliage_width=0.8, card_alpha=1.0, height=2.0)
+        assert tall.fitted_card_width() == pytest.approx(0.79 / 2.0, abs=0.04)

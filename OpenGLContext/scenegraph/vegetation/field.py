@@ -83,6 +83,9 @@ ALWAYS_DRAWN = 140.0
 VIEW_MARGIN = 60.0
 VIEW_SPREAD = 0.25
 
+#: The alpha above which a pixel of a card's picture counts as the tree.
+CARD_OPAQUE = 100
+
 #: The array keys a species' parts are stored under, when it does not say.
 SOLID_KEYS = ('oP', 'oN', 'oU', 'oI')
 FOLIAGE_KEYS = ('bP', 'bN', 'bU', 'bI')
@@ -121,6 +124,27 @@ class TreeSpecies(Varied, Node):
 
     def __repr__(self) -> str:
         return 'TreeSpecies(%s)' % (self.name,)
+
+    def fitted_card_width(self) -> float:
+        """The ``cardWidth`` at which the card shows the tree as wide as its mesh does.
+
+        The mesh's width is that of the middle 98% of its foliage vertices, measured across
+        both horizontal axes and as a fraction of the mesh's height; the card draws the tree
+        across as much of its picture as the picture's opaque pixels take. Where a card's
+        picture was made from a tree of other proportions than the mesh, ``cardWidth`` as
+        given leaves the tree narrower or wider the moment the two cross-fade, and this is the
+        width that does not. Reads the mesh and the impostor from disk.
+        """
+        from PIL import Image
+        with np.load(self.mesh) as arrays:
+            leaves = arrays[self.foliage[0]]
+            height = float(np.ptp(np.concatenate([arrays[self.solid[0]][:, 1], leaves[:, 1]])))
+        across = [float(np.ptp(np.percentile(leaves[:, axis], (1.0, 99.0)))) for axis in (0, 2)]
+        with Image.open(self.impostor) as image:
+            opaque = np.asarray(image.convert('RGBA'))[..., 3] > CARD_OPAQUE
+        columns = np.flatnonzero(opaque.any(axis=0))
+        drawn = (columns[-1] - columns[0] + 1) / opaque.shape[1] if len(columns) else 1.0
+        return float(np.clip(sum(across) / 2.0 / height / drawn, 0.2, 2.0))
 
     def near_entry(self) -> dict:
         """This species as :class:`InstancedMeshLOD` wants to be told it."""

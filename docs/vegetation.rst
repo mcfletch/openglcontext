@@ -71,7 +71,14 @@ world's species through ``located`` with ``tiles3d.fetch.beside``, which keeps
 them inside the world (:ref:`tiles3d-reach`).
 
 The near mesh and the cards cross-fade in their shaders over a shared distance
-band.
+band. A card's picture is baked separately from the mesh, and a ``cardWidth``
+that does not match the mesh shows as the tree narrowing or widening across that
+band. ``species.fitted_card_width()`` answers the ``cardWidth`` at which the card
+draws the tree as wide as the mesh does: the width of the middle 98% of the
+foliage vertices over both horizontal axes, as a fraction of the mesh's height,
+divided by the share of the card's picture that is opaque. It reads the mesh and
+the impostor from disk; ``species.varied(cardWidth=species.fitted_card_width())``
+is the species with it applied.
 
 Choosing what to draw
 ~~~~~~~~~~~~~~~~~~~~~
