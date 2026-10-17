@@ -309,7 +309,9 @@ class ScatterBlocks:
     A ``density`` of 0 or less holds no plants: every disc is empty.
 
     A thread making discs and a thread making blocks ahead of them (:meth:`warm`) may
-    share one; each takes the lock for the block it works on.
+    share one. A block is scattered outside the lock, so a thread waits only for a block
+    that another thread is scattering at that moment, and two threads asking for one make it
+    once.
     """
 
     #: How far out, in radii of the last disc, a block is kept.
@@ -340,6 +342,10 @@ class ScatterBlocks:
         #: How many blocks have been scattered, over the whole life of this.
         self.built = 0
         self._blocks: "dict[tuple[int, int], tuple]" = {}
+        #: The blocks being scattered now, each with the event its scatterer sets when done.
+        self._making: "dict[tuple[int, int], threading.Event]" = {}
+        #: How many times the blocks have been cleared.
+        self._generation = 0
         self._lock = threading.RLock()
 
     def __len__(self) -> int:
@@ -349,21 +355,48 @@ class ScatterBlocks:
         """Let go of every block, so each is scattered again when next reached."""
         with self._lock:
             self._blocks.clear()
+            self._generation += 1
 
     def _block(self, bi: int, bj: int) -> tuple:
+        """The block ``(bi, bj)``, scattered by this call unless it is kept or another thread
+        is scattering it, which is waited for.
+
+        A block is scattered outside the lock, so a thread reading blocks that are kept never
+        waits on one being made, and two threads asking for the same block make it once.
+        """
+        key = (bi, bj)
+        while True:
+            found = self._blocks.get(key)
+            if found is not None:
+                return found
+            with self._lock:
+                found = self._blocks.get(key)
+                if found is not None:
+                    return found
+                making = self._making.get(key)
+                if making is None:
+                    making = self._making[key] = threading.Event()
+                    generation = self._generation
+                    break
+            making.wait()
+        try:
+            i0, j0 = bi * self.cells, bj * self.cells
+            found = _scatter_cells(
+                i0, i0 + self.cells - 1, j0, j0 + self.cells - 1, self.cell,
+                self.height_field, self.scale_mul, self.jitter, self.mask,
+                self.salt, self.scale_range)
+            if self.finish is not None:
+                found = tuple(self.finish(*found))
+        finally:
+            with self._lock:
+                del self._making[key]
+                making.set()
         with self._lock:
-            found = self._blocks.get((bi, bj))
-            if found is None:
-                i0, j0 = bi * self.cells, bj * self.cells
-                found = _scatter_cells(
-                    i0, i0 + self.cells - 1, j0, j0 + self.cells - 1, self.cell,
-                    self.height_field, self.scale_mul, self.jitter, self.mask,
-                    self.salt, self.scale_range)
-                if self.finish is not None:
-                    found = tuple(self.finish(*found))
-                self._blocks[(bi, bj)] = found
-                self.built += 1
-            return found
+            # A block made while the blocks were cleared is for the mask and ground they had.
+            if generation == self._generation:
+                self._blocks[key] = found
+            self.built += 1
+        return found
 
     def _reaching(self, cx: float, cz: float, radius: float) -> "list[tuple[int, int]]":
         """The blocks a disc of ``radius`` about ``(cx, cz)`` touches."""

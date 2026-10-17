@@ -206,7 +206,10 @@ within twice the disc's radius of it. A disc is assembled from the blocks it
 reaches, so moving costs the ground newly reached, and driving back over
 ground already covered costs nothing but the assembly. ``GroundCover.scattered``
 counts the blocks scattered. Setting ``mask``, ``holes``, ``shade`` or
-``canopy`` scatters everything again.
+``canopy`` scatters everything again. A block is scattered outside any lock: the
+thread assembling a disc and the one preparing ground ahead (``prepare``) share the
+blocks, and one waits for another only for a block that other is scattering at that
+moment.
 
 The scatter is the expensive half of the work and makes no GL calls.
 ``GroundCover(..., background=True)`` runs it on a worker thread
