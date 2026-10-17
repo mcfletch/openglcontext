@@ -202,6 +202,8 @@ class VegetationField(Group):
     the cards do. ``cone_degrees`` is the half-angle of the cone the cards are
     chosen in: submitting every card in a four-kilometre forest every frame is
     most of what a forest costs, and what is behind the camera is not seen.
+    The trees drawn as geometry (``near_radius``) cast shadows into the sun's shadow
+    maps, ``shadows`` false leaves them out; the cards cast none.
     """
 
     species = field.newField('species', 'MFNode', 1, list)
@@ -213,6 +215,7 @@ class VegetationField(Group):
                  near_radius: float = NEAR_RADIUS,
                  far_radius: float = FAR_RADIUS,
                  cone_degrees: float = CONE_DEGREES,
+                 shadows: bool = True,
                  **named: Any) -> None:
         super().__init__(**named)
         if not species:
@@ -242,7 +245,7 @@ class VegetationField(Group):
         self._cards: dict[int, InstancedBillboards] = {}
         self._card_tables: dict[int, tuple[np.ndarray, ...]] = {}
         self._tabulate_cards()
-        self.children = ([_drawn(self.near)]
+        self.children = ([_drawn(self.near, casts=bool(shadows))]
                          + [_drawn(node) for node in self.impostors])
         if shade is not None:
             self.lit_by(shade)
@@ -439,17 +442,17 @@ def _unit(direction: np.ndarray) -> np.ndarray:
     return direction / length if length > 1e-9 else np.zeros(3, dtype='d')
 
 
-def _drawn(geometry: Any) -> Any:
+def _drawn(geometry: Any, casts: bool = False) -> Any:
     """A vegetation node wrapped so the scenegraph will render it.
 
     The instanced nodes drive their own program and need no material, but the
     pass reaches geometry through a Shape and would not otherwise see them. The
-    shape casts no shadow: the nodes are drawn into no shadow map, and a bound
-    wide enough for a forest would stretch every cascade of a sun's shadows over
-    all of it.
+    shape casts no shadow unless ``casts``, which is for a node bounded by what it
+    draws (the near trees): a bound wide enough for a forest would stretch every
+    cascade of a sun's shadows over all of it.
     """
     from OpenGLContext.scenegraph.appearance import Appearance
     from OpenGLContext.scenegraph.material import Material
     from OpenGLContext.scenegraph.shape import Shape
     return Shape(geometry=geometry,
-                 appearance=Appearance(material=Material()), castShadow=False)
+                 appearance=Appearance(material=Material()), castShadow=casts)

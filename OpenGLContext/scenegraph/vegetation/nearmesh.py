@@ -21,7 +21,8 @@ from OpenGL.GL import (
     GL_TRUE, GL_UNSIGNED_INT, glActiveTexture, glBindBuffer, glBindTexture,
     glBindVertexArray, glBufferData, glDepthMask, glDisable, glDrawElementsInstanced,
     glEnable, glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays,
-    glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
+    glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f,
+    glUniformMatrix4fv, glUseProgram, glVertexAttribPointer,
 )
 from OpenGLContext.scenegraph.instancedgl import (
     FOG_UNIFORMS, load_program, texture_rgba, delete_gl, setup_instance_attribs,
@@ -47,6 +48,11 @@ class InstancedMeshLOD(InstancedVegBase):
         positions/normals/uvs/indices.
     :param species_id: optional (N,) int assigning each tree to a species index;
         defaults to round-robin. Set before the first :meth:`update`.
+
+    The trees drawn are the trees near the camera, and that is all the node is bounded
+    by, so in a Shape that casts shadows they are written into the sun's shadow maps
+    without the maps being stretched over the whole forest. Trees beyond them are the
+    impostors', which cast none.
     """
     def __init__(self, all_pos: np.ndarray, all_yaw: np.ndarray, all_scale: np.ndarray,
                  species: "list[dict[str, Any]]",
@@ -69,6 +75,8 @@ class InstancedMeshLOD(InstancedVegBase):
         self.bounds = bounds
         self._gl: Any = None
         self._pending: "Optional[dict[int, np.ndarray]]" = None
+        #: The corners of the box the near set stands in, once one has been staged.
+        self._box: "Optional[tuple[np.ndarray, np.ndarray]]" = None
 
     def compute_pending(self, cx: float, cz: float,
                         radius: float = 42.0) -> "dict[int, np.ndarray]":
@@ -99,6 +107,17 @@ class InstancedMeshLOD(InstancedVegBase):
         before an earlier one was drawn replaces it.
         """
         self._pending = pending
+        self._box = _box_of(pending.values())
+
+    def boundingVolume(self, mode: Any) -> Any:
+        """The box the trees drawn stand in, crowns included; all of space before a near
+        set has been staged, and nothing where it holds no tree."""
+        if self._box is None:
+            return super().boundingVolume(mode)
+        from OpenGLContext.scenegraph import boundingvolume
+        low, high = self._box
+        return boundingvolume.AABoundingBox(size=tuple(float(v) for v in high - low),
+                                            center=tuple(float(v) for v in (low + high) / 2.0))
 
     @property
     def staged(self) -> "Optional[dict[int, np.ndarray]]":
@@ -132,6 +151,10 @@ class InstancedMeshLOD(InstancedVegBase):
 
     def _init_gl(self) -> None:
         self._prog = load_program("veg_mesh.vert", "veg_mesh.frag")
+        #: The program a shadow map is drawn with: the same vertices, and only the cutout.
+        self._depth_prog = load_program("veg_mesh.vert", "veg_depth.frag")
+        self._depth_U = {name: glGetUniformLocation(self._depth_prog, name)
+                         for name in ("uModelView", "uProjection", "atlas")}
         # Retain every generated handle so dispose() can free it -- the mesh/index
         # VBOs would otherwise be unreachable the moment _mkvao returns.
         self._vaos: "list[Any]" = []
@@ -175,8 +198,8 @@ class InstancedMeshLOD(InstancedVegBase):
         """Free this node's GL objects (VAOs, buffers, textures, program). GL thread."""
         if self._gl is None:
             return
-        delete_gl(vaos=self._vaos, buffers=self._buffers,
-                  textures=self._textures, programs=list(self.programs.programs()))
+        delete_gl(vaos=self._vaos, buffers=self._buffers, textures=self._textures,
+                  programs=[*self.programs.programs(), self._depth_prog])
         self._vaos = []
         self._buffers = []
         self._textures = []
@@ -189,6 +212,32 @@ class InstancedMeshLOD(InstancedVegBase):
                 self._sp[s]["buf"].upload(inst)
             self._pending = None
         return any(s["buf"].count for s in self._sp)
+
+    def render(self, mode: Any = None, **kw: Any) -> int:
+        """Draw the trees, or write them into the shadow map being made."""
+        if getattr(mode, 'shadow_pass', False):
+            return self._render_depth(mode)
+        return super().render(mode, **kw)
+
+    def _render_depth(self, mode: Any) -> int:
+        """Write the near trees' depth for a shadow map.
+
+        The pass has set the light's view and projection as ``mode.matrix`` and
+        ``mode.projection`` and bound its own program; this draws through its own, and
+        puts the pass's back.
+        """
+        if not self.ensure_gl() or not self._stream():
+            return 1
+        previous = mode.current_program() if hasattr(mode, "current_program") else 0
+        glUseProgram(self._depth_prog)
+        glUniformMatrix4fv(self._depth_U["uModelView"], 1, GL_FALSE,
+                           np.ascontiguousarray(mode.matrix, np.float32))
+        glUniformMatrix4fv(self._depth_U["uProjection"], 1, GL_FALSE,
+                           np.ascontiguousarray(mode.projection, np.float32))
+        glUniform1i(self._depth_U["atlas"], 0)
+        self._draw(mode)
+        glUseProgram(previous)
+        return 1
 
     def _draw(self, mode: Any) -> None:
         # single alpha-cutout pass, depth-write on, no blend -> depth-correct, no bleed
@@ -208,3 +257,25 @@ class InstancedMeshLOD(InstancedVegBase):
                     glDrawElementsInstanced(GL_TRIANGLES, cnt, GL_UNSIGNED_INT, None,
                                             n * copies)
         glBindVertexArray(0)
+
+
+#: How much of a tree's height its crown reaches out to either side of the trunk, and how far
+#: above its base the tip of it stands.
+CROWN_SPREAD = 0.6
+CROWN_RISE = 1.1
+
+
+def _box_of(sets: Any) -> "tuple[np.ndarray, np.ndarray]":
+    """The box the trees of ``sets``, each an (N, k) array of ``x, y, z, yaw, height``
+    rows, stand in with their crowns; a point where there are none."""
+    rows = [rows for rows in sets if len(rows)]
+    if not rows:
+        return np.zeros(3), np.zeros(3)
+    rows_all = np.concatenate(rows)
+    low = rows_all[:, :3].min(axis=0).astype('d')
+    high = rows_all[:, :3].max(axis=0).astype('d')
+    tallest = float(rows_all[:, 4].max())
+    low[[0, 2]] -= CROWN_SPREAD * tallest
+    high[[0, 2]] += CROWN_SPREAD * tallest
+    high[1] += CROWN_RISE * tallest
+    return low, high

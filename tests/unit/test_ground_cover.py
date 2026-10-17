@@ -565,3 +565,74 @@ class TestNoFarField:
         cover = _cover(card_radius=100.0, far_radius=400.0)
         cover.update((0.0, 0.0, 0.0))
         assert len(cover.rungs[0].far_cards.pos) > 0
+
+
+class TestHowSoonItFades:
+    def test_the_cards_dissolve_across_the_fraction_of_their_radius_it_is_told(self) -> None:
+        wide = _cover(card_radius=100.0, far_radius=300.0, fade=0.5)
+        default = _cover(card_radius=100.0, far_radius=300.0)
+        assert wide.rungs[0].far_cards.near_cut == pytest.approx(50.0)
+        assert default.rungs[0].far_cards.near_cut == pytest.approx(80.0)
+
+    def test_it_can_be_changed_and_the_windows_follow(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=300.0)
+        cover.fade = 0.6
+        cover.retune()
+        assert cover.rungs[0].far_cards.near_cut == pytest.approx(60.0)
+
+
+class TestPreparedAhead:
+    """The ground a camera is about to cross is scattered before it gets there, so the disc
+    that reaches it is only put together."""
+
+    def test_blocks_are_built_ahead_and_the_disc_that_reaches_them_builds_none(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        cover.prepare([(0.0, -60.0), (0.0, -120.0)])
+        built = cover.scattered
+        cover.update((0.0, 0.0, -60.0))
+        assert cover.scattered == built
+
+    def test_without_it_the_same_move_builds_blocks(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        built = cover.scattered
+        cover.update((0.0, 0.0, -60.0))
+        assert cover.scattered > built
+
+    def test_preparing_ground_already_scattered_costs_nothing(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        built = cover.scattered
+        cover.prepare([(0.0, -10.0)])
+        cover.prepare([(0.0, -10.0)])
+        assert cover.scattered <= built + 12
+
+    def test_it_stages_nothing_itself(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        before = cover.rungs[0].cards.pos.copy()
+        cover.prepare([(0.0, -90.0)])
+        assert np.array_equal(cover.rungs[0].cards.pos, before)
+
+    def test_in_the_background_it_is_done_by_a_worker_and_waited_for(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0, background=True)
+        try:
+            cover.update((0.0, 0.0, 0.0))
+            assert cover.wait(5.0)
+            built = cover.scattered
+            cover.prepare([(0.0, -80.0)])
+            assert cover.wait(5.0)
+            assert cover.scattered > built
+        finally:
+            cover.shutdown()
+
+    def test_ground_prepared_beyond_what_is_kept_is_let_go_by_the_next_disc(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        cover.prepare([(0.0, -900.0)])
+        cover.update((0.0, 0.0, -20.0))
+        far = cover.rungs[0]
+        blocks = cover._blocks[(far, 'cards')][1]  # noqa: SLF001 the cache this checks is bounded
+        assert all(abs((bj + 0.5) * blocks.span + 20.0) < 2.0 * 100.0 + 2 * blocks.span
+                   for _bi, bj in blocks._blocks)  # noqa: SLF001 the cache this checks is bounded

@@ -223,6 +223,18 @@ scatters that have arrived (``GroundCover.latency``, in seconds, 0 for a scatter
 made in line). A move of more than 150 m/s between two updates is a jump and
 carries no velocity.
 
+``prepare(points)`` scatters the ground about each of ``points``, ``(x, z)``
+places the camera will pass, before it gets there. A game that knows the way
+ahead, a road or a course, calls it with places along it as the camera advances;
+the disc that reaches that ground is then only put together. The blocks made
+are kept like any others, so ground more than twice a rung's radius from the
+camera is let go of by the next disc and is not made. With ``background`` it
+runs on a thread of its own behind the scatter the camera is waiting for.
+``GroundCover(..., fade=0.8)`` is where each rung's dissolve into the next
+begins, as a fraction of its outer edge: the dissolve is a window of metres, and
+a camera crossing it in under a second sees a pop, so a fast game lowers the
+fraction (``retune()`` after changing ``fade``).
+
 ``far_radius`` is where the coarse field beyond the cards ends. A cover whose
 ``far_radius`` is no further than its ``card_radius`` (``has_far`` false) has no
 coarse field: none is scattered or drawn, which suits a world whose haze hides
@@ -245,6 +257,20 @@ drops what the old ground scattered, including a scatter a worker is still
 making, and leaves the cover empty until the next ``update``. ``dispose()``
 deletes the GL objects of every node and stops the worker; call it with the GL
 context current.
+
+.. _vegetation-shadows:
+
+Shadows
+~~~~~~~
+
+The trees a ``VegetationField`` draws as geometry, within ``near_radius`` of the
+camera, are written into the shadow maps of a light with ``shadows`` on. The node
+that draws them is bounded by those trees and no others, so the cascades are not
+stretched over the whole forest. ``VegetationField(..., shadows=False)`` leaves them
+out. The cards that stand for trees further away, the ground cover and the grass cast
+no shadow, so a tree's shadow ends where its geometry does. A node of your own that is
+bounded by what it draws can cast through a ``Shape`` whose ``castShadow`` is true
+and a ``render`` that answers ``mode.shadow_pass``, as ``InstancedMeshLOD`` does.
 
 .. _vegetation-fog:
 

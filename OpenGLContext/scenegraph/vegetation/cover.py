@@ -452,7 +452,7 @@ class CoverRung:
                 if node is not None]
 
     def retune(self, clump_radius: float, card_radius: float,
-               far_radius: float) -> None:
+               far_radius: float, fade: float = CLUMP_FADE) -> None:
         """Point every fade window at the radii the rungs now run to.
 
         The coarse geometry is the complete base layer -- every plant in the
@@ -466,14 +466,14 @@ class CoverRung:
         self.cards.far_fade = card_radius
         self.cards.near_cut = clump_radius if self.species.clump else 0.0
         self.far_cards.far_fade = far_radius
-        self.far_cards.near_cut = card_radius * CLUMP_FADE
+        self.far_cards.near_cut = card_radius * fade
         if self.clumps_far is not None:
             self.clumps_far.cut_start = self.clumps_far.cut_end = 0.0
-            self.clumps_far.fade_start = clump_radius * CLUMP_FADE
+            self.clumps_far.fade_start = clump_radius * fade
             self.clumps_far.fade_end = clump_radius
         if self.clumps_near is not None:
             inner = clump_radius * CLUMP_LOD_FRAC
-            self.clumps_near.fade_start = inner * CLUMP_FADE
+            self.clumps_near.fade_start = inner * fade
             self.clumps_near.fade_end = inner
         for node in self.nodes:
             node.refresh_constants()
@@ -527,6 +527,7 @@ class GroundCover(Group):
                  canopy: Optional[Callable[[Any, Any], Any]] = None,
                  sun: "tuple[float, float, float]" = CLUMP_SUN,
                  background: bool = False,
+                 fade: float = CLUMP_FADE,
                  **named: Any) -> None:
         super().__init__(**named)
         kinds = ([species] if isinstance(species, CoverSpecies)
@@ -536,8 +537,9 @@ class GroundCover(Group):
         self.field = field
         #: Each rung's scatter, kept by the block: see :meth:`_scatter`.
         self._blocks: "dict[tuple, tuple[tuple, ScatterBlocks]]" = {}
-        self._scattered = 0
-        self._counting = threading.Lock()
+        #: Blocks scattered into tables since replaced; :attr:`scattered` adds the live ones.
+        self._retired = 0
+        self._tables = threading.RLock()
         self._near_at: Optional[np.ndarray] = None
         self._far_at: Optional[np.ndarray] = None
         self.species = kinds
@@ -546,6 +548,11 @@ class GroundCover(Group):
         #: Where the coarse field beyond the cards ends; no further out than the cards,
         #: it is not scattered or drawn.
         self.far_radius = max(float(far_radius), self.card_radius)
+        #: Where each rung's dissolve into the next begins, as a fraction of its outer edge.
+        #: A camera that crosses a window in under a second sees the dissolve as a pop: a
+        #: faster one wants a lower fraction, a wider window. Call :meth:`retune` after
+        #: setting it.
+        self.fade = float(fade)
         self.mask = mask
         #: Where the ground is not there, so nothing is seated on it. Kept
         #: apart from :attr:`mask`, which says what grows on the ground there
@@ -564,6 +571,7 @@ class GroundCover(Group):
         self.background = bool(background)
         self._worker: Any = None
         self._far_worker: Any = None
+        self._warm_thread: Any = None
         self._stop_workers: Optional[weakref.finalize] = None
         #: Seconds a scatter on a worker takes from the asking to the staging, a running
         #: average; the discs lead the camera by this much of its travel.
@@ -588,7 +596,7 @@ class GroundCover(Group):
         # A new table rather than an emptied one: a scatter on a worker keeps
         # the table it began with, so what it makes from the old value is
         # left there rather than put into this one.
-        self._blocks = {}
+        self._replace_tables()
         self._near_at = self._far_at = None
 
     @property
@@ -648,7 +656,8 @@ class GroundCover(Group):
         grows with the ground newly reached rather than with the distance
         driven over ground already covered.
         """
-        return self._scattered
+        with self._tables:
+            return self._retired + sum(held[1].built for held in self._blocks.values())
 
     def rung(self, name: str) -> CoverRung:
         """The rung for the species called ``name``."""
@@ -672,7 +681,7 @@ class GroundCover(Group):
         self._near_at = self._far_at = None
         self._drawn_at = None
         for rung in self.rungs:
-            rung.retune(self.clump_radius, self.card_radius, self.far_radius)
+            rung.retune(self.clump_radius, self.card_radius, self.far_radius, self.fade)
 
     # -- the scatter, which is pure numpy and touches no GL --------------------
 
@@ -711,29 +720,41 @@ class GroundCover(Group):
         Changing the mask, the holes, the shade or the canopy scatters
         everything again.
         """
-        # The table as it is now: one the render thread replaces while this
-        # runs keeps what this makes out of the new one.
-        blocks = self._blocks
-        slot = (rung, role)
+        found = self._blocks_for(rung, role, radius, density, height).disc(x, z, radius)
+        return found if len(found) == 4 else (*found, None)
+
+    def _replace_tables(self) -> None:
+        """Start the tables of kept blocks again, counting what the old ones made."""
+        with self._tables:
+            self._retired += sum(held[1].built for held in self._blocks.values())
+            self._blocks = {}
+
+    def _blocks_for(self, rung: CoverRung, role: str, radius: float, density: float,
+                    height: float) -> ScatterBlocks:
+        """The kept blocks one species' ``role`` rung is scattered into, made if need be.
+
+        A table the render thread replaces while a scatter runs is not the one the scatter
+        keeps its blocks in: what it makes goes into the table it began with.
+        """
         # A block a fraction of the disc's width, so a disc is a few dozen
         # of them however far it reaches.
         metres = max(BLOCK_METRES, radius / BLOCKS_ACROSS)
         key = (float(density), float(height), metres)
-        held = blocks.get(slot)
-        if held is None or held[0] != key:
-            kind = rung.species
-            held = (key, ScatterBlocks(
-                rung.patches.density_for(density), self.field,
-                scale_mul=height, jitter=COVER_JITTER, mask=self._suits(rung),
-                salt=kind.salt, scale_range=SIZE_SPREAD,
-                finish=self._finisher(rung), metres=metres))
-            blocks[slot] = held
-        built = held[1].built
-        found = held[1].disc(x, z, radius)
-        with self._counting:
-            self._scattered += held[1].built - built
-        return found if len(found) == 4 else (*found, None)
-
+        slot = (rung, role)
+        with self._tables:
+            blocks = self._blocks
+            held = blocks.get(slot)
+            if held is None or held[0] != key:
+                if held is not None:
+                    self._retired += held[1].built
+                kind = rung.species
+                held = (key, ScatterBlocks(
+                    rung.patches.density_for(density), self.field,
+                    scale_mul=height, jitter=COVER_JITTER, mask=self._suits(rung),
+                    salt=kind.salt, scale_range=SIZE_SPREAD,
+                    finish=self._finisher(rung), metres=metres))
+                blocks[slot] = held
+        return held[1]
     def _finisher(self, rung: CoverRung) -> Callable[..., tuple]:
         """What a block's plants are given besides their places: size and light."""
         band, canopy, shade = rung.species.band, self.canopy, self.shade
@@ -803,6 +824,57 @@ class GroundCover(Group):
             return
         for rung, cards in zip(self.rungs, payload, strict=True):
             rung.far_cards.update_instances(*cards)
+
+    def prepare(self, points: Any) -> None:
+        """Scatter the ground about each of ``points``, ``(x, z)`` places the camera will pass,
+        ahead of getting there; stages nothing.
+
+        What is scattered is kept as any other ground is, so the disc that reaches it is only
+        put together, and it is let go of by the first disc made far enough from it: ground
+        further ahead than twice a rung's radius is made and let go again. With
+        :attr:`background` it is done by a thread of its own, behind the scatter the camera
+        is waiting for. Call it with the places along the way ahead as often as they change.
+        """
+        places = tuple((float(x), float(z)) for x, z in points)
+        if not places:
+            return
+        if self.background:
+            self._warm_worker().request(places)
+        else:
+            self._warm(places)
+
+    def _warm(self, places: "tuple[tuple[float, float], ...]") -> None:
+        """Make the blocks the discs of the near scatter would need at each of ``places``."""
+        here = self._near_at
+        clumps_radius = self.clump_radius + self._stream_margin
+        for x, z in places:
+            # What the next disc would let go of at once is not made.
+            away = 0.0 if here is None else max(abs(x - here[0]), abs(z - here[2]))
+            for rung in self.rungs:
+                kind = rung.species
+                density = kind.density * self.density_scale
+                if away <= ScatterBlocks.keep * self.card_radius:
+                    self._blocks_for(rung, 'cards', self.card_radius, density * CARD_SHARE,
+                                     kind.height).warm(x, z, self.card_radius)
+                if rung.clumps_far is not None and away <= ScatterBlocks.keep * clumps_radius:
+                    self._blocks_for(rung, 'clumps', clumps_radius, density,
+                                     kind.height).warm(x, z, clumps_radius)
+
+    def _warm_worker(self) -> Any:
+        """The thread that makes blocks ahead of the camera, started on first use."""
+        if self._warm_thread is None:
+            from OpenGLContext.scenegraph.vegetation.streaming import BackgroundCompute
+            owner = weakref.ref(self)
+
+            def work(places: Any) -> Any:
+                cover = owner()
+                if cover is not None:
+                    cover._warm(places)
+
+            self._warm_thread = BackgroundCompute(work, lambda _made: None,
+                                                  name='ground-cover-ahead')
+            self._finalise_workers()
+        return self._warm_thread
 
     # -- the per-frame half, which is a pair of distance masks -----------------
 
@@ -927,12 +999,14 @@ class GroundCover(Group):
         """The thread that scatters the geometry and the cards, started on first use."""
         if self._worker is None:
             self._worker = self._start_worker('near', 'compute_near', 'apply_near', arrives=True)
+            self._finalise_workers()
         return self._worker
 
     def _far_cards_worker(self) -> Any:
         """The thread that scatters the coarse field, started on first use."""
         if self._far_worker is None:
             self._far_worker = self._start_worker('far', 'compute_far', 'apply_far')
+            self._finalise_workers()
         return self._far_worker
 
     def _start_worker(self, role: str, compute: str, apply: str, arrives: bool = False) -> Any:
@@ -961,11 +1035,17 @@ class GroundCover(Group):
             if cover is not None:
                 cover._scatter_failed(role)
         worker = BackgroundCompute(work, stage, name='ground-cover-' + role, failed=failed)
+        return worker
+
+    def _finalise_workers(self) -> None:
+        """Stop every worker this cover has started when the cover is collected."""
         if self._stop_workers is not None:
             self._stop_workers.detach()
-        self._stop_workers = weakref.finalize(self, _stop_all, worker, *(
-            w for w in (self._worker, self._far_worker) if w is not None))
-        return worker
+        self._stop_workers = weakref.finalize(self, _stop_all, *self._workers())
+
+    def _workers(self) -> "list[Any]":
+        return [w for w in (self._worker, self._far_worker, self._warm_thread)
+                if w is not None]
 
     def wait(self, timeout: Optional[float] = None) -> bool:
         """Wait for a background scatter to finish; whether it did in time.
@@ -973,15 +1053,14 @@ class GroundCover(Group):
         What it made is staged by the next :meth:`update`. A cover scattering
         in line has nothing to wait for.
         """
-        return all(bool(worker.wait(timeout))
-                   for worker in (self._worker, self._far_worker) if worker is not None)
+        return all(bool(worker.wait(timeout)) for worker in self._workers())
 
     def shutdown(self) -> None:
         """Stop the background scatter's threads, if there are any."""
         if self._stop_workers is not None:
             self._stop_workers()
             self._stop_workers = None
-        self._worker = self._far_worker = None
+        self._worker = self._far_worker = self._warm_thread = None
 
     def relocate(self, field: Ground,
                  mask: Optional[Callable[[Any, Any], Any]] = None,
@@ -1000,7 +1079,7 @@ class GroundCover(Group):
         self.shutdown()
         self.field = field
         self.mask, self.holes, self.shade, self.canopy = mask, holes, shade, canopy
-        self._blocks = {}
+        self._replace_tables()
         self._near_at = self._far_at = self._drawn_at = None
         for rung in self.rungs:
             rung.cache = None

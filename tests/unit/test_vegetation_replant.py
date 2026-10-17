@@ -118,7 +118,16 @@ def test_a_forest_replanted_with_no_trees_draws_nothing_and_can_be_planted_again
     assert field.tree_count == 200
 
 
-def test_the_shapes_that_draw_vegetation_cast_no_shadow(field):
-    """A forest's bound is as wide as the forest; as a caster it would stretch every cascade of
-    the sun's shadows over all of it."""
-    assert field.children and all(shape.castShadow is False for shape in field.children)
+def test_only_the_shape_bounded_by_the_trees_it_draws_casts_a_shadow(field):
+    """A forest's bound is as wide as the forest; as a caster the cards would stretch every
+    cascade of the sun's shadows over all of it. The near trees are bounded by what is near."""
+    casting = [shape.geometry for shape in field.children if shape.castShadow]
+    assert casting == [field.near]
+    assert len(field.children) > 1
+
+
+def test_a_forest_told_no_shadows_casts_none(field):
+    from OpenGLContext.scenegraph.vegetation.field import VegetationField
+    positions, yaws, heights, kinds = table(20, 3)
+    quiet = VegetationField(positions, yaws, heights, species(), species_id=kinds, shadows=False)
+    assert all(shape.castShadow is False for shape in quiet.children)
