@@ -306,6 +306,54 @@ class TestDamageIndicator:
         assert len(alphas) == 4
         assert alphas == sorted(alphas, reverse=True)
 
+    def test_a_steady_level_washes_every_edge(self, metrics):
+        indicator = self.marked(level=0.5)
+        indicator.tick(0.0)
+        assert {edge for edge, _rect, _colour in indicator.edges(metrics)} == {
+            'top', 'right', 'bottom', 'left'}
+
+    def test_a_steady_level_does_not_fade(self, metrics):
+        indicator = self.marked(level=0.5, duration=0.5)
+        indicator.tick(0.0)
+        before = self.peak(indicator, metrics)
+        indicator.tick(100.0)
+        assert before > 0.0
+        assert self.peak(indicator, metrics) == before
+
+    def test_a_higher_level_is_stronger(self, metrics):
+        low, high = self.marked(level=0.3), self.marked(level=0.9)
+        for indicator in (low, high):
+            indicator.tick(0.0)
+        assert self.peak(high, metrics) > self.peak(low, metrics) > 0.0
+
+    def test_level_zero_draws_nothing(self, metrics):
+        indicator = self.marked(level=0.0)
+        indicator.tick(0.0)
+        assert indicator.bands(metrics) == []
+
+    def test_a_hit_adds_to_a_steady_level_on_its_edge_only(self, metrics):
+        indicator = self.marked(level=0.3)
+        indicator.hurt(bearing=-math.pi / 2, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        shares = indicator.shares()
+        assert shares['left'] == pytest.approx(1.0)
+        assert shares['right'] == pytest.approx(0.3)
+
+    def test_a_hit_from_everywhere_marks_every_edge_and_fades(self, metrics):
+        indicator = self.marked(duration=0.8)
+        indicator.hurt_all(intensity=1.0, now=5.0)
+        indicator.tick(5.0)
+        assert {edge for edge, _rect, _colour in indicator.edges(metrics)} == {
+            'top', 'right', 'bottom', 'left'}
+        indicator.tick(6.0)
+        assert indicator.bands(metrics) == []
+
+    def test_a_hit_from_everywhere_of_no_intensity_shows_nothing(self, metrics):
+        indicator = self.marked()
+        assert indicator.hurt_all(intensity=0.0, now=0.0) == []
+        indicator.tick(0.0)
+        assert indicator.bands(metrics) == []
+
     # -- helpers ---------------------------------------------------------
     def strongest_edge(self, indicator, metrics):
         return max(indicator.edges(metrics),
