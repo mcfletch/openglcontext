@@ -210,13 +210,24 @@ counts the blocks scattered. Setting ``mask``, ``holes``, ``shade`` or
 
 The scatter is the expensive half of the work and makes no GL calls.
 ``GroundCover(..., background=True)`` runs it on a worker thread
-(``vegetation.streaming.BackgroundCompute``): ``update`` hands the scatter to
-the worker and stages what it made on a later call, so no frame waits for it,
-and ``wait(timeout)`` blocks until the worker is idle, for a capture or a
+(``vegetation.streaming.BackgroundCompute``): ``update`` hands the near scatter (the
+geometry and the cards) and the far scatter to two workers and stages what they
+made on a later call, so no frame waits for them and the near cover does not
+wait for the far. ``wait(timeout)`` blocks until the worker is idle, for a capture or a
 bake that wants the cover in place. A cover a streamed world carries
 (``TilesTerrain``) is scattered this way, and ``TilesTerrain.wait_for_loads``
-waits for it. A scatter that raises is logged and asked for again on the next
-``update``. ``shutdown()`` stops the worker; a cover that is collected stops
+waits for it. The discs lead the camera: a vehicle covers tens of metres in the time a scatter
+takes, so each scatter is centred where the camera will be when it arrives, its
+velocity from successive ``update`` calls and its arrival time measured from the
+scatters that have arrived (``GroundCover.latency``, in seconds, 0 for a scatter
+made in line). A move of more than 150 m/s between two updates is a jump and
+carries no velocity.
+
+``far_radius`` is where the coarse field beyond the cards ends. A cover whose
+``far_radius`` is no further than its ``card_radius`` (``has_far`` false) has no
+coarse field: none is scattered or drawn, which suits a world whose haze hides
+the ground past the cards. A scatter that raises is logged and asked for again
+on the next ``update``. ``shutdown()`` stops the worker; a cover that is collected stops
 its worker as well. Without ``background``, ``update`` scatters on the calling
 thread; a caller with its own worker can run ``compute_near`` there and pass
 the result to ``apply_near`` on the render thread. The near tree meshes
@@ -355,6 +366,13 @@ reads it back: each species with its card and clump resolved under
 
 A baked world can carry a whole cover set: see :ref:`Ground cover as a recipe
 <cover>`.
+
+A card is lit by a flat share of the sun, the species' ``sunLevel``. The default,
+``CARD_SUN`` (1.0), gives a card the average brightness of the lit geometry it
+replaces at ``CLUMP_RADIUS``, so the hand-over shows no step in brightness. A
+``cover.json`` records the ``sunLevel`` each species was written with and
+``read_cover_manifest`` returns it; ``species.varied(sunLevel=CARD_SUN)`` takes
+the default instead.
 
 .. _canopyshade:
 
