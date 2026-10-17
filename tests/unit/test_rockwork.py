@@ -157,3 +157,30 @@ def test_grain_never_brings_the_surface_nearer_the_open():
                      lambda rng, p: rng.random(len(p)))
     assert rough[:, 2].max() <= 1e-9 and rough[:, 2].min() < -0.02
     assert np.allclose(rough[:, :2], points[:, :2])
+
+
+def brute_distances(pinned, points, triangles, reach):
+    """Each point's distance to the pinned points and to the edges between them, by comparing all."""
+    edges = np.concatenate([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
+    both = edges[pinned[edges[:, 0]] & pinned[edges[:, 1]]]
+    starts = np.concatenate([points[both[:, 0]], points[pinned]])
+    ends = np.concatenate([points[both[:, 1]], points[pinned]])
+    span = ends - starts
+    length = np.maximum(np.sum(span * span, axis=1), 1e-18)
+    out = np.full(len(points), reach)
+    for i, p in enumerate(points):
+        t = np.clip(np.sum((p - starts) * span, axis=1) / length, 0.0, 1.0)
+        out[i] = min(reach, np.linalg.norm(p - (starts + t[:, None] * span), axis=1).min())
+    return out
+
+
+@pytest.mark.parametrize('reach', [0.3, 0.8, 2.5])
+def test_the_distance_from_pinned_points_is_exact_in_three_dimensions(reach):
+    flat, triangles = grid(18, 9.0)
+    rng = np.random.default_rng(5)
+    points = flat + rng.normal(scale=0.4, size=flat.shape)
+    pinned = np.zeros(len(points), bool)
+    pinned[(points[:, 0] < 1.0) & (points[:, 1] > 3.0)] = True
+    pinned[rng.choice(len(points), 6, replace=False)] = True
+    assert np.allclose(rw._distance_from(pinned, points, triangles, reach),
+                       brute_distances(pinned, points, triangles, reach))

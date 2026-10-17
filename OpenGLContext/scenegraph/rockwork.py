@@ -81,7 +81,10 @@ def split_edges(points: np.ndarray, triangles: np.ndarray,
     tri = np.asarray(triangles, dtype=np.int64)
     count = len(tri)
     edges = np.sort(np.concatenate([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]]), axis=1)
-    keys, inverse = np.unique(edges, axis=0, return_inverse=True)
+    # One integer for each edge, so the edges are told apart by a sort of numbers and not of rows.
+    count_points = len(points)
+    coded, inverse = np.unique(edges[:, 0] * count_points + edges[:, 1], return_inverse=True)
+    keys = np.stack([coded // count_points, coded % count_points], axis=1)
     chosen = np.asarray(wanted(points[keys[:, 0]], points[keys[:, 1]]), dtype=bool)
     if fixed is not None:
         chosen &= ~(np.asarray(fixed, dtype=bool)[keys[:, 0]] & np.asarray(fixed, dtype=bool)[keys[:, 1]])
@@ -122,43 +125,62 @@ def split_edges(points: np.ndarray, triangles: np.ndarray,
     return points, np.concatenate(out), parents
 
 
+def _cells_of_segments(a: np.ndarray, b: np.ndarray, reach: float, size: float,
+                       origin: np.ndarray, shape: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Every grid cell that reaches within ``reach`` of segment ``a``-``b``'s box, as a cell code,
+    and the segment each belongs to."""
+    low = np.floor((np.minimum(a, b) - reach - origin) / size).astype(np.int64)
+    span = np.floor((np.maximum(a, b) + reach - origin) / size).astype(np.int64) - low + 1
+    per = span[:, 0] * span[:, 1] * span[:, 2]
+    owner = np.repeat(np.arange(len(a)), per)
+    local = np.arange(int(per.sum())) - np.repeat(np.cumsum(per) - per, per)
+    here = span[owner]
+    cell = low[owner] + np.stack([local // (here[:, 1] * here[:, 2]),
+                                  local // here[:, 2] % here[:, 1],
+                                  local % here[:, 2]], axis=1)
+    return (cell[:, 0] * shape[1] + cell[:, 1]) * shape[2] + cell[:, 2], owner
+
+
 def _distance_from(pinned: np.ndarray, points: np.ndarray, triangles: np.ndarray,
                    reach: float) -> np.ndarray:
     """How far each vertex is from the pinned ones and the edges between them, up to ``reach``."""
     far = np.full(len(points), reach)
     far[pinned] = 0.0
-    edges = np.unique(np.sort(np.concatenate([triangles[:, [0, 1]], triangles[:, [1, 2]],
-                                              triangles[:, [2, 0]]]), axis=1), axis=0)
-    both = pinned[edges[:, 0]] & pinned[edges[:, 1]]
-    ends = edges[both]
+    edges = np.concatenate([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
+    ends = np.unique(edges[pinned[edges[:, 0]] & pinned[edges[:, 1]]], axis=0)
     alone = np.flatnonzero(pinned)
     first = np.concatenate([ends[:, 0], alone])
     second = np.concatenate([ends[:, 1], alone])
     if not len(first):
         return far
     a, b = points[first], points[second]
-    along = _long_axis(points)
-    order = np.argsort((a[:, along] + b[:, along]) / 2.0)
-    a, b = a[order], b[order]
-    line = (a[:, along] + b[:, along]) / 2.0
-    slack = reach + float(np.abs(a[:, along] - b[:, along]).max()) / 2.0
-    low = np.searchsorted(line, points[:, along] - slack)
-    high = np.searchsorted(line, points[:, along] + slack)
-    counts = high - low
-    step = max(1, int(4_000_000 // max(1, int(counts.max()))))
-    for start in range(0, len(points), step):
-        here = slice(start, min(len(points), start + step))
-        n = counts[here]
-        if not n.sum():
+    # The segments are filed by the cells of a grid their reach covers, so a vertex compares
+    # itself only with the segments filed under its own cell.
+    size = 2.0 * reach
+    origin = np.minimum(points.min(axis=0), np.minimum(a, b).min(axis=0)) - reach - size
+    top = np.maximum(points.max(axis=0), np.maximum(a, b).max(axis=0)) + reach + size
+    shape = np.floor((top - origin) / size).astype(np.int64) + 2
+    filed, which = _cells_of_segments(a, b, reach, size, origin, shape)
+    order = np.argsort(filed, kind='stable')
+    filed, which = filed[order], which[order]
+    cells = np.floor((points - origin) / size).astype(np.int64)
+    code = (cells[:, 0] * shape[1] + cells[:, 1]) * shape[2] + cells[:, 2]
+    low = np.searchsorted(filed, code, side='left')
+    counts = np.searchsorted(filed, code, side='right') - low
+    for owner in np.array_split(np.flatnonzero(counts), max(1, int(counts.sum() // 2_000_000) + 1)):
+        n = counts[owner]
+        if not len(owner):
             continue
-        owner = np.repeat(np.arange(here.start, here.stop), n)
-        offset = np.arange(int(n.sum())) - np.repeat(np.cumsum(n) - n, n)
-        segment = low[owner] + offset
+        starts = np.cumsum(n) - n
+        who = np.repeat(owner, n)
+        offset = np.arange(int(n.sum())) - np.repeat(starts, n)
+        segment = which[low[who] + offset]
         base, span = a[segment], b[segment] - a[segment]
-        length = np.maximum(np.sum(span * span, axis=1), 1e-18)
-        t = np.clip(np.sum((points[owner] - base) * span, axis=1) / length, 0.0, 1.0)
-        distance = np.linalg.norm(points[owner] - (base + t[:, None] * span), axis=1)
-        np.minimum.at(far, owner, distance)
+        length = np.maximum(np.einsum('ij,ij->i', span, span), 1e-18)
+        t = np.clip(np.einsum('ij,ij->i', points[who] - base, span) / length, 0.0, 1.0)
+        gap = points[who] - (base + t[:, None] * span)
+        far[owner] = np.minimum(far[owner], np.sqrt(np.minimum.reduceat(
+            np.einsum('ij,ij->i', gap, gap), starts)))
     return far
 
 
