@@ -85,3 +85,99 @@ def test_no_trees_staged_is_nothing_to_bound(tmp_path):
                             np.full(1, HEIGHT, 'f4'), [tree_files(tmp_path)])
     node.update(0.0, 0.0)
     assert max(node.boundingVolume(None).size) < 1.0
+
+
+def shaped(node):
+    return basenodes.Shape(geometry=node, appearance=basenodes.Appearance(
+        material=basenodes.Material()))
+
+
+def test_a_shape_follows_the_trees_as_they_are_staged_somewhere_else(tmp_path):
+    """The shape caches its geometry's bound: a trees node that handed out a new bound each time
+    would be culled for good once the camera had left the first one, and every tree with it."""
+    node = InstancedMeshLOD(np.array([[500.0, 0, 500.0], [9000.0, 0, 9000.0]], 'f4'),
+                            np.zeros(2, 'f4'), np.full(2, HEIGHT, 'f4'), [tree_files(tmp_path)])
+    shape = shaped(node)
+    assert max(shape.boundingVolume(None).size) > 1000.0
+    node.update(500.0, 500.0)
+    here = shape.boundingVolume(None)
+    assert max(here.size) < 80.0 and abs(here.center[0] - 500.0) < 5.0
+    node.update(9000.0, 9000.0)
+    there = shape.boundingVolume(None)
+    assert max(there.size) < 80.0 and abs(there.center[0] - 9000.0) < 5.0
+    node.update(500.0, 500.0)
+    assert abs(shape.boundingVolume(None).center[0] - 500.0) < 5.0
+
+
+def test_trees_staged_where_the_camera_has_gone_are_in_view_of_it(tmp_path):
+    node = InstancedMeshLOD(np.array([[0.0, 0, -300.0]], 'f4'), np.zeros(1, 'f4'),
+                            np.full(1, HEIGHT, 'f4'), [tree_files(tmp_path)])
+    shape = shaped(node)
+    node.update(0.0, 0.0)                       # nothing near the first place
+    shape.boundingVolume(None)
+    node.update(0.0, -290.0)                    # and then the camera is where the tree is
+    volume = shape.boundingVolume(None)
+    low = np.asarray(volume.center) - np.asarray(volume.size) / 2.0
+    high = np.asarray(volume.center) + np.asarray(volume.size) / 2.0
+    assert (low <= [0.0, 0.0, -300.0]).all() and (high >= [0.0, HEIGHT, -300.0]).all()
+
+
+def test_the_corners_the_pass_culls_by_follow_the_trees_too(tmp_path):
+    node = InstancedMeshLOD(np.array([[500.0, 0, 500.0], [9000.0, 0, 9000.0]], 'f4'),
+                            np.zeros(2, 'f4'), np.full(2, HEIGHT, 'f4'), [tree_files(tmp_path)])
+    shape = shaped(node)
+    shape.boundingVolume(None).getPoints()          # as the first frame's cull does
+    node.update(9000.0, 9000.0)
+    corners = np.asarray(shape.boundingVolume(None).getPoints())[:, :3]
+    assert abs(float(corners[:, 0].mean()) - 9000.0) < 10.0
+    assert corners[:, 0].max() - corners[:, 0].min() < 80.0
+
+
+def test_the_shadow_pass_is_told_the_trees_moved_by_a_bound_that_is_a_new_object(tmp_path):
+    """The caster pool and the depth maps are reused while a caster's bound is the same object, so
+    a node whose trees change hands the shape a new bound for them and the same one when they do
+    not."""
+    node = InstancedMeshLOD(np.array([[500.0, 0, 500.0], [9000.0, 0, 9000.0]], 'f4'),
+                            np.zeros(2, 'f4'), np.full(2, HEIGHT, 'f4'), [tree_files(tmp_path)])
+    shape = shaped(node)
+    node.update(500.0, 500.0)
+    first = shape.boundingVolume(None)
+    assert shape.boundingVolume(None) is first                       # unmoved: the same one
+    node.update(9000.0, 9000.0)
+    second = shape.boundingVolume(None)
+    assert second is not first                                       # moved: a new one
+    assert shape.boundingVolume(None) is second
+
+
+def test_trees_throw_shadows_after_the_camera_has_moved_on(render_scene, tmp_path):
+    """The depth maps are made again for trees staged somewhere else: a forest the camera
+    runs through casts its shadows wherever it runs."""
+    far = ((0.0, 0.0, 0.0), (0.0, 0.0, -400.0))
+    node = InstancedMeshLOD(np.array(far, 'f4'), np.zeros(2, 'f4'), np.full(2, HEIGHT, 'f4'),
+                            [tree_files(tmp_path)])
+    node.update(0.0, 0.0)
+    shape = shaped(node)
+    shape.castShadow = True
+    frames_of(render_scene, scene_with(shape))              # the first place, drawn and shadowed
+    node.update(0.0, -400.0)                                # the camera has run on
+    ground = basenodes.Shape(
+        geometry=basenodes.Box(size=(60, 0.2, 60)),
+        appearance=basenodes.Appearance(material=basenodes.Material(diffuseColor=(0.8, 0.8, 0.8))))
+    moved = [basenodes.Viewpoint(position=(0, 40, -375), orientation=(1, 0, 0, -1.0)),
+             basenodes.Transform(translation=(0, -0.1, -400), children=[ground]),
+             basenodes.DirectionalLight(direction=(-0.6, -1.0, -0.2), intensity=1.0, shadows=True),
+             shape]
+    shaded = frames_of(render_scene, moved)[-1].astype(int)
+    shape.castShadow = False
+    lit = frames_of(render_scene, moved)[-1].astype(int)
+    assert int(((lit.sum(axis=2) - shaded.sum(axis=2)) > 60).sum()) > 300
+
+
+def scene_with(shape):
+    ground = basenodes.Shape(
+        geometry=basenodes.Box(size=(60, 0.2, 60)),
+        appearance=basenodes.Appearance(material=basenodes.Material(diffuseColor=(0.8, 0.8, 0.8))))
+    return [basenodes.Viewpoint(position=(0, 40, 25), orientation=(1, 0, 0, -1.0)),
+            basenodes.Transform(translation=(0, -0.1, 0), children=[ground]),
+            basenodes.DirectionalLight(direction=(-0.6, -1.0, -0.2), intensity=1.0, shadows=True),
+            shape]

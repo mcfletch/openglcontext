@@ -221,13 +221,22 @@ class AABoundingBox(BoundingBox):
     center = field.newField("center", "SFVec3f", 0, (0, 0, 0))
     size = field.newField("size", "SFVec3f", 0, (0, 0, 0))
 
+    #: The ``(center, size)`` the corners in ``points`` were worked out from; None where
+    #: ``points`` was given, whose corners are the box's whatever its center and size say.
+    _worked_from: Any = None
+
     def getPoints(self) -> Any:
         """Return set of points to test against the frustum
 
         If self.points field is not set, will calculate the
-        points from the center and size fields.
+        points from the center and size fields, and again whenever
+        either of them has changed since.
         """
+        now = (tuple(self.center), tuple(self.size))
+        if self._worked_from is not None and self._worked_from != now:
+            self.points = []
         if not len(self.points):
+            self._worked_from = now
             cx, cy, cz = self.center
             sx, sy, sz = self.size
             sx /= 2.0

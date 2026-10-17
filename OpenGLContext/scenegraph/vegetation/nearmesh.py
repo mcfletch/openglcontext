@@ -15,6 +15,7 @@ import ctypes
 from typing import Any, Optional
 
 import numpy as np
+from vrml import field
 from OpenGL.GL import (
     GL_ARRAY_BUFFER, GL_BLEND, GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER,
     GL_FALSE, GL_FLOAT, GL_STATIC_DRAW, GL_TEXTURE0, GL_TEXTURE_2D, GL_TRIANGLES,
@@ -24,6 +25,7 @@ from OpenGL.GL import (
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f,
     glUniformMatrix4fv, glUseProgram, glVertexAttribPointer,
 )
+from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
     FOG_UNIFORMS, load_program, texture_rgba, delete_gl, setup_instance_attribs,
     instance_rows, InstanceBuffer)
@@ -54,6 +56,9 @@ class InstancedMeshLOD(InstancedVegBase):
     without the maps being stretched over the whole forest. Trees beyond them are the
     impostors', which cast none.
     """
+    #: How many near sets have been staged: what the node's bound is cached against.
+    generation = field.newField('generation', 'SFInt32', 0, 0)
+
     def __init__(self, all_pos: np.ndarray, all_yaw: np.ndarray, all_scale: np.ndarray,
                  species: "list[dict[str, Any]]",
                  sun: "tuple[float, float, float]" = DEFAULT_SUN,
@@ -108,16 +113,28 @@ class InstancedMeshLOD(InstancedVegBase):
         """
         self._pending = pending
         self._box = _box_of(pending.values())
+        self.generation += 1
 
     def boundingVolume(self, mode: Any) -> Any:
         """The box the trees drawn stand in, crowns included; all of space before a near
-        set has been staged, and nothing where it holds no tree."""
+        set has been staged, and nothing where it holds no tree.
+
+        The same object while the trees drawn are the same ones and a new one when they change.
+        The shadow pass keeps a caster's depth maps and world geometry for as long as its bound
+        is the same object, and it is cached against :attr:`generation`, which :meth:`stage`
+        counts up, so what caches it here and in the shape holding it lets go.
+        """
+        current = boundingvolume.getCachedVolume(self)
+        if current:
+            return current
         if self._box is None:
-            return super().boundingVolume(mode)
-        from OpenGLContext.scenegraph import boundingvolume
-        low, high = self._box
-        return boundingvolume.AABoundingBox(size=tuple(float(v) for v in high - low),
-                                            center=tuple(float(v) for v in (low + high) / 2.0))
+            volume = super().boundingVolume(mode)
+        else:
+            low, high = self._box
+            volume = boundingvolume.AABoundingBox(
+                size=tuple(float(v) for v in high - low),
+                center=tuple(float(v) for v in (low + high) / 2.0))
+        return boundingvolume.cacheVolume(self, volume, ((self, "generation"),))
 
     @property
     def staged(self) -> "Optional[dict[int, np.ndarray]]":
