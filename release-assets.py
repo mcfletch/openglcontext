@@ -200,7 +200,7 @@ def release() -> publish.Release:
     return publish.Release(
         namespace=NAMESPACE, url=URL, catalog=CATALOG, declare=declare,
         into=os.path.join(HERE, "dist", "content"), arguments=arguments,
-        description=__doc__.split("\n\n")[0],
+        keep_unbuilt=True, description=__doc__.split("\n\n")[0],
         title="Bust gallery world",
         notes="The level-of-detail demo world. Open it with "
               "`oglc-view --pack openglcontext/gallery`. Terms are in the "
