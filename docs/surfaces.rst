@@ -355,6 +355,14 @@ register it with ``add_collider_source`` on a ``TerrainWalkMixin`` (see
 :doc:`terrain`). A rock smaller than 0.3 m is underfoot and has no collider.
 A cell's colliders are worked out from the seed alone, so they are there before
 the cell is drawn, and the last 64 cells are kept.
+
+``mounds_near(x, z, reach=3.0)`` answers the same rocks as domes a walker can
+climb: ``(positions, radii, rims, tops)``, each dome 1.15 rock radii wide, 0.2
+radii high at its edge and 0.75 high at its middle above the ground under the
+rock. Registered with ``add_collider_source`` in place of ``colliders_near``, it
+lets the walker step onto a rock whose surface rises no more than
+``step_height`` (0.5 m) above its feet, stand on it and walk off it, and stops
+the walker at one that rises more.
 ``RockScatter`` is the tile generator underneath, for use with
 ``GeneratedTiles`` or a ``GeneratedTileset`` directly (see
 :ref:`tiles3d-generated`).

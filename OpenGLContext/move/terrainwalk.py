@@ -132,8 +132,11 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
     #: thinnest collider diameter or a fast walk tunnels straight through it, so the
     #: displacement is split into steps no longer than this before resolving trunks.
     collide_substep = 0.35
+    #: The tallest step the walker climbs, in metres: a mound whose surface rises this much or
+    #: less above the walker's feet is walked onto, and a taller one is a wall.
+    step_height = 0.5
     #: Sources of colliders that come and go; see :meth:`add_collider_source`.
-    _tw_sources: Sequence[Callable[[float, float, float], tuple[Any, Any]]] = ()
+    _tw_sources: Sequence[Callable[[float, float, float], tuple[Any, ...]]] = ()
     #: Cap on swept substeps per frame, so a very fast fly doesn't run the collision
     #: pass hundreds of times (beyond this a step may tunnel; acceptable at that speed).
     collide_max_substeps = 8
@@ -147,15 +150,86 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         return float(p[0]), float(p[2])
 
     def add_collider_source(self, source: Callable[[float, float, float],
-                                                    tuple[Any, Any]]) -> None:
+                                                    tuple[Any, ...]]) -> None:
         """Add colliders that come and go as the walker moves, such as streamed rocks.
 
         ``source(x, z, reach)`` answers ``(positions, radii)``, an ``(N, 3)`` array and an
         ``(N,)`` array in the form of ``init_walk``'s, for the colliders within ``reach``
-        metres of ``(x, z)``. It is asked at every collision step, so it should answer
-        from what it has kept. It may be called from the thread the avatar steps on.
+        metres of ``(x, z)``: cylinders the walker is pushed out of at any height.
+
+        It may answer ``(positions, radii, rims, tops)`` instead, with two more ``(N,)``
+        arrays, for mounds the walker can climb. Each is a dome over a circle of its radius
+        about its position, ``rims`` metres high at the edge and ``tops`` at the middle, both
+        above the position. The walker walks onto a mound where its surface rises at most
+        :attr:`step_height` above the walker's feet, stands on the surface, and is pushed out
+        of the mound where it rises more.
+
+        It is asked at every collision step, so it should answer from what it has kept. It
+        may be called from the thread the avatar steps on.
         """
         self._tw_sources = [*self._tw_sources, source]
+
+    def _tw_feet(self) -> float:
+        """The height of the walker's feet: the avatar's where there is one, the camera's
+        less :attr:`eye_height` where the free-fly camera is being held down."""
+        platform = getattr(self, 'physicsPlatform', None)
+        character = None if platform is None else getattr(platform, 'character', None)
+        if character is not None:
+            return float(character.position[1]) - float(character.height) * 0.5
+        return float(self.platform.position[1]) - float(self.eye_height)
+
+    @staticmethod
+    def _mound_surface(distance: Any, positions: Any, radii: Any, rims: Any, tops: Any) -> Any:
+        """The height of each mound's surface at ``distance`` from its middle: its rim at
+        its edge and its top at the middle, along a dome, and -inf beyond the edge."""
+        reach = np.asarray(radii, np.float64)
+        across = np.asarray(distance, np.float64) / reach
+        inside = across < 1.0
+        rim = np.asarray(rims, np.float64)
+        rise = (np.asarray(tops, np.float64) - rim) * np.sqrt(np.clip(1.0 - across * across, 0.0, 1.0))
+        return np.where(inside, np.asarray(positions, np.float64)[:, 1] + rim + rise, -np.inf)
+
+    def _tw_support(self, x: float, z: float) -> float:
+        """The highest mound surface under ``(x, z)``, or -inf where there is none."""
+        best = -math.inf
+        for source in self._tw_sources:
+            answer = source(x, z, self.collide_broadphase)
+            if len(answer) < 4 or not len(answer[0]):
+                continue
+            positions, radii, rims, tops = answer[:4]
+            positions = np.asarray(positions, np.float32)
+            distance = np.hypot(x - positions[:, 0], z - positions[:, 2])
+            best = max(best, float(self._mound_surface(distance, positions, radii, rims, tops).max()))
+        return best
+
+    def _push_from_mounds(self, x: float, z: float, positions: Any, radii: Any, rims: Any,
+                          tops: Any) -> tuple[float, float]:
+        """Push (x, z) out of the mound it cannot climb: the one whose surface, at the
+        nearest point of the walker's body, rises more than :attr:`step_height` above the
+        feet, taking the deepest."""
+        positions = np.asarray(positions, np.float32)
+        if not len(positions):
+            return x, z
+        dx = x - positions[:, 0]
+        dz = z - positions[:, 2]
+        bp = self.collide_broadphase
+        near = (np.abs(dx) < bp) & (np.abs(dz) < bp)
+        if not np.any(near):
+            return x, z
+        dx, dz = dx[near], dz[near]
+        radius = np.asarray(radii, np.float32)[near]
+        distance = np.hypot(dx, dz)
+        surface = self._mound_surface(np.maximum(distance - self.player_radius, 0.0), positions[near],
+                                      radius, np.asarray(rims)[near], np.asarray(tops)[near])
+        blocked = surface - self._tw_feet() > self.step_height
+        if not blocked.any():
+            return x, z
+        depth = np.where(blocked, radius + self.player_radius - distance, -np.inf)
+        k = int(np.argmax(depth))
+        if distance[k] < 1e-4:
+            return x + float(radius[k] + self.player_radius), z
+        push = depth[k] / distance[k]
+        return x + float(dx[k] * push), z + float(dz[k] * push)
 
     def _push_from(self, x: float, z: float, positions: Any, radii: Any) -> tuple[float, float]:
         """Push (x, z) out of the deepest of these colliders it lies inside."""
@@ -189,7 +263,11 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         """
         x, z = self._push_out_fixed(x, z)
         for source in self._tw_sources:
-            x, z = self._push_from(x, z, *source(x, z, self.collide_broadphase))
+            answer = source(x, z, self.collide_broadphase)
+            if len(answer) >= 4:
+                x, z = self._push_from_mounds(x, z, *answer[:4])
+            else:
+                x, z = self._push_from(x, z, *answer[:2])
         return x, z
 
     def _push_out_fixed(self, x: float, z: float) -> tuple[float, float]:
@@ -272,7 +350,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
                 or getattr(self, '_tw_hf', None) is None:
             return
         x, z = self._tw_sweep(*self._tw_xz())
-        self.platform.setPosition((x, self._tw_hf.height_at(x, z) + self.eye_height, z))
+        ground = max(float(self._tw_hf.height_at(x, z)), self._tw_support(x, z))
+        self.platform.setPosition((x, ground + self.eye_height, z))
 
     def DoEventCascade(self) -> Any:
         changed = super(TerrainWalkMixin, self).DoEventCascade()
@@ -418,7 +497,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         x, z = self._push_out(float(character.position[0]),
                               float(character.position[2]))
         character.position[:] = (
-            x, float(field.height_at(x, z)) + float(character.height) * 0.5, z)
+            x, max(float(field.height_at(x, z)), self._tw_support(x, z))
+            + float(character.height) * 0.5, z)
         character.vy = 0.0
         character.grounded = True
         self._tw_prev = (x, z)
@@ -450,7 +530,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         else:
             x, z = self._tw_sweep(x, z)
         half = float(character.height) * 0.5
-        ground = float(field.height_at(x, z))
+        ground = max(float(field.height_at(x, z)), self._tw_support(x, z))
         y = float(character.position[1])
         if y - half <= ground:
             y = ground + half

@@ -164,3 +164,45 @@ def test_the_field_keeps_only_so_many_cells(monkeypatch):
         assert len(field._held) == 4
     finally:
         field.shutdown()
+
+
+# -- what a walker can climb ---------------------------------------------------------
+
+def test_mounds_are_the_colliders_with_a_height_to_stand_on():
+    from OpenGLContext.scenegraph.rockfield import MOUND_REACH
+    s = scatter(density=0.05, sizes=(0.1, 1.2))
+    positions_, radii, rims, tops = s.mounds((0, 0))
+    cylinders, footprints = s.colliders((0, 0))
+    assert np.array_equal(positions_, cylinders)
+    assert np.allclose(radii / MOUND_REACH, footprints / 0.9)
+    assert (rims > 0).all() and (rims < tops).all()
+
+
+def test_the_surface_of_a_mound_meets_the_rock_drawn_over_it():
+    s = scatter(density=0.05, sizes=(0.1, 1.2), cell=64.0)
+    tile, _ = s.generate((1, 1))
+    drawn = positions(tile) + np.array(s.origin((1, 1)))
+    centres, radii, rims, tops = s.mounds((1, 1))
+    off, close = 0, 0
+    for centre, radius, top in zip(centres, radii, tops, strict=True):
+        around = drawn[np.hypot(drawn[:, 0] - centre[0], drawn[:, 2] - centre[2]) < 0.5 * radius]
+        if not len(around):
+            continue
+        close += 1
+        # A walker standing on the mound is no more than a third of its radius inside the rock
+        # or above it.
+        if abs(around[:, 1].max() - (centre[1] + top)) > radius / 1.15 / 3.0 + 0.05:
+            off += 1
+    assert close > 10 and off <= close * 0.15
+
+
+def test_the_field_answers_the_mounds_near_a_point():
+    field = RockField(Slope(), PhysicalMaterial(), reach=100.0, density=0.05, cell=40.0,
+                      sizes=(0.1, 1.2))
+    try:
+        mounds = field.mounds_near(40.0, 40.0, reach=10.0)
+        cylinders = field.colliders_near(40.0, 40.0, reach=10.0)
+        assert len(mounds) == 4 and np.array_equal(mounds[0], cylinders[0])
+        assert len(mounds[2]) == len(mounds[3]) == len(cylinders[1]) > 0
+    finally:
+        field.shutdown()

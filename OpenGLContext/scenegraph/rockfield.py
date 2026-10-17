@@ -34,6 +34,13 @@ CLUSTER_FROM = 0.3
 #: reach.
 COLLIDE_FROM = 0.25
 FOOTPRINT = 0.9
+#: What a walker can stand on of a rock, as multiples of its radius: a dome as wide as the rock's
+#: widest reach, as high at its edge as the rock is sunk below its middle, and as high at its
+#: middle as the drawn rocks' tops average, which are flat across the middle and fall away
+#: toward the edge.
+MOUND_REACH = 1.15
+MOUND_RIM = 0.2
+MOUND_TOP = 0.75
 #: Rocks of each size are divided this finely: below the first radius 1 division, below the
 #: second 2, above that 3. See :func:`~OpenGLContext.scenegraph.natural.stone`.
 DETAIL = (0.22, 0.45)
@@ -173,6 +180,26 @@ class RockScatter:
         positions = np.stack([ex[keep], ground, ez[keep]], axis=-1).astype('f')
         return positions, (er[keep] * FOOTPRINT).astype('f')
 
+    def mounds(self, key: tuple[int, int]
+               ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """What a walker can climb of the rocks of a cell: ``(positions, radii, rims, tops)``.
+
+        The rocks :meth:`colliders` answers, as the domes
+        :meth:`~OpenGLContext.move.terrainwalk.TerrainWalkMixin.add_collider_source` takes:
+        each ``radii`` wide, ``rims`` high at its edge and ``tops`` at its middle, above the
+        ground under the rock. Worked out from the seed alone, as the colliders are.
+        """
+        ex, ez, er = self._placements(key, self._rng(key))
+        keep = er >= COLLIDE_FROM
+        if not keep.any():
+            empty = np.zeros(0, 'f')
+            return np.zeros((0, 3), 'f'), empty, empty, empty
+        radius = er[keep]
+        ground = np.asarray(self.ground.sample(ex[keep], ez[keep]), dtype=float)
+        positions = np.stack([ex[keep], ground, ez[keep]], axis=-1).astype('f')
+        return (positions, (radius * MOUND_REACH).astype('f'), (radius * MOUND_RIM).astype('f'),
+                (radius * MOUND_TOP).astype('f'))
+
     @staticmethod
     def _rock(rng: np.random.Generator, radius: float) -> sf.Geometry:
         """One rock about the origin, flattened a little and turned."""
@@ -196,7 +223,7 @@ class RockField(GeneratedTiles):
                  sizes: tuple[float, float] = (0.12, 0.9), cell: float = 64.0, seed: int = 0,
                  **named: Any) -> None:
         self.scatter = RockScatter(ground, material, mask, density, sizes, cell, seed)
-        self._held: OrderedDict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = OrderedDict()
+        self._held: OrderedDict[tuple[int, int], tuple[np.ndarray, ...]] = OrderedDict()
         self._lock = threading.Lock()
         super().__init__(self.scatter, reach, **named)
 
@@ -209,25 +236,45 @@ class RockField(GeneratedTiles):
         last :data:`CELLS_KEPT` cells), and one is worked out the first time it is asked
         for whether or not it has been drawn. Safe to call from any thread.
         """
+        found = self._near(x, z, reach)
+        return found[0], found[1]
+
+    def mounds_near(self, x: float, z: float, reach: float = 3.0
+                    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """The mounds of the rocks within a square ``reach`` metres either side of ``(x, z)``:
+        ``(positions, radii, rims, tops)`` as :meth:`RockScatter.mounds` answers them, kept as
+        :meth:`colliders_near` keeps its cells. It is what a walker that climbs rocks is given
+        as a collider source."""
+        found = self._near(x, z, reach)
+        return found[2], found[3], found[4], found[5]
+
+    def _near(self, x: float, z: float, reach: float) -> tuple[np.ndarray, ...]:
+        """``(positions, footprints, positions, radii, rims, tops)`` over the cells ``reach``
+        metres around ``(x, z)`` touches."""
         cell = self.scatter.cell
-        positions, radii = [], []
+        kept = []
         for i in range(math.floor((x - reach) / cell), math.floor((x + reach) / cell) + 1):
             for j in range(math.floor((z - reach) / cell), math.floor((z + reach) / cell) + 1):
-                here, size = self._cell((i, j))
-                if len(size):
-                    positions.append(here)
-                    radii.append(size)
-        if not positions:
-            return np.zeros((0, 3), 'f'), np.zeros(0, 'f')
-        return np.concatenate(positions), np.concatenate(radii)
+                here = self._cell((i, j))
+                if len(here[1]):
+                    kept.append(here)
+        if not kept:
+            nothing = np.zeros(0, 'f')
+            return (np.zeros((0, 3), 'f'), nothing, np.zeros((0, 3), 'f'), nothing, nothing, nothing)
+        positions, footprints, radii, rims, tops = (np.concatenate(column)
+                                                    for column in zip(*kept, strict=True))
+        return positions, footprints, positions, radii, rims, tops
 
-    def _cell(self, key: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
+    def _cell(self, key: tuple[int, int]) -> tuple[np.ndarray, ...]:
+        """``(positions, footprints, radii, rims, tops)`` of a cell, kept."""
         with self._lock:
             held = self._held.get(key)
             if held is not None:
                 self._held.move_to_end(key)
                 return held
-        made = self.scatter.colliders(key)
+        positions, footprints = self.scatter.colliders(key)
+        _, radii, rims, tops = self.scatter.mounds(key)
+        made = (positions, footprints, radii, rims, tops)
         with self._lock:
             self._held[key] = made
             while len(self._held) > CELLS_KEPT:

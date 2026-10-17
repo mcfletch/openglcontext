@@ -503,6 +503,13 @@ and rocks are a set of vertical cylinders, resolved analytically.
        It is asked at every collision step, after the fixed cylinders.
        ``RockField.colliders_near`` is one: streamed rocks stop a walker
        without a table of every rock in the world (see :doc:`surfaces`).
+       A source may answer ``( positions, radii, rims, tops )`` instead, with two
+       more arrays for mounds: each a dome over a circle of its radius about its
+       position, ``rims`` high at the edge and ``tops`` at the middle, above the
+       position. The walker steps onto a mound where its surface rises no more
+       than ``step_height`` (0.5 m) above the walker's feet, stands on its
+       surface and is pushed out of it where it rises more.
+       ``RockField.mounds_near`` is one.
    * - ``setupPhysics( enable=True )``
      - Creates the avatar and gives it the camera. Inherited unchanged from
        ``PhysicsWalkMixin``: :kbd:`g` returns the camera to the free-fly
