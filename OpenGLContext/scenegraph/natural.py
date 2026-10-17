@@ -77,7 +77,7 @@ def _subdivided(points: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray, 
     return np.array(vertices), np.array(out)
 
 
-def _smooth_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+def smooth_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
     """A normal for each vertex: the faces about it, each weighted by its area."""
     corners = points[triangles]
     faces = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
@@ -88,7 +88,7 @@ def _smooth_normals(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
     return np.asarray(normals / np.maximum(length, 1e-12))
 
 
-def _waves(rng: np.random.Generator, points: np.ndarray, low: float, high: float) -> np.ndarray:
+def waves(rng: np.random.Generator, points: np.ndarray, low: float, high: float) -> np.ndarray:
     """Smooth noise at each point: a few waves of random direction, phase and frequency.
 
     ``low`` and ``high`` bound the frequency in cycles across a unit sphere. The result is
@@ -103,7 +103,7 @@ def _waves(rng: np.random.Generator, points: np.ndarray, low: float, high: float
     return total / math.sqrt(TERMS)
 
 
-def _projected(points: np.ndarray, normals: np.ndarray, triangles: np.ndarray,
+def projected(points: np.ndarray, normals: np.ndarray, triangles: np.ndarray,
                repeat: float) -> Geometry:
     """A triangle soup of the mesh with each face's texture laid along its dominant axis.
 
@@ -175,11 +175,11 @@ def stone(rng: np.random.Generator, radii: tuple[float, float, float], divisions
     shape = scrape(rng, unit, count)
     bump = np.zeros(len(shape))
     for low, high, amount in ROUGHNESS:
-        bump += amount * _waves(rng, shape, low, high)
+        bump += amount * waves(rng, shape, low, high)
     shape *= (1.0 + bump)[:, None]
     points = shape * np.asarray(radii, dtype=float)
-    normals = _smooth_normals(points, triangles)
-    return _projected(points, normals, triangles, repeat)
+    normals = smooth_normals(points, triangles)
+    return projected(points, normals, triangles, repeat)
 
 
 def _grid_normals(points: np.ndarray) -> np.ndarray:
@@ -301,7 +301,7 @@ def rubble(rng: np.random.Generator, line: np.ndarray, width: float, height: flo
         grid[i] = line[i] + side[i][None, :] * across[:, None] + up * rise[:, None]
     lumps = np.zeros((count, sections))
     for low, high, amount in ((1.5, 3.5, 0.45), (4.0, 9.0, 0.22), (10.0, 20.0, 0.07)):
-        lumps += amount * _waves(rng, (grid - line[0]).reshape(-1, 3), low, high).reshape(count, sections)
+        lumps += amount * waves(rng, (grid - line[0]).reshape(-1, 3), low, high).reshape(count, sections)
     swell = lumps[..., None] * width
     outward = (grid - (line + up * (0.3 * height))[:, None, :])
     outward /= np.maximum(np.linalg.norm(outward, axis=-1, keepdims=True), 1e-12)

@@ -362,6 +362,8 @@ OpenGLContext/
 │   │                 # so Blender loads it too -- docs/surfaces.rst
 │   ├── natural.py    # Rocks (scraped spheres), timber and dry-stone walls as
 │   │                 # Geometry, NumPy only -- docs/surfaces.rst
+│   ├── rockwork.py   # Rock cut into a mesh: edge splitting that leaves no cracks,
+│   │                 # and flat discs scraped in at every scale -- docs/surfaces.rst
 │   ├── rockfield.py  # RockField/RockScatter: streamed rocks over any ground --
 │   │                 # docs/surfaces.rst
 │   ├── rockground.py # RockGround/RockyGround/beneath: bare rock ground meshed

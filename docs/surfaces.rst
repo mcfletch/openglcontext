@@ -271,6 +271,52 @@ repeat of its texture covers; a photograph keeps its scale on every face.
 The scraping method is the one the README of ``gl-rock`` describes; see
 ``license.txt``.
 
+Rock cut into a surface
+~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.scenegraph.rockwork`` makes a smooth surface look hewn from rock the
+way ``stone`` makes a boulder: flat discs are pressed into it, each cutting down to
+a plane, a little tilted, within its reach and leaving what lies outside, so the
+surface steps in facets with a clean edge at every rim. It works on any triangle
+mesh whose front faces look into the open and whose rock lies behind them: the
+inside of a tunnel, a quarry face, a cliff.
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph import natural, rockwork
+
+   passes = (rockwork.Pass(radius=(1.5, 3.0), depth=(0.15, 0.4), per_area=0.02),    # facets
+             rockwork.Pass(radius=(0.7, 1.5), depth=(0.1, 0.3), per_area=0.04),     # smaller ones
+             rockwork.Pass(radius=(0.3, 0.6), depth=(0.4, 0.9), per_area=0.012,     # pits
+                           tilt=0.1))
+   points, triangles, pinned = rockwork.scrape(points, triangles, rng, passes,
+                                               pinned=held, keep_clear=fixings)
+   points = rockwork.grain(points, triangles, rng, 0.05, ripples, pinned=pinned)
+   rock = natural.projected(points, natural.smooth_normals(points, triangles), triangles, 2.0)
+
+``Pass`` gives the range of a disc's reach and of its cut in metres, how many
+discs there are for each square metre of surface (``per_area``) and the steepest
+slope of a cut face (``tilt``). ``scrape`` refines the mesh about the rim of
+every disc before the cut, so a step is an edge of the mesh and not a slope across
+a coarse triangle, and does the passes in order, from large facets to small pits:
+each pass refines the mesh the one before it left. Every cut goes into the rock,
+so the open space only grows and a clearance made for a runner is never taken away.
+
+``pinned`` is a boolean for each vertex that must stay where it is, where the
+mesh meets other meshes; cuts come in over ``ramp`` metres from a pinned vertex or
+the edge between two, and an edge between two pinned vertices is never split.
+``keep_clear`` is places, such as a torch's fixing, that no cut reaches.
+``scrape`` returns the points, the triangles and the pinned flags of the refined
+mesh; ``grain`` roughens the result by pushing it into the rock by up to the amount
+given, from noise the caller supplies, and ``natural.waves`` is such noise. The
+same ``rng`` cuts the same rock.
+
+``split_edges(points, triangles, wanted, fixed=None, protected=None)`` is the
+refinement on its own: it cuts the edges ``wanted(a, b)`` chooses at their middles
+and re-divides the triangles that touch them, so the mesh has no cracks whatever is
+chosen. It returns the new points, the triangles and the two parents of every new
+point, for ``interpolated(values, parents)`` to carry per-vertex data across.
+
 Rocks over a whole landscape
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
