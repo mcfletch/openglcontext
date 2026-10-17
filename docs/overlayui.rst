@@ -212,7 +212,8 @@ field on the ``ContextDefinition``, and the screen shows all of them:
    * - ``maximumLights``
      - int, 0–8
      - Lights bound in one frame, the headlight among them. The shader's own
-       limit still applies.
+       limit still applies. Of more lights than that, the directional ones bind
+       first and then the nearest to the camera.
      - —
    * - ``bloom``
      - bool

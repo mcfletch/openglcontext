@@ -590,6 +590,17 @@ def presentFrame( context: Any ) -> Any:
     return context.SwapBuffers()
 
 
+def _lamp_distance(lamp: tuple[Any, Any, Any]) -> float:
+    """How far a bound light is from the camera, for choosing among more lights than slots:
+    nothing for a light with no place (a directional one), which is bound before any other."""
+    light_node, _path, matrix = lamp
+    location = getattr(light_node, 'location', None)
+    if location is None:
+        return -1.0
+    eye = numpy.append(numpy.asarray(location, dtype='d')[:3], 1.0) @ numpy.asarray(matrix, dtype='d')
+    return float(numpy.linalg.norm(eye[:3] / (eye[3] or 1.0)))
+
+
 class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, MultiviewPassMixin,
                 ZonesMixin, ClipPlanesMixin,
                 GeneratedTexturesMixin, ProjectorsMixin, SelectionMixin, SGObserver ):
@@ -887,17 +898,19 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         ``matrix`` is the light's modelview under the view ``matrix``, which
         takes its position and direction to eye space as ``glLightfv`` does.
         At most ``ceiling``; lights that are off, image-based lights and
-        texture projectors are left out.
+        texture projectors are left out. Of more lights than that, the
+        directional ones bind first and then the nearest to the camera, so a
+        row of lamps along a corridor lights the part of it in view.
         """
         lamps: list[tuple[Any, Any, Any]] = []
         for path in self.layerPaths(nodetypes.Light):
-            if len(lamps) >= ceiling:
-                break
             light_node = path[-1]
             if isinstance(light_node, x3dnodes.EnvironmentLight) or is_projector(light_node):
                 continue
             if getattr(light_node, 'on', False):
                 lamps.append((light_node, path, dot(path.transformMatrix(), matrix)))
+        if len(lamps) > ceiling:
+            lamps = sorted(lamps, key=_lamp_distance)[:ceiling]
         return lamps
 
     def maxLights(self, ceiling: int) -> int:
