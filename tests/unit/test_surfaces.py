@@ -374,3 +374,14 @@ def test_a_normal_map_of_a_ramp_unwrapped_leans_the_same_at_its_edges():
     assert unwrapped[0, 4, 0] < 0.5                        # leans west, away from the rise
     wrapped = surfaces.normal_map(ramp, 1.0)
     assert not np.allclose(wrapped[:, 0], wrapped[:, 4])
+
+
+def test_merging_no_pieces_is_an_empty_mesh_that_merges_with_others():
+    nothing = surfaces.merge([])
+    assert len(nothing.positions) == len(nothing.indices) == 0
+    assert nothing.positions.shape == (0, 3) and nothing.tangents.shape == (0, 4)
+    assert nothing.texcoords.shape == (0, 2) and nothing.indices.dtype == np.uint32
+    block = surfaces.block((1.0, 1.0, 1.0))
+    both = surfaces.merge([nothing, block])
+    assert np.array_equal(both.indices, block.indices)
+    assert len(both.positions) == len(block.positions)

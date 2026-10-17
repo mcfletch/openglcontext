@@ -61,6 +61,25 @@ class TestARock:
         assert lumpiness(RockProfile(roughness=0.05)) \
             < lumpiness(RockProfile(roughness=0.5))
 
+    def test_scraping_flattens_the_rock_in_places(self) -> None:
+        def reach_spread(scrapes):
+            mesh = rock_mesh(seed=6, profile=RockProfile(roughness=0.0, scrapes=scrapes,
+                                                         settled=0.0))
+            return np.linalg.norm(mesh.positions - mesh.positions.mean(axis=0), axis=1)
+        sphere, scraped = reach_spread(0), reach_spread(10)
+        assert sphere.std() < 0.01 < scraped.std()
+
+    def test_a_rock_with_no_scrapes_is_the_ball_it_was(self) -> None:
+        rough = RockProfile(scrapes=0)
+        assert np.allclose(rock_mesh(seed=7, profile=rough).positions,
+                           rock_mesh(seed=7, profile=RockProfile(scrapes=0)).positions)
+        assert not np.allclose(rock_mesh(seed=7, profile=rough).positions,
+                               rock_mesh(seed=7).positions)
+
+    def test_a_scraped_rock_is_the_same_for_the_same_seed(self) -> None:
+        assert np.allclose(rock_mesh(seed=8, profile=RockProfile(scrapes=6)).positions,
+                           rock_mesh(seed=8, profile=RockProfile(scrapes=6)).positions)
+
 
 class TestWhatARockIsMadeOf:
     def test_it_is_stone_rather_than_a_mirror(self) -> None:

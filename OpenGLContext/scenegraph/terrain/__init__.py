@@ -6,6 +6,8 @@
 - :class:`SplatTerrain` — renders it as a runtime multi-layer splat terrain.
 - :class:`LayerRule` and :func:`control_map` — which of the splat's materials
   shows where, derived from the land's own elevation and steepness.
+- :class:`RockRelief` — bare rock: a slab with flat faces scraped into it, added to
+  the ground where the ground is rock.
 - :class:`Relief` — the grain a surface carries once it is meshed finely enough
   to show it, bounded by the error the drawing already allows.
 
@@ -13,8 +15,8 @@ See :mod:`OpenGLContext.move.terrainwalk` for clamping a viewer to a HeightField
 """
 from OpenGLContext.scenegraph.terrain.control import LayerRule, control_map
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
-from OpenGLContext.scenegraph.terrain.relief import GROUND_RELIEF, Relief
+from OpenGLContext.scenegraph.terrain.relief import GROUND_RELIEF, Relief, Reliefs, RockRelief
 from OpenGLContext.scenegraph.terrain.splat import SplatTerrain, DEFAULT_SUN
 
 __all__ = ["HeightField", "SplatTerrain", "DEFAULT_SUN", "LayerRule",
-           "control_map", "Relief", "GROUND_RELIEF"]
+           "control_map", "Relief", "GROUND_RELIEF", "RockRelief", "Reliefs"]

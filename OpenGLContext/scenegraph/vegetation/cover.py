@@ -69,10 +69,7 @@ from OpenGLContext.loaders.resolver import contain, contained_source, read_conta
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
-from OpenGLContext.scenegraph.vegetation.grid import BLOCK_METRES, Patches, ScatterBlocks
-
-if TYPE_CHECKING:
-    from OpenGLContext.scenegraph.terrain.heightfield import HeightField
+from OpenGLContext.scenegraph.vegetation.grid import BLOCK_METRES, Ground, Patches, ScatterBlocks
 
 __all__ = ['CoverSpecies', 'CoverRung', 'GroundCover', 'control_weight',
            'CLUMP_RADIUS', 'CARD_RADIUS', 'FAR_RADIUS', 'COVER_JITTER',
@@ -496,7 +493,7 @@ class GroundCover(Group):
 
     species = field.newField('species', 'MFNode', 1, list)
 
-    def __init__(self, field: "HeightField",
+    def __init__(self, field: Ground,
                  species: "CoverSpecies | Sequence[CoverSpecies]",
                  clump_radius: float = CLUMP_RADIUS,
                  card_radius: float = CARD_RADIUS,
@@ -889,6 +886,40 @@ class GroundCover(Group):
             self._stop_worker = None
         self._worker = None
 
+    def relocate(self, field: Ground,
+                 mask: Optional[Callable[[Any, Any], Any]] = None,
+                 holes: Optional[Callable[[Any, Any], Any]] = None,
+                 shade: Optional[Callable[[Any, Any], Any]] = None,
+                 canopy: Optional[Callable[[Any, Any], Any]] = None) -> None:
+        """Grow the same cover on another ground, keeping the nodes and their GL objects.
+
+        ``field`` and the four rules are those of the constructor, and replace the old
+        ones: the rules belong to a ground, so one not given is cleared. Everything the
+        old ground scattered is dropped, including a scatter a worker is still making, and
+        the cover is empty until the next :meth:`update` scatters it again. For a world
+        restarted or replaced while the program runs, in place of building the cover again
+        and loading its meshes and textures a second time.
+        """
+        self.shutdown()
+        self.field = field
+        self.mask, self.holes, self.shade, self.canopy = mask, holes, shade, canopy
+        self._blocks = {}
+        self._near_at = self._far_at = self._drawn_at = None
+        for rung in self.rungs:
+            rung.cache = None
+            for node in rung.nodes:
+                node.update_instances(_nothing(), _none(), _none())
+
+    def dispose(self) -> None:
+        """Free every GL object the cover made and stop its worker. GL thread.
+
+        The cover draws nothing afterwards; build another to grow cover again.
+        """
+        self.shutdown()
+        for rung in self.rungs:
+            for node in rung.nodes:
+                node.dispose()
+
 
 def _either(old: tuple, new: tuple) -> tuple:
     """Two scatter requests as one: the newer place, and either's rungs."""
@@ -932,10 +963,13 @@ def _drawn(geometry: Any) -> Any:
     """A vegetation node wrapped so the scenegraph will render it.
 
     The instanced nodes drive their own program and need no material, but the
-    pass reaches geometry through a Shape and would not otherwise see them.
+    pass reaches geometry through a Shape and would not otherwise see them. The
+    shape casts no shadow: the nodes are drawn into no shadow map, and a bound
+    wide enough for a forest would stretch every cascade of a sun's shadows over
+    all of it.
     """
     from OpenGLContext.scenegraph.appearance import Appearance
     from OpenGLContext.scenegraph.material import Material
     from OpenGLContext.scenegraph.shape import Shape
     return Shape(geometry=geometry,
-                 appearance=Appearance(material=Material()))
+                 appearance=Appearance(material=Material()), castShadow=False)

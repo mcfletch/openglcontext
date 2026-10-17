@@ -11,12 +11,20 @@ dissolve). Returns arrays ready for
 """
 import math
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Optional, TypeVar
+from typing import Optional, Protocol, TypeVar
 
 import numpy as np
 
-if TYPE_CHECKING:
-    from OpenGLContext.scenegraph.terrain.heightfield import HeightField
+
+class Ground(Protocol):
+    """What cover and trees are seated on: a height at ``(x, z)``.
+
+    A :class:`~OpenGLContext.scenegraph.terrain.heightfield.HeightField` is one;
+    so is any object that answers :meth:`sample`, such as land computed from a
+    function with no edge.
+    """
+
+    def sample(self, x: "float | np.ndarray", z: "float | np.ndarray") -> np.ndarray: ...
 
 
 # Independent per-stream seeds. Each derived value (jitter x/z, keep decision, yaw,
@@ -172,7 +180,7 @@ class Patches:
 
 
 def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
-                       height_field: "HeightField", scale_mul: float = 0.7,
+                       height_field: Ground, scale_mul: float = 0.7,
                        jitter: float = 0.95,
                        mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
                        salt: int = 0,
@@ -183,7 +191,7 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     :param cx, cz: disc centre (world XZ), typically the camera position.
     :param radius: disc radius in world units.
     :param density: instances per square world unit (grid spacing = 1/sqrt(density)).
-    :param height_field: a :class:`HeightField` used to sit instances on the ground.
+    :param height_field: the :class:`Ground` instances are seated on, such as a :class:`HeightField`.
     :param scale_mul: multiplies the per-instance height scale.
     :param jitter: how far an instance may be displaced from its cell's centre, as a
         fraction of the cell. Above 1 an instance may land in a neighbour's ground,
@@ -228,7 +236,7 @@ def _no_instances() -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
 
 
 def _scatter_cells(i0: int, i1: int, j0: int, j1: int, s: float,
-                   height_field: "HeightField", scale_mul: float, jitter: float,
+                   height_field: Ground, scale_mul: float, jitter: float,
                    mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]],
                    salt: int, scale_range: "tuple[float, float]",
                    disc: "Optional[tuple[float, float, float]]" = None,
@@ -306,7 +314,7 @@ class ScatterBlocks:
     #: How far out, in radii of the last disc, a block is kept.
     keep = 2.0
 
-    def __init__(self, density: float, height_field: "HeightField",
+    def __init__(self, density: float, height_field: Ground,
                  scale_mul: float = 0.7, jitter: float = 0.95,
                  mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
                  salt: int = 0,

@@ -64,7 +64,10 @@ coarse streamed tiles are used only when viewing a ``tileset.json``. Materials
 come from **ambientCG** (CC0) through ``loaders/cc0.py``, cached under the
 per-user app-data directory with a provenance manifest, with a procedural
 fallback when offline. The download and each map extracted from its archive
-are size-capped (``cc0.MAX_ARCHIVE_BYTES``, ``cc0.MAX_MEMBER_BYTES``). Foliage
+are size-capped (``cc0.MAX_ARCHIVE_BYTES``, ``cc0.MAX_MEMBER_BYTES``).
+``cc0.physical_material(name, tint=(1, 1, 1))`` returns a ``PhysicalMaterial``
+wearing a material's colour, normal and roughness maps, or ``None`` where they
+cannot be had; ``tint`` multiplies the colour. Foliage
 textures and textured glTF prototypes are in ``loaders/tiles3d/foliage.py``
 (grass, bark and needle generators, an optional CC0 bark, alpha-MASK cards,
 instanced). Shadows are the engine's cascaded shadow maps
@@ -218,6 +221,92 @@ The viewer also opens a tileset you make with ``oglc-terrain`` (see
 description <baking>`, :doc:`a city exported from OpenStreetMap <osmcity>`,
 or your own captures exported to 3D Tiles (RealityCapture, Cesium ion,
 py3dtiles, and others).
+
+.. _tiles3d-generated:
+
+Tiles made on demand
+--------------------
+
+A world that is endless, or cheaper to compute than to store, has no
+``tileset.json`` to read. ``GeneratedTiles`` streams one from a **generator**:
+an object that names the tiles near a point, bounds each, and builds a tile's
+content when the camera comes near it. No tile exists before the camera asks
+for it, and a tile is dropped when the camera is far enough away.
+
+.. code-block:: python
+
+   import math
+   from types import SimpleNamespace
+
+   from OpenGLContext.loaders.tiles3d.boundingvolume import BoxBV
+   from OpenGLContext.scenegraph.basenodes import Group
+   from OpenGLContext.scenegraph.generatedtiles import GeneratedTiles
+
+   class Hill:
+       def keys_near(self, point, radius):
+           """Keys of the tiles within ``radius`` metres of ``point``."""
+           first = max(0, int(-(point[2] + radius) // 64))
+           return range(first, int(-(point[2] - radius) // 64) + 1)
+
+       def bounds(self, key):
+           """The tile's bounding volume, in world coordinates."""
+           return BoxBV(...)
+
+       def origin(self, key):
+           """Optional: where the tile's local origin lies, in world coordinates."""
+           return (0.0, 0.0, -(key + 0.5) * 64.0)
+
+       def generate(self, key):
+           """``(scene, nbytes)``; called on a worker thread, so no GL."""
+           return SimpleNamespace(group=Group(children=[...])), nbytes
+
+   terrain = GeneratedTiles(Hill(), reach=250.0, fovy=math.radians(60))
+   sg.children = [terrain, ...]
+
+   # once a frame, with the GL context current
+   terrain.update_for_camera(eye, viewport_height)
+
+A key is any hashable value: a segment number, a grid cell. ``scene`` is
+anything with a ``group`` node to draw, as a loaded glTF has, and ``nbytes``
+is what the tile counts against ``memory_budget``. The node runs ``workers``
+loads at once (two by default), so ``generate`` is called from several threads
+together: it reads shared state and does not change it. ``reach`` is how far from
+the camera a tile is made, in metres, and ``retain`` how far one is kept
+(a quarter more than ``reach`` unless given), so a camera at a boundary does
+not make and drop the same tile every frame.
+
+A generator that defines ``origin(key)`` builds each tile around that point and
+the tile is drawn translated to it. Vertices of a tile far from the world's
+origin are then small numbers, which 32-bit floats hold to micrometres; world
+coordinates of ten kilometres resolve to a millimetre and those of a hundred
+kilometres to eight. The bounding volumes from ``bounds``
+stay in world coordinates.
+
+``update_for_camera`` makes the tiles now in reach, drops the tiles beyond
+``retain`` and deletes their GL buffers, then runs one streaming tick: load on
+the worker threads, upload up to ``max_uploads_per_update`` tiles, and draw the
+tiles that are ready. Call it with the GL context current, as the deletion
+needs one. ``prime(eye, viewport_height)`` repeats that until the view is
+drawn, for the frame before the first.
+
+Tiles made from materials the generator shares keep those materials when they
+are dropped (``own_materials=False``, the default): deleting a tile deletes its
+meshes and leaves the textures to the next tile. Pass ``own_materials=True``
+for a generator whose every tile builds its own.
+
+``dispose()`` deletes the GL objects of every tile drawn and empties the
+tileset, so the node makes its tiles again at the next ``update_for_camera``.
+``shutdown()`` stops the workers. Call both when the world is taken out of a
+scene that goes on, ``shutdown`` alone when the program ends.
+
+``GeneratedTileset`` is the tree underneath, usable with ``TilesetRuntime``
+directly. Its root has no content and always refines; its children are the
+tiles made so far, each a leaf. ``TilesetRuntime.discard(tile)`` releases what
+a tile that has left the tree drew, and ignores a load of it still in flight.
+``GeneratedTileset.clear()`` drops every tile made so far and the cached
+generator results, so a restarted scene regenerates from nothing.
+
+``openglcontext-hill-runner`` streams its hill this way.
 
 .. _tiles3d-reach:
 

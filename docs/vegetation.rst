@@ -97,6 +97,21 @@ slightly. Selection is skipped while the camera is nearly still.
 A baked world can carry its forest as a table: see :ref:`Baking a world
 <vegetation>`.
 
+Replacing the trees
+~~~~~~~~~~~~~~~~~~~
+
+A forest has a fixed table of trees. A world with no end plants the stretch around
+the camera and the next stretch as the camera nears its end.
+``replant(positions, yaws, heights, species_id=None, shade=None)`` takes the
+arguments of the constructor and swaps the table in place. The nodes that draw
+the trees, and the meshes and textures they have made on the GPU, are kept, so a
+replant costs a table of arrays and not a second upload of every model. What is
+drawn is chosen from the new trees at the next ``update``. A species that had no
+trees and now has some gets its cards then, and one that has none draws none.
+A table whose lengths do not agree raises ``ValueError`` and the forest is left
+as it was. ``replant`` builds nothing on the GPU, so the table can be worked out
+on a worker thread and handed over with the context current or not.
+
 .. _groundcover:
 
 Ground cover: ``GroundCover``
@@ -125,6 +140,12 @@ thickets with clear ground between them.
                            layers, field.extent),
        shade=terrain.shade, canopy=terrain.canopy_cover)
    cover.update(camera_position)                    # once a frame
+
+``field`` is the ground the plants are seated on: anything with
+``sample(x, z)``, which answers the height there. A ``HeightField`` is one; so
+is land computed from a function, which has no edge. A ground that answers for
+hundreds of thousands of points a scatter should answer quickly, and a game
+whose land is costly to compute answers from a grid it has laid.
 
 ``CoverSpecies`` is also a scenegraph node, kept in the cover's ``species``
 field. ``clumpMesh`` and ``clumpFarMesh`` name meshes in the ``.glb``. A string
@@ -202,6 +223,17 @@ the result to ``apply_near`` on the render thread. The near tree meshes
 (``InstancedMeshLOD``) work the same way: ``compute_pending(x, z, radius)``
 selects the trees near a point on any thread, and ``stage(result)`` on the
 render thread hands the set to the next draw.
+
+``GroundCover`` takes any ground that answers ``sample(x, z)`` with a height
+(the ``Ground`` protocol): a ``HeightField``, or an endless land computed from
+position. ``relocate(field, mask=None, holes=None, shade=None, canopy=None)``
+grows the same cover on another ground, for a world that restarts or is
+replaced while the program runs. It keeps the nodes and what they hold on the
+GPU, replaces the ground and the four rules (a rule not given is cleared),
+drops what the old ground scattered, including a scatter a worker is still
+making, and leaves the cover empty until the next ``update``. ``dispose()``
+deletes the GL objects of every node and stops the worker; call it with the GL
+context current.
 
 Every instanced vegetation node, the terrain and the particle emitters have a
 ``drawn`` attribute, True by default. Set it False and the node draws nothing

@@ -159,7 +159,9 @@ OpenGLContext/
 │   │   └── notices.py   # asset.copyright, exporter extras and
 │   │                 # KHR_xmp_json_ld packets, as Notice records
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
-│                     # (reader.py: the SceneReader registered for it)
+│                     # (reader.py: the SceneReader registered for it;
+│                     # generated.py: a tileset whose tiles a generator makes
+│                     # as the camera nears them -- docs/tiles3d.rst#tiles3d-generated)
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
 │   │                 # modes and views a definition declares -- no GL
@@ -270,6 +272,8 @@ OpenGLContext/
 │   │                 # coordinates moved through a NURBS volume -- docs/nurbs.rst
 │   ├── nurbseval.py  # X3D's NURBS field rules; curves, surfaces, trims and
 │   │                 # sweeps evaluated -- no GL
+│   ├── generatedtiles.py  # GeneratedTiles: the node that streams a generator's
+│   │                 # tiles, made as the camera nears them -- docs/tiles3d.rst
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── composedgeometry.py  # X3D triangle/line sets and ElevationGrid as
 │   │                 # glTF-shaped arrays -- NumPy only, no GL
@@ -356,6 +360,12 @@ OpenGLContext/
 │   ├── surfaces.py   # Procedural PBR maps (marble, tiles, brick, metals) and
 │   │                 # geometry that wears them by the metre; NumPy only,
 │   │                 # so Blender loads it too -- docs/surfaces.rst
+│   ├── natural.py    # Rocks (scraped spheres), timber and dry-stone walls as
+│   │                 # Geometry, NumPy only -- docs/surfaces.rst
+│   ├── rockfield.py  # RockField/RockScatter: streamed rocks over any ground --
+│   │                 # docs/surfaces.rst
+│   ├── rockground.py # RockGround/RockyGround/beneath: bare rock ground meshed
+│   │                 # finely over the coarse terrain -- docs/terrain.rst
 │   ├── varied.py     # Varied: a node's copy with some fields changed
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot
 │   ├── zone.py       # Zone and its settings nodes; placing a frame's zones

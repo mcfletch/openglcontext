@@ -719,3 +719,39 @@ generated from it. A pack without it is refused, so it cannot be offered and
 then left out of the credits. Check the terms of anything you offer: content
 licensed for use only within its own engine may not be downloaded or read by
 another engine, even when its file format would allow it.
+
+.. _engine-packs:
+
+The engine's own packs
+----------------------
+
+The engine publishes two packs under the ``openglcontext`` namespace; the registry
+that lists them is ``OpenGLContext/packs.json``:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Key
+     - What it holds
+   * - ``openglcontext/gallery``
+     - The level-of-detail demo's world, opened with ``oglc-view --pack
+       openglcontext/gallery``.
+   * - ``openglcontext/textures``
+     - The CC0 photographic PBR materials of ``loaders.cc0.CATALOG`` (bark,
+       rock, grass, ground, dirt, forest floor, moss and sand) at 1K: colour,
+       normal, roughness and occlusion maps, about 42 MB.
+
+With the texture pack installed ``cc0.material`` and ``cc0.physical_material`` read
+the maps from it and never reach ambientCG; without it they use the per-user cache,
+and fetch from ambientCG once as before. ``cc0.pack_directory()`` is where the pack
+is, or ``None``, and ``cc0.ensure_pack(consent)`` fetches it, asking ``consent``
+first (``contentpacks.application.ask_on_console`` is one) and answering whether it
+is there afterwards. A program that wants its textures from the pack asks once, at
+its first run, as its own art is asked for.
+
+``release-assets.py`` at the root of the repository builds them. ``--only textures``
+builds the texture pack alone and needs neither Blender nor ``openglcontext-editor``;
+a map not yet on the machine is fetched from ambientCG once, there, so that nobody
+else has to. ``--install`` puts the packs in this machine's store, and ``--push``
+attaches them to the release and writes the registry the package ships.

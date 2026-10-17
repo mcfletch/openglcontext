@@ -878,6 +878,9 @@ own stone material gets that stone weathered, not replaced.
 - ``roughness`` (0.32) - how far a vertex may move from the starting sphere, as
   a fraction of the radius;
 - ``facets`` (2) - how many times the icosahedron is subdivided;
+- ``scrapes`` (8) - how many flat discs are pressed into the sphere before it is
+  roughened, each flattening what lies under it and leaving the rest, so the
+  boulder has flat faces and edges; 0 leaves a lumpy ball;
 - ``settled`` (0.34) - how much of the bottom is pressed into the ground;
 - ``mottle`` (0.34) - how much the stone's colour varies over one boulder, as a
   fraction of it;

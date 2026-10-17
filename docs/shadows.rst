@@ -103,7 +103,12 @@ Clear it for these kinds of geometry:
   from. Clear the flag on the floor, walls and ceiling so the light reaches the
   room. Objects inside the room still cast shadows.
 - Dense alpha-tested foliage - drawing a field of grass into every cascade
-  costs more than its shadow adds; see :doc:`Vegetation <vegetation>`.
+  costs more than its shadow adds; see :doc:`Vegetation <vegetation>`. The
+  shapes that ``VegetationField`` and ``GroundCover`` draw with clear it
+  already. A node as wide as a forest has to clear it too, wherever it is
+  drawn: the cascades are fitted to the casters in view, and one wide caster
+  stretches every cascade over all of it, so that no shadow resolves.
+  A terrain whose shadows are baked into it clears it for the same reason.
 - Geometry that stands in for something absent - a sky drawn as a backdrop, a
   marker, a gizmo.
 

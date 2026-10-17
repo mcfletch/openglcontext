@@ -217,18 +217,9 @@ class VegetationField(Group):
         super().__init__(**named)
         if not species:
             raise ValueError("a vegetation field needs at least one species")
-        self.positions = np.asarray(positions, np.float32).reshape(-1, 3)
-        self.yaws = np.asarray(yaws, np.float32).reshape(-1)
-        self.heights = np.asarray(heights, np.float32).reshape(-1)
-        if not len(self.positions) == len(self.yaws) == len(self.heights):
-            raise ValueError(
-                "a forest of %d trees needs %d yaws and %d heights, not %d and %d"
-                % (len(self.positions), len(self.positions), len(self.positions),
-                   len(self.yaws), len(self.heights)))
-        if species_id is None:
-            species_id = np.arange(len(self.positions)) % len(species)
         self.species = list(species)
-        self.species_id = np.asarray(species_id, int).reshape(-1)
+        self.positions, self.yaws, self.heights, self.species_id = self._table(
+            positions, yaws, heights, species_id)
         #: How much of the sun reaches each tree, or None for full sun.
         self.shades: Optional[np.ndarray] = None
         self.near_radius = float(near_radius)
@@ -245,21 +236,78 @@ class VegetationField(Group):
             self.positions, self.yaws, self.heights,
             [entry.near_entry() for entry in self.species],
             species_id=self.species_id)
-        #: One card node per species that has trees, and the tables they choose
-        #: from. A species with none would be an instanced draw of nothing.
+        #: One card node per species that has had trees, and the tables each chooses from.
+        #: A species with none would be an instanced draw of nothing.
         self.impostors: list[InstancedBillboards] = []
-        self._card_tables: list[tuple[np.ndarray, ...]] = []
+        self._cards: dict[int, InstancedBillboards] = {}
+        self._card_tables: dict[int, tuple[np.ndarray, ...]] = {}
+        self._tabulate_cards()
+        self.children = ([_drawn(self.near)]
+                         + [_drawn(node) for node in self.impostors])
+        if shade is not None:
+            self.lit_by(shade)
+
+    def _table(self, positions: Any, yaws: Any, heights: Any,
+               species_id: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """The arrays of a table of trees, checked: one yaw, height and species for each tree,
+        and each species one the forest has. ``species_id`` defaults to dealing them round-robin."""
+        positions = np.asarray(positions, np.float32).reshape(-1, 3)
+        yaws = np.asarray(yaws, np.float32).reshape(-1)
+        heights = np.asarray(heights, np.float32).reshape(-1)
+        count = len(positions)
+        if not count == len(yaws) == len(heights):
+            raise ValueError(
+                "a forest of %d trees needs %d yaws and %d heights, not %d and %d"
+                % (count, count, count, len(yaws), len(heights)))
+        if species_id is None:
+            species_id = np.arange(count) % len(self.species)
+        kinds = np.asarray(species_id, int).reshape(-1)
+        if len(kinds) != count or (count and (kinds.min() < 0 or kinds.max() >= len(self.species))):
+            raise ValueError(
+                "a forest of %d trees needs a species for each, from the %d it has"
+                % (count, len(self.species)))
+        return positions, yaws, heights, kinds
+
+    def _tabulate_cards(self) -> list[InstancedBillboards]:
+        """Work out which trees each species' cards are chosen from, making a card node for a
+        species that has trees and has had none; returns the nodes made."""
+        made = []
+        self._card_tables = {}
         for index, entry in enumerate(self.species):
             mine = self.species_id == index
             if not mine.any():
                 continue
-            self.impostors.append(InstancedBillboards(
-                self.positions[mine], self.yaws[mine], self.heights[mine],
-                entry.impostor, width=entry.cardWidth, near_fade=True))
-            self._card_tables.append((self.positions[mine], self.yaws[mine],
-                                      self.heights[mine], mine))
-        self.children = ([_drawn(self.near)]
-                         + [_drawn(node) for node in self.impostors])
+            if index not in self._cards:
+                node = InstancedBillboards(
+                    self.positions[mine], self.yaws[mine], self.heights[mine],
+                    entry.impostor, width=entry.cardWidth, near_fade=True)
+                self._cards[index] = node
+                self.impostors.append(node)
+                made.append(node)
+            self._card_tables[index] = (self.positions[mine], self.yaws[mine],
+                                        self.heights[mine], mine)
+        return made
+
+    def replant(self, positions: Any, yaws: Any, heights: Any, species_id: Any = None,
+                shade: Any = None) -> None:
+        """Replace every tree with another table, keeping the models and textures.
+
+        The arguments are those of the constructor. The nodes that draw the trees, and what
+        they have made on the GPU, stay as they are; what is drawn is chosen from the new
+        trees at the next :meth:`update`. A table that does not fit is refused and the forest
+        is left as it was.
+        """
+        self.positions, self.yaws, self.heights, self.species_id = self._table(
+            positions, yaws, heights, species_id)
+        positions, yaws, heights = self.positions, self.yaws, self.heights
+        self.shades = None
+        near = self.near
+        near.all_pos, near.all_yaw, near.all_scale = positions, yaws, heights
+        near.all_sp, near.all_shade = self.species_id, None
+        made = self._tabulate_cards()
+        if made:
+            self.children = list(self.children) + [_drawn(node) for node in made]
+        self._chosen_at = None
         if shade is not None:
             self.lit_by(shade)
 
@@ -310,9 +358,12 @@ class VegetationField(Group):
         self._chosen_facing = None if way is None else way.copy()
         self._chosen_planes = None if planes is None else planes.copy()
         self.near.update(float(at[0]), float(at[2]), radius=self.near_radius)
-        for node, (points, yaws, heights, mine) in zip(self.impostors,
-                                                       self._card_tables,
-                                                       strict=True):
+        for index, node in self._cards.items():
+            if index not in self._card_tables:
+                node.update_instances(np.zeros((0, 3), np.float32), np.zeros(0, np.float32),
+                                      np.zeros(0, np.float32), None)
+                continue
+            points, yaws, heights, mine = self._card_tables[index]
             keep = self._cards_in_view(points, at, way, planes)
             lit = None if self.shades is None else self.shades[mine][keep]
             node.update_instances(points[keep], yaws[keep], heights[keep], lit)
@@ -392,10 +443,13 @@ def _drawn(geometry: Any) -> Any:
     """A vegetation node wrapped so the scenegraph will render it.
 
     The instanced nodes drive their own program and need no material, but the
-    pass reaches geometry through a Shape and would not otherwise see them.
+    pass reaches geometry through a Shape and would not otherwise see them. The
+    shape casts no shadow: the nodes are drawn into no shadow map, and a bound
+    wide enough for a forest would stretch every cascade of a sun's shadows over
+    all of it.
     """
     from OpenGLContext.scenegraph.appearance import Appearance
     from OpenGLContext.scenegraph.material import Material
     from OpenGLContext.scenegraph.shape import Shape
     return Shape(geometry=geometry,
-                 appearance=Appearance(material=Material()))
+                 appearance=Appearance(material=Material()), castShadow=False)

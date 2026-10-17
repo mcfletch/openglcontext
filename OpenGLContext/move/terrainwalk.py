@@ -132,6 +132,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
     #: thinnest collider diameter or a fast walk tunnels straight through it, so the
     #: displacement is split into steps no longer than this before resolving trunks.
     collide_substep = 0.35
+    #: Sources of colliders that come and go; see :meth:`add_collider_source`.
+    _tw_sources: Sequence[Callable[[float, float, float], tuple[Any, Any]]] = ()
     #: Cap on swept substeps per frame, so a very fast fly doesn't run the collision
     #: pass hundreds of times (beyond this a step may tunnel; acceptable at that speed).
     collide_max_substeps = 8
@@ -144,8 +146,54 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         p = self.platform.position
         return float(p[0]), float(p[2])
 
+    def add_collider_source(self, source: Callable[[float, float, float],
+                                                    tuple[Any, Any]]) -> None:
+        """Add colliders that come and go as the walker moves, such as streamed rocks.
+
+        ``source(x, z, reach)`` answers ``(positions, radii)``, an ``(N, 3)`` array and an
+        ``(N,)`` array in the form of ``init_walk``'s, for the colliders within ``reach``
+        metres of ``(x, z)``. It is asked at every collision step, so it should answer
+        from what it has kept. It may be called from the thread the avatar steps on.
+        """
+        self._tw_sources = [*self._tw_sources, source]
+
+    def _push_from(self, x: float, z: float, positions: Any, radii: Any) -> tuple[float, float]:
+        """Push (x, z) out of the deepest of these colliders it lies inside."""
+        positions = np.asarray(positions, np.float32)
+        if not len(positions):
+            return x, z
+        dx = x - positions[:, 0]
+        dz = z - positions[:, 2]
+        bp = self.collide_broadphase
+        near = (np.abs(dx) < bp) & (np.abs(dz) < bp)
+        if not np.any(near):
+            return x, z
+        dx, dz = dx[near], dz[near]
+        r = np.asarray(radii, np.float32)[near] + self.player_radius
+        d2 = dx * dx + dz * dz
+        k = int(np.argmax(r * r - d2))
+        if r[k] * r[k] > d2[k]:
+            d = math.sqrt(d2[k])
+            if d < 1e-4:
+                x += r[k]
+            else:
+                push = (r[k] - d) / d
+                x += dx[k] * push
+                z += dz[k] * push
+        return x, z
+
     def _push_out(self, x: float, z: float) -> tuple[float, float]:
-        """Push (x, z) out of the deepest collider it lies inside (one resolve)."""
+        """Push (x, z) out of the deepest collider it lies inside (one resolve).
+
+        The fixed colliders first, then each source of colliders that come and go.
+        """
+        x, z = self._push_out_fixed(x, z)
+        for source in self._tw_sources:
+            x, z = self._push_from(x, z, *source(x, z, self.collide_broadphase))
+        return x, z
+
+    def _push_out_fixed(self, x: float, z: float) -> tuple[float, float]:
+        """Push (x, z) out of the deepest fixed collider it lies inside."""
         cpos = self._tw_cpos
         grid = self._tw_grid
         if cpos is None or not len(cpos) or grid is None:

@@ -194,8 +194,11 @@ def _warn_no_context_once() -> None:
                     "context is current at release; falling back to GC reclamation.")
 
 
-def _make_dispose(drawable: Any) -> Callable[[], None]:
+def _make_dispose(drawable: Any, own_materials: bool = True) -> Callable[[], None]:
     """Build the drawable's `dispose`: delete its GL buffers/textures, once.
+
+    `own_materials` is whether the textures of the drawable's materials belong
+    to it. Tiles generated from shared materials leave them to their owner.
 
     Idempotent (a second call is a no-op) and guarded against there being no current
     context and against resources that were never uploaded or are already freed.
@@ -216,6 +219,8 @@ def _make_dispose(drawable: Any) -> Callable[[], None]:
         for shape in _drawable_shapes(drawable):
             geometry = shape.geometry
             _dispose_mesh_gpu(cache, geometry)
+            if not own_materials:
+                continue
             for appearance in (getattr(geometry, 'appearance', None),
                                getattr(shape, 'appearance', None)):
                 material = getattr(appearance, 'material', None)
@@ -236,9 +241,16 @@ class GLTileUploader:
     landscape it is part of. Settable after the uploader is built, and it has to
     be: a world reads its tileset to stand the streamer up and reads it again to
     find the landscape.
+
+    ``own_materials`` is whether releasing a tile deletes the textures of its
+    materials. A baked tile's maps come from its own images, so they go with it;
+    tiles made from materials the generator shares keep them for the next tile.
     """
 
     ground: Any = None
+
+    def __init__(self, own_materials: bool = True) -> None:
+        self.own_materials = own_materials
 
     def upload(self, tile: "RuntimeTile",
                payload: "tuple[_Scene, int]") -> "tuple[Any, int]":
@@ -262,7 +274,7 @@ class GLTileUploader:
             mount_ground(drawable, self.ground,
                          material=getattr(scene, 'materials', {}).get(GROUND_MATERIAL),
                          model=m.T)
-        drawable.dispose = _make_dispose(drawable)
+        drawable.dispose = _make_dispose(drawable, self.own_materials)
         return drawable, nbytes
 
     def release(self, drawable: Any) -> None:

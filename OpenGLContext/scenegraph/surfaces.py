@@ -564,7 +564,13 @@ def placed(geometry: Geometry, translation: Sequence[float] = (0.0, 0.0, 0.0),
 
 
 def merge(parts: Sequence[Geometry]) -> Geometry:
-    """One mesh of every part, for one shape: a floor's border, a frame's four sides."""
+    """One mesh of every part, for one shape: a floor's border, a frame's four sides.
+
+    No parts make an empty mesh.
+    """
+    if not parts:
+        return Geometry(np.zeros((0, 3), 'f'), np.zeros((0, 3), 'f'), np.zeros((0, 2), 'f'),
+                        np.zeros((0, 4), 'f'), np.zeros(0, np.uint32))
     offsets = np.cumsum([0] + [len(part.positions) for part in parts[:-1]])
     return Geometry(
         np.concatenate([part.positions for part in parts]),
