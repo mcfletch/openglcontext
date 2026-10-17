@@ -18,6 +18,7 @@ import numpy as np
 from OpenGLContext.loaders.tiles3d.generated import GeneratedTileset, TileGenerator
 from OpenGLContext.loaders.tiles3d.gltf_uploader import GLTileUploader
 from OpenGLContext.loaders.tiles3d.runtime import TilesetRuntime
+from OpenGLContext.loaders.tiles3d.tileprocess import TileProcesses
 from OpenGLContext.scenegraph.group import Group
 
 __all__ = ['GeneratedTiles']
@@ -36,6 +37,13 @@ class GeneratedTiles(Group):
     generator reports for each tile. ``max_sse`` is the screen-space error in
     pixels the runtime tolerates, and ``fovy`` the camera's vertical field of
     view in radians that error is measured against.
+
+    ``maker`` makes the tiles in child processes, which keeps a busy render thread from
+    slowing them: it is ``("package.module:function", args)``, the factory each of
+    ``processes`` children calls to build the object whose ``make(key)`` returns a tile's
+    plain data, and the generator then defines ``assemble(key, payload)`` (see
+    :mod:`OpenGLContext.loaders.tiles3d.tileprocess`). Each process serves one worker
+    thread, so ``workers`` is ``processes`` then.
     """
 
     def __init__(self, generator: TileGenerator, reach: float,
@@ -43,10 +51,14 @@ class GeneratedTiles(Group):
                  memory_budget: int = 256 * 1024 * 1024, max_sse: float = 16.0,
                  fovy: Optional[float] = None, max_uploads_per_update: int = 4,
                  workers: int = 2, own_materials: bool = False,
+                 maker: Optional[tuple[str, tuple[Any, ...]]] = None, processes: int = 2,
                  **named: Any) -> None:
         super().__init__(**named)
         self.fovy = math.radians(45.0) if fovy is None else fovy
-        self.tileset = GeneratedTileset(generator, reach, retain)
+        self.processes = None if maker is None else TileProcesses(maker[0], maker[1], processes)
+        if self.processes is not None:
+            workers = processes
+        self.tileset = GeneratedTileset(generator, reach, retain, self.processes)
         self.runtime = TilesetRuntime(
             self.tileset, self.tileset.loader, GLTileUploader(own_materials),
             memory_budget=memory_budget, fovy=self.fovy, max_sse=max_sse,
@@ -84,6 +96,8 @@ class GeneratedTiles(Group):
     def shutdown(self) -> None:
         """Stop the workers that make the tiles."""
         self.runtime.shutdown()
+        if self.processes is not None:
+            self.processes.close()
 
     def dispose(self) -> None:
         """Delete the GL objects of every tile drawn, with the context current."""

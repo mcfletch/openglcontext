@@ -161,7 +161,9 @@ OpenGLContext/
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
 │                     # (reader.py: the SceneReader registered for it;
 │                     # generated.py: a tileset whose tiles a generator makes
-│                     # as the camera nears them -- docs/tiles3d.rst#tiles3d-generated)
+│                     # as the camera nears them -- docs/tiles3d.rst#tiles3d-generated;
+│                     # tileprocess.py: worker processes that make them --
+│                     # docs/tiles3d.rst#tiles3d-processes)
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
 │   │                 # modes and views a definition declares -- no GL

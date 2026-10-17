@@ -299,6 +299,48 @@ tileset, so the node makes its tiles again at the next ``update_for_camera``.
 ``shutdown()`` stops the workers. Call both when the world is taken out of a
 scene that goes on, ``shutdown`` alone when the program ends.
 
+.. _tiles3d-processes:
+
+Tiles made in worker processes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``workers`` are threads, and the threads of one process share an interpreter
+lock. While the render thread is running Python, a tile that takes 0.3 s alone
+takes several seconds, and the tiles arrive after the camera has passed them.
+``maker=("package.module:function", args)`` has the tiles built in ``processes``
+child processes (two by default) instead:
+
+.. code-block:: python
+
+   class Hill:
+       MAKER = "mygame.tiles:TileMaker"
+
+       def assemble(self, key, payload):
+           """Nodes from what a child made, on a worker thread of this process."""
+           return SimpleNamespace(group=Group(children=[...])), payload.nbytes
+
+   terrain = GeneratedTiles(Hill(), reach=250.0, maker=(Hill.MAKER, (seed,)))
+
+   # in mygame/tiles.py, run in each child
+   class TileMaker:
+       def __init__(self, seed): ...
+       def make(self, key):
+           """The tile's arrays, and whatever else pickles; no node, no GL call."""
+
+Each child calls the factory once, with ``args``, and ``make(key)`` for each tile
+it is given; the payload goes back to the generator's ``assemble(key, payload)``,
+which builds the nodes that share the parent's materials and returns the same
+``(scene, nbytes)`` as ``generate``. ``generate`` is then not called. A child is a
+new interpreter started with ``python -m``, so it holds no GL context and the
+program's main module is not run again in it. It talks to the parent over a
+loopback socket that needs a token the parent made for it, and ends when the
+socket closes. Anything the payload holds has to pickle; a factory that raises, a
+``make`` that raises and a child that stops each raise ``TileProcessError`` for
+the tile, which is asked for again at a later update, and a stopped child is
+replaced. ``shutdown()`` stops the children;
+:class:`~OpenGLContext.loaders.tiles3d.tileprocess.TileProcesses` is the pool
+itself, for use without the node.
+
 ``GeneratedTileset`` is the tree underneath, usable with ``TilesetRuntime``
 directly. Its root has no content and always refines; its children are the
 tiles made so far, each a leaf. ``TilesetRuntime.discard(tile)`` releases what
@@ -306,7 +348,7 @@ a tile that has left the tree drew, and ignores a load of it still in flight.
 ``GeneratedTileset.clear()`` drops every tile made so far and the cached
 generator results, so a restarted scene regenerates from nothing.
 
-``openglcontext-hill-runner`` streams its hill this way.
+``openglcontext-hill-runner`` streams its hill this way, with the tiles made in worker processes.
 
 .. _tiles3d-reach:
 

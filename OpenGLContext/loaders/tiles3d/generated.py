@@ -19,20 +19,26 @@ The generator is any object with three methods:
     memory budget. Called on a worker thread, so it builds nodes and arrays and
     makes no GL call.
 
+A generator whose tiles are costly to build can have them made in child processes
+(:class:`~OpenGLContext.loaders.tiles3d.tileprocess.TileProcesses`) instead of
+``generate``: it then also defines ``assemble(key, payload)``, which turns the plain
+data a child's maker returned into the same ``(scene, nbytes)``, on a worker thread.
+
 :class:`~OpenGLContext.scenegraph.generatedtiles.GeneratedTiles` is the node
 that streams one.
 """
 from collections.abc import Hashable, Iterable
-from typing import Any, NamedTuple, Optional, Protocol
+from typing import Any, NamedTuple, Optional, Protocol, cast
 
 import numpy as np
 
 from OpenGLContext.loaders.tiles3d.boundingvolume import SphereBV
+from OpenGLContext.loaders.tiles3d.tileprocess import TileProcesses
 from OpenGLContext.loaders.tiles3d.tileset import (
     BoundingVolume, RuntimeTile, RuntimeTileset,
 )
 
-__all__ = ['GeneratedTileset', 'TileChanges', 'TileGenerator']
+__all__ = ['AssemblingGenerator', 'GeneratedTileset', 'TileChanges', 'TileGenerator']
 
 #: A geometric error so large that the root refines at any distance.
 _ALWAYS_REFINE = 1.0e12
@@ -55,6 +61,13 @@ class TileGenerator(Protocol):
     def generate(self, key: Any) -> tuple[Any, int]: ...
 
 
+class AssemblingGenerator(TileGenerator, Protocol):
+    """A generator whose tiles are made in child processes: ``assemble`` is given what the
+    child's maker returned for ``key`` and answers the tile's ``(scene, nbytes)``."""
+
+    def assemble(self, key: Any, payload: Any) -> tuple[Any, int]: ...
+
+
 class TileChanges(NamedTuple):
     """The tiles one :meth:`GeneratedTileset.ensure` made, and the ones it dropped."""
 
@@ -73,7 +86,8 @@ class GeneratedTileset(RuntimeTileset):
     """
 
     def __init__(self, generator: TileGenerator, reach: float,
-                 retain: Optional[float] = None) -> None:
+                 retain: Optional[float] = None,
+                 processes: Optional[TileProcesses] = None) -> None:
         retain = reach * 1.25 if retain is None else retain
         if retain < reach:
             raise ValueError('retain (%s m) is less than reach (%s m), so a tile '
@@ -83,6 +97,8 @@ class GeneratedTileset(RuntimeTileset):
                            None, np.identity(4), [])
         super().__init__(root, _ALWAYS_REFINE, {'version': '1.1'})
         self.generator = generator
+        #: Child processes that make the tiles' content, or None to have ``generate`` do it.
+        self.processes = processes
         self.reach = float(reach)
         self.retain = float(retain)
         self._tiles: dict[Hashable, RuntimeTile] = {}
@@ -113,6 +129,9 @@ class GeneratedTileset(RuntimeTileset):
 
     def loader(self, tile: RuntimeTile) -> tuple[Any, int]:
         """A tile's content from the generator: the ``loader_fn`` the runtime takes."""
+        if self.processes is not None:
+            generator = cast(AssemblingGenerator, self.generator)
+            return generator.assemble(tile.content_key, self.processes.make(tile.content_key))
         return self.generator.generate(tile.content_key)
 
     def _make(self, key: Hashable) -> RuntimeTile:
