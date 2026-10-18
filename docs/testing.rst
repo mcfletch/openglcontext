@@ -44,8 +44,8 @@ The plugin provides three fixtures:
    A hidden core-profile 3.3 window, 64×64 pixels, current for the test.
 ``gl_context_compat``
    The same in the compatibility profile, for fixed-function code such as
-   ``glFrustum``, display lists and the GLU tessellator. It skips where the
-   driver returns a core context for a compatibility request.
+   ``glFrustum`` and display lists. It skips where the driver returns a core
+   context for a compatibility request.
 ``gl_window``
    The factory the other two use, for a test that needs a different size,
    profile or window hint. Every window it makes is destroyed when the test
@@ -862,9 +862,10 @@ it to the directory it was named in, and a file is written through
 ``OpenGLContext.atomicfiles``. The open audit (``OpenGLContext.testing.
 openaudit``) is a ``sys.audit`` hook that charges each file opened to the
 innermost module of a checked package on the stack, and records it where
-that module is not a sanctioned opener. Opens the import system or traceback
-formatting make on a module's behalf, a package's own data files and file
-descriptors are not recorded. A package name sanctions every module in it.
+that module is not a sanctioned opener. Opens made on a module's behalf by
+the import system, by ``ctypes`` searching for a shared library, or by
+traceback formatting are not recorded, and neither are a package's own data
+files and file descriptors. A package name sanctions every module in it.
 
 ``open_audit = "fail"`` fails the test that opened such a file, at teardown,
 naming the module, the line and the path; ``"report"`` lists each as an

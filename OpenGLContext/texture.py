@@ -5,7 +5,6 @@ from collections.abc import Callable, Iterable, Sequence
 from typing import Any, ClassVar, Optional
 
 from OpenGL.GL import *
-from OpenGL.GLU import *
 from OpenGL.GL.ARB import texture_non_power_of_two
 from OpenGL.extensions import available
 from OpenGLContext import contextresources
@@ -620,36 +619,16 @@ class MMTexture(Texture):
         y: int,
         image: Any,
     ) -> None:
-        """define the texture's parameters...
-        components -- number of components (3 or 4 for
-            RGB and RGBA respectively)
-        format -- GL_RGB, GL_RGBA, GL_LUMINANCE
-        x,y -- dimensions of the image
-        image -- string, data in raw (unencoded) format
-        """
-        self.components = components
-        # make our ID current
-        glBindTexture(GL_TEXTURE_2D, self.texture)
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-        # copy the texture into the current texture ID
-        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+        """Store the image as :meth:`Texture.store` does, and its mipmap chain
 
-        gluBuild2DMipmaps(
-            GL_TEXTURE_2D,
-            components,
-            x,
-            y,
-            format,
-            GL_UNSIGNED_BYTE,
-            image,
-        )
+        See:
+            glGenerateMipmap
+        """
+        super().store(components, format, x, y, image)
+        glGenerateMipmap(GL_TEXTURE_2D)
 
     def ensurePow2(self, image: Any) -> Any:
-        """Ensure that the PIL image is pow2 x pow2 dimensions
-
-        Mip-mapping does this already if I'm not mistaken, so
-        we just return image unchanged.
-        """
+        """Return the image unchanged: a texture of any size has mipmaps."""
         return image
 
 

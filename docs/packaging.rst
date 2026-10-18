@@ -155,17 +155,19 @@ appears in an ELF header. The package names are declared in
 
 Only libraries that a graphical session does not already provide need
 declaring. A machine running X11 has ``libX11``, and one running Wayland has
-``libwayland-client``. Neither is certain to have GLU, which only OpenGL
-software uses, or ``libdecor``, without which a Wayland window has no title
-bar and cannot be moved or closed.
+``libwayland-client``. Neither is certain to have ``libdecor``, without
+which a Wayland window has no title bar and cannot be moved or closed.
 
-By default a package accepts **either** windowing stack. GL, EGL and GLU are
+The engine makes no GLU call, so GLU is not declared. A game that calls GLU
+itself adds ``libglu1-mesa`` to its ``depends``.
+
+By default a package accepts **either** windowing stack. GL and EGL are
 named directly. The windowing stack is a single dependency with two
 alternatives, which any X11 or Wayland desktop already satisfies:
 
 .. code-block:: text
 
-   Depends: libegl1, libgl1, libglu1-mesa, libwayland-client0 | libx11-6
+   Depends: libegl1, libgl1, libwayland-client0 | libx11-6
    Recommends: libdecor-0-0, libdecor-0-plugin-1-gtk | libdecor-0-plugin-1-cairo
 
 On any machine that can run the game, the installed libraries meet that

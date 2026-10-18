@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Simple GLU Tess-object test w/out combine callback
+"""A letter H filled by the polygon tessellator, drawn fixed-function
 
 NOTE: This test uses legacy OpenGL (glBegin/glEnd, glColor, glVertex) and requires
 a compatibility profile context.
@@ -54,8 +54,7 @@ class TestContext( BaseContext ):
         self.renderCap( self.scale )
 
     def renderCap( self, scale = 400.0):
-        """The cap is generated with GLU tessellation routines...
-        """
+        """Draw the cap the polygon tessellator makes from the outline"""
         vertices = [
             vertex.Vertex( (x/scale,y/scale,0) ) for (x,y) in outline[::2]
         ]

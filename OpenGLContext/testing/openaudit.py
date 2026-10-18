@@ -15,8 +15,9 @@ packages, and records a finding where that frame's module is not one of the
 
 - an open made where no checked module is on the stack (the test's own
   files, pytest's, a library used directly);
-- an open made by the import system or by traceback formatting on a checked
-  module's behalf (a module imported inside a function, a traceback logged);
+- an open made by the import system, by ``ctypes`` searching for a shared
+  library, or by traceback formatting on a checked module's behalf (a module
+  imported inside a function, ``find_library``, a traceback logged);
 - a file inside a checked package's own directory: the package's data;
 - a file descriptor rather than a path.
 
@@ -42,10 +43,12 @@ from typing import Any, Optional
 __all__ = ['OpenAudit', 'OpenFinding', 'installed']
 
 #: Modules whose frames between an open and the checked module mean the open
-#: was made on that module's behalf, not by it: importing, and formatting a
-#: traceback from source.
+#: was made on that module's behalf, not by it: importing, searching for a
+#: shared library (``ctypes.util`` runs ldconfig or a compiler and reads what
+#: it writes), and formatting a traceback from source.
 _ON_BEHALF = ('importlib', '_frozen_importlib', '_frozen_importlib_external',
-              'zipimport', 'linecache', 'traceback', 'tokenize', 'inspect')
+              'zipimport', 'ctypes', 'linecache', 'traceback', 'tokenize',
+              'inspect')
 
 
 def _within(name: str, prefixes: tuple[str, ...]) -> bool:

@@ -589,9 +589,9 @@ holds many examples. These show particular techniques:
   - `Shader-based geometry scenegraph nodes
     <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/shaders.py>`__
 
-- GLU polygon tessellation
+- Polygon tessellation of faces and glyph outlines (see :doc:`Tessellation <tessellation>`)
 
-  - `Scenegraph node
+  - `Tessellator
     <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/polygontessellator.py>`__
 
   - `Usage sample

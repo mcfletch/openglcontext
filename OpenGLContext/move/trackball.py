@@ -3,7 +3,6 @@ from collections.abc import Sequence
 from typing import Any
 
 from OpenGLContext.arrays import *
-from OpenGL.GLU import *
 from OpenGL.GL import *
 
 from OpenGLContext import quaternion

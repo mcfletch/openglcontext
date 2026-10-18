@@ -95,10 +95,9 @@ class ExtensionManager(object):
         return names
 
     def listGLU(self) -> list[bytes]:
-        """Return list of GLU extension names
-
-        XXX This is currently broken with PyOpenGL 2.0.1
-        """
+        """Return list of GLU extension names, empty where GLU is not installed"""
+        if not bool(gluGetString):
+            return []
         names: list[bytes] = gluGetString(GLU_EXTENSIONS).split()
         return names
 

@@ -51,7 +51,7 @@ class TestContext(BaseContext):
     def OnInit(self):
         """Load the image on initial load of the application"""
         print("""Should see 6-sided polygon with normal-per-vertex smoothing
-    This polygon is produced using the GLU tesselator
+    This polygon is triangulated by the polygon tessellator
     from a simple linear progression of indices across
     the 6 points of the polygon.""")
         points, indices = loadData(TESTDATA)

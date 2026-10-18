@@ -27,9 +27,11 @@ os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '90')
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 
-import numpy as np
-from OpenGL.GLU import gluProject
+import types
 
+import numpy as np
+
+from OpenGLContext.events.mouseevents import projected
 from OpenGLContext import testingcontext
 from OpenGLContext.events import synthetic
 from OpenGLContext.scenegraph.basenodes import (
@@ -83,12 +85,11 @@ class DriverContext(BaseContext):
     def _pixel(self, point):
         """Where a world point is drawn, in pick-point pixels"""
         width, height = self.getViewPort()
-        return gluProject(
-            point[0], point[1], point[2],
-            np.asarray(self.platform.modelMatrix(), 'd'),
-            np.asarray(self.platform.viewMatrix(), 'd'),
-            np.asarray((0, 0, width, height), 'i'),
-        )[:2]
+        view = types.SimpleNamespace(
+            modelViewMatrix=self.platform.modelMatrix(),
+            projectionMatrix=self.platform.viewMatrix(),
+            viewport=(0, 0, width, height))
+        return tuple(projected(view, point)[:2])
 
     def _post(self, *records):
         for record in records:
