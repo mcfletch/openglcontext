@@ -13,7 +13,7 @@ the whole of that:
     ./release-assets.py --only textures # the textures alone: no Blender needed
     ./release-assets.py --install       # ...and put them in this machine's store
     ./release-assets.py --reinstall     # ...replacing the copy installed there
-    ./release-assets.py --push          # ...attach them to the release tag and
+    ./release-assets.py --push          # ...attach each to its release and
                                         #    write OpenGLContext/packs.json
 
 ``--install`` is what makes a content release testable before it is a release:
