@@ -42,17 +42,17 @@ classifiers = [
 dependencies = [
     "numpy>=2.0",
     "packaging>=22",
-    "omi_audio>=0.4.0a1",
+    "omi_audio>=0.4.0a3",
     "omi_physics>=0.4.0",
-    "opengl_extrusions>=1.0.0",
+    "opengl_extrusions>=1.2.1a1",
     "pillow",
-    "PyOpenGL>=4.0.0a1",
-    "PyOpenGL-accelerate>=4.0.0a1",
-    "PyVRML97>=2.4.0a2",
-    "PyVRML97-accelerate>=2.3.5a1",
-    "pydispatcher",
-    "TTFQuery>=2.0.1a1",
-    "simpleparse>=3.0.0a3",
+    "PyOpenGL>=4.0.0a7",
+    "PyOpenGL-accelerate>=4.0.0a7",
+    "PyVRML97>=2.4.0a3",
+    "PyVRML97-accelerate>=2.4.0a3",
+    "pydispatcher>=3.0.0a2",
+    "TTFQuery>=2.1.1",
+    "simpleparse>=3.0.1a2",
     "pygltflib>=1.16",
 ]
 
@@ -65,7 +65,7 @@ glfw = ["glfw>=2.0"]
 # Recording what the engine draws to an H.264 video file, and playing a
 # MovieTexture's H.264 movie. The encoder and the decoder are the ones in the
 # graphics driver; this brings in the bindings that reach them.
-video = ["pyopengl-video>=1.0.0a1"]
+video = ["pyopengl-video>=1.0.0a3"]
 # Basis Universal textures: glTF's KHR_texture_basisu and KTX 2 or .basis files
 # named by X3D texture nodes, transcoded to the block formats the GPU samples.
 # opengl_basisu compiles Binomial's transcoder (Apache-2.0) into a wheel. Not
