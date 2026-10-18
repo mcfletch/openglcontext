@@ -3,6 +3,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from OpenGLContext.contentpacks import catalog, fetch
+from OpenGLContext.contentpacks import store as content_store
 from OpenGLContext.loaders import cc0
 
 
@@ -117,5 +119,26 @@ def test_there_is_no_pack_directory_where_none_is_installed(tmp_path, monkeypatc
     assert cc0.pack_directory() is None or isinstance(cc0.pack_directory(), str)
 
 
-def test_the_pack_is_not_fetched_where_the_registry_does_not_offer_it():
-    assert cc0.ensure_pack(consent=lambda packs: pytest.fail('asked')) in (True, False)
+@pytest.fixture
+def empty_store(tmp_path, monkeypatch):
+    """A content store holding nothing, so no pack is installed."""
+    monkeypatch.setenv('OPENGLCONTEXT_CONTENT', str(tmp_path))
+    monkeypatch.setattr(content_store, '_from_environment', lambda: [])
+
+
+def test_the_pack_is_not_fetched_where_the_registry_does_not_offer_it(empty_store, monkeypatch):
+    monkeypatch.setattr(catalog, 'load', lambda path: [])
+    assert cc0.ensure_pack(consent=lambda packs: pytest.fail('asked')) is False
+
+
+def test_the_pack_is_not_fetched_when_consent_is_declined(empty_store, monkeypatch):
+    fetched = []
+    monkeypatch.setattr(fetch, 'fetch_pack', lambda pack, store: fetched.append(pack))
+    asked = []
+
+    def decline(packs):
+        asked.extend(packs)
+        return False
+
+    assert cc0.ensure_pack(consent=decline) is False
+    assert [pack.key for pack in asked] == [cc0.PACK] and not fetched

@@ -25,6 +25,7 @@ import numpy as np
 
 class TestContext(BaseContext):
     """Test context comparing shader and legacy rendering"""
+    __test__ = False    # a window to draw in; the name is not a test case
 
     use_shader = False  # Start with legacy rendering
 
