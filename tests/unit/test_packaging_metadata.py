@@ -153,7 +153,11 @@ class TestGeneratedArtifactsPruned:
         for generated in ('teapot_regression_diff.png', 'teapot_regression_result.png',
                           'teapot_regression_reference.png', 'debug_test.png'):
             assert not (d / generated).exists(), generated
-        assert (d / 'teapot_regression.png').exists()   # canonical baseline kept
+
+    @pytest.mark.skipif(not any((ROOT / 'tests' / 'reference_images').glob('*.png')),
+                        reason='the reference-images submodule is not checked out')
+    def test_the_canonical_baseline_is_kept(self):
+        assert (ROOT / 'tests' / 'reference_images' / 'teapot_regression.png').exists()
 
     def test_gitignore_covers_test_outputs(self):
         gi = (ROOT / '.gitignore').read_text()

@@ -15,7 +15,9 @@ from OpenGLContext.scenegraph.terrain import HeightField
 
 def _save(tmp_path, name, arr, mode):
     p = tmp_path / name
-    Image.fromarray(arr, mode=mode).save(p)
+    image = Image.fromarray(arr)
+    assert image.mode == mode
+    image.save(p)
     return str(p)
 
 

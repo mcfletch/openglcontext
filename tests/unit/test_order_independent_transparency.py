@@ -163,7 +163,7 @@ def test_text_is_not_weighted():
 
 def test_a_transparent_point_set_is_weighted_as_the_blend_gives(gl_context):
     points = (b"<Shape><Appearance><Material emissiveColor='1 1 1' transparency='0.5'/>"
-              b"<PointProperties pointSizeScaleFactor='20'/></Appearance>"
+              b"<PointProperties pointSizeScaleFactor='20' pointSizeMaxValue='20'/></Appearance>"
               b"<PointSet><Coordinate point='0 0 -3'/></PointSet></Shape>")
     plain = drawn(document(points), orderIndependentTransparency=False)[16, 16]
     weighted = drawn(document(points), orderIndependentTransparency=True)[16, 16]
@@ -181,3 +181,4 @@ def test_a_transparent_textured_surface_is_weighted_as_the_blend_gives(gl_contex
     weighted = drawn(document(textured), orderIndependentTransparency=True)[16, 16]
     assert plain[0] > 100
     assert tuple(weighted) == pytest.approx(tuple(plain), abs=4)
+

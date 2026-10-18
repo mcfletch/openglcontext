@@ -57,11 +57,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Mesa, Xvfb and the libraries GLFW links
+      - name: Install Mesa, Xvfb, freeglut and the libraries GLFW links
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            xvfb libgl1 libglx-mesa0 libgl1-mesa-dri libegl1 libegl-mesa0 \
+            xvfb freeglut3-dev libgl1 libglx-mesa0 libgl1-mesa-dri libegl1 libegl-mesa0 \
             libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6 \
             libxxf86vm1 libxext6
 
@@ -70,9 +70,13 @@ jobs:
         # 2.3.4b, TTFQuery 2.0.1a, simpleparse 3.0.0a, omi_audio 0.2.0a) is
         # published only as pre-releases, which the resolver otherwise skips
         # and then reports as unavailable.
+        #
+        # setuptools and wheel because the packaging test builds a wheel with
+        # --no-build-isolation, which builds in this environment.
         run: |
           python -m pip install --upgrade pip
           python -m pip install --pre -e .[dev]
+          python -m pip install 'setuptools>=77' wheel
 
       - name: Report the renderer under test
         # A suite with no GL target skips its way to green without having
@@ -123,6 +127,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --pre -e .[dev]
+          python -m pip install 'setuptools>=77' wheel
 
       - name: Report the renderer under test
         # Exits non-zero where no context can be made: a suite that found no GL

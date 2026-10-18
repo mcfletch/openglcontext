@@ -155,6 +155,7 @@ class OITTargets:
 
     def compose(self) -> None:
         """Lay the targets over the view in the framebuffer :meth:`begin` found bound"""
+        from OpenGLContext.passes._flat import OBJECT_ID_ATTACHMENT  # noqa: PLC0415 the pass imports this module
         x, y, width, height = self._viewport
         GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self._previous)
         GL.glViewport(x, y, width, height)
@@ -169,9 +170,15 @@ class OITTargets:
         GL.glEnable(GL.GL_BLEND)
         GL.glBlendFunc(GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA)
         GL.glBindVertexArray(self.vertex_array)
+        # The composite writes the colour only. A frame that picks draws into
+        # a second buffer of object ids, which a program with no output for it
+        # leaves undefined, so it is masked off for this draw.
+        ids_written = GL.glGetBooleani_v(GL.GL_COLOR_WRITEMASK, OBJECT_ID_ATTACHMENT).tolist()
+        GL.glColorMaski(OBJECT_ID_ATTACHMENT, False, False, False, False)
         try:
             GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)
         finally:
+            GL.glColorMaski(OBJECT_ID_ATTACHMENT, *(bool(value) for value in ids_written))
             GL.glBindVertexArray(0)
             for unit in (1, 0):
                 GL.glActiveTexture(GL.GL_TEXTURE0 + unit)

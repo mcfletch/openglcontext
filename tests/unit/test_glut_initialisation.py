@@ -21,7 +21,7 @@ import pytest
 
 from OpenGLContext.testing.glcontext import client_opens_a_window
 
-pytest.importorskip('OpenGL.GLUT')
+GLUT = pytest.importorskip('OpenGL.GLUT')
 
 from OpenGLContext.testing.paths import tests_root
 from OpenGLContext.windowsystem import glut as glutwindowsystem
@@ -61,6 +61,8 @@ class TestTheInitialisationGuard:
         assert callable(glutwindowsystem.ensureGlutInitialised)
 
 
+@pytest.mark.skipif(not GLUT.glutInit,
+                    reason='the GLUT library (freeglut) is not installed')
 @pytest.mark.skipif(not client_opens_a_window(),
                     reason='no window can be opened here (under X, run it with xvfb-run)')
 class TestAgainstARealDisplay:

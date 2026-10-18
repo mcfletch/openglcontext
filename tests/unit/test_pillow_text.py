@@ -4,11 +4,14 @@
 anti-aliased, at the pixels per unit asked, and its edges are given about
 the line's origin on the baseline.
 """
+import types
+
 import numpy as np
 import pytest
 from vrml.vrml97 import basenodes
 
 from OpenGLContext.scenegraph.text import pillowtext
+from OpenGLContext.scenegraph.text.fontprovider import TTFFontProvider
 
 
 @pytest.fixture(scope='module')
@@ -16,26 +19,84 @@ def regular():
     return pillowtext.face(basenodes.FontStyle(family=['SERIF']))
 
 
+class Catalogue:
+    """An installed-font registry holding exactly the faces it is given
+
+    ``families`` maps a family name to its ``(path, weight, italic)`` faces.
+    """
+
+    STYLES = {'PLAIN': (400, 0), 'BOLD': (700, 0), 'ITALIC': (400, 1),
+              'BOLDITALIC': (700, 1), 'LIGHT': (300, 0)}
+
+    def __init__(self, families):
+        self.families = families
+
+    def modifiersFromStyle(self, fontStyle, mode=None):
+        return self.STYLES[fontStyle.style]
+
+    def fontNameFromStyle(self, fontStyle, mode=None):
+        return fontStyle.family[0]
+
+    def fontMembers(self, name):
+        return [path for path, _weight, _italic in self.families[name]]
+
+    def fontFile(self, member):
+        return member
+
+    def metadata(self, path):
+        for faces in self.families.values():
+            for found, weight, italic in faces:
+                if found == path:
+                    return types.SimpleNamespace(modifiers=(weight, italic))
+        raise KeyError(path)
+
+
+@pytest.fixture
+def install(monkeypatch):
+    """Replace the installed fonts with the families a test names"""
+    def install(families, width=lambda path: pillowtext.NORMAL_WIDTH):
+        monkeypatch.setattr(TTFFontProvider, 'getTTFRegistry',
+                            staticmethod(lambda: Catalogue(families)))
+        monkeypatch.setattr(pillowtext, '_width', width)
+    return install
+
+
+OPEN_SANS = {'Open Sans': [
+    ('OpenSans-Light.ttf', 300, 0), ('OpenSans-CondLight.ttf', 300, 0),
+    ('OpenSans-Regular.ttf', 400, 0), ('OpenSans-Italic.ttf', 400, 1),
+    ('OpenSans-Bold.ttf', 700, 0), ('OpenSans-BoldItalic.ttf', 700, 1),
+]}
+
+
 @pytest.mark.parametrize('style, suffix', [
     ('PLAIN', 'Regular'), ('BOLD', 'Bold'), ('ITALIC', 'Italic'), ('BOLDITALIC', 'BoldItalic'),
 ])
-def test_a_style_chooses_the_face(style, suffix):
+def test_a_style_chooses_the_face(install, style, suffix):
+    install(OPEN_SANS)
     found = pillowtext.face(basenodes.FontStyle(family=['Open Sans'], style=style))
-    assert found.path.endswith('OpenSans-%s.ttf' % suffix)
+    assert found.path == 'OpenSans-%s.ttf' % suffix
     assert not found.embolden and not found.oblique
 
 
-def test_a_light_weight_is_the_family_s_own_width():
-    """Open Sans's light faces are a regular and a condensed width"""
+def test_a_light_weight_is_the_family_s_own_width(install):
+    """Of two faces at the weight asked, the one of normal width is chosen"""
+    install(OPEN_SANS, width=lambda path: 3 if 'Cond' in path else pillowtext.NORMAL_WIDTH)
     found = pillowtext.face(basenodes.FontStyle(family=['Open Sans'], style='LIGHT'))
-    assert found.path.endswith('OpenSans-Light.ttf')
+    assert found.path == 'OpenSans-Light.ttf'
 
 
-def test_a_family_without_the_slant_is_sheared():
-    """DejaVu Serif has bold but no italic here"""
-    found = pillowtext.face(basenodes.FontStyle(family=['DejaVu Serif'], style='BOLDITALIC'))
-    assert found.path.endswith('DejaVuSerif-Bold.ttf')
+def test_a_family_without_the_slant_is_sheared(install):
+    install({'Serif': [('Serif.ttf', 400, 0), ('Serif-Bold.ttf', 700, 0)]})
+    found = pillowtext.face(basenodes.FontStyle(family=['Serif'], style='BOLDITALIC'))
+    assert found.path == 'Serif-Bold.ttf'
     assert found.oblique and not found.embolden
+
+
+def test_a_family_without_the_weight_is_stroked_by_the_catalogue(install):
+    install({'Serif': [('Serif.ttf', 400, 0)]})
+    found = pillowtext.face(basenodes.FontStyle(family=['Serif'], style='BOLD'))
+    assert found.path == 'Serif.ttf'
+    assert found.embolden and not found.oblique
 
 
 def test_a_family_without_the_weight_is_stroked():

@@ -105,7 +105,7 @@ def test_a_line(gl_context, width, definition, expected):
 
 
 POINTS = (b"<X3D version='4.0'><Scene><Viewpoint position='0 0 0'/>"
-          b"<Shape><Appearance><PointProperties pointSizeScaleFactor='8'/></Appearance>"
+          b"<Shape><Appearance><PointProperties pointSizeScaleFactor='8' pointSizeMaxValue='8'/></Appearance>"
           b"<PointSet><Color color='0.5 0.5 0.5'/><Coordinate point='0 0 -1'/></PointSet></Shape>"
           b"</Scene></X3D>")
 

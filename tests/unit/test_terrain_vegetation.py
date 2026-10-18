@@ -72,7 +72,7 @@ def test_mesh_counts_and_unit_normals():
 def test_from_image(tmp_path):
     arr = (np.linspace(0, 65535, 16 * 16).reshape(16, 16)).astype(np.uint16)
     p = tmp_path / "h.png"
-    Image.fromarray(arr, mode="I;16").save(p)
+    Image.fromarray(arr).save(p)
     hf = HeightField.from_image(str(p), 8, 100.0, 50.0)
     assert hf.res == 8 and hf.extent == 100.0 and hf.relief == 50.0
     assert 0.0 <= hf.height_at(0, 0) <= 50.0
