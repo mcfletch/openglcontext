@@ -156,6 +156,13 @@ A provider registers itself when its module is imported; importing
 ``OpenGLContext.scenegraph.text.toolsfont`` registers the FontTools
 providers.
 
+A context loads its providers when the first ``Text`` is drawn: the texture
+atlas, which is the first asked, the FontTools solid and outline providers
+and the shader bitmap provider. The PyGame and GLUT bitmap providers are not
+among them. A program that wants one imports
+``OpenGLContext.scenegraph.text.pygamefont``, which imports PyGame, or
+``OpenGLContext.scenegraph.text.glutfont``.
+
 The provider returns a ``Font``. The ``Text`` node's render method calls the
 font with the string to draw. The font builds or looks up each character,
 measures it, and lays the lines out.
@@ -218,8 +225,9 @@ unchanged is not uploaded again.
 The provider registry puts this provider ahead of the other bitmap providers
 in both profiles. In the :doc:`core profile <renderpasses>` the
 fixed-function providers cannot run and are skipped. In the compatibility
-profile they are fallbacks. The GLUT bitmap provider only works inside a live
-GLUT context, because its routines crash without one.
+profile they are fallbacks, where a program has imported them. The GLUT
+bitmap provider only works inside a live GLUT context, because its routines
+crash without one.
 
 The atlas has these limits:
 

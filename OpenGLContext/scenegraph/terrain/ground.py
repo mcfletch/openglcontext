@@ -44,11 +44,14 @@ from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.passes import tonemapping
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
+    FOG_UNIFORMS,
     ViewPrograms,
     delete_gl,
+    frame_fog,
     GLLayer,
     load_program,
     texture_rgba,
+    upload_fog,
 )
 from OpenGLContext.scenegraph.vertexsemantics import LOC_NORMAL, LOC_POSITION
 from OpenGLContext.scenegraph.walk import reachable
@@ -74,12 +77,11 @@ NORMAL_STRENGTH = 1.1
 
 # Atmosphere. Kept in step with the vegetation nodes' lighting so the ground and
 # the plants on it read under one sun: a warm key light, a hemispheric sky/ground
-# ambient split, and exponential height fog.
+# ambient split. The fog is the scene's own, or the engine's aerial haze where the
+# scene binds none (``instancedgl.DEFAULT_FOG``).
 SUN_COLOR = (1.3, 1.22, 1.05)
 SKY_COLOR = (0.42, 0.52, 0.66)
 GROUND_AMBIENT = (0.18, 0.17, 0.15)
-FOG_DENSITY = 0.00016
-FOG_COLOR = (0.46, 0.58, 0.76)
 
 #: Every uniform the ground's program takes. Looked up once, by name, so a
 #: shader that gains one needs nothing here but the name.
@@ -87,8 +89,7 @@ UNIFORMS = (
     'layerColor', 'layerNormal', 'layerRough', 'controlMap', 'sunShadow',
     'numLayers', 'worldMin', 'worldSize', 'detailScale', 'macroScale',
     'normalStrength', 'uModel', 'uModelView', 'uProjection', 'uNormalMatrix',
-    'sunDirEye', 'sunColor', 'skyColor', 'groundAmbient', 'fogDensity',
-    'fogColor',
+    'sunDirEye', 'sunColor', 'skyColor', 'groundAmbient', *FOG_UNIFORMS,
 )
 
 
@@ -172,8 +173,6 @@ class GroundShading(GLLayer):
         glUniform3f(U['sunColor'], *SUN_COLOR)
         glUniform3f(U['skyColor'], *SKY_COLOR)
         glUniform3f(U['groundAmbient'], *GROUND_AMBIENT)
-        glUniform1f(U['fogDensity'], FOG_DENSITY)
-        glUniform3f(U['fogColor'], *FOG_COLOR)
 
     def ready(self) -> bool:
         """Whether the ground can be drawn, building its GL objects if need be."""
@@ -198,6 +197,7 @@ class GroundShading(GLLayer):
         glUseProgram(program)
         tonemapping.upload_display(program, tonemapping.frame_display(mode))
         ViewPrograms.apply_views(mode, U)
+        upload_fog(U, frame_fog(mode))
         glUniformMatrix4fv(U['uModel'], 1, GL_FALSE,
                            np.ascontiguousarray(model, np.float32))
         glUniformMatrix4fv(U['uModelView'], 1, GL_FALSE,

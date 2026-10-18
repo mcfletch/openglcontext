@@ -18,10 +18,11 @@ import contextlib
 import threading
 import weakref
 from types import MappingProxyType
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any, NamedTuple, Optional, TYPE_CHECKING
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid,billboard,layering
+from OpenGLContext.scenegraph import rendermodes
 from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGLContext.scenegraph import bindable
 from OpenGLContext.passes import glstate
@@ -140,15 +141,21 @@ def opaqueDrawOrder(opaque: Sequence[tuple[Any, Any]]) -> list[tuple[Any, Any]]:
     still helps.  The groups come in the order their first shape does, and
     shapes at one depth keep the order they arrived in: where two fragments
     land at the same depth the later draw is the one seen, so an order that
-    changed from run to run would change the frame.
+    changed from run to run would change the frame. A shape whose appearance
+    sets its own blend or depth state comes after the others, so a DepthMode's
+    test is made against the rest of the scene.
     """
     def material(record: Any) -> Any:
         return getattr(getattr(record[5], 'appearance', None), 'material', None)
 
+    def moded(record: Any) -> bool:
+        return rendermodes.has_modes(getattr(record[5], 'appearance', None))
+
     rank: dict[Any, int] = {}
     for _index, record in opaque:
         rank.setdefault(material(record), len(rank))
-    return sorted(opaque, key=lambda item: (rank[material(item[1])], -item[1][1][3][2]))
+    return sorted(opaque, key=lambda item: (moded(item[1]), rank[material(item[1])],
+                                            -item[1][1][3][2]))
 
 
 class GatheredPaths( NamedTuple ):
@@ -193,6 +200,9 @@ class SGObserver( object ):
     #: ``__init__`` because a pass may be built by a subclass or a test harness
     #: that never reaches this one, and a gather must work on any of them.
     _pathGeneration = 0
+    #: Weakrefs to the contexts this pass draws for; none for a pass built
+    #: without ``__init__``.
+    contexts: Sequence[Any] = ()
     #: The ``(N,8,4)`` array :meth:`_boundingArrays` stacks corners into, kept
     #: so a frame allocates nothing for a scene whose size has not changed.
     _pointsBuffer: Optional[Any] = None
@@ -224,8 +234,10 @@ class SGObserver( object ):
         """Initialize the FlatPass for this scene and set of contexts
 
         - ``scene`` - the scenegraph to manage as a flattened hierarchy
-        - ``contexts`` - set of (weakrefs to) contexts to be serviced, normally
-          a reference to ``Context.allContexts``
+        - ``contexts`` - weakrefs to the contexts this pass draws for. A node
+          with a ``bind`` method is bound to each as it comes into the scene,
+          and one with an ``unbindContext`` method unbound from each as it leaves
+          (:meth:`release`)
         """
         self.scene = scene
         self.contexts = contexts
@@ -287,6 +299,19 @@ class SGObserver( object ):
                         log.warning( '%s is inside itself; it is drawn once', child )
                         continue
                     todo.append( (child,path) )
+    def release( self, nodes: Optional[Iterable[Any]] = None ) -> None:
+        """Unbind ``nodes`` from this pass's contexts; every node it holds, given none.
+
+        What :meth:`integrate` bound: a node stepped or told of events through
+        a context stops when the context no longer draws it.
+        """
+        contexts = [ context for context in ( ref() for ref in self.contexts )
+                     if context is not None ]
+        for node in list( self.nodePaths if nodes is None else nodes ):
+            unbind = getattr( node, 'unbindContext', None )
+            if unbind is not None:
+                for context in contexts:
+                    unbind( context )
     def npFor( self, node: Any ) -> list[Any]:
         """The paths ending at ``node``, a record made for it if it has none."""
         current = self.nodePaths.get( node )
@@ -406,6 +431,7 @@ class SGObserver( object ):
         with how long the session has run rather than with what is on screen.
         """
         dropped = []
+        gone: list[Any] = []
         for _key, values in self.paths.items():
             live = []
             for v in values:
@@ -428,6 +454,8 @@ class SGObserver( object ):
                 paths[:] = live
             else:
                 del self.nodePaths[node]
+                gone.append( node )
+        self.release( gone )
         # Drop the removed paths' persistent picking ids so a later pick can't
         # resolve a stale object.
         sel_map = getattr( self, '_sel_id_map', None )
@@ -563,6 +591,17 @@ def presentFrame( context: Any ) -> Any:
     return context.SwapBuffers()
 
 
+def _lamp_distance(lamp: tuple[Any, Any, Any]) -> float:
+    """How far a bound light is from the camera, for choosing among more lights than slots:
+    nothing for a light with no place (a directional one), which is bound before any other."""
+    light_node, _path, matrix = lamp
+    location = getattr(light_node, 'location', None)
+    if location is None:
+        return -1.0
+    eye = numpy.append(numpy.asarray(location, dtype='d')[:3], 1.0) @ numpy.asarray(matrix, dtype='d')
+    return float(numpy.linalg.norm(eye[:3] / (eye[3] or 1.0)))
+
+
 class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, MultiviewPassMixin,
                 ZonesMixin, ClipPlanesMixin,
                 GeneratedTexturesMixin, ProjectorsMixin, SelectionMixin, SGObserver ):
@@ -647,6 +686,17 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         """
         if self.failures.record(where, node, err):
             log.error('Failure in %s render: %s', where, describe(err))
+
+    def recoverFromFailedDraw(self, shader: Any) -> None:
+        """Put the pass's lit program back after a draw that raised.
+
+        A geometry binds a program of its own and its vertex array, and puts
+        the pass's program back when it has drawn; one that raised in between
+        leaves them bound, and the next shape's matrices would be set at the
+        lit program's uniform locations on the wrong program.
+        """
+        glBindVertexArray(0)
+        shader.use(lit=True)
 
     def reportFailures(self) -> None:
         """Say what this pass could not draw, if anything failed at all.
@@ -852,17 +902,19 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         ``matrix`` is the light's modelview under the view ``matrix``, which
         takes its position and direction to eye space as ``glLightfv`` does.
         At most ``ceiling``; lights that are off, image-based lights and
-        texture projectors are left out.
+        texture projectors are left out. Of more lights than that, the
+        directional ones bind first and then the nearest to the camera, so a
+        row of lamps along a corridor lights the part of it in view.
         """
         lamps: list[tuple[Any, Any, Any]] = []
         for path in self.layerPaths(nodetypes.Light):
-            if len(lamps) >= ceiling:
-                break
             light_node = path[-1]
             if isinstance(light_node, x3dnodes.EnvironmentLight) or is_projector(light_node):
                 continue
             if getattr(light_node, 'on', False):
                 lamps.append((light_node, path, dot(path.transformMatrix(), matrix)))
+        if len(lamps) > ceiling:
+            lamps = sorted(lamps, key=_lamp_distance)[:ceiling]
         return lamps
 
     def maxLights(self, ceiling: int) -> int:
@@ -977,11 +1029,16 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                     self._drawInstanceGroup(group, shader, prog, id_map)
                 except Exception as err:
                     self.renderFailed('instanced', group, err)
+                    self.recoverFromFailedDraw(shader)
                 else:
                     self.stats.instanceGroups += 1
                     self.stats.instances += len(group)
                     self.stats.draws += 1
-            singles = [(None, rec) for rec in single_recs]
+            # Batching puts what it leaves alone first; a shape with its own
+            # blend or depth state is still drawn after the others.
+            singles = sorted(((None, rec) for rec in single_recs),
+                             key=lambda item: rendermodes.has_modes(
+                                 getattr(item[1][5], 'appearance', None)))
 
         self.stats.opaque += len(singles)
         self.stats.draws += len(singles)
@@ -1012,6 +1069,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                     bvolume.debugRender()
             except Exception as err:
                 self.renderFailed('opaque', node, err)
+                self.recoverFromFailedDraw(shader)
             finally:
                 self._restoreShapeId(masked)
 
@@ -1083,6 +1141,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                         bvolume.debugRender()
                 except Exception as err:
                     self.renderFailed('transparent', node, err)
+                    self.recoverFromFailedDraw(shader)
                 finally:
                     self._restoreShapeId(masked)
         try:
@@ -2297,8 +2356,13 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
             # out of the opaque pass unless transmission is disabled.
             transmissive = (self.transmissiveRecords(toRender)
                             if self.transmissionMode() != 'off' else set())
-            self.shaderRenderOpaque(toRender, id_map, skip=transmissive)
-            self.shaderRenderTransmissive(toRender, transmissive, id_map)
+            scattering = self.shaderRenderScatter(self.scatterRecords(toRender))
+            try:
+                self.shaderRenderOpaque(toRender, id_map, skip=transmissive)
+                self.shaderRenderTransmissive(toRender, transmissive, id_map)
+            finally:
+                if scattering:
+                    self.endScatter()
             self.shaderRenderTransparent(toRender, id_map)
 
             self.resetMeshDrawState()

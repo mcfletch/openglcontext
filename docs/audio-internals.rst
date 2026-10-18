@@ -271,8 +271,22 @@ graph:
 A new graph node is settled (``Node.settle``) after its first frame, so it
 starts at its fields rather than ramping there from its defaults. The work
 of a frame grows linearly with the nodes (``test_x3d_sound.py`` holds it to
-that); 100 ``SpatialSound`` nodes of three graph nodes each take about
-1.6 ms a frame.
+that); a node takes about 7 microseconds a frame.
+
+A sound past the voice budget, out of range or behind a surface that passes
+nothing is placed at gains of nought, and the graph stops rendering what only
+it reads ("What is rendered" in omi_audio's guide to its graph): a clip or
+oscillator behind it keeps time, and a delay, filter or convolver starts from
+silence when the sound is heard again. The frame's occlusion is one pass over
+every sound and every acoustic triangle (``Acoustics.occlusions``).
+
+``SoundGraph.seconds`` is how long the latest frame's update took.
+``oglc-x3d-sound-stress`` (:ref:`audio-stress`) reports it, and the mixer's
+time for each block, for a document using every sound node;
+``tests/unit/test_x3d_sound_stress.py`` holds both to linear growth with the
+document's size, the shipped 537-node document to half a 60 Hz frame of
+update and a quarter of real time on the audio thread, and all 128 of its
+sounds heard at once to less than real time.
 
 .. _mixer:
 

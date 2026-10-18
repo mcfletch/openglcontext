@@ -16,6 +16,7 @@ fails no run.
     oglc-x3d-regression --fetch          # download the corpus with its images, once
     oglc-x3d-regression                  # exit non-zero if a render regressed or failed
     oglc-x3d-regression --bless          # the renders reviewed in the report become baselines
+    oglc-x3d-regression --bless --bless-within 0.5   # those within 0.5% of their reference
     oglc-x3d-regression --only Geometry/Box --jobs 8
 
 Each document is drawn in a process of its own, and ``--jobs`` runs that
@@ -37,10 +38,11 @@ from typing import Any, Optional
 
 from OpenGLContext import atomicfiles, renderoptions
 from OpenGLContext.testing import renderregression
+from OpenGLContext.video.clock import CAPTURE_FPS
 
 __all__ = [
     'Scene', 'find_scenes', 'upstream_render', 'render_scene', 'parse_render_report',
-    'build_report', 'run', 'main',
+    'build_report', 'run', 'main', 'capture_time', 'WORLD_START', 'CAPTURE_FPS',
 ]
 
 #: The size of the renders Web3D publishes, so each sits beside its own.
@@ -59,6 +61,19 @@ MAX_PROBLEMS = 20
 #: The world time, in seconds since 1970, a document's first frame is drawn at
 #: (2000-01-01): a TimeSensor with startTime 0 has run its cycle long before.
 WORLD_START = 946684800.0
+
+
+def capture_time(frames: int) -> float:
+    """The world time, in seconds since 1970, of the frame a run of `frames`
+    frames reads back
+
+    The clock stands at :data:`WORLD_START` while the document's loads arrive
+    and moves one step of 1/:data:`CAPTURE_FPS` seconds before each frame
+    counted, and once more before the frame that is read.
+    """
+    return WORLD_START + (frames + 1) / CAPTURE_FPS
+
+
 #: Begins the line the drawing process reports on.
 REPORT_MARK = 'X3D_RENDER '
 #: The per-channel difference a pixel must exceed to count as differing from
@@ -385,7 +400,7 @@ def run(args: argparse.Namespace) -> int:
     out_dir = args.out_dir or default_out_dir()
     report = args.report or default_report_path()
     if args.bless is not None:
-        return bless(out_dir, baseline_root, args.bless)
+        return bless(out_dir, baseline_root, args.bless, args.bless_within)
     drawn = None
     if not args.report_only:
         scenes = find_scenes(root, args.archive or DEFAULT_ARCHIVES, args.only)
@@ -405,13 +420,25 @@ def run(args: argparse.Namespace) -> int:
                           args.diff_threshold, drawn)
     return renderregression.exit_status(counts, report)
 
+def close_to_reference(record: dict[str, Any], within: float) -> bool:
+    """Whether a render differs from its reference by less than `within`
+    percent of its pixels; False where it was compared with none"""
+    difference = record.get('reference_difference')
+    return difference is not None and difference < within
 
-def bless(out_dir: str, baseline_root: str, parts: Sequence[str]) -> int:
+
+def bless(out_dir: str, baseline_root: str, parts: Sequence[str],
+          within: Optional[float] = None) -> int:
     """Make the renders in `out_dir` baselines: every one, or those whose
-    document's name contains one of `parts`; 1 where there were none"""
-    promoted = renderregression.promote(
-        out_dir, baseline_root,
-        lambda _slug, record: not parts or any(part in record.get('scene', '') for part in parts))
+    document's name contains one of `parts`, and of those only the ones
+    differing from their reference by less than `within` percent where it is
+    given; 1 where there were none"""
+    def chosen(_slug: str, record: dict[str, Any]) -> bool:
+        if parts and not any(part in record.get('scene', '') for part in parts):
+            return False
+        return within is None or close_to_reference(record, within)
+
+    promoted = renderregression.promote(out_dir, baseline_root, chosen)
     for slug in promoted:
         print('  BLESS %s' % slug)
     if not promoted:
@@ -446,6 +473,9 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
                              "(default, where there is one), or Web3D's published one")
     parser.add_argument('--reference-root', metavar='DIR',
                         help="X_ITE's renders (default: tests/reference_images/x3d_xite)")
+    parser.add_argument('--bless-within', type=float, metavar='PCT',
+                        help='with --bless, bless only the renders whose difference from '
+                             'their reference is less than PCT percent of their pixels')
     parser.add_argument('--renderer', choices=('pbr', 'vrml97'), default='pbr',
                         help="the pass documents are drawn with: the PBR pass (default), "
                              "or the VRML97 pass")
@@ -458,7 +488,10 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.bless_within is not None and args.bless is None:
+        parser.error('--bless-within chooses among the renders --bless makes baselines')
     if args.render:                             # pragma: no cover - its own process
         draw_document(args.render, args.root or os.path.dirname(args.render), args.size)
         return 0

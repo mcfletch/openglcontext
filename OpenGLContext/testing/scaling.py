@@ -23,7 +23,8 @@ what is measured is the steady cost rather than the first call's setup.
 Two measures:
 
 ``'time'``
-    The work's wall-clock time, the least of ``repeat`` runs. A clock
+    The work's wall-clock time, the least of ``repeat`` runs, the two
+    sizes timed in turn so that both see the same load. A clock
     measures the machine as well as the code, so a test measuring time
     carries the ``serial`` marker and runs with the machine to itself; the
     plugin's ``check_scaling`` fixture refuses a test without it.
@@ -80,15 +81,29 @@ class Scaling:
                    self.costs[1], unit, self.ratio))
 
 
-def _cost(work: Callable[[], Any], measure: Measure, repeat: int) -> float:
-    work()
-    if measure == 'count':
-        return float(work())
-    best = float('inf')
-    for _ in range(repeat):
-        started = time.perf_counter()
+def _counts(works: list[Callable[[], Any]]) -> list[float]:
+    """What each work returns on its second run."""
+    found = []
+    for work in works:
         work()
-        best = min(best, time.perf_counter() - started)
+        found.append(float(work()))
+    return found
+
+
+def _times(works: list[Callable[[], Any]], repeat: int) -> list[float]:
+    """The least of ``repeat`` wall-clock times for each work, the works timed in turn.
+
+    Taking the sizes in turn rather than one after the other puts both through
+    the same stretch of whatever else the machine is doing.
+    """
+    for work in works:
+        work()
+    best = [float('inf')] * len(works)
+    for _ in range(repeat):
+        for index, work in enumerate(works):
+            started = time.perf_counter()
+            work()
+            best[index] = min(best[index], time.perf_counter() - started)
     return best
 
 
@@ -102,7 +117,8 @@ def measure_scaling(prepare: Callable[[int], Callable[[], Any]], *, n: int,
         raise ValueError('scaling needs n of 1 or more and a factor of 2 or '
                          'more, not n=%r, factor=%r' % (n, factor))
     sizes = (n, n * factor)
-    costs = tuple(_cost(prepare(size), measure, repeat) for size in sizes)
+    works = [prepare(size) for size in sizes]
+    costs = _counts(works) if measure == 'count' else _times(works, repeat)
     return Scaling(sizes, (costs[0], costs[1]), measure)
 
 

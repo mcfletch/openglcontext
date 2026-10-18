@@ -42,8 +42,15 @@ class TestWarnMissingDedup:
             _draco_warned = True
 
         with caplog.at_level('WARNING'):
-            draco_mod._warn_missing_once(_Res())
+            draco_mod.warn_missing_once(_Res())
         assert not [r for r in caplog.records if 'draco' in r.getMessage().lower()]
+
+
+class TestDecodeWithoutDracoPy:
+    def test_decoding_without_dracopy_raises(self, monkeypatch):
+        monkeypatch.setattr(draco_mod, 'HAVE_DRACO', False)
+        with pytest.raises(RuntimeError, match='DracoPy'):
+            draco_mod.draco_arrays(GLTF2(), _prim({'POSITION': 10}, POSITION=0), None)
 
 
 class TestDecodeBlobGuards:

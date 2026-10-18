@@ -177,7 +177,9 @@ class LayeringPassMixin:
         """Each view of `frames` as the parts of its layer stack, bottom first
 
         `frames` is the frame's views as the layout placed them, each looking
-        through its own camera. A view whose stack draws nothing is kept as one
+        through its own camera. A view styled without layers
+        (:class:`~OpenGLContext.multiview.views.ViewStyle`) draws the layer
+        navigation drives alone. A view whose stack draws nothing is kept as one
         part of :data:`NOTHING`, which clears it. Answers `frames` unchanged for
         a scene that is not drawn as a stack.
         """
@@ -185,10 +187,12 @@ class LayeringPassMixin:
         if not self.stacked():
             return list(frames)
         drawn, active = self.layerStack()
+        navigated = [plan for plan in drawn if plan.number == active]
         table = self.layerTable()
         stacked: list['ViewFrame'] = []
         for frame in frames:
-            parts = layers.stack_parts(drawn, table, frame.rect)
+            shown = drawn if frame.view.style.layers else navigated
+            parts = layers.stack_parts(shown, table, frame.rect)
             if not parts:
                 parts = [layers.LayerPart(NOTHING, (), frame.rect, True, True)]
             for part in parts:

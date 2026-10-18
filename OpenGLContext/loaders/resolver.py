@@ -54,6 +54,7 @@ __all__ = [
     'SAME_ORIGIN', 'PUBLIC_HOSTS', 'open_url',
     'DEFAULT_MAX_RESOURCE_BYTES', 'DEFAULT_MAX_IMAGE_PIXELS', 'DOWNLOAD_CHUNK_BYTES',
     'safe_url', 'is_url', 'is_local', 'require_host', 'user_agent', 'check_size', 'check_pixels', 'decode_data_uri', 'resolver_max',
+    'GZIP_MAGIC', 'gunzipped',
     'fetch_url', 'fetch_to_cache', 'stream_capped', 'stream_to', 'cached_path',
     'default_cache_dir', 'purge_cache',
 ]
@@ -637,6 +638,33 @@ def check_size(nbytes: int, max_bytes: Optional[int], what: str) -> None:
             % (what, nbytes, max_bytes))
 
 
+#: The first bytes of a gzip member (RFC 1952): its magic number and the one
+#: compression method the format defines.
+GZIP_MAGIC = b"\037\213\010"
+
+
+def gunzipped(data: bytes, max_bytes: Optional[int], what: str = 'document') -> bytes:
+    """``data`` decompressed where it is a gzip stream, else ``data`` itself.
+
+    The decompressed size is held to ``max_bytes`` as it is produced, so a
+    small file that expands without bound raises :class:`ResourceTooLarge`
+    rather than filling memory. A truncated or corrupt stream raises ValueError.
+    """
+    if not data.startswith(GZIP_MAGIC):
+        return data
+    import zlib  # noqa: PLC0415 only a compressed document needs it
+    stream = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    limit = 0 if max_bytes is None else max_bytes + 1
+    try:
+        out = stream.decompress(data, limit)
+    except zlib.error as err:
+        raise ValueError("%s is not a readable gzip stream: %s" % (what, err)) from err
+    check_size(len(out), max_bytes, what)
+    if not stream.eof:
+        raise ValueError("%s ends inside its gzip stream" % (what,))
+    return out
+
+
 def decode_data_uri(uri: str, max_bytes: Optional[int] = None) -> bytes:
     """Decode a ``data:`` URI to bytes.
 
@@ -678,6 +706,7 @@ class Resolver:
         self.max_resource_bytes = max_resource_bytes
         self._cache: dict[str, bytes] = {}
         self._buffers: dict[int, bytes] = {}   # decoded buffer bytes, keyed by buffer index
+        self._views: dict[int, bytes] = {}     # decompressed (meshopt) views, by view index
         self._resolved: dict[str, Located] = {}  # resolved location, keyed by raw uri
         self._draco_warned = False   # the "install DracoPy" warning fired once
         #: Arrays already decoded, keyed by (kind, accessor index), which every

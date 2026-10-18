@@ -113,7 +113,9 @@ class _Recording(WindowSystem):
 ])
 def test_every_window_system_opens_the_resolved_definition(module_name, class_name, system):
     """The window is made from the resolved definition, not one built locally."""
-    module = pytest.importorskip(module_name)
+    # `exc_type`: a binding whose platform library is absent -- EGL off a
+    # driver that ships one -- says so with an ImportError of its own.
+    module = pytest.importorskip(module_name, exc_type=ImportError)
     handed = []
 
     class DeclaredHere(getattr(module, class_name)):

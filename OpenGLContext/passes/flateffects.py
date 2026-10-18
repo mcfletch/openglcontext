@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import numpy as np
 from vrml.x3d import nodes as x3dnodes
 from OpenGL.GL import (
-    glEnable, glDisable, glBlendFunc, glDepthMask,
+    glEnable, glDisable, glBlendFunc, glDepthMask, glViewport,
     GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
 )
 
@@ -33,6 +33,7 @@ from OpenGLContext.scenegraph import fog as fognode
 if TYPE_CHECKING:
     from OpenGLContext.passes.bloom import BloomPass
     from OpenGLContext.passes.ibl import IBLController, IBLProbe
+    from OpenGLContext.passes.scatter import ScatterBuffer
     from OpenGLContext.passes.transmission import TransmissionBackdrops
 
 log = logging.getLogger(__name__)
@@ -81,6 +82,9 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
     # GL renderer string; 'full' captures an opaque backdrop, 'blend' fakes it.
     _transmission_mode: Optional[str] = None
     _transmission_backdrops: Optional["TransmissionBackdrops"] = None
+    #: The volume-scatter buffer (KHR_materials_volume_scatter), made on the
+    #: first frame with a scattering material in view.
+    _scatter_buffer: Optional["ScatterBuffer"] = None
 
     # Image-based lighting (environment reflection for metals). Resolved once from
     # the GL renderer; the probe is built lazily on the first 'full' frame.
@@ -110,6 +114,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         let_go(self, '_ibl_probe')
         let_go(self, '_bloom_pass')
         let_go(self, '_transmission_backdrops')
+        let_go(self, '_scatter_buffer')
         self._bloom_active = False
         super().disposeResources()
 
@@ -382,6 +387,77 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
             else:
                 glDisable(GL_BLEND)
                 glDepthMask(1)
+            shader.unuse()
+
+    # -- volume scatter (KHR_materials_volume_scatter) ---------------------
+    def scatterRecords(self, toRender: list) -> list:
+        """The opaque records whose material scatters light beneath its surface"""
+        from OpenGLContext.passes.scatter import has_volume_scatter  # noqa: PLC0415 beside its use
+        found = []
+        for record in toRender:
+            if record[0][0]:
+                continue  # routed to the blended pass
+            appearance = getattr(record[5], 'appearance', None)
+            material = getattr(appearance, 'material', None)
+            if material is not None and has_volume_scatter(material):
+                found.append(record)
+        return found
+
+    def shaderRenderScatter(self, records: list) -> bool:
+        """Draw the scattering shapes' light into the scatter buffer; whether it was drawn
+
+        The program reads the buffer for the rest of the opaque shapes, until
+        :meth:`endScatter`. Nothing is drawn where the program has no sampler
+        for it or nothing scattering is in view.
+        """
+        shader = self.shader_program
+        if not records or not getattr(shader, 'volume_scatter_supported', False):
+            return False
+        from OpenGLContext.passes import glstate  # noqa: PLC0415 beside its use
+        from OpenGLContext.passes.scatter import ScatterBuffer  # noqa: PLC0415 beside its use
+        x, y, width, height = (int(value) for value in self.viewport)
+        if self._scatter_buffer is None:
+            self._scatter_buffer = ScatterBuffer()
+        buffer = self._scatter_buffer
+        if not buffer.ensure_size(width, height):
+            log.warning('The volume-scatter buffer is not a complete framebuffer here; '
+                        'scattering materials are drawn without it')
+            let_go(self, '_scatter_buffer')
+            return False
+        shader.use(lit=True)
+        prog = shader.program
+        shader.set_scatter_pass(True)
+        try:
+            with glstate.bound_framebuffer(buffer.framebuffer or 0):
+                glViewport(0, 0, width, height)
+                buffer.begin()
+                for record in records:
+                    _key, mvmatrix, tmatrix, bvolume, path, node = record
+                    self.matrix = mvmatrix
+                    self.renderPath = path
+                    shader.set_matrices(mvmatrix, self.projection, program=prog)
+                    self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
+                    self.applyZones(shader, path, tmatrix, bvolume, prog)
+                    try:
+                        node.Render(mode=self)
+                    except Exception as err:
+                        log.error('Failure drawing a shape into the scatter buffer: %s',
+                                  getTraceback(err))
+        finally:
+            glViewport(x, y, width, height)
+            shader.set_scatter_pass(False)
+        shader.bind_scatter_buffer(buffer)
+        reset = getattr(shader, 'reset_appearance_cache', None)
+        if reset is not None:
+            reset()
+        return True
+
+    def endScatter(self) -> None:
+        """Stop the program reading the scatter buffer"""
+        shader = self.shader_program
+        if shader is not None and hasattr(shader, 'bind_scatter_buffer'):
+            shader.use(lit=True)
+            shader.bind_scatter_buffer(None)
             shader.unuse()
 
     # -- visibility culling ------------------------------------------------

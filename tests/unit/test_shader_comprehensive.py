@@ -468,6 +468,7 @@ TEST_SCENES = [
 
 class TestContext(BaseContext):
     """Test context that cycles through test scenes"""
+    __test__ = False    # a window to draw in; the name is not a test case
 
     def OnInit(self):
         """Set up the test environment"""

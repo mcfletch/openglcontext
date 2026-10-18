@@ -484,14 +484,18 @@ class TestRenders:
         assert _red(open_right) > _red(zoned_right) + 1.0
 
 
-def _cost(mode, frames=120):
-    """The harness's median frame time in ``mode``, in milliseconds."""
-    done = subprocess.run([sys.executable, COST, str(frames), mode], capture_output=True,
-                          text=True, timeout=600)
+def _costs(*modes, frames=120):
+    """The harness's median frame time in each of ``modes``, in milliseconds, by mode.
+
+    The harness draws the modes in turn, a frame of each, so a change in what
+    else the machine is doing lands on all of them.
+    """
+    done = subprocess.run([sys.executable, COST, str(frames), *modes],
+                          capture_output=True, text=True, timeout=600)
     skip_if_child_had_no_context(done.returncode, done.stderr)
     assert done.returncode == 0, done.stderr[-3000:]
-    line = [text for text in done.stdout.splitlines() if text.startswith('{')][-1]
-    return json.loads(line)['median_ms']
+    found = [json.loads(text) for text in done.stdout.splitlines() if text.startswith('{')]
+    return {entry['mode']: entry['median_ms'] for entry in found}
 
 
 class TestHelpersFailLoudly:
@@ -508,7 +512,7 @@ class TestHelpersFailLoudly:
 
     def test_a_timing_that_fails_fails(self):
         with pytest.raises(AssertionError, match='no zone cost mode'):
-            _cost('no-such-mode', frames=1)
+            _costs('no-such-mode', frames=1)
 
 
 @pytest.mark.serial
@@ -524,9 +528,9 @@ def test_zones_cost_a_fill_bound_frame_little():
     if not gl_available():
         pytest.skip('no GL context can be made here')
 
-    plain = min(_cost('plain') for _ in range(2))
-    zoned = min(_cost('zones') for _ in range(2))
-    probed = min(_cost('probes') for _ in range(2))
+    runs = [_costs('plain', 'zones', 'probes') for _ in range(2)]
+    plain, zoned, probed = (min(run[mode] for run in runs)
+                            for mode in ('plain', 'zones', 'probes'))
     assert zoned < plain * 1.3 + 0.3, (plain, zoned)
     assert probed < plain * 1.6 + 0.5, (plain, probed)
 
@@ -744,6 +748,40 @@ class TestImageLightsWhileZonesMove:
             zoned.uploadImageLights(probe)
             assert zoned.zoneProbeLayer(placed) == 1.0
         assert probe.uploads == [1]
+
+
+class TestAnImageLightEdited:
+    """An image light's intensity or rotation set (a KHR_animation_pointer
+    channel driving it) puts it in its layer again."""
+
+    def test_a_zones_light_is_uploaded_again(self):
+        light = ImageBasedLight()
+        lit = Zone(size=(10, 10, 10), settings=[ZoneEnvironment(light=light)])
+        zoned = ZonedPass([(lit, at(0))])
+        probe = zoned._ibl_probe = ImageProbe()
+        zoned._zoneLighting = ('full', probe)
+        placed = zoned.placeZones()[0]
+        zoned.zoneProbeLayer(placed)
+        zoned.uploadImageLights(probe)
+        zoned.zoneProbeLayer(placed)
+        zoned.uploadImageLights(probe)
+        assert probe.uploads == [1]
+        light.intensity = 2.0
+        assert zoned.zoneProbeLayer(placed) == 1.0
+        zoned.uploadImageLights(probe)
+        assert probe.uploads == [1, 1]
+
+    def test_the_scenes_light_is_uploaded_again(self):
+        light = ImageBasedLight()
+        zoned = ZonedPass([])
+        zoned.paths[ImageBasedLight] = [FakePath([light], at(0))]
+        probe = ImageProbe()
+        zoned.uploadImageLights(probe)
+        zoned.uploadImageLights(probe)
+        assert probe.uploads == [0]
+        light.rotation = (0.0, 0.6, 0.0, 0.8)
+        zoned.uploadImageLights(probe)
+        assert probe.uploads == [0, 0]
 
 
 class TestAnObjectChangingInPlace:

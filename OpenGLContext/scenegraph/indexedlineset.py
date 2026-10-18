@@ -62,26 +62,18 @@ class IndexedLineSet(
         indices = expandIndices(self.coordIndex)
         colors = (np.asarray(self.color.color, dtype='f')
                   if self.color and len(self.color.color) else None)
-        cidx = None
-        if colors is not None and self.colorPerVertex:
-            cidx = (expandIndices(self.colorIndex) if len(self.colorIndex) else indices)
+        cidx = (polyline_color_indices(indices, self.colorIndex, bool(self.colorPerVertex),
+                                       len(colors))
+                if colors is not None else None)
         verts: list[Any] = []
         cols: list[Any] = []
         for pi, poly in enumerate(indices):
-            pc = cidx[pi] if cidx is not None else None
             for k in range(len(poly) - 1):
                 verts.append(points[poly[k]])
                 verts.append(points[poly[k + 1]])
-                if colors is not None:
-                    if pc is not None:
-                        cols.append(colors[pc[k]])
-                        cols.append(colors[pc[k + 1]])
-                    else:
-                        ci = (self.colorIndex[pi] if len(self.colorIndex)
-                              else pi % len(colors))
-                        c = colors[int(ci)][:3]
-                        cols.append(c)
-                        cols.append(c)
+                if colors is not None and cidx is not None:
+                    cols.append(colors[cidx[pi][k]][:3])
+                    cols.append(colors[cidx[pi][k + 1]][:3])
         pos = np.ascontiguousarray(verts, dtype='f') if verts else np.zeros((0, 3), 'f')
         col = (np.ascontiguousarray(cols, dtype='f') if cols
                else np.ones((len(pos), 3), dtype='f'))
@@ -120,21 +112,8 @@ class IndexedLineSet(
             #XXX should do sanity checks here...
             if self.color and len(self.color.color):
                 colors = self.color.color
-                # One entry per polyline, or one per vertex of each polyline;
-                # the loop below tells which by whether the entry is a number.
-                colorIndices: Any
-                if self.colorPerVertex:
-                    if len(self.colorIndex):
-                        colorIndices = expandIndices( self.colorIndex )
-                    else:
-                        colorIndices = indices
-                else:
-                    if len(self.colorIndex):
-                        # each item represents a single polyline colour
-                        colorIndices = self.colorIndex
-                    else:
-                        # each item in color used in turn by each polyline
-                        colorIndices = range(len(indices))
+                colorIndices: Any = polyline_color_indices(
+                    indices, self.colorIndex, bool(self.colorPerVertex), len(colors))
                 # compile the color-friendly ILS
                 dl.start()
                 try:
@@ -319,14 +298,8 @@ class IndexedLineSet(
         color_indices: list[Any] = []
         if has_colors:
             colors = np.asarray(self.color.color, dtype='f')
-            if self.colorPerVertex:
-                color_indices = list(expandIndices(self.colorIndex)
-                                     if len(self.colorIndex) else indices)
-            elif len(self.colorIndex):
-                color_indices = [[ci] * len(indices[i])
-                                 for i, ci in enumerate(self.colorIndex)]
-            else:
-                color_indices = [[i] * len(poly) for i, poly in enumerate(indices)]
+            color_indices = polyline_color_indices(
+                indices, self.colorIndex, bool(self.colorPerVertex), len(colors))
 
         rows: list[Any] = []
         segments: list[tuple[int, int]] = []
@@ -342,13 +315,7 @@ class IndexedLineSet(
             steps = np.linalg.norm(np.diff(block[:, 0:3], axis=0), axis=1)
             block[:, 3] = np.concatenate([[0.0], np.cumsum(steps)])
             if colors is not None:
-                poly_color_indices = (color_indices[poly_idx]
-                                      if poly_idx < len(color_indices)
-                                      else [0] * len(polyline))
-                poly_colors = np.array(
-                    [colors[min(ci, len(colors) - 1)][:3]
-                     for ci in poly_color_indices], dtype='f')
-                block[:, 4:7] = poly_colors
+                block[:, 4:7] = colors[color_indices[poly_idx]][:, :3]
             rows.append(block)
             segments.append((first, len(polyline)))
             first += len(polyline)
@@ -398,21 +365,8 @@ class IndexedLineSet(
             #XXX should do sanity checks here...
             if self.color and len(self.color.color):
                 colors = self.color.color
-                # One entry per polyline, or one per vertex of each polyline;
-                # the loop below tells which by whether the entry is a number.
-                colorIndices: Any
-                if self.colorPerVertex:
-                    if len(self.colorIndex):
-                        colorIndices = expandIndices( self.colorIndex )
-                    else:
-                        colorIndices = indices
-                else:
-                    if len(self.colorIndex):
-                        # each item represents a single polyline colour
-                        colorIndices = self.colorIndex
-                    else:
-                        # each item in color used in turn by each polyline
-                        colorIndices = range(len(indices))
+                colorIndices: Any = polyline_color_indices(
+                    indices, self.colorIndex, bool(self.colorPerVertex), len(colors))
                 # compile the color-friendly ILS
                 for index in range(len(indices)):
                     polyline = indices[index]
@@ -466,6 +420,34 @@ class _LineInstanceGPU(object):
             except Exception:
                 pass
             self._instance_vao = None
+
+
+def polyline_color_indices(polylines: Sequence[Sequence[int]], color_index: Any,
+                           per_vertex: bool, color_count: int) -> list[list[int]]:
+    """The index into `color_count` colours of each vertex of each polyline
+
+    Per vertex, `color_index` is read as ``coordIndex`` is, polyline by
+    polyline, and without one the polylines' own indices are used; a
+    polyline given fewer entries than vertices carries its last entry on.
+    Per polyline, polyline i takes entry i, or i itself where there is no
+    entry; entries past the polylines are not read. An index past the
+    colours takes the last colour.
+    """
+    last = max(color_count - 1, 0)
+    given = [int(value) for value in color_index]
+    chosen: list[list[int]] = []
+    if per_vertex:
+        by_polyline = expandIndices(given) if given else [list(poly) for poly in polylines]
+        for number, polyline in enumerate(polylines):
+            entries = (by_polyline[number] if number < len(by_polyline) and by_polyline[number]
+                       else list(polyline))
+            entries = entries + [entries[-1]] * (len(polyline) - len(entries))
+            chosen.append([min(max(entry, 0), last) for entry in entries[:len(polyline)]])
+    else:
+        for number, polyline in enumerate(polylines):
+            entry = given[number] if number < len(given) else number
+            chosen.append([min(max(entry, 0), last)] * len(polyline))
+    return chosen
 
 
 def expandIndices( indices: Any ) -> list[list[int]]:

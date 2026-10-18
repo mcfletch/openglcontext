@@ -47,23 +47,27 @@ if TYPE_CHECKING:
     # points), so mypy cannot see them there; take the types from their defining
     # modules.
     from OpenGLContext.scenegraph.transform import Transform
-    from OpenGLContext.scenegraph.viewpoint import Viewpoint
+    from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint, Viewpoint
     from OpenGLContext.scenegraph.light import DirectionalLight, PointLight, SpotLight
 else:
     from OpenGLContext.scenegraph.basenodes import (
-        Transform, Viewpoint, DirectionalLight, PointLight, SpotLight,
+        Transform, Viewpoint, OrthoViewpoint, DirectionalLight, PointLight, SpotLight,
     )
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
 from OpenGLContext.scenegraph.transform import MatrixTransform
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.loaders.gltf import lod as lodext
 from OpenGLContext.loaders.gltf.accessors import (
-    _buffer_bytes, decode_data_uri, _read_normalized, resolver_max,
+    decode_data_uri, _read_normalized, resolver_max, view_bytes,
 )
 from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf import hooks as hookreg
 from OpenGLContext.loaders.gltf import imagebased, zoning
+from OpenGLContext.loaders.gltf.materials import _build_appearance, _double_sided
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
+from OpenGLContext.loaders.gltf import variants as variantsext
 from OpenGLContext.loaders.gltf.notices import document_notices
+from OpenGLContext.loaders.gltf.textures import basisu_notice
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
     look_orientation,
@@ -71,6 +75,7 @@ from OpenGLContext.loaders.gltf.transforms import (
 from OpenGLContext.loaders.gltf.animation import (
     Player, compute_world_matrices,
     _trs_animated_nodes, _build_animations, _register_morph, _register_skin,
+    PointerTargets,
 )
 
 log = logging.getLogger(__name__)
@@ -187,6 +192,26 @@ class GLTFScene(object):
         self.zones: list = []
         # environment: the scene's EXT_lights_image_based light, or None.
         self.environment: Any = None
+        # material_variants: the document's KHR_materials_variants and the
+        # shapes a selection re-dresses; see select_variant.
+        self.material_variants = variantsext.MaterialVariants()
+
+    @property
+    def variants(self) -> tuple[str, ...]:
+        """The names of the document's material variants, in document order."""
+        return self.material_variants.names
+
+    @property
+    def variant(self) -> Optional[str]:
+        """The active material variant's name, or None for none."""
+        return self.material_variants.active
+
+    def select_variant(self, variant: "str | int | None") -> None:
+        """Draw the model in material variant ``variant``: a name from
+        :attr:`variants`, an index into it, or None for each primitive's own
+        material. A primitive the variant does not map keeps its own material.
+        """
+        self.material_variants.select(variant)
 
     def advance(self, when: float) -> bool:
         """Move whatever a hook asked to be moved to ``when``, in seconds.
@@ -349,25 +374,35 @@ def gpu_instance_placements(g: "pygltflib.GLTF2", ext_dict: Optional[dict],
 
 
 def _one_camera_pose(world: np.ndarray, cam: "pygltflib.Camera") -> dict:
-    """World pose + perspective params for a single (world_matrix, camera_def).
+    """World pose and projection of a single (world_matrix, camera_def).
 
     World matrices are row-vector (p' = p @ M). A glTF camera looks down its
-    local -Z with +Y up; we report world-space position/forward/up.
+    local -Z with +Y up; we report world-space position/forward/up. An
+    orthographic camera adds ``orthographic``, its ``(xmag, ymag)``; a
+    perspective one its ``aspectRatio`` (None where it declares none).
     """
     pos = (np.array([0, 0, 0, 1.0]) @ world)[:3]
     forward = (np.array([0, 0, -1.0, 0.0]) @ world)[:3]
     up = (np.array([0, 1.0, 0, 0.0]) @ world)[:3]
-    persp = getattr(cam, 'perspective', None)
+    ortho = getattr(cam, 'orthographic', None) if getattr(cam, 'type', None) == 'orthographic' \
+        else None
+    persp = None if ortho is not None else getattr(cam, 'perspective', None)
+    projection = ortho if ortho is not None else persp
     fov = float(persp.yfov) if (persp and persp.yfov) else np.pi / 4.0
-    near = float(persp.znear) if (persp and persp.znear) else None
-    far = float(persp.zfar) if (persp and getattr(persp, 'zfar', None)) else None
-    return {
+    near = float(projection.znear) if (projection and projection.znear) else None
+    far = float(projection.zfar) if (projection and getattr(projection, 'zfar', None)) else None
+    pose = {
         'name': getattr(cam, 'name', None) or 'camera',
         'position': tuple(float(v) for v in pos),
         'forward': tuple(float(v) for v in (forward / (np.linalg.norm(forward) or 1))),
         'up': tuple(float(v) for v in (up / (np.linalg.norm(up) or 1))),
         'fov': fov, 'near': near, 'far': far,
+        'aspectRatio': float(persp.aspectRatio) if (persp and persp.aspectRatio) else None,
     }
+    if ortho is not None:
+        pose['orthographic'] = (float(ortho.xmag if ortho.xmag is not None else 1.0),
+                                float(ortho.ymag if ortho.ymag is not None else 1.0))
+    return pose
 
 
 def _camera_poses(cameras: list) -> list:
@@ -376,24 +411,34 @@ def _camera_poses(cameras: list) -> list:
 
 
 def _viewpoints_for_poses(poses: list, scene_graph: SceneGraph, used_defs: set) -> list:
-    """Build one root-space ``Viewpoint`` node per camera pose, in order.
+    """Build one root-space viewpoint node per camera pose, in order.
 
-    Each Viewpoint is authored in world space (the loader already resolved the
-    camera's world pose), so mounted directly under the scene root it reproduces
-    the glTF camera exactly. It is DEF-registered under the camera's name (made
-    unique) so it is addressable, and carries ``near``/``far`` beside its fields
-    for :meth:`Viewpoint.moveTo` to apply. Prefer names over indices, per the
-    glTF-camera intent.
+    Each is authored in world space (the loader already resolved the camera's
+    world pose), so mounted directly under the scene root it reproduces the
+    glTF camera exactly. It is DEF-registered under the camera's name (made
+    unique) so it is addressable. A perspective camera is a ``Viewpoint``
+    carrying ``near``/``far`` beside its fields for :meth:`Viewpoint.moveTo`
+    to apply, and ``aspectRatio``, which the projection does not follow: it
+    takes the viewport's shape, as X_ITE does. An orthographic camera is an
+    ``OrthoViewpoint`` whose window is ``(-xmag, -ymag, xmag, ymag)``.
     """
     viewpoints: list = []
     for i, pose in enumerate(poses):
-        vp = Viewpoint(
-            position=tuple(pose['position']),
-            orientation=look_orientation(pose['forward'], pose['up']),
-            fieldOfView=pose['fov'],
-            description=pose.get('name') or 'camera',
-        )
-        _beside_fields(vp, near=pose.get('near'), far=pose.get('far'))
+        position = tuple(pose['position'])
+        orientation = look_orientation(pose['forward'], pose['up'])
+        description = str(pose.get('name') or 'camera')
+        vp: Any
+        if 'orthographic' in pose:
+            xmag, ymag = pose['orthographic']
+            vp = OrthoViewpoint(fieldOfView=[-xmag, -ymag, xmag, ymag],
+                                nearDistance=pose.get('near') or -1.0,
+                                farDistance=pose.get('far') or -1.0, position=position,
+                                orientation=orientation, description=description)
+        else:
+            vp = Viewpoint(fieldOfView=pose['fov'], position=position,
+                           orientation=orientation, description=description)
+            _beside_fields(vp, near=pose.get('near'), far=pose.get('far'),
+                           aspectRatio=pose.get('aspectRatio'))
         scene_graph.regDefName(
             _unique_def(_def_name(pose.get('name'), i), used_defs), vp)
         viewpoints.append(vp)
@@ -538,6 +583,35 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
     return light
 
 
+#: The extensions this loader reads, by name: what a document may list in
+#: ``extensionsRequired`` without a report. ``KHR_draco_mesh_compression``
+#: needs the optional DracoPy as well, and ``KHR_texture_basisu`` the optional
+#: opengl_basisu, whose absence is reported by
+#: :func:`~OpenGLContext.loaders.gltf.textures.basisu_notice`.
+SUPPORTED_EXTENSIONS = frozenset((
+    'EXT_lights_image_based', 'EXT_mesh_gpu_instancing', 'EXT_meshopt_compression',
+    'EXT_texture_avif', 'EXT_texture_video', 'EXT_texture_webp', 'KHR_accessor_float16',
+    'KHR_accessor_float64', 'KHR_animation_pointer', 'KHR_audio_emitter',
+    'KHR_draco_mesh_compression', 'KHR_gaussian_splatting', 'KHR_implicit_shapes',
+    'KHR_lights_punctual', 'KHR_materials_anisotropy', 'KHR_materials_clearcoat',
+    'KHR_materials_diffuse_transmission', 'KHR_materials_dispersion',
+    'KHR_materials_emissive_strength', 'KHR_materials_ior',
+    'KHR_materials_iridescence', 'KHR_materials_pbrSpecularGlossiness',
+    'KHR_materials_sheen', 'KHR_materials_specular', 'KHR_materials_transmission',
+    'KHR_materials_unlit', 'KHR_materials_variants', 'KHR_materials_volume',
+    'KHR_mesh_quantization', 'KHR_meshopt_compression', 'KHR_node_visibility',
+    'KHR_texture_basisu', 'KHR_texture_transform', 'KHR_xmp_json_ld', 'MSFT_lod', 'MSFT_screencoverage',
+    'OGLC_hook', 'OGLC_materials_baked_light', 'OGLC_zone', 'OMI_environment_sky',
+    'OMI_physics_gravity',
+))
+
+
+def unread_required(g: "pygltflib.GLTF2") -> list[str]:
+    """The extensions a document requires that this loader does not read."""
+    required = getattr(g, 'extensionsRequired', None) or []
+    return sorted(str(name) for name in required if name not in SUPPORTED_EXTENSIONS)
+
+
 class _SceneBuilder:
     """Builds a :class:`GLTFScene` from a parsed glTF document.
 
@@ -553,6 +627,14 @@ class _SceneBuilder:
     def __init__(self, g: "pygltflib.GLTF2", resolver: Resolver,
                  pointer_time: Optional[float] = None) -> None:
         self.g = g
+        unread = unread_required(g)
+        if unread:
+            log.warning("glTF document lists in extensionsRequired %s, which this "
+                        "loader does not read; what depends on them is drawn "
+                        "without them", ', '.join(unread))
+        notice = basisu_notice(g)
+        if notice is not None:
+            log.warning(notice)
         self.resolver = resolver
         #: One Appearance per glTF material index, shared by its primitives.
         self.appearances: dict = {}
@@ -605,6 +687,13 @@ class _SceneBuilder:
         self.values = DocumentValues(logger=log)
         self.lod_alternatives: set = lodext.alternative_ids(g, self.values)
         self._coarser_levels = 0
+        # How many hidden (KHR_node_visibility) nodes the walk is inside: what
+        # is built there is not counted in the framing.
+        self._hiding = 0
+        # KHR_animation_pointer's targets beyond nodes and materials: the light
+        # nodes built for each punctual light, and each camera node's camera.
+        self.light_nodes: dict[int, list] = {}
+        self.camera_indices: list[int] = []
         # The OGLC_hook kinds this document's materials and nodes name, and the
         # hook_data they write. One runner for the whole load, so an unknown
         # kind is reported once rather than once per primitive.
@@ -615,6 +704,10 @@ class _SceneBuilder:
         # EXT_lights_image_based: the document's prefiltered environments, for
         # its scene and its zones to name.
         self.image_lights = imagebased.ImageLights(g, resolver)
+        # KHR_materials_variants: the names here, and each shape that maps one
+        # as mesh_shapes builds it.
+        self.material_variants = variantsext.MaterialVariants(
+            variantsext.variant_names(top_ext))
         self.emitter_nodes: dict = {}
         self._emitter_index: Optional[dict] = None
         self._zone_placed: list = []
@@ -635,6 +728,7 @@ class _SceneBuilder:
                 self.g, prim, self.resolver, self.appearances, self.tex_cache,
                 self.hooks, world)
             if shape is not None:
+                self._dress_variants(prim, shape)
                 shapes.append((shape, bounds))
                 if not casts and hasattr(shape, 'castShadow'):
                     shape.castShadow = False
@@ -653,6 +747,30 @@ class _SceneBuilder:
             self.mesh_cache[key] = shapes
         return shapes
 
+    def _dress_variants(self, primitive: Any, shape: Any) -> None:
+        """Give a primitive's mesh its material variants, and the scene its shape.
+
+        Only a Shape holding a PBRMesh is re-dressed; a hook's result is
+        whatever the hook made it, and keeps the material it was given.
+        """
+        mesh = getattr(shape, 'geometry', None)
+        if not self.material_variants.names or not isinstance(mesh, PBRMesh):
+            return
+        mapped = variantsext.primitive_mappings(
+            primitive, len(self.material_variants.names), len(self.g.materials or []))
+        if not mapped:
+            return
+        dressed = variantsext.PrimitiveVariants(default=(shape.appearance, bool(mesh.solid)))
+        for variant, material in mapped.items():
+            appearance = self.appearances.get(material)
+            if appearance is None:
+                appearance = self.appearances[material] = _build_appearance(
+                    self.g, material, self.resolver, self.tex_cache)
+            dressed.by_name[self.material_variants.names[variant]] = (
+                appearance, not _double_sided(self.g, material))
+        mesh.materialVariants = dressed
+        self.material_variants.add(shape)
+
     def _record_part(self, world: np.ndarray, shape: Any,
                      bounds: tuple[np.ndarray, np.ndarray]) -> None:
         """Note where one drawn primitive ended up, and how much of it there is.
@@ -661,7 +779,7 @@ class _SceneBuilder:
         the model: it is the same part, drawn instead. Recording it would frame
         the camera on a scene counted several times over.
         """
-        if self._coarser_levels:
+        if self._coarser_levels or self._hiding:
             return
         minimum, maximum = _world_box(world, bounds)
         positions = getattr(getattr(shape, 'geometry', None), 'positions', None)
@@ -703,20 +821,21 @@ class _SceneBuilder:
         # ``group.children`` was O(n^2) in the node/primitive count.
         children = list(group.children)
         node_ext = getattr(node, 'extensions', None) or {}
-        # KHR_node_visibility: an invisible node -- or any descendant of one --
-        # contributes no drawn geometry or light and isn't counted in the framing
-        # bounds. Visibility is the AND of this node's flag and its ancestors'
-        # (the spec requires a node drawn only if it and every ancestor is visible),
-        # so the flag threads down the recursion as `parent_visible`. The authored
-        # initial flag may itself be a KHR_animation_pointer target baked in above.
+        # KHR_node_visibility: a hidden node is built with X3D's `visible` false
+        # on its Transform, which leaves it and everything under it, lights
+        # included, out of the frame until something shows it (an animation
+        # pointer, or the application). A node is drawn only where it and every
+        # ancestor is visible, so `node_visible` threads down the recursion;
+        # what is not drawn is not counted in the framing bounds.
         node_visible = parent_visible
         node_casts = parent_casts and _casts_shadow(node)   # parent_casts: an MSFT_lod alternative of a marked node
         placements: Optional[np.ndarray] = None
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
-            if isinstance(nv, dict):
-                node_visible = node_visible and self.values.flag(
-                    nv.get('visible'), True, 'KHR_node_visibility visible')
+            if isinstance(nv, dict) and not self.values.flag(
+                    nv.get('visible'), True, 'KHR_node_visibility visible'):
+                group.visible = False
+                node_visible = False
             gi_ext = node_ext.get('EXT_mesh_gpu_instancing')
             if gi_ext:
                 placements = gpu_instance_placements(
@@ -724,26 +843,33 @@ class _SceneBuilder:
         lod_ids = lodext.level_ids(
             node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None,
             self.values, own=node_index)
-        if lod_ids and node.mesh is not None and node_visible and placements is None:
+        hidden_here = parent_visible and not node_visible
+        self._hiding += hidden_here
+        if lod_ids and node.mesh is not None and placements is None:
             children.append(self._lod_node(node, node_index, lod_ids, world,
                                            ancestry, node_visible, group,
                                            node_casts))
-        elif (node.mesh is not None and node_visible and placements is not None
+        elif (node.mesh is not None and placements is not None
               and not self._mesh_shareable(node.mesh)):
             # A hook whose result stands for one copy is run for each
             # placement, and each copy is placed on its own.
+            copies = []
             for placement in placements:
                 placed = placement @ world
                 for shape, bounds in self.mesh_shapes(node.mesh, placed, node_casts):
                     children.append(MatrixTransform(localMatrix=placement,
                                                     children=[shape]))
                     self._record_part(placed, shape, bounds)
-        elif node.mesh is not None and node_visible:
+                    copies.append((shape, bounds))
+            self._register_deformation(node, node_index, copies)
+        elif node.mesh is not None:
             shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
                 # One node per mesh primitive holding every placement, sharing
                 # the mesh's geometry and appearance -> one render record, and
-                # one instanced draw that other tiles' copies batch into.
+                # one instanced draw that other tiles' copies batch into. The
+                # shared geometry is what a morph or a skin deforms, so every
+                # copy moves with it.
                 for shape, bounds in shapes:
                     children.append(self._instanced(node, shape, placements))
                     for placement in placements:
@@ -752,20 +878,22 @@ class _SceneBuilder:
                 for shape, bounds in shapes:
                     children.append(shape)
                     self._record_part(world, shape, bounds)
-                _register_morph(node, node_index, shapes, self.g, self.node_morph)
-                _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
+            self._register_deformation(node, node_index, shapes)
         if getattr(node, 'camera', None) is not None and self.g.cameras:
             self.cameras.append((world, self.g.cameras[node.camera]))
-        if isinstance(node_ext, dict) and self.light_defs and node_visible:
+            self.camera_indices.append(node.camera)
+        if isinstance(node_ext, dict) and self.light_defs:
             li = (node_ext.get('KHR_lights_punctual', {}) or {}).get('light')
             if li is not None and 0 <= li < len(self.light_defs):
                 light = _light_node(self.light_defs[li], world, node_casts)
                 if light is not None:
                     children.append(light)
-                    self.node_light[node_index] = light   # for KHR_animation_pointer visibility
+                    self.node_light[node_index] = light
+                    self.light_nodes.setdefault(li, []).append(light)
                     wpos = (None if isinstance(light, DirectionalLight) else
                             tuple(float(v) for v in (np.array([0, 0, 0, 1.0]) @ world)[:3]))
-                    self.light_meter.append((light, wpos))
+                    if node_visible:
+                        self.light_meter.append((light, wpos))
         if self.audio_document.emitters:
             children.extend(self._audio_emitters(node))
         zone = self.zoning.zone_for(node, node_index)
@@ -773,6 +901,7 @@ class _SceneBuilder:
             children.append(zone)
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
+        self._hiding -= hidden_here
         return self._place(node, node_index, group, children, world)
 
     def _place(self, node: Any, node_index: int, group: "Transform",
@@ -823,6 +952,11 @@ class _SceneBuilder:
                     and not self.hooks.shareable(materials[index]):
                 return False
         return True
+
+    def _register_deformation(self, node: Any, node_index: int, shapes: list) -> None:
+        """Bind the node's morph weights and skin to the geometry of ``shapes``."""
+        _register_morph(node, node_index, shapes, self.g, self.node_morph)
+        _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
 
     def _instanced(self, node: Any, shape: Any, placements: np.ndarray) -> Any:
         """Every placement of one primitive as a single instanced draw.
@@ -943,10 +1077,7 @@ class _SceneBuilder:
             views = self.g.bufferViews or []
             if not (0 <= audio.bufferView < len(views)):
                 return None
-            view = views[audio.bufferView]
-            data = _buffer_bytes(self.g, view.buffer, self.resolver)
-            start = view.byteOffset or 0
-            return data[start:start + view.byteLength]
+            return bytes(view_bytes(self.g, audio.bufferView, self.resolver))
         if not audio.uri:
             return None
         if audio.uri.startswith('data:'):
@@ -1127,8 +1258,13 @@ class _SceneBuilder:
             radius = float(np.linalg.norm(framed.maximum - framed.minimum) / 2.0) or 1.0
         poses = _camera_poses(self.cameras)
         viewpoints = _viewpoints_for_poses(poses, self.scene_graph, self.used_defs)
-        animations = _build_animations(
-            g, self.resolver, self.node_transforms, self.node_light, self.appearances)
+        by_camera: dict[int, list] = {}
+        for camera, viewpoint in zip(self.camera_indices, viewpoints):
+            by_camera.setdefault(camera, []).append(viewpoint)
+        animations = _build_animations(g, self.resolver, PointerTargets(
+            g, node_transforms=self.node_transforms, node_morph=self.node_morph,
+            appearances=self.appearances, lights=self.light_nodes,
+            viewpoints=by_camera, image_lights=self.image_lights))
         scene = GLTFScene(root, center, radius,
                           camera=(poses[0] if poses else None), cameras=poses,
                           viewpoints=viewpoints, sceneGraph=self.scene_graph,
@@ -1152,6 +1288,7 @@ class _SceneBuilder:
         scene.hook_registrations = dict(self.hooks.registrations)
         scene.zones = list(self.zoning.zones)
         scene.environment = environment
+        scene.material_variants = self.material_variants
         top = getattr(g, 'extensions', None) or {}
         scene.extensions = top if isinstance(top, dict) else {}
         scene.notices = document_notices(g)

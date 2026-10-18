@@ -22,12 +22,13 @@ Rendered fixed-function in a hidden GLFW (compatibility) context.
 import numpy as np
 import pytest
 
+from vrml.vrml97 import transformmatrix
+
 from OpenGLContext.testing.glcontext import gl_available, hidden_window
 
 from OpenGLContext.scenegraph.quadrics import Sphere, Cone, lod_phi
 
 from OpenGL.GL import *
-from OpenGL.GLU import gluPerspective
 
 S = 256
 PI = np.pi
@@ -112,8 +113,8 @@ def _render(coords, indices, cull=False, view='side', dist=2.8):
         glEnable(GL_COLOR_MATERIAL)
         glColor3f(0.85, 0.85, 0.85)
         glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        gluPerspective(45, 1, 0.1, 50)
+        glLoadMatrixd(np.asarray(
+            transformmatrix.perspectiveMatrix(np.radians(45.0), 1.0, 0.1, 50.0), 'd'))
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
         # Light set here, under the identity view, so it is a fixed eye-space

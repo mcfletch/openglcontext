@@ -40,6 +40,34 @@ def test_the_engines_own_nodes():
     assert reported(scene) == []
 
 
+BLAXXUN_SURFACE = HEADER + b'''
+EXTERNPROTO NurbsSurface [
+  field SFInt32 uDimension  field SFInt32 vDimension
+  field MFFloat uKnot  field MFFloat vKnot
+  field SFInt32 uOrder  field SFInt32 vOrder
+  exposedField MFVec3f controlPoint  exposedField MFFloat weight
+  exposedField SFInt32 uTessellation  exposedField SFInt32 vTessellation
+  exposedField SFNode texCoord  field SFBool ccw  field SFBool solid
+] [ "urn:inet:blaxxun.com:node:NurbsSurface",
+    "nurbs.wrl#NurbsSurface",
+    "http://www.blaxxun.com/vrml/protos/nurbs.wrl#NurbsSurface" ]
+Shape { geometry NurbsSurface {
+  uDimension 3 vDimension 3 uOrder 3 vOrder 3
+  uKnot [ 0 0 0 1 1 1 ] vKnot [ 0 0 0 1 1 1 ]
+  controlPoint [ 0 0 0, 1 0 0, 2 0 0, 0 1 0, 1 1 1, 2 1 0, 0 2 0, 1 2 0, 2 2 0 ]
+} }
+'''
+
+
+def test_a_blaxxun_nurbs_declaration_is_the_engines_surface():
+    """The EXTERNPROTO published NURBS worlds open with names the engine's own node"""
+    scene = Loader.loads(BLAXXUN_SURFACE, 'surface.wrl')
+    surface = scene.children[0].geometry
+    assert type(surface) is basenodes.NurbsSurface
+    assert reported(scene) == []
+    assert len(surface.meshArrays().indices) >= 3
+
+
 def test_standard_nodes_are_the_engines():
     scene = Loader.loads(HEADER + b'Transform { children Shape { geometry Box {} } }', 'w.wrl')
     assert type(scene.children[0]) is basenodes.Transform

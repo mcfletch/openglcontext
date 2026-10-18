@@ -10,12 +10,11 @@ as it draws a VRML97 world. What the read found wrong is in the scene's
 """
 import logging
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any, ClassVar, Optional
 
-from vrml import node
 from vrml import x3d as vrml_x3d
-from vrml.x3d import files, readers
+from vrml.x3d import files, xite
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.loaders import base
@@ -35,6 +34,13 @@ X3D_ONLY = {
     'Contour2D': ('OpenGLContext.scenegraph.nurbsx3d', 'Contour2D'),
 }
 
+#: The engine's own nodes an X3D document may name, though X3D has no node of
+#: the name, by name: (module, class). Each is in the `OpenGLContext` component
+#: (`vrml.x3d.components`), which another browser does not have.
+EXTENSION_NODES = {
+    'CoordinateDeformer': ('OpenGLContext.scenegraph.coordinatedeformer', 'CoordinateDeformer'),
+}
+
 #: How each problem's severity is logged.
 _LEVELS = {'error': logging.ERROR, 'warning': logging.WARNING, 'info': logging.INFO}
 
@@ -44,75 +50,64 @@ def prototypes() -> "dict[str, type]":
 
     A registered class counts when it derives from the X3D declaration of its
     name; the others (a node of the same name with other fields) are left to
-    the declaration, or to the class :data:`X3D_ONLY` names. `X3DScene` is
-    the engine's scene class.
+    the declaration, or to the class :data:`X3D_ONLY` names. The engine's
+    own nodes in :data:`EXTENSION_NODES` are added. `X3DScene` is the engine's
+    scene class.
     """
     import importlib  # noqa: PLC0415 kept with its use
     from OpenGLContext.scenegraph import basenodes  # noqa: PLC0415 the registry fills at first import
     from OpenGLContext.scenegraph.scenegraph import X3DScene  # noqa: PLC0415 beside the registry
     found: "dict[str, type]" = {}
     for name, cls in basenodes.PROTOTYPES.items():
-        declared = x3d.CONCRETE_NODES.get(name)
+        declared = xite.declaration(name)
         if declared is not None and isinstance(cls, type) and issubclass(cls, declared):
             found[name] = cls
-    for name, (module, attribute) in X3D_ONLY.items():
+    for name, (module, attribute) in {**X3D_ONLY, **EXTENSION_NODES}.items():
         found[name] = getattr(importlib.import_module(module), attribute)
     found['X3DScene'] = X3DScene
     return found
 
 
-class ContainedPrototypes:
+class ContainedPrototypes(files.ExternPrototypes):
     """Reads the files a document's EXTERNPROTO URLs name, as the document's other references are read
 
     A document read from a file reads prototypes from files under its own
     folder (or a content root); one read from a URL, from its own origin
-    (:class:`~OpenGLContext.loaders.resolver.Resolver`). Each file is read
-    once per load, and a file naming prototypes in others is read the same
-    way, to :data:`vrml.x3d.files.MAX_PROTOTYPE_DEPTH` files deep. A URL the
-    policy refuses, or a file that cannot be read, is logged and the next URL
-    is tried.
+    (:class:`~OpenGLContext.loaders.resolver.Resolver`); one with no location
+    reads none. :class:`vrml.x3d.files.ExternPrototypes` chooses the prototype
+    a URL names in its file, reads each file once per load and limits how
+    deep files name others. A URL the policy refuses, or a file that cannot
+    be read, is logged and the next URL is tried.
     """
 
-    def __init__(self, prototypes: Mapping[str, type], depth: int = 0,
-                 scenes: Optional[dict[str, Any]] = None) -> None:
-        self.prototypes = prototypes
-        self.depth = depth
-        self.scenes: dict[str, Any] = {} if scenes is None else scenes
+    def __init__(self, prototypes: Mapping[str, type]) -> None:
+        super().__init__(prototypes)
+        self._resolvers: dict[str, Resolver] = {}
 
-    def __call__(self, urls: Sequence[str], baseURL: str, name: str) -> Optional[type]:
-        if self.depth >= files.MAX_PROTOTYPE_DEPTH or not baseURL:
+    def _resolver(self, baseURL: str) -> Resolver:
+        """The policy of the document at `baseURL`, which `locate` and `read` share"""
+        found = self._resolvers.get(baseURL)
+        if found is None:
+            found = self._resolvers[baseURL] = (
+                Resolver(base_url=baseURL) if is_url(baseURL)
+                else Resolver(base_dir=os.path.dirname(os.path.abspath(baseURL))))
+        return found
+
+    def locate(self, reference: str, base: str) -> Optional[str]:
+        if not base:
             return None
-        resolver = (Resolver(base_url=baseURL) if is_url(baseURL)
-                    else Resolver(base_dir=os.path.dirname(os.path.abspath(baseURL))))
-        for url in urls:
-            reference, _, fragment = str(url).partition('#')
-            if not reference:
-                continue
-            scene = self._scene(resolver, reference, baseURL)
-            if scene is None:
-                continue
-            found = scene.getProto(fragment or name)
-            if found is not None and found not in node.PENDING_PROTOTYPES:
-                return found  # type: ignore[no-any-return]  # a prototype class the scene declared
-        return None
-
-    def _scene(self, resolver: Resolver, reference: str, baseURL: str) -> Any:
         try:
-            location = str(resolver.resolve(reference))
+            return str(self._resolver(base).resolve(reference))
         except IOError as err:
-            log.warning('%s: EXTERNPROTO %s is not read: %s', baseURL, reference, err)
+            log.warning('%s: EXTERNPROTO %s is not read: %s', base, reference, err)
             return None
-        if location not in self.scenes:
-            self.scenes[location] = None
-            try:
-                data = resolver.fetch(reference)
-            except (IOError, ValueError) as err:
-                log.warning('%s: EXTERNPROTO %s is not read: %s', baseURL, reference, err)
-                return None
-            self.scenes[location] = readers.read(
-                data, name=location, prototypes=self.prototypes,
-                extern_resolver=ContainedPrototypes(self.prototypes, self.depth + 1, self.scenes))
-        return self.scenes[location]
+
+    def read(self, reference: str, base: str) -> Optional[bytes]:
+        try:
+            return self._resolver(base).fetch(reference)
+        except (IOError, ValueError) as err:
+            log.warning('%s: EXTERNPROTO %s is not read: %s', base, reference, err)
+            return None
 
 
 class X3DHandler(base.BaseHandler):

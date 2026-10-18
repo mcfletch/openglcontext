@@ -45,18 +45,26 @@ from OpenGLContext import __version__ as _engine_version
 from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.loaders.gltf import hooks as _hooks
 from OpenGLContext.loaders.gltf.splats import splat_primitive
+from OpenGLContext.loaders.gltf import variants as variantsext
 from OpenGLContext.loaders.resolver import contained_source
-from OpenGLContext.loaders.gltf.materials import GLTF_TEXTURE_KEYS, khr_transform_params
-from OpenGLContext.loaders.gltf.textures import gl_sampler
+from OpenGLContext.loaders.gltf.materials import (
+    GLTF_TEXTURE_KEYS, MATERIAL_EXTENSION_FIELDS, khr_transform_params,
+)
+from OpenGLContext.loaders.basisu import BasisImage
+from OpenGLContext.loaders.gltf.textures import (
+    BASISU_EXTENSION, IMAGE_EXTENSIONS, VIDEO_EXTENSION, gl_sampler,
+)
+from OpenGLContext.scenegraph.movietexture import MovieTexture
 from OpenGLContext.scenegraph.gaussiansplats import GaussianSplats
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture, x3d_image
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.physicalmaterial import (
-    ChannelMaterial, appearance_alpha, pbr_material, source_of,
+    NO_ATTENUATION, ChannelMaterial, appearance_alpha, pbr_material, source_of,
 )
 from OpenGLContext.scenegraph.texturemapping import (
     channel_labels, coordinate_set, transform_for, transform_matrix,
 )
+from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from vrml.x3d import nodes as x3d
 
@@ -151,8 +159,8 @@ class EncodedImage(ImageDataTexture):
     def from_path(cls, path: str, **named: Any) -> "EncodedImage":
         """Read an image file, taking its MIME type from the extension"""
         suffix = path.lower().rsplit('.', 1)[-1]
-        mime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-                'png': 'image/png', 'webp': 'image/webp'}.get(suffix, 'image/png')
+        mime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+                'webp': 'image/webp', 'avif': 'image/avif'}.get(suffix, 'image/png')
         with open(contained_source(path), 'rb') as handle:
             return cls(handle.read(), mime_type=mime, **named)
 
@@ -360,42 +368,12 @@ def _kind_for(array: np.ndarray, name: str, allowed: Sequence[int]) -> str:
 
 # --- materials ----------------------------------------------------------------
 
-# Written when the field differs from the glTF default. Each entry is
-# (extension, {json key: (material field, default)}); the reader's handler table
-# in materials.py is the other half of the pair.
-_MATERIAL_EXTENSIONS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
-    # Ours: the vertex colours on this material are light worked out when the
-    # world was built rather than a tint on the surface, so a reader adds them
-    # as emission and lets its own lights shade the surface underneath.
-    ('OGLC_materials_baked_light', {}),
-    ('KHR_materials_emissive_strength',
-     {'emissiveStrength': ('emissiveStrength', 1.0)}),
-    ('KHR_materials_ior', {'ior': ('ior', 1.5)}),
-    ('KHR_materials_specular', {'specularFactor': ('specular', 1.0),
-                                'specularColorFactor': ('specularColor', (1.0, 1.0, 1.0))}),
-    ('KHR_materials_clearcoat', {'clearcoatFactor': ('clearcoat', 0.0),
-                                 'clearcoatRoughnessFactor': ('clearcoatRoughness', 0.0)}),
-    ('KHR_materials_sheen', {'sheenColorFactor': ('sheenColor', (0.0, 0.0, 0.0)),
-                             'sheenRoughnessFactor': ('sheenRoughness', 0.0)}),
-    ('KHR_materials_transmission', {'transmissionFactor': ('transmission', 0.0)}),
-    ('KHR_materials_volume', {'thicknessFactor': ('thickness', 0.0),
-                              'attenuationColor': ('attenuationColor', (1.0, 1.0, 1.0)),
-                              'attenuationDistance': ('attenuationDistance', 0.0)}),
-    ('KHR_materials_diffuse_transmission',
-     {'diffuseTransmissionFactor': ('diffuseTransmission', 0.0),
-      'diffuseTransmissionColorFactor': ('diffuseTransmissionColor', (1.0, 1.0, 1.0))}),
-    ('KHR_materials_anisotropy', {'anisotropyStrength': ('anisotropyStrength', 0.0),
-                                  'anisotropyRotation': ('anisotropyRotation', 0.0)}),
-    ('KHR_materials_dispersion', {'dispersion': ('dispersion', 0.0)}),
-    ('KHR_materials_iridescence',
-     {'iridescenceFactor': ('iridescence', 0.0),
-      'iridescenceIor': ('iridescenceIor', 1.3),
-      'iridescenceThicknessMinimum': ('iridescenceThicknessMin', 100.0),
-      'iridescenceThicknessMaximum': ('iridescenceThicknessMax', 400.0)}),
-)
+# Written when the field differs from the glTF default; the table is the
+# reader's too (materials.MATERIAL_EXTENSION_FIELDS).
+_MATERIAL_EXTENSIONS = MATERIAL_EXTENSION_FIELDS
 
-# attenuationDistance is +inf in glTF and 0.0 in PhysicalMaterial ("no absorption"),
-# so the sentinel must not be written as a literal distance of zero.
+# attenuationDistance is +inf in glTF; PhysicalMaterial holds that as
+# NO_ATTENUATION, and 0 also means no absorption, so neither is written.
 _SENTINEL_INFINITY = ('attenuationDistance',)
 
 # Which extension a factor belongs to, so a non-default factor pulls its whole
@@ -415,6 +393,9 @@ _MATERIAL_TEXTURE_EXTENSION = {
     'anisotropy': 'KHR_materials_anisotropy',
     'diffuseTransmission': 'KHR_materials_diffuse_transmission',
     'diffuseTransmissionColor': 'KHR_materials_diffuse_transmission',
+    'retroreflection': 'KHR_materials_retroreflection',
+    'scatterStrength': 'KHR_materials_scatter',
+    'multiscatterColor': 'KHR_materials_scatter',
 }
 
 # The textureInfo key each extension gives its channel.
@@ -495,6 +476,12 @@ def _factor(value: Any) -> Any:
 
 # --- the writer ---------------------------------------------------------------
 
+#: The extension a texture needs for an image in each format the core does
+#: not allow.
+_IMAGE_EXTENSION = {mime: name for name, mime in IMAGE_EXTENSIONS}
+_KTX2_IDENTIFIER = b'\xabKTX 20\xbb\r\n\x1a\n'
+
+
 class GLTFWriter:
     """Builds a glTF 2.0 document and serializes it as GLB.
 
@@ -519,6 +506,9 @@ class GLTFWriter:
         self._nodes: list[dict] = []
         self._roots: list[int] = []
         self._extensions_used: set[str] = set()
+        self._extensions_required: set[str] = set()
+        #: Each image index written in a format only an extension allows.
+        self._image_extension: dict[int, str] = {}
         self._mesh_index: _IdentityCache[int] = _IdentityCache()
         #: Each material's glTF indices, one per alpha mode, cutoff and sidedness.
         self._material_index: _IdentityCache[dict[tuple, int]] = _IdentityCache()
@@ -528,6 +518,12 @@ class GLTFWriter:
         self.extras: dict = {}
         self._shapes: list[dict] = []
         self._sounds: list[GlobalSound] = []
+        #: EXT_texture_video uris, in the order the textures first name them.
+        self._videos: list[str] = []
+        #: The directory :meth:`write` is writing into, while it writes.
+        self._directory: Optional[str] = None
+        #: KHR_materials_variants names, in the order the meshes first map them.
+        self._variant_names: list[str] = []
 
     # -- meshes ----------------------------------------------------------------
 
@@ -605,18 +601,46 @@ class GLTFWriter:
         mode = int(getattr(mesh, 'draw_mode', 4) or 0)
         if mode != 4:                                    # TRIANGLES is the default
             primitive['mode'] = mode
-        appearance = getattr(mesh, 'appearance', None)
+        dressed = getattr(mesh, 'materialVariants', None)
+        appearance, solid = (dressed.default if dressed is not None else
+                             (getattr(mesh, 'appearance', None),
+                              bool(getattr(mesh, 'solid', True))))
+        material = self._appearance_material(mesh, appearance, solid)
+        if material is not None:
+            primitive['material'] = material
+        if dressed is not None and dressed.by_name:
+            primitive.setdefault('extensions', {})[variantsext.EXTENSION] = {
+                'mappings': self._variant_mappings(mesh, dressed)}
+            self._extensions_used.add(variantsext.EXTENSION)
+        return primitive
+
+    def _appearance_material(self, mesh: Any, appearance: Any,
+                             solid: bool) -> Optional[int]:
+        """The material index for ``mesh`` drawn in ``appearance``, or None."""
         material = getattr(appearance, 'material', None)
         if isinstance(material, ChannelMaterial):
             # With the appearance's texture as the base map where it stands in
             # for the material's own.
             material = pbr_material(appearance)
-        if material:
-            primitive['material'] = self.add_material(
-                material, alpha=appearance_alpha(appearance),
-                double_sided=not bool(getattr(mesh, 'solid', True)),
-                coordinates=texture_coordinates(appearance, mesh))
-        return primitive
+        if not material:
+            return None
+        return self.add_material(
+            material, alpha=appearance_alpha(appearance), double_sided=not solid,
+            coordinates=texture_coordinates(appearance, mesh))
+
+    def _variant_mappings(self, mesh: Any, dressed: Any) -> list[dict]:
+        """``KHR_materials_variants`` mappings: one per material, listing the
+        variants (indices into the document's variant names) that choose it."""
+        by_material: dict[int, list[int]] = {}
+        for name, (appearance, solid) in dressed.by_name.items():
+            material = self._appearance_material(mesh, appearance, solid)
+            if material is None:
+                continue
+            if name not in self._variant_names:
+                self._variant_names.append(name)
+            by_material.setdefault(material, []).append(self._variant_names.index(name))
+        return [{'material': material, 'variants': sorted(variants)}
+                for material, variants in by_material.items()]
 
     # -- materials -------------------------------------------------------------
 
@@ -625,7 +649,7 @@ class GLTFWriter:
                      double_sided: bool = False,
                      coordinates: "Optional[dict[str, tuple[int, Optional[dict]]]]" = None,
                      ) -> int:
-        """Write a `PhysicalMaterial` or `UnlitMaterial` as a glTF material
+        """Write a `PhysicalMaterial`, `SpecularGlossinessMaterial` or `UnlitMaterial` as a glTF material
 
         alpha -- the alpha mode and cutoff, which X3D puts on the Appearance
         double_sided -- True for geometry that is not `solid`
@@ -694,19 +718,35 @@ class GLTFWriter:
                 entry['name'] = name
             self._carry_extras(entry, _with_impostor(material))
             return entry
-        pbr = {
-            'baseColorFactor': [float(c) for c in material.baseColor] + [alpha],
-            'metallicFactor': float(material.metallic),
-            'roughnessFactor': float(material.roughness),
-        }
-        base_color = texture_info('baseColor')
-        if base_color is not None:
-            pbr['baseColorTexture'] = base_color
-        metallic_roughness = texture_info('metallicRoughness')
-        if metallic_roughness is not None:
-            pbr['metallicRoughnessTexture'] = metallic_roughness
-
-        entry = {'pbrMetallicRoughness': pbr}
+        glossy = isinstance(source_of(material), SpecularGlossinessMaterial)
+        if glossy:
+            # The specular/glossiness workflow, with no metallic/roughness
+            # fallback: a reader draws it as written or not at all.
+            block: dict[str, Any] = {
+                'diffuseFactor': [float(c) for c in material.diffuseColor] + [alpha],
+                'specularFactor': [float(c) for c in material.specularColor],
+                'glossinessFactor': float(material.glossiness),
+            }
+            for channel, key in (('baseColor', 'diffuseTexture'),
+                                 ('specularColor', 'specularGlossinessTexture')):
+                found = texture_info(channel)
+                if found is not None:
+                    block[key] = found
+            entry = {'extensions': {'KHR_materials_pbrSpecularGlossiness': block}}
+            self._extensions_used.add('KHR_materials_pbrSpecularGlossiness')
+        else:
+            pbr = {
+                'baseColorFactor': [float(c) for c in material.baseColor] + [alpha],
+                'metallicFactor': float(material.metallic),
+                'roughnessFactor': float(material.roughness),
+            }
+            base_color = texture_info('baseColor')
+            if base_color is not None:
+                pbr['baseColorTexture'] = base_color
+            metallic_roughness = texture_info('metallicRoughness')
+            if metallic_roughness is not None:
+                pbr['metallicRoughnessTexture'] = metallic_roughness
+            entry = {'pbrMetallicRoughness': pbr}
         if name:
             entry['name'] = name
         emissive = [float(c) for c in getattr(material, 'emissiveColor', (0, 0, 0))]
@@ -726,11 +766,11 @@ class GLTFWriter:
         if emissive_texture is not None:
             entry['emissiveTexture'] = emissive_texture
 
-        extensions = self._material_extensions(material, texture_info)
+        extensions = {} if glossy else self._material_extensions(material, texture_info)
         extensions.update(self._hook_extension(
             getattr(material, 'hook', None) or _reflector_hook(material)))
         if extensions:
-            entry['extensions'] = extensions
+            entry.setdefault('extensions', {}).update(extensions)
             self._extensions_used.update(extensions)
         self._carry_extras(entry, _with_impostor(material))
         return entry
@@ -771,7 +811,8 @@ class GLTFWriter:
             block: dict[str, Any] = {}
             for key, (attribute, default) in fields.items():
                 value = getattr(material, attribute, default)
-                if attribute in _SENTINEL_INFINITY and _close(value, 0.0):
+                if attribute in _SENTINEL_INFINITY and (_close(value, 0.0)
+                                                        or value >= NO_ATTENUATION):
                     continue
                 if not _close(value, default):
                     block[key] = _factor(value)
@@ -787,11 +828,17 @@ class GLTFWriter:
                 info = texture_info(channel)
                 if info is not None:
                     wanted[extension][key] = info
+        coat = wanted.get('KHR_materials_clearcoat', {}).get('clearcoatNormalTexture')
+        scale = float(getattr(material, 'clearcoatNormalScale', 1.0))
+        if coat is not None and not _close(scale, 1.0):
+            coat['scale'] = _factor(scale)
         return wanted
 
     # -- textures --------------------------------------------------------------
 
     def _add_texture(self, holder: Any) -> int:
+        if isinstance(holder, MovieTexture):
+            return self._add_video(holder)
         sampler = self._add_sampler(holder)
         image = self._add_image(holder)
         key = (image, sampler)
@@ -799,6 +846,13 @@ class GLTFWriter:
         if cached is not None:
             return cached
         entry: dict[str, Any] = {'source': image}
+        extension = self._image_extension.get(image)
+        if extension is not None:
+            # The only image there is, in a format the core does not allow, so
+            # the document requires the extension.
+            entry = {'extensions': {extension: {'source': image}}}
+            self._extensions_used.add(extension)
+            self._extensions_required.add(extension)
         if sampler is not None:
             entry['sampler'] = sampler
         self._textures.append(entry)
@@ -806,11 +860,29 @@ class GLTFWriter:
         self._texture_index[key] = index
         return index
 
+    def _add_video(self, holder: Any) -> int:
+        """A MovieTexture as an ``EXT_texture_video`` texture naming its first url
+
+        It has no still image to fall back to, so the document requires the
+        extension.
+        """
+        urls = [str(url) for url in holder.url]
+        if not urls:
+            raise ValueError('A MovieTexture with no url has no video to write')
+        if urls[0] not in self._videos:
+            self._videos.append(urls[0])
+        entry = {'extensions': {VIDEO_EXTENSION: {'source': self._videos.index(urls[0])}}}
+        self._extensions_used.add(VIDEO_EXTENSION)
+        self._extensions_required.add(VIDEO_EXTENSION)
+        self._textures.append(entry)
+        return len(self._textures) - 1
+
     def _add_image(self, holder: Any) -> int:
         """A texture's image: an ImageTexture's first URL as a uri, else embedded
 
-        An ``EncodedImage`` is embedded as its bytes; any other image is
-        encoded as PNG.
+        An ``EncodedImage`` is embedded as its bytes, an AVIF or WebP one
+        through its texture's ``EXT_texture_avif`` or ``EXT_texture_webp``
+        (:meth:`_add_texture`); any other image is encoded as PNG.
         """
         if isinstance(holder, x3d.ImageTexture):
             cached = self._image_index.get(holder)
@@ -827,11 +899,25 @@ class GLTFWriter:
                 return cached
             view = self._buffer.add_view(holder.data)
             self._images.append({'bufferView': view, 'mimeType': holder.mime_type})
-            return self._image_index.set(holder, len(self._images) - 1)
+            index = self._image_index.set(holder, len(self._images) - 1)
+            extension = _IMAGE_EXTENSION.get(holder.mime_type)
+            if extension is not None:
+                self._image_extension[index] = extension
+            return index
         image = holder.image
         cached = self._image_index.get(image)
         if cached is not None:
             return cached
+        if isinstance(image, BasisImage) and image.data[:12] == _KTX2_IDENTIFIER:
+            # The file as it came, under the extension that carries it; there
+            # is no PNG beside it, so the document requires the extension.
+            view = self._buffer.add_view(image.data)
+            self._images.append({'bufferView': view, 'mimeType': 'image/ktx2'})
+            index = self._image_index.set(image, len(self._images) - 1)
+            self._image_extension[index] = BASISU_EXTENSION
+            return index
+        if isinstance(image, BasisImage):
+            image = image.pil()
         buffer = io.BytesIO()
         image.save(buffer, format='PNG')
         view = self._buffer.add_view(buffer.getvalue())
@@ -950,8 +1036,15 @@ class GLTFWriter:
         return index
 
     def _document_extensions(self) -> dict:
-        """The document-level blocks the zones and their sounds need."""
+        """The document-level blocks: material variant names, and what the zones
+        and their sounds need."""
         extensions: dict[str, Any] = {}
+        if self._videos:
+            extensions[VIDEO_EXTENSION] = {'videos': [
+                {'uri': self._relative(uri)} for uri in self._videos]}
+        if self._variant_names:
+            extensions[variantsext.EXTENSION] = {
+                'variants': [{'name': name} for name in self._variant_names]}
         if self._shapes:
             extensions['KHR_implicit_shapes'] = {'shapes': self._shapes}
         if self._sounds:
@@ -1032,6 +1125,8 @@ class GLTFWriter:
                 doc[key] = value
         if self._extensions_used:
             doc['extensionsUsed'] = sorted(self._extensions_used)
+        if self._extensions_required:
+            doc['extensionsRequired'] = sorted(self._extensions_required)
         extensions = self._document_extensions()
         if extensions:
             doc['extensions'] = extensions
@@ -1075,9 +1170,24 @@ class GLTFWriter:
         directory = os.path.dirname(os.path.abspath(path))
         for name, data in self.external_buffers().items():
             atomicfiles.write_bytes(os.path.join(directory, name), data)
-        data = self.to_glb()
+        self._directory = directory
+        try:
+            data = self.to_glb()
+        finally:
+            self._directory = None
         atomicfiles.write_bytes(path, data)
         return data
+
+    def _relative(self, location: str) -> str:
+        """A file ``location`` as a uri relative to the file being written,
+        where it is under that file's directory; otherwise as it is."""
+        directory = self._directory
+        if directory is None or '://' in location or not os.path.isabs(location):
+            return location
+        inside = os.path.relpath(location, directory)
+        if inside.startswith(os.pardir):
+            return location
+        return inside.replace(os.sep, '/')
 
 
 def _check_buffer_name(name: Optional[str]) -> None:

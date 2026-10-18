@@ -16,6 +16,7 @@ from OpenGLContext.move import navigationinfo
 from OpenGLContext.passes import viewpointbinding
 from vrml.x3d.scene import X3DScene
 import logging
+import weakref
 log = logging.getLogger( __name__ )
 
 
@@ -115,6 +116,13 @@ def _dispose( pass_: Any, why: str ) -> None:
         log.debug( "disposing of a pass on %s failed: %s", why, err )
 
 
+def _release( pass_: Any ) -> None:
+    """Unbind the nodes of a pass's scene from the contexts it drew for."""
+    release = getattr( pass_, 'release', None )
+    if release is not None:
+        release()
+
+
 def cached_pass( scene: Any, build: Callable[[], Any] ) -> Any:
     """The pass for the context that is current, built by ``build`` if there is
     not one for it yet.
@@ -135,6 +143,7 @@ def cached_pass( scene: Any, build: Callable[[], Any] ) -> Any:
         # Replacing this context's own pass, with this context current, so its
         # GL objects can go rather than be leaked.
         _dispose( existing, 'pass swap' )
+        _release( existing )
     FLAT = _passes[key] = build()
     return FLAT
 
@@ -149,7 +158,7 @@ class _defaultRenderPasses( object ):
             else:
                 log.info( 'Using compatibility profile' )
                 from OpenGLContext.passes.flatcompat import FlatPass
-            built = FlatPass( sg, context.allContexts )
+            built = FlatPass( sg, ( weakref.ref( context ), ) )
             if sg is None:
                 built.integrate( context.renderedChildren()[0] )
             return built
@@ -182,6 +191,7 @@ def drop_pass() -> None:
     dying = _passes.pop( key, None )
     if dying is None:
         return
+    _release( dying )
     if contextresources.deletable():
         _dispose( dying, 'context loss' )
     if FLAT is dying:

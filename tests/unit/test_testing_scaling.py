@@ -52,6 +52,21 @@ def test_each_size_is_run_once_before_it_is_measured():
     assert calls == [3, 3, 12, 12]
 
 
+def test_timed_runs_take_the_sizes_in_turn():
+    """Both sizes are timed through the same stretch of the machine's load.
+
+    Timing every run of the small size and then every run of the large one
+    lets a change in what else the machine is doing land on one size only,
+    and the ratio then measures the change.
+    """
+    calls = []
+
+    def prepare(n):
+        return lambda: calls.append(n)
+    measure_scaling(prepare, n=3, measure='time', repeat=3)
+    assert calls == [3, 12] + [3, 12] * 3
+
+
 @pytest.mark.serial
 def test_time_is_measured_as_the_least_of_several_runs():
     found = check_scaling(_pairs, n=60, most=40.0, repeat=3)

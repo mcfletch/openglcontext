@@ -55,13 +55,19 @@ equation (ISO/IEC 19775-1, 17.2.2.5): the emissive colour, plus for each light
 its ``ambientIntensity`` times the Material's ``ambientIntensity`` and diffuse
 colour, its diffuse and its Blinn-Phong specular terms, on the colour values as
 given, bloom on or off. The exposure and the tone curve apply to the result
-(:ref:`tone-mapping`); by default a document has neither. A ``Color`` node replaces the
+(:ref:`tone-mapping`); by default a document has neither. The specular term,
+(N·H) to the power 128 × ``shininess``, is computed whichever side of the
+face the light is on, and a ``shininess`` of 0 gives the whole specular
+colour, as X_ITE draws it. A ``Color`` node replaces the
 diffuse colour, a normal map turns the normal, an occlusion map scales the
 lights' sum, and fog is X3D's. Where the texture applies is the shading's
 (:ref:`shading`): a document is shaded as Gouraud, which multiplies the lit
 colour by the texture, emissive and specular included. Image-based lighting,
 lightmaps and planar reflections are not read for such a shape. An appearance
-with no ``Material`` is unlit: white, times its texture or a ``Color`` node.
+with no ``Material``, a Shape with no Appearance and a document's
+``UnlitMaterial`` are unlit: white (or the emissive colour), times its
+texture or a ``Color`` node, on the colour values as given. An
+``UnlitMaterial`` built in code or read from glTF is linear light.
 A ``Material`` built in code is converted instead: its diffuse colour
 becomes the base colour and its shininess sets the roughness, lit in linear
 light with a flat ambient term.
@@ -214,7 +220,11 @@ label, matched by each transform's ``mapping``; a single transform whose
 ``mapping`` is empty applies to every channel, as in VRML97.
 ``TextureTransform`` (centre, rotation, scale, translation) and
 ``TextureTransformMatrix3D`` (a 4×4 matrix of which the s and t rows are
-used, translation in the last column) are both read. One draw can use four
+used, translation in the last column) are both read. A ``TextureTransform``
+or ``TextureTransform3D`` is X3D's equation, Tc' = -C × S × R × C × T × Tc,
+with the rightmost applied to the coordinate first: translated, moved by the
+centre, rotated, scaled and moved back, as X_ITE reads it (the prose beside
+the equation in 19775-1 18.4.10 scales before rotating). One draw can use four
 distinct transforms; channels sharing a transform share one. The glTF loader
 turns each ``KHR_texture_transform``, including its ``texCoord`` override,
 into a ``TextureTransformMatrix3D`` under the label of the texture that
@@ -369,14 +379,42 @@ channels as linear. ``material.textures`` is a read-only view of the textures
 by channel name, and ``material.setTexture(channel, texture)`` sets one by
 channel name. The glTF loader builds these when it imports a model.
 
+``SpecularGlossinessMaterial`` (X_ITE's, and glTF's archived
+``KHR_materials_pbrSpecularGlossiness``) is a dielectric given by its
+``diffuseColor``, the reflectance at normal incidence ``specularColor`` and
+``glossiness``, 1 less the roughness. It is drawn through the same program
+with no metal: the diffuse colour is the base colour and the specular colour
+the reflectance in place of the one ``ior`` gives. Its ``diffuseTexture``
+multiplies the diffuse colour, and its ``specularGlossinessTexture``'s RGB
+(sRGB) the specular colour and its alpha the glossiness; ``emissiveTexture``,
+``normalTexture`` and ``occlusionTexture`` are read as a PhysicalMaterial's.
+
 ``UnlitMaterial`` (X3D 4) draws its ``emissiveColor``, multiplied by its
 ``emissiveTexture``, with no lighting; the glTF loader makes one for
 ``KHR_materials_unlit``.
 
+The glTF extensions' values and maps (``clearcoat``, ``sheenColor``,
+``ior``, ``transmission``, ``retroreflection``, ``multiscatterColor`` and the
+rest) are kept in X_ITE's material extension nodes, one per glTF extension,
+in the material's ``extensions`` field: a ``ClearcoatMaterialExtension``
+holds ``clearcoat``, ``clearcoatRoughness`` and their maps. The material's
+own names read and set them; setting one that is not the default adds the
+node of its type where the material has none, and editing the node's field
+is editing the material. ``materialextensions.MATERIAL_FIELDS`` names the
+node type and field of each. ``ior`` is ``IORMaterialExtension``'s
+``indexOfRefraction``, and ``iridescenceIor``, ``iridescenceThicknessMin``
+and ``iridescenceThicknessMax`` are ``IridescenceMaterialExtension``'s
+``iridescenceIndexOfRefraction``, ``iridescenceThicknessMinimum`` and
+``iridescenceThicknessMaximum``. ``attenuationDistance`` defaults to
+1000000, which stands for glTF's infinite distance; 0 also means no
+absorption.
+
 Written as X3D (``vrml.x3d.dump``), both materials write X3D's own fields as
-usual, and the fields X3D's nodes lack (the glTF extension factors and
-textures, the lightmap, the impostor views) in a ``MetadataSet`` named
-``OpenGLContext`` on the material's ``metadata``. An ``ImageDataTexture`` is
+usual, the extension nodes as X_ITE writes them (with the ``X_ITE``
+component statement, so X_ITE draws the material as the engine does), and
+the engine's own fields (the lightmap, baked light, the impostor views, a
+reflector) in a ``MetadataSet`` named ``OpenGLContext`` on the material's
+``metadata``. An ``ImageDataTexture`` is
 written as an ``ImageTexture`` whose URL is the image, upside down, as a PNG
 ``data:`` URL, so the same coordinates name the same texels; an
 ``EncodedImage`` is written in its own format. Read back with the engine's
@@ -448,9 +486,10 @@ Surface basics:
      - 1.5
      - index of refraction; sets the base reflectivity and how much glass bends
        the view
-   * - ``specular`` / ``specularColor``
-     - 1.0 / (1,1,1)
-     - strength and tint of the non-metal highlight
+   * - ``specular`` / ``specularColor`` / ``specularStrength``
+     - 1.0 / (1,1,1) / 1.0
+     - strength and tint of the non-metal highlight; ``specularStrength``
+       multiplies the tint, which may then exceed 1
 
 Optional lobes, each off at 0:
 
@@ -467,6 +506,10 @@ Optional lobes, each off at 0:
    * - ``clearcoatRoughness``
      - 0.0
      - how sharp the clearcoat's highlight is
+   * - ``clearcoatNormalScale``
+     - 1.0
+     - strength of ``clearcoatNormalTexture``: its x and y are multiplied by
+       it, as ``normalScale`` does for the base normal map
    * - ``sheenColor``
      - (0, 0, 0)
      - colour of the soft glow at the edges of fabric (velvet, satin)
@@ -480,9 +523,9 @@ Optional lobes, each off at 0:
      - 0.0
      - volume thickness, for tinting transmitted light
    * - ``attenuationColor`` / ``attenuationDistance``
-     - (1,1,1) / 0
+     - (1,1,1) / 1000000
      - colour that light picks up passing through the volume, and over what
-       distance; 0 means no absorption
+       distance in metres; the default and 0 both mean no absorption
 
 Transparency and sidedness belong to the appearance and the geometry, as in
 X3D 4:
@@ -537,6 +580,49 @@ Further glTF material extensions, each off at its default:
      - 0.0, 1.3, 100 / 400
      - thin-film colour shift, as on a soap bubble; thickness in nanometres
        (``KHR_materials_iridescence``)
+   * - ``retroreflection``
+     - 0.0
+     - specular light sent back towards its source, as on road signs and
+       safety clothing (``KHR_materials_retroreflection``)
+   * - ``multiscatterColor``
+     - (0,0,0)
+     - light scattered beneath the surface, as in skin, wax and marble
+       (``KHR_materials_volume_scatter``); see below
+   * - ``scatterStrength`` / ``scatterAnisotropy``
+     - 0.0 / 0.0
+     - kept, read and written; the shading does not use them, as X_ITE's
+       does not
+
+A retroreflective surface evaluates its specular lobes, punctual and
+environment, with the view direction mirrored about the normal, and
+``retroreflection`` blends from the ordinary lobes (0) to those (1). The
+diffuse lobe, clearcoat and sheen are left as they are.
+
+A material with a ``VolumeScatterMaterialExtension`` scatters the light its
+diffuse transmission takes in (``diffuseTransmission``, which must be above
+0 for anything to scatter). Before the opaque shapes, the pass draws the
+scattering ones into a float buffer the size of the view: the light their
+diffuse transmission lobes take in from in front and, through the volume,
+from behind, and each fragment's distance from the eye
+(:mod:`~OpenGLContext.passes.scatter`). Each of their fragments then reads 55
+samples of that buffer around it and adds them, weighted by the Burley
+diffusion profile over the distance between the two points, times
+``diffuseTransmissionColor``. The profile reaches ``attenuationDistance``
+times ``multiscatterColor`` in each channel, so a scattering material wants a
+``VolumeMaterialExtension`` with a distance set. The light scattered many
+times leaves the back lobes. Samples are taken from any scattering shape the
+buffer holds, weighted by distance, so two such shapes touching on screen at
+the same depth share some light. The buffer needs one more fragment sampler
+than the texture layers leave on a 32-sampler driver, and a driver with
+fewer draws scattering materials without it.
+
+The fragment stage's 32 samplers are taken by the other maps, so the
+``retroreflectionTexture``, ``scatterStrengthTexture`` and
+``multiscatterColorTexture`` maps are read through the sampler of
+``iridescenceTexture``, ``anisotropyTexture`` and ``clearcoatNormalTexture``
+respectively, where the material has no map of that channel
+(``pbrpass.PBR_SHARED_CHANNELS``). A material with both draws the other map
+and the factor alone.
 
 Texture maps are the ``...Texture`` fields described above. Each map varies
 its property across the surface (see :ref:`Texture Maps <maps>` above). Where
@@ -772,8 +858,8 @@ which a scene's ``{"light": n}`` or a zone's (:doc:`zones`) selects:
    * - ``rotation``
      - (0, 0, 0, 1)
      - A quaternion ``(x, y, z, w)`` turning the environment. It is applied as
-       the faces are read, so the probe holds a world-aligned cube; each face
-       is read bilinearly and clamped at its edges.
+       the light is drawn into the probe, so the probe holds a world-aligned
+       cube.
    * - ``irradianceCoefficients``
      - none
      - Nine RGB spherical-harmonic coefficients, l ≤ 2, of the irradiance
@@ -791,10 +877,18 @@ file is read as RGBD HDR.
 ``irradiance_faces(size)`` evaluates the coefficients into six ``(size, size,
 3)`` faces holding irradiance over π, the value the PBR shader multiplies the
 albedo by. ``IBLProbe.upload_light`` puts both into one layer of the probe the
-first time the light is needed, resampling the specular mips to the probe's
-size and repeating the roughest where the light has fewer; nothing is drawn.
-A light with no specular images is not uploaded. A zone's light needs the
-``full`` probe and cube-map arrays (GL 4.0 or ``ARB_texture_cube_map_array``).
+first time the light is needed, and again whenever one of its fields is set
+(``ImageBasedLight.version``), which is how an animation of its intensity or
+rotation reaches the frame. The specular mips go into a cube of their own,
+and each of the probe's levels is drawn from it on the GPU, turned and scaled:
+the light's mips span perceptual roughness 0 to 1 evenly whatever their
+count, as ``EXT_lights_image_based`` lays them out, and the probe's level for
+roughness *r* reads the light's chain at level *r* (count - 1), between the
+two mips either side (``ibl.roughness_lod``). A light whose ``prefiltered`` is
+false (an ``EnvironmentLight``'s ``specularTexture``) holds the environment
+itself, which the probe GGX-filters for each roughness. A light with no
+specular images is not uploaded. A zone's light needs the ``full`` probe and
+cube-map arrays (GL 4.0 or ``ARB_texture_cube_map_array``).
 
 In ``auto`` mode, environment lighting adapts to the frame rate. When the
 frame rate stays below 45 frames a second for 30 frames it steps down to
@@ -916,7 +1010,9 @@ fog leaves an object ``(visibilityRange - distance) / visibilityRange`` of its
 own colour, at its distance from the viewer. Both passes fog lit, unlit and
 vertex-coloured shapes, points and lines; text and the overlay are not
 fogged. X3D's
-``LocalFog`` fogs only its own group (:doc:`X3D <x3d>`).
+``LocalFog`` fogs only its own group (:doc:`X3D <x3d>`). The instanced
+:ref:`vegetation <vegetation-fog>` and the :ref:`splat terrain <terrain-fog>`
+are fogged by the bound ``Fog`` too.
 
 Choosing a fog curve
 ~~~~~~~~~~~~~~~~~~~~

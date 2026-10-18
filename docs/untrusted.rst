@@ -188,9 +188,13 @@ Rules for each loader
    * - :doc:`X3D <x3d>` (``loaders/x3d.py``) ``EXTERNPROTO``
      - Each URL an ``ExternProtoDeclare`` names is resolved and read through a
        ``Resolver`` built from the document's own location
-       (``loaders.x3d.ContainedPrototypes``), and so is each file those name,
-       eight files deep at most. A URL the resolver refuses is logged and the
-       next one tried; the prototype's instances are then empty.
+       (``loaders.x3d.ContainedPrototypes``, the engine's policy on pyvrml97's
+       ``vrml.x3d.files.ExternPrototypes``), and so is each file those name,
+       eight files deep at most. A URL's ``#name`` says which of the file's
+       prototypes it is; with none, it is the file's first ``PROTO``. A
+       document with no location reads no prototype files. A URL
+       the resolver refuses is logged and the next one tried; the
+       prototype's instances are then empty.
    * - :doc:`X3D <x3d>` and VRML97 ``Anchor``
      - A url the document's Anchor follows is resolved through a ``Resolver``
        built from the document's own location
@@ -200,6 +204,10 @@ Rules for each loader
        ``Context.OnAnchorElsewhere``, which opens nothing. An application that
        opens web pages overrides it and decides which of the document's urls
        it trusts.
+   * - STL, PLY, OFF (``loaders/meshfiles.py``)
+     - Reference nothing. A count in a header is checked against the bytes
+       that follow before anything is allocated for it, and a gzip document is
+       decompressed no further than the size limit.
    * - :ref:`MovieTexture <x3d-movies>` ``url``
      - Each entry is resolved by ``Loader.local_copy`` under the document's
        ``Resolver``: a file in the document's directory is read in place, a

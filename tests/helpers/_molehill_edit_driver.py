@@ -20,9 +20,11 @@ os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
 os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '60')
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 
-import numpy as np
-from OpenGL.GLU import gluProject
+import types
 
+import numpy as np
+
+from OpenGLContext.events.mouseevents import projected
 from OpenGLContext.edit.gizmo import AXES
 from OpenGLContext.events import synthetic
 from OpenGLContext.scenegraph.nodepath import NodePath
@@ -63,12 +65,11 @@ class DriverContext(BaseContext):
         matrix = NodePath([self.sg, self.sg.children[0]]).transformMatrix()
         root = np.dot(np.append(np.asarray(point, 'd'), 1.0), matrix)[:3]
         width, height = self.getViewPort()
-        return gluProject(
-            root[0], root[1], root[2],
-            np.asarray(self.platform.modelMatrix(), 'd'),
-            np.asarray(self.platform.viewMatrix(), 'd'),
-            np.asarray((0, 0, width, height), 'i'),
-        )[:2]
+        view = types.SimpleNamespace(
+            modelViewMatrix=self.platform.modelMatrix(),
+            projectionMatrix=self.platform.viewMatrix(),
+            viewport=(0, 0, width, height))
+        return tuple(projected(view, root)[:2])
 
     def _post(self, *records):
         for record in records:

@@ -488,6 +488,48 @@ class TestAnInputTheOverlayTookIsTakenWhole:
         context.ProcessEvent(again)
         assert context.dispatched[-1] is again
 
+    def test_a_drag_begun_in_the_world_stays_the_worlds_over_a_control(self, context):
+        """A pointer dragging something in the scene crosses a button: the
+        scene goes on hearing the moves, and the button is not hovered."""
+        panel = dialog(modal=False)
+        context.pushOverlay(panel)
+        x, y = panel.find('ok').rect.centre
+        outside = (panel.rect.x - 5.0, panel.rect.y - 5.0)
+        context.ProcessEvent(FakeEvent('mousebutton', button=0, state=1, pick=outside))
+        moved = FakeEvent('mousemove', pick=(x, y))
+        context.ProcessEvent(moved)
+        assert context.dispatched[-1] is moved
+        assert context.overlays.hovered() is None
+
+    def test_the_overlay_hears_the_pointer_again_once_the_drag_is_let_go(self, context):
+        panel = dialog(modal=False)
+        context.pushOverlay(panel)
+        x, y = panel.find('ok').rect.centre
+        outside = (panel.rect.x - 5.0, panel.rect.y - 5.0)
+        context.ProcessEvent(FakeEvent('mousebutton', button=0, state=1, pick=outside))
+        context.ProcessEvent(FakeEvent('mousebutton', button=0, state=0, pick=outside))
+        moved = FakeEvent('mousemove', pick=(x, y))
+        context.ProcessEvent(moved)
+        assert context.dispatched[-1] is not moved
+        assert context.overlays.hovered() is panel.find('ok')
+
+    def test_a_wheel_notch_the_world_took_is_not_a_drag(self, context):
+        panel = dialog(modal=False)
+        context.pushOverlay(panel)
+        outside = (panel.rect.x - 5.0, panel.rect.y - 5.0)
+        context.ProcessEvent(FakeEvent('mousebutton', button=4, state=1, pick=outside))
+        context.ProcessEvent(FakeEvent('mousemove', pick=panel.find('ok').rect.centre))
+        assert context.overlays.hovered() is panel.find('ok')
+
+    def test_a_drag_begun_on_a_control_is_not_the_worlds(self, context):
+        panel = dialog(modal=False)
+        context.pushOverlay(panel)
+        x, y = panel.find('ok').rect.centre
+        context.ProcessEvent(FakeEvent('mousebutton', button=0, state=1, pick=(x, y)))
+        moved = FakeEvent('mousemove', pick=(x + 1.0, y))
+        context.ProcessEvent(moved)
+        assert moved not in context.dispatched
+
     def test_a_mouse_release_follows_the_press_that_closed_the_panel(self, context):
         """A click that dismisses a dialog must not also pick the world."""
         panel = dialog()

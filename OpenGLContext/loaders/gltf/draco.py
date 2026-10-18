@@ -8,9 +8,13 @@ turns that blob back into the plain numpy arrays :mod:`meshes` expects, mapping 
 extension's ``attributes`` (semantic -> Draco unique id) onto the accessor
 semantics the loader already uses and honoring each accessor's normalization.
 
-``DracoPy`` is a soft dependency: :data:`HAVE_DRACO` is False when it is absent, and
-:func:`draco_arrays` returns None so the caller skips the primitive (warning once
-per load) instead of crashing the whole scene.
+A primitive attribute the extension's map does not name is not in the stream;
+the caller reads it from its own accessor (:func:`compressed_semantics`).
+
+``DracoPy`` is a soft dependency: :data:`HAVE_DRACO` is False when it is absent.
+A primitive whose accessors also carry the uncompressed data
+(:func:`has_fallback`) is then read from them; one without is skipped, with
+one warning per load.
 """
 from __future__ import annotations
 
@@ -21,7 +25,7 @@ import numpy as np
 
 from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf.accessors import (
-    _buffer_bytes, _coerce_normalized, _colors_to_rgba,
+    _coerce_normalized, _colors_to_rgba, view_bytes,
 )
 
 if TYPE_CHECKING:
@@ -51,12 +55,30 @@ def draco_extension(primitive: "pygltflib.Primitive") -> Optional[dict]:
     return ext.get(DRACO_EXTENSION) or None
 
 
+def compressed_semantics(primitive: "pygltflib.Primitive") -> frozenset[str]:
+    """The attribute semantics the primitive's Draco stream holds."""
+    return frozenset(_ext_field(draco_extension(primitive), 'attributes') or ())
+
+
+def has_fallback(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive") -> bool:
+    """Whether a Draco primitive's index and POSITION accessors hold the
+    uncompressed data a loader without a decoder draws instead."""
+    accessors = g.accessors or []
+    needed = [primitive.attributes.POSITION]
+    if primitive.indices is not None:
+        needed.append(primitive.indices)
+    return all(index is not None and 0 <= index < len(accessors)
+               and (accessors[index].bufferView is not None
+                    or getattr(accessors[index], 'sparse', None) is not None)
+               for index in needed)
+
+
 # Dedupe the "install DracoPy" warning when there is no resolver to stash the
 # flag on (a primitive decoded outside a load, so `resolver is None`).
 _warned_missing_no_resolver = False
 
 
-def _warn_missing_once(resolver: Optional[Resolver]) -> None:
+def warn_missing_once(resolver: Optional[Resolver]) -> None:
     global _warned_missing_no_resolver
     if resolver is not None:
         if getattr(resolver, '_draco_warned', False):
@@ -64,8 +86,9 @@ def _warn_missing_once(resolver: Optional[Resolver]) -> None:
     elif _warned_missing_no_resolver:
         return
     log.warning(
-        "glTF: primitive uses KHR_draco_mesh_compression but DracoPy is not "
-        "installed; skipping it (pip install DracoPy). The rest of the scene loads.")
+        "glTF: primitive uses KHR_draco_mesh_compression with no uncompressed "
+        "fallback and DracoPy is not installed; skipping it (pip install "
+        "DracoPy). The rest of the scene loads.")
     if resolver is not None:
         resolver._draco_warned = True
     else:
@@ -77,32 +100,22 @@ def _decode_blob(g: "pygltflib.GLTF2", ext: Any, resolver: Resolver) -> Any:
     bv_index = _ext_field(ext, 'bufferView')
     if bv_index is None:
         raise ValueError("KHR_draco_mesh_compression primitive has no bufferView")
-    bv = g.bufferViews[bv_index]
-    data = _buffer_bytes(g, bv.buffer, resolver)
-    start = bv.byteOffset or 0
-    end = start + (bv.byteLength or 0)
-    if bv.byteLength is None or end > len(data):
-        raise ValueError(
-            "glTF Draco bufferView %d reads %d bytes at offset %d but its buffer "
-            "holds only %d" % (bv_index, bv.byteLength or 0, start, len(data)))
-    return DracoPy.decode(bytes(data[start:end]))
+    return DracoPy.decode(bytes(view_bytes(g, bv_index, resolver)))
 
 
 def draco_arrays(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
-                 resolver: Resolver) -> Optional[dict[str, np.ndarray]]:
-    """Decoded attribute arrays for a Draco ``primitive``, or None to skip it.
+                 resolver: Resolver) -> dict[str, np.ndarray]:
+    """Decoded attribute arrays for a Draco ``primitive``.
 
     Returns a dict with ``positions`` and ``indices`` (flat uint32) plus whichever
     of ``normals``/``texcoords``/``texcoords1``/``tangents``/``colors``/
     ``skin_joints``/``skin_weights`` the stream carries -- the same keys and dtypes
     :mod:`meshes` builds from accessors, so the shared decode path is unchanged.
-    None means DracoPy is unavailable (a warning was emitted); the caller drops the
-    primitive. Raises ValueError on a malformed blob. Call only after
+    Attributes the extension's map does not name are not read here. Raises ValueError on a malformed blob. Call only after
     :func:`draco_extension` confirms the primitive is Draco-compressed.
     """
     if not HAVE_DRACO:
-        _warn_missing_once(resolver)
-        return None
+        raise RuntimeError("decoding a Draco primitive needs DracoPy")
     ext = draco_extension(primitive)
     mesh = _decode_blob(g, ext, resolver)
     attr_map = _ext_field(ext, 'attributes') or {}

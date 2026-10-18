@@ -2,9 +2,10 @@
 in vec2 vUV; in vec3 vEyePos; in vec3 vEyeN; in float vShade;
 // The camera each fragment is drawn for, in a shared draw of several views.
 #include "_viewer_inc.glsl"
+// fogMode, fogDensity, fogColor and x3dFogged().
+#include "_x3d_fog_inc.glsl"
 uniform sampler2D atlas;
 uniform vec3 sunDirEye, sunColor, skyAmbient, groundAmbient;
-uniform float fogDensity; uniform vec3 fogColor;
 uniform float uFadeStart, uFadeEnd;   // dither-dissolve the clump out across this eye-distance window
 uniform float uCutStart, uCutEnd;     // dither the clump IN across this inner window (uCutEnd<=0 disables)
 uniform vec3 uUpEye;                  // world +Y in eye space: hemisphere-ambient split axis
@@ -33,7 +34,11 @@ void main(){
     // vShade is how much of the sun this instance stands in: the canopy
     // takes the key light, and leaves the ambient it does not block.
     vec3 col=alb*(amb*mix(0.55,1.0,vShade)+sunColor*ndl*vShade);
-    if(fogDensity>0.0){float f=1.-exp(-fogDensity*length(toViewer(vEyePos)));col=mix(col,fogColor,clamp(f,0.,1.));}
-    col=toneCurve(col * exposure);
-    fragColor=vec4(pow(col,vec3(1.0/2.2)),1.0);
+    // The aerial haze (mode 1) is mixed in linear light; X3D's Fog (modes 2 and 3) is
+    // mixed into the colour as displayed, as pbr.frag does.
+    float eyeDistance=length(toViewer(vEyePos));
+    if(fogMode==1) col=x3dFogged(col,eyeDistance);
+    vec3 shown=pow(toneCurve(col * exposure),vec3(1.0/2.2));
+    if(fogMode>1) shown=x3dFogged(shown,eyeDistance);
+    fragColor=vec4(shown,1.0);
 }

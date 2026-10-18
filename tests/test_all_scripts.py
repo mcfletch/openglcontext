@@ -81,12 +81,7 @@ CAPTURE_SEED = 4242
 # picture turns on something neither of those settles -- and when it advances
 # its own state, it has to do so from the frame rather than from OnIdle, which
 # the main loop calls as often as it has room for.
-RANDOMIZED_SCRIPTS = [
-    # Its background thread moves every sphere each half second of wall
-    # time, which is what the demo shows; how many moves land before the
-    # capture depends on how busy the machine is.
-    'selectrendermode_threads.py',
-]
+RANDOMIZED_SCRIPTS: list[str] = []
 
 # Single source of truth for the visual-diff tolerance. The gate
 # is percentage-based, not pixel-exact: cross-GPU rasterization, anti-aliasing
@@ -728,6 +723,11 @@ SLOW_SCRIPTS = {
     'shader_instanced.py': SLOW_TIMEOUT,
     'test_shader_comprehensive.py': SLOW_TIMEOUT,
     'x3d_movie.py': SLOW_TIMEOUT,  # draws and encodes its film before the scene opens
+    # The X3D showcases generate their meshes, maps and volumes before the
+    # first frame: 25 s alone, more beside a busy suite.
+    'x3d_materials.py': SLOW_TIMEOUT,
+    'x3d_splats.py': SLOW_TIMEOUT,
+    'x3d_volume.py': SLOW_TIMEOUT,
 }
 
 # Scripts that require GLUT specifically (the GLUT backend or GLUT draw helpers

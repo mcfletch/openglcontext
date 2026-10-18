@@ -84,12 +84,16 @@ class TestTheCeiling:
     that matter must be the ones that survive."""
 
     def test_ordinary_traffic_stops_once_the_ceiling_is_reached(self, tmp_path):
+        """Measured from after the header, whose size is the caller's command
+        line: the header records `sys.argv`, and a suite run that names two
+        hundred files writes twelve kilobytes of it before any traffic."""
         target = tmp_path / 'session.jsonl'
         journal = SessionJournal(target, max_bytes=200)
+        header = target.stat().st_size
         for index in range(200):
             journal({'kind': 'frames', 'frame': index, 'ms': [16.0] * 4})
         journal.close()
-        assert target.stat().st_size < 4000
+        assert target.stat().st_size - header < 4000
 
     def test_it_says_in_the_file_that_it_stopped(self, tmp_path):
         target = tmp_path / 'session.jsonl'

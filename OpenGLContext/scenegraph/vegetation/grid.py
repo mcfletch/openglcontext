@@ -10,13 +10,22 @@ dissolve). Returns arrays ready for
 :meth:`~OpenGLContext.scenegraph.vegetation.billboards.InstancedBillboards.update_instances`.
 """
 import math
+import threading
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Optional, TypeVar
+from typing import Optional, Protocol, TypeVar
 
 import numpy as np
 
-if TYPE_CHECKING:
-    from OpenGLContext.scenegraph.terrain.heightfield import HeightField
+
+class Ground(Protocol):
+    """What cover and trees are seated on: a height at ``(x, z)``.
+
+    A :class:`~OpenGLContext.scenegraph.terrain.heightfield.HeightField` is one;
+    so is any object that answers :meth:`sample`, such as land computed from a
+    function with no edge.
+    """
+
+    def sample(self, x: "float | np.ndarray", z: "float | np.ndarray") -> np.ndarray: ...
 
 
 # Independent per-stream seeds. Each derived value (jitter x/z, keep decision, yaw,
@@ -172,7 +181,7 @@ class Patches:
 
 
 def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
-                       height_field: "HeightField", scale_mul: float = 0.7,
+                       height_field: Ground, scale_mul: float = 0.7,
                        jitter: float = 0.95,
                        mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
                        salt: int = 0,
@@ -183,7 +192,7 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     :param cx, cz: disc centre (world XZ), typically the camera position.
     :param radius: disc radius in world units.
     :param density: instances per square world unit (grid spacing = 1/sqrt(density)).
-    :param height_field: a :class:`HeightField` used to sit instances on the ground.
+    :param height_field: the :class:`Ground` instances are seated on, such as a :class:`HeightField`.
     :param scale_mul: multiplies the per-instance height scale.
     :param jitter: how far an instance may be displaced from its cell's centre, as a
         fraction of the cell. Above 1 an instance may land in a neighbour's ground,
@@ -228,7 +237,7 @@ def _no_instances() -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
 
 
 def _scatter_cells(i0: int, i1: int, j0: int, j1: int, s: float,
-                   height_field: "HeightField", scale_mul: float, jitter: float,
+                   height_field: Ground, scale_mul: float, jitter: float,
                    mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]],
                    salt: int, scale_range: "tuple[float, float]",
                    disc: "Optional[tuple[float, float, float]]" = None,
@@ -299,14 +308,16 @@ class ScatterBlocks:
 
     A ``density`` of 0 or less holds no plants: every disc is empty.
 
-    One caller at a time: a worker thread computing discs owns the blocks
-    while it does.
+    A thread making discs and a thread making blocks ahead of them (:meth:`warm`) may
+    share one. A block is scattered outside the lock, so a thread waits only for a block
+    that another thread is scattering at that moment, and two threads asking for one make it
+    once.
     """
 
     #: How far out, in radii of the last disc, a block is kept.
     keep = 2.0
 
-    def __init__(self, density: float, height_field: "HeightField",
+    def __init__(self, density: float, height_field: Ground,
                  scale_mul: float = 0.7, jitter: float = 0.95,
                  mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
                  salt: int = 0,
@@ -331,17 +342,44 @@ class ScatterBlocks:
         #: How many blocks have been scattered, over the whole life of this.
         self.built = 0
         self._blocks: "dict[tuple[int, int], tuple]" = {}
+        #: The blocks being scattered now, each with the event its scatterer sets when done.
+        self._making: "dict[tuple[int, int], threading.Event]" = {}
+        #: How many times the blocks have been cleared.
+        self._generation = 0
+        self._lock = threading.RLock()
 
     def __len__(self) -> int:
         return len(self._blocks)
 
     def clear(self) -> None:
         """Let go of every block, so each is scattered again when next reached."""
-        self._blocks.clear()
+        with self._lock:
+            self._blocks.clear()
+            self._generation += 1
 
     def _block(self, bi: int, bj: int) -> tuple:
-        found = self._blocks.get((bi, bj))
-        if found is None:
+        """The block ``(bi, bj)``, scattered by this call unless it is kept or another thread
+        is scattering it, which is waited for.
+
+        A block is scattered outside the lock, so a thread reading blocks that are kept never
+        waits on one being made, and two threads asking for the same block make it once.
+        """
+        key = (bi, bj)
+        while True:
+            found = self._blocks.get(key)
+            if found is not None:
+                return found
+            with self._lock:
+                found = self._blocks.get(key)
+                if found is not None:
+                    return found
+                making = self._making.get(key)
+                if making is None:
+                    making = self._making[key] = threading.Event()
+                    generation = self._generation
+                    break
+            making.wait()
+        try:
             i0, j0 = bi * self.cells, bj * self.cells
             found = _scatter_cells(
                 i0, i0 + self.cells - 1, j0, j0 + self.cells - 1, self.cell,
@@ -349,9 +387,40 @@ class ScatterBlocks:
                 self.salt, self.scale_range)
             if self.finish is not None:
                 found = tuple(self.finish(*found))
-            self._blocks[(bi, bj)] = found
+        finally:
+            with self._lock:
+                del self._making[key]
+                making.set()
+        with self._lock:
+            # A block made while the blocks were cleared is for the mask and ground they had.
+            if generation == self._generation:
+                self._blocks[key] = found
             self.built += 1
         return found
+
+    def _reaching(self, cx: float, cz: float, radius: float) -> "list[tuple[int, int]]":
+        """The blocks a disc of ``radius`` about ``(cx, cz)`` touches."""
+        span = self.span
+        # A cell's instance lands up to half a cell of jitter from the cell.
+        reach = radius + self.cell * max(self.jitter, 1.0) / 2.0
+        return [(bi, bj)
+                for bj in range(int(math.floor((cz - reach) / span)),
+                                int(math.floor((cz + reach) / span)) + 1)
+                for bi in range(int(math.floor((cx - reach) / span)),
+                                int(math.floor((cx + reach) / span)) + 1)]
+
+    def warm(self, cx: float, cz: float, radius: float) -> int:
+        """Scatter the blocks a disc here would need, and make no disc; the number made.
+
+        A later :meth:`disc` over the same ground is only put together. A block is let go
+        again by the first disc made far enough from it, as any other.
+        """
+        if not self.density > 0.0:
+            return 0
+        before = self.built
+        for bi, bj in self._reaching(cx, cz, radius):
+            self._block(bi, bj)
+        return self.built - before
 
     def disc(self, cx: float, cz: float, radius: float) -> tuple:
         """The instances within ``radius`` of ``(cx, cz)``, as the scatter gives them."""
@@ -359,13 +428,7 @@ class ScatterBlocks:
             found = _no_instances()
             return tuple(self.finish(*found)) if self.finish is not None else found
         span = self.span
-        # A cell's instance lands up to half a cell of jitter from the cell.
-        reach = radius + self.cell * max(self.jitter, 1.0) / 2.0
-        wanted = [self._block(bi, bj)
-                  for bj in range(int(math.floor((cz - reach) / span)),
-                                  int(math.floor((cz + reach) / span)) + 1)
-                  for bi in range(int(math.floor((cx - reach) / span)),
-                                  int(math.floor((cx + reach) / span)) + 1)]
+        wanted = [self._block(bi, bj) for bi, bj in self._reaching(cx, cz, radius)]
         self._forget(cx, cz, radius, span)
         joined = [np.concatenate(parts) for parts in zip(*wanted, strict=True)]
         points = joined[0]
@@ -375,8 +438,9 @@ class ScatterBlocks:
 
     def _forget(self, cx: float, cz: float, radius: float, span: float) -> None:
         far = self.keep * radius + span
-        for bi, bj in list(self._blocks):
-            x = (bi + 0.5) * span
-            z = (bj + 0.5) * span
-            if abs(x - cx) > far or abs(z - cz) > far:
-                del self._blocks[(bi, bj)]
+        with self._lock:
+            for bi, bj in list(self._blocks):
+                x = (bi + 0.5) * span
+                z = (bj + 0.5) * span
+                if abs(x - cx) > far or abs(z - cz) > far:
+                    del self._blocks[(bi, bj)]

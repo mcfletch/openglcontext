@@ -168,3 +168,60 @@ def test_cell_size_covers_broadphase_and_reach():
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# -- colliders that come and go -----------------------------------------------------
+
+def _walker_with(*sources):
+    w = _Walker(_FakePlatform((0, 0, 0)))
+    w.init_walk(HeightField(np.zeros((9, 9)), 100.0, 1.0))
+    for source in sources:
+        w.add_collider_source(source)
+    return w
+
+
+def _rock_at(x, z, radius):
+    positions = np.array([[x, 0.0, z]], np.float32)
+    return lambda px, pz, reach: (positions, np.array([radius], np.float32))
+
+
+def test_a_walker_is_pushed_out_of_a_rock_a_source_supplies():
+    w = _walker_with(_rock_at(5.0, 5.0, 1.0))
+    x, z = w._push_out(5.2, 5.0)
+    assert math.hypot(x - 5.0, z - 5.0) == pytest.approx(1.0 + w.player_radius, abs=1e-4)
+    assert w._push_out(9.0, 9.0) == (9.0, 9.0)
+
+
+def test_a_source_is_asked_where_the_walker_is_and_how_far_it_reaches():
+    asked = []
+
+    def source(x, z, reach):
+        asked.append((x, z, reach))
+        return np.zeros((0, 3), 'f'), np.zeros(0, 'f')
+
+    w = _walker_with(source)
+    w._push_out(3.0, -4.0)
+    assert asked == [(3.0, -4.0, w.collide_broadphase)]
+
+
+def test_a_walk_through_a_rock_a_source_supplies_is_swept_around_it():
+    w = _walker_with(_rock_at(5.0, 0.0, 0.6))
+    w._tw_prev = (3.0, 0.1)
+    x, z = w._tw_sweep(7.0, 0.1)
+    assert math.hypot(x - 5.0, z - 0.0) >= 0.6 + w.player_radius - 1e-3
+
+
+def test_fixed_and_streamed_colliders_both_count():
+    w = _walker_with(_rock_at(5.0, 5.0, 1.0))
+    w._tw_cpos = np.array([[-5.0, 0.0, -5.0]], np.float32)
+    w._tw_crad = np.array([1.0], np.float32)
+    w._tw_build_grid()
+    assert w._push_out(-5.1, -5.0) != (-5.1, -5.0)
+    assert w._push_out(5.1, 5.0) != (5.1, 5.0)
+
+
+def test_sources_are_kept_when_the_walker_is_bound_to_another_field():
+    source = _rock_at(5.0, 5.0, 1.0)
+    w = _walker_with(source)
+    w.init_walk(HeightField(np.zeros((9, 9)), 100.0, 1.0))
+    assert w._push_out(5.2, 5.0) != (5.2, 5.0)

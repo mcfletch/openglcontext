@@ -77,13 +77,15 @@ void shadeFragment() {
 
     float lightShadow[MAX_LIGHTS];
     resolveShadows(lightShadow);
-    vec3 finalColor = clamp(emissiveColor + ambientIntensity * matDiffuse * sceneAmbient
-                            + phongLights(normal, viewDir, vPosition, matDiffuse,
-                                          ambientIntensity * matDiffuse, specularColor,
-                                          shininess, lightShadow),
-                            0.0, 1.0);
+    vec3 finalColor = emissiveColor + ambientIntensity * matDiffuse * sceneAmbient
+                      + phongLights(normal, viewDir, vPosition, matDiffuse,
+                                    ambientIntensity * matDiffuse, specularColor,
+                                    shininess, lightShadow);
 
-    fragColor = vec4(displayedX3D(x3dFogged(finalColor, length(toViewer(vPosition)))), alpha);
+    // X3D fogs the lights' sum; a document's display then puts it through the
+    // tone curve, and any other display clamps what results (17.2.2.5)
+    vec3 lit = x3dFogged(finalColor, length(toViewer(vPosition)));
+    fragColor = vec4(documentDisplay ? displayedX3D(lit) : clamp(lit, 0.0, 1.0), alpha);
     fragObjectId = encodeObjectId(objectId);
 }
 

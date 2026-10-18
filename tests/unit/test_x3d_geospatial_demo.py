@@ -1,4 +1,4 @@
-"""The Geospatial showcase `oglc-x3d-geospatial` opens
+"""The Geospatial valley `tests/x3d_geospatial.py` opens
 
 `x3d_geospatial.x3d` is written with its four tiles and their maps, read by
 the engine's loader and drawn through both renderers: the GeoLOD reads its
@@ -48,6 +48,17 @@ def test_the_colour_map_is_an_image_of_the_ground():
     assert image[:, -1].mean() > image[:, 0].mean()        # snow is brighter than meadow
 
 
+def test_each_viewpoint_has_the_documents_speed_factor(directory):
+    showcase = x3d_geospatial_demo.Showcase(directory)
+    views = [node for node in showcase.scene.children
+             if type(node).__name__ == 'GeoViewpoint']
+    assert [view.speedFactor for view in views] == [pytest.approx(0.1)] * 3
+
+
+def test_nothing_is_said_of_a_touch_before_one(directory):
+    assert x3d_geospatial_demo.Showcase(directory).said_of_touch() == ''
+
+
 def test_the_keys_answer(directory):
     showcase = x3d_geospatial_demo.Showcase(directory)
     assert 'not been sensed' in showcase.press('g')
@@ -67,11 +78,20 @@ def test_the_valley_is_drawn_and_placed(directory, renderer):
             drawn_image(context)
         assert background.wait_for_idle(20.0)
         image = drawn_image(context).astype(int)
+        step = context.movementManager.STEPDISTANCE
     lod = next(node for node in showcase.scene.children
                if type(node).__name__ == 'Group').children[1]
     assert lod.level_changed == 1
     assert showcase.where() == pytest.approx((46.533, 7.9805, 1450.0), abs=1e-9)
     assert showcase.press('g') == '46.53300 N 7.98050 E, 1450 m'
+    # 1450 m above the ellipsoid: 146 times the speed factor, a quarter unit each.
+    assert step == pytest.approx(0.25 * 146.0 * x3d_geospatial_demo.SPEED_FACTOR, rel=1e-3)
     sky, ground = image[2, 80], image[80, 80]
     assert sky[2] > sky[0] and sky[2] > 150                 # blue above
     assert ground[1] > ground[2]                            # meadow below
+
+
+def test_a_touch_is_said_as_latitude_longitude_and_height(directory):
+    showcase = x3d_geospatial_demo.Showcase(directory)
+    showcase.scene.getDEF('Touch').hitGeoCoord_changed = (46.545, 7.986, 1004.0)
+    assert showcase.said_of_touch() == 'the ground at 46.54500 N 7.98600 E, 1004 m'

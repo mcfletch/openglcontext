@@ -25,10 +25,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `ReceiverPdu`, `SignalPdu`, `TransmitterPdu`, `DISEntityManager`,
     `DISEntityTypeMapping`, which act only on a DIS network (IEEE 1278.1 PDUs
     over UDP), not implemented: a maintainer decision whether the engine
-    speaks DIS; `FogCoordinate`, which needs a per-vertex input and every one
-    of the 16 attribute locations GL 3.3 guarantees is taken (the table holds
-    no two semantics to one location): a maintainer decision between sharing
-    `TEXCOORD_3D`'s location 15 and a 17th location
+    speaks DIS. `FogCoordinate` is drawn (x3d-xnodes): its depths are read
+    from a buffer texture by `gl_VertexID`, taking no attribute location
 
 - Phase 1, pyvrml97 groundwork (§9.1)
   - [x] `ElevationGrid.xSpacing`/`zSpacing` 1.0, `NavigationInfo.type` `["WALK", "ANY"]`
@@ -93,8 +91,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     so the examples reach images above their folders
   - [ ] baselines not yet blessed: review the report first
     (`oglc-x3d-regression`, then `--bless`)
-  - [ ] found by comparing with Web3D's renders, still to fix: a grey plane drawn
-    that Web3D does not (SphereSensor/multisensor); Figure20_17a framed differently
+  - [x] found by comparing with Web3D's renders: a grey plane drawn that Web3D
+    does not (SphereSensor/multisensor: a wall both draw; the difference is
+    X_ITE's WALK fall); Figure20_17a framed differently (fixed 2026-10-08)
   - [x] Inlines naming another archive's scenes: the corpus is one tree
     (`vrml.x3d.corpus.examples`), `--fetch` adds the archives the drawn ones name
     (`with_references`: X3dForWebAuthors), and the folder of every archive's
@@ -149,13 +148,14 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
       bodies"); the engine integrates every turn exactly. X_ITE holds a body
       with `useFiniteRotation` TRUE to `finiteRotationAxis`, a component-wise
       angular factor
-  - [ ] whole corpus against X_ITE (2026-10-07): median 4.9% of pixels unlike
+  - [x] whole corpus against X_ITE: see "Corpus against X_ITE, xcorpus
+    stream" at the end. (2026-10-07: median 4.9% of pixels unlike
     with the PBR pass, 1.8% with the VRML97 pass, whose worst were the fog
     documents it did not fog;
     to look at next: Background fogged (fogtype_linear: our frame is the fog
     colour), the Snake's background colour, Figure20_09's viewpoint, and the
     SphereSensor tests' framing. X_ITE runs Scripts, so its render of a document
-    whose scene a Script builds shows what ours does not draw
+    whose scene a Script builds shows what ours does not draw)
   - [x] Background image faces: each side drawn as its own quad once its image
     has loaded, turned as X3D says, transparent parts showing the sky
     (`tests/unit/test_background_faces.py`); the old cube map drew only with
@@ -455,9 +455,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     as in X_ITE, which reads `NurbsSurface` as an unknown node (2026-10-09)
   - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
     (DDS, KTX 1.1, KTX 2 of 8-bit and BC1-3 formats with zlib or no
-    supercompression (2026-10-09 x3d-xfields; X_ITE also transcodes Basis
-    Universal, which needs a transcoder this engine does not carry; X_ITE
-    reads no HDR cube map), crosses and strips: `loaders.textureimages`),
+    supercompression (2026-10-09 x3d-xfields), and Basis Universal through the
+    optional opengl_basisu (2026-10-09 x3d-xbasisu; X_ITE reads no HDR cube
+    map), crosses and strips: `loaders.textureimages`),
     `GeneratedCubeMapTexture` (drawn before the views from the shape's
     origin, update NONE drawn once); sampled with the world reflection
     vector; compatibility profile through reflection-map texgen
@@ -776,6 +776,177 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
       `pitch` and `gain` are kept and not read
     - the node is bound to a context when a shape wearing it is first drawn
       there; a movie no drawn shape wears sends no events
+- X_ITE's own nodes (2026-10-09, branch x3d-xnodes). pyvrml97's
+  `vrml.x3d.xite` declares the X_ITE component, `ImageTextureAtlas` and the
+  fields X_ITE adds to PhysicalMaterial and Appearance, as X_ITE 16.4.3's
+  X3DUOM extension and component sources (MIT) give them; every encoding
+  reads and writes them, the writers add the `X_ITE` component statement
+  - [x] material extension nodes: one representation, the nodes. A
+    PhysicalMaterial's glTF extension values are kept in its `extensions`
+    nodes and read and set under the material's names
+    (`scenegraph.materialextensions`); the `OpenGLContext` metadata set
+    carries only the engine's own fields. attenuationDistance's default is
+    X_ITE's 1000000 (glTF's infinity). Retroreflection (MRM, view mirrored
+    about the normal, punctual and environment) and volume scatter (a float
+    buffer of the diffuse-transmission light drawn before the opaque
+    shapes, 55 Burley samples, `passes/scatter.py`) added to the PBR pass,
+    with KHR_materials_retroreflection and KHR_materials_volume_scatter /
+    KHR_materials_scatter read and written. The three new maps share the
+    samplers of the iridescence, anisotropy and clearcoat-normal maps. The
+    scatter buffer holds depth where X_ITE holds a shape id, so touching
+    scattering shapes share light weighted by distance. Against X_ITE: the
+    scatter test sphere 0.2% of pixels apart
+  - [x] SpecularGlossinessMaterial: the metallic/roughness program with no
+    metal, the specular colour as the dielectric reflectance and roughness
+    1 - glossiness (`SPECULAR_GLOSSINESS_BIT`); glTF's
+    KHR_materials_pbrSpecularGlossiness read as one where the material has no
+    pbrMetallicRoughness (X_ITE draws the fallback where there is one) and
+    written from one. The load-time conversion to metallic/roughness is gone.
+    Retroreflection and scatter factors are in
+    `materials.MATERIAL_EXTENSION_FIELDS`, so KHR_animation_pointer reaches
+    them
+  - [x] BlendMode and DepthMode (`scenegraph.rendermodes`): GL blend and
+    depth state around the shape's draw, put back after; a BlendMode makes
+    the shape blended (X_ITE's reading); a shape with either is drawn alone
+    and after the other opaque shapes. Against X_ITE the test document
+    differs only in UnlitMaterial's colour encoding
+  - [x] InstancedShape: the engine's InstancedShape is X_ITE's node; its
+    placements come from the five X3D lists (clamped to each list's last
+    entry, as X_ITE does) where `placements` is empty
+  - [x] ImageTextureAtlas (`texture3d.ImageTextureAtlas`, `atlas_volume`): the
+    tiles of one picture as slices, top row of each tile at t=0 as X_ITE
+    reads it; matches X_ITE's render of the test atlas (0.5% of pixels)
+  - [x] FogCoordinate (`scenegraph.fogcoordinate`): per-vertex depths from the
+    coordinate each vertex was read from, in a buffer texture the PBR vertex
+    shader reads by `gl_VertexID`; the depth is the fog share (X_ITE's
+    `1 - depth` interpolant). Triangle sets, IndexedFaceSet, ElevationGrid;
+    0.3% of pixels from X_ITE on the test document. Lines, points and the
+    VRML97 renderer fog by distance
+  - [x] showcase `oglc-x3d-materials` (`tests/x3d_materials.py`, baseline
+    x3d_materials.png): every node of the stream in one document
+- Phase 11, X_ITE compatibility: glTF extensions and file formats (branch
+  x3d-xgltf, 2026-10-09). Audit of the 34 extensions on X_ITE's features page
+  against the loader and writer code
+  - [x] `KHR_accessor_float16`, `KHR_accessor_float64` (Khronos draft PR
+    2397): component types 5131 and 5130 wherever a float accessor is read;
+    animation keyframes read and interpolated in float64
+    (`accessors._read_floats(precise=True)`); a double vertex attribute is
+    logged when rounded to single precision
+  - [x] `KHR_mesh_quantization` was partial: normalized positions, normals,
+    tangents and morph deltas were read as raw integers (a gltfpack mesh drew
+    127 to 65535 times too large, its tangents swamped the normal map); all
+    float reads now take the normalized policy (`_coerce_normalized`)
+  - [x] `KHR_meshopt_compression`, `EXT_meshopt_compression`:
+    `loaders.gltf.meshopt`, a NumPy decoder from the extension READMEs'
+    appendices; ambiguities resolved from meshoptimizer's MIT reference
+    decoder, no code copied. Every buffer-view read goes through
+    `accessors.view_bytes` (accessors, sparse, images, Draco, audio), which
+    decodes a compressed view once per load. Checked against meshoptimizer
+    0.2.30's encoder on 2,700 attribute streams (both versions, all levels
+    including XOR channels), 400 triangle and 400 index streams, and its
+    filters (within the one unit the spec allows; exponential exact): no
+    differences. 100k 12-byte vertices decode in about 0.02 s, 100k
+    triangles in about 0.05 s. Tests: meshoptimizer's own vectors, the
+    filters encoded by hand, built documents, Khronos BrainStem (both
+    variants) and MeshoptCubeTest (`network`). The writer writes buffers
+    uncompressed
+  - [x] `KHR_materials_variants`: `loaders.gltf.variants`;
+    `GLTFScene.variants`, `.variant`, `.select_variant(name | index | None)`
+    re-dress every primitive that maps the variant (appearance, mesh
+    appearance, `solid`); materials of every variant built at load. Each mesh
+    keeps `materialVariants`, which the writer writes back as mappings with
+    the default material. Tested with built documents, a GL frame, and
+    Khronos MaterialsVariantsShoe (`network`)
+  - [x] `EXT_texture_avif` through Pillow (12.3 here decodes AVIF;
+    `textures.decodes`); the AVIF or WebP image is now preferred to the core
+    `source`, which is the fallback (before, the core source won). The writer
+    writes an `EncodedImage` in AVIF or WebP through its extension and lists
+    it in `extensionsRequired` (a WebP image was written as a core image,
+    which is invalid)
+  - [x] `EXT_texture_video` (draft, github.com/takahirox/EXT_texture_video,
+    MIT): `textures.video_texture` makes a looping `MovieTexture` of the
+    named video (uri resolved under the document's policy; a buffer view
+    written once to the asset cache by digest); falls back to the core
+    `source`. Written back by the writer (relative uri beside the written
+    file; extension required). GL test draws `colours.mp4`'s frame
+  - [x] `KHR_texture_basisu` (2026-10-09 x3d-xbasisu): the new sibling
+    `opengl_basisu` (MIT; Cython C++ extension compiling basis_universal v2_50's
+    transcoder and Zstandard decoder, Apache-2.0 and BSD, vendored unmodified)
+    is the optional extra `OpenGLContext[basisu]`. `loaders.basisu` opens the
+    KTX 2 image (`BasisImage`) and plans the upload from the context's
+    extensions and version (BC7/BC1/BC3, ETC1/ETC2, ASTC 4x4, else RGBA8);
+    `texture.BasisTexture` uploads every mip level with
+    `glCompressedTexImage2D`; `apply_sampler` keeps a texture's own mips. The
+    Basis image is preferred to the core `source`, which is the fallback for a
+    file that does not transcode. Without opengl_basisu: the fallback, and one
+    warning per document naming the extra. The writer writes a Basis image
+    back under the extension. The KTX 2 reader in `loaders.textureimages`
+    hands Basis payloads (and `.basis` files) to it too, so
+    `ImageCubeMapTexture`, `ImageTexture3D` (a 2D array as a volume) and
+    `ImageTexture` (RGBA8, turned to X3D's lower-left origin) read them. GL
+    test draws each target format's quadrants (`test_basisu_gl.py`)
+  - left to the xnodes stream: `KHR_materials_retroreflection`,
+    `KHR_materials_volume_scatter`, `KHR_materials_pbrSpecularGlossiness`
+  - [x] X_ITE's file formats: STL, PLY (with 3D Gaussian splat PLY as
+    GaussianSplats) and OFF read by `loaders.meshfiles`, registered as Loader
+    and Adapter entries (so `Inline`, `SceneLoader` and `oglc-view` open
+    them); `.vrm` and `model/vrm` read as glTF; `.x3djz` and `.gz` appended to
+    X3D, glTF, OBJ and the mesh formats, decompressed under the resource limit
+    (`resolver.gunzipped`). Not read: SOG and SPZ (splat formats X_ITE reads
+    only with plug-ins), SVG (2D)
+  - [x] `KHR_animation_pointer` was partial (material factors, emissive
+    strength, texture transforms, a light's visibility): `animation.PointerTargets`
+    now resolves node TRS, weights and `weights/{i}`, node visibility,
+    `alphaCutoff`, normal scale, occlusion strength, base colour with alpha,
+    every `MATERIAL_EXTENSION_FIELDS` factor (the table moved from the writer
+    to `materials`), light colour, intensity, range and cone angles, camera
+    `yfov`, `znear`, `zfar`. An unresolved pointer is logged once. The rest
+    landed on x3d-xgltf2 (below)
+  - [x] `KHR_node_visibility` was partial: a hidden node was not built, so it
+    could not be shown. It is built with X3D `visible` false
+    (`_flat.integrate` prunes it, lights included) and left out of the
+    framing. CubeVisibility's capture pinned at t=0.25, since its blue cube
+    now blinks (reference_images `ee6c177`)
+  - [x] `extensionsRequired` was never read: an unread required extension is
+    reported (`scene.SUPPORTED_EXTENSIONS`, `unread_required`)
+  - [x] tangents were made only for a normal map; also for a clearcoat normal
+    map and anisotropy, which read the tangent's direction
+  - [x] audit gaps closed on x3d-xgltf2 (2026-10-09):
+    - Draco: an attribute outside the extension's map is read from its
+      accessor (`meshes._primitive_arrays`); without DracoPy a primitive whose
+      accessors hold the uncompressed data draws from them; without either,
+      one warning per load
+    - image-based lights: a light's mips span roughness 0 to 1 whatever their
+      count (EXT_lights_image_based README: "the various mip levels evenly
+      map to roughness values from 0 to 1"); `ibl.roughness_lod` places each
+      of the probe's five levels in the light's chain and `ibl_resample.frag`
+      draws it trilinearly, turned and scaled on the GPU (the CPU turn of a
+      256 chain took 156 ms; the GPU draw makes an animated light
+      affordable). The probe's own prefilter and `pbr.frag`'s lookup already
+      use `lod = roughness * (levels - 1)`, as the sample viewer and X_ITE
+      do. An EnvironmentLight's `specularTexture` was box-filtered into a mip
+      chain; it is now GGX-filtered by the probe, as X_ITE filters it
+      (`ImageBasedLight.prefiltered`). X_ITE reads only an
+      EXT_lights_image_based light's first mip and prefilters it itself; we
+      read the document's mips, as the extension specifies
+    - `PhysicalMaterial.clearcoatNormalScale`: loaded, written, material
+      block word 19, scales the coat normal's x and y in `pbr.frag`, driven by
+      `KHR_animation_pointer`. X_ITE has no such field and draws the coat
+      normal map at full strength; the glTF spec is followed
+    - pointers: an orthographic camera is an `OrthoViewpoint`
+      (`-xmag, -ymag, xmag, ymag`, as X_ITE builds it) with `xmag`, `ymag`,
+      `znear`, `zfar` driven; `aspectRatio` kept beside the Viewpoint and
+      driven (the projection follows the window, as X_ITE's does);
+      `EXT_lights_image_based` `intensity` and `rotation` (slerped), the
+      light uploaded again when its `version` moves; a texture with no
+      transform, or one sharing a transform, is given its own
+      (`animation.own_texture_transform`)
+    - EXT_mesh_gpu_instancing: the node's morph weights and skin are bound to
+      the instanced geometry, so every instance deforms
+  - [ ] `KHR_xmp_json_ld` keeps four notice fields
+  - [x] `test_gltf_conformance` skipped every render: it passed `None` as the
+    window system, and a render that drew nothing was a skip. It passes no
+    backend now, and a render that draws nothing fails
 - Documentation (§12)
 
 **Touches:** pyvrml97 (the scenegraph model, parsers, field types), OpenGLContext
@@ -2312,15 +2483,13 @@ Corpus renders that differ from X_ITE by more than 10%, looked at 2026-10-08:
 - [x] Sphere, Cylinder and Cone texture coordinates followed neither the seam
   at the back nor v upward; they are VRML97's now, and the top cap's image
   has its top toward -Z.
-- Figure22_2 and other ground colours: X_ITE and Web3D's render draw the
-  nadir colour solid up to the first `groundAngle`; VRML97 and X3D
-  interpolate the colours between the angles, as drawn here.
-- PixelTexture filtering: X_ITE magnifies a PixelTexture with no
-  TextureProperties by nearest texel; the specification leaves the default
-  filter to the browser, and the engine filters linearly.
-- WALK documents: X_ITE drops a walking viewer to the floor at load, before
-  the first frame; the engine's capture shows the viewer where the
-  Viewpoint places it.
+- Figure22_2 and other ground colours: see the xcorpus section (X_ITE
+  interpolates as X3D does; a looking-level artefact of its nadir band).
+- PixelTexture filtering: X_ITE and the engine both sample a texture with no
+  TextureProperties and under 16 texels on its longer side by nearest texel
+  (`sampler.SMALL_IMAGE`), linearly otherwise.
+- [x] WALK documents: the viewer stands on the ground below it and falls
+  under gravity (`move/terrainfollow.py`, 2026-10-09).
 - [x] Text: a document's Text with no FontStyle is SERIF, SERIF and
   TYPEWRITER are found by name where the fonts' classes are wrong, and the
   lines are `size` x `spacing` apart.
@@ -2345,3 +2514,144 @@ Corpus renders that differ from X_ITE by more than 10%, looked at 2026-10-08:
   sphere beside the switched-off light dark, as drawn here; X_ITE and
   Web3D's render light it, and light Figure20_12's two groups with both
   lights.
+
+## Corpus against X_ITE, xcorpus stream (2026-10-09)
+
+X_ITE 16.4.3 references for every archive (`scripts/x3d_xite_references.py
+--archive`): ConformanceNist 779, Vrml2Sourcebook 418, Basic 716 of 745,
+HumanoidAnimation 927, Savage 13327 of 13342, X3dForAdvancedModeling 164,
+X3dForWebAuthors 246 of 274; 72 documents fail in X_ITE (page errors or
+time-outs) and have none. The difference is the percentage of pixels more
+than 32 apart in a channel (`oglc-x3d-regression`'s X_ITE column). The
+committed X_ITE renders in the submodule are LFS pointers in a fresh clone;
+1181 of them read as no image until replaced by the real files, which is why
+the 2026-10-07 figure (4.9%) is not comparable with the ones below.
+
+| Archives (documents) | renderer | before median / mean / >10% | after median / mean / >10% |
+|---|---|---|---|
+| ConformanceNist + Vrml2Sourcebook (1181) | pbr | 0.51 / 2.94 / 69, 32 failed to draw | 0.39 / 2.72 / 63, none failed |
+| ConformanceNist (763) | pbr | 0.53 / 2.11 / 16 | 0.38 / 2.01 / 16 |
+| Vrml2Sourcebook (418) | pbr | 0.46 / 4.38 / 53 | 0.40 / 4.00 / 47 |
+| ConformanceNist + Vrml2Sourcebook (1181) | vrml97 | 0.47 / 2.92 / 67, 32 failed | 0.40 / 2.76 / 64, none failed |
+| Basic, HumanoidAnimation, X3dForAdvancedModeling, X3dForWebAuthors, Savage without tiles (3385) | pbr | 0.19 / 5.27 / 447, 43 failed | 0.18 / 4.62 / 416, 29 failed |
+| Basic (711) | pbr | 0.18 / 4.96 / 89 | 0.18 / 4.53 / 83 |
+| HumanoidAnimation (927) | pbr | 0.02 / 0.54 / 11 | 0.02 / 0.54 / 11 |
+| Savage without tiles (1239) | pbr | 0.70 / 8.93 / 284 | 0.63 / 7.64 / 266 |
+| X3dForAdvancedModeling (163) | pbr | 0.54 / 2.69 / 14 | 0.43 / 2.52 / 12 |
+| X3dForWebAuthors (245) | pbr | 2.01 / 7.32 / 49 | 1.39 / 6.50 / 44 |
+
+"Before" is x3d-complete at openglcontext 5f572275, pyvrml97 083e25b;
+"after" is x3d-xcorpus with x3d-complete 5417a803 / 57ad92e merged. The
+other archives leave out Savage's 12067 terrain tiles. A failed document is
+one either renderer drew nothing for. Savage's `*_files/` documents are
+PowerPoint exports, and X_ITE's render of them is its loading screen.
+
+- [x] 32 ConformanceNist documents failed to draw: an IndexedFaceSet with
+  `colorPerVertex FALSE` and no `colorIndex` indexed its colours by
+  `coordIndex`; face i takes colour i (13.3.6), and a face left without a
+  colour drops the colour array rather than raising under NumPy 2
+  (`tests/unit/test_ifscompiler.py`)
+- [x] TextureTransform composed by the equation, Tc' = -C x S x R x C x T x Tc,
+  rightmost first, as X_ITE reads it; the prose beside it in 18.4.10 scales
+  before rotating, so the specification is ambiguous and X_ITE decides.
+  TextureTransform3D likewise (`tests/unit/test_shaderpass.py`);
+  center_complex_pixeltexture 7.3% -> 0.8%
+- [x] a WALK document's viewer stands on the ground below it and falls under
+  gravity (`move/terrainfollow.py`, `tests/unit/test_terrain_follow.py`);
+  23.4.4 recommends it and X_ITE does it. Placed on the ground when its
+  viewpoint is bound rather than after a timed fall, so a capture is
+  deterministic. Figure28_1 33.6% -> 3.0%, Figure24_1 24.4% -> 0.9%,
+  Doorway 53% -> 44%
+- [x] Phong specular: no N.L condition, and a shininess of 0 is (N.H)^0 = 1
+  everywhere (17.2.2.5; X_ITE alike); Material/shininess 5.1% -> 1.6%
+- [x] a document's unlit colours (no Appearance, no Material, a document's
+  UnlitMaterial) are display values in the PBR pass, as X_ITE's colour
+  space has them (`pbrpass.DISPLAYED_BIT`); also in an instanced batch
+  (`pbrpass.drawn_material`). Figure16_7 22.9% -> 0.3%, Figure16_6 13.2% -> 0.9%, Log 6.0% -> 0.5%
+- [x] fog applied to the lights' unclamped sum, then clamped (17.2.2.5's
+  applyFog(emissive + lights)); Figure23_4 6.6% -> 0.3%
+- [x] Extrusion `scale` and `orientation` by spine point, min(i, count - 1)
+  as X_ITE reads them, a closed spine's repeated point not counted: the
+  torus rings of PROTO/fivedeepnesting were dropped by opengl_extrusions'
+  count check (5.9% -> 0.2%). opengl_extrusions' `vrml97_extrusion` still refuses a list
+  with an entry for a closed spine's repeated point; the engine passes it
+  one entry per distinct point; it also refuses a two-point crossSection
+  (a ribbon), which Savage documents use (follow-ups for that project)
+- [x] the first viewpoint bound is the one the camera opens at whatever its
+  `jump`; `jump` FALSE keeps the user's view, and there is none before the
+  first bind. 38 documents (Savage's ships and boats) have only jump-false
+  viewpoints: Sovremenny 96.8% -> 1.0%, the UssCole boats 74% -> 1.2%
+  (`tests/unit/test_x3d_default_view.py`)
+- [x] WALK gravity for the type spelled `WALK` only; X_ITE takes `'walk'`
+  for no type (SanCarlosCathedral/originals/gen6)
+- [x] EXTERNPROTO URL with no `#name`: the file's first PROTO (4.9.3), in
+  pyvrml97's `files.LocalPrototypes` and the engine's `ContainedPrototypes`
+  (EXTERNPROTO/first_proto 2.7% -> 0.0%)
+
+Kept by choice (the specification's normative text against X_ITE; for the
+maintainer):
+
+- Background ground beyond the last `groundAngle`: 24.2.1 "the region
+  between the last groundAngle and the equator is non-existent"; X_ITE
+  carries the last ground colour to the equator (verify_lastground 50%,
+  Figure18_24's fence 54%). Together with the next point this is the
+  largest group left: 143 documents of the other archives over 10% hold a
+  Background with ground angles (Savage's ship and sensor scenes at 50 to
+  75%). Figure22_2 and the other ground documents (15%)
+  differ by a different cause: X_ITE interpolates the ground colours as the
+  specification says when the nadir is in view (probe documents looking
+  down match ours), but its band reaching the nadir has a vertex on the
+  camera plane (w = 0) when looking level, and draws that band in the
+  nadir colour. Not a choice of X_ITE's; not followed
+- Box top and bottom texture faces: 13.3.1 gives each face's orientation;
+  X_ITE 16.4.3 turns top and bottom 180 degrees
+- X3D 3.0 DirectionalLight scope: X3D 3's DirectionalLight (17.4.1) scopes the light to its
+  parent group (NIST's expected image for DirectionalLight/test_on agrees);
+  X_ITE lights everything (Figure20_12 17%)
+- Extrusion caps: creaseAngle smooths across any two adjacent faces
+  (13.2.3), the caps' edges among them; X_ITE shades the caps apart from
+  the sides (test_ccw 15%, test_begincap 3.7%)
+
+Resolved without change:
+
+- Viewpoint orientation: X_ITE's EXAMINE viewer straightens the horizon of a
+  bound viewpoint (its StraightenHorizon browser option, on by default), so
+  a viewpoint with roll is turned until y is up; 23.4.x places the view as
+  the Viewpoint's orientation says. `scripts/x3d_xite_references.py`
+  switches the option off (2026-10-14). Of the 1181 references it changes
+  the 24 NIST STEP documents with rolled viewpoints for their z-up parts,
+  drawn again: they were 4 to 7% from ours and are now at most 0.64%
+- PixelTexture filtering: X_ITE samples any texture with no
+  TextureProperties and fewer than 16 texels on its longer side by nearest
+  texel, linear otherwise; `sampler.SMALL_IMAGE` is the same rule
+- Figure20_09's viewpoint matches; its remaining 3.7% is the GLOBELIGHT
+  intensity a TimeSensor animates (capture time)
+- the Snake's background matches; 13% is the pose at capture time
+- SphereSensor's grey plane: the sensor tests are WALK documents with
+  nothing below the viewer, which X_ITE drops under gravity from the first
+  frame; the plane is a wall at z = -8 and is the same in both
+- Figure20_17a 0.3%
+
+Differences that remain, by cause:
+
+- capture time (TimeSensor loops started at 0, interpolators, falling WALK
+  viewers with no ground): X_ITE captures 0.5 s after load at browser time,
+  a time no fixed clock reproduces. One/Two/Three, Boxes, StopWatch,
+  Floater, fogtype_linear (98%: the fogged quad's position), the sensor
+  tests' falls, children500, PlayYard, the dungeon rooms seen from outside
+- Scripts and text: exempt (Bounce*, Cut, Button, Match's flames,
+  TexturePlane, SubWorld, the FontStyle and Text tests)
+- antialiasing: X_ITE's canvas antialiases lines and edges
+  (points15000_lineset 43%, IsoLine 13%); a global rendering option, for the
+  xrender stream
+- Ambient (9%): X_ITE drops the centre of the near disc and the marker
+  sphere; not explained
+- MovieTexture (VirtualTV), Sound documents' markers: other streams
+
+Tone mapping: of all archives, 13 documents use PhysicalMaterial (glTF
+sample models in X3dForAdvancedModeling, CesiumMan); a document's Material
+and unlit surfaces are drawn without the tone map. X_ITE's renders of
+them are nearly empty at its capture (the glTF Inlines have not arrived 0.5 s after load), and drawing
+them again with X_ITE's `toneMapping="NONE"` gives the same images, so the
+corpus measures nothing of the tone curve: the default curve is not a
+difference here. For the xrender stream.

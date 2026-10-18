@@ -32,11 +32,12 @@ from vrml.vrml97 import transformmatrix
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.loaders.gltf.materials import (
+    MATERIAL_EXTENSION_FIELDS,
     GLTF_TEXTURE_KEYS, khr_transform_matrix, khr_transform_params,
 )
 from OpenGLContext.scenegraph.texturemapping import channel_labels, transform_for
 from OpenGLContext.loaders.resolver import Resolver
-from OpenGLContext.loaders.gltf.accessors import _read_floats, _read_normalized
+from OpenGLContext.loaders.gltf.accessors import _read_floats
 
 if TYPE_CHECKING:
     import pygltflib
@@ -528,6 +529,12 @@ def _trs_animated_nodes(g: "pygltflib.GLTF2") -> set:
             if tgt is not None and getattr(tgt, 'node', None) is not None \
                     and getattr(tgt, 'path', None) in _TRS_PATHS:
                 out.add(tgt.node)
+            elif tgt is not None and getattr(tgt, 'path', None) == 'pointer':
+                pointer = ((getattr(tgt, 'extensions', None) or {})
+                           .get('KHR_animation_pointer') or {}).get('pointer')
+                node = _pointer_node_trs(pointer)
+                if node is not None:
+                    out.add(node)
     return out
 
 
@@ -540,7 +547,7 @@ def _sampler_values(g: "pygltflib.GLTF2", samp: "pygltflib.AnimationSampler",
     or the morph-target count for a ``weights`` channel -- all recovered from the
     total component count so a single reshape handles every path uniformly.
     """
-    raw = _read_normalized(g, samp.output, resolver)
+    raw = _read_floats(g, samp.output, resolver, precise=True)
     total = int(np.asarray(raw).size)
     divisor = (3 * times_len) if interp == 'CUBICSPLINE' else times_len
     if divisor <= 0 or total % divisor:
@@ -548,6 +555,47 @@ def _sampler_values(g: "pygltflib.GLTF2", samp: "pygltflib.AnimationSampler",
             "glTF animation sampler output (%d values) is not divisible into %d "
             "keyframe rows" % (total, divisor))
     return np.ascontiguousarray(raw, dtype='d').reshape(divisor, total // divisor)
+
+
+def own_texture_transform(appearance: Any, channel: str) -> Optional[Any]:
+    """The ``TextureTransformMatrix3D`` that moves ``channel``'s texture and
+    no other, or None where the channel has no texture or another kind of
+    transform.
+
+    A texture with no transform is given one, of the identity, through the
+    coordinate set it reads; one sharing a transform with another channel (the
+    loader makes one per distinct transform) is given a copy of its own. Each
+    is a new entry of the appearance's ``MultiTextureTransform`` under a new
+    mapping label, which the channel's ``...TextureMapping`` field is set to.
+    """
+    material = getattr(appearance, 'material', None)
+    labels = channel_labels(material)
+    label = labels.get(channel)
+    fields = getattr(material, 'CHANNELS', None)
+    if label is None or not fields or channel not in fields:
+        return None
+    transform = transform_for(appearance, label) if label else None
+    if transform is not None and not isinstance(transform, x3d.TextureTransformMatrix3D):
+        return None
+    shared = any(other != channel and found == label for other, found in labels.items())
+    if transform is not None and not shared:
+        return transform
+    current = getattr(appearance, 'textureTransform', None)
+    if current and not isinstance(current, x3d.MultiTextureTransform):
+        return None
+    entries = list(current.textureTransform) if current else []
+    taken = {str(getattr(entry, 'mapping', '')) for entry in entries}
+    coordinates = label.split(':')[0] or 'TEXCOORD_0'
+    index = len(entries)
+    while '%s:%d' % (coordinates, index) in taken:
+        index += 1
+    mapping = '%s:%d' % (coordinates, index)
+    matrix = (np.array(transform.matrix, 'f') if transform is not None
+              else khr_transform_matrix())
+    own = x3d.TextureTransformMatrix3D(mapping=mapping, matrix=matrix)
+    appearance.textureTransform = x3d.MultiTextureTransform(textureTransform=entries + [own])
+    setattr(material, fields[channel] + 'Mapping', mapping)
+    return own
 
 
 #: Each glTF textureInfo key's channel.
@@ -558,17 +606,16 @@ def _texture_transform_setter(appearance: Any, texture_key: str,
                               component: str) -> "Optional[Callable[..., None]]":
     """A setter for one component of a texture's KHR_texture_transform, or None
 
-    The transform is the ``TextureTransformMatrix3D`` the loader made for the
-    channel's mapping label. Setting one component keeps the others, which
-    are read back from the matrix.
+    The transform is the channel's own ``TextureTransformMatrix3D``
+    (:func:`own_texture_transform`), made where the texture declared none.
+    Setting one component keeps the others, which are read back from the
+    matrix.
     """
     channel = _TEXTURE_KEY_CHANNEL.get(texture_key)
-    material = getattr(appearance, 'material', None)
-    label = channel_labels(material).get(channel) if channel else None
-    if label is None or component not in ('offset', 'rotation', 'scale'):
+    if channel is None or component not in ('offset', 'rotation', 'scale'):
         return None
-    transform = transform_for(appearance, label)
-    if not isinstance(transform, x3d.TextureTransformMatrix3D):
+    transform = own_texture_transform(appearance, channel)
+    if transform is None:
         return None
 
     def set_transform(value: Any) -> None:
@@ -582,73 +629,262 @@ def _texture_transform_setter(appearance: Any, texture_key: str,
     return set_transform
 
 
-def _pointer_setter(g: "pygltflib.GLTF2", pointer: str, node_transforms: dict,
-                    node_light: dict, appearances: dict) -> Optional[Callable[..., None]]:
-    """Resolve a KHR_animation_pointer JSON-pointer to a ``setter(value)`` that
-    mutates the live scenegraph, or None if the target is unsupported. Covers node
-    visibility (of a light), material factors, emissive strength and per-texture
-    KHR_texture_transform components."""
-    toks = [t for t in pointer.split('/') if t]
+#: The core material properties a pointer may drive: the JSON path under
+#: ``/materials/{}`` -> (what holds it, its field).
+_MATERIAL_POINTERS: dict[tuple[str, ...], tuple[str, str]] = {
+    ('alphaCutoff',): ('appearance', 'alphaCutoff'),
+    ('emissiveFactor',): ('material', 'emissiveColor'),
+    ('normalTexture', 'scale'): ('material', 'normalScale'),
+    ('extensions', 'KHR_materials_clearcoat', 'clearcoatNormalTexture', 'scale'):
+        ('material', 'clearcoatNormalScale'),
+    ('occlusionTexture', 'strength'): ('material', 'occlusionStrength'),
+    ('pbrMetallicRoughness', 'metallicFactor'): ('material', 'metallic'),
+    ('pbrMetallicRoughness', 'roughnessFactor'): ('material', 'roughness'),
+}
+_MATERIAL_POINTERS.update({
+    ('extensions', extension, key): ('material', name)
+    for extension, fields in MATERIAL_EXTENSION_FIELDS
+    for key, (name, _default) in fields.items()})
 
-    def _v(value: Any) -> np.ndarray:
-        return np.ravel(np.asarray(value, dtype='d'))
+#: KHR_lights_punctual properties -> the light node's field.
+_LIGHT_POINTERS: dict[tuple[str, ...], str] = {('color',): 'color', ('intensity',): 'intensity',
+                   ('range',): 'radius', ('spot', 'innerConeAngle'): 'beamWidth',
+                   ('spot', 'outerConeAngle'): 'cutOffAngle'}
 
-    try:
-        if toks[0] == 'nodes':
-            ni = int(toks[1])
-            if toks[2:] == ['extensions', 'KHR_node_visibility', 'visible']:
-                light = node_light.get(ni)
-                if light is not None:
-                    base_i = float(getattr(light, 'intensity', 1.0)) or 1.0
-                    def set_light_vis(value: Any, light: Any = light,
-                                      base_i: float = base_i) -> None:
-                        light.intensity = base_i if _v(value)[0] > 0.5 else 0.0
-                    return set_light_vis
+#: Camera properties -> the viewpoint's field or the value beside it.
+_CAMERA_POINTERS: dict[tuple[str, ...], str] = {
+    ('perspective', 'yfov'): 'fieldOfView', ('perspective', 'znear'): 'near',
+    ('perspective', 'zfar'): 'far', ('perspective', 'aspectRatio'): 'aspectRatio',
+    ('orthographic', 'znear'): 'nearDistance', ('orthographic', 'zfar'): 'farDistance'}
+
+#: An orthographic camera's magnifications -> their place in the window
+#: ``(-xmag, -ymag, xmag, ymag)``.
+_MAGNIFICATIONS: dict[tuple[str, ...], int] = {('orthographic', 'xmag'): 0, ('orthographic', 'ymag'): 1}
+
+_NODE_TRS = ('translation', 'rotation', 'scale')
+_VISIBILITY = ('extensions', 'KHR_node_visibility', 'visible')
+
+
+def _values(value: Any) -> np.ndarray:
+    return np.ravel(np.asarray(value, dtype='d'))
+
+
+def _assign(holder: Any, field: str) -> Callable[[Any], None]:
+    """A setter writing a sampled value to ``holder.field``, as wide as the field is."""
+    width = int(np.size(getattr(holder, field)))
+
+    def assign(value: Any) -> None:
+        given = _values(value)
+        setattr(holder, field, float(given[0]) if width == 1 else
+                tuple(float(v) for v in given[:width]))
+    return assign
+
+
+class PointerTargets:
+    """What a KHR_animation_pointer may drive in one built scene, by glTF index.
+
+    The scene builder fills it as it builds: each node's transform and morph
+    setters, each punctual light's nodes (one per node that carries it), each
+    camera's viewpoints, each material's appearance, and the document's
+    image-based lights. :meth:`setter` resolves a
+    pointer against it.
+    """
+
+    def __init__(self, g: "pygltflib.GLTF2", node_transforms: Optional[dict] = None,
+                 node_morph: Optional[dict] = None, appearances: Optional[dict] = None,
+                 lights: Optional[dict] = None, viewpoints: Optional[dict] = None,
+                 image_lights: Any = None) -> None:
+        self.g = g
+        self.node_transforms = node_transforms if node_transforms is not None else {}
+        self.node_morph = node_morph if node_morph is not None else {}
+        self.appearances = appearances if appearances is not None else {}
+        #: light index -> the light nodes built for it
+        self.lights: dict[int, list] = lights if lights is not None else {}
+        #: camera index -> the Viewpoints built for it
+        self.viewpoints: dict[int, list] = viewpoints if viewpoints is not None else {}
+        #: The document's EXT_lights_image_based lights, read by index
+        #: (``imagebased.ImageLights``), or None
+        self.image_lights = image_lights
+
+    def setter(self, pointer: str) -> Optional[Callable[[Any], None]]:
+        """A ``setter(value)`` for the property ``pointer`` names, or None where
+        this engine has nothing that property drives."""
+        tokens = [token for token in pointer.split('/') if token]
+        try:
+            if len(tokens) >= 3 and tokens[0] == 'nodes':
+                return self._node(int(tokens[1]), tuple(tokens[2:]))
+            if len(tokens) >= 3 and tokens[0] == 'materials':
+                return self._material(int(tokens[1]), tuple(tokens[2:]))
+            if len(tokens) >= 3 and tokens[0] == 'cameras':
+                return self._camera(int(tokens[1]), tuple(tokens[2:]))
+            if tokens[:3] == ['extensions', 'KHR_lights_punctual', 'lights'] and len(tokens) >= 5:
+                return self._light(int(tokens[3]), tuple(tokens[4:]))
+            if tokens[:3] == ['extensions', 'EXT_lights_image_based', 'lights'] \
+                    and len(tokens) == 5:
+                return self._image_light(int(tokens[3]), tokens[4])
+        except (ValueError, IndexError, TypeError, AttributeError):
             return None
-        if toks[0] == 'materials':
-            appearance = appearances.get(int(toks[1]))
-            if appearance is None:
-                return None
-            m = appearance.material
-            rest = toks[2:]
-            if len(rest) >= 4 and rest[-2] == 'KHR_texture_transform':
-                return _texture_transform_setter(appearance, rest[-4], rest[-1])
-            _SCALAR = {
-                ('pbrMetallicRoughness', 'metallicFactor'): 'metallic',
-                ('pbrMetallicRoughness', 'roughnessFactor'): 'roughness',
-            }
-            _COLOR3 = {
-                ('pbrMetallicRoughness', 'baseColorFactor'): 'baseColor',
-                ('emissiveFactor',): 'emissiveColor',
-            }
-            key = tuple(rest)
-            if key in _SCALAR:
-                attr = _SCALAR[key]
-                def set_scalar(value: Any, m: Any = m, attr: str = attr) -> None:
-                    setattr(m, attr, float(_v(value)[0]))
-                return set_scalar
-            if key in _COLOR3:
-                attr = _COLOR3[key]
-                def set_color(value: Any, m: Any = m, attr: str = attr) -> None:
-                    val = _v(value)
-                    setattr(m, attr, tuple(float(x) for x in val[:3]))
-                return set_color
-            if key == ('extensions', 'KHR_materials_emissive_strength', 'emissiveStrength'):
-                def set_es(value: Any, m: Any = m) -> None:
-                    m.emissiveStrength = float(_v(value)[0])
-                return set_es
         return None
-    except (ValueError, IndexError, KeyError, TypeError):
+
+    def _node(self, index: int, path: tuple[str, ...]) -> Optional[Callable[[Any], None]]:
+        transform = self.node_transforms.get(index)
+        if path == _VISIBILITY and transform is not None:
+            def set_visible(value: Any, transform: Any = transform) -> None:
+                visible = bool(_values(value)[0] >= 0.5)
+                if bool(transform.visible) != visible:
+                    transform.visible = visible
+            return set_visible
+        if path in (('translation',), ('scale',)) and transform is not None:
+            return _assign(transform, path[0])
+        if path == ('rotation',) and transform is not None:
+            def set_rotation(value: Any, transform: Any = transform) -> None:
+                transform.rotation = quat_xyzw_to_vrml(_values(value)[:4])
+            return set_rotation
+        setters = self.node_morph.get(index)
+        if setters and path[0] == 'weights':
+            weights = np.array(self._initial_weights(index), dtype='d')
+            if len(path) == 1:
+                def set_weights(value: Any, setters: list = setters) -> None:
+                    given = np.asarray(_values(value), dtype='f')
+                    for setter in setters:
+                        setter(given)
+                return set_weights
+            if len(path) == 2:
+                target = int(path[1])
+                if not 0 <= target < len(weights):
+                    return None
+
+                def set_weight(value: Any, setters: list = setters,
+                               weights: np.ndarray = weights, target: int = target) -> None:
+                    weights[target] = _values(value)[0]
+                    for setter in setters:
+                        setter(np.asarray(weights, dtype='f'))
+                return set_weight
         return None
+
+    def _initial_weights(self, index: int) -> list:
+        node = self.g.nodes[index]
+        weights = getattr(node, 'weights', None)
+        mesh = self.g.meshes[node.mesh] if node.mesh is not None else None
+        if weights is None and mesh is not None:
+            weights = getattr(mesh, 'weights', None)
+        if weights is None and mesh is not None:
+            targets = max((len(getattr(p, 'targets', None) or []) for p in mesh.primitives),
+                          default=0)
+            weights = [0.0] * targets
+        return list(weights or [])
+
+    def _material(self, index: int, path: tuple[str, ...]) -> Optional[Callable[[Any], None]]:
+        appearance = self.appearances.get(index)
+        if appearance is None:
+            return None
+        material = appearance.material
+        if len(path) >= 4 and path[-2] == 'KHR_texture_transform':
+            return _texture_transform_setter(appearance, path[-4], path[-1])
+        if path == ('pbrMetallicRoughness', 'baseColorFactor'):
+            colour = 'baseColor' if hasattr(material, 'baseColor') else 'emissiveColor'
+
+            def set_base(value: Any, material: Any = material,
+                         appearance: Any = appearance, colour: str = colour) -> None:
+                given = _values(value)
+                setattr(material, colour, tuple(float(v) for v in given[:3]))
+                if len(given) > 3 and getattr(appearance, 'alphaMode', 'OPAQUE') != 'OPAQUE':
+                    material.transparency = float(1.0 - given[3])
+            return set_base
+        found = _MATERIAL_POINTERS.get(path)
+        if found is None:
+            return None
+        holder = appearance if found[0] == 'appearance' else material
+        if found[1] == 'attenuationDistance':
+            def set_distance(value: Any, material: Any = material) -> None:
+                distance = float(_values(value)[0])
+                material.attenuationDistance = distance if math.isfinite(distance) else 0.0
+            return set_distance
+        if not hasattr(holder, found[1]):
+            return None
+        return _assign(holder, found[1])
+
+    def _light(self, index: int, path: tuple[str, ...]) -> Optional[Callable[[Any], None]]:
+        field = _LIGHT_POINTERS.get(path)
+        lights = [light for light in self.lights.get(index, ()) if hasattr(light, field or '')]
+        if field is None or not lights:
+            return None
+        if field == 'radius':
+            def set_range(value: Any, lights: list = lights) -> None:
+                reach = float(_values(value)[0])
+                for light in lights:
+                    light.radius = reach if reach > 0 else float('inf')
+                    light._gltf_range = reach
+            return set_range
+        assigners = [_assign(light, field) for light in lights]
+
+        def set_lights(value: Any, assigners: list = assigners) -> None:
+            for assign in assigners:
+                assign(value)
+        return set_lights
+
+    def _image_light(self, index: int, name: str) -> Optional[Callable[[Any], None]]:
+        light = self.image_lights.light(index) if self.image_lights is not None else None
+        if light is None or name not in ('intensity', 'rotation'):
+            return None
+        return _assign(light, name)
+
+    def _camera(self, index: int, path: tuple[str, ...]) -> Optional[Callable[[Any], None]]:
+        viewpoints = self.viewpoints.get(index, [])
+        axis = _MAGNIFICATIONS.get(path)
+        if axis is not None and viewpoints:
+            def set_magnification(value: Any, viewpoints: list = viewpoints,
+                                  axis: int = axis) -> None:
+                magnification = float(_values(value)[0])
+                for viewpoint in viewpoints:
+                    window = [float(v) for v in viewpoint.fieldOfView]
+                    if len(window) >= 4:
+                        window[axis], window[axis + 2] = -magnification, magnification
+                        viewpoint.fieldOfView = window
+            return set_magnification
+        field = _CAMERA_POINTERS.get(path)
+        if field is None or not viewpoints:
+            return None
+
+        def set_camera(value: Any, viewpoints: list = viewpoints, field: str = field) -> None:
+            for viewpoint in viewpoints:
+                setattr(viewpoint, field, float(_values(value)[0]))
+        return set_camera
+
+
+def pointer_is_rotation(pointer: str) -> bool:
+    """Whether a pointer names a quaternion, which is interpolated as one: a
+    node's rotation or an image-based light's."""
+    tokens = [token for token in pointer.split('/') if token]
+    if len(tokens) == 3 and tokens[0] == 'nodes':
+        return tokens[2] == 'rotation'
+    return (len(tokens) == 5 and tokens[:3] == ['extensions', 'EXT_lights_image_based', 'lights']
+            and tokens[4] == 'rotation')
+
+
+def _pointer_node_trs(pointer: Any) -> Optional[int]:
+    """The node a pointer moves by translation, rotation or scale, or None."""
+    if not isinstance(pointer, str):
+        return None
+    tokens = [token for token in pointer.split('/') if token]
+    if len(tokens) == 3 and tokens[0] == 'nodes' and tokens[2] in _NODE_TRS:
+        try:
+            return int(tokens[1])
+        except ValueError:
+            return None
+    return None
 
 
 def _build_animations(g: "pygltflib.GLTF2", resolver: Resolver,
-                      node_transforms: Optional[dict] = None, node_light: Optional[dict] = None,
-                      appearances: Optional[dict] = None) -> list:
-    """Parse ``g.animations`` into :class:`Animation` objects (TRS/weights
-    channels plus resolved KHR_animation_pointer channels)."""
-    node_light = node_light or {}
-    appearances = appearances or {}
+                      targets: Optional[PointerTargets] = None) -> list:
+    """Parse ``g.animations`` into :class:`Animation` objects: TRS and weights
+    channels, and the KHR_animation_pointer channels ``targets`` resolves.
+
+    A pointer naming a property this engine does not drive is reported once
+    and its channel left out; the clip's other channels play.
+    """
+    targets = targets if targets is not None else PointerTargets(g)
+    unresolved: set[str] = set()
     out: list = []
     for anim in (getattr(g, 'animations', None) or []):
         channels: list = []
@@ -665,19 +901,23 @@ def _build_animations(g: "pygltflib.GLTF2", resolver: Resolver,
             samp = samplers[si]
             interp = getattr(samp, 'interpolation', None) or 'LINEAR'
             try:
-                times = _read_floats(g, samp.input, resolver).ravel()
+                times = _read_floats(g, samp.input, resolver, precise=True).ravel()
                 values = _sampler_values(g, samp, len(times), interp, resolver)
             except (ValueError, KeyError, IndexError) as err:
                 log.warning("glTF: skipping animation channel: %s", err)
                 continue
             if path == 'pointer':
-                ptr = ((getattr(tgt, 'extensions', None) or {})
-                       .get('KHR_animation_pointer', {}) or {}).get('pointer')
-                setter = _pointer_setter(g, ptr, node_transforms or {},
-                                         node_light, appearances) if ptr else None
+                ptr = str(((getattr(tgt, 'extensions', None) or {})
+                           .get('KHR_animation_pointer', {}) or {}).get('pointer') or '')
+                setter = targets.setter(ptr)
                 if setter is not None:
                     pointer_channels.append(PointerChannel(
-                        Sampler(times, values, interp), setter, ptr))
+                        Sampler(times, values, interp,
+                                is_rotation=pointer_is_rotation(ptr)), setter, ptr))
+                elif ptr not in unresolved:
+                    unresolved.add(ptr)
+                    log.warning("glTF KHR_animation_pointer %r names a property "
+                                "that is not animated here; its channel is left out", ptr)
                 continue
             if path not in ('translation', 'rotation', 'scale', 'weights'):
                 continue

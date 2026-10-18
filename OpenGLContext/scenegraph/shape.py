@@ -8,9 +8,9 @@ from OpenGL import GL
 from OpenGL.GL import *
 from OpenGL.GL import GL_BACK, GL_FRONT, glUseProgram
 from vrml.vrml97 import basenodes
-from vrml import field
+from vrml import field, node, protofunctions
 from OpenGLContext import lighting
-from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort, texgen
+from OpenGLContext.scenegraph import boundingvolume, drawproperties, polygonsort, rendermodes, texgen
 from OpenGLContext.scenegraph.physicalmaterial import two_sided
 from OpenGLContext.scenegraph.texturelayers import is_layered, texture_layers
 from OpenGLContext.arrays import array
@@ -66,9 +66,9 @@ class Shape(basenodes.Shape):
         Read by the geometry that draws lines, points or polygons, which does
         not see the appearance (:mod:`~OpenGLContext.scenegraph.drawproperties`).
         """
-        mode._lineProperties = getattr(self.appearance, 'lineProperties', None)
-        mode._pointProperties = getattr(self.appearance, 'pointProperties', None)
-        mode._fillProperties = getattr(self.appearance, 'fillProperties', None)
+        mode._lineProperties = getattr(self.drawnAppearance, 'lineProperties', None)
+        mode._pointProperties = getattr(self.drawnAppearance, 'pointProperties', None)
+        mode._fillProperties = getattr(self.drawnAppearance, 'fillProperties', None)
         # The geometry a 3D texture spans in the compatibility profile
         mode._texturedGeometry = self.geometry
 
@@ -77,7 +77,7 @@ class Shape(basenodes.Shape):
         geometry of lines or points, which it does not apply to"""
         if getattr(type(self.geometry), 'meshArrays', None) is None:
             return drawproperties.FillStyle()
-        return drawproperties.fill_style(getattr(self.appearance, 'fillProperties', None))
+        return drawproperties.fill_style(getattr(self.drawnAppearance, 'fillProperties', None))
 
     def _renderFilledFixed(self, lit: Any, textured: Any, mode: Any) -> None:
         """Draw the geometry by the fixed-function state, or by the X3D shader that reads it
@@ -87,13 +87,13 @@ class Shape(basenodes.Shape):
         matrices and arrays this pass has set (:mod:`~OpenGLContext.scenegraph.x3dshaders`).
         """
         drawn = None
-        if getattr(self.appearance, 'shaders', None):
-            drawn = self.appearance.drawProgram(mode, self)
+        if getattr(self.drawnAppearance, 'shaders', None):
+            drawn = self.drawnAppearance.drawProgram(mode, self)
         try:
             self.geometry.render(lit=lit, textured=textured, mode=mode)
         finally:
             if drawn is not None:
-                self.appearance.releaseProgram(drawn, mode)
+                self.drawnAppearance.releaseProgram(drawn, mode)
                 glUseProgram(0)
 
     def _renderHatchFixed(self, fill: drawproperties.FillStyle, mode: Any) -> None:
@@ -125,8 +125,8 @@ class Shape(basenodes.Shape):
         if mode.visible:  # anything else...
             glPushAttrib(GL_LIGHTING_BIT)
             try:
-                if self.appearance:
-                    lit, textured, alpha, textureToken = self.appearance.render(
+                if self.drawnAppearance:
+                    lit, textured, alpha, textureToken = self.drawnAppearance.render(
                         mode=mode
                     )
                     if alpha < 1.0:  # is currently somewhat transparent
@@ -134,7 +134,7 @@ class Shape(basenodes.Shape):
                             mode.addTransparent(self)
                         if textured:
                             # undo the texture setup (since we won't render anything just now)
-                            self.appearance.renderPost(textureToken, mode=mode)
+                            self.drawnAppearance.renderPost(textureToken, mode=mode)
                         return
                 else:
                     lit = 0
@@ -151,7 +151,7 @@ class Shape(basenodes.Shape):
                     with _fixed_texgen(generated):
                         self._renderFilledFixed(lit, textured, mode)
                 if textured:
-                    self.appearance.renderPost(textureToken, mode=mode)
+                    self.drawnAppearance.renderPost(textureToken, mode=mode)
                 if fill.hatch:
                     self._renderHatchFixed(fill, mode)
             finally:
@@ -172,10 +172,7 @@ class Shape(basenodes.Shape):
         Sets up material and texture uniforms on the shader, then
         calls geometry's render method (which will use shader path).
         """
-        from OpenGLContext.passes.shaderpass import (
-            appearance_solid_color,
-            configure_material_from_node,
-        )
+        from OpenGLContext.passes.shaderpass import appearance_solid_color
 
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
@@ -192,12 +189,12 @@ class Shape(basenodes.Shape):
         # The one colour geometry with no material of its own is drawn in --
         # a line, a point cloud. Published here because the appearance belongs
         # to the shape and the geometry node does not see it.
-        mode._solid_color = appearance_solid_color(self.appearance,
+        mode._solid_color = appearance_solid_color(self.drawnAppearance,
                                                    lighting.x3d_lit(self.geometry))
         if hasattr(shader_program, 'set_fill_style'):
             shader_program.set_fill_style(self.fillStyle())
 
-        if self.appearance and getattr(self.appearance, 'bringsProgram', False):
+        if self.drawnAppearance and getattr(self.drawnAppearance, 'bringsProgram', False):
             if not getattr(mode, 'visible', True):
                 # Selection paints every shape in its own id colour with the
                 # pass's own program; the appearance's would paint its own.
@@ -206,10 +203,22 @@ class Shape(basenodes.Shape):
                 return None
             # No program of its own runs: drawn with its material and texture.
 
+        if getattr(mode, 'visible', True) and rendermodes.has_modes(self.drawnAppearance):
+            # X_ITE's BlendMode and DepthMode: the appearance's own state
+            # around the draw.
+            with rendermodes.applied(self.drawnAppearance):
+                return self._render_shader_drawn(mode, shader_program)
+        return self._render_shader_drawn(mode, shader_program)
+
+    def _render_shader_drawn(self, mode: Any, shader_program: Any) -> Any:
+        """Draw the geometry with the appearance's material through `shader_program`"""
+        from OpenGLContext.passes.shaderpass import (  # noqa: PLC0415 shaderpass imports the scenegraph
+            configure_material_from_node,
+        )
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
         if getattr(mode, 'visible', True) and hasattr(shader_program, 'configure_appearance'):
-            if two_sided(self.appearance) and not getattr(self.geometry, 'solid', True):
+            if two_sided(self.drawnAppearance) and not getattr(self.geometry, 'solid', True):
                 # The front faces with the material, then the back faces with
                 # the back material, each side culling the other.
                 try:
@@ -228,8 +237,8 @@ class Shape(basenodes.Shape):
         textured = False
         if getattr(mode, 'visible', True):
             # Set up material properties
-            if self.appearance and self.appearance.material:
-                configure_material_from_node(shader_program, self.appearance.material)
+            if self.drawnAppearance and self.drawnAppearance.material:
+                configure_material_from_node(shader_program, self.drawnAppearance.material)
             elif lighting.x3d_lit(self.geometry):
                 shader_program.set_unlit_material()
             else:
@@ -237,22 +246,22 @@ class Shape(basenodes.Shape):
 
             # A MultiTexture, a cube map or a 3D texture is a chain of layers
             # in place of the texture.
-            layered = self.appearance and is_layered(self.appearance.texture)
+            layered = self.drawnAppearance and is_layered(self.drawnAppearance.texture)
             if hasattr(shader_program, 'set_texture_layers'):
                 shader_program.set_texture_layers(
-                    texture_layers(self.appearance, self.geometry) if layered else None,
+                    texture_layers(self.drawnAppearance, self.geometry) if layered else None,
                     mode, self.geometry)
             # Set up texture if present
-            if self.appearance and self.appearance.texture and not layered:
-                tex = self.appearance.texture.cached(mode)
+            if self.drawnAppearance and self.drawnAppearance.texture and not layered:
+                tex = self.drawnAppearance.texture.cached(mode)
                 if tex is not None:
                     shader_program.bind_texture(tex)
                     textured = True
                     # Store texture ID in mode for geometry nodes that need direct access
                     mode._bound_texture_id = tex.texture
                     # Apply texture transform if present
-                    if self.appearance.textureTransform:
-                        shader_program.set_texture_transform(self.appearance.textureTransform)
+                    if self.drawnAppearance.textureTransform:
+                        shader_program.set_texture_transform(self.drawnAppearance.textureTransform)
                     else:
                         shader_program.set_default_texture_transform()
 
@@ -274,9 +283,9 @@ class Shape(basenodes.Shape):
     def _render_pbr(self, mode: Any, shader_program: Any, back: bool) -> None:
         """Draw through the PBR program with the front or back faces' material"""
         if back:
-            shader_program.configure_appearance(self.appearance, mode, self.geometry, back=True)
+            shader_program.configure_appearance(self.drawnAppearance, mode, self.geometry, back=True)
         else:
-            shader_program.configure_appearance(self.appearance, mode, self.geometry)
+            shader_program.configure_appearance(self.drawnAppearance, mode, self.geometry)
         # Whether the base colour is modulated by a per-vertex colour is one
         # uniform for the whole pass, so it is answered for every shape
         # rather than only by the geometry that has colours: a box drawn
@@ -315,7 +324,7 @@ class Shape(basenodes.Shape):
         # the same discipline the raw-GL layers follow.
         previous = mode.current_program() if hasattr(mode, 'current_program') else 0
         pass_program = mode.shader_program
-        drawn = self.appearance.drawProgram(mode, self)
+        drawn = self.drawnAppearance.drawProgram(mode, self)
         if drawn is None:
             return False
         mode.shader_program = drawn
@@ -323,7 +332,7 @@ class Shape(basenodes.Shape):
             self.geometry.render(textured=True, mode=mode)
         finally:
             mode.shader_program = pass_program
-            self.appearance.releaseProgram(drawn, mode)
+            self.drawnAppearance.releaseProgram(drawn, mode)
             if previous:
                 glUseProgram(previous)
             # The program may have replaced the textures on the pass's units;
@@ -348,8 +357,8 @@ class Shape(basenodes.Shape):
         glPushAttrib(GL_LIGHTING_BIT)
         try:
             textureToken = None
-            if self.appearance:
-                lit, textured, alpha, textureToken = self.appearance.render(mode=mode)
+            if self.drawnAppearance:
+                lit, textured, alpha, textureToken = self.drawnAppearance.render(mode=mode)
             else:
                 lit = 0
                 textured = 0
@@ -360,10 +369,17 @@ class Shape(basenodes.Shape):
                 glDisable(GL_LIGHTING)
             ## do the actual work of rendering it transparently...
             self.geometry.render(lit=lit, textured=textured, transparent=1, mode=mode)
-            if self.appearance:
-                self.appearance.renderPost(textureToken, mode=mode)
+            if self.drawnAppearance:
+                self.drawnAppearance.renderPost(textureToken, mode=mode)
         finally:
             glPopAttrib()
+
+    @property
+    def drawnAppearance(self) -> Any:
+        """The appearance this shape is drawn with: its ``appearance``, or
+        None where that is an instance of a prototype not read, which stands
+        for no node"""
+        return _standing(self.appearance)
 
     def drawsNothing(self) -> bool:
         """Whether this shape would put nothing on screen this frame.
@@ -376,13 +392,16 @@ class Shape(basenodes.Shape):
         have no extent the frustum test can use and still have something to
         draw, and a volume of unknown extent must always be drawn; only the node
         knows which of those it is.
+
+        A shape with no geometry, or with an instance of a prototype not read
+        as its geometry, draws nothing.
         """
-        return False
+        return not _standing(self.geometry)
 
     def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
-        if self.appearance:
-            key = self.appearance.sortKey(mode, matrix)
+        if self.drawnAppearance:
+            key = self.drawnAppearance.sortKey(mode, matrix)
         else:
             key = (False, [], None)
         if not key[0] and getattr(self.geometry, 'softEdges', False):
@@ -496,3 +515,11 @@ def _fixed_texgen(name: Optional[str]) -> Iterator[None]:
     finally:
         for _coordinate, switch, _plane in _PLANES:
             glDisable(switch)
+
+
+def _standing(value: Any) -> Any:
+    """`value`, or None where it is a prototype instance that stands for no
+    node: an EXTERNPROTO whose file was not read"""
+    if isinstance(value, node.PrototypedNode) and protofunctions.stands_for(value) is value:
+        return None
+    return value

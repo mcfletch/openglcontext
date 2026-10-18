@@ -31,6 +31,14 @@ Exceptions are as follows:
 
 	See tests/resources/3Dlabs-License.txt
 
+	The encoded streams and decoded values in
+	tests/unit/test_gltf_meshopt.py are taken from meshoptimizer's
+	test suite (demo/tests.cpp), under the MIT licence:
+		Copyright (c) 2016-2026 Arseny Kapoulkine
+	OpenGLContext/loaders/gltf/meshopt.py is written from the
+	KHR_meshopt_compression and EXT_meshopt_compression
+	specifications and copies no meshoptimizer code.
+
 	The tone curves in OpenGLContext/shaders/_tonemap_inc.glsl and
 	OpenGLContext/passes/tonemapping.py follow X_ITE 16.4.3's
 	ToneMapping2.glsl, and the weighted blended transparency in
@@ -39,12 +47,19 @@ Exceptions are as follows:
 
 		Copyright (c) 2009 Holger Seelig and other contributors
 
+	OpenGLContext/scenegraph/natural.py makes rocks by the method
+	that the README of gl-rock (https://github.com/Erkaman/gl-rock,
+	by Erkaman) describes: a sphere scraped flat in several places,
+	then roughened.  The code is written from that description and
+	copies none of gl-rock's code.  gl-rock is released under the
+	MIT licence, reproduced here:
+
 		Permission is hereby granted, free of charge, to any person
 		obtaining a copy of this software and associated documentation
 		files (the "Software"), to deal in the Software without
 		restriction, including without limitation the rights to use,
-		copy, modify, merge, publish, distribute, sublicense, and/or sell
-		copies of the Software, and to permit persons to whom the
+		copy, modify, merge, publish, distribute, sublicense, and/or
+		sell copies of the Software, and to permit persons to whom the
 		Software is furnished to do so, subject to the following
 		conditions:
 

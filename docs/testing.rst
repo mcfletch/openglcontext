@@ -44,8 +44,8 @@ The plugin provides three fixtures:
    A hidden core-profile 3.3 window, 64×64 pixels, current for the test.
 ``gl_context_compat``
    The same in the compatibility profile, for fixed-function code such as
-   ``glFrustum``, display lists and the GLU tessellator. It skips where the
-   driver returns a core context for a compatibility request.
+   ``glFrustum`` and display lists. It skips where the driver returns a core
+   context for a compatibility request.
 ``gl_window``
    The factory the other two use, for a test that needs a different size,
    profile or window hint. Every window it makes is destroyed when the test
@@ -70,6 +70,16 @@ than on GLFW directly:
 All three fixtures **skip** the test when the machine has no GL target.
 Invalid arguments, such as an unknown profile name, raise ``ValueError``
 instead, so a mistake does not silently skip the test.
+
+A driver that has already given this process contexts and then refuses one is
+not a machine without GL -- it is a display driver that has reset, taking the
+process's contexts with it and refusing every later one. That raises
+``DriverGone`` rather than ``GLUnavailable``, and the plugin **ends the
+session** with it: the GL tests after such a point would each report the driver
+rather than themselves. On Windows the reset is a Display event 4101 in the
+system log, *stopped responding and has successfully recovered*; a run that
+ends this way is to be started again, and a run that ends this way repeatedly
+has work in it that hangs the GPU.
 
 These fixtures create a bare GLFW window. A test that runs a whole
 ``Context``, such as a demo script or an application's context class,
@@ -137,6 +147,14 @@ runner can use it directly:
 
 ``gl_available()`` returns whether a context can be created at all, for
 example for a module-level ``skipif``. It is computed once per process.
+
+``client_opens_a_window()`` is the question a test of a toolkit has -- Tk, GLUT,
+anything that puts a window on the screen rather than rendering into a hidden
+one. It answers per platform: where the windows come from an X server it is
+``display_answers()``, so ``DISPLAY`` has to name a server that is there and
+that lets this process in; on Windows and macOS, where the windows come from the
+platform, it runs a client and reports what happened. Asking ``display_answers``
+everywhere skips such tests on a platform that has no X and does not need one.
 
 ``describe_gl()`` returns a description of the GL implementation: the
 vendor, renderer and version strings, and whether it rasterises on the CPU.
@@ -524,7 +542,10 @@ sets a rate other than the default 60, or ``0`` to use real time, and
 Everything that reads ``OpenGLContext.events.systemtime`` follows this
 clock, which includes every ``Timer`` and every ``TimeSensor``. Code that
 calls ``time.time()`` directly does not; call ``systemtime.systemTime()``
-instead to make it reproducible. State updated from ``OnIdle`` does not
+instead to make it reproducible. A background thread that changes the
+scene on a schedule waits until ``systemTime()`` reaches the next change
+rather than calling ``time.sleep()`` for the interval, as
+``tests/selectrendermode_threads.py`` does. State updated from ``OnIdle`` does not
 follow the clock either, because the main loop calls ``OnIdle`` as often as
 it can. Scripts that update their scene there are listed in
 ``RANDOMIZED_SCRIPTS`` in ``tests/test_all_scripts.py`` and are checked only
@@ -768,7 +789,8 @@ Cost that grows with the scene
 ``OpenGLContext.testing.scaling.check_scaling(prepare, n=..., most=...,
 factor=4, measure='time')`` builds the scene at ``n`` and at ``factor * n``
 with ``prepare(size)``, which returns the work as a callable, runs the work
-once at each size and then measures it, and fails where the larger costs more
+once at each size and then measures it, timing the two sizes in turn so
+that both see the same load, and fails where the larger costs more
 than ``most`` times the smaller. ``measure='count'`` takes the number the work
 returns (objects touched, records built) instead of its time; a count is the
 same on every machine and is the better measure where the work can give one.
@@ -783,7 +805,12 @@ independent of the scene about 1, and work growing as the square about 16:
        def prepare(objects):
            table, lows, highs = road(objects)
            return lambda: table.classify_many(lows, highs)
-       check_scaling(prepare, n=5000, most=6.0, repeat=3)
+       check_scaling(prepare, n=5000, most=6.0)
+
+The larger scene is the smaller one extended: a road four times as long and
+as wide as before, so the objects near any one of them are as many at both
+sizes. A scene that grows in every direction changes the work per object as
+well as the number of objects, and the ratio then measures both.
 
 ``tests/unit/test_scaling.py`` holds zone classification, the mirror planner
 and ground cover to it.
@@ -853,9 +880,10 @@ it to the directory it was named in, and a file is written through
 ``OpenGLContext.atomicfiles``. The open audit (``OpenGLContext.testing.
 openaudit``) is a ``sys.audit`` hook that charges each file opened to the
 innermost module of a checked package on the stack, and records it where
-that module is not a sanctioned opener. Opens the import system or traceback
-formatting make on a module's behalf, a package's own data files and file
-descriptors are not recorded. A package name sanctions every module in it.
+that module is not a sanctioned opener. Opens made on a module's behalf by
+the import system, by ``ctypes`` searching for a shared library, or by
+traceback formatting are not recorded, and neither are a package's own data
+files and file descriptors. A package name sanctions every module in it.
 
 ``open_audit = "fail"`` fails the test that opened such a file, at teardown,
 naming the module, the line and the path; ``"report"`` lists each as an

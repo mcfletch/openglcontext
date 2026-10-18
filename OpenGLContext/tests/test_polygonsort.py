@@ -1,8 +1,10 @@
+import types
+import unittest
+
 from OpenGLContext.arrays import allclose, array
+from OpenGLContext.events.mouseevents import projected
 from OpenGLContext.scenegraph.polygonsort import *
 from OpenGLContext.move import viewplatform
-from OpenGL.GLU import gluProject
-import unittest
 
 class TestPolygonSort( unittest.TestCase ):
     """Tests for generic atlas algorithms"""
@@ -13,18 +15,11 @@ class TestPolygonSort( unittest.TestCase ):
         self.mvMatrix = self.vp.modelMatrix().astype('d')
         self.viewPort = array([0,0,300,300],'f')
     def test_distances( self ) -> None:
-        """Test distance calculation function
-        
-        Originally was using gluProject, we check to be sure 
-        that we return the same value as gluProject used to 
-        produce...
-        """
-        glu = gluProject( 
-            0,0,0, 
-            self.mvMatrix, self.pMatrix, 
-            self.viewPort.astype('i') 
-        )
-        expected = glu[2]
+        """The distance is the window depth a single point projects to"""
+        view = types.SimpleNamespace(
+            modelViewMatrix=self.mvMatrix, projectionMatrix=self.pMatrix,
+            viewport=self.viewPort)
+        expected = projected(view, (0, 0, 0))[2]
         d = distances(
             array([[0,0,0,1]],'f'),
             self.mvMatrix,
@@ -34,7 +29,6 @@ class TestPolygonSort( unittest.TestCase ):
         assert allclose( d[0], expected), (d,expected)
     def test_project( self ) -> None:
         """Test projection function"""
-        #glu = gluProject( 0,0,0, self.mvMatrix, self.pMatrix, self.viewPort )
         expected = [150.0, 150.0, 0.97000581]
         d = project(
             array([[0,0,0,1]],'f'),

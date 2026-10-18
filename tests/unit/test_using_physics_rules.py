@@ -9,6 +9,7 @@ import math
 import random
 import sys
 
+import numpy as np
 import pytest
 
 from OpenGLContext.physics.gltf_world import node_mesh
@@ -238,14 +239,114 @@ class TestTheReport:
         late = float(abs(clip.samples[-self.RATE // 10:]).max())
         assert late < 0.3 * loud
 
+    def test_the_report_grows_louder_with_the_power(self):
+        low, high = game.POWER_LIMIT
+        assert game.report_gain(low) == pytest.approx(game.REPORT_GAIN[0])
+        assert game.report_gain(high) == pytest.approx(game.REPORT_GAIN[1])
+        assert game.report_gain(low) < game.report_gain((low + high) / 2) < game.report_gain(high)
+        # The step from the gentlest shot to the hardest is heard as a change,
+        # not a nudge: a good few decibels, about a doubling of loudness
+        quiet, loud = game.REPORT_GAIN
+        assert 20.0 * math.log10(loud / quiet) >= 10.0
+        # Beyond the limits it stays within them rather than running away
+        assert game.report_gain(low - 100.0) == pytest.approx(game.REPORT_GAIN[0])
+        assert game.report_gain(high + 100.0) == pytest.approx(game.REPORT_GAIN[1])
+
     def test_playing_the_report_starts_a_voice_in_the_engine(self, engine):
         report = game.Report(self.RATE)
-        assert report.play(engine, (0.0, 3.0, 0.0)) is not None
+        assert report.play(engine, (0.0, 3.0, 0.0), game.POWER_LIMIT[1]) is not None
         engine.mixer.mix(self.RATE // 10)
         assert engine.mixer.active_voices > 0
 
     def test_a_report_with_no_engine_is_silence_and_no_error(self):
-        assert game.Report(self.RATE).play(None, (0.0, 0.0, 0.0)) is None
+        assert game.Report(self.RATE).play(None, (0.0, 0.0, 0.0), game.POWER_LIMIT[1]) is None
+
+
+class _NoWindowCannon(game.TestContext):
+    """A cannon context with no window: it only answers for the camera's platform."""
+
+    def getViewPlatform(self):
+        return self.platform
+
+
+def heard_context(rate=8000):
+    """The cannon's context, its ears at the camera, updated once.
+
+    Built without a window: the scene nodes ``update`` writes to are stand-ins,
+    and the engine is real over a silent device, so what it mixes is the mix.
+    """
+    from types import SimpleNamespace
+
+    from omi_audio.device import NullDevice
+    from omi_audio.engine import AudioEngine
+
+    from OpenGLContext.move import viewplatform
+
+    context = object.__new__(_NoWindowCannon)
+    context.game = game.Game(random.Random(3))
+    context.platform = viewplatform.ViewPlatform()
+    context.engine = AudioEngine(device=NullDevice(sample_rate=rate), voices=4)
+    context.loaded = SimpleNamespace(translation=None, children=[])
+    context.trail = SimpleNamespace(point=[])
+    context.line = SimpleNamespace(coordIndex=[])
+    context.waiting = []
+    context.wheels = game.Wheels(context.game.set_aim)
+    context.readout = SimpleNamespace(lines=[])
+    context.message = ''
+    context.report = game.Report(rate)
+    context.update()
+    return context
+
+
+def peak_dbfs(context, power, blocks=12, frames=1024):
+    """The loudest sample one shot mixes, in dBFS."""
+    context.report.play(context.engine, context.game.muzzle, power)
+    peak = 0.0
+    for _ in range(blocks):
+        peak = max(peak, float(np.abs(context.engine.mixer.mix(frames)).max()))
+    return 20.0 * math.log10(max(peak, 1e-9))
+
+
+#: Floor for the shot on its own: below this it is lost on ordinary hardware.
+AUDIBLE_DBFS = -30.0
+
+
+class TestTheReportReachesTheCamera:
+    """The shot is played straight into the engine, so the ears follow the camera.
+
+    Nothing else moves the listener here, so the report is only audible if the
+    context puts the listener where the camera is each frame.
+    """
+
+    RATE = 8000
+
+    @pytest.fixture
+    def heard(self):
+        made = []
+
+        def build():
+            context = heard_context(self.RATE)
+            made.append(context)
+            return context
+
+        yield build
+        for context in made:
+            context.engine.close()
+
+    def test_the_listener_moves_to_the_camera(self, heard):
+        context = heard()
+        camera = list(context.platform.position)[:3]
+        assert list(context.engine.listener.position) == pytest.approx(camera)
+
+    def test_the_least_power_is_audible(self, heard):
+        assert peak_dbfs(heard(), game.POWER_LIMIT[0]) > AUDIBLE_DBFS
+
+    def test_the_most_power_is_louder_than_the_least(self, heard):
+        quiet = peak_dbfs(heard(), game.POWER_LIMIT[0])
+        loud = peak_dbfs(heard(), game.POWER_LIMIT[1])
+        # The two are told apart by ear: a span of about a doubling of loudness
+        assert loud > quiet + 10.0
+        assert quiet > AUDIBLE_DBFS
 
 
 class TestTheLimitOnShots:
@@ -362,3 +463,254 @@ class TestTheCannonsFrames:
         looking = tuple(sees[i] * math.cos(angle) + cross[i] * math.sin(angle)
                         + (x, y, z)[i] * dot * (1 - math.cos(angle)) for i in range(3))
         assert looking == pytest.approx(along(bearing, elevation), abs=1e-6)
+
+
+
+def drag(wheel, pixels):
+    """Press the wheel's drum and drag ``pixels`` up it."""
+    from vrml.x3d import pointing  # noqa: PLC0415 kept with its use
+
+    def ray(height):
+        return pointing.Ray((0.0, height, 500.0), (0.0, 0.0, -1.0))
+
+    wheel.sensor.pointerPress(pointing.Hit((0.0, 0.0, 0.0)), ray(0.0))
+    wheel.sensor.pointerDrag(None, ray(pixels))
+
+
+class TestTheScales:
+    """A wheel's turn read as the value it sets, and the value as the turn."""
+
+    def test_there_is_one_for_each_field_of_the_aim_over_its_limits(self):
+        assert [(scale.name, scale.limits) for scale in game.SCALES] == [
+            ('bearing', game.BEARING_LIMIT), ('elevation', game.ELEVATION_LIMIT),
+            ('power', game.POWER_LIMIT)]
+
+    def test_each_names_the_keys_that_step_its_field(self):
+        for scale in game.SCALES:
+            up, down = scale.keys
+            assert game.AIM_KEYS[up][scale.name] > 0 > game.AIM_KEYS[down][scale.name]
+
+    @pytest.mark.parametrize('scale', game.SCALES, ids=lambda scale: scale.name)
+    def test_the_limits_are_one_whole_turn_and_the_whole_travel_apart(self, scale):
+        low, high = scale.limits
+        assert (scale.turn(low), scale.turn(high)) == (0.0, 1.0)
+        assert scale.value(0.0) == low
+        assert scale.value(game.TRAVEL) == pytest.approx(high)
+        assert scale.value(game.TRAVEL / 2.0) == pytest.approx((low + high) / 2.0)
+
+    def test_the_travel_is_most_of_the_windows_height(self):
+        assert 0.7 * game.SIZE[1] <= game.TRAVEL <= 0.9 * game.SIZE[1]
+
+    def test_a_drag_past_the_end_of_the_travel_reads_as_the_limit(self):
+        bearing = game.SCALES[0]
+        assert bearing.value(game.TRAVEL * 2.0) == game.BEARING_LIMIT[1]
+        assert bearing.value(-5.0) == game.BEARING_LIMIT[0]
+
+
+class TestTheWheels:
+    """The three thumb-wheels: a drag on one sets the aim, and the aim sets all three."""
+
+    @pytest.fixture
+    def turned(self):
+        return []
+
+    @pytest.fixture
+    def wheels(self, turned):
+        return game.Wheels(lambda name, value: turned.append((name, value)))
+
+    def test_there_is_a_wheel_for_each_scale(self, wheels):
+        assert [wheel.scale for wheel in wheels.wheels] == list(game.SCALES)
+
+    def test_each_sensor_is_dragged_up_and_down_the_travel_and_not_across(self, wheels):
+        for wheel in wheels.wheels:
+            assert tuple(wheel.sensor.minPosition) == (0.0, 0.0)
+            assert tuple(wheel.sensor.maxPosition) == (0.0, game.TRAVEL)
+
+    def test_a_pixel_of_drag_is_a_key_press_or_so(self, wheels, turned):
+        wheels.show(game.Aim(bearing=0.0))
+        drag(wheels.wheels[0], 1.0)
+        assert 0.0 < turned[-1][1] <= 1.5 * game.TURN
+
+    def test_dragging_a_wheel_up_raises_its_field(self, wheels, turned):
+        wheels.show(game.Aim(bearing=0.0))
+        drag(wheels.wheels[0], game.TRAVEL / 10.0)
+        assert [name for name, _value in turned] == ['bearing']
+        low, high = game.BEARING_LIMIT
+        assert turned[-1][1] == pytest.approx((high - low) / 10.0, abs=1e-4)
+
+    def test_a_drag_carries_on_from_the_value_shown(self, wheels, turned):
+        wheels.show(game.Aim(elevation=40.0))
+        low, high = game.ELEVATION_LIMIT
+        drag(wheels.wheels[1], -game.TRAVEL / 10.0)
+        assert turned[-1] == ('elevation', pytest.approx(40.0 - (high - low) / 10.0, abs=1e-4))
+
+    def test_a_drag_stops_at_the_limit(self, wheels, turned):
+        wheels.show(game.Aim(bearing=50.0))
+        drag(wheels.wheels[0], game.TRAVEL)
+        assert turned[-1] == ('bearing', pytest.approx(game.BEARING_LIMIT[1]))
+
+    def test_a_drag_to_one_side_changes_nothing_more(self, wheels, turned):
+        from vrml.x3d import pointing  # noqa: PLC0415 kept with its use
+        wheels.show(game.Aim(power=20.0))
+        sensor = wheels.wheels[2].sensor
+        sensor.pointerPress(pointing.Hit((0, 0, 0)), pointing.Ray((0, 0, 500), (0, 0, -1)))
+        sensor.pointerDrag(None, pointing.Ray((300.0, 0, 500), (0, 0, -1)))
+        assert turned[-1] == ('power', pytest.approx(20.0))
+
+    def test_the_aim_turns_each_drum_and_is_written_under_it(self, wheels):
+        wheels.show(game.Aim(bearing=-12.5, elevation=33.0, power=21.0))
+        for wheel, value in zip(wheels.wheels, (-12.5, 33.0, 21.0)):
+            # The face of the drum goes up as the value does
+            assert tuple(wheel.drum.rotation) == pytest.approx(
+                (1, 0, 0, -2.0 * math.pi * wheel.scale.turn(value)))
+        assert [list(wheel.label.string) for wheel in wheels.wheels] == [
+            ['bearing  q a', '-12.5 deg'], ['elevation  w s', '33.0 deg'],
+            ['power  e d', '21.0 m/s  46%']]
+
+    def test_only_the_power_wheel_reads_its_share_of_the_scale(self, wheels):
+        wheels.show(game.Aim(bearing=-12.5, elevation=33.0, power=21.0))
+        assert '%' not in wheels.wheels[0].label.string[1]
+        assert '%' not in wheels.wheels[1].label.string[1]
+        assert wheels.wheels[2].label.string[1].endswith('46%')
+
+    def test_the_power_wheel_reads_the_ends_of_its_scale(self, wheels):
+        wheel = wheels.wheels[2]
+        wheel.show(game.POWER_LIMIT[0])
+        assert list(wheel.label.string) == ['power  e d', '5.0 m/s  0%']
+        wheel.show(game.POWER_LIMIT[1])
+        assert list(wheel.label.string) == ['power  e d', '40.0 m/s  100%']
+
+    def test_a_whole_turn_of_the_drum_is_the_whole_scale(self, wheels):
+        wheel = wheels.wheels[2]
+        wheel.show(game.POWER_LIMIT[0])
+        assert wheel.drum.rotation[3] == pytest.approx(0.0)
+        wheel.show(game.POWER_LIMIT[1])
+        assert abs(wheel.drum.rotation[3]) == pytest.approx(2.0 * math.pi)
+
+    def test_a_value_shown_during_a_drag_leaves_the_drag_where_it_started(self, wheels):
+        wheels.show(game.Aim(bearing=0.0))
+        wheel = wheels.wheels[0]
+        started = wheel.sensor.offset[1]
+        drag(wheel, 30.0)
+        wheels.show(game.Aim(bearing=10.0))
+        assert wheel.sensor.offset[1] == pytest.approx(started)
+        assert wheel.drum.rotation[3] == pytest.approx(-2.0 * math.pi * wheel.scale.turn(10.0))
+
+    def test_the_layers_are_drawn_over_the_scene(self, wheels):
+        assert list(wheels.layers.order) == [0, 1]
+        assert len(wheels.layers.layers) == 1
+
+    def test_the_panel_stands_at_the_left_of_its_view_half_way_up(self, wheels):
+        layout = wheels.layer.layout
+        assert list(layout.align) == ['LEFT', 'CENTER']
+        assert tuple(layout.size) == pytest.approx(wheels.size)
+
+    def test_a_wheel_turned_while_aiming_moves_the_cannon(self):
+        course = game.Game(random.Random(3))
+        wheels = game.Wheels(course.set_aim)
+        wheels.show(course.aim)
+        drag(wheels.wheels[0], game.TRAVEL / 8.0)
+        assert course.aim.bearing == pytest.approx(15.0, abs=1e-4)
+        assert tuple(course.course.gun.turn.rotation) == pytest.approx(
+            (0, 1, 0, math.radians(15.0)), abs=1e-5)
+
+    def test_a_wheel_turned_while_the_ball_is_in_the_air_moves_nothing(self):
+        course = game.Game(random.Random(3))
+        wheels = game.Wheels(course.set_aim)
+        wheels.show(course.aim)
+        course.fire()
+        drag(wheels.wheels[2], 100.0)
+        assert course.aim.power == game.Aim().power
+
+
+@pytest.mark.usefixtures('gl_context')
+class TestTheWheelsOnTheScreen:
+    """The panel in the cannon's view of the four, dragged with the pointer."""
+
+    WIDTH, HEIGHT = game.SIZE
+
+    @pytest.fixture
+    def played(self):
+        from OpenGLContext.context import MultiViewContext  # noqa: PLC0415 GL
+        from OpenGLContext.testing.scenes import scene_context  # noqa: PLC0415 GL
+        course = game.Game(random.Random(3))
+        wheels = game.Wheels(course.set_aim)
+        wheels.show(course.aim)
+        setup = game.TestContext.setupViews
+
+        class Quad(MultiViewContext):
+            game = course
+            setupViews = setup
+
+        with scene_context([*course.course.nodes, wheels.layers], base=Quad,
+                           size=game.SIZE) as context:
+            context.OnDraw(force=1)
+            yield context, course, wheels
+
+    def panel(self, wheels):
+        """The panel's left, bottom, width and height in the window, from the bottom left:
+        it is in the bottom right view."""
+        width, height = wheels.size
+        return (self.WIDTH / 2 + game.INSET, self.HEIGHT / 4 - height / 2, width, height)
+
+    def pointer(self, context, wheels, kind, rise, until, **record):
+        """Send the pointer ``rise`` pixels above the middle of the bearing wheel's
+        drum, and draw until ``until()``."""
+        from OpenGLContext.events import synthetic  # noqa: PLC0415 kept with its use
+        left, bottom, width, height = self.panel(wheels)
+        x = round(left + width / 2 - game.PITCH)
+        y = round(bottom + height / 2 + game.RISE + rise)
+        synthetic.dispatch(context, {'type': kind, 'x': x, 'y': y, 'pick': True, **record})
+        for _ in range(120):
+            context.OnDraw(force=1)
+            if until():
+                return
+        raise AssertionError('the %s %s pixels up was not sensed' % (kind, rise))
+
+    def test_the_panel_is_in_the_cannons_view_alone(self, played):
+        from OpenGLContext.testing.scenes import drawn_image  # noqa: PLC0415 GL
+        context, _course, wheels = played
+        image = drawn_image(context)
+        left, bottom, _width, _height = self.panel(wheels)
+        x, y = round(left + 5), round(bottom + 5)
+        panel = image[self.HEIGHT - 1 - (y + 30):self.HEIGHT - 1 - y - 5,
+                      x:x + 30].reshape(-1, 3).astype(int)
+        metal = panel.mean(axis=0)
+        # The panel is brushed metal: grey, so no channel leads, and mid-bright
+        assert float(metal.max() - metal.min()) < 25.0
+        assert 80.0 < float(metal.mean()) < 220.0
+        for across, up in ((-self.WIDTH // 2, 0), (0, self.HEIGHT // 2),
+                           (-self.WIDTH // 2, self.HEIGHT // 2)):
+            elsewhere = image[self.HEIGHT - 1 - (y + up), x + across].astype(int)
+            assert abs(elsewhere - metal).sum() > 30.0
+
+    def test_the_reading_under_the_wheels_is_dark_on_the_panel(self, played):
+        from OpenGLContext.testing.scenes import drawn_image  # noqa: PLC0415 GL
+        context, _course, wheels = played
+        image = drawn_image(context)
+        left, bottom, width, _height = self.panel(wheels)
+        # The reading is written under the wheels, low in the panel
+        rows = slice(round(self.HEIGHT - 1 - (bottom + 55)),
+                     round(self.HEIGHT - 1 - (bottom + 30)))
+        band = image[rows, round(left):round(left + width)].reshape(-1, 3).astype(int)
+        ink = band.mean(axis=1)
+        assert float(np.median(ink)) > 150.0     # the panel behind is bright
+        assert float(ink.min()) < 90.0           # the ink is dark against it
+        assert float((ink < 90.0).mean()) > 0.02
+
+    def test_dragging_the_bearing_wheel_up_turns_the_cannon(self, played):
+        context, course, wheels = played
+        sensor = wheels.wheels[0].sensor
+        # A pick reads the frame before, so the first move only warms the id buffer
+        self.pointer(context, wheels, 'mousemove', 0, lambda: True, buttons=[])
+        self.pointer(context, wheels, 'mousemove', 0, sensor.over, buttons=[])
+        self.pointer(context, wheels, 'mousebutton', 0, sensor.active, button=0, state=1)
+        rise = round(game.TRAVEL / 10.0)
+        self.pointer(context, wheels, 'mousemove', rise,
+                     lambda: course.aim.bearing != 0.0, buttons=[0])
+        self.pointer(context, wheels, 'mousebutton', rise, lambda: not sensor.active(),
+                     button=0, state=0)
+        low, high = game.BEARING_LIMIT
+        assert course.aim.bearing == pytest.approx((high - low) / 10.0, abs=0.5)
+        assert sensor.offset[1] == pytest.approx(
+            game.SCALES[0].turn(course.aim.bearing) * game.TRAVEL, abs=1e-3)

@@ -235,7 +235,8 @@ class Hall:
                 surfaces.shape(ring, border, rotation=flat)]
 
     def hang(self, geometry: surfaces.Geometry, material: Any, wall: str, along: float,
-             height: float, frame: Optional[Any] = None, border: float = 0.1) -> list[Any]:
+             height: float, frame: Optional[Any] = None, border: float = 0.1,
+             texture: Optional[Any] = None) -> list[Any]:
         """``geometry`` wearing ``material``, flat on ``wall`` and facing into the room.
 
         ``geometry`` lies in its own xy plane facing +z, as
@@ -243,10 +244,11 @@ class Hall:
         one of :data:`WALLS`; ``along`` is the position along it -- x on the
         far and near walls, z on the left and right -- and ``height`` that of
         the surface's centre. ``frame`` is a material for a frame behind it,
-        ``border`` metres wider on every side.
+        ``border`` metres wider on every side. ``texture`` is a texture node
+        for the surface's appearance.
         """
         at, rotation = _on_wall(wall, along, height, STANDOFF)
-        hung = [surfaces.shape(geometry, material, at, rotation)]
+        hung = [surfaces.shape(geometry, material, at, rotation, texture=texture)]
         if frame is not None:
             width, tall = np.ptp(geometry.positions[:, :2], axis=0)
             behind, _ = _on_wall(wall, along, height, STANDOFF - FRAME_DEPTH / 2 - 0.01)

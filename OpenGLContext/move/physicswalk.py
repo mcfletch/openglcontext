@@ -452,8 +452,24 @@ class PhysicsWalkMixin(object):
         platform.bind_eye(tuple(viewpoint.position))
         platform.set_fly(not platform.character.grounded)
 
+    def OnViewpointBound(self, viewpoint: Any) -> None:
+        """Stand the avatar where a newly bound viewpoint put the camera
+
+        Called by :func:`OpenGLContext.passes.viewpointbinding.bind_scene_viewpoint`
+        with the view platform at ``viewpoint``. While walking, the avatar is
+        seated there looking the way the camera looks
+        (:meth:`syncAvatarToCamera`), and the platform is put at the
+        avatar's eye: a viewpoint inside geometry or below standing height
+        is not somewhere the avatar can be, and the transition ends where
+        it is. In free-fly the avatar stays where it was left.
+        """
+        if self.physicsWalking and self.physicsPlatform is not None:
+            self.syncAvatarToCamera(pitch=True)
+            self.physicsPlatform.apply(self)
+
     def syncAvatarToCamera(self, heading: bool = True,
-                           eye: Optional[Sequence[float]] = None) -> None:
+                           eye: Optional[Sequence[float]] = None,
+                           pitch: bool = False) -> None:
         """Seat the avatar at the current free-fly camera pose, safe-bound.
 
         Flying is left on when there is nothing underfoot, so a camera in mid
@@ -466,13 +482,16 @@ class PhysicsWalkMixin(object):
 
         ``eye`` seats the avatar there rather than at the camera's current
         position, for a caller that read the camera before something moved it.
+
+        ``pitch`` keeps the camera's look up or down; otherwise the avatar
+        looks level.
         """
         platform = self.physicsPlatform
         if platform is None:
             return
         if heading:
             platform.yaw = self.yawFromPlatform()
-        platform.pitch = 0.0
+        platform.pitch = self.pitchFromPlatform() if pitch else 0.0
         platform.bind_eye(tuple(self.platform.position[:3]) if eye is None
                           else tuple(eye))
         platform.set_fly(not platform.character.grounded)
@@ -483,17 +502,29 @@ class PhysicsWalkMixin(object):
         forward = self.platform.forward()
         return float(np.arctan2(forward[0], -forward[2]))
 
+    def pitchFromPlatform(self) -> float:
+        """How far above the horizon the camera looks, as the avatar's pitch"""
+        forward = self.platform.forward()
+        return float(-np.arcsin(np.clip(forward[1], -1.0, 1.0)))
+
     # -- the frame --------------------------------------------------------
     def stepPhysics(self, dt: Optional[float] = None) -> None:
         """Advance the avatar one frame and put the camera where it ended up.
 
         ``dt`` defaults to the wall-clock since the last step, clamped to
-        :attr:`physicsMaxStep`.
+        :attr:`physicsMaxStep`. While the camera is in transition to a newly
+        bound viewpoint the avatar is not stepped: it stands where the
+        transition ends (:meth:`OnViewpointBound`).
         """
         platform = self.physicsPlatform
         if platform is None:
             return
         now = self.physicsNow()
+        from OpenGLContext.passes import viewpointbinding  # noqa: PLC0415 cycle: passes import move
+        if viewpointbinding.in_transition(self):
+            # The transition is moving the camera to where the avatar stands
+            self._physicsLast = now
+            return
         if dt is None:
             dt = min(now - self._physicsLast, self.physicsMaxStep)
         self._physicsLast = now

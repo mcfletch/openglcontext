@@ -91,6 +91,18 @@ def test_a_film_already_made_is_kept(tmp_path, monkeypatch):
     assert x3d_movie.make_film(str(film)) == str(film)
 
 
+def test_the_film_is_made_in_a_directory_that_is_not_there_yet(tmp_path, monkeypatch):
+    film = tmp_path / 'cache' / 'x3d-movie' / 'film.mp4'
+
+    def records(command, **named):
+        with open(command[-1], 'wb') as handle:
+            handle.write(b'film')
+        return subprocess.CompletedProcess(command, 0, '', '')
+    monkeypatch.setattr(subprocess, 'run', records)
+    assert x3d_movie.make_film(str(film)) == str(film)
+    assert film.read_bytes() == b'film'
+
+
 def test_a_film_that_cannot_be_made_says_why(tmp_path, monkeypatch):
     def refused(command, **named):
         assert 'OPENGLCONTEXT_AUTO_EXIT_FRAMES' not in named['env']
@@ -132,3 +144,47 @@ def test_main_reports_a_film_it_cannot_make(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(x3d_movie, 'make_film', refused)
     assert x3d_movie.main(['--directory', str(tmp_path)]) == 1
     assert 'no encoder: none here' in capsys.readouterr().out
+
+
+def test_a_named_movie_is_shown_from_a_directory_of_its_own(tmp_path):
+    made = tmp_path / 'film.mp4'
+    made.write_bytes(b'made')
+    directory, film = x3d_movie.chosen_film(str(tmp_path), COLOURS_MOVIE)
+    assert film == COLOURS_MOVIE
+    assert directory == str(tmp_path / x3d_movie.NAMED)
+    shown = x3d_movie.MovieScene(directory, film)
+    assert background.wait_for_idle(20.0)
+    assert loadsensor.load_state(shown.node('Looping')) == loadsensor.LOADED
+    with open(COLOURS_MOVIE, 'rb') as handle:
+        assert (tmp_path / x3d_movie.NAMED / 'film.mp4').read_bytes() == handle.read()
+    assert made.read_bytes() == b'made'
+
+
+def test_with_no_movie_named_the_film_is_the_one_made_here(tmp_path, monkeypatch):
+    asked = []
+
+    def made(path, force=False):
+        asked.append((path, force))
+        return path
+
+    monkeypatch.setattr(x3d_movie, 'make_film', made)
+    film = str(tmp_path / 'film.mp4')
+    assert x3d_movie.chosen_film(str(tmp_path), remake=True) == (str(tmp_path), film)
+    assert asked == [(film, True)]
+
+
+def test_a_named_movie_that_is_not_a_file_is_refused(tmp_path):
+    with pytest.raises(x3d_movie.FilmUnavailable, match='absent.mp4 is not a file'):
+        x3d_movie.chosen_film(str(tmp_path), str(tmp_path / 'absent.mp4'))
+
+
+def test_main_reports_a_named_movie_that_is_not_there(tmp_path, capsys):
+    assert x3d_movie.main(['--directory', str(tmp_path), str(tmp_path / 'absent.mp4')]) == 1
+    assert 'absent.mp4 is not a file' in capsys.readouterr().out
+
+
+def test_remake_is_refused_with_a_named_movie(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        x3d_movie.main(['--remake', COLOURS_MOVIE])
+    assert '--remake' in capsys.readouterr().err
+

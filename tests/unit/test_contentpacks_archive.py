@@ -428,8 +428,27 @@ class TestReadingNoMoreThanItMust:
                             cancel=lambda: True)
 
 
+def _can_symlink(tmp_path):
+    """Whether this account may make a symbolic link here.
+
+    `os.symlink` is there on Windows and refuses without the privilege an
+    ordinary account is not given, so having the function is not having a link.
+    """
+    probe = tmp_path / 'symlink-probe'
+    try:
+        os.symlink(str(tmp_path), str(probe))
+    except (OSError, NotImplementedError, AttributeError):
+        return False
+    os.unlink(str(probe))
+    return True
+
+
 class TestWritingAPackFromATreeWithLinks:
-    @pytest.mark.skipif(not hasattr(os, 'symlink'), reason='no symlinks')
+    @pytest.fixture(autouse=True)
+    def _links_are_possible(self, tmp_path):
+        if not _can_symlink(tmp_path):
+            pytest.skip('this account may not create symbolic links')
+
     def test_a_linked_file_is_refused_by_name(self, tmp_path):
         tree = tmp_path / 'tree'
         tree.mkdir()
@@ -439,7 +458,6 @@ class TestWritingAPackFromATreeWithLinks:
             archive.write(str(tree), str(tmp_path / 'a.tar.gz'))
         assert 'link.txt' in str(raised.value)
 
-    @pytest.mark.skipif(not hasattr(os, 'symlink'), reason='no symlinks')
     def test_a_linked_directory_is_refused_rather_than_left_out(self,
                                                                 tmp_path):
         tree = tmp_path / 'tree'
@@ -450,7 +468,6 @@ class TestWritingAPackFromATreeWithLinks:
             archive.write(str(tree), str(tmp_path / 'a.tar.gz'))
         assert 'dirlink' in str(raised.value)
 
-    @pytest.mark.skipif(not hasattr(os, 'symlink'), reason='no symlinks')
     def test_a_refused_write_leaves_no_archive(self, tmp_path):
         tree = tmp_path / 'tree'
         tree.mkdir()

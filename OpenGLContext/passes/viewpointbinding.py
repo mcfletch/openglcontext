@@ -76,7 +76,7 @@ class ViewpointTransition:
         self.kind = kind
 
     def at(self, now: float) -> tuple[np.ndarray, Any, bool]:
-        """(position, orientation, arrived) at time `now`"""
+        """Calculates new (position, orientation, arrived) at time `now`"""
         fraction = min(max((float(now) - self.start) / self.duration, 0.0), 1.0)
         eased = fraction * fraction * (3.0 - 2.0 * fraction) if self.kind == 'ANIMATE' else fraction
         position = self.position + (self.target - self.position) * eased
@@ -132,6 +132,18 @@ def bind_scene_viewpoint(context: Any) -> None:
     ``SceneGraph.boundViewpoint`` is the viewpoint the platform was last moved
     to.
 
+    A viewpoint bound after the first is passed to
+    ``context.OnViewpointBound`` with the platform standing at it. A context
+    whose camera follows something else, a walked avatar for one, moves that
+    there and leaves the platform where the camera will rest; the transition
+    ends at that pose.
+
+    Each bind calls ``context.mark('viewpoint-bound', ...)`` with the
+    viewpoint's name and index, the transition's type and seconds, and the
+    ``start`` and ``target`` positions; an arrival calls
+    ``context.mark('viewpoint-arrived', ...)`` with the ``position`` reached.
+    The first bind's transition is ``FIRST``.
+
     The paths are the ones :func:`publish_viewpoints` gave the scenegraph, so a
     Viewpoint that arrives after the first frame is as bindable as one that was
     there from the start.
@@ -153,16 +165,13 @@ def bind_scene_viewpoint(context: Any) -> None:
     info = binding.bound(sg, nodetypes.NavigationInfo)
     kind, seconds = navigationinfo.transition_of(info)
     if platform is None or not previous or previous is _defaults.get(sg):
-        view.moveTo(view_path, context)
+        view.moveTo(view_path, context, first=True)
         _remember(view, platform)
+        _mark_bound(context, sg, view, 'FIRST', 0.0, None)
         return
+    position = np.array(platform.position, 'd')
     retained = getattr(previous, 'retainUserOffsets', False) and previous in _authored
-    if kind == 'TELEPORT' and not retained:
-        view.moveTo(view_path, context)
-        _remember(view, platform)
-        _restore_offset(view, platform)
-        return
-    position, orientation = np.array(platform.position, 'd'), platform.quaternion
+    orientation = platform.quaternion if retained or kind != 'TELEPORT' else None
     if retained:
         # Where the user had moved to from the viewpoint being left.
         was, turned = _authored[previous]
@@ -170,6 +179,10 @@ def bind_scene_viewpoint(context: Any) -> None:
     view.moveTo(view_path, context)
     _remember(view, platform)
     _restore_offset(view, platform)
+    placed = getattr(context, 'OnViewpointBound', None)
+    if placed is not None:
+        placed(view)
+    _mark_bound(context, sg, view, kind, seconds, position)
     if kind == 'TELEPORT':
         return
     move = ViewpointTransition(position, orientation, platform.position,
@@ -177,6 +190,32 @@ def bind_scene_viewpoint(context: Any) -> None:
     _moving[context] = move
     platform.setPosition(position[:3])
     platform.setOrientation(orientation)
+    _ask_for_frame(context)
+
+
+def viewpoint_name(view: Any) -> str:
+    """What a viewpoint is called: its description, else its DEF name, else ''"""
+    return str(getattr(view, 'description', '') or getattr(view, 'DEF', '') or '')
+
+
+def _mark_bound(context: Any, sg: Any, view: Any, kind: str, seconds: float,
+                start: Any) -> None:
+    """Mark in the session's telemetry that `view` was bound, and the move it began
+
+    `start` is where the camera was, None for the first viewpoint bound; the
+    platform is where the move ends.
+    """
+    mark = getattr(context, 'mark', None)
+    platform = getattr(context, 'platform', None)
+    if mark is None or platform is None:
+        return
+    target = [float(value) for value in platform.position[:3]]
+    index = next((index for index, path in enumerate(getattr(sg, 'viewpointPaths', ()))
+                  if path[-1] is view), -1)
+    mark('viewpoint-bound', viewpoint=viewpoint_name(view), index=index,
+         transition=kind, seconds=float(seconds),
+         start=target if start is None else [float(value) for value in start[:3]],
+         target=target)
 
 
 #: The default Viewpoint each document without one is seen through.
@@ -205,7 +244,7 @@ def _bind_default(context: Any, sg: Any) -> None:
     platform = getattr(context, 'platform', None) or context.getViewPlatform()
     if platform is None:
         return
-    default = _defaults[sg] = Viewpoint()
+    default = _defaults[sg] = Viewpoint() # this should *not* get stored in a module variable
     default.project(platform)
     sg.boundViewpoint = default
 
@@ -213,6 +252,9 @@ def _bind_default(context: Any, sg: Any) -> None:
 def _remember(view: Any, platform: Any) -> None:
     """Keep where `view` put the platform, for a viewpoint that retains user offsets"""
     if platform is not None and getattr(view, 'retainUserOffsets', False):
+        # again, should not be in a module variable, cache for the scenegraph
+        # or store directly on the platform, or otherwise isolate for the
+        # specific instance...
         _authored[view] = (np.array(platform.position, 'd'), platform.quaternion)
 
 
@@ -224,20 +266,37 @@ def _restore_offset(view: Any, platform: Any) -> None:
         platform.setOrientation(platform.quaternion * offset[1])
 
 
+def in_transition(context: Any) -> bool:
+    """Whether `context`'s camera is moving to a newly bound viewpoint"""
+    return context in _moving
+
+
+def _ask_for_frame(context: Any) -> None:
+    """Have `context` draw again: a transition moves only as frames are drawn"""
+    redraw = getattr(context, 'triggerRedraw', None)
+    if redraw is not None:
+        redraw(1)
+
+
 def _step_transition(context: Any, sg: Any) -> None:
     """Move the platform on along the transition in progress, if there is one"""
     move = _moving.get(context)
     if move is None:
         return
+    # should be using context's systemtime, not going through a module
+    # backdoor
     position, orientation, arrived = move.at(systemtime.systemTime())
     platform = getattr(context, 'platform', None) or context.getViewPlatform()
     platform.setPosition(position)
     platform.setOrientation(orientation)
-    redraw = getattr(context, 'triggerRedraw', None)
-    if redraw is not None:
-        redraw(1)
+    _ask_for_frame(context)
     if arrived:
         del _moving[context]
+        mark = getattr(context, 'mark', None)
+        if mark is not None:
+            mark('viewpoint-arrived',
+                 viewpoint=viewpoint_name(getattr(sg, 'boundViewpoint', None)),
+                 position=[float(value) for value in position[:3]])
         info = binding.bound(sg, nodetypes.NavigationInfo)
         if info is not None:
             info.transitionComplete = True

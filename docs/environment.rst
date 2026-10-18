@@ -145,6 +145,12 @@ Lighting and shadows
        shadows at a distance. ``0`` lets the pass choose from available video
        memory and frame rate. Set a fixed value when shadow output must be
        reproducible.
+   * - ``OPENGLCONTEXT_SHADOW_DISTANCE``
+     - number of scene units
+     - ``0``
+     - How far from the camera a directional light's shadows are made. The
+       cascades are fitted to that distance and the shadows fade out over its
+       last fifth. ``0`` fits them to the farthest caster.
    * - ``OPENGLCONTEXT_MAXIMUM_LIGHTS``
      - integer 0–8
      - ``8``

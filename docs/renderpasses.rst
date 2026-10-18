@@ -209,8 +209,10 @@ places:
 - ``geometryarrays.report_missing_inputs`` names a geometry that does not
   supply a required input.
 
-A missing input is reported once per program and geometry, not once per frame,
-through the same log as other draw failures:
+A shape whose draw raises is skipped and the rest of the frame is drawn: the
+pass binds its own program again and draws the next shape. A missing input
+is reported once per program and geometry, not once per frame, through the
+same log as other draw failures:
 
 .. code-block:: text
 

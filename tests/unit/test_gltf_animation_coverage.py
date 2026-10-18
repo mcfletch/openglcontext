@@ -131,55 +131,50 @@ class TestPointerSetter:
         g.nodes = [Node()]
         return g
 
-    def test_node_visibility_toggles_light_intensity(self):
-        light = types.SimpleNamespace(intensity=2.0)
-        setter = ga._pointer_setter(
-            self._g(), '/nodes/0/extensions/KHR_node_visibility/visible',
-            {}, {0: light}, {})
-        setter([1.0])
-        assert light.intensity == 2.0
-        setter([0.0])
-        assert light.intensity == 0.0
+    def _targets(self, **named):
+        return ga.PointerTargets(self._g(), **named)
 
-    def test_node_non_visibility_pointer_is_unsupported(self):
-        assert ga._pointer_setter(
-            self._g(), '/nodes/0/translation', {}, {}, {}) is None
+    def test_node_visibility_sets_the_transforms_visible(self):
+        transform = types.SimpleNamespace(visible=True)
+        setter = self._targets(node_transforms={0: transform}).setter(
+            '/nodes/0/extensions/KHR_node_visibility/visible')
+        setter([0.0])
+        assert transform.visible is False
+        setter([1.0])
+        assert transform.visible is True
+
+    def test_a_node_with_no_transform_is_unsupported(self):
+        assert self._targets().setter('/nodes/0/translation') is None
 
     def test_unknown_material_is_unsupported(self):
-        assert ga._pointer_setter(
-            self._g(), '/materials/9/pbrMetallicRoughness/metallicFactor',
-            {}, {}, {}) is None
+        assert self._targets().setter(
+            '/materials/9/pbrMetallicRoughness/metallicFactor') is None
 
     def test_scalar_factor_setter(self):
-        m = types.SimpleNamespace()
-        setter = ga._pointer_setter(
-            self._g(), '/materials/0/pbrMetallicRoughness/metallicFactor',
-            {}, {}, {0: types.SimpleNamespace(material=m)})
+        m = types.SimpleNamespace(metallic=1.0)
+        setter = self._targets(appearances={0: types.SimpleNamespace(material=m)}).setter(
+            '/materials/0/pbrMetallicRoughness/metallicFactor')
         setter([0.3])
         assert abs(m.metallic - 0.3) < 1e-6
 
     def test_emissive_strength_setter(self):
-        m = types.SimpleNamespace()
-        setter = ga._pointer_setter(
-            self._g(),
-            '/materials/0/extensions/KHR_materials_emissive_strength/emissiveStrength',
-            {}, {}, {0: types.SimpleNamespace(material=m)})
+        m = types.SimpleNamespace(emissiveStrength=1.0)
+        setter = self._targets(appearances={0: types.SimpleNamespace(material=m)}).setter(
+            '/materials/0/extensions/KHR_materials_emissive_strength/emissiveStrength')
         setter([4.0])
         assert abs(m.emissiveStrength - 4.0) < 1e-6
 
     def test_unknown_material_property_is_unsupported(self):
         # A valid material but an unrecognised factor falls through to no setter.
         m = types.SimpleNamespace()
-        assert ga._pointer_setter(
-            self._g(), '/materials/0/pbrMetallicRoughness/unknownFactor',
-            {}, {}, {0: types.SimpleNamespace(material=m)}) is None
+        assert self._targets(appearances={0: types.SimpleNamespace(material=m)}).setter(
+            '/materials/0/pbrMetallicRoughness/unknownFactor') is None
 
     def test_malformed_material_pointer_is_swallowed(self):
-        # A non-integer material index raises inside and resolves to no setter.
+        # A non-integer material index resolves to no setter.
         m = types.SimpleNamespace()
-        assert ga._pointer_setter(
-            self._g(), '/materials/notanindex/metallicFactor',
-            {}, {}, {0: types.SimpleNamespace(material=m)}) is None
+        assert self._targets(appearances={0: types.SimpleNamespace(material=m)}).setter(
+            '/materials/notanindex/metallicFactor') is None
 
     def _transformed(self):
         """An appearance whose base colour map is moved by a matrix transform."""
@@ -208,14 +203,64 @@ class TestPointerSetter:
             appearance, transform = self._transformed()
             ptr = ('/materials/0/pbrMetallicRoughness/baseColorTexture/extensions/'
                    'KHR_texture_transform/%s' % comp)
-            setter = ga._pointer_setter(self._g(), ptr, {}, {}, {0: appearance})
+            setter = self._targets(appearances={0: appearance}).setter(ptr)
             setter(value)
             assert check(khr_transform_params(transform.matrix)), comp
+
+    def _untransformed(self, mapping='', shared=False):
+        """An appearance whose base colour map has no transform (or, with
+        ``shared``, the one its emissive map has too)."""
+        from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
+        from OpenGLContext.loaders.gltf.materials import khr_transform_matrix  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.appearance import Appearance  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.imagedata import ImageDataTexture  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial  # noqa: PLC0415 kept with its use
+        material = PhysicalMaterial(baseTexture=ImageDataTexture(), baseTextureMapping=mapping,
+                                    emissiveTexture=ImageDataTexture(),
+                                    emissiveTextureMapping=mapping)
+        appearance = Appearance(material=material)
+        if shared:
+            appearance.textureTransform = x3d.MultiTextureTransform(textureTransform=[
+                x3d.TextureTransformMatrix3D(mapping=mapping,
+                                             matrix=khr_transform_matrix(scale=(2.0, 2.0)))])
+        return appearance, material
+
+    @pytest.mark.parametrize('mapping, coordinates', [('', 'TEXCOORD_0'),
+                                                      ('TEXCOORD_1', 'TEXCOORD_1')])
+    def test_a_texture_without_a_transform_is_given_one(self, mapping, coordinates):
+        from OpenGLContext.loaders.gltf.materials import khr_transform_params  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.texturemapping import transform_for  # noqa: PLC0415 kept with its use
+        appearance, material = self._untransformed(mapping)
+        ptr = ('/materials/0/pbrMetallicRoughness/baseColorTexture/extensions/'
+               'KHR_texture_transform/offset')
+        self._targets(appearances={0: appearance}).setter(ptr)([0.5, 0.25])
+        label = material.baseTextureMapping
+        assert label.startswith(coordinates + ':')
+        assert khr_transform_params(transform_for(appearance, label).matrix)['offset'] == \
+            pytest.approx([0.5, 0.25])
+        assert material.emissiveTextureMapping == mapping
+        assert transform_for(appearance, mapping) is None
+
+    def test_a_shared_transform_is_split_for_the_animated_texture(self):
+        from OpenGLContext.loaders.gltf.materials import khr_transform_params  # noqa: PLC0415 kept with its use
+        from OpenGLContext.scenegraph.texturemapping import transform_for  # noqa: PLC0415 kept with its use
+        appearance, material = self._untransformed('TEXCOORD_0:0', shared=True)
+        ptr = ('/materials/0/pbrMetallicRoughness/baseColorTexture/extensions/'
+               'KHR_texture_transform/offset')
+        self._targets(appearances={0: appearance}).setter(ptr)([0.5, 0.25])
+        moved = khr_transform_params(
+            transform_for(appearance, material.baseTextureMapping).matrix)
+        kept = khr_transform_params(
+            transform_for(appearance, material.emissiveTextureMapping).matrix)
+        assert material.baseTextureMapping != material.emissiveTextureMapping
+        assert moved['offset'] == pytest.approx([0.5, 0.25])
+        assert moved['scale'] == pytest.approx([2.0, 2.0])
+        assert kept['offset'] == pytest.approx([0.0, 0.0])
 
     def test_a_texture_without_a_transform_cannot_be_animated(self):
         appearance, _transform = self._transformed()
         ptr = '/materials/0/normalTexture/extensions/KHR_texture_transform/offset'
-        assert ga._pointer_setter(self._g(), ptr, {}, {}, {0: appearance}) is None
+        assert self._targets(appearances={0: appearance}).setter(ptr) is None
 
 
 class TestResolveJsonPointer:

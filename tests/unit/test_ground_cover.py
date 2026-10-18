@@ -444,3 +444,195 @@ class TestTheWorkerIsLetGo:
         assert gone() is None
         thread.join(5.0)
         assert not thread.is_alive()
+
+
+class TestFollowingAFastCamera:
+    """A scatter that takes a second to arrive is for where the camera will be then.
+
+    A vehicle covers tens of metres in the time a scatter takes, so a disc centred on
+    the camera at the moment of asking is behind it by the time it is drawn.
+    """
+
+    SPEED = 24.0
+
+    @pytest.fixture
+    def clock(self, monkeypatch):
+        from OpenGLContext.events import systemtime
+        now = [0.0]
+        monkeypatch.setattr(systemtime, 'systemTime', lambda: now[0])
+        return now
+
+    def drive(self, cover, clock, seconds, speed=None, start=0.0):
+        """Update at 30 Hz along -z at ``speed``; returns the camera's last z."""
+        speed = self.SPEED if speed is None else speed
+        z = start
+        for _frame in range(int(seconds * 30)):
+            clock[0] += 1.0 / 30.0
+            z -= speed / 30.0
+            cover.update((0.0, 0.0, z))
+        return z
+
+    @staticmethod
+    def centre(cover):
+        return float(cover.rungs[0].cards.pos[:, 2].mean())
+
+    def test_the_disc_is_centred_where_the_camera_will_be_when_it_arrives(self, clock) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.latency = 1.0
+        z = self.drive(cover, clock, 3.0)
+        # The disc is scattered every SETTLED_METRES: it is for where the camera is
+        # about to be, a lead of up to a second's travel past the camera.
+        assert z - 2 * self.SPEED < self.centre(cover) < z - 0.5 * self.SPEED
+
+    def test_a_camera_standing_still_has_its_disc_about_it(self, clock) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.latency = 1.0
+        z = self.drive(cover, clock, 2.0, speed=0.0)
+        assert abs(self.centre(cover) - z) < 3.0
+
+    def test_a_cover_that_has_never_been_slow_leads_nothing(self, clock) -> None:
+        cover = _cover(card_radius=100.0)
+        z = self.drive(cover, clock, 3.0)
+        assert cover.latency == 0.0
+        assert abs(self.centre(cover) - z) < 12.0
+
+    def test_a_jump_in_position_is_not_a_speed(self, clock) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.latency = 1.0
+        cover.update((0.0, 0.0, 0.0))
+        clock[0] += 0.001
+        cover.update((0.0, 0.0, -400.0))
+        assert abs(self.centre(cover) + 400.0) < 5.0
+
+    def test_the_cards_reach_further_ahead_of_a_fast_camera_than_their_radius(self, clock) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.latency = 1.0
+        z = self.drive(cover, clock, 3.0)
+        reach = float(z - cover.rungs[0].cards.pos[:, 2].min())
+        assert reach > 100.0 + 0.5 * self.SPEED
+
+    def test_how_long_a_scatter_takes_to_arrive_is_measured_after_the_first(self) -> None:
+        cover = _cover(card_radius=100.0, background=True)
+        try:
+            cover.update((0.0, 0.0, 0.0))
+            assert cover.wait(5.0)
+            cover.update((0.0, 0.0, 0.0))          # the first scatter makes everything: not counted
+            assert cover.latency == 0.0
+            cover.update((40.0, 0.0, 0.0))
+            assert cover.wait(5.0)
+            cover.update((40.0, 0.0, 0.0))
+            assert cover.latency > 0.0
+        finally:
+            cover.shutdown()
+
+    def test_the_near_cover_does_not_wait_for_the_far(self) -> None:
+        import threading
+        import time
+        release = threading.Event()
+        cover = _cover(card_radius=100.0, background=True)
+        original = cover.compute_far
+
+        def slow_far(x, z):
+            release.wait(10.0)
+            return original(x, z)
+        cover.compute_far = slow_far
+        try:
+            cover.update((0.0, 0.0, 0.0))
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline and len(cover.rungs[0].cards.pos) < 100:
+                cover.update((0.0, 0.0, 0.0))
+                time.sleep(0.01)
+            assert len(cover.rungs[0].cards.pos) > 100
+            assert len(cover.rungs[0].far_cards.pos) == 0
+        finally:
+            release.set()
+            cover.shutdown()
+
+
+class TestNoFarField:
+    def test_a_cover_has_a_far_field_where_it_is_told_to_run_past_the_cards(self) -> None:
+        assert _cover(card_radius=100.0, far_radius=400.0).has_far
+        assert not _cover(card_radius=100.0, far_radius=100.0).has_far
+
+    def test_with_none_it_is_neither_scattered_nor_staged(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        assert cover.compute_far(0.0, 0.0) == []
+        assert len(cover.rungs[0].far_cards.pos) == 0
+        assert len(cover.rungs[0].cards.pos) > 100
+
+    def test_with_one_it_is_staged(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=400.0)
+        cover.update((0.0, 0.0, 0.0))
+        assert len(cover.rungs[0].far_cards.pos) > 0
+
+
+class TestHowSoonItFades:
+    def test_the_cards_dissolve_across_the_fraction_of_their_radius_it_is_told(self) -> None:
+        wide = _cover(card_radius=100.0, far_radius=300.0, fade=0.5)
+        default = _cover(card_radius=100.0, far_radius=300.0)
+        assert wide.rungs[0].far_cards.near_cut == pytest.approx(50.0)
+        assert default.rungs[0].far_cards.near_cut == pytest.approx(80.0)
+
+    def test_it_can_be_changed_and_the_windows_follow(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=300.0)
+        cover.fade = 0.6
+        cover.retune()
+        assert cover.rungs[0].far_cards.near_cut == pytest.approx(60.0)
+
+
+class TestPreparedAhead:
+    """The ground a camera is about to cross is scattered before it gets there, so the disc
+    that reaches it is only put together."""
+
+    def test_blocks_are_built_ahead_and_the_disc_that_reaches_them_builds_none(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        cover.prepare([(0.0, -60.0), (0.0, -120.0)])
+        built = cover.scattered
+        cover.update((0.0, 0.0, -60.0))
+        assert cover.scattered == built
+
+    def test_without_it_the_same_move_builds_blocks(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        built = cover.scattered
+        cover.update((0.0, 0.0, -60.0))
+        assert cover.scattered > built
+
+    def test_preparing_ground_already_scattered_costs_nothing(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        built = cover.scattered
+        cover.prepare([(0.0, -10.0)])
+        cover.prepare([(0.0, -10.0)])
+        assert cover.scattered <= built + 12
+
+    def test_it_stages_nothing_itself(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        before = cover.rungs[0].cards.pos.copy()
+        cover.prepare([(0.0, -90.0)])
+        assert np.array_equal(cover.rungs[0].cards.pos, before)
+
+    def test_in_the_background_it_is_done_by_a_worker_and_waited_for(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0, background=True)
+        try:
+            cover.update((0.0, 0.0, 0.0))
+            assert cover.wait(5.0)
+            built = cover.scattered
+            cover.prepare([(0.0, -80.0)])
+            assert cover.wait(5.0)
+            assert cover.scattered > built
+        finally:
+            cover.shutdown()
+
+    def test_ground_prepared_beyond_what_is_kept_is_let_go_by_the_next_disc(self) -> None:
+        cover = _cover(card_radius=100.0, far_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        cover.prepare([(0.0, -900.0)])
+        cover.update((0.0, 0.0, -20.0))
+        far = cover.rungs[0]
+        blocks = cover._blocks[(far, 'cards')][1]  # noqa: SLF001 the cache this checks is bounded
+        assert all(abs((bj + 0.5) * blocks.span + 20.0) < 2.0 * 100.0 + 2 * blocks.span
+                   for _bi, bj in blocks._blocks)  # noqa: SLF001 the cache this checks is bounded

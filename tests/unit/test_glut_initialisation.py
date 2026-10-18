@@ -19,7 +19,7 @@ import sys
 
 import pytest
 
-from OpenGLContext.testing.glcontext import display_answers
+from OpenGLContext.testing.glcontext import client_opens_a_window
 
 pytest.importorskip('OpenGL.GLUT')
 
@@ -61,8 +61,8 @@ class TestTheInitialisationGuard:
         assert callable(glutwindowsystem.ensureGlutInitialised)
 
 
-@pytest.mark.skipif(not display_answers(),
-                    reason='GLUT needs an X display that answers; run under xvfb-run')
+@pytest.mark.skipif(not client_opens_a_window(),
+                    reason='no window can be opened here (under X, run it with xvfb-run)')
 class TestAgainstARealDisplay:
     def test_a_context_can_be_built_directly(self):
         reported = _drive('build')

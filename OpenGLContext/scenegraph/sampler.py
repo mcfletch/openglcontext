@@ -38,6 +38,11 @@ MINIFICATION = {
 #: X3D magnification filters as GL filters; the rest take GL_LINEAR.
 MAGNIFICATION = {'AVG_PIXEL': 'GL_LINEAR', 'NEAREST_PIXEL': 'GL_NEAREST'}
 
+#: Each mipmapped GL minification filter (by enum) as the filter of its level
+#: alone, for a texture with one level and no way to make more.
+_WITHOUT_MIPMAPS = {0x2700: 0x2600, 0x2702: 0x2600,     # GL_NEAREST_MIPMAP_* -> GL_NEAREST
+                    0x2701: 0x2601, 0x2703: 0x2601}     # GL_LINEAR_MIPMAP_* -> GL_LINEAR
+
 #: Texels on the longer side below which a document's image with no
 #: TextureProperties is sampled from its nearest texel.
 SMALL_IMAGE = 16
@@ -117,10 +122,17 @@ def apply_sampler(texture: Any, sampler: "dict[str, str]") -> None:
                            getattr(GL, WRAP_MODES.get(sampler.get(name, 'REPEAT'), 'GL_REPEAT')))
     minification = getattr(GL, MINIFICATION.get(sampler['minification'],
                                                  'GL_LINEAR_MIPMAP_LINEAR'))
-    try:
-        GL.glGenerateMipmap(target)
-    except GL.GLError:
-        minification = GL.GL_LINEAR
+    # A texture that brought its own mip levels (a Basis Universal file's,
+    # perhaps block-compressed, which GL cannot generate from) keeps them; one
+    # level is sampled without mipmaps.
+    levels = getattr(texture, 'mip_levels', 0)
+    if levels == 1:
+        minification = _WITHOUT_MIPMAPS.get(minification, minification)
+    elif not levels:
+        try:
+            GL.glGenerateMipmap(target)
+        except GL.GLError:
+            minification = GL.GL_LINEAR
     GL.glTexParameteri(target, GL.GL_TEXTURE_MIN_FILTER, minification)
     GL.glTexParameteri(target, GL.GL_TEXTURE_MAG_FILTER,
                        getattr(GL, MAGNIFICATION.get(sampler['magnification'], 'GL_LINEAR')))

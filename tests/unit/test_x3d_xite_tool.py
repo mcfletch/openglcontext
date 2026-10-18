@@ -88,6 +88,13 @@ class TestTheRoster:
         assert tool.DEFAULT_SIZE == x3d_regression.DEFAULT_SIZE
         assert tool.DEFAULT_ARCHIVES == x3d_regression.DEFAULT_ARCHIVES
 
+    def test_drawn_at_the_world_time_oglc_x3d_regression_reads(self, tool):
+        assert tool.WORLD_START == x3d_regression.WORLD_START
+        assert tool.CAPTURE_FPS == x3d_regression.CAPTURE_FPS
+        assert tool.CAPTURE_FRAMES == x3d_regression.DEFAULT_FRAMES
+        assert tool.capture_time() == x3d_regression.capture_time(x3d_regression.DEFAULT_FRAMES)
+        assert tool.capture_time(3) == x3d_regression.capture_time(3)
+
 
 class TestUnpacking:
     def test_the_distribution_folder(self, tool, tmp_path):
@@ -121,6 +128,21 @@ class TestUnpacking:
 def test_the_harness_names_the_size(tool):
     page = tool.harness_page((792, 465))
     assert 'x_ite/x_ite.min.js' in page and 'width:792px' in page and 'height:465px' in page
+
+
+def test_the_harness_puts_the_page_on_the_capture_clock_before_x_ite(tool):
+    page = tool.harness_page((792, 465))
+    assert page.index('window.Date = CaptureDate') < page.index('x_ite/x_ite.min.js')
+    assert 'start: %r' % (tool.WORLD_START * 1000.0) in page
+    assert 'step: 1000 / %d' % tool.CAPTURE_FPS in page
+    assert 'async function settle(frames, timeout)' in page
+
+
+def test_the_harness_leaves_a_viewpoints_roll_as_the_document_gives_it(tool):
+    page = tool.harness_page((792, 465))
+    option = "setBrowserOption('StraightenHorizon', false)"
+    assert option in page
+    assert page.index(option) < page.index("canvas.setAttribute('src'")
 
 
 class TestTheServer:
@@ -301,7 +323,8 @@ PACKAGE_INDEX = 'https://pypi.org/simple/playwright/'
 @pytest.mark.network
 @pytest.mark.slow
 def test_a_document_rendered_by_x_ite(tmp_path, tool):
-    """One real render, through ``uv run`` as the script is used: a red box on black
+    """Real renders, through ``uv run`` as the script is used: a red box on
+    black, and a box half red at the capture time
 
     The run fetches Playwright, its Chromium and X_ITE where they are not cached.
     """
@@ -316,11 +339,14 @@ def test_a_document_rendered_by_x_ite(tmp_path, tool):
             pytest.skip(reason)
     import numpy as np  # noqa: PLC0415 kept with its use
     from PIL import Image  # noqa: PLC0415 kept with its use
+    from tests.unit.test_x3d_regression import stepped_clock_document  # noqa: PLC0415 kept with its use
     corpus, out = str(tmp_path / 'corpus'), tmp_path / 'out'
+    clocked = stepped_clock_document(tool.capture_time(), 1.0 / tool.CAPTURE_FPS)
     write_corpus(corpus, 'Tiny', {'red.x3d': (
         '<X3D profile="Interchange" version="3.3"><Scene><Shape><Appearance>'
         '<Material diffuseColor="1 0 0" emissiveColor="1 0 0"/></Appearance><Box/>'
-        '</Shape></Scene></X3D>')})
+        '</Shape></Scene></X3D>'), 'clocked.x3d': (
+        '<X3D profile="Immersive" version="3.3"><Scene>%s</Scene></X3D>' % clocked)})
     proc = subprocess.run(
         [uv, 'run', '--quiet', '--script', SCRIPT, '--corpus', corpus, '--archive', 'Tiny',
          '--out', str(out), '--size', '96x64', '--jobs', '1'],
@@ -328,7 +354,10 @@ def test_a_document_rendered_by_x_ite(tmp_path, tool):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     record = json.loads((out / 'Tiny.red.json').read_text())
     assert record['ok'] and record['scene'] == 'Tiny/red', record
+    assert record['world_time'] == pytest.approx(tool.capture_time(), abs=1e-3)
     pixels = np.asarray(Image.open(out / 'Tiny.red.png').convert('RGB')).astype(int)
     assert pixels.shape == (64, 96, 3)
     assert pixels[32, 48, 0] > 150 and pixels[32, 48, 1] < 80
     assert pixels[2, 2].sum() < 30
+    clocked = np.asarray(Image.open(out / 'Tiny.clocked.png').convert('RGB')).astype(int)
+    assert 40 < clocked[32, 48, 0] < 220, 'drawn at capture_time(), as oglc-x3d-regression draws'

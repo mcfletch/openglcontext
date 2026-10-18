@@ -209,10 +209,17 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - Cascades for a directional light. 0 lets the pass choose from VRAM and frame
        rate; a fixed value makes shadow output reproducible.
      - ``OPENGLCONTEXT_SHADOW_CASCADES``
+   * - ``shadowDistance``
+     - float, 0–1000
+     - How far from the camera a directional light's shadows are made, with the
+       cascades fitted to it and a fade over its last fifth. 0 fits them to the
+       farthest caster.
+     - ``OPENGLCONTEXT_SHADOW_DISTANCE``
    * - ``maximumLights``
      - int, 0–8
      - Lights bound in one frame, the headlight among them. The shader's own
-       limit still applies.
+       limit still applies. Of more lights than that, the directional ones bind
+       first and then the nearest to the camera.
      - —
    * - ``bloom``
      - bool
@@ -528,6 +535,10 @@ layer can update its hover state.
   last panel, and its key-up would reach the scene's own Escape handler,
   which quits every OpenGLContext application. Likewise, the release of a
   click that dismisses a dialog does not pick what was behind the dialog.
+- While a mouse button is down whose press went to the scene, the pointer's
+  moves go to the scene too, and the overlay's controls are not hovered. A
+  drag begun on a drag sensor or in a view crosses a button or a splitter
+  and carries on. ``draggingBelow()`` says whether one is under way.
 - When a panel takes the input, the scene is sent a release for every key it
   was holding. The real release goes to the panel, and an application that
   tracks held keys itself, as a movement mode or a game's steering does, has

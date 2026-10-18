@@ -8,9 +8,9 @@ render pass lights the scene with, with the light's ``intensity`` and
 ``rotation``.
 
 ``specularTexture``, a ``ComposedCubeMapTexture`` or ``ImageCubeMapTexture``,
-is the environment smooth surfaces reflect: its faces decoded from sRGB to
-linear light, and each rougher level the faces averaged down by half, to a
-texel a side. ``diffuseTexture`` is the irradiance (over pi, so a white face
+is the environment surfaces reflect: its faces decoded from sRGB to linear
+light, which the render pass GGX-filters for each roughness as it uploads
+them (:attr:`ImageBasedLight.prefiltered` is false), as X_ITE does. ``diffuseTexture`` is the irradiance (over pi, so a white face
 lights a white surface fully), read as its spherical-harmonic fit. The
 irradiance is the ``diffuseCoefficients`` where there are nine of them, else
 the diffuse cube map's, else the specular cube map convolved. Without a
@@ -39,7 +39,7 @@ from vrml.x3d import nodes as x3d
 
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight, sh_fit
 
-__all__ = ['EnvironmentLight', 'IMAGE_LIGHT_KEY', 'IRRADIANCE_BANDS', 'mip_chain']
+__all__ = ['EnvironmentLight', 'IMAGE_LIGHT_KEY', 'IRRADIANCE_BANDS']
 
 #: Where an EnvironmentLight keeps its ImageBasedLight, in vrml's cache.
 IMAGE_LIGHT_KEY = 'environment-image-light'
@@ -103,8 +103,9 @@ class EnvironmentLight(x3d.EnvironmentLight):
                                 irradianceCoefficients=[tuple(row) for row in coefficients],
                                 specularImageSize=SPECULAR_SIZE)
         if specular is not None:
-            light.specular = mip_chain([face * colour for face in specular])
+            light.specular = [[face * colour for face in specular]]
             light.specularImageSize = int(specular[0].shape[0])
+            light.prefiltered = False
         else:
             # The specular level is the irradiance unturned and at unit
             # intensity: specular_faces turns and scales it as
@@ -143,16 +144,3 @@ def _linear_faces(texture: Any) -> Optional[list[np.ndarray]]:
     return [np.where(face <= 0.04045, face / 12.92, ((face + 0.055) / 1.055) ** 2.4)
             for face in values]
 
-
-def mip_chain(faces: list[np.ndarray]) -> list[list[np.ndarray]]:
-    """The faces, then each level the one before averaged down by half, to one texel"""
-    chain = [faces]
-    while chain[-1][0].shape[0] > 1:
-        level = []
-        for face in chain[-1]:
-            size = face.shape[0] // 2 * 2
-            trimmed = face[:size, :size]
-            level.append(0.25 * (trimmed[0::2, 0::2] + trimmed[1::2, 0::2]
-                                 + trimmed[0::2, 1::2] + trimmed[1::2, 1::2]))
-        chain.append(level)
-    return chain

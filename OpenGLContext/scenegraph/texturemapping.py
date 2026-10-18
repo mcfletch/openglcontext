@@ -36,7 +36,7 @@ CHANNELS = (
     'transmission', 'iridescenceThickness', 'clearcoat', 'clearcoatRoughness',
     'thickness', 'anisotropy', 'specular', 'specularColor', 'sheenColor',
     'sheenRoughness', 'iridescence', 'clearcoatNormal', 'diffuseTransmissionColor',
-    'diffuseTransmission',
+    'diffuseTransmission', 'retroreflection', 'scatterStrength', 'multiscatterColor',
 )
 
 #: How many distinct transforms one draw's channels can use.
@@ -185,8 +185,11 @@ def _rotate(angle: float) -> np.ndarray:
 def texture_transform_matrix(transform_node: Optional[Any]) -> np.ndarray:
     """A TextureTransform node as a 3x3 homogeneous matrix; None is the identity
 
-    Composed as VRML97 and X3D give it: translate by the center, rotate,
-    scale, translate back, then translate.
+    X3D's equation (19775-1 18.4.10), Tc' = -C x S x R x C x T x Tc, with
+    the rightmost applied first: the coordinate is translated, moved by the
+    center, rotated, scaled and moved back. The prose beside the equation
+    puts the scale before the rotation; X_ITE follows the equation, and so
+    does this.
     """
     if transform_node is None:
         return np.eye(3, dtype='f')
@@ -196,13 +199,13 @@ def texture_transform_matrix(transform_node: Optional[Any]) -> np.ndarray:
     sx, sy = transform_node.scale
     m = np.eye(3, dtype='f')
     if cx != 0 or cy != 0:
-        m = m @ _translate(cx, cy)
-    if angle != 0:
-        m = m @ _rotate(angle)
+        m = m @ _translate(-cx, -cy)
     if sx != 1 or sy != 1:
         m = m @ _scale(sx, sy)
+    if angle != 0:
+        m = m @ _rotate(angle)
     if cx != 0 or cy != 0:
-        m = m @ _translate(-cx, -cy)
+        m = m @ _translate(cx, cy)
     if tx != 0 or ty != 0:
         m = m @ _translate(tx, ty)
     return m

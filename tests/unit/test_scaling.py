@@ -64,13 +64,17 @@ def test_one_room_moving_classifies_the_objects_near_it_however_long_the_street(
 
 
 def _boxes_along_a_road(objects):
-    """``objects`` boxes in no order over a road with a room every 350 of them."""
+    """``objects`` boxes in no order over a road with a room every 350 of them.
+
+    The road grows longer with the objects and stays five metres across, so
+    the objects and rooms within any stretch of it are as many at every size.
+    """
     rng = np.random.default_rng(32)
     half = objects / 10.0
     table = zonelayers.ZoneTable(place(*[
         (room(size=20.0, blend=5.0, environment=ZoneEnvironment()), (x, 0, 0))
         for x in np.linspace(-half, half, max(2, objects // 350))]))
-    lows = rng.uniform(-half, half, (objects, 3)) * (1, 0.005, 0.005)
+    lows = rng.uniform(-1.0, 1.0, (objects, 3)) * (half, 2.5, 2.5)
     return table, lows, lows + 2.0
 
 
@@ -99,7 +103,7 @@ def test_classifying_a_first_frame_grows_with_the_objects():
     def prepare(objects):
         table, lows, highs = _boxes_along_a_road(objects)
         return lambda: table.classify_many(lows, highs)
-    check_scaling(prepare, n=5000, most=6.0, repeat=3)
+    check_scaling(prepare, n=5000, most=6.0)
 
 
 def test_classifying_answers_as_one_box_at_a_time_does():

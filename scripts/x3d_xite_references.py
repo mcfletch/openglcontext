@@ -25,6 +25,17 @@ downloaded from npm once, at :data:`VERSION`, and checked against
 :data:`TARBALL_SHA256`. Each document and X_ITE are served from 127.0.0.1;
 nothing else is fetched.
 
+X_ITE draws each document at the world time ``oglc-x3d-regression`` reads
+its own render at (:func:`capture_time`): the page's ``Date`` is a clock that
+stands just before :data:`WORLD_START` while the document and its loads
+arrive, and then moves one frame of 1/:data:`CAPTURE_FPS` seconds for each
+frame drawn, :data:`CAPTURE_FRAMES` and one more, as the engine's capture
+clock does. A looping TimeSensor, an interpolator or a viewer falling under
+gravity is then at the same point in both renders.
+
+X_ITE's StraightenHorizon browser option is off, so a document is seen from
+its Viewpoint's ``orientation`` as written, roll included.
+
 Each browser draws :data:`CHUNK` documents in a process of its own, killed if
 it outlasts a minute and :data:`LOAD_TIMEOUT` a document. A browser whose
 driver dies stops there; the documents it left undrawn are drawn again, five to
@@ -69,8 +80,13 @@ DEFAULT_SIZE = (792, 465)
 DEFAULT_ARCHIVES = ('ConformanceNist', 'Vrml2Sourcebook')
 #: Seconds a document has to load in X_ITE.
 LOAD_TIMEOUT = 30.0
-#: Milliseconds drawn after the load before the screenshot.
-SETTLE_MS = 500
+#: The world time, in seconds since 1970, a document's loads arrive at
+#: (2000-01-01), and the frame rate the world's clock then steps at; both
+#: as ``oglc-x3d-regression`` draws.
+WORLD_START = 946684800.0
+CAPTURE_FPS = 60
+#: Frames drawn once the loads have arrived, before the one captured.
+CAPTURE_FRAMES = 8
 #: Chromium's switches: WebGL drawn by SwiftShader, whatever the GPU.
 CHROMIUM_ARGS = ('--use-angle=swiftshader', '--enable-unsafe-swiftshader',
                  '--ignore-gpu-blocklist')
@@ -216,24 +232,93 @@ def distribution(cache: Optional[str] = None) -> str:
     return unpack(tarball, where)
 
 
+def capture_time(frames: int = CAPTURE_FRAMES) -> float:
+    """The world time of the frame captured after `frames` frames:
+    :data:`WORLD_START`, a step for each frame and one for the frame captured"""
+    return WORLD_START + (frames + 1) / CAPTURE_FPS
+
+
+#: Milliseconds the clock stands before WORLD_START when the page opens, and
+#: moves on by at each animation frame until the loads have arrived. X_ITE
+#: draws a frame only where the clock has moved, and the loads finish by
+#: drawing frames; the steps are small enough that the world has not moved
+#: when they have arrived, and the frame rate cap is raised to let them count.
+_LOADING_START_MS = 50.0
+_LOADING_STEP_MS = 0.01
+#: Frames a second X_ITE may draw: above the loading clock's step.
+_MAXIMUM_FRAME_RATE = 10 ** 7
+
+#: The page's clock, before X_ITE is loaded: ``Date`` reads ``captureClock``,
+#: which ``settle`` steps through the frames that are drawn.
+_CLOCK_SCRIPT = '''
+const captureClock = {start: %(start)r, step: 1000 / %(fps)d, frame: null,
+                      loading: -%(loading_start)r, tick: null};
+(() => {
+  const RealDate = Date;
+  const now = () => captureClock.frame === null
+      ? captureClock.start + captureClock.loading
+      : captureClock.start + captureClock.frame * captureClock.step;
+  class CaptureDate extends RealDate {
+    constructor(...given) { if (given.length) super(...given); else super(now()); }
+    static now() { return now(); }
+  }
+  window.Date = CaptureDate;
+  const request = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (callback) => request((stamp) => {
+    if (captureClock.frame === null && stamp !== captureClock.tick) {
+      captureClock.tick = stamp;
+      captureClock.loading = Math.min(captureClock.loading + %(loading_step)r, -%(loading_step)r);
+    }
+    callback(stamp);
+  });
+})();
+async function settle(frames, timeout) {
+  const browser = document.getElementById('canvas').browser;
+  const until = performance.now() + timeout;
+  while (browser.getLoadingObjects().size && performance.now() < until)
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  for (let frame = 1; frame <= frames + 1; ++frame) {
+    captureClock.frame = frame;
+    await browser.nextFrame();
+  }
+  return Date.now() / 1000;
+}
+'''
+
+
 def harness_page(size: tuple[int, int]) -> str:
-    """The page that loads the document its ``scene`` query names into X_ITE;
-    ``window.done`` is true once loaded, ``'error'`` where it could not be"""
+    """The page that loads the document its ``scene`` query names into X_ITE
+    on the capture clock; ``window.done`` is true once loaded, ``'error'``
+    where it could not be, and ``settle(frames, milliseconds)`` draws the
+    frames up to the one captured
+
+    X_ITE's splash screen is off: it fades out on the wall clock, which the
+    captured frame is no longer drawn at a fixed interval after. Its
+    StraightenHorizon option is off as well: with it on, the EXAMINE viewer
+    turns a bound viewpoint until the world's y axis is up, and a document
+    whose Viewpoint looks at a z-up part is drawn on its side.
+    """
     width, height = size
+    clock = _CLOCK_SCRIPT % {'start': WORLD_START * 1000.0, 'fps': CAPTURE_FPS,
+                             'loading_start': _LOADING_START_MS,
+                             'loading_step': _LOADING_STEP_MS}
     return '''<!doctype html>
 <html><head><meta charset="utf-8">
+<script>%s</script>
 <script src="x_ite/x_ite.min.js"></script>
 <style>html,body{margin:0;background:#000} x3d-canvas{width:%dpx;height:%dpx;display:block}</style>
 </head><body>
-<x3d-canvas id="canvas" contextMenu="false" notifications="false" timings="false"></x3d-canvas>
+<x3d-canvas id="canvas" contextMenu="false" notifications="false" timings="false"
+  splashScreen="false" maximumFrameRate="%d"></x3d-canvas>
 <script>
 const canvas = document.getElementById('canvas');
 window.done = false;
 canvas.addEventListener('load', () => { window.done = true; });
 canvas.addEventListener('error', () => { window.done = 'error'; });
+canvas.browser.setBrowserOption('StraightenHorizon', false);
 canvas.setAttribute('src', new URLSearchParams(location.search).get('scene'));
 </script></body></html>
-''' % (width, height)
+''' % (clock, width, height, _MAXIMUM_FRAME_RATE)
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
@@ -339,7 +424,8 @@ class Renderer:
 
     def render(self, relative: str, out: str) -> dict[str, Any]:
         """Draw the document at `relative` in the folder into the PNG `out`:
-        ``ok``, the ``errors`` the page reported, and ``seconds``"""
+        ``ok``, the ``errors`` the page reported, the ``world_time`` drawn at
+        and ``seconds``"""
         self._errors.clear()
         start = time.monotonic()
         scene = 'scene/' + urllib.parse.quote(relative.replace(os.sep, '/'))
@@ -347,7 +433,9 @@ class Renderer:
             self._page.goto('%s/harness.html?scene=%s' % (self.server.url, scene))
             self._page.wait_for_function('window.done', timeout=LOAD_TIMEOUT * 1000)
             loaded = self._page.evaluate('window.done')
-            self._page.wait_for_timeout(SETTLE_MS)
+            world_time = self._page.evaluate(
+                '([frames, timeout]) => settle(frames, timeout)',
+                [CAPTURE_FRAMES, LOAD_TIMEOUT * 1000])
             write_file(out, self._page.locator('#canvas').screenshot())
         except Exception as error:
             return {'ok': False, 'errors': list(self._errors) + [str(error).splitlines()[0]],
@@ -355,7 +443,7 @@ class Renderer:
         errors = list(self._errors)
         if loaded == 'error':
             errors.append('X_ITE could not load the document')
-        return {'ok': os.path.exists(out), 'errors': errors[:20],
+        return {'ok': os.path.exists(out), 'errors': errors[:20], 'world_time': world_time,
                 'seconds': time.monotonic() - start}
 
 

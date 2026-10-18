@@ -78,8 +78,9 @@ def _fieldIsSet(definition: ContextDefinition, name: str) -> bool:
     A field default is a callable the field runs on first read, so reading the
     field to find out would settle it and destroy the answer.
     """
-    from vrml import protofunctions
-    return bool(protofunctions.getField(definition, name).fhas(definition))
+    from vrml import field, protofunctions
+    declared = protofunctions.getField(definition, name)
+    return isinstance(declared, field.Field) and bool(declared.fhas(definition))
 
 
 #: How far inside its own bounding sphere the camera has to be before an

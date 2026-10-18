@@ -93,13 +93,12 @@ PATHS = [
     TutorialPath(
         'Using the Engine',
         """How to get something on screen and make it move: loading a model in
-        each of the three formats, animating it, playing the clips a rigged
+        each of the three formats, playing the clips a rigged
         model was authored with, and walking a character along a route.""",
         [
             'tutorials/core_context/getting_a_context',
             'tutorials/core_context/loading_gltf_model',
             'keyboardevents',
-            'using_animation',
             'using_clips',
             'crowd_demo',
             'using_npc',
@@ -157,6 +156,7 @@ PATHS = [
             'x3d_geospatial',
             'x3d_layering',
             'x3d_splats',
+            'x3d_materials',
             'x3d_volume',
             'x3d_sound',
             'x3d_movie',

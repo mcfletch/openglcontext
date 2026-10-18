@@ -143,6 +143,15 @@ class TestLights:
         assert min(at(image, 44, 32)) > 200
 
 
+#: A blue HUD, 20 pixels by 10 in the bottom left corner of its view, over a
+#: red box that fills the view; a TouchSensor ``HUD`` is beside it.
+HUD_OVER_RED = (
+    '<LayerSet order="0 1"><LayoutLayer><Layout containerField="layout" size="20 10" '
+    'sizeUnits=\'"PIXEL"\' align=\'"LEFT" "BOTTOM"\' scaleMode=\'"PIXEL"\'/>'
+    '<Group>%s<TouchSensor DEF="HUD"/></Group></LayoutLayer></LayerSet>%s'
+    % (glowing(BLUE, '<Rectangle2D size="20 10"/>'), NEAR_RED))
+
+
 @pytest.mark.usefixtures('gl_context')
 class TestLayout:
     def test_a_layout_layer_places_a_hud_in_pixels(self):
@@ -182,6 +191,62 @@ class TestLayout:
         blue = (image[:, :, 2] > 128) & (image[:, :, 0] < 64)
         quarters = [blue[:64, :64], blue[:64, 64:], blue[64:, :64], blue[64:, 64:]]
         assert [int(quarter.sum()) for quarter in quarters] == [36] * 4
+
+    def test_a_view_styled_without_layers_draws_the_navigated_layer_alone(self):
+        """Four views; the three orthographic ones are styled without layers,
+        so the HUD is in the window's own view and nowhere else"""
+        import dataclasses  # noqa: PLC0415 kept with its use
+
+        from OpenGLContext.context import MultiViewContext  # noqa: PLC0415 GL
+        from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
+
+        class Quad(MultiViewContext):
+            def setupViews(self):
+                for view in self.startViews(arrangement='quad', chrome=False).views:
+                    if not view.windowView:
+                        view.style = dataclasses.replace(view.style, layers=False)
+
+        scene = document(HUD_OVER_RED)
+        with scene_context(scene, base=Quad, size=(128, 128)) as context:
+            for _ in range(2):
+                context.OnDraw(force=1)
+            image = drawn_image(context)
+        blue = (image[:, :, 2] > 128) & (image[:, :, 0] < 64)
+        quarters = [blue[:64, :64], blue[:64, 64:], blue[64:, :64], blue[64:, 64:]]
+        assert [int(quarter.sum()) for quarter in quarters] == [0, 0, 0, 200]
+
+    def test_a_click_in_a_view_without_layers_passes_their_sensors_by(self):
+        import dataclasses  # noqa: PLC0415 kept with its use
+
+        from OpenGLContext.context import MultiViewContext  # noqa: PLC0415 GL
+        from OpenGLContext.events import synthetic  # noqa: PLC0415 kept with its use
+        from OpenGLContext.testing.scenes import scene_context  # noqa: PLC0415 GL
+
+        class Quad(MultiViewContext):
+            def setupViews(self):
+                views = self.startViews(arrangement='quad', chrome=False).views
+                views[2].style = dataclasses.replace(views[2].style, layers=False)
+
+        scene = document(HUD_OVER_RED)
+        touch = scene.getDEF('HUD')
+        # The HUD's place in the bottom left view, which has no layers, then
+        # in the bottom right one, which has
+        for x, expected in ((5, False), (69, True)):
+            with scene_context(scene, base=Quad, size=(128, 128)) as context:
+                context.OnDraw(force=1)
+                for record in (
+                    {'type': 'mousemove', 'buttons': [], 'x': x, 'y': 5, 'pick': True},
+                    {'type': 'mousemove', 'buttons': [], 'x': x, 'y': 5, 'pick': True},
+                    {'type': 'mousebutton', 'button': 0, 'state': 1, 'x': x, 'y': 5, 'pick': True},
+                    {'type': 'mousebutton', 'button': 0, 'state': 0, 'x': x, 'y': 5, 'pick': True},
+                ):
+                    synthetic.dispatch(context, record)
+                    context.OnDraw(force=1)
+                for _ in range(120 if expected else 20):
+                    if 'touchTime' in touch.__dict__:
+                        break
+                    context.OnDraw(force=1)
+            assert ('touchTime' in touch.__dict__) is expected
 
     def test_screen_text_is_its_point_size_in_pixels(self):
         text = ('<Shape><Appearance><Material diffuseColor="0 0 0" emissiveColor="1 1 1"/>'

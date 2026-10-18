@@ -33,6 +33,7 @@ from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 from OpenGLContext import arrays
+from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.winding import apply_winding_cull
 from OpenGLContext.scenegraph.shadergeometry import (
     get_or_build_vao, SHARED_LAYOUT,
@@ -55,6 +56,7 @@ from OpenGLContext.scenegraph.nurbstess import (
     NORMAL_POSITION_STRIDE,
     SurfaceTessellation,
     build_surface_vbo,
+    report,
     tessellate_surface,
 )
 
@@ -75,6 +77,23 @@ INTERLEAVED_PLAIN = (NORMAL_POSITION_STRIDE, None, 0, 12)
 #: Points evaluated along a 3D :class:`NurbsCurve` when it names no
 #: ``tessellation`` of its own.
 CURVE_STEPS = 64
+
+
+def control_hull(node: Any, sources: "tuple[tuple[Any, str], ...]", points: Any) -> Any:
+    """The bounds of a NURBS node's control points, kept until a source is set
+
+    A NURBS with positive weights lies inside the hull of its control points,
+    so their box bounds it without the surface being evaluated.
+
+    sources -- (node, field name) for each field `points` is read from
+    """
+    current = boundingvolume.getCachedVolume(node)
+    if current is not None:
+        return current
+    control = np.asarray(points, dtype=np.float64).reshape(-1, 3)
+    volume: Any = (boundingvolume.AABoundingBox.fromPoints(control) if len(control)
+                   else boundingvolume.BoundingVolume())
+    return boundingvolume.cacheVolume(node, volume, sources)
 
 
 def nurbs_lod_steps(level: int) -> Optional[float]:
@@ -149,7 +168,7 @@ class _SurfaceRenderer(object):
         try:
             tessellation = self._tessellate(steps=steps)
         except (NurbsError, ValueError) as err:
-            log.error("Cannot tessellate %s: %s", self, err)
+            report(self, logging.ERROR, "Cannot tessellate: %s" % (err,))
             return None
         if tessellation is None:
             return None
@@ -165,7 +184,7 @@ class _SurfaceRenderer(object):
         try:
             found = self._tessellate()
         except (NurbsError, ValueError) as err:
-            log.error("Cannot tessellate %s: %s", self, err)
+            report(self, logging.ERROR, "Cannot tessellate: %s" % (err,))
             return None
         if found is None or not found.triangle_count:
             return None
@@ -451,6 +470,10 @@ class NurbsSurface(_SurfaceRenderer, nurbs.NurbsSurface):
     def _lod_bounding_sphere(self) -> Optional[tuple[Any, float]]:
         return self._control_point_sphere(self.controlPoint)
 
+    def boundingVolume(self, mode: Any = None) -> Any:
+        """The box of the control points"""
+        return control_hull(self, ((self, 'controlPoint'),), self.controlPoint)
+
     def _tessellate(self, steps: Optional[float] = None) -> Any:
         return tessellate_surface(
             self,
@@ -489,6 +512,14 @@ class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
         if not self.surface:
             return None
         return self._control_point_sphere(self.surface.controlPoint)
+
+    def boundingVolume(self, mode: Any = None) -> Any:
+        """The box of the surface's control points; empty with no surface"""
+        inner = self.surface
+        if not inner:
+            return control_hull(self, ((self, 'surface'),), ())
+        return control_hull(
+            self, ((self, 'surface'), (inner, 'controlPoint')), inner.controlPoint)
 
     def _face_source(self) -> Any:
         return self.surface or None
@@ -540,6 +571,10 @@ class NurbsCurve(nurbs.NurbsCurve):
         if mode is not None and getattr(mode, 'shader_mode', False):
             return self._render_shader(mode, points, colors)
         return self._render_legacy(points, colors)
+
+    def boundingVolume(self, mode: Any = None) -> Any:
+        """The box of the control points"""
+        return control_hull(self, ((self, 'controlPoint'),), self.controlPoint)
 
     def _cached_points(self, mode: Any) -> Any:
         """``(points, colors)`` for this curve, from the pass's cache."""

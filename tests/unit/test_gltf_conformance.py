@@ -38,6 +38,7 @@ pytest.importorskip("numpy")
 from OpenGLContext.bin import gltf_regression as R
 from OpenGLContext.testing import renderregression as RR
 from OpenGLContext.loaders import gltf_demos
+from OpenGLContext.loaders.gltf import fastdecode
 from OpenGLContext.testing.display import display_available
 
 
@@ -193,6 +194,29 @@ def test_baseline_was_rendered_for_this_view(spec, camera):
         "--only %s" % (spec.slug(camera), reason, spec.name))
 
 
+_SCENES = list(gltf_demos.iter_scenes())
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("spec", _SCENES, ids=[spec.name for spec in _SCENES])
+def test_an_animated_scene_pins_its_time(spec):
+    """A scene whose model animates is captured at a time the roster names.
+
+    Unpinned, the capture shows the pose the animation had reached when the
+    settle ended, which is later on a busy machine than on an idle one.
+    """
+    path = R.resolve_model(spec, gltf_demos.find_parthenon())
+    if path is None:
+        pytest.skip("model unavailable (offline / download failed)")
+    with open(path, 'rb') as handle:
+        data = handle.read()
+    document = (fastdecode.load_glb(data) if data[:4] == b'glTF'
+                else fastdecode.decode_gltf(data))
+    if document.animations:
+        assert spec.anim_time is not None, (
+            "%s animates and its roster entry pins no anim_time" % spec.name)
+
+
 @pytest.mark.slow
 @pytest.mark.visual
 @pytest.mark.skipif(not _HAS_DISPLAY, reason="no display available for GL rendering")
@@ -223,12 +247,9 @@ def test_view_matches_baseline(spec, camera, tmp_path):
 
     out = str(tmp_path / (slug + '.png'))
     diff = str(tmp_path / (slug + '_diff.png'))
-    # render_view recomputes its own env prefix from spec.environment; the passed
-    # value is unused, so None is fine.
-    rendered, _stats = R.render_view(spec, camera, url, out, R.DEFAULT_SIZE,
-                                     R.DEFAULT_FRAMES, R.DEFAULT_DELAY, None)
-    if not rendered:
-        pytest.skip("render did not produce a frame (GL/network flake or timeout)")
+    rendered, stats = R.render_view(spec, camera, url, out, R.DEFAULT_SIZE,
+                                    R.DEFAULT_FRAMES, R.DEFAULT_DELAY)
+    assert rendered, "%s drew no frame: %s" % (slug, stats.get('error'))
 
     result, stats = RR.compare(baseline, out, diff, RR.DIFF_THRESHOLD)
     assert not RR.is_regression(result, _tolerance_for(spec)), (

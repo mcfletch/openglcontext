@@ -69,6 +69,7 @@ GLTF_DEMOS = [
 # auto-exit screenshot mechanism.
 DEMO_SCRIPTS = [
     ('shadow_demo', 'shadow_demo', 24),
+    ('x3d_materials', 'demos/x3d_materials', 40),
 ]
 
 

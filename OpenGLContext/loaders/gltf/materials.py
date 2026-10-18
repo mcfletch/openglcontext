@@ -9,9 +9,10 @@ its factor block and registers its textures -- so :func:`_build_material` stays 
 readable sequence rather than a wall of near-identical blocks.
 
 ``_TextureCollector`` accumulates a material's texture holders, its UV-set mask and
-any shared ``KHR_texture_transform`` while the handlers run. The archived
-spec/gloss workflow is converted to metallic/roughness in the sibling
-:mod:`specular_glossiness` module; texture decoding lives in :mod:`textures`.
+any shared ``KHR_texture_transform`` while the handlers run. A material in the
+archived spec/gloss workflow with no metallic/roughness fallback is a
+:class:`~OpenGLContext.scenegraph.specularglossiness.SpecularGlossinessMaterial`;
+texture decoding lives in :mod:`textures`.
 """
 from __future__ import annotations
 
@@ -27,16 +28,14 @@ from vrml.x3d import nodes as x3d
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.physicalmaterial import (
-    CHANNEL_FIELDS, PhysicalMaterial, uv_transform_matrix,
+    CHANNEL_FIELDS, NO_ATTENUATION, PhysicalMaterial, uv_transform_matrix,
 )
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf import hooks
-from OpenGLContext.loaders.gltf.textures import _info, _texture_holder, _pil_for_texinfo
-from OpenGLContext.loaders.gltf.specular_glossiness import (
-    _specgloss_to_metalrough, _specgloss_textures_to_metalrough,
-)
+from OpenGLContext.loaders.gltf.textures import _info, _texture_holder
+from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +64,9 @@ GLTF_TEXTURE_KEYS = {
     'anisotropy': 'anisotropyTexture',
     'diffuseTransmission': 'diffuseTransmissionTexture',
     'diffuseTransmissionColor': 'diffuseTransmissionColorTexture',
+    'retroreflection': 'retroreflectionTexture',
+    'scatterStrength': 'scatterStrengthTexture',
+    'multiscatterColor': 'multiscatterColorTexture',
 }
 
 
@@ -184,9 +186,12 @@ def _ext_specular(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
 def _ext_clearcoat(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('clearcoat', _info(ext.get('clearcoatTexture')))
     add('clearcoatRoughness', _info(ext.get('clearcoatRoughnessTexture')))
-    add('clearcoatNormal', _info(ext.get('clearcoatNormalTexture')))
+    normal = ext.get('clearcoatNormalTexture')
+    add('clearcoatNormal', _info(normal))
     return {'clearcoat': _factor(values, ext, 'clearcoatFactor', 0.0, minimum=0.0, maximum=1.0),
-            'clearcoatRoughness': _factor(values, ext, 'clearcoatRoughnessFactor', 0.0, minimum=0.0, maximum=1.0)}
+            'clearcoatRoughness': _factor(values, ext, 'clearcoatRoughnessFactor', 0.0, minimum=0.0, maximum=1.0),
+            'clearcoatNormalScale': _factor(values, normal, 'scale', 1.0)
+            if isinstance(normal, dict) else 1.0}
 
 
 def _ext_sheen(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
@@ -224,12 +229,26 @@ def _ext_diffuse_transmission(ext: dict, add: AddTexture, values: DocumentValues
 
 def _ext_volume(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('thickness', _info(ext.get('thicknessTexture')))
-    ad = ext.get('attenuationDistance')
-    # attenuationDistance defaults to +inf (no absorption); 0.0 is our sentinel.
     return {'thickness': _factor(values, ext, 'thicknessFactor', 0.0, minimum=0.0),
             'attenuationColor': tuple(ext.get('attenuationColor', [1, 1, 1])),
-            'attenuationDistance': (0.0 if ad is None else values.number(
-                ad, 0.0, 'KHR_materials_volume attenuationDistance', minimum=0.0))}
+            'attenuationDistance': _factor(values, ext, 'attenuationDistance', NO_ATTENUATION,
+                                           minimum=0.0)}
+
+
+def _ext_retroreflection(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
+    add('retroreflection', _info(ext.get('retroreflectionTexture')))  # .r
+    return {'retroreflection': _factor(values, ext, 'retroreflectionFactor', 0.0,
+                                       minimum=0.0, maximum=1.0)}
+
+
+def _ext_scatter(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
+    add('scatterStrength', _info(ext.get('scatterStrengthTexture')))      # .a
+    add('multiscatterColor', _info(ext.get('multiscatterColorTexture')))  # .rgb
+    return {'scatterStrength': _factor(values, ext, 'scatterStrengthFactor', 0.0,
+                                       minimum=0.0, maximum=1.0),
+            'multiscatterColor': tuple(ext.get('multiscatterColorFactor', [0, 0, 0]))[:3],
+            'scatterAnisotropy': _factor(values, ext, 'scatterAnisotropy', 0.0,
+                                         minimum=-1.0, maximum=1.0)}
 
 
 def _ext_anisotropy(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
@@ -245,6 +264,44 @@ def _factor(values: DocumentValues, ext: dict, key: str, default: float,
                          minimum=minimum, maximum=maximum)
 
 
+#: Each material extension's factors as (extension, {JSON key: (PhysicalMaterial
+#: field, glTF default)}): what the writer writes where a field differs from the
+#: default, and what a KHR_animation_pointer under the extension drives.
+MATERIAL_EXTENSION_FIELDS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
+    # Ours: the vertex colours on this material are light worked out when the
+    # world was built rather than a tint on the surface, so a reader adds them
+    # as emission and lets its own lights shade the surface underneath.
+    ('OGLC_materials_baked_light', {}),
+    ('KHR_materials_emissive_strength',
+     {'emissiveStrength': ('emissiveStrength', 1.0)}),
+    ('KHR_materials_ior', {'ior': ('ior', 1.5)}),
+    ('KHR_materials_specular', {'specularFactor': ('specular', 1.0),
+                                'specularColorFactor': ('specularColor', (1.0, 1.0, 1.0))}),
+    ('KHR_materials_clearcoat', {'clearcoatFactor': ('clearcoat', 0.0),
+                                 'clearcoatRoughnessFactor': ('clearcoatRoughness', 0.0)}),
+    ('KHR_materials_sheen', {'sheenColorFactor': ('sheenColor', (0.0, 0.0, 0.0)),
+                             'sheenRoughnessFactor': ('sheenRoughness', 0.0)}),
+    ('KHR_materials_transmission', {'transmissionFactor': ('transmission', 0.0)}),
+    ('KHR_materials_volume', {'thicknessFactor': ('thickness', 0.0),
+                              'attenuationColor': ('attenuationColor', (1.0, 1.0, 1.0)),
+                              'attenuationDistance': ('attenuationDistance', NO_ATTENUATION)}),
+    ('KHR_materials_diffuse_transmission',
+     {'diffuseTransmissionFactor': ('diffuseTransmission', 0.0),
+      'diffuseTransmissionColorFactor': ('diffuseTransmissionColor', (1.0, 1.0, 1.0))}),
+    ('KHR_materials_anisotropy', {'anisotropyStrength': ('anisotropyStrength', 0.0),
+                                  'anisotropyRotation': ('anisotropyRotation', 0.0)}),
+    ('KHR_materials_dispersion', {'dispersion': ('dispersion', 0.0)}),
+    ('KHR_materials_retroreflection', {'retroreflectionFactor': ('retroreflection', 0.0)}),
+    ('KHR_materials_scatter', {'scatterStrengthFactor': ('scatterStrength', 0.0),
+                               'multiscatterColorFactor': ('multiscatterColor', (0.0, 0.0, 0.0)),
+                               'scatterAnisotropy': ('scatterAnisotropy', 0.0)}),
+    ('KHR_materials_iridescence',
+     {'iridescenceFactor': ('iridescence', 0.0),
+      'iridescenceIor': ('iridescenceIor', 1.3),
+      'iridescenceThicknessMinimum': ('iridescenceThicknessMin', 100.0),
+      'iridescenceThicknessMaximum': ('iridescenceThicknessMax', 400.0)}),
+)
+
 _MATERIAL_EXT_HANDLERS = {
     'OGLC_materials_baked_light': _ext_baked_light,
     'KHR_materials_emissive_strength': _ext_emissive_strength,
@@ -258,17 +315,23 @@ _MATERIAL_EXT_HANDLERS = {
     'KHR_materials_volume': _ext_volume,
     'KHR_materials_anisotropy': _ext_anisotropy,
     'KHR_materials_dispersion': _ext_dispersion,
+    'KHR_materials_retroreflection': _ext_retroreflection,
+    # The extension's name in its draft, and the name it has since.
+    'KHR_materials_volume_scatter': _ext_scatter,
+    'KHR_materials_scatter': _ext_scatter,
 }
 
 _MATERIAL_EXT_DEFAULTS = dict(
     bakedLight=False, emissiveStrength=1.0, specular=1.0,
     specularColor=(1.0, 1.0, 1.0),
-    ior=1.5, clearcoat=0.0, clearcoatRoughness=0.0, sheenColor=(0.0, 0.0, 0.0),
+    ior=1.5, clearcoat=0.0, clearcoatRoughness=0.0, clearcoatNormalScale=1.0,
+    sheenColor=(0.0, 0.0, 0.0),
     sheenRoughness=0.0, iridescence=0.0, iridescenceIor=1.3,
     iridescenceThicknessMin=100.0, iridescenceThicknessMax=400.0,
     transmission=0.0, diffuseTransmission=0.0, diffuseTransmissionColor=(1.0, 1.0, 1.0),
-    thickness=0.0, attenuationColor=(1.0, 1.0, 1.0), attenuationDistance=0.0,
-    anisotropyStrength=0.0, anisotropyRotation=0.0, dispersion=0.0,
+    thickness=0.0, attenuationColor=(1.0, 1.0, 1.0), attenuationDistance=NO_ATTENUATION,
+    anisotropyStrength=0.0, anisotropyRotation=0.0, dispersion=0.0, retroreflection=0.0,
+    scatterStrength=0.0, multiscatterColor=(0.0, 0.0, 0.0), scatterAnisotropy=0.0,
 )
 
 
@@ -334,39 +397,15 @@ def _material_and_transforms(g: "pygltflib.GLTF2", material_index: Optional[int]
     # collector; ``add`` records a channel.
     collector = _TextureCollector(g, resolver, tex_cache)
     add = collector.add
-    textures = collector.textures
 
     exts = mat.extensions or {}
 
-    # KHR_materials_pbrSpecularGlossiness: convert the legacy spec/gloss workflow
-    # to an approximate metallic/roughness so it renders through the same shader.
+    # KHR_materials_pbrSpecularGlossiness: drawn as a SpecularGlossinessMaterial
+    # where the material gives no pbrMetallicRoughness, the fallback a document
+    # gives for viewers without the extension, which is drawn where it is there.
     sg = exts.get('KHR_materials_pbrSpecularGlossiness')
-    if sg:
-        diffuse = sg.get('diffuseFactor', [1, 1, 1, 1])
-        gloss = sg.get('glossinessFactor', 1.0)
-        spec_rgb = sg.get('specularFactor', [1, 1, 1])
-        base_rgb, metallic, roughness = _specgloss_to_metalrough(diffuse, spec_rgb, gloss)
-        # keep the diffuse alpha; only RGB is remapped by the conversion
-        base = list(base_rgb) + [diffuse[3] if len(diffuse) > 3 else 1.0]
-        # Texture-driven spec/gloss carries its metalness in the spec/gloss image,
-        # not the factors -- convert per pixel into baseColor + metallicRoughness
-        # maps so it renders as metal. Factors then just pass the maps through.
-        sgt = sg.get('specularGlossinessTexture')
-        dift = sg.get('diffuseTexture')
-        converted = False
-        if sgt is not None:
-            diffuse_pil = _pil_for_texinfo(g, _info(dift), resolver) if dift else None
-            sg_pil = _pil_for_texinfo(g, _info(sgt), resolver)
-            if sg_pil is not None:
-                base_img, mr_img = _specgloss_textures_to_metalrough(
-                    diffuse_pil, sg_pil, diffuse, spec_rgb + [1.0], gloss)
-                textures['baseColor'] = ImageDataTexture(image=base_img)
-                textures['metallicRoughness'] = ImageDataTexture(image=mr_img)
-                base = [1.0, 1.0, 1.0, diffuse[3] if len(diffuse) > 3 else 1.0]
-                metallic, roughness = 1.0, 1.0
-                converted = True
-        if not converted and 'diffuseTexture' in sg:
-            add('baseColor', _info(sg['diffuseTexture']))
+    if isinstance(sg, dict) and pbr is None:
+        return _specular_glossiness(mat, sg, collector)
 
     if pbr:
         add('baseColor', pbr.baseColorTexture)
@@ -411,6 +450,39 @@ def _material_and_transforms(g: "pygltflib.GLTF2", material_index: Optional[int]
         **channels,
     )
     _carry_application_data(result, mat, exts)
+    return result, list(collector.transforms.values())
+
+
+def _specular_glossiness(mat: Any, sg: dict, collector: "_TextureCollector") -> "tuple[Any, list]":
+    """A KHR_materials_pbrSpecularGlossiness material and its texture transforms"""
+    values = DocumentValues(logger=log)
+    diffuse = list(sg.get('diffuseFactor', [1, 1, 1, 1]))
+    alpha_mode = _ALPHA_MODE.get(mat.alphaMode, 'OPAQUE')
+    alpha = float(diffuse[3]) if len(diffuse) > 3 else 1.0
+    add = collector.add
+    add('baseColor', _info(sg.get('diffuseTexture')))
+    add('specularColor', _info(sg.get('specularGlossinessTexture')))
+    add('normal', mat.normalTexture)
+    add('occlusion', mat.occlusionTexture)
+    add('emissive', mat.emissiveTexture)
+    fields = SpecularGlossinessMaterial.CHANNELS
+    channels: dict[str, Any] = {fields[channel]: texture
+                                for channel, texture in collector.textures.items()}
+    channels.update((fields[channel] + 'Mapping', label)
+                    for channel, label in collector.labels.items() if label)
+    result = SpecularGlossinessMaterial(
+        diffuseColor=tuple(float(value) for value in diffuse[:3]),
+        transparency=1.0 - alpha if alpha_mode != 'OPAQUE' else 0.0,
+        specularColor=tuple(float(value) for value in sg.get('specularFactor', [1, 1, 1])[:3]),
+        glossiness=_factor(values, sg, 'glossinessFactor', 1.0, minimum=0.0, maximum=1.0),
+        emissiveColor=tuple(mat.emissiveFactor or (0.0, 0.0, 0.0))[:3],
+        normalScale=float(getattr(mat.normalTexture, 'scale', 1.0) or 1.0)
+        if mat.normalTexture else 1.0,
+        occlusionStrength=float(getattr(mat.occlusionTexture, 'strength', 1.0) or 1.0)
+        if mat.occlusionTexture else 1.0,
+        **channels,
+    )
+    _carry_application_data(result, mat, mat.extensions or {})
     return result, list(collector.transforms.values())
 
 

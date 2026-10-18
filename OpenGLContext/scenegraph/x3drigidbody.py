@@ -5,8 +5,9 @@ A `RigidBodyCollection` simulates its bodies on omi_physics
 `CollisionSensor` reports the touches among its collider's collidables
 (:func:`~OpenGLContext.physics.x3drigid.detect`). Bound to contexts, each
 steps once a frame through the context's render queue, on the engine's clock
-(:class:`~OpenGLContext.scenegraph.x3druntime.EngineTimed`), and a collection
-asks for frames while any of its bodies is moving.
+(:class:`~OpenGLContext.scenegraph.x3druntime.EngineTimed`), for as long as
+the context draws the scene the node is in, and a collection asks for frames
+while any of its bodies is moving.
 
 `CollidableShape` draws its `shape`, and `CollidableOffset` the collidable it
 holds, each placed by its `translation` and `rotation`. `RigidBody`,
@@ -101,18 +102,31 @@ class CollidableOffset(_Collidable, x3d.CollidableOffset):
 
 
 class _Stepped(EngineTimed):
-    """A node stepped once a frame through each context it is bound to"""
+    """A node stepped once a frame through each context it is bound to
+
+    The render pass binds a node to its context when the node comes into the
+    scene the pass draws, and unbinds it when the node leaves that scene or
+    the context is given another.
+    """
 
     def bind(self, context: Any) -> bool:
         """Step through `context`'s render queue from its next frame"""
-        contexts = self.__dict__.setdefault('_contexts', weakref.WeakSet())
-        if context not in contexts:
-            contexts.add(context)
+        self.__dict__.setdefault('_contexts', weakref.WeakSet()).add(context)
+        queued = self.__dict__.setdefault('_queued', weakref.WeakSet())
+        if context not in queued:
+            queued.add(context)
             context.renderQueue.call(self.tick, context)
         return True
 
+    def unbindContext(self, context: Any) -> None:
+        """Stop stepping through `context`"""
+        self.__dict__.setdefault('_contexts', weakref.WeakSet()).discard(context)
+
     def tick(self, context: Any) -> Any:
-        """One frame's step; DEFER, so the next frame steps again"""
+        """One frame's step; DEFER while bound, so the next frame steps again"""
+        if context not in self.__dict__['_contexts']:
+            self.__dict__['_queued'].discard(context)
+            return None
         if self.step():
             context.triggerRedraw(1)
         return DEFER

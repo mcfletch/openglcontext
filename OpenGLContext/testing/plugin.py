@@ -81,6 +81,7 @@ gl_env.settle_gl_backend()
 from OpenGLContext.testing import glcontext
 from OpenGLContext.testing.glcontext import (
     GLDescription,
+    DriverGone,
     GLUnavailable,
     describe_gl,
     hidden_window,
@@ -461,6 +462,20 @@ def gl_configuration(request: Any) -> Iterator[None]:
         _restore(settled)
 
 
+def unavailable(error: GLUnavailable) -> None:
+    """Skip for a machine with no GL to give; stop the session for one that had.
+
+    A :class:`~OpenGLContext.testing.glcontext.DriverGone` says the driver gave
+    this process contexts and has stopped -- a display driver reset. Every GL
+    test after it would skip or fail for a reason that is in none of them, so
+    the session ends there, with what happened, rather than reporting the driver
+    a few hundred times over.
+    """
+    if isinstance(error, DriverGone):
+        pytest.exit(str(error), returncode=1)
+    pytest.skip(str(error))
+
+
 @pytest.fixture
 def gl_window() -> Iterator[Callable[..., Any]]:
     """Make hidden GL windows; every one is destroyed when the test ends.
@@ -476,7 +491,7 @@ def gl_window() -> Iterator[Callable[..., Any]]:
             try:
                 return windows.enter_context(hidden_window(title, **named))
             except GLUnavailable as err:
-                pytest.skip(str(err))
+                unavailable(err)
         yield make
 
 

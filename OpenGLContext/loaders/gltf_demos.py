@@ -188,7 +188,7 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
     SceneSpec('Duck', yaw=-0.6, elevation=0.05, margin=0.9,
               description='The classic duck.'),
     _studio('IridescentDishWithOlives', yaw=-0.5, elevation=0.5, tilt=-0.32,
-          margin=0.9,
+          margin=0.9, anim_time=0.5,
           description='Look down into the iridescent dish.'),
     _studio('ToyCar', yaw=-0.6, elevation=0.05, margin=0.9,
             description='Clearcoat toy car.'),
@@ -203,7 +203,7 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
     _cube('ABeautifulGame', yaw=0.6, elevation=0.12, tilt=0.05, margin=0.9,
           description='Marble chess set; close low 3/4 hero angle.'),
     SceneSpec('AlphaBlendModeTest', margin=0.95),
-    SceneSpec('AnimatedColorsCube'),
+    SceneSpec('AnimatedColorsCube', anim_time=0.5),
     SceneSpec('AnimatedMorphCube', anim_time=1.0),
     _studio('AnimationPointerUVs', margin=0.95, anim_time=1.0,
             description='KHR_animation_pointer driving UV transforms across a panel '
@@ -229,7 +229,7 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
     SceneSpec('CesiumMan', anim_time=0.6),
     SceneSpec('CesiumMilkTruck', anim_time=0.6),
     _studio('ChairDamaskPurplegold'),
-    _cube('ChronographWatch'),
+    _cube('ChronographWatch', anim_time=0.5),
     _cube('ClearCoatCarPaint'),
     _cube('ClearcoatWicker'),
     # The door swings open and shut over 4.7s; 4.0 is inside the second closed
@@ -253,8 +253,8 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
     _studio('CompareTransmission', margin=0.9),
     _studio('CompareVolume', margin=0.95),
     SceneSpec('Corset'),
-    SceneSpec('CubeVisibility'),
-    _studio('DiffuseTransmissionPlant', margin=0.9),
+    SceneSpec('CubeVisibility', anim_time=0.25),   # the blue cube blinks; shown here
+    _studio('DiffuseTransmissionPlant', margin=0.9, anim_time=0.5),
     _studio('DiffuseTransmissionTeacup', yaw=0.5, elevation=0.35, tilt=-0.18,
           margin=0.9),
     _cube('DiffuseTransmissionTest', margin=0.9),
@@ -287,7 +287,7 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
                       'shade), so render against the image-cube, not black.'),
     SceneSpec('MaterialsVariantsShoe'),
     SceneSpec('MorphPrimitivesTest', margin=0.95),
-    SceneSpec('MorphStressTest', margin=0.95),
+    SceneSpec('MorphStressTest', margin=0.95, anim_time=0.5),
     _studio('MosquitoInAmber'),
     SceneSpec('MultiUVTest', margin=0.95),
     SceneSpec('NodePerformanceTest', margin=0.95),
@@ -305,7 +305,7 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
                           'is wherever the settle happened to reach, which is a '
                           'different pose on a busy machine.'),
     SceneSpec('RiggedFigure', anim_time=0.6),
-    SceneSpec('RiggedSimple'),
+    SceneSpec('RiggedSimple', anim_time=0.5),
     _studio('ScatteringSkull', yaw=-0.6, elevation=0.12, margin=0.9),
     _hdr('SheenChair', 'procedural_studio',
          description='Sheen velvet over a wooden frame. A neutral grey studio, '
@@ -329,7 +329,7 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
     SceneSpec('Unicode❤♻Test', margin=0.95),
     SceneSpec('UnlitTest', margin=0.95),
     SceneSpec('VertexColorTest', margin=0.95),
-    SceneSpec('VirtualCity', cameras=(8,),
+    SceneSpec('VirtualCity', cameras=(8,), anim_time=0.5,
               description='Panoramic city dome; camera 0 is authored with a ~90 deg '
                           'roll (up ~ world +X), so use the upright aerial camera 8.'),
     SceneSpec('XmpMetadataRoundedCube'),
@@ -355,7 +355,7 @@ DEMO_SCENES: tuple[SceneSpec, ...] = (
               description='Diffuse-transmission mandarin.'),
     SceneSpec('MeshPrimitiveModes', margin=0.95,
               description='POINTS/LINES/TRIANGLES primitive modes.'),
-    SceneSpec('MeshoptCubeTest', description='Quantized cube (KHR_mesh_quantization).'),
+    SceneSpec('MeshoptCubeTest', anim_time=0.5, description='Quantized cube (KHR_mesh_quantization).'),
     SceneSpec('MultipleScenes', description='Document with several scenes; scene 0 shown.'),
     _studio('PrimitiveModeNormalsTest', margin=0.95,
             description='Per-primitive-mode normal handling; the PBR row is '

@@ -15,7 +15,7 @@ error, a content's URI) that is missing or of the wrong type is a
 :class:`~OpenGLContext.loaders.documentvalues.DocumentError` naming it.
 """
 import os
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 from typing import Optional, Union
 
 import numpy as np
@@ -83,7 +83,8 @@ class RuntimeTile:
     A tile may carry several content URIs: 3D Tiles 1.0 has one `content`, while 1.1
     allows a `contents` array (e.g. buildings and trees as separate glTF in one tile).
     `content_uris` holds them all; `content_uri` returns the first for single-content
-    callers.
+    callers. A tile made by a :mod:`~OpenGLContext.loaders.tiles3d.generated`
+    tileset has no file: its `content_key` names what its generator makes it from.
 
     Two transforms, because a tile's frame and its content's are not the same one.
     `world_transform` places the tile: bounding volumes are expressed in the tile's
@@ -101,11 +102,13 @@ class RuntimeTile:
         world_transform: np.ndarray,
         children: "list[RuntimeTile]",
         up_axis_matrix: np.ndarray = _IDENTITY,
+        content_key: Optional[Hashable] = None,
     ) -> None:
         self.bounding_volume = bounding_volume
         self.geometric_error = float(geometric_error)
         self.refine = refine
         self.content_uris = list(content_uris) if content_uris else []
+        self.content_key = content_key
         self.world_transform = world_transform
         self.content_transform = world_transform @ up_axis_matrix
         self.children = children
@@ -126,7 +129,7 @@ class RuntimeTile:
 
     @property
     def has_content(self) -> bool:
-        return bool(self.content_uris)
+        return bool(self.content_uris) or self.content_key is not None
 
     def iter_tiles(self) -> "Iterator[RuntimeTile]":
         yield self

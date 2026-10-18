@@ -276,6 +276,57 @@ def test_bless_promotes_what_was_drawn_and_reviewed(monkeypatch, tmp_path, capsy
         assert image.tobytes() == reviewed
 
 
+def test_bless_within_promotes_the_renders_close_to_their_reference(monkeypatch, tmp_path):
+    names = ('a', 'b', 'c', 'd')
+    root = write_corpus(str(tmp_path / 'corpus'),
+                        {'Geometry/Box/%s.x3d' % name: '' for name in names})
+    monkeypatch.setattr(R, 'render_scene', _fake_render)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
+    baselines, out_dir = str(tmp_path / 'b'), str(tmp_path / 'renders')
+    arguments = ['--corpus', root, '--baseline-root', baselines, '--out-dir', out_dir,
+                 '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--reference', 'web3d']
+    R.main(arguments)
+    for name, difference in zip(names, (0.0, 0.4, 3.0, None)):
+        path = os.path.join(out_dir, 'ConformanceNist.Geometry.Box.%s.json' % name)
+        with open(path) as stream:
+            record = json.load(stream)
+        record['reference_difference'] = difference
+        with open(path, 'w') as stream:
+            json.dump(record, stream)
+    assert R.main(arguments + ['--bless', '--bless-within', '0.5']) == 0
+    assert sorted(os.listdir(baselines)) == [
+        'ConformanceNist.Geometry.Box.a.json', 'ConformanceNist.Geometry.Box.a.png',
+        'ConformanceNist.Geometry.Box.b.json', 'ConformanceNist.Geometry.Box.b.png']
+
+
+def test_bless_within_and_a_part_both_choose(monkeypatch, tmp_path):
+    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
+    monkeypatch.setattr(R, 'render_scene', _fake_render)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
+    baselines, out_dir = str(tmp_path / 'b'), str(tmp_path / 'renders')
+    arguments = ['--corpus', root, '--baseline-root', baselines, '--out-dir', out_dir,
+                 '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--reference', 'web3d']
+    R.main(arguments)
+    for name in ('a', 'b'):
+        path = os.path.join(out_dir, 'ConformanceNist.Geometry.Box.%s.json' % name)
+        with open(path) as stream:
+            record = json.load(stream)
+        record['reference_difference'] = 0.1
+        with open(path, 'w') as stream:
+            json.dump(record, stream)
+    assert R.main(arguments + ['--bless', 'Box/b', '--bless-within', '0.5']) == 0
+    assert sorted(os.listdir(baselines)) == ['ConformanceNist.Geometry.Box.b.json',
+                                             'ConformanceNist.Geometry.Box.b.png']
+
+
+def test_bless_within_without_bless_is_refused(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        R.main(['--corpus', str(tmp_path), '--bless-within', '0.5'])
+    assert '--bless-within' in capsys.readouterr().err
+
+
 def test_no_corpus_says_how_to_fetch_one(tmp_path, capsys):
     assert R.main(['--corpus', str(tmp_path), '--out-dir', str(tmp_path / 'o'),
                    '--report', str(tmp_path / 'r.html')]) == 2
@@ -352,6 +403,32 @@ def test_a_time_sensor_started_at_zero_has_finished_when_the_world_is_drawn(tmp_
     ''')
     centre = pixels[32, 48]
     assert centre[0] > 150 and centre[1] < 80, centre
+
+
+def stepped_clock_document(when, step):
+    """A box whose emissive red is 0 until `when` less half a `step`, 1 from
+    `when` and half a `step`, and half way between at `when`: a looping
+    TimeSensor of one second, started at 0, read at world time `when`"""
+    fraction = when % 1.0
+    keys = '0 %r %r 1' % (fraction - step / 2, fraction + step / 2)
+    return '''
+      <TimeSensor DEF="Clock" startTime="0" cycleInterval="1" loop="true"/>
+      <ColorInterpolator DEF="Paint" key="%s" keyValue="0 0 0 0 0 0 1 0 0 1 0 0"/>
+      <Shape><Appearance><Material DEF="Skin" diffuseColor="0 0 0" emissiveColor="0 0 0"/>
+        </Appearance><Box/></Shape>
+      <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Paint" toField="set_fraction"/>
+      <ROUTE fromNode="Paint" fromField="value_changed" toNode="Skin" toField="emissiveColor"/>
+    ''' % keys
+
+
+def test_the_frame_captured_is_drawn_at_the_capture_time(tmp_path):
+    """A run of three frames reads the frame drawn at ``capture_time(3)``:
+    the box is half red there, black a frame earlier and red a frame later"""
+    step = 1.0 / R.CAPTURE_FPS
+    assert R.capture_time(3) == R.WORLD_START + 4 * step
+    pixels = render_document(tmp_path, stepped_clock_document(R.capture_time(3), step))
+    red = pixels[32, 48, 0]
+    assert 40 < red < 220, pixels[32, 48]
 
 
 LIT = '''

@@ -95,7 +95,8 @@ class IFSCompiler(object):
     def dependencies(self) -> list[tuple[Any, Any]]:
         """(node, field) for every field the compiled arrays are made from:
         each of the face set's own, and the values of its property nodes"""
-        found = [(self.target, field) for field in protofunctions.getFields(self.target)]
+        found: list[tuple[Any, Any]] = [
+            (self.target, field) for field in protofunctions.getFields(self.target)]
         found += [(n, protofunctions.getField(n, attr))
                   for n, attr in coordinates.fields(self.target.coord)]
         for n, attr in [
@@ -340,7 +341,9 @@ class ArrayGeometryCompiler(IFSCompiler):
         if self.target.color and len(self.target.color.color):
             try:
                 colorArray = array([vertex.color for vertex in vertices], "f")
-            except TypeError:
+            except (TypeError, ValueError):
+                # a vertex left without a colour (fewer colours than faces)
+                # or a value that is not one
                 colorArray = None
                 log.warning(
                     """%s tessellation appears to have created invalid color for tesselated vertex""",
@@ -631,7 +634,8 @@ class IndexedValueSource(object):
         """Initialize the IndexedValueSource object
 
         vertexIndices -- the vertex indices for the indexedfaceset
-            if indices is NULL, we will use these for-our indices
+            if indices is empty, these are used, except for a per-face
+            source, whose i-th face takes the i-th value
         indices -- index-values specific to this particular value-type
             or None if there are no specifically-defined values
         values -- array of values specific to this particular value type
@@ -642,8 +646,12 @@ class IndexedValueSource(object):
         name -- name to be reported in debugging logs
         """
         if (not len(indices)) and len(values):
-            log.debug("""%s array using vertex indices""", name)
-            indices = vertexIndices
+            if perFace:
+                # X3D 13.3.6: with no index, the i-th face takes the i-th value
+                indices = range(len(values))
+            else:
+                log.debug("""%s array using vertex indices""", name)
+                indices = vertexIndices
         self.indices = indices
         self.values = values
         self.perFace = perFace

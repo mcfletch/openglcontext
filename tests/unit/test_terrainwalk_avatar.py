@@ -252,6 +252,62 @@ class TestObstacles:
         assert eye(host)[2] < -1.0
 
 
+class TestMounds:
+    """A rock the walker can step onto is walked up, over and off; one too tall is a wall."""
+
+    @staticmethod
+    def mound(rim, top, radius=1.5, at=(0.0, 0.0, -6.0)):
+        positions = np.array([at], 'f')
+        arrays = (positions, np.array([radius], 'f'), np.array([rim], 'f'), np.array([top], 'f'))
+        return lambda _x, _z, _reach: arrays
+
+    def host_walking_at(self, source):
+        host = walking(field=flat_field(height=0.0))
+        host.add_collider_source(source)
+        press(host, 'w')
+        return host
+
+    def test_the_walker_climbs_onto_a_rock_it_can_step_onto_and_goes_over_it(self):
+        host = self.host_walking_at(self.mound(rim=0.1, top=0.4))
+        highest, passed = 0.0, False
+        for _ in range(60 * 6):
+            host.clock += 1.0 / 60.0
+            host.stepPhysics()
+            x, y, z = eye(host)
+            highest = max(highest, y - host.eye_height)
+            passed = passed or z < -8.0
+        assert highest > 0.35
+        assert passed
+
+    def test_the_walker_stands_on_top_of_the_rock_it_climbed(self):
+        host = self.host_walking_at(self.mound(rim=0.1, top=0.4, radius=3.0))
+        run(host, 3.0)
+        press(host, 'w', state=0)
+        run(host, 0.5)
+        x, y, z = eye(host)
+        assert math.hypot(x, z + 6.0) < 3.0
+        assert y - host.eye_height == pytest.approx(
+            0.1 + 0.3 * math.sqrt(1.0 - (math.hypot(x, z + 6.0) / 3.0) ** 2), abs=1e-3)
+
+    def test_a_rock_too_tall_to_step_onto_is_a_wall(self):
+        host = self.host_walking_at(self.mound(rim=0.9, top=1.4))
+        run(host, 6.0)
+        x, y, z = eye(host)
+        assert math.hypot(x, z + 6.0) >= 1.5 - 1e-3
+        assert y - host.eye_height == pytest.approx(0.0, abs=1e-6)
+
+    def test_a_walker_whose_feet_are_above_the_rock_is_not_stopped_by_it(self):
+        host = walking(field=flat_field(height=0.0), position=(0.0, 3.0, -5.0))
+        host.add_collider_source(self.mound(rim=0.9, top=1.4))
+        host.standAvatarOnTerrain()
+        character = host.physicsPlatform.character
+        character.position[1] = 2.0 + character.height * 0.5
+        character.vy = 0.0
+        character.grounded = False
+        x, z = host._push_out(0.0, -6.0)   # noqa: SLF001 the collision resolve under test
+        assert (x, z) == pytest.approx((0.0, -6.0))
+
+
 class TestFlying:
     def test_flying_leaves_the_ground(self):
         host = walking()

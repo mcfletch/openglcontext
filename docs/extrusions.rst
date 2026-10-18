@@ -264,7 +264,11 @@ it, and is oriented at each spine point by that specification's Spine-aligned
 Cross-section Plane -- axes taken from the spine's own neighbours rather than
 from any reference direction. A ``crossSection`` or ``spine`` whose last point
 repeats its first is *closed*: the surface has no seam there, and a closed
-spine has no ends to cap.
+spine has no ends to cap. A ``crossSection`` of two points sweeps a ribbon.
+
+Spine point i takes ``scale`` and ``orientation`` entry min(i, count - 1),
+as X_ITE reads them: one entry applies throughout, a shorter list carries its
+last entry on, and a closed spine's repeated point is its first again.
 
 Texture coordinates
 -------------------

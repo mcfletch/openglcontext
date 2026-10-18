@@ -80,6 +80,7 @@ class MultiviewPassMixin( PassResources ):
                        among: Optional[numpy.ndarray] = None ) -> list[Any]: ...
         def greatestDepth( self, toRender: Sequence[Any] ) -> float: ...
         def zoneHiddenAt( self, camera: Any ) -> Any: ...
+        def currentNavigation( self ) -> Any: ...
         def setupViewLighting( self, matrix: Any, lighting: Optional['Lighting'],
                                fitted: bool = False ) -> None: ...
         def shaderRenderOpaque( self, toRender: list, id_map: Optional[dict] = None,
@@ -553,6 +554,7 @@ class MultiviewPassMixin( PassResources ):
             else:
                 gathered = self.frameGather()
             self.cullViewFrames( viewFrames, gathered, window )
+        self.followTerrain()
         self.applyViewFrame( active, gl=False )
         self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )
         return frames
@@ -618,6 +620,20 @@ class MultiviewPassMixin( PassResources ):
             return
         x3dsensors.sense( list( paths ), self.nodePaths, viewer,
                           [ frame.frustum.planes for frame in frames ] )
+
+    def followTerrain( self ) -> None:
+        """Keep a WALK document's viewer on the ground below it, from this
+        frame's walk; the camera moved is the next frame's
+        (:func:`OpenGLContext.move.terrainfollow.follow`)."""
+        from OpenGLContext.passes import viewpointbinding
+        if self.frameState is None or self.frameState.gathered is None:
+            return
+        if viewpointbinding.in_transition( self.context ):
+            return
+        from OpenGLContext.events import systemtime
+        from OpenGLContext.move import terrainfollow
+        terrainfollow.follow( self.context, self.frameState.gathered,
+                              self.currentNavigation(), systemtime.systemTime() )
 
     def sensePicks( self ) -> None:
         """Tell the scene's pick sensors what their picking geometry touches

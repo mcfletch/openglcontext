@@ -18,7 +18,7 @@ import sys
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
-from OpenGLContext.testing.glcontext import display_answers
+from OpenGLContext.testing.glcontext import client_opens_a_window
 from OpenGLContext.testing.paths import tests_root
 from OpenGLContext import windowsystem
 
@@ -31,13 +31,13 @@ from OpenGLContext.windowsystem.tk import TkWindowSystem, attributesFromDefiniti
 
 DRIVER = tests_root(__file__) / 'helpers' / '_tk_backend_drive.py'
 
-#: Whether an X server answers and lets this process in: a ``DISPLAY`` naming
-#: a server that has gone, or one whose authority this process does not hold,
-#: is no display for Tk to open.
+#: Whether a client opens a window here at all: where the windows come from an
+#: X server, a ``DISPLAY`` naming one that has gone or one whose authority this
+#: process does not hold is no display for Tk to open; where they come from the
+#: platform, there is nothing to name and the client is simply run.
 needs_display = pytest.mark.skipif(
-    not display_answers(),
-    reason='Tk needs an X display this process can open; run under xvfb-run '
-           'to exercise it')
+    not client_opens_a_window(),
+    reason='no window can be opened here (under X, run it with xvfb-run)')
 
 
 def _asked(**named):

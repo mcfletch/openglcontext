@@ -76,11 +76,10 @@ vec3 phongLight(int lightIndex, vec3 normal, vec3 viewDir, vec3 position,
     float nDotL = max(dot(normal, lightDir), 0.0);
     vec3 diffuse = matDiffuse * color * nDotL;
 
-    // Specular (Blinn-Phong), as X3D's equation writes it (17.2.2.4) and
-    // X_ITE draws it: (N.H)^(128 shininess), not clipped where N.L is 0,
-    // and 1 at shininess 0, where the exponent is 0.
-    vec3 halfDir = normalize(lightDir + viewDir);
-    float nDotH = max(dot(normal, halfDir), 0.0);
+    // Specular (Blinn-Phong): X3D's term has no N.L condition, and a
+    // shininess of 0 makes (N.H)^0, 1 everywhere, as X_ITE draws it
+    vec3 halfVec = lightDir + viewDir;
+    float nDotH = dot(halfVec, halfVec) > 1e-12 ? max(dot(normal, normalize(halfVec)), 0.0) : 0.0;
     float highlight = shininess > 0.0 ? pow(nDotH, shininess * 128.0) : 1.0;
     vec3 specular = matSpecular * color * highlight;
 

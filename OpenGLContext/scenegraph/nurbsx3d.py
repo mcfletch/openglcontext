@@ -231,6 +231,31 @@ class SurfaceDrawn(Parametric, MeshDrawn):
                 found.append(net.at(fractions))
         return found
 
+    def meshOrigin(self) -> Optional[np.ndarray]:
+        """None: the tessellation is single precision, about the surface's own frame
+
+        Answered without a mesh, so a surface drawn at a distance level is
+        not built at full detail as well.
+        """
+        return None
+
+    def boundingVolume(self, mode: Any = None) -> Any:
+        """The box of the control points; an empty volume for a surface with nothing to draw
+
+        A NURBS surface lies inside the hull of its control points, so the
+        box holds every level's mesh and is known without one. Kept until a
+        field the surface is built from is set.
+        """
+        current = boundingvolume.getCachedVolume(self)
+        if current is not None:
+            return current
+        found = self.surface()
+        volume: Any = boundingvolume.BoundingVolume()
+        if found is not None:
+            volume = boundingvolume.AABoundingBox.fromPoints(found.control.reshape(-1, 3))
+        self.dependOn(boundingvolume.holdVolume(self, volume))
+        return volume
+
     def levelMesh(self, level: int) -> Optional[Any]:
         """The mesh at distance level `level`, kept in vrml's cache"""
         if level <= 0:
@@ -257,15 +282,23 @@ class SurfaceDrawn(Parametric, MeshDrawn):
     def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
                transparent: int = 0, mode: Any = None) -> int:
         """Draw the mesh for the viewer's distance"""
-        found = self.levelMesh(self.lodLevel(mode))
+        level = self.lodLevel(mode)
+        self.__dict__['_viewLevel'] = level
+        found = self.levelMesh(level)
         if found is None:
             return 0
         return int(found.render(visible=visible, lit=lit, textured=textured,
                                 transparent=transparent, mode=mode))
 
     def depthDraw(self, mode: Any) -> bool:
-        """Draw the mesh for the viewer's distance into a depth map"""
-        found = self.levelMesh(self.lodLevel(mode))
+        """Draw the mesh the view last drew into a depth map
+
+        A shadow is cast by the mesh that is seen, so a surface whose control
+        points move is tessellated once a frame, and its shadow has its
+        shape. A surface no view has drawn is drawn for the light's distance.
+        """
+        level = self.__dict__.get('_viewLevel')
+        found = self.levelMesh(self.lodLevel(mode) if level is None else level)
         return True if found is None else bool(found.depthDraw(mode))
 
 
