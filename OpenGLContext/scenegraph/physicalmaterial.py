@@ -188,6 +188,11 @@ class PhysicalMaterial(ChannelMaterial, xite.PhysicalMaterial):
     specularStrength = ExtensionValue('specularStrength')
     clearcoat = ExtensionValue('clearcoat')
     clearcoatRoughness = ExtensionValue('clearcoatRoughness')
+    #: The strength of `clearcoatNormalTexture`, as `normalScale` is of the
+    #: base normal map: its x and y are multiplied by it. glTF's
+    #: `clearcoatNormalTexture.scale`; X_ITE's clearcoat node has no such
+    #: field, so it is the material's own.
+    clearcoatNormalScale = field.newField('clearcoatNormalScale', 'SFFloat', 1, 1.0)
     sheenColor = ExtensionValue('sheenColor')
     sheenRoughness = ExtensionValue('sheenRoughness')
     ior = ExtensionValue('ior')

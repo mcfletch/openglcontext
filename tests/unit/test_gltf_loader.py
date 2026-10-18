@@ -328,9 +328,16 @@ class TestTextureSource:
                         extensions={'EXT_texture_webp': {'source': 7}})
         assert gltf.textures._texture_source(tex) == 7  # noqa: SLF001 the texture source fallbacks, one extension block each
 
-    def test_basisu_is_not_consulted(self):
-        # KTX2/Basis needs a transcoder Pillow lacks, so it must NOT be treated
-        # as a usable source -- resolve to None instead of a KTX2 image index.
+    def test_basisu_is_consulted_where_the_transcoder_is_installed(self, monkeypatch):
+        monkeypatch.setattr(gltf.textures.basisu, 'available', lambda: True)
+        tex = self._Tex(source=2,
+                        extensions={'KHR_texture_basisu': {'source': 3}})
+        assert gltf.textures._texture_sources(tex) == [3, 2]  # noqa: SLF001 the texture source fallbacks, one extension block each
+
+    def test_basisu_is_not_consulted_without_the_transcoder(self, monkeypatch):
+        # KTX2/Basis needs opengl_basisu; without it the texture has no source
+        # but its core one.
+        monkeypatch.setattr(gltf.textures.basisu, 'available', lambda: False)
         tex = self._Tex(source=None,
                         extensions={'KHR_texture_basisu': {'source': 3}})
         assert gltf.textures._texture_source(tex) is None  # noqa: SLF001 the texture source fallbacks, one extension block each

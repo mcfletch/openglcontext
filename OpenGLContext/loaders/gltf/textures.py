@@ -4,11 +4,13 @@ Turns a glTF ``texture`` (its ``source`` image, resolved via bufferView, ``data:
 URI or external URI, plus its ``sampler`` wrap/filter enums) into an
 :class:`~OpenGLContext.scenegraph.imagedata.ImageDataTexture`, with the sampler
 as a ``TextureProperties``, memoising by texture index. Images are normalised to RGBA on decode so grayscale
-and luminance-alpha sources sample correctly. ``EXT_texture_avif`` and
-``EXT_texture_webp`` images are preferred to the core ``source`` where the
-installed Pillow decodes the format (:func:`decodes`); ``KHR_texture_basisu``
-(KTX2/Basis) is not read, as it needs a GPU-block transcoder Pillow lacks, and a
-texture carrying it is drawn from its core ``source``.
+and luminance-alpha sources sample correctly. A ``KHR_texture_basisu``,
+``EXT_texture_avif`` or ``EXT_texture_webp`` image is preferred to the core
+``source``, in that order, where it is decoded here (:func:`decodes`): Basis
+Universal KTX 2 needs the optional opengl_basisu
+(:mod:`OpenGLContext.loaders.basisu`), and becomes a texture uploaded in a
+block format the context samples; AVIF and WebP need a Pillow built with them.
+An image that does not decode gives way to the next, the core ``source`` last.
 
 ``_TexInfo`` / ``_info`` wrap the raw textureInfo dicts that appear inside material
 extensions, giving them the ``.index`` / ``.texCoord`` / ``.extensions`` attribute
@@ -34,6 +36,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.sampler import sampler_of, texture_properties
+from OpenGLContext.loaders import basisu
 from OpenGLContext.loaders.gltf.accessors import view_bytes
 from OpenGLContext.loaders.resolver import Resolver, decode_data_uri, resolver_max
 
@@ -84,7 +87,10 @@ def _image_pil(g: "pygltflib.GLTF2", image_index: int,
 
 
 def _decode(raw: bytes) -> "Optional[Image.Image]":
+    """A PIL image in RGBA of encoded bytes; a Basis Universal file's level 0"""
     from PIL import Image
+    if basisu.is_basis(raw):
+        return basisu.open_image(raw).pil().convert('RGBA')
     pim: "Image.Image" = Image.open(io.BytesIO(raw))
     # Normalise to RGBA so grayscale (L) and luminance-alpha (LA) images expand
     # to (L,L,L,A) -- otherwise an LA texture samples as (lum, alpha, 0) and a
@@ -94,21 +100,27 @@ def _decode(raw: bytes) -> "Optional[Image.Image]":
     return pim
 
 
+BASISU_EXTENSION = 'KHR_texture_basisu'
+
 #: The texture extensions whose image a texture prefers to its core ``source``,
 #: most preferred first, with the format each names.
-IMAGE_EXTENSIONS = (('EXT_texture_avif', 'image/avif'), ('EXT_texture_webp', 'image/webp'))
+IMAGE_EXTENSIONS = ((BASISU_EXTENSION, 'image/ktx2'), ('EXT_texture_avif', 'image/avif'),
+                    ('EXT_texture_webp', 'image/webp'))
 
 #: Pillow's name for each format an extension may name.
 _PILLOW_FEATURES = {'image/avif': 'avif', 'image/webp': 'webp'}
 
 
 def decodes(mime_type: str) -> bool:
-    """Whether the installed Pillow decodes images of ``mime_type``.
+    """Whether images of ``mime_type`` are decoded here.
 
-    PNG and JPEG always; AVIF and WebP where Pillow was built with them.
+    PNG and JPEG always; KTX 2 where opengl_basisu is installed; AVIF and WebP
+    where Pillow was built with them.
     """
     if mime_type in ('image/png', 'image/jpeg'):
         return True
+    if mime_type == 'image/ktx2':
+        return basisu.available()
     feature = _PILLOW_FEATURES.get(mime_type)
     if feature is None:
         return False
@@ -116,23 +128,65 @@ def decodes(mime_type: str) -> bool:
     return bool(features.check(feature))
 
 
-def _texture_source(tex: "pygltflib.Texture") -> Optional[int]:
-    """The image index a texture's pixels come from, or None.
+def _texture_sources(tex: "pygltflib.Texture") -> list[int]:
+    """The image indices a texture's pixels may come from, most preferred first.
 
-    The image an ``EXT_texture_avif`` or ``EXT_texture_webp`` extension names,
-    where Pillow decodes that format: the extension's image is what the
-    author meant, and the core ``source`` is the fallback for a reader without
-    it. Otherwise ``texture.source``, which a document requiring one of those
-    extensions may leave out. ``KHR_texture_basisu`` is never chosen.
+    The images the extensions in :data:`IMAGE_EXTENSIONS` name, where that
+    format is decoded here: the extension's image is what the author meant,
+    and the core ``source`` is the fallback for a reader without it. Then
+    ``texture.source``, which a document requiring one of those extensions may
+    leave out.
     """
     extensions = getattr(tex, 'extensions', None) or {}
+    found = []
     for name, mime_type in IMAGE_EXTENSIONS:
         block = extensions.get(name)
         source = block.get('source') if isinstance(block, dict) else None
         if isinstance(source, int) and not isinstance(source, bool) and decodes(mime_type):
-            return source
-    if tex.source is not None:
-        return int(tex.source)
+            found.append(source)
+    if tex.source is not None and int(tex.source) not in found:
+        found.append(int(tex.source))
+    return found
+
+
+def _texture_source(tex: "pygltflib.Texture") -> Optional[int]:
+    """The image index a texture's pixels come from first, or None (:func:`_texture_sources`)."""
+    sources = _texture_sources(tex)
+    return sources[0] if sources else None
+
+
+def basisu_notice(g: "pygltflib.GLTF2") -> Optional[str]:
+    """What a document loses to opengl_basisu not being installed, or None.
+
+    None where the document has no ``KHR_texture_basisu`` texture or the
+    transcoder is installed.
+    """
+    if basisu.available():
+        return None
+    basis = [tex for tex in (g.textures or [])
+             if isinstance((getattr(tex, 'extensions', None) or {}).get(BASISU_EXTENSION), dict)]
+    if not basis:
+        return None
+    fallback = sum(1 for tex in basis if tex.source is not None)
+    return ('glTF %s: %s. Of its %d Basis textures, %d are drawn from their fallback '
+            'image and %d are not drawn.' % (BASISU_EXTENSION, basisu.missing_reason(),
+                                             len(basis), fallback, len(basis) - fallback))
+
+
+def _decoded_texture(g: "pygltflib.GLTF2", tex: "pygltflib.Texture", resolver: Resolver,
+                     what: str = 'image') -> "Optional[Image.Image]":
+    """The PIL image of a texture's first source that decodes, or None
+
+    ``what`` names the image in the warning a source that does not decode logs.
+    """
+    for src in _texture_sources(tex):
+        try:
+            image = _image_pil(g, src, resolver)
+        except Exception as err:
+            log.warning("glTF: failed to decode %s %s: %s", what, src, err)
+            continue
+        if image is not None:
+            return image
     return None
 
 
@@ -141,14 +195,7 @@ def _pil_for_texinfo(g: "pygltflib.GLTF2", info: "Optional[_TexInfo]",
     """Decode the PIL image behind a texture-info dict (or None)."""
     if info is None or getattr(info, 'index', None) is None:
         return None
-    src = _texture_source(g.textures[info.index])
-    if src is None:
-        return None
-    try:
-        return _image_pil(g, src, resolver)
-    except Exception as err:
-        log.warning("glTF: failed to decode spec/gloss image %s: %s", src, err)
-        return None
+    return _decoded_texture(g, g.textures[info.index], resolver, 'spec/gloss image')
 
 
 def texture_image(g: "pygltflib.GLTF2", texture_index: Optional[int],
@@ -162,14 +209,7 @@ def texture_image(g: "pygltflib.GLTF2", texture_index: Optional[int],
     """
     if texture_index is None or not (0 <= texture_index < len(g.textures or [])):
         return None
-    src = _texture_source(g.textures[texture_index])
-    if src is None:
-        return None
-    try:
-        return _image_pil(g, src, resolver)
-    except Exception as err:
-        log.warning("glTF: failed to decode image %s: %s", src, err)
-        return None
+    return _decoded_texture(g, g.textures[texture_index], resolver)
 
 
 VIDEO_EXTENSION = 'EXT_texture_video'
@@ -245,9 +285,6 @@ def _texture_holder(g: "pygltflib.GLTF2", texture_index: Optional[int], resolver
     if movie is not None:
         cache[texture_index] = movie
         return movie  # type: ignore[no-any-return]  # a MovieTexture is drawn as an image texture is
-    src = _texture_source(tex)
-    if src is None:
-        return None
     # glTF sampler wrap/filter enums are GL enums; pass them straight through.
     sampler = None
     if getattr(tex, 'sampler', None) is not None and g.samplers:
@@ -255,13 +292,16 @@ def _texture_holder(g: "pygltflib.GLTF2", texture_index: Optional[int], resolver
     settings = (getattr(sampler, 'wrapS', None), getattr(sampler, 'wrapT', None),
                 getattr(sampler, 'minFilter', None),
                 getattr(sampler, 'magFilter', None))
-    try:
-        holder = _shared_texture(_image_bytes(g, src, resolver), settings)
-    except Exception as err:
-        log.warning("glTF: failed to decode image %s: %s", src, err)
-        return None
-    cache[texture_index] = holder
-    return holder
+    for src in _texture_sources(tex):
+        try:
+            holder = _shared_texture(_image_bytes(g, src, resolver), settings)
+        except Exception as err:
+            log.warning("glTF: failed to decode image %s: %s", src, err)
+            continue
+        if holder is not None:
+            cache[texture_index] = holder
+            return holder
+    return None
 
 
 def _shared_texture(raw: Optional[bytes], settings: tuple) -> Optional[ImageDataTexture]:
@@ -270,6 +310,8 @@ def _shared_texture(raw: Optional[bytes], settings: tuple) -> Optional[ImageData
     Two documents holding the same image get the same texture, which is what
     lets everything drawn with it collapse into one instanced draw. The key is
     the image and its sampler: one wrapped and one clamped are two textures.
+    A Basis Universal file's texture holds it as a
+    :class:`~OpenGLContext.loaders.basisu.BasisImage`, uploaded compressed.
     """
     if raw is None:
         return None
@@ -277,7 +319,7 @@ def _shared_texture(raw: Optional[bytes], settings: tuple) -> Optional[ImageData
     found = _SHARED.get(key)
     if found is not None:
         return found
-    image = _decode(raw)
+    image: Any = basisu.open_image(raw) if basisu.is_basis(raw) else _decode(raw)
     if image is None:
         return None
     holder = ImageDataTexture(image=image)

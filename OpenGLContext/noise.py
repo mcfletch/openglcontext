@@ -16,11 +16,16 @@ __all__ = ['fbm', 'ridged', 'smoothstep', 'value_noise']
 
 
 def _hash01(ix: np.ndarray, iz: np.ndarray, seed: int) -> np.ndarray:
-    """A value in [0, 1] for each integer lattice point, fixed by ``seed``."""
-    h = (ix.astype(np.int64) * 374761393 + iz.astype(np.int64) * 668265263
-         + np.int64(seed) * 1013904223)
-    h = (h ^ (h >> np.int64(13))) * np.int64(1274126177)
-    h = h ^ (h >> np.int64(16))
+    """A value in [0, 1] for each integer lattice point, fixed by ``seed``.
+
+    The hash wraps in 64 bits, which is what mixes the bits; ``errstate`` keeps
+    NumPy from reporting the wrap when an input is a scalar.
+    """
+    with np.errstate(over='ignore'):
+        h = (ix.astype(np.int64) * 374761393 + iz.astype(np.int64) * 668265263
+             + np.int64(seed) * 1013904223)
+        h = (h ^ (h >> np.int64(13))) * np.int64(1274126177)
+        h = h ^ (h >> np.int64(16))
     return (h & np.int64(0xFFFFFF)).astype(np.float64) / float(0xFFFFFF)
 
 

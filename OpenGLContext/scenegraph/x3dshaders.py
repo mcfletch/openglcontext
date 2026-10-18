@@ -470,13 +470,14 @@ def _declared_by(node: Any) -> type:
     return type(node)
 
 
-def user_fields(node: Any) -> "list[Any]":
+def user_fields(node: Any) -> "list[protofunctions.FieldOrEvent]":
     """The fields and events `node` declares for itself, beyond its X3D declaration's"""
     base = _declared_by(node)
     known = {entry.name for entry in protofunctions.getFields(base)}
     known.update(entry.name for entry in protofunctions.getFields(base, events=1))
-    found = [entry for entry in protofunctions.getFields(node)
-             if entry.name not in known and not entry.name.startswith(' ')]
+    found: "list[protofunctions.FieldOrEvent]" = [
+        entry for entry in protofunctions.getFields(node)
+        if entry.name not in known and not entry.name.startswith(' ')]
     found.extend(entry for entry in protofunctions.getFields(node, events=1)
                  if entry.name not in known and not entry.direction)
     return found

@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from OpenGLContext.noise import fbm
+from OpenGLContext.noise import fbm, smoothstep
 
 HeightFn = Callable[[Any, Any], Any]
 #: ``where(x, z) -> weight``: how much of the grain a place gets, 0 to 1.
@@ -185,6 +185,165 @@ class Relief:
         def ground(x: Any, z: Any) -> Any:
             return height_fn(x, z) + self.height(x, z, spacing, error)
 
+        return ground
+
+
+def _unit(i: np.ndarray, j: np.ndarray, k: int, salt: int, seed: int) -> np.ndarray:
+    """A value in [0, 1) for each integer pair ``(i, j)``, fixed by ``k``, ``salt`` and ``seed``."""
+    mask = np.uint64(0xFFFFFFFFFFFFFFFF)
+    with np.errstate(over='ignore'):
+        n = (np.asarray(i, dtype=np.int64).astype(np.uint64) * np.uint64(0x9E3779B97F4A7C15)
+             ^ np.asarray(j, dtype=np.int64).astype(np.uint64) * np.uint64(0xC2B2AE3D27D4EB4F)
+             ^ np.uint64((k * 0x165667B19E3779F9 + salt * 0x27D4EB2F165667C5 + seed * 0x9E3779B1)
+                         & 0xFFFFFFFFFFFFFFFF))
+        n = (n ^ (n >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9) & mask
+        n = (n ^ (n >> np.uint64(27))) * np.uint64(0x94D049BB133111EB) & mask
+        n = n ^ (n >> np.uint64(31))
+    return np.asarray((n >> np.uint64(11)).astype('d') / float(1 << 53))
+
+
+@dataclass(frozen=True)
+class RockRelief:
+    """Ground that is bare rock, shaped by scraping: terraces, flat faces and steps.
+
+    Bare rock is not a smoother or rougher version of the hillside it lies on. It is a
+    block with flat faces cut into it. This builds that the way
+    :func:`~OpenGLContext.scenegraph.natural.scrape` builds a boulder: the rock starts as
+    a raised, slightly uneven slab, and flat discs are pressed into it, each cutting
+    down to a plane (a little tilted) within its reach and leaving what lies outside. Where
+    discs overlap the lowest plane wins, so the surface steps down in facets with a
+    clean edge at every rim, and a fine grain is laid over them.
+
+    The result is metres to add to the ground, from 0 where the rock gives out up to
+    ``height``. It is a function of position alone, so the surface that is drawn and the
+    one that is walked on are the same function, and neighbouring tiles meet exactly.
+
+    ``where(x, z)`` is how rocky each place is, from 0 to 1; rock appears from
+    ``begins`` and is whole from ``whole``, blending into the ground between, and a place
+    below ``begins`` has none. ``cell`` is the width of the square that holds each
+    ``scrapes`` discs, whose radius runs over ``span`` times the cell's half width and
+    whose cuts are ``depth`` of the height deep; ``tilt`` is the steepest slope of a
+    scraped face. ``grain`` is the height of the fine roughness, in metres. Features
+    smaller than a few samples are left out of a surface sampled coarsely, as
+    :class:`Relief` leaves out its bands.
+    """
+
+    where: Weight
+    height: float = 0.7
+    cell: float = 6.0
+    scrapes: int = 2
+    span: tuple[float, float] = (0.55, 1.15)
+    depth: tuple[float, float] = (0.15, 0.65)
+    tilt: float = 0.3
+    grain: float = 0.05
+    begins: float = 0.35
+    whole: float = 0.7
+    seed: int = 0
+    #: How far above the ground bare rock stands at its lowest, in metres, which keeps
+    #: the rock surface from lying in the ground it replaces.
+    lift: float = 0.03
+    #: Samples across a scrape's radius before it is drawn.
+    samples_per_scrape: float = 3.0
+
+    def __post_init__(self) -> None:
+        if self.height <= 0.0 or self.cell <= 0.0 or self.scrapes < 0:
+            raise ValueError('rock relief %r m high in cells %r m wide with %r scrapes'
+                             % (self.height, self.cell, self.scrapes))
+        if not 0.0 <= self.begins < self.whole <= 1.0:
+            raise ValueError('rock begins at %r and is whole at %r; need 0 <= begins < whole <= 1'
+                             % (self.begins, self.whole))
+
+    def weight(self, x: Any, z: Any) -> np.ndarray:
+        """How much rock each place has, from 0 to 1."""
+        rocky = np.clip(np.asarray(self.where(x, z), dtype='d'), 0.0, 1.0)
+        return np.asarray(smoothstep(np.clip((rocky - self.begins) / (self.whole - self.begins),
+                                             0.0, 1.0)))
+
+    def _slab(self, x: Any, z: Any) -> np.ndarray:
+        """The uncut rock: a slab as high as ``height`` and a little uneven."""
+        wander = fbm(np.asarray(x, 'd') / 9.0, np.asarray(z, 'd') / 9.0, seed=self.seed + 31,
+                     octaves=2)
+        return np.asarray(self.height * (0.8 + 0.2 * wander))
+
+    def rock(self, x: Any, z: Any, spacing: float = 0.0) -> np.ndarray:
+        """How high the rock stands above the ground at each place, where it is rock: 0 up to
+        ``height``, before ``where`` is applied. ``spacing`` leaves out the scrapes a surface
+        sampled that coarsely cannot hold."""
+        x = np.asarray(x, dtype='d')
+        z = np.asarray(z, dtype='d')
+        surface = self._slab(x, z)
+        ci = np.floor(x / self.cell).astype(np.int64)
+        cj = np.floor(z / self.cell).astype(np.int64)
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                i, j = ci + di, cj + dj
+                for k in range(self.scrapes):
+                    cx = (i + _unit(i, j, k, 1, self.seed)) * self.cell
+                    cz = (j + _unit(i, j, k, 2, self.seed)) * self.cell
+                    reach = 0.5 * self.cell * (self.span[0] + (self.span[1] - self.span[0])
+                                               * _unit(i, j, k, 3, self.seed))
+                    cut = self.height * (self.depth[0] + (self.depth[1] - self.depth[0])
+                                         * _unit(i, j, k, 4, self.seed))
+                    sx = self.tilt * (2.0 * _unit(i, j, k, 5, self.seed) - 1.0)
+                    sz = self.tilt * (2.0 * _unit(i, j, k, 6, self.seed) - 1.0)
+                    plane = self._slab(cx, cz) - cut + sx * (x - cx) + sz * (z - cz)
+                    inside = np.hypot(x - cx, z - cz) < reach
+                    if spacing:
+                        inside = inside & (reach >= spacing * self.samples_per_scrape)
+                    surface = np.where(inside, np.minimum(surface, plane), surface)
+        if self.grain and spacing * 4.0 <= 3.2:
+            for size, share in ((3.2, 1.0), (1.6, 0.5)):
+                if spacing * 4.0 <= size:
+                    surface = surface + self.grain * share * 2.0 * (
+                        fbm(x / size, z / size, seed=self.seed + 53 + int(size * 10),
+                            octaves=1) - 0.5)
+        return np.asarray(np.maximum(surface, 0.0))
+
+    def displacement(self, x: Any, z: Any, spacing: float = 0.0) -> np.ndarray:
+        """Metres to add to the ground at ``(x, z)``: none off the rock, the rock's height on it.
+
+        ``spacing`` is how far apart the surface's samples are.
+        """
+        found = self.weight(x, z)
+        out = np.asarray(found * (self.lift + self.rock(x, z, spacing)))
+        return out
+
+    def no_finer_than(self, spacing: float) -> "RockRelief":
+        """This rock; scrapes too small for a surface at ``spacing`` are left out as it is
+        sampled (:meth:`rock`), so there is nothing to cut."""
+        return self
+
+    def over(self, height_fn: HeightFn, spacing: float, error: float) -> HeightFn:
+        """``height_fn`` with the rock added, for a surface at ``spacing``.
+
+        ``error`` is taken for the signature of :meth:`Relief.over` and unused: a block of
+        rock is the shape of the ground, not grain inside the error a tile may be wrong by.
+        """
+        def ground(x: Any, z: Any) -> Any:
+            return height_fn(x, z) + self.displacement(x, z, spacing)
+
+        return ground
+
+
+@dataclass(frozen=True)
+class Reliefs:
+    """Several reliefs as one: each is added over what the ones before it made.
+
+    It answers where a :class:`Relief` is asked for, so a surface carries grain and bare rock
+    together.
+    """
+
+    parts: tuple[Any, ...]
+
+    def no_finer_than(self, spacing: float) -> "Reliefs":
+        """Each part held to what a surface at ``spacing`` can carry."""
+        return Reliefs(tuple(part.no_finer_than(spacing) for part in self.parts))
+
+    def over(self, height_fn: HeightFn, spacing: float, error: float) -> HeightFn:
+        """``height_fn`` with every part added, for a surface at ``spacing``."""
+        ground = height_fn
+        for part in self.parts:
+            ground = part.over(ground, spacing, error)
         return ground
 
 

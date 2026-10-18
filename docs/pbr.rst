@@ -503,6 +503,10 @@ Optional lobes, each off at 0:
    * - ``clearcoatRoughness``
      - 0.0
      - how sharp the clearcoat's highlight is
+   * - ``clearcoatNormalScale``
+     - 1.0
+     - strength of ``clearcoatNormalTexture``: its x and y are multiplied by
+       it, as ``normalScale`` does for the base normal map
    * - ``sheenColor``
      - (0, 0, 0)
      - colour of the soft glow at the edges of fabric (velvet, satin)
@@ -715,8 +719,8 @@ which a scene's ``{"light": n}`` or a zone's (:doc:`zones`) selects:
    * - ``rotation``
      - (0, 0, 0, 1)
      - A quaternion ``(x, y, z, w)`` turning the environment. It is applied as
-       the faces are read, so the probe holds a world-aligned cube; each face
-       is read bilinearly and clamped at its edges.
+       the light is drawn into the probe, so the probe holds a world-aligned
+       cube.
    * - ``irradianceCoefficients``
      - none
      - Nine RGB spherical-harmonic coefficients, l ≤ 2, of the irradiance
@@ -734,10 +738,18 @@ file is read as RGBD HDR.
 ``irradiance_faces(size)`` evaluates the coefficients into six ``(size, size,
 3)`` faces holding irradiance over π, the value the PBR shader multiplies the
 albedo by. ``IBLProbe.upload_light`` puts both into one layer of the probe the
-first time the light is needed, resampling the specular mips to the probe's
-size and repeating the roughest where the light has fewer; nothing is drawn.
-A light with no specular images is not uploaded. A zone's light needs the
-``full`` probe and cube-map arrays (GL 4.0 or ``ARB_texture_cube_map_array``).
+first time the light is needed, and again whenever one of its fields is set
+(``ImageBasedLight.version``), which is how an animation of its intensity or
+rotation reaches the frame. The specular mips go into a cube of their own,
+and each of the probe's levels is drawn from it on the GPU, turned and scaled:
+the light's mips span perceptual roughness 0 to 1 evenly whatever their
+count, as ``EXT_lights_image_based`` lays them out, and the probe's level for
+roughness *r* reads the light's chain at level *r* (count - 1), between the
+two mips either side (``ibl.roughness_lod``). A light whose ``prefiltered`` is
+false (an ``EnvironmentLight``'s ``specularTexture``) holds the environment
+itself, which the probe GGX-filters for each roughness. A light with no
+specular images is not uploaded. A zone's light needs the ``full`` probe and
+cube-map arrays (GL 4.0 or ``ARB_texture_cube_map_array``).
 
 In ``auto`` mode, environment lighting adapts to the frame rate. When the
 frame rate stays below 45 frames a second for 30 frames it steps down to
@@ -859,7 +871,9 @@ fog leaves an object ``(visibilityRange - distance) / visibilityRange`` of its
 own colour, at its distance from the viewer. Both passes fog lit, unlit and
 vertex-coloured shapes, points and lines; text and the overlay are not
 fogged. X3D's
-``LocalFog`` fogs only its own group (:doc:`X3D <x3d>`).
+``LocalFog`` fogs only its own group (:doc:`X3D <x3d>`). The instanced
+:ref:`vegetation <vegetation-fog>` and the :ref:`splat terrain <terrain-fog>`
+are fogged by the bound ``Fog`` too.
 
 Choosing a fog curve
 ~~~~~~~~~~~~~~~~~~~~

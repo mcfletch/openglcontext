@@ -79,3 +79,20 @@ class TestWhereTheRegistryIsWritten:
                             '--write-registry']) == 0
         assert (tmp_path / 'packs.json').read_text() == \
             (into / 'packs.json').read_text()
+
+    def test_building_one_pack_keeps_the_entries_of_the_other_in_the_shipped_registry(
+            self, script, tmp_path):
+        """The textures and the gallery are published separately; publishing one must not
+        drop the other from the registry the engine ships."""
+        import json
+        (tmp_path / 'packs.json').write_text(json.dumps({
+            'namespace': 'openglcontext',
+            'packs': [{'key': 'openglcontext/textures', 'title': 'CC0 PBR textures',
+                       'url': 'https://example.invalid/textures.tar.gz',
+                       'directory': 'textures', 'archive': 'tar', 'approximate_bytes': 1,
+                       'sha256': '0' * 64, 'copyright': 'CC0', 'marker': 'CREDITS.txt',
+                       'notes': ''}]}))
+        assert script.main(['--only', 'gallery', '--world', a_world(tmp_path),
+                            '--into', str(tmp_path / 'dist'), '--write-registry']) == 0
+        keys = [pack['key'] for pack in json.loads((tmp_path / 'packs.json').read_text())['packs']]
+        assert sorted(keys) == ['openglcontext/gallery', 'openglcontext/textures']

@@ -2,10 +2,10 @@
 from collections.abc import Iterable
 from typing import Any, Optional
 
+import numpy as np
+
 from OpenGLContext.events import event, eventmanager
-from OpenGL.GLU import *
 from OpenGLContext.scenegraph import nodepath
-from OpenGLContext.arrays import array
 import itertools
 
 #: The buttons a wheel notch is reported on, in the X11 numbering the whole of
@@ -24,6 +24,46 @@ WHEEL_UP, WHEEL_DOWN = 3, 4
 #: what lets a binding list it, a settings page present it and a movement mode
 #: read it, with no second path for the mouse.
 BUTTON_NAME = '<mouse-%d>'
+
+
+def _window(view: Any) -> tuple[np.ndarray, tuple[float, float, float, float]]:
+    """The world-to-device matrix and the viewport of ``view``."""
+    if view.modelViewMatrix is None or view.projectionMatrix is None or view.viewport is None:
+        raise ValueError(
+            'projecting through %r needs its modelViewMatrix, projectionMatrix '
+            'and viewport' % (view,))
+    combined = (np.asarray(view.modelViewMatrix, np.float64)
+                @ np.asarray(view.projectionMatrix, np.float64))
+    vx, vy, width, height = (float(value) for value in view.viewport)
+    return combined, (vx, vy, width, height)
+
+
+def unprojected(view: Any, x: float, y: float, depth: float) -> np.ndarray:
+    """The world point at window position (x, y) and depth in [0, 1]
+
+    `view` carries the row-vector ``modelViewMatrix`` and ``projectionMatrix``
+    and the ``viewport`` (x, y, width, height) a picked event has.
+    """
+    combined, (vx, vy, width, height) = _window(view)
+    device = np.array([2.0 * (x - vx) / width - 1.0, 2.0 * (y - vy) / height - 1.0,
+                       2.0 * depth - 1.0, 1.0])
+    found = device @ np.linalg.inv(combined)
+    return np.asarray(found[:3] / found[3])
+
+
+def projected(view: Any, point: Any) -> np.ndarray:
+    """The window position (x, y) and depth in [0, 1] of a world point
+
+    The inverse of :func:`unprojected`, through the same three attributes of
+    `view`.
+    """
+    combined, (vx, vy, width, height) = _window(view)
+    x, y, z = (float(value) for value in tuple(point)[:3])
+    clip = np.array([x, y, z, 1.0]) @ combined
+    device = clip[:3] / clip[3]
+    return np.array([vx + (device[0] + 1.0) * width / 2.0,
+                     vy + (device[1] + 1.0) * height / 2.0,
+                     (device[2] + 1.0) / 2.0])
 
 
 def button_name(button: Any) -> str:
@@ -132,15 +172,7 @@ class MouseEvent( event.Event ):
                 # A raw depth-buffer value, as the name-stack reports it,
                 # rather than the [0,1] the projection wants.
                 z = z / (2.0**32-1.0)
-        viewport = self.viewport
-        if viewport is not None:
-            viewport = array(viewport,'i')
-        worldCoordinate = gluUnProject(
-            x,y,z,
-            self.modelViewMatrix.astype('d'),
-            self.projectionMatrix.astype('d'),
-            viewport,
-        )
+        worldCoordinate = tuple(unprojected(self, x, y, z).tolist())
         if viewCoordinate is None:
             self.worldCoordinate = worldCoordinate
         return worldCoordinate
@@ -157,12 +189,7 @@ class MouseEvent( event.Event ):
             x,y,z = self.worldCoordinate
         else:
             x,y,z = worldCoordinate
-        viewCoordinate = gluProject(
-            x,y,z,
-            self.modelViewMatrix,
-            self.projectionMatrix,
-            self.viewport,
-        )
+        viewCoordinate = tuple(projected(self, (x, y, z)).tolist())
         if worldCoordinate is None:
             self.viewCoordinate = viewCoordinate
         return viewCoordinate

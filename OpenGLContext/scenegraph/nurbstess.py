@@ -33,6 +33,7 @@ Parameter conventions
 from __future__ import annotations
 
 import logging
+import weakref
 from dataclasses import dataclass
 from collections.abc import Sequence
 from typing import Any, Optional
@@ -61,6 +62,7 @@ __all__ = [
     'TRIM_CURVE_STEPS',
     'build_surface_vbo',
     'intervals_for',
+    'report',
     'surface_intervals',
     'tessellate_surface',
 ]
@@ -139,6 +141,22 @@ def intervals_for(step: float, span: float) -> int:
     return int(min(MAX_INTERVALS, max(1, round(step * span))))
 
 
+#: What has been logged about each node, by node.
+_reported: "weakref.WeakKeyDictionary[Any, set[str]]" = weakref.WeakKeyDictionary()
+
+
+def report(node: Any, level: int, message: str) -> None:
+    """Log `message` about `node`, the first time this node has it to say
+
+    An animated surface is tessellated every frame, and what is wrong with
+    its fields is the same each time.
+    """
+    said = _reported.setdefault(node, set())
+    if message not in said:
+        said.add(message)
+        log.log(level, '%s %s', node, message)
+
+
 def _degree(knot: Any, dimension: int, name: str) -> int:
     """The degree a knot vector of this length implies over this many points."""
     degree = len(knot) - dimension - 1
@@ -162,13 +180,20 @@ class _Surface:
     def __init__(self, surface: Any) -> None:
         u_dimension = int(surface.uDimension)
         v_dimension = int(surface.vDimension)
-        control = np.asarray(surface.controlPoint, dtype=np.float64)
-        if control.size != u_dimension * v_dimension * 3:
+        control = np.asarray(surface.controlPoint, dtype=np.float64).ravel()
+        needed = u_dimension * v_dimension * 3
+        if control.size < needed:
             raise NurbsError(
                 'a %d by %d control net needs %d coordinates, got %d'
-                % (u_dimension, v_dimension, u_dimension * v_dimension * 3,
-                   control.size)
+                % (u_dimension, v_dimension, needed, control.size)
             )
+        if control.size > needed:
+            # Worlds exported for the Contact browsers carry points past the
+            # net their dimensions declare; the net is the first of them.
+            report(surface, logging.WARNING,
+                   'carries %d control points for a %d by %d net -> using the first %d'
+                   % (control.size // 3, u_dimension, v_dimension, needed // 3))
+            control = control[:needed]
         # v-major, and so the evaluator's first axis: see the module docstring.
         self.control = control.reshape(v_dimension, u_dimension, 3)
         self.v_knot = np.asarray(surface.vKnot, dtype=np.float64).ravel()
@@ -184,10 +209,9 @@ class _Surface:
                 v_dimension, u_dimension)
         else:
             if weight.size:
-                log.warning(
-                    '%s carries %d weights for %d control points -> ignoring them',
-                    surface, weight.size, u_dimension * v_dimension,
-                )
+                report(surface, logging.WARNING,
+                       'carries %d weights for %d control points -> ignoring them'
+                       % (weight.size, u_dimension * v_dimension))
             self.weights = None
 
         color = np.asarray(getattr(surface, 'color', ()), dtype=np.float64)
@@ -196,11 +220,9 @@ class _Surface:
                 v_dimension, u_dimension, 3)
         else:
             if color.size:
-                log.warning(
-                    '%s carries %d colour components for %d control points'
-                    ' -> ignoring them',
-                    surface, color.size, u_dimension * v_dimension,
-                )
+                report(surface, logging.WARNING,
+                       'carries %d colour components for %d control points'
+                       ' -> ignoring them' % (color.size, u_dimension * v_dimension))
             self.colors = None
 
     @staticmethod

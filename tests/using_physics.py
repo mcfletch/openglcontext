@@ -5,35 +5,33 @@
 
 This tutorial walks through the process of creating a game using the 
 OpenGLContext renderer and the omi_physics engine for simulating a 
-physical environment.
+physical environment. We use convenience methods to create the geometry
+for the world with reasonable textures.
 
 As with any game, the first question is what we're going to build.
 To keep it simple, we'll use a classic game that's been available
 on computers since the early 80s. It's a canon game where you try
 to hit a target on a platform by controlling your canon's bearing,
-elevation and power.
-
-Most of the code in this tutorial is about the game itself, since 
-the rendering and physics are handled by the engine.
-
-We'll create a class that models the Game itself, it's responsible
-for tracking the Game's attempts, win state, loss state, and 
-generating the (randomised) worlds. We'll use the :py:mod:`OpenGLContext.surfaces` 
-module to generate simple cartoonish structures for the game.
+elevation and power. More advanced versions of the game might add
+barriers, different cannon ball types, trick shots around corners
+and the like, but we're going to build just the base game here.
 
 The rules are approximately these:
 
 * two random platforms are created, one with a canon, one with a target
-* the player adjusts the bearing, elevation and power of the canon
+* the player adjusts the bearing, elevation and power of the canon, with
+  the keys or by dragging three thumb-wheels on the screen
 * the player hits space to fire the cannon
 * if the player fires more than 10 shots without hitting the target, they lose
 * if the player hits the target within the 10 shots, they win
 
 When the player wins, we display a "wash" over the screen and a
 space causes the next game to play.
+
 '''
 from __future__ import annotations
 
+import dataclasses
 import functools
 import math
 from collections.abc import Callable
@@ -45,6 +43,7 @@ from omi_audio import model as audiomodel
 from omi_audio import synth
 from omi_audio.clip import Clip
 from omi_physics import model
+from pydispatch import dispatcher
 
 ''':py:mod:`OpenGLContext.entropy` provides a random number generator that shares
 the world's seed, that allows test suites to test the random value
@@ -63,8 +62,9 @@ from OpenGLContext.events.timer import Timer
 from OpenGLContext.physics.manager import PhysicsManager
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.basenodes import (
-    Appearance, Coordinate, DirectionalLight, IndexedLineSet, Material,
-    Shape, Transform, Viewpoint, sceneGraph,
+    Appearance, Coordinate, DirectionalLight, Group, IndexedLineSet, LayerSet,
+    Layout, LayoutLayer, Material, NavigationInfo, PlaneSensor,
+    ScreenFontStyle, ScreenGroup, Shape, Text, Transform, Viewpoint, sceneGraph,
 )
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.nodepath import NodePath
@@ -90,7 +90,7 @@ BARREL = 2.0
 CANNON_HALF, TARGET_HALF = 2.0, 1.25
 
 #: Seconds the world advances in one step.  A ball at full power crosses
-#: less than its own radius in a step, so it cannot pass through a surface.
+#: less than  its own radius in a step, so it cannot pass through a surface.
 STEP = 1.0 / 240.0
 
 #: Where the camera sits in the barrel's frame: behind the pivot, above the
@@ -122,6 +122,27 @@ BEARING_LIMIT = (-60.0, 60.0)
 ELEVATION_LIMIT = (-10.0, 85.0)
 POWER_LIMIT = (5.0, 40.0)
 
+#: How loud the report is at the least and the most power: a gentle shot is
+#: plainly audible, a hard one is at full volume, and the 14 dB between them is
+#: heard as a clear change rather than a nudge.
+REPORT_GAIN = (0.2, 1.0)
+
+#: How far a thumb-wheel is dragged for one whole turn, in pixels: most of the
+#: window's height.
+TRAVEL = 0.8 * SIZE[1]
+
+#: A thumb-wheel, in pixels: the opening its drum shows through (across, up),
+#: the drum's radius and the width of its face, how far behind the panel its
+#: axis is, the thickness of the bars round the opening, and the length of
+#: knurling one copy of the texture covers, which goes six times round.
+SLOT, DRUM, FACE, AXLE, BAR = (52.0, 124.0), 84.0, 46.0, 52.0, 10.0
+KNURL = 2.0 * math.pi * DRUM / 6.0
+
+#: The distance between two wheels' centres, how far the panel they are on
+#: stands in from the left of its view, and how far above the panel's middle
+#: the wheels are, which leaves room under them for what they read.
+PITCH, INSET, RISE = 96.0, 10.0, 26.0
+
 #: The colours of the screen wash for a win and for a lost game, and how solid
 #: it is: the world still shows through.
 WIN_WASH, LOSE_WASH, WASH_STRENGTH = (0.1, 0.8, 0.2), (0.85, 0.1, 0.1), 0.4
@@ -148,6 +169,13 @@ def looks() -> dict[str, Any]:
         'mark': PhysicalMaterial(baseColor=(0.8, 0.08, 0.06), metallic=0.0, roughness=0.5),
         'steel': PhysicalMaterial(baseColor=surfaces.STEEL, metallic=1.0, roughness=0.25),
         'bronze': PhysicalMaterial(baseColor=surfaces.BRONZE, metallic=1.0, roughness=0.35),
+        'panel': surfaces.pbr_material(
+            surfaces.brushed_metal(128, colour=(0.35, 0.36, 0.37), roughness=0.6)),
+        'knurl': surfaces.pbr_material(surfaces.knurled(256, count=8), relief=6.0,
+                                       baseColor=(0.8, 0.8, 0.8)),
+        'chrome': PhysicalMaterial(baseColor=surfaces.STEEL, metallic=1.0, roughness=0.3),
+        'recess': PhysicalMaterial(baseColor=(0.02, 0.02, 0.02), metallic=0.0, roughness=0.9),
+        'paint': Material(diffuseColor=(0.02, 0.02, 0.02)),
     }
 
 '''Model a single platform as to where it is and how large it is.'''
@@ -161,6 +189,13 @@ class Platform:
     half: float
 
 
+def report_gain(power: float) -> float:
+    """The report's gain at ``power``: audible at the least, full at the most."""
+    low, high = POWER_LIMIT
+    fraction = (min(max(power, low), high) - low) / (high - low)
+    return REPORT_GAIN[0] + (REPORT_GAIN[1] - REPORT_GAIN[0]) * fraction
+
+
 class Report:
     """The sound of the cannon firing, made from arithmetic.
 
@@ -171,7 +206,8 @@ class Report:
     `reverberated` puts the tail of an open field behind it.  The clip is made
     once, and each shot plays it from the muzzle through an emitter, so it is
     placed in the stereo field and falls off with the distance from the
-    camera.'''
+    camera.  Its gain rises with the shot's power, so a gentle shot is audible
+    and a hard one is at full volume.'''
     """
 
     def __init__(self, sample_rate: int | None = None) -> None:
@@ -182,13 +218,15 @@ class Report:
         self.emitter = audiomodel.AudioEmitter(positional=audiomodel.PositionalProperties(
             refDistance=3.0, rolloffFactor=0.8))
 
-    def play(self, engine: Any, position: Any) -> Any:
-        """Start the report at ``position``; None where there is no engine to play it."""
+    def play(self, engine: Any, position: Any, power: float) -> Any:
+        """Start the report at ``position``, as loud as ``power`` asks.
+
+        None where there is no engine to play it."""
         if engine is None:
             return None
         return engine.play(self.clip, emitter=self.emitter,
                            position=tuple(float(part) for part in position),
-                           gain=1.0, priority=1.0)
+                           gain=report_gain(power), priority=1.0)
 
 
 @dataclass
@@ -205,6 +243,178 @@ class Aim:
         self.elevation = min(max(self.elevation + elevation, ELEVATION_LIMIT[0]),
                              ELEVATION_LIMIT[1])
         self.power = min(max(self.power + power, POWER_LIMIT[0]), POWER_LIMIT[1])
+
+
+@dataclass(frozen=True)
+class Scale:
+    """One field of the aim as a thumb-wheel sets it.
+
+    The field's limits are one whole turn of the wheel apart, and TRAVEL
+    pixels of drag.  ``keys`` are the keys that step the field up and down.
+    """
+
+    name: str
+    unit: str
+    limits: tuple[float, float]
+    keys: tuple[str, str]
+    #: Whether the wheel also reads the value as a percentage of its scale.
+    fraction: bool = False
+
+    def turn(self, value: float) -> float:
+        """How far round the wheel is at ``value``: 0 at the lower limit, 1 at the upper."""
+        low, high = self.limits
+        return (value - low) / (high - low)
+
+    def value(self, travel: float) -> float:
+        """The value ``travel`` pixels of drag up from the lower limit, within the limits."""
+        low, high = self.limits
+        return min(max(low + travel / TRAVEL * (high - low), low), high)
+
+
+#: The three wheels, in the order they stand on the panel.  The power wheel
+#: reads as a percentage of its scale as well as in metres per second.
+SCALES = (
+    Scale('bearing', 'deg', BEARING_LIMIT, ('q', 'a')),
+    Scale('elevation', 'deg', ELEVATION_LIMIT, ('w', 's')),
+    Scale('power', 'm/s', POWER_LIMIT, ('e', 'd'), fraction=True),
+)
+
+
+class Wheel:
+    """A thumb-wheel on the screen that sets one field of the aim, labelled with its value.
+
+    '''=A drag sensor=
+
+    A thumb-wheel is turned by dragging its face up or down, and a long drag
+    is a small turn, which is what makes it a fine control.  X3D has three
+    sensors that follow a drag: a `CylinderSensor` and a `SphereSensor` turn
+    with the pointer as though it held their surface, and a `PlaneSensor`
+    measures how far the pointer has gone.  The wheel uses a `PlaneSensor`,
+    since its turn is the length of the drag and not the angle the pointer
+    has reached round it.
+
+    The sensor sends `translation_changed`, here in pixels.  `minPosition`
+    and `maxPosition` hold it to no movement across and to TRAVEL pixels up,
+    which is the wheel's whole scale.
+
+    The sensor and the drum share a `Group`: a sensor senses its siblings,
+    and a drag that starts on the drum carries on wherever the pointer goes.
+
+    Each drag starts from the sensor's `offset`.  `show` writes the place of
+    the value there, so a drag carries on from wherever the keys left the
+    aim, and it leaves the offset alone while a drag is under way.'''
+
+    '''=The wheel=
+
+    The drum is a cylinder lying across the panel, knurled, and it is turned
+    about its own axis, so the knurling moves up and down its face as a real
+    wheel's does.  Its axis is behind the panel and a frame of four chrome
+    bars stands in front of its top and bottom, so what shows is the part
+    of the drum that stands out through the frame.'''
+    """
+
+    def __init__(self, scale: Scale, look: dict[str, Any],
+                 on_turn: Callable[[str, float], None]) -> None:
+        self.scale = scale
+        self.on_turn = on_turn
+        #: The value the drum and the label were last written for.
+        self.shown: float | None = None
+        self.sensor = PlaneSensor(description=scale.name, minPosition=(0, 0),
+                                  maxPosition=(0, TRAVEL))
+        self.drum = Transform(translation=(0, 0, -AXLE), children=[
+            surfaces.shape(surfaces.cylinder(DRUM, FACE, sides=64, repeat=KNURL),
+                           look['knurl'], rotation=(0, 0, 1, math.pi / 2))])
+        self.label = Text(string=['', ''], fontStyle=ScreenFontStyle(
+            pointSize=10, spacing=1.3, family=['SANS'], justify=['MIDDLE', 'BEGIN']))
+        width, height = SLOT
+        '''A `Layout` sets the size of its children's unit across and up the
+        screen and leaves depth alone, so a drum drawn straight into the
+        panel would be far deeper than it is tall.  A `ScreenGroup`'s unit is
+        one pixel in all three directions, and the wheel's parts go in one.'''
+        self.node = Transform(children=[ScreenGroup(children=[
+            surfaces.shape(surfaces.panel(width, height), look['recess'],
+                           translation=(0, 0, 0.5)),
+            Group(children=[self.drum, self.sensor]),
+            *frame(width, height, look['chrome']),
+            Transform(translation=(0, -height / 2 - BAR - 18, 1), children=[
+                Shape(geometry=self.label, appearance=Appearance(material=look['paint']))]),
+        ])])
+        '''A field of a node sends a `set` signal when it is written, which is
+        how a ROUTE hears a sensor.  The wheel listens for the sensor's
+        `translation_changed` the same way.'''
+        dispatcher.connect(self.turned, sender=self.sensor,
+                           signal=('set', PlaneSensor.translation_changed))
+
+    def turned(self, value: Any) -> None:
+        """Report the value at ``value``, the sensor's translation."""
+        self.on_turn(self.scale.name, self.scale.value(float(value[1])))
+
+    def show(self, value: float) -> None:
+        """Turn the drum to ``value`` and write it underneath."""
+        turn = self.scale.turn(value)
+        if value != self.shown:
+            self.shown = value
+            self.drum.rotation = (1, 0, 0, -2.0 * math.pi * turn)
+            reading = '%.1f %s' % (value, self.scale.unit)
+            if self.scale.fraction:
+                reading += '  %d%%' % round(100.0 * turn)
+            self.label.string = ['%s  %s %s' % (self.scale.name, *self.scale.keys),
+                                 reading]
+        if not self.sensor.active():
+            self.sensor.offset = (0, turn * TRAVEL, 0)
+
+
+def frame(width: float, height: float, material: Any) -> list[Any]:
+    """Four half-round bars round a ``width`` by ``height`` opening, their flat backs on z = 0."""
+    upright = surfaces.cylinder(BAR / 2.0, height + 2 * BAR, arc=math.pi)
+    level = surfaces.cylinder(BAR / 2.0, width + 2 * BAR, arc=math.pi)
+    across, up = (width + BAR) / 2.0, (height + BAR) / 2.0
+    return [
+        surfaces.shape(upright, material, translation=(-across, 0, 0)),
+        surfaces.shape(upright, material, translation=(across, 0, 0)),
+        surfaces.shape(level, material, translation=(0, up, 0), rotation=(0, 0, 1, math.pi / 2)),
+        surfaces.shape(level, material, translation=(0, -up, 0), rotation=(0, 0, 1, math.pi / 2)),
+    ]
+
+
+class Wheels:
+    """The three wheels on a panel at the left of the view, drawn over the scene.
+
+    '''=On the screen=
+
+    A `LayerSet` draws layers over the scene's own children, which are layer
+    0.  A `LayoutLayer` is a layer whose `Layout` places it on the screen:
+    this one is a rectangle of pixels against the left of the view, half
+    way up, and `scaleMode` PIXEL makes its children's unit one pixel too.
+    A layer has its own lights, and its `NavigationInfo` gives it a
+    headlight.  A pick is resolved through the topmost layer under the
+    pointer, so the wheels take the pointer and the world behind them does
+    not.'''
+    """
+
+    def __init__(self, on_turn: Callable[[str, float], None]) -> None:
+        look = looks()
+        self.wheels = [Wheel(scale, look, on_turn) for scale in SCALES]
+        #: The panel's width and height, in pixels.
+        self.size = (PITCH * len(self.wheels), SLOT[1] + 2 * BAR + 84.0)
+        width, height = self.size
+        for index, wheel in enumerate(self.wheels):
+            wheel.node.translation = ((index - (len(self.wheels) - 1) / 2.0) * PITCH, RISE, 0)
+        self.layer = LayoutLayer(
+            layout=Layout(size=self.size, sizeUnits=['PIXEL', 'PIXEL'],
+                          align=['LEFT', 'CENTER'], offset=(INSET, 0),
+                          offsetUnits=['PIXEL', 'PIXEL'], scaleMode=['PIXEL', 'PIXEL']),
+            children=[
+                NavigationInfo(),
+                surfaces.shape(surfaces.panel(width, height, repeat=height), look['panel']),
+                *(wheel.node for wheel in self.wheels),
+            ])
+        self.layers = LayerSet(order=[0, 1], layers=[self.layer])
+
+    def show(self, aim: Aim) -> None:
+        """Turn each wheel to its field of ``aim``."""
+        for wheel in self.wheels:
+            wheel.show(getattr(aim, wheel.scale.name))
 
 
 class Cannon:
@@ -436,6 +646,10 @@ class Game:
             self.aim.adjust(**change)
             self.point()
 
+    def set_aim(self, name: str, value: float) -> None:
+        """Move one field of the aim to ``value``, as far as `adjust` allows."""
+        self.adjust(**{name: value - getattr(self.aim, name)})
+
     @property
     def shots_left(self) -> int:
         return MAX_SHOTS - self.shots
@@ -533,12 +747,19 @@ class TestContext(BaseContext):
         self.waiting = list(self.loaded.children)
         self.trail = Coordinate(point=[(0, 0, 0), (0, 0, 0)])
         self.line = IndexedLineSet(coord=self.trail, coordIndex=[0, 1, -1])
+        '''=The wheels=
+
+        The wheels' `LayerSet` goes in the scene with everything else.  Each
+        wheel calls `OnWheel` with the name of its field and the value it was
+        turned to.'''
+        self.wheels = Wheels(self.OnWheel)
         self.sg = sceneGraph(children=[
             sky_background(),
             DirectionalLight(direction=(-0.4, -0.8, -0.5)),
             self.scenery, self.loaded, self.shot,
             Shape(geometry=self.line, appearance=Appearance(
                 material=Material(emissiveColor=(1.0, 0.8, 0.2), diffuseColor=(0, 0, 0)))),
+            self.wheels.layers,
         ])
         '''=A wash=
 
@@ -591,11 +812,26 @@ class TestContext(BaseContext):
         '''A `MultiViewContext` shows the plan, the front and the left
         elevation in orthographic views and, in the fourth, what the window's
         camera sees, which here is a camera placed behind the barrel.  The
-        three elevations are fitted to the box round the towers.'''
-        self.startViews(arrangement='quad', bounds=lambda: self.game.course.bounds())
+        three elevations are fitted to the box round the towers.
+
+        Each view draws the scene's whole layer stack unless its style says
+        otherwise, which would put a panel of wheels in all four.  The three
+        elevations are styled without layers, so the wheels are in the
+        cannon's view alone.'''
+        views = self.startViews(arrangement='quad', bounds=lambda: self.game.course.bounds())
+        for view in views.views:
+            if not view.windowView:
+                view.style = dataclasses.replace(view.style, layers=False)
 
     def OnAim(self, event):
         self.game.adjust(**AIM_KEYS[event.name])
+        self.message = ''
+        self.update()
+
+    def OnWheel(self, name, value):
+        '''A wheel sets the field a pair of keys steps, through the same
+        `adjust`, so it is locked while a ball is in the air as they are.'''
+        self.game.set_aim(name, value)
         self.message = ''
         self.update()
 
@@ -626,7 +862,7 @@ class TestContext(BaseContext):
             self.lay_out()
             self.frameViews()
         elif self.game.ball is not None:
-            self.report.play(self.engine, self.game.muzzle)
+            self.report.play(self.engine, self.game.muzzle, self.game.aim.power)
             self.shot.children = [self.game.ball.transform]
             self.trail.point = [self.game.muzzle, self.game.muzzle]
         self.update()
@@ -648,6 +884,11 @@ class TestContext(BaseContext):
         the barrel's frame puts it.  `look_through` moves the window's camera
         to it, which is done again each frame because the frame turns.'''
         game.course.gun.look_through(self)
+        '''The report is played directly rather than through a scene `Sound`,
+        so nothing else moves the engine's listener.  The camera is the
+        listener, and it has just moved, so the ears follow it here.'''
+        if self.engine is not None:
+            self.engine.listen(self.getViewPlatform())
         self.loaded.translation = game.muzzle
         if game.state == 'flying':
             path = list(self.trail.point)
@@ -655,12 +896,9 @@ class TestContext(BaseContext):
             self.trail.point = path
             self.line.coordIndex = list(range(len(path))) + [-1]
         self.loaded.children = self.waiting if game.state != 'flying' else []
+        self.wheels.show(game.aim)
         self.readout.lines = [
-            'q a  bearing    %5.1f deg' % game.aim.bearing,
-            'w s  elevation  %5.1f deg' % game.aim.elevation,
-            'e d  power      %5.1f m/s' % game.aim.power,
             'space  fire     %2d shots left' % game.shots_left,
-            '',
             self.message,
         ]
 

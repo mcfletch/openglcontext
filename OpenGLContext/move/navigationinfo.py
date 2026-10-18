@@ -19,10 +19,11 @@ NavigationInfo is bound and again when it changes.
   context with no declared movement modes keeps its own navigation.
 - ``visibilityLimit``, where positive, is the far clipping distance, and
   half of ``avatarSize``'s collision radius the near one (:func:`clip`).
-- ``speed`` scales the declared modes' speeds relative to X3D's default of 1,
-  so 1 leaves the engine's own speeds and 2 doubles them
-  (:func:`speed_factor`); a speed the application sets on a mode is the one
-  scaled from then.
+- ``speed`` scales the declared modes' speeds, and the distance the
+  free-fly manager steps for a key press, relative to X3D's default of 1, so
+  1 leaves the engine's own speeds and 2 doubles them (:func:`speed_factor`);
+  a speed the application sets on a mode, or a step the player changes with
+  the free-fly manager's keys, is the one scaled from then.
 - ``avatarSize`` (radius, eye height, step height) sizes the walking avatar
   (:func:`avatar_of`, ``context.navigationAvatar``).
 - ``transitionType`` and ``transitionTime`` say how the camera moves to a
@@ -55,16 +56,21 @@ TRANSITIONS = ('TELEPORT', 'LINEAR', 'ANIMATE')
 #: The fields each mode's speeds are held in.
 SPEEDS = ('walkSpeed', 'runSpeed', 'flySpeed', 'boostSpeed', 'swimSpeed')
 
+#: What the free-fly manager's speed is held in: the distance a key press steps.
+STEP = ('STEPDISTANCE',)
+
 #: X3D's avatarSize default: collision radius, eye height, step height.
 AVATAR = (0.25, 1.6, 0.75)
 
-#: Each mode's own speeds, and the factor they were last scaled by.
+#: Each mode's and each free-fly manager's own speeds, and the factor they
+#: were last scaled by.
 _base_speeds: weakref.WeakKeyDictionary[Any, tuple[dict[str, float], float]] = (
     weakref.WeakKeyDictionary())
 
-#: The NavigationInfo last applied to each context, and the values of the
-#: fields applied from it.
-_applied: weakref.WeakKeyDictionary[Any, tuple[Any, Any]] = weakref.WeakKeyDictionary()
+#: The NavigationInfo last applied to each context, the values of the fields
+#: applied from it, the viewpoint's scale and the free-fly manager scaled.
+_applied: weakref.WeakKeyDictionary[Any, tuple[Any, Any, float, Any]] = (
+    weakref.WeakKeyDictionary())
 
 #: X3D's default NavigationInfo, which a document that binds none has.
 _DOCUMENT_DEFAULT: list[Any] = []
@@ -154,24 +160,29 @@ def transition_of(info: Any) -> tuple[str, float]:
     return (kind, seconds)
 
 
-def _scale_speeds(manager: Any, factor: float) -> None:
-    """Set each declared mode's speeds to its own times `factor`
+def _scale_own(holder: Any, names: Sequence[str], factor: float) -> None:
+    """Set each of `holder`'s speeds in `names` to its own times `factor`
 
-    A mode's own speed is the one it had before it was first scaled, or one
-    the application has set since: a speed that is no longer the one this
-    last set is taken as the mode's own.
+    A speed's own value is the one it had before it was first scaled, or one
+    set since: a speed that is no longer the one this last set is taken as
+    its own, scaled by the last factor.
     """
+    held = _base_speeds.get(holder)
+    base, last = held if held is not None else ({}, 1.0)
+    for name in names:
+        if not hasattr(holder, name):
+            continue
+        current = float(getattr(holder, name))
+        if name not in base or abs(current - base[name] * last) > 1e-9:
+            base[name] = current / last if last else current
+        setattr(holder, name, base[name] * factor)
+    _base_speeds[holder] = (base, factor)
+
+
+def _scale_speeds(manager: Any, factor: float) -> None:
+    """Set each declared mode's speeds to its own times `factor`"""
     for mode in manager.modes():
-        held = _base_speeds.get(mode)
-        base, last = held if held is not None else ({}, 1.0)
-        for name in SPEEDS:
-            if not hasattr(mode, name):
-                continue
-            current = float(getattr(mode, name))
-            if name not in base or abs(current - base[name] * last) > 1e-9:
-                base[name] = current / last if last else current
-            setattr(mode, name, base[name] * factor)
-        _base_speeds[mode] = (base, factor)
+        _scale_own(mode, SPEEDS, factor)
 
 
 def clip(platform: Any, info: Any) -> None:
@@ -192,32 +203,46 @@ def apply(context: Any, info: Any, document: bool = False, scale: float = 1.0) -
     """Apply `info` to `context` as it is bound, and as its fields change
 
     The clipping distances of the context's ``platform`` (:func:`clip`),
-    the avatar size (``context.navigationAvatar``) and the modes' speeds, each
-    time one of those fields has changed; and the movement mode `info` asks
-    for, when it is bound or its ``type`` changes. `info` is None where the
-    scene binds none, and `document` says the scene was read from a VRML97 or
-    X3D document, which then has X3D's default NavigationInfo. `scale`
+    the avatar size (``context.navigationAvatar``) and the speeds, each time
+    one of those fields has changed; and the movement mode `info` asks for,
+    when it is bound or its ``type`` changes. `info` is None where the scene
+    binds none, and `document` says the scene was read from a VRML97 or X3D
+    document, which then has X3D's default NavigationInfo. `scale`
     multiplies the speeds further: the bound viewpoint's
-    (:meth:`~OpenGLContext.scenegraph.viewpoint.Placing.speedScale`). `context`
-    answers ``getNavigation()``: its navigation manager, or None where it
-    declares no movement modes.
+    (:meth:`~OpenGLContext.scenegraph.viewpoint.Placing.speedScale`), which
+    applies with or without a NavigationInfo.
+
+    The speeds are those of each declared movement mode, where `context`
+    answers a navigation manager from ``getNavigation()``, and the distance
+    its free-fly manager (``context.movementManager``) steps for a key
+    press, which is what moves the camera of a context that declares no
+    modes.
     """
     if info is None and document:
         info = document_default()
-    values = None if info is None else _values(info) + (float(scale),)
+    fields = None if info is None else _values(info)
+    free = getattr(context, 'movementManager', None)
     last = _applied.get(context)
-    if last is not None and last[0] is info and last[1] == values:
+    if (last is not None and last[0] is info and last[1] == fields
+            and last[2] == float(scale) and (last[3] and last[3]()) is free):
         return
-    _applied[context] = (info, values)
+    # The manager refers to its context, so it is held weakly here.
+    _applied[context] = (info, fields, float(scale),
+                         None if free is None else weakref.ref(free))
     platform = getattr(context, 'platform', None)
     if platform is not None:
         clip(platform, info)
     context.navigationAvatar = None if info is None else avatar_of(info)
+    factor = (1.0 if info is None else speed_factor(info)) * float(scale)
+    if free is not None:
+        _scale_own(free, STEP, factor)
     manager = context.getNavigation()
-    if manager is None or info is None or values is None:
+    if manager is None:
         return
-    _scale_speeds(manager, speed_factor(info) * float(scale))
-    if last is not None and last[0] is info and last[1] is not None and last[1][3] == values[3]:
+    _scale_speeds(manager, factor)
+    if info is None or fields is None:
+        return
+    if last is not None and last[0] is info and last[1] is not None and last[1][3] == fields[3]:
         return
     name = chosen_mode(info, [mode.name for mode in manager.selectable()])
     if name is not None:

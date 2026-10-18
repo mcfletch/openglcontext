@@ -270,6 +270,8 @@ How a view draws
 - ``ViewStyle(wireframe=True)`` draws the view's geometry as lines.
 - ``ViewStyle(grid=True)`` rules the view with the scene's grid; see
   :ref:`multiview-grid`.
+- ``ViewStyle(layers=False)`` draws the layer navigation drives and none of
+  the scene's other X3D layers. The default, ``True``, draws the whole stack.
 
 When a view's rectangle changes size, its camera is given the new size. A
 perspective camera then uses the rectangle's aspect ratio rather than the
@@ -290,6 +292,22 @@ navigation drives through the view's camera and the others through their
 own. A view's events are routed through that layer, and a pick through the
 layer that drew what is under the pointer. A frame of layers draws each view
 in turn, rather than sharing one draw between views.
+
+A panel of controls in a ``LayoutLayer`` is then drawn in every view. Style
+the views that should not carry it with ``layers=False``; a pick in such a
+view reaches the navigated layer alone. A style is frozen, so a view of a
+set already built is given a changed copy:
+
+.. code-block:: python
+
+   import dataclasses
+
+   for view in self.startViews(arrangement='quad').views:
+       if not view.windowView:
+           view.style = dataclasses.replace(view.style, layers=False)
+
+The :doc:`cannon game <tutorials/using_physics>` keeps its thumb-wheels in
+the window's own view this way.
 
 .. _multiview-grid:
 

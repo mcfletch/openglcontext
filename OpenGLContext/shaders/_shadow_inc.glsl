@@ -38,6 +38,8 @@ uniform float cascadeSplit[MAX_SHADOW_LIGHTS * MAX_CASCADES];   // eye-space -z 
 // the fitted camera's splits, so the finest cascade whose map holds the
 // fragment is used instead.
 uniform int   cascadeByFit;
+// Eye depths between which a directional light's shadow fades to none; end 0 is no fade.
+uniform vec2  cascadeFade[MAX_SHADOW_LIGHTS];
 uniform vec3  cubeLightPos[MAX_SHADOW_LIGHTS];                  // world-space light position
 uniform float cubeNear[MAX_SHADOW_LIGHTS];
 uniform float cubeFar[MAX_SHADOW_LIGHTS];
@@ -206,7 +208,12 @@ float csmFactor(int slot) {
     // spot path: a directional light has no finite size / blocker distance to drive
     // penumbra growth, so a constant softening is the right model here.
     float radius = shadowSoft == 1 ? 4.0 : 1.0;
-    return pcfArray(p.xy, layer, ref, radius);
+    float lit = pcfArray(p.xy, layer, ref, radius);
+    vec2 fade = cascadeFade[slot];
+    if (fade.y > 0.0 && cascadeByFit != 1 && !viewCascadesByFit()) {
+        lit = mix(lit, 1.0, smoothstep(fade.x, fade.y, -vPosition.z));
+    }
+    return lit;
 }
 
 // --- Point light: omnidirectional cube (array layer, or a per-slot cube) ------

@@ -129,7 +129,7 @@ class TestContext(BaseContext):
         self.sg.children = list(self.sg.children) + [self.model]
         '''Nothing in the file moves, so the movement is this program's:
         a turntable, from a ``Timer``, as in the cannon-ball game of
-        :doc:`Animating a cannon-ball <using_animation>`.'''
+        :doc:`Creating a Game with the Physics Engine <using_physics>`.'''
         self.timer = Timer(duration=PERIOD, repeating=1)
         self.timer.addEventHandler('fraction', self.OnFraction)
         self.timer.register(self)

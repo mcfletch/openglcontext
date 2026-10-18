@@ -29,6 +29,7 @@ import numpy as np
 
 from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_text
 from OpenGLContext.loaders.gltf.meshes import estimate_normals
+from OpenGLContext.scenegraph import natural
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.appearance import Appearance
@@ -66,6 +67,11 @@ class RockProfile:
     ground: a boulder that has been lying there for a few thousand years is not
     a ball resting on a point.
 
+    ``scrapes`` is how many flat discs are pressed into the sphere before it is roughened,
+    each flattening what lies under it and leaving the rest (see
+    :func:`~OpenGLContext.scenegraph.natural.scrape`): a boulder of flat faces and edges
+    where 0 leaves a lumpy ball.
+
     ``mottle`` is how far the stone's own colour varies over one boulder, as a
     fraction of it. ``moss`` is how thickly moss has taken hold where it grows,
     from bare stone at 0 to full cover at 1; where it grows comes off the rock's
@@ -78,6 +84,7 @@ class RockProfile:
     settled: float = 0.34
     mottle: float = 0.34
     moss: float = 0.7
+    scrapes: int = 8
 
 
 def rock_material() -> PhysicalMaterial:
@@ -103,6 +110,8 @@ def rock_mesh(radius: float = 1.0, seed: int = 0,
     """
     profile = profile or RockProfile()
     points, faces = _icosphere(max(int(profile.facets), 0))
+    if profile.scrapes > 0:
+        points = natural.scrape(np.random.default_rng(seed), points, int(profile.scrapes))
     points = points * _lumps(points, seed, profile.roughness)
     points[:, 1] *= 1.0 - min(max(profile.settled, 0.0), 0.9)
     points *= float(radius)

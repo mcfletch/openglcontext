@@ -32,7 +32,7 @@ from OpenGLContext.loaders.documentvalues import (
     require_item, require_object, require_text, require_whole,
 )
 from OpenGLContext.scenegraph.instancedgl import (
-    load_program, texture_rgba, delete_gl, setup_instance_attribs,
+    FOG_UNIFORMS, load_program, texture_rgba, delete_gl, setup_instance_attribs,
     instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import InstancedVegBase, _BIG
 
@@ -285,7 +285,7 @@ class InstancedClumps(InstancedVegBase):
         glBindVertexArray(0)
         self.U = {x: glGetUniformLocation(self._prog, x) for x in
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",
-                   "skyAmbient", "groundAmbient", "fogDensity", "fogColor",
+                   "skyAmbient", "groundAmbient", *FOG_UNIFORMS,
                    "uFadeStart", "uFadeEnd", "uCutStart", "uCutEnd", "uUpEye")}
         self._commit_constants("veg_mesh.vert", "veg_clump.frag")
         self._gl = self._prog
@@ -295,8 +295,6 @@ class InstancedClumps(InstancedVegBase):
         glUniform3f(U["sunColor"], 1.25, 1.18, 1.02)
         glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66)
         glUniform3f(U["groundAmbient"], 0.14, 0.16, 0.11)
-        glUniform1f(U["fogDensity"], 0.00016)
-        glUniform3f(U["fogColor"], 0.46, 0.58, 0.76)
         glUniform1f(U["uFadeStart"], self.fade_start)
         glUniform1f(U["uFadeEnd"], self.fade_end)
         glUniform1f(U["uCutStart"], self.cut_start)

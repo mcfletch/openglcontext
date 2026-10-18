@@ -6,6 +6,8 @@ so the scatter of a piece of ground is the same whoever asks and from where.
 it reaches, each scattered the first time it is reached, and moving on costs
 only the ground newly reached.
 """
+import threading
+
 import numpy as np
 
 from OpenGLContext.scenegraph.terrain import HeightField
@@ -105,3 +107,66 @@ class TestNoDensityIsNoPlants:
         blocks = ScatterBlocks(0.0, _field())
         points, yaws, scales = blocks.disc(0.0, 0.0, 50.0)
         assert points.shape == (0, 3) and len(yaws) == len(scales) == 0
+
+
+class TestBlocksMadeOnOtherThreads:
+    """A thread making blocks ahead of the camera shares the blocks with the thread making its
+    discs: one waits for another only for a block both want."""
+
+    @staticmethod
+    def _held_mask(entered, gate):
+        """A mask that stops where x is far out until ``gate`` opens."""
+        def mask(x, z):
+            if float(np.max(np.asarray(x))) > 5000.0:
+                entered.set()
+                assert gate.wait(10.0)
+            return _mask(x, z)
+        return mask
+
+    def test_a_disc_of_made_blocks_is_not_held_up_by_another_block_being_made(self):
+        entered, gate = threading.Event(), threading.Event()
+        blocks, _field_ = _blocks(mask=self._held_mask(entered, gate))
+        blocks.disc(0.0, 0.0, 90.0)
+        ahead = threading.Thread(target=blocks.warm, args=(8000.0, 0.0, 10.0))
+        ahead.start()
+        try:
+            assert entered.wait(5.0)
+            reader = threading.Thread(target=blocks.disc, args=(0.0, 0.0, 90.0))
+            reader.start()
+            reader.join(5.0)
+            assert not reader.is_alive(), 'a disc of made blocks waits for an unrelated block'
+        finally:
+            gate.set()
+            ahead.join(10.0)
+
+    def test_two_threads_that_want_a_block_make_it_once(self):
+        blocks, _field_ = _blocks()
+        results = []
+        start = threading.Barrier(4)
+
+        def ask():
+            start.wait()
+            results.append(blocks.disc(0.0, 0.0, 90.0))
+
+        threads = [threading.Thread(target=ask) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(30.0)
+        assert len(results) == 4
+        assert blocks.built == len(blocks)
+        assert all(_rows(*found) == _rows(*results[0]) for found in results)
+
+    def test_a_block_being_made_when_the_blocks_are_cleared_is_not_kept(self):
+        entered, gate = threading.Event(), threading.Event()
+        blocks, _field_ = _blocks(mask=self._held_mask(entered, gate))
+        middle = (round(8000.0 / blocks.span) + 0.5) * blocks.span
+        ahead = threading.Thread(target=blocks.warm, args=(middle, blocks.span / 2, 1.0))
+        ahead.start()
+        try:
+            assert entered.wait(5.0)
+            blocks.clear()
+        finally:
+            gate.set()
+            ahead.join(10.0)
+        assert len(blocks) == 0

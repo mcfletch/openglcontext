@@ -79,8 +79,13 @@ OpenGLContext/
 │   └── vehicle.py    # A road vehicle's motor, tyres, wind and impacts as
 │                     # scene nodes -- docs/audio.rst#audio-vehicle
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.rst
-│   └── mirrorhall.py # The room oglc-mirrors hangs its mirrors in; scenery,
-│                     # not a command
+│   ├── mirrorhall.py # The room oglc-mirrors hangs its mirrors in; scenery,
+│   │                 # not a command
+│   ├── x3d_geospatial_demo.py  # The valley tests/x3d_geospatial.py opens,
+│   │                 # as an X3D Geospatial document; scenery, not a command
+│   └── x3d_sound_stress.py  # oglc-x3d-sound-stress: a document of many
+│                     # sounds, and the frame and block time playing it costs
+│                     # -- docs/audio.rst#audio-stress
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
 │   └── hanim.py      # X3D HAnim's arithmetic: names and levels, skin weights,
 │                     # BVH channels, poses, limits -- no GL -- docs/characters.rst#characters-hanim
@@ -125,6 +130,9 @@ OpenGLContext/
 │   │                 # for a part the document cannot be read without
 │   ├── textureimages.py  # Cube maps and volumes from DDS, KTX, NRRD and
 │   │                 # laid-out pictures -- no GL -- docs/x3d.rst
+│   ├── basisu.py     # Basis Universal KTX 2 and .basis files through the
+│   │                 # optional opengl_basisu: the image, and the formats
+│   │                 # to upload it in -- no GL -- docs/gltf.rst#gltf-basisu
 │   ├── panorama.py   # Environment panoramas: which sources are (.hdr, .pic,
 │   │                 # .exr) and one decode for all of them -- docs/pbr.rst
 │   ├── notices.py    # A file's copyright and licence notices, as Notice
@@ -151,7 +159,11 @@ OpenGLContext/
 │   │   └── notices.py   # asset.copyright, exporter extras and
 │   │                 # KHR_xmp_json_ld packets, as Notice records
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
-│                     # (reader.py: the SceneReader registered for it)
+│                     # (reader.py: the SceneReader registered for it;
+│                     # generated.py: a tileset whose tiles a generator makes
+│                     # as the camera nears them -- docs/tiles3d.rst#tiles3d-generated;
+│                     # tileprocess.py: worker processes that make them --
+│                     # docs/tiles3d.rst#tiles3d-processes)
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
 │   │                 # modes and views a definition declares -- no GL
@@ -258,8 +270,12 @@ OpenGLContext/
 │   ├── nurbsx3d.py   # X3D's NURBS geometry, trims, texture coordinates and
 │   │                 # NurbsSet, drawn as meshes and lines
 │   ├── nurbsinterpolators.py  # X3D's three NURBS interpolators -- no GL
+│   ├── coordinatedeformer.py  # The VRML97 NURBS extension's CoordinateDeformer:
+│   │                 # coordinates moved through a NURBS volume -- docs/nurbs.rst
 │   ├── nurbseval.py  # X3D's NURBS field rules; curves, surfaces, trims and
 │   │                 # sweeps evaluated -- no GL
+│   ├── generatedtiles.py  # GeneratedTiles: the node that streams a generator's
+│   │                 # tiles, made as the camera nears them -- docs/tiles3d.rst
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── composedgeometry.py  # X3D triangle/line sets and ElevationGrid as
 │   │                 # glTF-shaped arrays -- NumPy only, no GL
@@ -346,6 +362,14 @@ OpenGLContext/
 │   ├── surfaces.py   # Procedural PBR maps (marble, tiles, brick, metals) and
 │   │                 # geometry that wears them by the metre; NumPy only,
 │   │                 # so Blender loads it too -- docs/surfaces.rst
+│   ├── natural.py    # Rocks (scraped spheres), timber and dry-stone walls as
+│   │                 # Geometry, NumPy only -- docs/surfaces.rst
+│   ├── rockwork.py   # Rock cut into a mesh: edge splitting that leaves no cracks,
+│   │                 # and flat discs scraped in at every scale -- docs/surfaces.rst
+│   ├── rockfield.py  # RockField/RockScatter: streamed rocks over any ground --
+│   │                 # docs/surfaces.rst
+│   ├── rockground.py # RockGround/RockyGround/beneath: bare rock ground meshed
+│   │                 # finely over the coarse terrain -- docs/terrain.rst
 │   ├── varied.py     # Varied: a node's copy with some fields changed
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot
 │   ├── zone.py       # Zone and its settings nodes; placing a frame's zones

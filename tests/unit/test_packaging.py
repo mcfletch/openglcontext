@@ -87,7 +87,10 @@ class TestTheLibrariesTheMachineIsAskedFor:
         """Whichever way the window is opened, these are what draws in it."""
         assert 'libgl1' in packaging.SYSTEM_LIBRARIES
         assert 'libegl1' in packaging.SYSTEM_LIBRARIES
-        assert 'libglu1-mesa' in packaging.SYSTEM_LIBRARIES
+
+    def test_glu_is_not_asked_for(self):
+        """The engine draws without it; a game that calls GLU names it in ``depends``."""
+        assert not [name for name in packaging.SYSTEM_LIBRARIES if 'glu' in name]
 
     def test_no_session_library_is_in_the_common_set(self):
         """Naming X11 unconditionally is what made the first list wrong."""

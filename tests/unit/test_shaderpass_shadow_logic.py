@@ -26,6 +26,9 @@ class FakeProgram(_ShadowUniformMixin):
     def _set_uniform1f(self, name, value, _program):
         self.calls.append(('1f', name, value))
 
+    def _set_uniform2f(self, name, value, _program):
+        self.calls.append(('2f', name, value))
+
     def _set_uniform3f(self, name, value, _program):
         self.calls.append(('3f', name, value))
 
@@ -116,6 +119,13 @@ class TestSlotBinding:
         assert 'cascadeCount[0]' in names
         assert ('cascade', 0, 0) in p.calls and ('cascade', 0, 1) in p.calls
         assert 'cascadeSplit[0]' in names and 'cascadeSplit[1]' in names
+
+    def test_csm_slot_binds_the_fade_it_is_given_and_none_without_one(self):
+        p = FakeProgram()
+        p.bind_csm_slot(1, 3, [object()], [0.8], fade=(32.0, 40.0))
+        p.bind_csm_slot(0, 3, [object()], [0.8])
+        assert ('2f', 'cascadeFade[1]', (32.0, 40.0)) in p.calls
+        assert ('2f', 'cascadeFade[0]', (0.0, 0.0)) in p.calls
 
     def test_cube_slot_fallback_binds_per_slot_cube_texture(self):
         p = FakeProgram(cube_array=False)

@@ -17,7 +17,9 @@ map taken out of it.
 import io
 import os
 import zipfile
-from typing import Optional
+from typing import Any, Optional
+
+import numpy as np
 
 from OpenGLContext import atomicfiles, userpaths
 from OpenGLContext.loaders import resolver
@@ -50,7 +52,15 @@ CATALOG = {
     "grass": "Grass004",
     "forest_floor": "Ground042",  # needles / leaf litter
     "moss": "Ground038",
+    "sand": "Ground080",         # golden sand
 }
+
+#: The content pack that carries these materials, so that a program need not reach
+#: ambientCG for them. See :func:`pack_directory`.
+PACK = "openglcontext/textures"
+
+#: Where inside the pack a material's maps are: ``textures/<asset id>_<resolution>/``.
+PACK_FOLDER = "textures"
 
 
 def cache_dir() -> str:
@@ -114,14 +124,74 @@ def _download(asset: str, resolution: str = "1K") -> zipfile.ZipFile:
     return zipfile.ZipFile(io.BytesIO(_read_capped(link, MAX_ARCHIVE_BYTES)))
 
 
+def pack_directory() -> Optional[str]:
+    """Where the engine's texture pack is on this machine, or None if it is not installed.
+
+    The pack holds every material of :data:`CATALOG` at 1K, so a program that finds it
+    reads them from this machine and never reaches ambientCG.
+    """
+    from OpenGLContext.contentpacks import ContentStore, catalog
+    from OpenGLContext.viewer.source import ENGINE_REGISTRY, ENGINE_STORE
+
+    try:
+        pack = catalog.pack_for_key(PACK, catalog.load(ENGINE_REGISTRY))
+        return None if pack is None else ContentStore(ENGINE_STORE).root_for(pack)
+    except (OSError, ValueError):
+        return None
+
+
+def ensure_pack(consent: Optional[Any] = None) -> bool:
+    """Fetch the engine's texture pack if it is not here; whether it is now.
+
+    ``consent`` is shown the pack (its title, size and terms) before anything is
+    downloaded and answers whether to go ahead: ``contentpacks.application.ask_on_console``
+    is one. Without one the pack is fetched. False where the pack is not published, the
+    download fails, or ``consent`` declines; the materials then come from ambientCG as
+    before.
+    """
+    from OpenGLContext.contentpacks import ContentStore, catalog, fetch
+    from OpenGLContext.viewer.source import ENGINE_REGISTRY, ENGINE_STORE
+
+    try:
+        pack = catalog.pack_for_key(PACK, catalog.load(ENGINE_REGISTRY))
+        if pack is None:
+            return False
+        store = ContentStore(ENGINE_STORE)
+        if store.root_for(pack) is None:
+            if consent is not None and not consent([pack]):
+                return False
+            fetch.fetch_pack(pack, store)
+        return store.root_for(pack) is not None
+    except (OSError, ValueError):
+        return False
+
+
+def _from_pack(asset: str, resolution: str) -> Optional[dict[str, str]]:
+    """The maps of ``asset`` out of the installed texture pack, or None."""
+    root = pack_directory()
+    if root is None:
+        return None
+    where = os.path.join(root, PACK_FOLDER, "%s_%s" % (asset, resolution))
+    found = {kind: os.path.join(where, kind + ".jpg")
+             for kind in ("color", "normal", "roughness", "ao")}
+    if not all(os.path.exists(found[kind]) for kind in ("color", "normal")):
+        return None
+    return {kind: path for kind, path in found.items() if os.path.exists(path)}
+
+
 def material(name: str, resolution: str = "1K",
              max_member_bytes: int = MAX_MEMBER_BYTES) -> dict[str, str]:
     """Return {'color','normal','roughness','ao'} local map paths for a CATALOG name.
 
-    Downloads + caches on first use. Raises on network failure (caller falls back),
-    and on a member larger than ``max_member_bytes``.
+    From the engine's texture pack where it is installed (:func:`pack_directory`), else
+    from the per-user cache. Downloads from ambientCG and caches on first use otherwise.
+    Raises on network failure (caller falls back), and on a member larger than
+    ``max_member_bytes``.
     """
     asset = CATALOG.get(name, name)
+    packed = _from_pack(asset, resolution)
+    if packed is not None:
+        return packed
     out = os.path.join(cache_dir(), "%s_%s" % (asset, resolution))
     os.makedirs(out, exist_ok=True)
     kinds = {"color": "_Color", "normal": "_NormalGL",
@@ -165,3 +235,43 @@ def try_material(name: str, resolution: str = "1K",
         return material(name, resolution, max_member_bytes)
     except Exception:
         return None
+
+
+def physical_material(name: str, resolution: str = "1K",
+                      tint: tuple[float, float, float] = (1.0, 1.0, 1.0)) -> Optional[Any]:
+    """A :class:`~OpenGLContext.scenegraph.physicalmaterial.PhysicalMaterial` wearing the
+    photograph of ``name``, or None where it cannot be had.
+
+    ``name`` is a key of :data:`CATALOG` or an ambientCG id. The material has the colour,
+    normal and roughness maps; a material with no colour or no normal map is None. ``tint``
+    multiplies the colour. Offline, the first call returns None; once the maps are cached,
+    later calls read the cache.
+    """
+    from PIL import Image
+
+    from OpenGLContext.scenegraph.imagedata import ImageDataTexture
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+
+    maps = try_material(name, resolution)
+    if not maps or 'color' not in maps or 'normal' not in maps:
+        return None
+
+    def read(path: str, mode: str) -> Any:
+        # The maps are under the cache or the installed pack, and nowhere else.
+        base = next((root for root in (cache_dir(), pack_directory())
+                     if root and os.path.commonpath([root, path]) == root), cache_dir())
+        contained = resolver.contain(base, os.path.relpath(path, base))
+        with resolver.open_contained(contained) as handle, Image.open(handle) as picture:
+            return picture.convert(mode)
+
+    settings: dict[str, Any] = dict(
+        baseTexture=ImageDataTexture(image=read(maps['color'], 'RGB')),
+        normalTexture=ImageDataTexture(image=read(maps['normal'], 'RGB')),
+        baseColor=tint, metallic=0.0, roughness=0.9)
+    if 'roughness' in maps:
+        rough = np.asarray(read(maps['roughness'], 'L'))
+        packed = np.zeros(rough.shape + (3,), np.uint8)
+        packed[..., 1] = rough
+        settings.update(metallicRoughnessTexture=ImageDataTexture(
+            image=Image.fromarray(packed, 'RGB')), roughness=1.0)
+    return PhysicalMaterial(**settings)

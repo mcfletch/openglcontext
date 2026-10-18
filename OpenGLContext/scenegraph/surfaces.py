@@ -32,7 +32,7 @@ __all__ = [
     'GOLD', 'COPPER', 'STEEL', 'BRONZE', 'SILVER', 'Maps', 'tileable_noise',
     'fbm', 'marble', 'checkered_marble', 'marble_tiles', 'tiles', 'brick', 'plaster',
     'sandstone', 'wood',
-    'brushed_metal', 'normal_map', 'to_srgb', 'images', 'pbr_material',
+    'brushed_metal', 'knurled', 'normal_map', 'to_srgb', 'images', 'pbr_material',
     'Geometry', 'panel', 'polygon', 'block', 'prism', 'cylinder', 'sphere', 'moved',
     'placed', 'merge', 'shape',
 ]
@@ -273,6 +273,25 @@ def brushed_metal(size: int = 256, colour: Colour = STEEL, roughness: float = 0.
     base = np.asarray(colour) * (0.96 + 0.04 * streak[:, None, None])
     return Maps(_clip(np.broadcast_to(base, (size, size, 3)).copy()), _clip(rough),
                 np.ones((size, size)), np.full((size, size), 0.5))
+
+
+def knurled(size: int = 256, colour: Colour = SILVER, count: int = 8,
+            roughness: float = 0.18) -> Maps:
+    """A metal knurled into diamonds: two sets of cuts crossing on the diagonals.
+
+    ``count`` diamonds stand across the texture and as many up it, each a
+    pyramid between its four cuts. ``roughness`` is the pyramids'; the cuts
+    are rougher and a little darker, as the bottom of a cut is.
+    """
+    x, y = _grid(size)
+
+    def ridges(across: np.ndarray) -> np.ndarray:
+        return np.asarray(1.0 - np.abs(2.0 * np.mod(count * across, 1.0) - 1.0))
+
+    height = np.minimum(ridges(x + y), ridges(x - y))
+    base = np.asarray(colour) * (0.75 + 0.25 * height)[..., None]
+    return Maps(_clip(base), _clip(roughness + 0.5 * (1.0 - height) ** 2),
+                np.ones((size, size)), _clip(height))
 
 
 def normal_map(height: np.ndarray, strength: float = 2.0, wrap: bool = True) -> np.ndarray:
@@ -545,7 +564,13 @@ def placed(geometry: Geometry, translation: Sequence[float] = (0.0, 0.0, 0.0),
 
 
 def merge(parts: Sequence[Geometry]) -> Geometry:
-    """One mesh of every part, for one shape: a floor's border, a frame's four sides."""
+    """One mesh of every part, for one shape: a floor's border, a frame's four sides.
+
+    No parts make an empty mesh.
+    """
+    if not parts:
+        return Geometry(np.zeros((0, 3), 'f'), np.zeros((0, 3), 'f'), np.zeros((0, 2), 'f'),
+                        np.zeros((0, 4), 'f'), np.zeros(0, np.uint32))
     offsets = np.cumsum([0] + [len(part.positions) for part in parts[:-1]])
     return Geometry(
         np.concatenate([part.positions for part in parts]),
@@ -630,15 +655,20 @@ def sphere(radius: float, sides: int = 24, repeat: float = 1.0) -> Geometry:
 
 def shape(geometry: Geometry, material: Any,
           translation: Sequence[float] = (0.0, 0.0, 0.0),
-          rotation: Sequence[float] = (0.0, 1.0, 0.0, 0.0)) -> Any:
+          rotation: Sequence[float] = (0.0, 1.0, 0.0, 0.0),
+          texture: Any = None) -> Any:
     """A ``Transform`` holding ``geometry`` wearing ``material``, placed in the scene.
 
-    ``rotation`` is VRML97's axis and angle in radians.
+    ``rotation`` is VRML97's axis and angle in radians. ``texture`` is a
+    texture node for the appearance, where the material's own maps are not
+    the picture: a ``MovieTexture``, say.
     """
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
     look = basenodes.Appearance(material=material)
+    if texture is not None:
+        look.texture = texture
     mesh = PBRMesh(positions=geometry.positions, normals=geometry.normals,
                    texcoords=geometry.texcoords, tangents=geometry.tangents,
                    indices=geometry.indices, appearance=look)

@@ -33,6 +33,7 @@ either stops.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Iterable, Sequence
 from typing import Any, Optional
 
@@ -125,6 +126,9 @@ class SoundGraph:
         self._since: dict[Any, float] = {}
         self._reported: set[str] = set()
         self._heard: tuple[Any, ...] = ()
+        self._nodes: tuple[Any, ...] = ()
+        #: How long the latest :meth:`update` took, in seconds.
+        self.seconds = 0.0
 
     def __repr__(self) -> str:
         return '<%s %d nodes, %d heard>' % (type(self).__name__, len(self._made),
@@ -134,6 +138,11 @@ class SoundGraph:
     def heard(self) -> tuple[Any, ...]:
         """The X3D nodes whose output is heard"""
         return self._heard
+
+    @property
+    def nodes(self) -> tuple[Any, ...]:
+        """The X3D nodes the latest :meth:`update` drove, each before its inputs"""
+        return self._nodes
 
     def audioNode(self, found: Any) -> Any:
         """The graph node ``found`` plays as, or None where it is not in this graph"""
@@ -166,6 +175,7 @@ class SoundGraph:
         ``capture`` whether an input may be opened, and ``acoustics`` the
         frame's acoustic surfaces.
         """
+        started = time.perf_counter()
         walk = _Walk(roots)
         fresh = set()
         for found in walk.order:
@@ -195,6 +205,8 @@ class SoundGraph:
             if found in fresh:
                 self._made[found].settle()
             found.reportAudio(self._made[found], self)
+        self._nodes = tuple(walk.order)
+        self.seconds = time.perf_counter() - started
         return len(walk.order)
 
     def clear(self) -> None:
@@ -292,16 +304,19 @@ class SoundGraph:
                 if point is not None:
                     listener = point
                     break
-        candidates = []
         hearing = x3dsound.Hearing(listener)
-        for found in walk.order:
-            if isinstance(found, x3dsound.Placed):
-                placement = found.placement(walk.matrices[found], hearing)
-                if acoustics and placement.level > 0.0:
-                    placement = x3dsound.scaled(placement, acoustics.occlusion(
-                        found.origin(walk.matrices[found]), hearing.position))
-                since = self._since.setdefault(found, now)
-                candidates.append((found, placement, float(found.priority), since))
+        placed = [found for found in walk.order if isinstance(found, x3dsound.Placed)]
+        placements = [found.placement(walk.matrices[found], hearing) for found in placed]
+        if acoustics:
+            behind = [index for index, placement in enumerate(placements)
+                      if placement.level > 0.0]
+            shares = acoustics.occlusions(
+                [placed[index].origin(walk.matrices[placed[index]]) for index in behind],
+                hearing.position)
+            for index, share in zip(behind, shares.tolist(), strict=True):
+                placements[index] = x3dsound.scaled(placements[index], share)
+        candidates = [(found, placement, float(found.priority), self._since.setdefault(found, now))
+                      for found, placement in zip(placed, placements, strict=True)]
         chosen = audible(candidates, budget)
         for found, placement, _, _ in candidates:
             found.placeAudio(self._made[found], placement if found in chosen else x3dsound.SILENT)

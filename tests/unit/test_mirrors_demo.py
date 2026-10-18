@@ -145,3 +145,73 @@ def test_help_prints_usage_and_opens_no_window(capsys):
     said = capsys.readouterr().out
     assert 'usage' in said
     assert 'reflections on and off' in said.lower()
+
+
+COLOURS_MOVIE = str(Path(__file__).resolve().parents[1] / 'resources' / 'colours.mp4')
+
+
+def _movies(hall):
+    from OpenGLContext.scenegraph.movietexture import MovieTexture  # noqa: PLC0415 kept with its use
+    found = []
+    for child in hall.children:
+        for record in _placed(child):
+            texture = getattr(record[-1].appearance, 'texture', None)
+            if isinstance(texture, MovieTexture):
+                found.append((texture, record))
+    return found
+
+
+def test_the_hall_has_no_screen_unless_a_movie_is_named(hall):
+    assert hall.screen is None
+    assert _movies(hall) == []
+
+
+def test_a_named_movie_plays_looped_on_a_screen_facing_the_far_mirror():
+    hall = MirrorHall(movie=COLOURS_MOVIE)
+    (texture, record), = _movies(hall)
+    assert texture is hall.screen
+    assert list(texture.url) == [COLOURS_MOVIE] and texture.loop
+    point, normal = reflection.surface_plane(record)
+    assert point[2] > 11.0 and normal[2] == pytest.approx(-1.0)
+    mesh = record[-1].geometry
+    low, high = np.min(mesh.texcoords, axis=0), np.max(mesh.texcoords, axis=0)
+    assert tuple(low) == (0.0, 0.0) and tuple(high) == (1.0, 1.0)
+    width, tall = np.ptp(np.asarray(mesh.positions)[:, :2], axis=0)
+    assert width / tall == pytest.approx(16 / 9)
+
+
+def test_the_screen_adds_no_mirror():
+    found = []
+    for child in MirrorHall(movie=COLOURS_MOVIE).children:
+        _placed(child, out=found)
+    assert len([record for record in found if reflection.is_reflector(record)]) == 15
+
+
+def test_the_named_movie_is_opened_by_the_loader():
+    pytest.importorskip('pyopengl_video', reason='the screen reads its movie through pyopengl-video')
+    from vrml.x3d import loadsensor  # noqa: PLC0415 kept with its use
+
+    from OpenGLContext.loaders import background  # noqa: PLC0415 kept with its use
+    hall = MirrorHall(movie=COLOURS_MOVIE)
+    assert background.wait_for_idle(20.0)
+    assert loadsensor.load_state(hall.screen) == loadsensor.LOADED
+
+
+def test_movie_url_is_read_from_the_command_line():
+    assert mirrors_demo.arguments([]).movie_url is None
+    assert mirrors_demo.arguments(['--movie-url', 'https://example.org/film.mp4']).movie_url \
+        == 'https://example.org/film.mp4'
+
+
+def test_the_hall_draws_with_a_screen(render_scene, monkeypatch):
+    pytest.importorskip('glfw')
+    pytest.importorskip('pyopengl_video', reason='the screen reads its movie through pyopengl-video')
+    from tests.unit.glrender import base_env  # noqa: PLC0415 glrender skips its importer without glfw, and the rest of this module needs none
+
+    from OpenGLContext.loaders import background  # noqa: PLC0415 kept with its use
+    base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_REFLECTION_VIEWS='3')
+    hall = MirrorHall(movie=COLOURS_MOVIE)
+    assert background.wait_for_idle(20.0)
+    render_scene(hall.children, frames=3, size=(320, 180))
+    assert hall.screen.movie() is not None
+    assert renderpass.FLAT.stats.mirrorViews == 3

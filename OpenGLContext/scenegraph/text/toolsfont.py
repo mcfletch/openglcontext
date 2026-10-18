@@ -9,7 +9,6 @@ from OpenGL.GL import *
 # PyOpenGL generates the type-inferring entry points at import time, so they
 # need naming to be seen.
 from OpenGL.GL import glColor, glNormal, glTranslate, glVertex, glVertexPointerd
-from OpenGL.GLU import *
 from OpenGL.GLE import *
 from OpenGL.arrays import vbo
 from OpenGLContext.scenegraph import polygontessellator, vertex
@@ -236,8 +235,7 @@ class SolidGlyph( OutlineGlyph ):
             [vertex.Vertex( point=(x/scale,y/scale,0.0) ) for (x,y) in outline]
             for outline in self.outlines
         ]
-        gluTessNormal( self.tess.controller, 0,0,1.0 )
-        contours = self.tess.tessContours( vertices, forceTriangles=0 )
+        contours = self.tess.tessContours( vertices, forceTriangles=0, normal=(0, 0, 1.0) )
         return [
             (t, asarray([ v.point for v in vertices ],'d'))
             for t, vertices in contours
@@ -307,8 +305,8 @@ class SolidGlyph( OutlineGlyph ):
             [vertex.Vertex(point=(x/scale, y/scale, z_offset)) for (x, y) in outline]
             for outline in self.outlines
         ]
-        gluTessNormal(self.tess.controller, 0, 0, 1.0 if front else -1.0)
-        contours = self.tess.tessContours(vertices, forceTriangles=True)
+        contours = self.tess.tessContours(
+            vertices, forceTriangles=True, normal=(0, 0, 1.0 if front else -1.0))
 
         normal = [0.0, 0.0, 1.0] if front else [0.0, 0.0, -1.0]
         result = []

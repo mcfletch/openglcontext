@@ -61,6 +61,12 @@ def test_pbr_material_factors_land_at_their_offsets():
     assert np.isclose(buf[27], 5.0)      # attenuationDistance
 
 
+def test_the_clearcoat_normal_scale_is_word_19():
+    assert np.isclose(pack_material_block(PhysicalMaterial(clearcoatNormalScale=0.5))[19], 0.5)
+    assert np.isclose(pack_material_block(PhysicalMaterial())[19], 1.0)
+    assert np.isclose(pack_material_block(None)[19], 1.0)
+
+
 def test_unlit_flag_is_int_at_word_28():
     assert pack_material_block(UnlitMaterial()).view(np.int32)[28] == 1
     assert pack_material_block(PhysicalMaterial()).view(np.int32)[28] == 0

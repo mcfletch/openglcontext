@@ -36,9 +36,11 @@ def write_pose(transform: Any, pos_row: Any, aa_row: Any) -> None:
     tt = type(transform)
     rot = _ROT_FIELD_CACHE.get(tt)
     if rot is None:
-        from vrml import protofunctions
-        rot = protofunctions.getField(transform, 'rotation')
-        _ROT_FIELD_CACHE[tt] = rot
+        from vrml import field, protofunctions
+        declared = protofunctions.getField(transform, 'rotation')
+        if not isinstance(declared, field.Field):
+            raise TypeError('%s.rotation is an event, which holds no pose' % (tt.__name__,))
+        rot = _ROT_FIELD_CACHE[tt] = declared
     rot.fset(transform, aa_row, False)              # array coerce, no dispatch
 
 

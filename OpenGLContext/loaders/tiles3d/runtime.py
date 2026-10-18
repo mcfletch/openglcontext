@@ -18,6 +18,8 @@ and `release(drawable)`), so the orchestration is testable without a GL context.
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Optional, Protocol
 
+import weakref
+
 import numpy as np
 
 from OpenGLContext.loaders.tiles3d.traversal import select_tiles
@@ -84,6 +86,9 @@ class TilesetRuntime:
         self._drawables: "dict[RuntimeTile, Any]" = {}
         #: Each loaded tile's payload, awaiting upload, in the order it arrived.
         self._ready_payloads: "dict[RuntimeTile, Any]" = {}
+        #: Tiles :meth:`discard` has dropped, so a load still in flight for one
+        #: is thrown away when it arrives instead of being uploaded.
+        self._discarded: "weakref.WeakSet[RuntimeTile]" = weakref.WeakSet()
         #: What the last update decided to draw, as (tile, drawable) pairs.
         self._drawn: "list[tuple[RuntimeTile, Any]]" = []
 
@@ -122,6 +127,30 @@ class TilesetRuntime:
     def wait_for_loads(self, timeout: float = 5.0) -> bool:
         return self.loadmgr.wait_idle(timeout=timeout)
 
+    @property
+    def pending_uploads(self) -> int:
+        """How many loaded tiles wait for an update to upload them to the GPU."""
+        return len(self._ready_payloads)
+
+    def discard(self, tile: "RuntimeTile") -> None:
+        """Forget a tile that has left the tree, and release what it drew.
+
+        A tileset that removes tiles (see
+        :class:`~OpenGLContext.loaders.tiles3d.generated.GeneratedTileset`)
+        calls this for each one, with the GL context current, since nothing the
+        traversal reaches will ever name the tile again to evict it.
+        """
+        self._discarded.add(tile)
+        self.loadmgr.cancel(tile)
+        self._ready_payloads.pop(tile, None)
+        self._refined_state.pop(tile, None)
+        self.residency.evict(tile)
+        drawable = self._drawables.pop(tile, None)
+        if drawable is not None:
+            self.uploader.release(drawable)
+            if self.on_evicted is not None:
+                self.on_evicted(tile, drawable)
+
     def shutdown(self) -> None:
         self.loadmgr.shutdown()
 
@@ -133,6 +162,8 @@ class TilesetRuntime:
 
     def _collect_ready(self) -> None:
         for tile, payload in self.loadmgr.poll_ready():
+            if tile in self._discarded:
+                continue
             if isinstance(payload, Exception):
                 # Failed load: drop back to unloaded so it can be retried later.
                 self.residency.evict(tile)

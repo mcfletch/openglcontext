@@ -15,21 +15,17 @@ from OpenGLContext.loaders.tiles3d.geomorph import morph_factor
 from OpenGLContext.loaders.tiles3d.boundingvolume import SphereBV
 from OpenGLContext.loaders.tiles3d.runtime import TilesetRuntime
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
+from OpenGLContext import userpaths
 
 
 # --- fetch.default_cache_dir --------------------------------------------------
 
-def test_default_cache_dir_honours_xdg(monkeypatch):
-    monkeypatch.setenv("XDG_CACHE_HOME", "/somewhere/cache")
+def test_default_cache_dir_is_this_project_s_corner_of_the_user_s_cache():
+    """Which directory the user's cache is belongs to :mod:`userpaths` -- the
+    XDG variable on one platform, ``%LOCALAPPDATA%`` on another -- and its own
+    cases say it per platform."""
     assert fetch.default_cache_dir() == os.path.join(
-        "/somewhere/cache", "openglcontext", "tiles3d")
-
-
-def test_default_cache_dir_falls_back_to_home(monkeypatch):
-    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
-    d = fetch.default_cache_dir()
-    assert d.endswith(os.path.join("openglcontext", "tiles3d"))
-    assert os.path.expanduser("~/.cache") in d
+        userpaths.cachedirectory(), "openglcontext", "tiles3d")
 
 
 # --- loadmanager LoadQueue dedupe ---------------------------------------------

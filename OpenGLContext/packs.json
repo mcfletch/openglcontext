@@ -2,6 +2,18 @@
  "namespace": "openglcontext",
  "packs": [
   {
+   "key": "openglcontext/textures",
+   "title": "CC0 PBR textures",
+   "url": "https://github.com/mcfletch/openglcontext/releases/download/content-v1/textures.tar.gz",
+   "directory": "textures",
+   "archive": "tar",
+   "approximate_bytes": 43957973,
+   "sha256": "339db7b096c2093e24f69a0df21f71eedd3069da1e25010f5205770e05fa1ee7",
+   "copyright": "Photographic PBR materials from ambientCG (https://ambientcg.com): bark, rock, grass, ground, sand and forest floor -- all CC0 1.0 (public domain). The list is in CREDITS.txt inside the pack.",
+   "marker": "CREDITS.txt",
+   "notes": "The materials the engine's terrain, forest and demos wear: colour, normal and roughness maps at 1K. With this installed the engine reads them from this machine and does not reach ambientCG."
+  },
+  {
    "key": "openglcontext/gallery",
    "title": "Bust gallery demo world",
    "url": "https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz",

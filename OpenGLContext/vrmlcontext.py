@@ -61,7 +61,11 @@ class VRMLSceneMixin(_Host):
 
         See the OpenGLContext.scenegraph.text package for the
         available font providers.  Called by :meth:`ensureFontProviders`;
-        a context that offers other fonts overrides this.
+        a context that offers other fonts overrides this.  The texture
+        provider is registered with ``Text`` itself and is the first asked.
+        The PyGame and GLUT bitmap providers are loaded by a program that
+        imports ``OpenGLContext.scenegraph.text.pygamefont`` or
+        ``glutfont``, and not here.
         """
         from OpenGLContext.scenegraph.text import fontprovider
 
@@ -76,18 +80,6 @@ class VRMLSceneMixin(_Host):
         else:
             fontprovider.setTTFRegistry(
                 registry,
-            )
-        try:
-            from OpenGLContext.scenegraph.text import pygamefont
-        except (ImportError, NotImplementedError):
-            log.warning(
-                """Unable to import PyGame TTF-font renderer, no PyGame anti-aliased font support!"""
-            )
-        try:
-            from OpenGLContext.scenegraph.text import glutfont
-        except ImportError:
-            log.error(
-                """Unable to import GLUT-based font renderer, no GLUT bitmap font support (this is unexpected)!"""
             )
 
     def load(self, filename: str) -> None:

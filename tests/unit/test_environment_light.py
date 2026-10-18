@@ -105,9 +105,10 @@ def test_a_specular_cube_map_is_the_lights_reflected_environment():
     assert found is not None
     level = found.specular[0]
     assert len(level) == 6 and level[0].shape == (4, 4, 3)
-    # The faces decoded to linear light; rougher levels averaged down.
+    # The faces decoded to linear light: the environment the renderer
+    # prefilters for each roughness, as X_ITE does.
     assert level[0][0, 0] == pytest.approx((1.0, 0.2158605, 0.0), abs=1e-4)
-    assert len(found.specular) > 1 and found.specular[-1][0].shape[0] == 1
+    assert len(found.specular) == 1 and not found.prefiltered
     # A uniform environment's irradiance (over pi) is its radiance, to the
     # fit's quadrature over faces four texels wide.
     irradiance = found.irradiance_faces(4)[2]

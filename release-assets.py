@@ -1,15 +1,19 @@
 #! /usr/bin/env python3
-"""Build the bust gallery world, install it here, and publish it.
+"""Build the engine's content packs, install them here, and publish them.
 
-The level-of-detail demo's world is twelve megabytes of CC0 art, which is not
-something an index should be asked to serve on every install of the engine. It
-does not travel in the wheel: it is attached to a GitHub release and fetched
-through :mod:`OpenGLContext.contentpacks`. One command covers the whole of that:
+The engine has two packs. The CC0 PBR textures its terrain, forest and demos wear are
+a few tens of megabytes that ambientCG would otherwise be asked to serve to every
+program that starts, so they are a pack the engine reads from this machine once it is
+installed (:func:`OpenGLContext.loaders.cc0.pack_directory`). The level-of-detail demo's
+world is twelve megabytes of CC0 art. Neither travels in the wheel: each is attached to a
+GitHub release and fetched through :mod:`OpenGLContext.contentpacks`. One command covers
+the whole of that:
 
-    ./release-assets.py                 # build the world and its registry
-    ./release-assets.py --install       # ...and put it in this machine's store
+    ./release-assets.py                 # build the packs and their registry
+    ./release-assets.py --only textures # the textures alone: no Blender needed
+    ./release-assets.py --install       # ...and put them in this machine's store
     ./release-assets.py --reinstall     # ...replacing the copy installed there
-    ./release-assets.py --push          # ...attach it to the release tag and
+    ./release-assets.py --push          # ...attach them to the release tag and
                                         #    write OpenGLContext/packs.json
 
 ``--install`` is what makes a content release testable before it is a release:
@@ -105,7 +109,59 @@ def credits() -> str:
             "(public domain). Full attribution in CREDITS.txt inside the pack.")
 
 
+#: What proves the texture pack is unpacked.
+TEXTURES_MARKER = "CREDITS.txt"
+
+
+def stage_textures(into: str) -> str:
+    """Copy the CC0 materials of :data:`OpenGLContext.loaders.cc0.CATALOG` into the pack.
+
+    Each is the colour, normal, roughness and occlusion maps ambientCG publishes at 1K, under
+    ``textures/<asset id>_1K/``, which is where
+    :func:`OpenGLContext.loaders.cc0.material` looks for them. A map not on this machine is
+    fetched from ambientCG once, here, so that nobody else has to.
+    """
+    from OpenGLContext.loaders import cc0
+
+    names = ["# CC0 materials from ambientCG (https://ambientcg.com)\n",
+             "# Released under CC0 1.0 Universal (public domain): no attribution is required.\n"]
+    for key, asset in sorted(cc0.CATALOG.items(), key=lambda item: item[1]):
+        maps = cc0.material(key)
+        where = os.path.join(into, cc0.PACK_FOLDER, "%s_1K" % (asset,))
+        os.makedirs(where, exist_ok=True)
+        for kind, path in maps.items():
+            atomicfiles.copy_file(path, os.path.join(where, kind + ".jpg"))
+        names.append("%s  (%s)\n" % (asset, key))
+    atomicfiles.write_bytes(os.path.join(into, TEXTURES_MARKER), "".join(names).encode("utf-8"))
+    return into
+
+
+def textures_credits() -> str:
+    """Whose the textures are, in the one line a consent screen has room for."""
+    return ("Photographic PBR materials from ambientCG (https://ambientcg.com): bark, rock, "
+            "grass, ground, sand and forest floor -- all CC0 1.0 (public domain). The list is in "
+            "CREDITS.txt inside the pack.")
+
+
 def declare(build: publish.Build) -> list[dict]:
+    """Build the packs the options ask for; what the registry says about them."""
+    entries: list[dict] = []
+    if build.options.only in (None, "textures"):
+        staged = build.staging("textures")
+        stage_textures(staged)
+        built = build.archive(staged, "textures")
+        entries.append(build.entry(
+            "textures", built, title="CC0 PBR textures", copyright=textures_credits(),
+            marker=TEXTURES_MARKER,
+            notes="The materials the engine's terrain, forest and demos wear: colour, normal "
+                  "and roughness maps at 1K. With this installed the engine reads them from "
+                  "this machine and does not reach ambientCG."))
+    if build.options.only in (None, "gallery"):
+        entries.extend(declare_gallery(build))
+    return entries
+
+
+def declare_gallery(build: publish.Build) -> list[dict]:
     """Build the gallery pack; what the registry says about it."""
     options = build.options
     staged = build.staging("gallery")
@@ -127,6 +183,9 @@ def declare(build: publish.Build) -> list[dict]:
 
 def arguments(parser: argparse.ArgumentParser) -> None:
     """The options that say how the world is built."""
+    parser.add_argument("--only", choices=("gallery", "textures"), default=None,
+                        help="build this pack alone; the gallery needs Blender and "
+                             "openglcontext-editor, the textures need neither")
     parser.add_argument("--world", default=None,
                         help="pack this glB instead of building one, which "
                              "needs neither Blender nor openglcontext-editor")
@@ -141,7 +200,7 @@ def release() -> publish.Release:
     return publish.Release(
         namespace=NAMESPACE, url=URL, catalog=CATALOG, declare=declare,
         into=os.path.join(HERE, "dist", "content"), arguments=arguments,
-        description=__doc__.split("\n\n")[0],
+        keep_unbuilt=True, description=__doc__.split("\n\n")[0],
         title="Bust gallery world",
         notes="The level-of-detail demo world. Open it with "
               "`oglc-view --pack openglcontext/gallery`. Terms are in the "

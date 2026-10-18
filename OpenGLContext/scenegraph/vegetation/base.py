@@ -20,7 +20,8 @@ from OpenGL.GL import (
 )
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
-from OpenGLContext.scenegraph.instancedgl import GLLayer, ViewPrograms, view_copies
+from OpenGLContext.scenegraph.instancedgl import (
+    FOG_UNIFORMS, GLLayer, ViewPrograms, frame_fog, upload_fog, view_copies)
 
 #: node AABB kept large so a camera-following field is never frustum-culled whole.
 _BIG = (1.0e6, 1.0e6, 1.0e6)
@@ -127,6 +128,7 @@ class InstancedVegBase(vnodes.PointSet, GLLayer):
         prev = mode.current_program() if hasattr(mode, "current_program") else 0
         glUseProgram(program)
         ViewPrograms.apply_views(mode, U)
+        upload_fog(U, frame_fog(mode))
         glUniformMatrix4fv(U["uModelView"], 1, GL_FALSE, np.ascontiguousarray(mode.matrix, np.float32))
         glUniformMatrix4fv(U["uProjection"], 1, GL_FALSE, np.ascontiguousarray(mode.projection, np.float32))
         nm = np.asarray(mode.matrix)[:3, :3].T   # normal-matrix path shared by sun and up

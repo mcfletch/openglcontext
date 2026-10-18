@@ -334,11 +334,23 @@ the next rather than jumping between them.
      -
      - 8
      - The most hits shown at once.
+   * - ``level``
+     - 0–1
+     - 0
+     - A steady wash on all four edges that does not fade, for a lasting
+       state such as being wounded. Hits show over it; a level of 0 draws
+       none.
 
 ``intensity`` runs from 0 to 1. An intensity of 0 draws nothing, so a hit
 that armour absorbed entirely shows no wash. Several hits can be shown at
 once, and each fades on its own timer. ``clear()`` removes them all, for
-example on respawn.
+example on respawn; it leaves ``level`` as it is.
+
+``hurt_all(intensity, now)`` shows a hit with no direction, on every edge at
+once, for harm with no one to turn towards, such as a collision. A game that
+counts wounds sets ``level`` from the count and calls ``hurt_all`` when one
+lands, so the edges stay shaded in proportion to the damage and flash at each
+new hit.
 
 .. _screenwash:
 

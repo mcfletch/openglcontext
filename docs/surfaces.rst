@@ -82,6 +82,10 @@ from 0 to 1.
      - ``size=256, colour=STEEL, roughness=0.28``
      - A metal brushed along one direction. ``GOLD``, ``COPPER``, ``STEEL``,
        ``BRONZE`` and ``SILVER`` are metals' reflectance colours.
+   * - ``knurled``
+     - ``size=256, colour=SILVER, count=8, roughness=0.18``
+     - A metal knurled into diamonds, ``count`` across the texture: the grip
+       of a thumb-wheel or a tool handle.
 
 ``polish``, ``glaze`` and ``roughness`` are the surface's roughness: 0 is a
 mirror finish, 1 fully matte.
@@ -175,10 +179,12 @@ Triangles wind counter-clockwise seen from the side the normals face.
        ``Transform`` with that translation and rotation would place it; its
        normals and tangents turn with it.
    * - ``merge(parts)``
-     - One mesh of several, for one shape.
-   * - ``shape(geometry, material, translation=(0, 0, 0), rotation=(0, 1, 0, 0))``
+     - One mesh of several, for one shape; no parts make an empty mesh.
+   * - ``shape(geometry, material, translation=(0, 0, 0), rotation=(0, 1, 0, 0), texture=None)``
      - A ``Transform`` holding the geometry as a ``PBRMesh`` wearing the
        material, placed in the scene. ``rotation`` is VRML97's axis and angle.
+       ``texture`` is a texture node for the appearance, a ``MovieTexture``
+       for one.
 
 A wall with an opening in it is a few panels round the opening, each started
 where it sits on the wall, so the courses of brick run straight across:
@@ -211,6 +217,155 @@ strips of a floor's border, for example:
        surfaces.moved(surfaces.panel(0.3, 5.4, 0.6), (3.85, 0.0, 0.0)),
        surfaces.moved(surfaces.panel(0.3, 5.4, 0.6), (-3.85, 0.0, 0.0)),
    ])
+
+Rocks, timber and walls
+-----------------------
+
+``OpenGLContext.scenegraph.natural`` makes the shapes that a box and a cylinder
+cannot stand in for. Each takes a ``numpy.random.Generator``, so the same
+generator makes the same piece, and returns a ``Geometry`` to wear a material,
+place with ``placed`` and join with ``merge``. Each says how many metres one
+repeat of its texture covers; a photograph keeps its scale on every face.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Function
+     - What it makes
+   * - ``stone(rng, radii, divisions=2, repeat=1.0)``
+     - A rock about the origin. Seven to thirteen flat discs are pressed into
+       a sphere, each flattening what lies under it and leaving the rest, and
+       the surface is lumped, undulated and grained over them. ``radii`` is the
+       size along each axis before that. ``divisions`` is how finely the
+       surface is divided: 1 (42 vertices) for a stone in the hand, 2 for a
+       rock, 3 for a boulder. A face is shaded partly flat, so the edges the
+       scrapes leave stay crisp. Texture is projected along each face's
+       dominant axis.
+   * - ``timber(rng, length, radius, repeat=0.6, rings=None, sides=20, crook=0.04)``
+     - A trunk along X, centred on the origin, as ``(bark, ends)``: two
+       meshes, because the bark and the sawn ends want different textures. The
+       axis wanders by up to ``crook`` of the length, the section is a little
+       out of round and tapers, the bark is fissured along the grain and
+       carries knots. ``ends`` is textured with one picture across each face,
+       centred, for a growth-ring texture.
+   * - ``scrape(rng, unit, count)``
+     - ``unit``, an ``(N, 3)`` array of points on a unit sphere, with ``count`` flat
+       discs pressed into it. ``stone`` is built on it, and ``RockProfile.scrapes``
+       (see :doc:`roads`) uses it for the boulders of a baked world.
+   * - ``rubble(rng, line, width, height, sunk=0.3, repeat=0.8, sections=11)``
+     - A low dry-stone wall along ``line``, an ``(N, 3)`` array of points at
+       ground level. It is lumpy on both faces and along its crest, reaches
+       ``sunk`` below the line and rounds off into the ground at both ends.
+
+.. code-block:: python
+
+   import numpy as np
+   from OpenGLContext.scenegraph import natural, surfaces
+
+   rng = np.random.default_rng(7)
+   boulder = natural.stone(rng, (0.9, 0.6, 0.7), divisions=3)
+   bark, ends = natural.timber(rng, 2.0, 0.25)
+   rock = surfaces.shape(boulder, rock_material, translation=(0.0, 0.3, 0.0))
+
+The scraping method is the one the README of ``gl-rock`` describes; see
+``license.txt``.
+
+Rock cut into a surface
+~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.scenegraph.rockwork`` makes a smooth surface look hewn from rock the
+way ``stone`` makes a boulder: flat discs are pressed into it, each cutting down to
+a plane, a little tilted, within its reach and leaving what lies outside, so the
+surface steps in facets with a clean edge at every rim. It works on any triangle
+mesh whose front faces look into the open and whose rock lies behind them: the
+inside of a tunnel, a quarry face, a cliff.
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph import natural, rockwork
+
+   passes = (rockwork.Pass(radius=(1.5, 3.0), depth=(0.15, 0.4), per_area=0.02),    # facets
+             rockwork.Pass(radius=(0.7, 1.5), depth=(0.1, 0.3), per_area=0.04),     # smaller ones
+             rockwork.Pass(radius=(0.3, 0.6), depth=(0.4, 0.9), per_area=0.012,     # pits
+                           tilt=0.1))
+   points, triangles, pinned = rockwork.scrape(points, triangles, rng, passes,
+                                               pinned=held, keep_clear=fixings)
+   points = rockwork.grain(points, triangles, rng, 0.05, ripples, pinned=pinned)
+   rock = natural.projected(points, natural.smooth_normals(points, triangles), triangles, 2.0)
+
+``Pass`` gives the range of a disc's reach and of its cut in metres, how many
+discs there are for each square metre of surface (``per_area``) and the steepest
+slope of a cut face (``tilt``). ``scrape`` refines the mesh about the rim of
+every disc before the cut, so a step is an edge of the mesh and not a slope across
+a coarse triangle, and does the passes in order, from large facets to small pits:
+each pass refines the mesh the one before it left. Every cut goes into the rock,
+so the open space only grows and a clearance made for a runner is never taken away.
+
+``pinned`` is a boolean for each vertex that must stay where it is, where the
+mesh meets other meshes; cuts come in over ``ramp`` metres from a pinned vertex or
+the edge between two, and an edge between two pinned vertices is never split.
+``keep_clear`` is places, such as a torch's fixing, that no cut reaches.
+``scrape`` returns the points, the triangles and the pinned flags of the refined
+mesh; ``grain`` roughens the result by pushing it into the rock by up to the amount
+given, from noise the caller supplies, and ``natural.waves`` is such noise. The
+same ``rng`` cuts the same rock.
+
+``split_edges(points, triangles, wanted, fixed=None, protected=None)`` is the
+refinement on its own: it cuts the edges ``wanted(a, b)`` chooses at their middles
+and re-divides the triangles that touch them, so the mesh has no cracks whatever is
+chosen. It returns the new points, the triangles and the two parents of every new
+point, for ``interpolated(values, parents)`` to carry per-vertex data across.
+
+Rocks over a whole landscape
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.scenegraph.rockfield.RockField`` scatters stones over any
+ground that answers ``sample(x, z)`` with a height, a ``HeightField`` or land
+computed from position, and streams them as the camera moves:
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph.rockfield import RockField
+
+   rocks = RockField(ground, rock_material, reach=150.0,
+                     mask=rockiness, density=0.012, sizes=(0.12, 1.0))
+   scene.children.append(rocks)
+
+   # once a frame, with the GL context current
+   rocks.update_for_camera(eye, viewport_height)
+
+The world is divided into square cells (``cell``, 64 m by default). A cell's
+rocks are made, seated on the ground, sunk a fifth of their radius into it and
+merged into one mesh when the camera comes within ``reach`` metres, on a worker
+thread; the cell is dropped when the camera leaves. A cell depends only on
+``seed`` and its place, so it is the same each time and neighbouring cells meet
+without a seam, and its vertices are built around the cell's corner, so they
+stay precise at any distance from the world's origin.
+
+``density`` is rocks per square metre where ``mask(x, z)`` is 1. The mask
+answers from 0 to 1 how likely a rock is at each point and scales the largest
+rock that grows there, so bare rock country has boulders and a forest floor
+has stones. A rock bigger than 0.3 m has one to three smaller ones lying at its
+foot. The rocks cast shadows and all wear the one ``material``.
+
+``colliders_near(x, z, reach=3.0)`` answers ``(positions, radii)`` for the rocks
+within ``reach`` metres of a point, as cylinders a walker is pushed out of;
+register it with ``add_collider_source`` on a ``TerrainWalkMixin`` (see
+:doc:`terrain`). A rock smaller than 0.3 m is underfoot and has no collider.
+A cell's colliders are worked out from the seed alone, so they are there before
+the cell is drawn, and the last 64 cells are kept.
+
+``mounds_near(x, z, reach=3.0)`` answers the same rocks as domes a walker can
+climb: ``(positions, radii, rims, tops)``, each dome 1.15 rock radii wide, 0.2
+radii high at its edge and 0.75 high at its middle above the ground under the
+rock. Registered with ``add_collider_source`` in place of ``colliders_near``, it
+lets the walker step onto a rock whose surface rises no more than
+``step_height`` (0.5 m) above its feet, stand on it and walk off it, and stops
+the walker at one that rises more.
+``RockScatter`` is the tile generator underneath, for use with
+``GeneratedTiles`` or a ``GeneratedTileset`` directly (see
+:ref:`tiles3d-generated`).
 
 Making a surface of your own
 ----------------------------
@@ -285,6 +440,10 @@ in milliseconds:
      - 3
      - 4
      - 13
+   * - ``knurled``
+     - 3
+     - 9
+     - 28
 
 ``pbr_material`` adds about 20 ms at 512, for the normal map and the encoding.
 Each material uploads its own three textures, so make a surface once and share

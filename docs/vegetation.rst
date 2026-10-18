@@ -71,7 +71,14 @@ world's species through ``located`` with ``tiles3d.fetch.beside``, which keeps
 them inside the world (:ref:`tiles3d-reach`).
 
 The near mesh and the cards cross-fade in their shaders over a shared distance
-band.
+band. A card's picture is baked separately from the mesh, and a ``cardWidth``
+that does not match the mesh shows as the tree narrowing or widening across that
+band. ``species.fitted_card_width()`` answers the ``cardWidth`` at which the card
+draws the tree as wide as the mesh does: the width of the middle 98% of the
+foliage vertices over both horizontal axes, as a fraction of the mesh's height,
+divided by the share of the card's picture that is opaque. It reads the mesh and
+the impostor from disk; ``species.varied(cardWidth=species.fitted_card_width())``
+is the species with it applied.
 
 Choosing what to draw
 ~~~~~~~~~~~~~~~~~~~~~
@@ -96,6 +103,21 @@ slightly. Selection is skipped while the camera is nearly still.
 
 A baked world can carry its forest as a table: see :ref:`Baking a world
 <vegetation>`.
+
+Replacing the trees
+~~~~~~~~~~~~~~~~~~~
+
+A forest has a fixed table of trees. A world with no end plants the stretch around
+the camera and the next stretch as the camera nears its end.
+``replant(positions, yaws, heights, species_id=None, shade=None)`` takes the
+arguments of the constructor and swaps the table in place. The nodes that draw
+the trees, and the meshes and textures they have made on the GPU, are kept, so a
+replant costs a table of arrays and not a second upload of every model. What is
+drawn is chosen from the new trees at the next ``update``. A species that had no
+trees and now has some gets its cards then, and one that has none draws none.
+A table whose lengths do not agree raises ``ValueError`` and the forest is left
+as it was. ``replant`` builds nothing on the GPU, so the table can be worked out
+on a worker thread and handed over with the context current or not.
 
 .. _groundcover:
 
@@ -125,6 +147,12 @@ thickets with clear ground between them.
                            layers, field.extent),
        shade=terrain.shade, canopy=terrain.canopy_cover)
    cover.update(camera_position)                    # once a frame
+
+``field`` is the ground the plants are seated on: anything with
+``sample(x, z)``, which answers the height there. A ``HeightField`` is one; so
+is land computed from a function, which has no edge. A ground that answers for
+hundreds of thousands of points a scatter should answer quickly, and a game
+whose land is costly to compute answers from a grid it has laid.
 
 ``CoverSpecies`` is also a scenegraph node, kept in the cover's ``species``
 field. ``clumpMesh`` and ``clumpFarMesh`` name meshes in the ``.glb``. A string
@@ -185,23 +213,86 @@ within twice the disc's radius of it. A disc is assembled from the blocks it
 reaches, so moving costs the ground newly reached, and driving back over
 ground already covered costs nothing but the assembly. ``GroundCover.scattered``
 counts the blocks scattered. Setting ``mask``, ``holes``, ``shade`` or
-``canopy`` scatters everything again.
+``canopy`` scatters everything again. A block is scattered outside any lock: the
+thread assembling a disc and the one preparing ground ahead (``prepare``) share the
+blocks, and one waits for another only for a block that other is scattering at that
+moment.
 
 The scatter is the expensive half of the work and makes no GL calls.
 ``GroundCover(..., background=True)`` runs it on a worker thread
-(``vegetation.streaming.BackgroundCompute``): ``update`` hands the scatter to
-the worker and stages what it made on a later call, so no frame waits for it,
-and ``wait(timeout)`` blocks until the worker is idle, for a capture or a
+(``vegetation.streaming.BackgroundCompute``): ``update`` hands the near scatter (the
+geometry and the cards) and the far scatter to two workers and stages what they
+made on a later call, so no frame waits for them and the near cover does not
+wait for the far. ``wait(timeout)`` blocks until the worker is idle, for a capture or a
 bake that wants the cover in place. A cover a streamed world carries
 (``TilesTerrain``) is scattered this way, and ``TilesTerrain.wait_for_loads``
-waits for it. A scatter that raises is logged and asked for again on the next
-``update``. ``shutdown()`` stops the worker; a cover that is collected stops
+waits for it. The discs lead the camera: a vehicle covers tens of metres in the time a scatter
+takes, so each scatter is centred where the camera will be when it arrives, its
+velocity from successive ``update`` calls and its arrival time measured from the
+scatters that have arrived (``GroundCover.latency``, in seconds, 0 for a scatter
+made in line). A move of more than 150 m/s between two updates is a jump and
+carries no velocity.
+
+``prepare(points)`` scatters the ground about each of ``points``, ``(x, z)``
+places the camera will pass, before it gets there. A game that knows the way
+ahead, a road or a course, calls it with places along it as the camera advances;
+the disc that reaches that ground is then only put together. The blocks made
+are kept like any others, so ground more than twice a rung's radius from the
+camera is let go of by the next disc and is not made. With ``background`` it
+runs on a thread of its own behind the scatter the camera is waiting for.
+``GroundCover(..., fade=0.8)`` is where each rung's dissolve into the next
+begins, as a fraction of its outer edge: the dissolve is a window of metres, and
+a camera crossing it in under a second sees a pop, so a fast game lowers the
+fraction (``retune()`` after changing ``fade``).
+
+``far_radius`` is where the coarse field beyond the cards ends. A cover whose
+``far_radius`` is no further than its ``card_radius`` (``has_far`` false) has no
+coarse field: none is scattered or drawn, which suits a world whose haze hides
+the ground past the cards. A scatter that raises is logged and asked for again
+on the next ``update``. ``shutdown()`` stops the worker; a cover that is collected stops
 its worker as well. Without ``background``, ``update`` scatters on the calling
 thread; a caller with its own worker can run ``compute_near`` there and pass
 the result to ``apply_near`` on the render thread. The near tree meshes
 (``InstancedMeshLOD``) work the same way: ``compute_pending(x, z, radius)``
 selects the trees near a point on any thread, and ``stage(result)`` on the
 render thread hands the set to the next draw.
+
+``GroundCover`` takes any ground that answers ``sample(x, z)`` with a height
+(the ``Ground`` protocol): a ``HeightField``, or an endless land computed from
+position. ``relocate(field, mask=None, holes=None, shade=None, canopy=None)``
+grows the same cover on another ground, for a world that restarts or is
+replaced while the program runs. It keeps the nodes and what they hold on the
+GPU, replaces the ground and the four rules (a rule not given is cleared),
+drops what the old ground scattered, including a scatter a worker is still
+making, and leaves the cover empty until the next ``update``. ``dispose()``
+deletes the GL objects of every node and stops the worker; call it with the GL
+context current.
+
+.. _vegetation-shadows:
+
+Shadows
+~~~~~~~
+
+The trees a ``VegetationField`` draws as geometry, within ``near_radius`` of the
+camera, are written into the shadow maps of a light with ``shadows`` on. The node
+that draws them is bounded by those trees and no others, so the cascades are not
+stretched over the whole forest. ``VegetationField(..., shadows=False)`` leaves them
+out. The cards that stand for trees further away, the ground cover and the grass cast
+no shadow, so a tree's shadow ends where its geometry does. A node of your own that is
+bounded by what it draws can cast through a ``Shape`` whose ``castShadow`` is true
+and a ``render`` that answers ``mode.shadow_pass``, as ``InstancedMeshLOD`` does.
+
+.. _vegetation-fog:
+
+Fog
+~~~
+
+Trees and ground cover are fogged by the scene's bound ``Fog`` node
+(:ref:`Fog <fog>`), with the same curve and colour as the rest of the scene, so
+plants fade into the haze at the distance the ground and the sky do. With no
+``Fog`` bound they are fogged by the engine's aerial haze: density 0.00016 per
+metre, colour ``(0.46, 0.58, 0.76)`` in linear light. A bound ``Fog`` with a
+``visibilityRange`` of 0 is no fog. The terrain takes its fog the same way.
 
 Every instanced vegetation node, the terrain and the particle emitters have a
 ``drawn`` attribute, True by default. Set it False and the node draws nothing
@@ -311,6 +402,13 @@ reads it back: each species with its card and clump resolved under
 
 A baked world can carry a whole cover set: see :ref:`Ground cover as a recipe
 <cover>`.
+
+A card is lit by a flat share of the sun, the species' ``sunLevel``. The default,
+``CARD_SUN`` (1.0), gives a card the average brightness of the lit geometry it
+replaces at ``CLUMP_RADIUS``, so the hand-over shows no step in brightness. A
+``cover.json`` records the ``sunLevel`` each species was written with and
+``read_cover_manifest`` returns it; ``species.varied(sunLevel=CARD_SUN)`` takes
+the default instead.
 
 .. _canopyshade:
 

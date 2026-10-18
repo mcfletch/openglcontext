@@ -31,6 +31,7 @@ def _vp(eye, look_at):
 
 class CountingUploader(GLTileUploader):
     def __init__(self):
+        super().__init__()
         self.uploaded = []
         self.released = 0
 

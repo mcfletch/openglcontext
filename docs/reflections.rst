@@ -338,7 +338,9 @@ The budget is for a whole frame, across every view.
      - A GPU time the reflections aim to stay under. The texels drawn are
        scaled by the measured time, between a quarter and all of the budget.
        Each measurement arrives two frames late and is applied once, weighed
-       by the scale the frame it measured was drawn at.
+       by the scale the frame it measured was drawn at. A GL with no timer
+       queries measures nothing, and the target then changes nothing: the
+       reflections are drawn at the full texel budget.
 
 The first five are counts and sizes, so a capture or a visual baseline draws
 the same reflections every run. The time target adapts to the machine, which
@@ -436,6 +438,14 @@ reflector is set to, the materials carrying them, and where they go.
    * - ``o``
      - The round window on the right wall between ``replace`` and a shaded
        glass mirror.
+
+``oglc-mirrors --movie-url URL`` hangs a 4.8 m by 2.7 m screen on the wall
+behind the starting viewpoint, facing the far mirror, and loops the movie at
+``URL`` on it. ``URL`` is a local path or an http(s) URL, which is downloaded
+into the engine's cache first and may be up to 256 MiB (:doc:`untrusted`).
+The screen is a ``MovieTexture`` (:ref:`x3d-movies`) on an unlit material, so
+the mirrors, the floor and the pool reflect a moving picture. Without a
+decoder for the window's context the screen is drawn untextured.
 
 ``tools/blender/demos/mirrors.glb``, in a checkout of the OpenGLContext
 repository (``tools/`` is not in the installed package), is the same kind of

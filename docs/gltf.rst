@@ -142,8 +142,11 @@ animation:
 
 - Alpha - opaque, mask (with cutoff) and blend modes.
 
-- Cameras - each perspective camera in the file becomes a viewpoint. In the
-  viewer, PageUp / PageDown cycle through them.
+- Cameras - each camera in the file becomes a viewpoint: a perspective camera a
+  ``Viewpoint`` and an orthographic one an ``OrthoViewpoint`` whose window is
+  ``(-xmag, -ymag, xmag, ymag)``. A perspective camera's ``aspectRatio`` is
+  kept beside its ``Viewpoint``; the projection takes the window's shape, as
+  X_ITE's does. In the viewer, PageUp / PageDown cycle through them.
 
 - Lights - ``KHR_lights_punctual`` directional, point and spot lights.
 
@@ -154,13 +157,17 @@ animation:
   ``alphaCutoff``, ``emissiveFactor``, ``normalTexture/scale``,
   ``occlusionTexture/strength``, the ``pbrMetallicRoughness`` factors
   (``baseColorFactor`` with its alpha for a material that blends or masks),
-  every factor of the ``KHR_materials_*`` extensions the loader reads, and each
+  every factor of the ``KHR_materials_*`` extensions the loader reads,
+  ``KHR_materials_clearcoat``'s ``clearcoatNormalTexture/scale``, and each
   texture's ``KHR_texture_transform`` ``offset``, ``rotation`` and ``scale``
-  where the texture declares one; a punctual light's ``color``,
-  ``intensity``, ``range`` and spot cone angles; a perspective camera's
-  ``yfov``, ``znear`` and ``zfar``. A pointer to any other property is logged
-  once, with its path, and its channel left out while the clip's other
-  channels play.
+  (a texture that declares no transform, or shares one with another texture,
+  is given its own); a punctual light's ``color``, ``intensity``, ``range``
+  and spot cone angles; a perspective camera's ``yfov``, ``aspectRatio``,
+  ``znear`` and ``zfar``, and an orthographic one's ``xmag``, ``ymag``,
+  ``znear`` and ``zfar``; an ``EXT_lights_image_based`` light's ``intensity``
+  and ``rotation`` (interpolated as a quaternion, as a node's rotation is).
+  A pointer to any other property is logged once, with its path, and its
+  channel left out while the clip's other channels play.
 
 - Required extensions - a document whose ``extensionsRequired`` lists an
   extension the loader does not read is reported, naming each, and loaded
@@ -177,9 +184,10 @@ animation:
   lights included, are left out of the frame and of the framing bounds until
   an animation pointer, or the application, sets ``visible`` true.
 
-- Instancing - ``EXT_mesh_gpu_instancing``. Repeated meshes are also batched
-  into one instanced draw when the file does not use the extension. See
-  :doc:`Instanced rendering <instancing>`.
+- Instancing - ``EXT_mesh_gpu_instancing``. The instances share the node's
+  geometry, so a skin or morph weights on the node move every instance.
+  Repeated meshes are also batched into one instanced draw when the file does
+  not use the extension. See :doc:`Instanced rendering <instancing>`.
 
 - Levels of detail - ``MSFT_lod`` with ``MSFT_screencoverage``: a node's
   coarser alternatives and the share of the window at which each one is drawn.
@@ -223,10 +231,19 @@ animation:
   animation, read into ``scene.notices``. The viewer shows them on ``i``; see
   :ref:`viewer-notices`.
 
+- Texture compression - ``KHR_texture_basisu``, when the optional
+  ``opengl_basisu`` package is installed (``pip install
+  'OpenGLContext[basisu]'``). See :ref:`Basis Universal textures
+  <gltf-basisu>` below.
+
 - Geometry compression - ``KHR_draco_mesh_compression``, when the optional
   ``DracoPy`` package is installed (``pip install DracoPy``, or
-  ``OpenGLContext[draco]``). Without it, the loader skips a Draco-compressed
-  primitive with a warning and loads the rest of the scene.
+  ``OpenGLContext[draco]``). An attribute the extension's ``attributes`` map
+  does not name is read from its own accessor. Without ``DracoPy``, a
+  primitive whose accessors also hold the uncompressed data (a document that
+  lists the extension in ``extensionsUsed`` only) is drawn from that data, and
+  one without is skipped, with one warning per load, while the rest of the
+  scene loads.
 
 - Buffer compression - ``KHR_meshopt_compression`` and
   ``EXT_meshopt_compression``, decoded in NumPy with no further package: all
@@ -701,17 +718,59 @@ differ by a quarter of the image width, so the loader rolls the image's
 columns once, at load. The drawn sky and its reflections then share one
 direction-to-texture mapping and always agree.
 
+.. _gltf-basisu:
+
+Basis Universal textures
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+A ``KHR_texture_basisu`` texture names a KTX 2 image whose payload is Basis
+Universal ETC1S or UASTC. The transcoder is the separate ``opengl_basisu``
+package, which compiles Binomial's basis_universal transcoder (Apache-2.0)::
+
+   pip install 'OpenGLContext[basisu]'
+
+With it installed, the Basis image is preferred to the texture's core
+``source``, and :mod:`OpenGLContext.loaders.basisu` reads it. When the texture
+is first drawn, the context's extensions and version choose the format it is
+uploaded in, every mip level the file holds with ``glCompressedTexImage2D``:
+
+=========================  ===========================================================
+Codec                      Formats, in the order they are taken
+=========================  ===========================================================
+ETC1S (desktop GL)         BC7, BC1 (BC3 with alpha), ASTC 4x4, ETC1/ETC2, RGBA8
+UASTC (desktop GL)         ASTC 4x4, BC7, BC3/BC1, ETC2/ETC1, RGBA8
+ETC1S (OpenGL ES)          ETC1/ETC2, BC7, ASTC 4x4, BC1/BC3, RGBA8
+UASTC (OpenGL ES)          ASTC 4x4, BC7, ETC2/ETC1, BC3/BC1, RGBA8
+=========================  ===========================================================
+
+BC7 is GL 4.2 or ``GL_ARB_texture_compression_bptc``; BC1 and BC3 are
+``GL_EXT_texture_compression_s3tc``; ETC1 and ETC2 are GL 4.3, OpenGL ES 3.0 or
+``GL_ARB_ES3_compatibility``; ASTC is OpenGL ES 3.2 or
+``GL_KHR_texture_compression_astc_ldr``. A context offering none of them gets
+RGBA8. Desktop drivers that report ETC2 commonly decode it to RGBA8 at upload,
+so desktop GL takes the BC formats first. The format's linear enum is used for
+an sRGB file too: the shader decodes each map's colour space.
+
+A file with one mip level is sampled without mipmaps, since GL cannot generate
+them for a block format; encode with ``basisu -mipmap`` for a mip chain. A
+Basis image that does not transcode gives way to the core ``source``.
+
+Without ``opengl_basisu``, a texture is drawn from its core ``source`` (a PNG or
+JPEG fallback) where it has one, and is not drawn where it has none. The load
+logs one warning naming the extra to install and how many textures each case
+covers.
+
+The texture node holds a :class:`~OpenGLContext.loaders.basisu.BasisImage`;
+``image.pil()`` gives level 0 as a PIL image for code that reads the pixels.
+The glTF writer writes a Basis KTX 2 image back as it came, under
+``KHR_texture_basisu``, and lists the extension as required.
+
 Current limitations
 ~~~~~~~~~~~~~~~~~~~
 
-- ``KHR_texture_basisu`` (KTX2 / Basis Universal) is not read. No transcoder
-  is available under a licence this project can use. A texture carrying it is
-  drawn from its core ``source`` where the document gives one, and without the
-  texture where it does not.
-
 - ``KHR_draco_mesh_compression`` needs the optional ``DracoPy`` package.
-  Without it, the loader skips a Draco-compressed primitive with a warning and
-  loads the rest of the scene.
+  Without it, a Draco-compressed primitive with no uncompressed fallback is
+  skipped with a warning and the rest of the scene loads.
 
 - Two material effects are approximations of the reference result: volumetric
   subsurface scattering, and transmission through nested transparent shells.

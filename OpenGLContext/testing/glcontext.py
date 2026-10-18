@@ -49,7 +49,7 @@ import socket
 import sys
 import time
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any, Optional
+from typing import Any, NoReturn, Optional
 
 from OpenGLContext import contextresources
 
@@ -100,6 +100,52 @@ class GLUnavailable(RuntimeError):
     Carries the reason -- no ``glfw``, no display, a driver that refused the
     profile -- so a caller can report it rather than a bare failure.
     """
+
+
+class DriverGone(GLUnavailable):
+    """The driver gave this process contexts and has stopped giving them.
+
+    What a display driver reset looks like from inside the process: every
+    later context is refused, in this process alone, until it ends. A caller
+    that skips for :class:`GLUnavailable` -- a machine that has no GL to give
+    -- has something else to do with this one, since the tests after it would
+    each report the driver rather than themselves.
+    """
+
+
+#: How many GL surfaces this process has been given. A driver that refuses one
+#: having given out none is a machine without GL; the same refusal after fifty
+#: is a driver that has stopped, and :func:`refuse` tells them apart.
+_given = 0
+
+
+def given_a_surface() -> None:
+    """Record that this process was given a context or a window."""
+    global _given
+    _given += 1
+
+
+def surfaces_given() -> int:
+    """How many contexts and windows this process has been given."""
+    return _given
+
+
+def refuse(what: str, cause: BaseException | None = None) -> NoReturn:
+    """Raise for a refused surface: :class:`DriverGone` where there were some.
+
+    ``what`` says what was refused. Where this process has been given surfaces
+    already, the reason carries that count and where to look for the reset, so
+    the first refusal says why the rest of the run is about the driver.
+    """
+    if not _given:
+        raise GLUnavailable(what) from cause
+    raise DriverGone(
+        '%s, having been given %d in this process: the driver has stopped '
+        'handing them out, which is what a display driver reset looks like '
+        'from here (on Windows, a Display event 4101 in the system log, '
+        '"stopped responding and has successfully recovered"). Every GL test '
+        'after it in this process would answer for the driver rather than for '
+        'itself.' % (what, _given)) from cause
 
 
 def windowing(environ: Mapping[str, str] | None = None) -> str:
@@ -163,12 +209,37 @@ def display_answers(name: str | None = None,
     return _client_opens(display, timeout)
 
 
+#: The platforms whose windows come from the platform itself rather than from
+#: an X server, so that there is no display for a client to name.
+WITHOUT_X = ('win32', 'darwin')
+
 #: Seconds before a display whose client failed is tried again.  One that
 #: opened a window is taken at its word for the rest of the run.
 RETRY_SECONDS = 10.0
 
 #: Whether a client opened a window on each display, and when it was tried.
 _OPENED: dict[str, tuple[bool, float]] = {}
+
+
+def client_opens_a_window(timeout: float = 30.0) -> bool:
+    """Whether a client can open a window on this machine.
+
+    Where the windows come from an X server this is :func:`display_answers`:
+    ``$DISPLAY`` has to name a server that is there and that lets this process
+    in. On Windows and macOS the windows come from the platform itself and
+    there is no display to name, so what is asked is whether a client opens
+    one -- which is what a test of Tk or GLUT needs to know, and is not a
+    question about X anywhere.
+    """
+    if sys.platform not in WITHOUT_X:
+        return display_answers(timeout=timeout)
+    try:
+        import tkinter                     # noqa: F401 the client run below
+    except ImportError:
+        # Nothing to run, so the platform is taken at its word, as a display
+        # that accepts a connection is in `display_answers`.
+        return True
+    return _client_opens('', timeout)
 
 
 def _client_opens(display: str, timeout: float) -> bool:
@@ -195,7 +266,13 @@ def _client_opens(display: str, timeout: float) -> bool:
 
 
 def _display_listens(display: str, directory: str, timeout: float) -> bool:
-    """Whether anything is listening where ``display`` says a server would be."""
+    """Whether anything is listening where ``display`` says a server would be.
+
+    A display naming a host is a TCP port anywhere.  One naming none is the
+    platform's local transport, which is a socket in ``directory`` where there
+    are Unix domain sockets and is nothing at all on Windows, so a host-less
+    display answers False there.
+    """
     host, colon, screen = display.rpartition(':')
     if not colon:
         return False
@@ -207,6 +284,8 @@ def _display_listens(display: str, directory: str, timeout: float) -> bool:
         if host and host != 'unix':
             with socket.create_connection((host, X_PORT + number), timeout):
                 return True
+        elif sys.platform == 'win32':
+            return False
         else:
             connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             try:
@@ -470,9 +549,9 @@ def _egl_pbuffer(size: Sequence[int], profile: str, version: Sequence[int],
             forwardCompatible=forward_compatible or profile == 'core',
         )
     except EGLContextError as err:
-        raise GLUnavailable(
-            'the driver would not give a %dx%d %s offscreen context: %s'
-            % (width, height, profile, err)) from err
+        refuse('the driver would not give a %dx%d %s offscreen context: %s'
+               % (width, height, profile, err), err)
+    given_a_surface()
     try:
         yield context
     finally:
@@ -546,9 +625,9 @@ def offscreen_window(title: str = 'OpenGLContext test',
             forward_compatible=forward_compatible or profile == 'core',
         )
     except offscreen.WGLError as err:
-        raise GLUnavailable(
-            'the driver would not give a %dx%d %s offscreen context: %s'
-            % (width, height, profile, err)) from err
+        refuse('the driver would not give a %dx%d %s offscreen context: %s'
+               % (width, height, profile, err), err)
+    given_a_surface()
     try:
         yield context
     finally:
@@ -658,8 +737,9 @@ def _glfw_window(title: str, size: Sequence[int], profile: str,
     release_foreign_context()
     window = glfw.create_window(width, height, title, None, None)
     if not window:
-        raise GLUnavailable('the driver would not create a %dx%d %s window'
-                            % (width, height, profile))
+        refuse('the driver would not create a %dx%d %s window'
+               % (width, height, profile))
+    given_a_surface()
     glfw.make_context_current(window)
     if profile == 'compatibility':
         _check_compatibility(glfw, window)

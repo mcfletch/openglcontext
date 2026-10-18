@@ -3,9 +3,8 @@
 
 [x3d_geospatial.py-screen-0001.png Screenshot]
 
-``oglc-x3d-geospatial`` opens ``x3d_geospatial.x3d``, an X3D 4 document whose
-content is placed by latitude, longitude and height rather than by metres
-from an origin:
+``x3d_geospatial.x3d`` is an X3D 4 document whose content is placed by
+latitude, longitude and height rather than by metres from an origin:
 
 * the valley is a ``GeoElevationGrid`` stepping ``xSpacing`` degrees of
   longitude across and ``zSpacing`` degrees of latitude deep; its heights are
@@ -23,6 +22,12 @@ from an origin:
 Every node names the same ``GeoOrigin``, whose ``rotateYUp`` turns the
 scene so the valley's up is +Y; the coordinates are worked out in double
 precision, so the huts stand on the ground to the millimetre.
+
+The arrow keys fly the camera. A ``GeoViewpoint`` scales navigation by a
+tenth of the viewer's height above the ellipsoid, in metres, times its
+``speedFactor``; the document's 0.1 makes a key press a step of two and a
+half metres among the huts and eight from the highest viewpoint. ``]``
+lengthens the step by half and ``[`` shortens it.
 '''
 import os
 import tempfile
@@ -32,6 +37,8 @@ os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.bin.x3d_geospatial_demo import Showcase
 from OpenGLContext.loaders import background
+from pydispatch import dispatcher
+from vrml import protofunctions
 
 
 class TestContext(BaseContext):
@@ -47,12 +54,23 @@ class TestContext(BaseContext):
         for key in Showcase.KEYS:
             self.addEventHandler('keypress', name=key, function=self.OnKey)
         print(Showcase.help())
+        '''A click on the ground sets the ``GeoTouchSensor``'s ``touchTime``,
+        and its ``hitGeoCoord_changed`` is then where the click landed.'''
+        touch = self.sg.getDEF('Touch')
+        dispatcher.connect(
+            self.OnTouch, sender=touch,
+            signal=('set', protofunctions.getField(touch, 'touchTime')))
 
     def OnKey(self, event):
         said = self.showcase.press(event.name)
         if said:
             print(said)
             self.triggerRedraw(True)
+
+    def OnTouch(self, **named):
+        said = self.showcase.said_of_touch()
+        if said:
+            print(said)
 
 
 if __name__ == "__main__":

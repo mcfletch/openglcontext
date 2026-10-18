@@ -27,7 +27,7 @@ from OpenGL.GL import (
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
 )
 from OpenGLContext.scenegraph.instancedgl import (
-    load_program, texture_rgba, delete_gl, setup_instance_attribs,
+    FOG_UNIFORMS, load_program, texture_rgba, delete_gl, setup_instance_attribs,
     instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
     InstancedVegBase, _BIG, LOD_NEAR, LOD_FAR)
@@ -100,7 +100,7 @@ class InstancedBillboards(InstancedVegBase):
         self.U = {n: glGetUniformLocation(self._prog, n) for n in
                   ("uModelView", "uProjection", "pine", "uWidth", "uNearFade", "uFarFade",
                    "uNearCut", "uSunLevel", "uLodStart", "uLodEnd", "sunColor",
-                   "skyAmbient", "groundAmbient", "fogDensity", "fogColor")}
+                   "skyAmbient", "groundAmbient", *FOG_UNIFORMS)}
         self._commit_constants("veg_billboard.vert", "veg_billboard.frag")
         self._gl = self._prog
 
@@ -116,8 +116,6 @@ class InstancedBillboards(InstancedVegBase):
         glUniform3f(U["sunColor"], 1.3, 1.22, 1.05)
         glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66)
         glUniform3f(U["groundAmbient"], 0.14, 0.16, 0.11)
-        glUniform1f(U["fogDensity"], 0.00016)
-        glUniform3f(U["fogColor"], 0.46, 0.58, 0.76)
 
     def dispose(self) -> None:
         """Free this node's GL objects (VAO, buffers, texture, program). GL thread."""

@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext import frustum
-from OpenGLContext.passes import _flat, flatcore, renderpass
+from OpenGLContext.passes import _flat, flatcore, multiviewpass, renderpass
 from OpenGLContext.scenegraph import basenodes
 
 
@@ -54,8 +54,11 @@ class TestTheFramesWalk:
     def test_giving_the_views_back_leaves_the_walk_for_the_rest_of_the_frame(self, monkeypatch):
         """What the legacy pick path does part-way through a frame."""
         passing = _pass()
-        monkeypatch.setattr(_flat, 'glDisable', lambda *_args: None)
-        monkeypatch.setattr(_flat, 'glViewport', lambda *_args: None)
+        # Patched where the calls are made: `finishViews` reads the names in
+        # its own module, and a real `glDisable` with no context is a no-op on
+        # one platform's GL and an invalid operation on another's.
+        monkeypatch.setattr(multiviewpass, 'glDisable', lambda *_args: None)
+        monkeypatch.setattr(multiviewpass, 'glViewport', lambda *_args: None)
 
         class _Context:
             def getViewPort(self):

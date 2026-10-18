@@ -1,12 +1,6 @@
-#! /usr/bin/env python
-"""X3D Geospatial: an alpine valley placed on the Earth.
+"""An alpine valley placed on the Earth, as an X3D Geospatial document
 
-    oglc-x3d-geospatial [--directory DIR]
-
-    g      where the viewer is, in latitude, longitude and height
-    w      the scene written back as X3D in each encoding, beside the document
-
-Click the ground to have its latitude, longitude and height printed.
+The scene ``tests/x3d_geospatial.py`` opens; scenery, not a command.
 
 :func:`prepare` writes ``x3d_geospatial.x3d`` and the files it names: a
 valley four and a half kilometres across near 46.55 N 7.98 E, its heights
@@ -17,20 +11,19 @@ valley floor, each placed by a `GeoLocation`; a balloon drifts along a loop
 a `GeoPositionInterpolator` makes round the globe; three `GeoViewpoint`s
 look across it, one of them given in UTM. A `GeoProximitySensor` reports
 where the viewer is and a `GeoTouchSensor` where the ground is clicked.
-docs/x3d.rst describes the nodes.
+Each viewpoint's `speedFactor` is :data:`SPEED_FACTOR`. docs/x3d.rst
+describes the nodes.
 """
 from __future__ import annotations
 
-import argparse
 import math
 import os
-import sys
 from collections.abc import Sequence
 from typing import Any, ClassVar, Optional
 
 import numpy as np
 
-__all__ = ['AREA', 'Showcase', 'colour_map', 'heights', 'main', 'prepare']
+__all__ = ['AREA', 'SPEED_FACTOR', 'Showcase', 'colour_map', 'heights', 'prepare']
 
 #: The valley: (south latitude, west longitude, north latitude, east longitude), degrees.
 AREA = (46.53, 7.95, 46.57, 8.01)
@@ -41,6 +34,11 @@ COARSE, FINE = 33, 49
 #: The hamlet on the valley floor: each hut's (latitude, longitude, turn in radians).
 HUTS = ((46.5450, 7.9858, 0.3), (46.5456, 7.9866, -0.2), (46.5461, 7.9855, 1.1),
         (46.5447, 7.9871, 0.6), (46.5466, 7.9864, -0.5), (46.5440, 7.9862, 1.4))
+#: Each viewpoint's speedFactor. A GeoViewpoint's navigation is a tenth of
+#: the viewer's height above the ellipsoid times faster than the engine's
+#: own, 100 to 330 times here; this leaves the free-fly camera a step of
+#: 2.5 metres on the valley floor and 8 from the highest viewpoint.
+SPEED_FACTOR = 0.1
 #: Where the viewpoint given in UTM stands, 30 metres above the ground: (latitude, longitude).
 LOOKOUT = (46.5418, 7.9868)
 #: The balloon's loop over the hamlet: (latitude, longitude, height) it passes through.
@@ -193,11 +191,11 @@ def document(directory: str) -> str:
 <DirectionalLight direction="-0.5 -0.45 0.55" intensity="0.55" color="0.62 0.72 0.92"/>
 <DirectionalLight direction="0 -1 0" intensity="0.25" color="0.7 0.8 1"/>
 <GeoViewpoint description="Down the valley" position="46.533 7.9805 1450"
-  orientation="1 0 0 -0.12" speedFactor="0.05">{origin}</GeoViewpoint>
+  orientation="1 0 0 -0.12" speedFactor="{speed}">{origin}</GeoViewpoint>
 <GeoViewpoint description="Above the huts (UTM)" geoSystem='"UTM" "Z32"'
-  position="{utm}" orientation="1 0 0 -0.1" speedFactor="0.05">{use}</GeoViewpoint>
+  position="{utm}" orientation="1 0 0 -0.1" speedFactor="{speed}">{use}</GeoViewpoint>
 <GeoViewpoint description="Over the head of the valley" position="46.585 7.9905 3300"
-  orientation="0.04 0.99 0.12 2.95" speedFactor="0.05">{use}</GeoViewpoint>
+  orientation="0.04 0.99 0.12 2.95" speedFactor="{speed}">{use}</GeoViewpoint>
 <GeoProximitySensor DEF="Where" geoCenter="46.55 7.98 2000" size="20000 20000 20000">{use}
 </GeoProximitySensor>
 <Group>
@@ -221,6 +219,7 @@ def document(directory: str) -> str:
 </Scene>
 </X3D>
 '''.format(origin=ORIGIN_DEF, use=ORIGIN_USE, utm=_numbers(utm), tiles=tiles, coarse=coarse,
+           speed=SPEED_FACTOR,
            huts='\n'.join(_hut(index, *hut) for index, hut in enumerate(HUTS)),
            keys=balloon_keys, balloon=_numbers(BALLOON))
 
@@ -249,7 +248,7 @@ def _triple(values: Any) -> Optional[tuple[float, float, float]]:
 
 
 class Showcase:
-    """The geospatial showcase with no window: what the command, its tutorial and its tests share
+    """The valley with no window: what its tutorial and its tests share
 
     ``scene`` is the document read by the engine's loader.
     """
@@ -273,6 +272,11 @@ class Showcase:
         """The (latitude, longitude, height) of the ground last under the pointer; None before"""
         return _triple(self.scene.getDEF('Touch').__dict__.get('hitGeoCoord_changed'))
 
+    def said_of_touch(self) -> str:
+        """The ground last under the pointer, for the console; '' before there is one"""
+        found = self.touched()
+        return '' if found is None else 'the ground at %.5f N %.5f E, %.0f m' % found
+
     def press(self, key: str) -> str:
         """Answer a key; what it did, for the console"""
         if key == 'g':
@@ -294,50 +298,3 @@ class Showcase:
     def help(cls) -> str:
         """The keys, one to a line"""
         return '\n'.join('  %s  %s' % item for item in cls.KEYS.items())
-
-
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    """Open the showcase in a window"""
-    parser = argparse.ArgumentParser(
-        prog='oglc-x3d-geospatial', description=(__doc__ or '').split('\n')[0],
-        epilog=Showcase.help(), formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--directory', help='where the document and its files are written '
-                        '(default: the user cache directory)')
-    options = parser.parse_args(argv)
-    from OpenGLContext import testingcontext, userpaths  # noqa: PLC0415 a window only for main
-    from OpenGLContext.contextdefinition import ContextDefinition  # noqa: PLC0415 a window only for main
-    directory = options.directory or os.path.join(userpaths.cachedirectory(), 'x3d-geospatial')
-    base: Any = testingcontext.getInteractive()
-
-    class ShowcaseContext(base):                 # pragma: no cover - needs a window
-        contextDefinition = ContextDefinition(title='X3D Geospatial', size=(1280, 720))
-
-        def OnInit(self) -> None:
-            from pydispatch import dispatcher  # noqa: PLC0415 kept with its use
-            from vrml import protofunctions  # noqa: PLC0415 kept with its use
-            self.showcase = Showcase(directory)
-            self.sg = self.showcase.scene
-            for key in Showcase.KEYS:
-                self.addEventHandler('keypress', name=key, function=self.OnKey)
-            touch = self.sg.getDEF('Touch')
-            dispatcher.connect(self.OnTouch, signal=('set', protofunctions.getField(
-                touch, 'touchTime')), sender=touch)
-            print(Showcase.help())
-
-        def OnKey(self, event: Any) -> None:
-            said = self.showcase.press(event.name)
-            if said:
-                print(said)
-                self.triggerRedraw(True)
-
-        def OnTouch(self, **_named: Any) -> None:
-            found = self.showcase.touched()
-            if found is not None:
-                print('the ground at %.5f N %.5f E, %.0f m' % found)
-
-    ShowcaseContext.ContextMainLoop()
-    return 0
-
-
-if __name__ == '__main__':  # pragma: no cover - the command line
-    sys.exit(main())

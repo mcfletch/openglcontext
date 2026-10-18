@@ -95,7 +95,8 @@ class IFSCompiler(object):
     def dependencies(self) -> list[tuple[Any, Any]]:
         """(node, field) for every field the compiled arrays are made from:
         each of the face set's own, and the values of its property nodes"""
-        found = [(self.target, field) for field in protofunctions.getFields(self.target)]
+        found: list[tuple[Any, Any]] = [
+            (self.target, field) for field in protofunctions.getFields(self.target)]
         found += [(n, protofunctions.getField(n, attr))
                   for n, attr in coordinates.fields(self.target.coord)]
         for n, attr in [

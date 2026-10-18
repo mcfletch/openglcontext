@@ -13,16 +13,32 @@ was given for the stretch it measured: the setting that stretch was drawn
 with, for a caller adjusting that setting by what it cost.
 
 GL allows one ``GL_TIME_ELAPSED`` query at a time, so timers do not nest.
+
+Timer queries are GL 3.3, or ``GL_EXT_timer_query`` before it, and on some
+platforms an entry point resolves only through a current context. A timer whose
+GL has not got them (:meth:`GpuTimer.timeable`) measures nothing: the stretch it
+brackets is drawn as it was, :attr:`GpuTimer.milliseconds` stays None, and a
+caller reading it adapts to nothing.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 __all__ = ['DEPTH', 'GpuTimer']
 
+log = logging.getLogger(__name__)
+
 #: Queries in the ring: an answer is read this many frames, less one, after
 #: the work it measures was issued.
 DEPTH = 3
+
+#: The entry points a measurement needs. The queries are GL 1.5; bracketing one
+#: on ``GL_TIME_ELAPSED`` and reading a nanosecond count back as 64 bits are
+#: GL 3.3, or ``GL_EXT_timer_query`` before it. A platform whose entry points
+#: resolve through the current context has none of them without one.
+NEEDED = ('glGenQueries', 'glBeginQuery', 'glEndQuery', 'glGetQueryObjectuiv',
+          'glGetQueryObjectui64v', 'glDeleteQueries')
 
 
 class GpuTimer:
@@ -41,13 +57,33 @@ class GpuTimer:
         self.reading = 0
         #: The ``tag`` the newest measurement's :meth:`begin` was given.
         self.tag: Any = None
+        #: Whether this GL has the query entry points; None until one is asked for.
+        self._timeable: Optional[bool] = None
+
+    def timeable(self) -> bool:
+        """Whether this GL resolves what a measurement needs (asked once).
+
+        Where it does not, :meth:`begin` and :meth:`end` do nothing and
+        :attr:`milliseconds` stays None: the stretch they bracket is drawn as
+        it was, and the caller reads no measurement of it.
+        """
+        if self._timeable is None:
+            from OpenGL import GL as gl
+            missing = [name for name in NEEDED if not bool(getattr(gl, name, None))]
+            self._timeable = not missing
+            if missing:
+                log.info('no GPU timing here: this GL has no %s', ', '.join(missing))
+        return self._timeable
 
     def begin(self, tag: Any = None) -> None:
         """Start timing; everything issued until :meth:`end` is measured.
 
         ``tag`` comes back as :attr:`tag` with this stretch's measurement.
+        Nothing is measured where :meth:`timeable` is False.
         """
         from OpenGL import GL as gl
+        if not self.timeable():
+            return
         if not self._queries:
             self._queries = [int(name) for name in gl.glGenQueries(self.depth)]
         self._collect()

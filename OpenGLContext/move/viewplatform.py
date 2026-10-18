@@ -39,8 +39,8 @@ from OpenGL.GL import (
     glRotate,
     glTranslate,
     glOrtho,
+    glMultMatrixd,
 )
-from OpenGL.GLU import gluPerspective
 
 
 RADTODEG = 180 / pi
@@ -244,15 +244,13 @@ class ViewPlatform(object):
     def render(self, mode: Any = None, identity: bool = False) -> None:
         """Perform the actual view-platform setup during rendering
 
-        This is really quite a trivial function, given the
-        amount of setup that's been done before-hand.  The
-        gluPerspective function takes care of the perspective-
-        matrix setup, while self.quaternion (Quaternion)
+        The projection is :meth:`viewMatrix`, multiplied onto the
+        projection stack, while self.quaternion (Quaternion)
         takes care of the rotation, and positioning is a
         simple call to glTranslate.
 
         See:
-            gluPerspective
+            glMultMatrix, glOrtho
         """
         # setup camera
         glMatrixMode(GL_PROJECTION)
@@ -263,7 +261,7 @@ class ViewPlatform(object):
             left, bottom, right, top = fitted_window(self.window, aspect)
             glOrtho(left, right, bottom, top, near, far)
         else:
-            gluPerspective(*self.frustum)
+            glMultMatrixd(np.asarray(self.viewMatrix(), 'd'))
         glMatrixMode(GL_MODELVIEW)
         if identity:
             glLoadIdentity()

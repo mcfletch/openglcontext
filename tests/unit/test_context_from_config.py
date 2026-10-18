@@ -56,11 +56,14 @@ class TestItProducesAClass:
         assert found.contextDefinition.windowsystem == 'glfw'
 
     def test_the_definitions_own_window_system_wins_over_the_gui(self):
-        cfg = _config(gui='glfw')
+        """Both named systems are ones every platform here has: the class comes
+        back as None for a window system the machine cannot open, which would
+        answer a question about the machine rather than about the precedence."""
+        cfg = _config(gui='glut')
         cfg.add_section('contextdefinition')
-        cfg.set('contextdefinition', 'windowsystem', 'egl')
+        cfg.set('contextdefinition', 'windowsystem', 'glfw')
         found = context.Context.fromConfig(cfg)
-        assert found.contextDefinition.windowsystem == 'egl'
+        assert found.contextDefinition.windowsystem == 'glfw'
 
 
 class TestItCarriesTheDefinition:

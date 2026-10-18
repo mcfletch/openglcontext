@@ -58,16 +58,15 @@ BACKEND_MODULES = {
 }
 
 #: The Debian packages holding the shared libraries an installed bundle loads
-#: whatever kind of desktop it is running on: the GL and GLU the bindings
-#: themselves open, and the EGL the Wayland path creates its context through.
-#: They are named as run-time dependencies rather than bundled: a driver's GL
-#: library belongs to the machine, and a copy carried in a package would be the
-#: wrong one. ``libglu1-mesa`` is the one of the three a desktop does not
-#: already have -- nothing but OpenGL software wants GLU.
+#: whatever kind of desktop it is running on: the GL the bindings open, and the
+#: EGL the Wayland path creates its context through. They are named as run-time
+#: dependencies rather than bundled: a driver's GL library belongs to the
+#: machine, and a copy carried in a package would be the wrong one. The engine
+#: makes no GLU call, so ``libglu1-mesa`` is not among them; a game that calls
+#: GLU itself names it in ``depends``.
 SYSTEM_LIBRARIES = (
     'libegl1',
     'libgl1',
-    'libglu1-mesa',
 )
 
 #: What GLFW opens on a Wayland session, over the above. ``libdecor`` is how a

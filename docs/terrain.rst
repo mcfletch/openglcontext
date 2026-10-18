@@ -124,6 +124,15 @@ same grain.
 
 .. _controlmap:
 
+.. _terrain-fog:
+
+Fog
+~~~
+
+A ``SplatTerrain`` is fogged by the scene's bound ``Fog`` node
+(:ref:`Fog <fog>`), as the vegetation on it is (:ref:`vegetation fog
+<vegetation-fog>`). With none bound it is fogged by the engine's aerial haze.
+
 Ground materials: the control map
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -382,6 +391,74 @@ and levelled before it is surfaced, so it has no hummocks. Pass ``where`` a
 weight that is 0 on the built ground and 1 clear of it. The same weight
 applies to both the tiles and the field.
 
+Bare rock
+~~~~~~~~~
+
+Where the ground is bare it is rock, and rock is a block with faces cut into it
+rather than a rougher hillside. ``RockRelief`` makes that, by the method
+``natural.stone`` makes a boulder (see :doc:`surfaces`): a raised, slightly
+uneven slab has flat discs pressed into it, each cutting down to a plane, a
+little tilted, within its reach. Where discs overlap the lowest plane wins, so
+the surface steps down in facets with a clean edge at every rim, and a fine
+grain lies over them.
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph.terrain import RockRelief
+
+   rock = RockRelief(where=rockiness, height=0.8, seed=3)
+   ground = rock.over(height_fn, spacing=0.4, error=0.1)
+
+``where(x, z)`` is how rocky each place is, from 0 to 1. Rock begins at
+``begins`` (0.35) and is whole at ``whole`` (0.7), blending into the ground
+between them, and a place below ``begins`` has none. ``height`` is how high the
+rock stands above the ground, ``cell`` the width of the squares that each hold
+``scrapes`` discs (6 m and 2), ``tilt`` the steepest slope of a cut face and
+``grain`` the fine roughness in metres. The result is one function of position, so
+the surface drawn and the surface walked on are the same, and neighbouring tiles
+meet exactly. A scrape smaller than a few samples (``samples_per_scrape``, 3)
+across its radius is left out of a surface sampled that coarsely, so a coarse
+tile carries the slab and a fine one carries the faces. ``Reliefs`` adds several
+reliefs over one another, for a surface with grain and rock.
+
+A terrain drawn from a height field, such as the forest demo's, meshes the rock
+finely near the camera with ``RockGround``, a node that streams square cells of
+the rocky ground, each meshed every 0.4 m and drawn over the coarse terrain with
+a rock material:
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph.rockground import RockGround, beneath
+
+   coarse = SplatTerrain(beneath(height_field, rock), layers, control)
+   rock_ground = RockGround(height_field, rock, rock_material, reach=110.0)
+   scene.children.extend([coarse, rock_ground])
+   walkable = rock_ground.ground      # the ground that is drawn, as a ground
+   self.init_walk(walkable, trunks, radii)
+   # once a frame, with the GL context current
+   rock_ground.update_for_camera(eye, viewport_height)
+
+The two meshes are the same ground, and two surfaces that lie together flicker as the
+camera moves. ``beneath(field, rock, depth=0.3)`` returns the field lowered by
+``depth`` times the rock's weight, which is what the coarse terrain is drawn from. The
+rock is never below the field, so it stands above the coarse mesh by at least that
+much wherever it is drawn. A triangle of the fine mesh with next to no rock at its
+corners (``LEAVE_OUT``, 0.03) is not made, so the fine ground ends where the coarse
+ground has the rock's own weight to show, and its colour fades in from nothing at the
+edge (over ``FADE_IN``, a weight of 0.35), so that the edge is the coarse ground
+showing through and not a line. Set ``begins`` of the ``RockRelief`` where the
+coarse terrain's own texture starts to show rock, so that no ground reads as rock
+without the fine mesh over it.
+
+Only cells with rock in them are made. The cells meet exactly, are built around
+their own corners so their vertices stay small, and are textured by metres
+(``repeat``, 2 m) laid flat across the ground, so a steep face shows the picture
+stretched down it. ``rock_ground.ground`` is a ``RockyGround``: the height field
+with the rock added, answering ``sample``, ``height_at`` and ``slope``, with the
+rock as ``rock`` and everything else, ``relief`` included, taken from the field.
+Bind a walker, a camera, a ground cover or a ``RockField`` to it, so that what
+stands on the rock stands on what is drawn.
+
 To bake relief into a world, use `openglcontext-editor
 <https://github.com/mcfletch/openglcontext-editor>`__:
 ``HeightfieldLayer(relief=...)`` meshes each tile from the height function
@@ -419,6 +496,20 @@ and rocks are a set of vertical cylinders, resolved analytically.
      - Sets the ground and the obstacle cylinders. ``player_radius`` is added to
        each radius. The cylinders are sorted into a hash grid, so a collision test
        checks a few neighbours rather than the whole forest.
+   * - ``add_collider_source( source )``
+     - Adds colliders that come and go as the walker moves. ``source( x, z,
+       reach )`` answers ``( positions, radii )``, arrays of the same form as
+       ``init_walk``'s, for the colliders within ``reach`` metres of ``( x, z )``.
+       It is asked at every collision step, after the fixed cylinders.
+       ``RockField.colliders_near`` is one: streamed rocks stop a walker
+       without a table of every rock in the world (see :doc:`surfaces`).
+       A source may answer ``( positions, radii, rims, tops )`` instead, with two
+       more arrays for mounds: each a dome over a circle of its radius about its
+       position, ``rims`` high at the edge and ``tops`` at the middle, above the
+       position. The walker steps onto a mound where its surface rises no more
+       than ``step_height`` (0.5 m) above the walker's feet, stands on its
+       surface and is pushed out of it where it rises more.
+       ``RockField.mounds_near`` is one.
    * - ``setupPhysics( enable=True )``
      - Creates the avatar and gives it the camera. Inherited unchanged from
        ``PhysicsWalkMixin``: :kbd:`g` returns the camera to the free-fly

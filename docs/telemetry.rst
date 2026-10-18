@@ -129,6 +129,33 @@ level, the match, pickups, shots, the opponents' decisions.
 marks from the match's own event stream rather than from calls inside the
 game rules.
 
+.. _marks-engine:
+
+The engine marks the camera's moves between viewpoints itself:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 76
+
+   * - Mark
+     - Fields
+   * - ``viewpoint-bound``
+     - ``viewpoint``, the bound viewpoint's description or DEF name;
+       ``index``, its place among the scene's viewpoints; ``transition``,
+       ``LINEAR``, ``ANIMATE`` or ``TELEPORT``, or ``FIRST`` for the one the
+       scene opens at; ``seconds``, the transition's length; ``start`` and
+       ``target``, the camera's position as the move begins and where it
+       ends, each ``[x, y, z]`` in world units.
+   * - ``viewpoint-arrived``
+     - ``viewpoint``, as above; ``position``, where the camera is as the
+       transition ends.
+
+A ``viewpoint-bound`` with no ``viewpoint-arrived`` after it is a transition
+that another bind replaced, or a ``TELEPORT`` or ``FIRST`` bind, which has
+none. Where a frame's camera position differs from the last arrival's
+``position`` with no input recorded between them, something other than the
+transition moved the camera.
+
 Code that marks through a recorder of its own, rather than the context's,
 can be handed any of three with the same ``mark()``:
 

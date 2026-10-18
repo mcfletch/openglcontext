@@ -379,9 +379,9 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     as in X_ITE, which reads `NurbsSurface` as an unknown node (2026-10-09)
   - [x] CubeMapTexturing: `ComposedCubeMapTexture`, `ImageCubeMapTexture`
     (DDS, KTX 1.1, KTX 2 of 8-bit and BC1-3 formats with zlib or no
-    supercompression (2026-10-09 x3d-xfields; X_ITE also transcodes Basis
-    Universal, which needs a transcoder this engine does not carry; X_ITE
-    reads no HDR cube map), crosses and strips: `loaders.textureimages`),
+    supercompression (2026-10-09 x3d-xfields), and Basis Universal through the
+    optional opengl_basisu (2026-10-09 x3d-xbasisu; X_ITE reads no HDR cube
+    map), crosses and strips: `loaders.textureimages`),
     `GeneratedCubeMapTexture` (drawn before the views from the shape's
     origin, update NONE drawn once); sampled with the world reflection
     vector; compatibility profile through reflection-map texgen
@@ -793,10 +793,22 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     written once to the asset cache by digest); falls back to the core
     `source`. Written back by the writer (relative uri beside the written
     file; extension required). GL test draws `colours.mp4`'s frame
-  - [ ] `KHR_texture_basisu`: no KTX2/Basis transcoder under a usable licence
-    in Python; needs one (Binomial's basis_universal is Apache-2.0, C++, and
-    would be an optional compiled dependency). A texture carrying it draws its
-    core `source`
+  - [x] `KHR_texture_basisu` (2026-10-09 x3d-xbasisu): the new sibling
+    `opengl_basisu` (MIT; Cython C++ extension compiling basis_universal v2_50's
+    transcoder and Zstandard decoder, Apache-2.0 and BSD, vendored unmodified)
+    is the optional extra `OpenGLContext[basisu]`. `loaders.basisu` opens the
+    KTX 2 image (`BasisImage`) and plans the upload from the context's
+    extensions and version (BC7/BC1/BC3, ETC1/ETC2, ASTC 4x4, else RGBA8);
+    `texture.BasisTexture` uploads every mip level with
+    `glCompressedTexImage2D`; `apply_sampler` keeps a texture's own mips. The
+    Basis image is preferred to the core `source`, which is the fallback for a
+    file that does not transcode. Without opengl_basisu: the fallback, and one
+    warning per document naming the extra. The writer writes a Basis image
+    back under the extension. The KTX 2 reader in `loaders.textureimages`
+    hands Basis payloads (and `.basis` files) to it too, so
+    `ImageCubeMapTexture`, `ImageTexture3D` (a 2D array as a volume) and
+    `ImageTexture` (RGBA8, turned to X3D's lower-left origin) read them. GL
+    test draws each target format's quadrants (`test_basisu_gl.py`)
   - left to the xnodes stream: `KHR_materials_retroreflection`,
     `KHR_materials_volume_scatter`, `KHR_materials_pbrSpecularGlossiness`
   - [x] X_ITE's file formats: STL, PLY (with 3D Gaussian splat PLY as
@@ -812,10 +824,8 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     `alphaCutoff`, normal scale, occlusion strength, base colour with alpha,
     every `MATERIAL_EXTENSION_FIELDS` factor (the table moved from the writer
     to `materials`), light colour, intensity, range and cone angles, camera
-    `yfov`, `znear`, `zfar`. An unresolved pointer is logged once. Not driven:
-    orthographic camera fields, `aspectRatio`, `EXT_lights_image_based`
-    intensity and rotation, `clearcoatNormalTexture/scale` (no engine field),
-    texture transforms a texture does not declare
+    `yfov`, `znear`, `zfar`. An unresolved pointer is logged once. The rest
+    landed on x3d-xgltf2 (below)
   - [x] `KHR_node_visibility` was partial: a hidden node was not built, so it
     could not be shown. It is built with X3D `visible` false
     (`_flat.integrate` prunes it, lights included) and left out of the
@@ -825,12 +835,39 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     reported (`scene.SUPPORTED_EXTENSIONS`, `unread_required`)
   - [x] tangents were made only for a normal map; also for a clearcoat normal
     map and anisotropy, which read the tangent's direction
-  - [ ] audit gaps left open: Draco attributes outside the Draco map and a
-    Draco primitive with an uncompressed fallback when DracoPy is absent;
-    `EXT_lights_image_based` mip levels placed on the probe's five fixed
-    levels rather than spread over roughness; `clearcoatNormalTexture.scale`
-    (no material field or shader input); instanced skinned or morphed meshes
-    are static; `KHR_xmp_json_ld` keeps four notice fields
+  - [x] audit gaps closed on x3d-xgltf2 (2026-10-09):
+    - Draco: an attribute outside the extension's map is read from its
+      accessor (`meshes._primitive_arrays`); without DracoPy a primitive whose
+      accessors hold the uncompressed data draws from them; without either,
+      one warning per load
+    - image-based lights: a light's mips span roughness 0 to 1 whatever their
+      count (EXT_lights_image_based README: "the various mip levels evenly
+      map to roughness values from 0 to 1"); `ibl.roughness_lod` places each
+      of the probe's five levels in the light's chain and `ibl_resample.frag`
+      draws it trilinearly, turned and scaled on the GPU (the CPU turn of a
+      256 chain took 156 ms; the GPU draw makes an animated light
+      affordable). The probe's own prefilter and `pbr.frag`'s lookup already
+      use `lod = roughness * (levels - 1)`, as the sample viewer and X_ITE
+      do. An EnvironmentLight's `specularTexture` was box-filtered into a mip
+      chain; it is now GGX-filtered by the probe, as X_ITE filters it
+      (`ImageBasedLight.prefiltered`). X_ITE reads only an
+      EXT_lights_image_based light's first mip and prefilters it itself; we
+      read the document's mips, as the extension specifies
+    - `PhysicalMaterial.clearcoatNormalScale`: loaded, written, material
+      block word 19, scales the coat normal's x and y in `pbr.frag`, driven by
+      `KHR_animation_pointer`. X_ITE has no such field and draws the coat
+      normal map at full strength; the glTF spec is followed
+    - pointers: an orthographic camera is an `OrthoViewpoint`
+      (`-xmag, -ymag, xmag, ymag`, as X_ITE builds it) with `xmag`, `ymag`,
+      `znear`, `zfar` driven; `aspectRatio` kept beside the Viewpoint and
+      driven (the projection follows the window, as X_ITE's does);
+      `EXT_lights_image_based` `intensity` and `rotation` (slerped), the
+      light uploaded again when its `version` moves; a texture with no
+      transform, or one sharing a transform, is given its own
+      (`animation.own_texture_transform`)
+    - EXT_mesh_gpu_instancing: the node's morph weights and skin are bound to
+      the instanced geometry, so every instance deforms
+  - [ ] `KHR_xmp_json_ld` keeps four notice fields
   - [x] `test_gltf_conformance` skipped every render: it passed `None` as the
     window system, and a render that drew nothing was a skip. It passes no
     backend now, and a render that draws nothing fails
@@ -2498,14 +2535,16 @@ maintainer):
 - Extrusion caps: creaseAngle smooths across any two adjacent faces
   (13.2.3), the caps' edges among them; X_ITE shades the caps apart from
   the sides (test_ccw 15%, test_begincap 3.7%)
-- Viewpoint orientation: X_ITE's EXAMINE viewer straightens the horizon of a
-  bound viewpoint (its StraightenHorizon browser option, on by default), so
-  a viewpoint with roll is turned upright; 23.4.x places the view as the
-  Viewpoint's orientation says. The NIST STEP documents (25 of them, 4 to
-  7%) have rolled viewpoints for their z-up parts
 
 Resolved without change:
 
+- Viewpoint orientation: X_ITE's EXAMINE viewer straightens the horizon of a
+  bound viewpoint (its StraightenHorizon browser option, on by default), so
+  a viewpoint with roll is turned until y is up; 23.4.x places the view as
+  the Viewpoint's orientation says. `scripts/x3d_xite_references.py`
+  switches the option off (2026-10-14). Of the 1181 references it changes
+  the 24 NIST STEP documents with rolled viewpoints for their z-up parts,
+  drawn again: they were 4 to 7% from ours and are now at most 0.64%
 - PixelTexture filtering: X_ITE samples any texture with no
   TextureProperties and fewer than 16 texels on its longer side by nearest
   texel, linear otherwise; `sampler.SMALL_IMAGE` is the same rule

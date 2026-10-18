@@ -15,7 +15,7 @@ import pytest
 from vrml import protofunctions
 from vrml import x3d as vrml_x3d
 from vrml.x3d import nodes as x3d
-from vrml.x3d import xite
+from vrml.x3d import components, xite
 
 from OpenGLContext.loaders import formats
 from OpenGLContext.loaders.loader import Loader
@@ -88,11 +88,21 @@ def test_a_node_the_engine_does_not_implement_is_its_declaration_and_reported():
     assert any('SignalPdu' in str(problem.message) for problem in scene.problems)
 
 
+def _declaration(name):
+    """X3D's or X_ITE's class for a node name, or the engine's for a node of its own"""
+    return xite.declaration(name) or components.declaration(name)
+
+
+def test_the_engines_own_component_is_in_the_vocabulary():
+    assert components.component_of('CoordinateDeformer') == ('OpenGLContext', 1)
+    assert prototypes()['CoordinateDeformer'] is components.declaration('CoordinateDeformer')
+
+
 def test_the_engines_classes_are_used_only_where_they_implement_the_declaration():
     found = prototypes()
     for name, cls in found.items():
         if name != 'X3DScene':
-            assert issubclass(cls, xite.declaration(name)), name
+            assert issubclass(cls, _declaration(name)), name
     assert found['Shape'] is basenodes.Shape
     assert 'SignalPdu' not in found
 
@@ -190,7 +200,7 @@ def test_the_documented_node_list_is_the_engines():
         component, names = item.split(' - ', 1)
         for name in re.split(r'[,\s]+', names.strip()):
             documented[name] = component.strip()
-    found = {name: xite.declaration(name).COMPONENT[0]
+    found = {name: _declaration(name).COMPONENT[0]
              for name in prototypes() if name != 'X3DScene'}
     assert documented == found
 
@@ -259,3 +269,32 @@ def test_an_external_prototype_outside_the_documents_folder_is_not_read(tmp_path
         scene = Loader.load(str(tmp_path / 'inner' / 'world.x3d'))
     assert not protofunctions.getSceneGraph(scene.getDEF('J')).children
     assert 'joint.x3d' in caplog.text
+
+
+def test_external_prototypes_are_resolved_by_pyvrml97s_resolver_under_the_engines_policy():
+    from vrml.x3d import files
+
+    from OpenGLContext.loaders.x3d import ContainedPrototypes
+    assert issubclass(ContainedPrototypes, files.ExternPrototypes)
+    for inherited in ('__call__', '_scene'):
+        assert inherited not in vars(ContainedPrototypes)
+
+
+def test_an_external_prototype_file_names_prototypes_in_another(tmp_path):
+    (tmp_path / 'inner.x3d').write_bytes(DEFINITION)
+    (tmp_path / 'joint.x3d').write_bytes(b'''<X3D version="4.0"><Scene>
+  <ExternProtoDeclare name="Joint" url='"inner.x3d#Joint"'>
+    <field name="size" type="SFFloat" accessType="initializeOnly"/>
+  </ExternProtoDeclare>
+</Scene></X3D>''')
+    (tmp_path / 'world.x3d').write_bytes(EXTERN % b'joint.x3d')
+    scene = Loader.load(str(tmp_path / 'world.x3d'))
+    assert len(protofunctions.getSceneGraph(scene.getDEF('J')).children) == 1
+
+
+def test_an_external_prototype_of_a_document_with_no_location_is_not_read(tmp_path):
+    from OpenGLContext.loaders.x3d import ContainedPrototypes
+    (tmp_path / 'joint.x3d').write_bytes(DEFINITION)
+    resolver = ContainedPrototypes(prototypes())
+    assert resolver([str(tmp_path / 'joint.x3d') + '#Joint'], '', 'Joint') is None
+    assert resolver.scenes == {}

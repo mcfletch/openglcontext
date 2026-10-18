@@ -190,3 +190,28 @@ def test_a_shapes_bounds_follow_its_geometrys_points():
     assert np.allclose(shape.boundingVolume(None).getPoints()[:, :3].max(axis=0), (1, 1, 0))
     points.point = [(-5, -5, 0), (5, -5, 0), (5, 5, 0)]
     assert np.allclose(shape.boundingVolume(None).getPoints()[:, :3].max(axis=0), (5, 5, 0))
+
+
+class TestABoxThatIsChanged:
+    """A box whose centre or size is set again is the box it now says it is, to the frustum test as
+    much as to a reader of its fields."""
+
+    @staticmethod
+    def extent(box):
+        points = np.asarray(box.getPoints())[:, :3]
+        return points.min(axis=0), points.max(axis=0)
+
+    def test_the_corners_follow_a_new_size_and_a_new_centre(self):
+        box = boundingvolume.AABoundingBox(size=(2, 2, 2), center=(0, 0, 0))
+        low, high = self.extent(box)
+        assert (low == -1).all() and (high == 1).all()
+        box.center = (10, 0, 0)
+        box.size = (4, 2, 2)
+        low, high = self.extent(box)
+        assert tuple(low) == (8, -1, -1) and tuple(high) == (12, 1, 1)
+
+    def test_corners_given_outright_are_left_alone(self):
+        given = np.array([[0, 0, 0, 1], [1, 1, 1, 1]], 'f')
+        box = boundingvolume.AABoundingBox(size=(2, 2, 2), center=(5, 5, 5), points=given)
+        box.center = (9, 9, 9)
+        assert np.array_equal(np.asarray(box.getPoints()), given)

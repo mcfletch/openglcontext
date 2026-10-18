@@ -523,6 +523,16 @@ fly out, and :kbd:`g` again to walk from wherever you are.
      - Places the avatar at a ``Viewpoint``'s position, facing the same way,
        with :ref:`safe placement <character>`. If the viewpoint is in the air,
        the avatar starts flying, so it stays in the shot instead of falling.
+   * - ``OnViewpointBound( vp )``
+     - Called as the frame moves the camera to a viewpoint bound after the
+       first. While walking, the avatar is placed where the viewpoint put the
+       camera, with :ref:`safe placement <character>`, looking the way the
+       viewpoint looks, pitch included. The camera's
+       :ref:`transition <x3d-binding>` to the viewpoint ends at the
+       avatar's eye, and ``stepPhysics()`` leaves the avatar there until the
+       transition arrives. In free-fly the avatar is not moved. Binding a
+       viewpoint, by ``set_bind`` or by the next-viewpoint key, is all a
+       walking application does to go to it.
    * - ``resolvePhysicsStep()``
      - Called after the character has solved its step and before the camera
        reads its pose. A host whose ground is not in the collision world

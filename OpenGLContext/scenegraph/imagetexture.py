@@ -9,7 +9,7 @@ from OpenGL.GLU import *
 from OpenGL.error import GLError
 from OpenGLContext import texture, context
 from OpenGLContext.scenegraph.sampler import apply_sampler, sampler_of
-from OpenGLContext.loaders import background
+from OpenGLContext.loaders import background, basisu
 
 from PIL import Image
 
@@ -74,8 +74,18 @@ class _Texture(nodetypes.Texture, node.Node):
         """Create a new texture-holding object
 
         Uses the TextureCache to try to minimise the
-        number of textures created
+        number of textures created. A Basis Universal image is a
+        :class:`~OpenGLContext.texture.BasisTexture` of its own.
         """
+        if isinstance(image, basisu.BasisImage):
+            return mode.context.textureCache.getTexture(
+                image,
+                texture.BasisTexture,
+                mode=mode,
+                repeating=(self.repeatS or self.repeatT),
+                atlasable=False,
+                topFirst=self.TOP_FIRST,
+            )
         return mode.context.textureCache.getTexture(
             image,
             texture.Texture,
@@ -174,10 +184,13 @@ class _Texture(nodetypes.Texture, node.Node):
     def hasAlpha(self) -> bool:
         """Whether the image this node holds has an alpha channel, read without GL
 
-        A PIL image with an alpha band or a transparent palette entry, or an
-        SFImage of two or four components. False until an image is loaded.
+        A PIL image with an alpha band or a transparent palette entry, a Basis
+        Universal file storing alpha, or an SFImage of two or four components.
+        False until an image is loaded.
         """
         image = self.image
+        if isinstance(image, basisu.BasisImage):
+            return image.has_alpha
         if isinstance(image, Image.Image):
             return 'A' in image.getbands() or 'transparency' in image.info
         try:
@@ -232,40 +245,89 @@ def decode_picture(file: Any, baseURL: str) -> Any:
     Decoded here rather than by whoever first looks at the pixels: PIL reads
     lazily, so an image left undecoded holds the file it came from open --
     six of them for a cubemap -- and does its reading on the thread that
-    draws.
+    draws. A Basis Universal file (KTX 2 or ``.basis``) is a
+    :class:`~OpenGLContext.loaders.basisu.BasisImage`, which raises the
+    extra to install where opengl_basisu is not.
     """
-    image = Image.open(file)
+    return decode_image_bytes(file.read())
+
+
+def decode_image_bytes(data: bytes) -> Any:
+    """A PIL image, or a Basis Universal image, of a picture file's bytes"""
+    if basisu.is_basis(data):
+        return basisu.open_image(data)
+    image = Image.open(BytesIO(data))
     image.load()
     return image
+
+
+#: How much of a URL a log line carries: a ``data:`` URL holds its whole image.
+URL_LOG_LENGTH = 96
+
+
+def brief(url: Any) -> str:
+    """A URL, or each of several, cut to :data:`URL_LOG_LENGTH` for a log line"""
+    if not isinstance(url, (bytes, str)):
+        return '[%s]' % ', '.join(brief(entry) for entry in url)
+    text = url.decode('utf-8', 'replace') if isinstance(url, bytes) else url
+    return text if len(text) <= URL_LOG_LENGTH else text[:URL_LOG_LENGTH] + '...'
+
+
+def _is_data_url(url: Any) -> bool:
+    text = url.decode('utf-8', 'replace') if isinstance(url, bytes) else str(url)
+    return text[:5].lower() == 'data:'
+
+
+def _open(single: Any, baseURI: Any) -> Optional[tuple[str, str, Any]]:
+    """(URL, file name, open file) for one entry of a url; None for one that names nothing
+
+    A ``data:`` URL holds its own bytes, so it reads no file and asks no
+    host, wherever its document came from. Its size is held to the
+    resolver's limit before it is decoded.
+    """
+    from OpenGLContext.loaders import resolver
+    from OpenGLContext.loaders.loader import Loader
+
+    if _is_data_url(single):
+        text = single.decode('utf-8', 'replace') if isinstance(single, bytes) else str(single)
+        try:
+            data = resolver.decode_data_uri(text, resolver.DEFAULT_MAX_RESOURCE_BYTES)
+        except ValueError as err:
+            raise IOError(str(err)) from err
+        return 'data:', '', BytesIO(data)
+    result = Loader(single, baseURL=baseURI)
+    if not result:
+        return None
+    baseURL, filename, file, _headers = result
+    return baseURL, filename, file
 
 
 def load_first(node: Any, url: Any, decode: Callable[[Any, str], Any]) -> Optional[tuple[Any, str, str]]:
     """The first entry of `url` that fetches and decodes: (decoded, its URL, its file name)
 
-    Each entry is read relative to `node`'s root's base URL and handed, as
-    an open file, to ``decode(file, url)``. An entry that cannot be fetched,
-    or whose bytes `decode` raises on -- truncated, another format, or a few
-    dozen bytes declaring a billion pixels -- is reported and the next is
-    tried. None where none is read.
+    Each entry is read relative to `node`'s root's base URL, or from the
+    entry itself where it is a ``data:`` URL, and handed, as an open file, to
+    ``decode(file, url)``. An entry that cannot be fetched, or whose bytes
+    `decode` raises on -- truncated, another format, or a few dozen bytes
+    declaring a billion pixels -- is reported and the next is tried. None
+    where none is read.
     """
-    from OpenGLContext.loaders.loader import Loader
-
     baseNode = protofunctions.root(node)
     baseURI = baseNode.baseURI if baseNode else None
     for single in ([url] if isinstance(url, (bytes, str)) else list(url)):
         try:
-            result = Loader(single, baseURL=baseURI)
+            opened = _open(single, baseURI)
         except IOError as err:
-            log.warning("Unable to fetch the image at %s: %s", single, err)
+            log.warning("Unable to fetch the image at %s: %s", brief(single), brief(str(err)))
             continue
-        if not result:
+        if opened is None:
             continue
-        baseURL, filename, file, headers = result
+        baseURL, filename, file = opened
         try:
             with contextlib.closing(file):
                 decoded = decode(file, baseURL)
         except Exception as err:
-            log.warning("Unable to decode the image at %s: %s", single, err)
+            log.warning("Unable to decode the image at %s: %s", brief(single), err)
             continue
         return decoded, baseURL, filename
     return None
@@ -355,7 +417,7 @@ class ImageTexture(URLRead, _Texture, basenodes.ImageTexture):
             loadsensor.set_load_state(self, loadsensor.FAILED)
             log.warning(
                 """Unable to load any image from the url %s for the node %s""",
-                url,
+                brief(url),
                 str(self),
             )
             return None
@@ -380,12 +442,10 @@ class ImageTexture(URLRead, _Texture, basenodes.ImageTexture):
 
     def loadFromData(self, data: bytes, url: Any = None) -> Any:
         """Load (synchronously) from given data"""
-        fh = BytesIO(data)
         if url is None:
             url = "memory:%s" % (hash(data),)
         try:
-            image = Image.open(fh)
-            image.load()
+            image = decode_image_bytes(data)
         except Exception as err:
             # As in loadBackground: bytes that are not the image they claim to
             # be are a warning and no texture, whatever the decoder made of them.

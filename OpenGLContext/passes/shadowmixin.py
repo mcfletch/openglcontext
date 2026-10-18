@@ -27,6 +27,7 @@ from OpenGL.GL import (
 )
 from OpenGLContext.arrays import dot  # numpy re-export via vrml.arrays star import
 from OpenGLContext import frustum as frustum_module
+from OpenGLContext import renderoptions
 from OpenGLContext.scenegraph import light as light_module
 from OpenGLContext.passes import shadowmath
 from OpenGLContext.passes.shadowmath import SPOT_FOV_MARGIN
@@ -360,7 +361,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                         b['slot'], b['light_index'],
                         [shadowmath.shadow_matrix_eye(camera_view, view, proj)
                          for view, proj in b['lights']],
-                        b['splits'], b['biases'])
+                        b['splits'], b['biases'], b.get('fade'))
                 elif b['kind'] == 'point':
                     shader.bind_cube_slot(b['slot'], b['light_index'], b['texture'],
                                           b['light_pos'], b['near'], b['far'],
@@ -454,6 +455,10 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             return None
         # Fit cascades over the visible depth range bounded by the occluders.
         near, far = self._scene_depth_range(camera_view, occluder_points)
+        distance = float(renderoptions.number(self, 'shadowDistance', 0.0))
+        fade = shadowmath.shadow_fade(distance)
+        if fade is not None:
+            far = max(near + 1.0, min(far, distance))
         count = max(1, min(self._effectiveCascades(), self.shader_program.MAX_CASCADES))
         splits = shadowmath.cascade_splits(near, far, count)
         smap = self._shared_map()
@@ -514,7 +519,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             biases.append(shadowmath.depth_bias_terms(
                 proj, texel_bias, self.shadow_resolution))
         return {'kind': 'directional', 'slot': slot, 'light_index': light_index,
-                'lights': lights, 'splits': cascade_splits, 'biases': biases}
+                'lights': lights, 'splits': cascade_splits, 'biases': biases, 'fade': fade}
 
     def _renderPoint(self, path: Any, light_node: Any, slot: int, light_index: int,
                      caps: ShadowCapabilities) -> Optional[dict]:

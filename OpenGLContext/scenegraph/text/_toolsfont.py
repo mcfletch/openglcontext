@@ -51,20 +51,18 @@ class Font(object):
         filename -- a file source from which to load
             the .ttf file, must be a simple local filename,
             not a URL or font-name.
-        encoding -- the TrueType encoding specifier, the
-            specifier is two elements, a PlatformID and
-            a platform-specific ID code (sub encoding).
-            http://developer.apple.com/fonts/TTRefMan/RM06/Chap6name.html#ID
-            the default should be the Unicode Roman if
-            I've done my homework correctly.
+        encoding -- which of the font's cmap sub-tables to look characters
+            up in, as (PlatformID, platform-specific ID). `None`, the
+            default, takes the font's most capable Unicode sub-table --
+            (3,10) or (0,4) over (3,1) or (0,3) -- since a character is
+            looked up by its Unicode code point; `ttfquery.describe`'s
+            `UNICODE_ENCODINGS` is the order, and a font with no Unicode
+            sub-table answers from the one it has.
 
-            (0,0) or (0,3) -- Unicode (default or Unicode 2.0
-            semantics respectively), I have no fonts with which
-            to test this encoding.
-            (3,1) -- Latin-1 Microsoft encoding, while
-            (1,0) should be the Mac-Roman encoding. You will
-            almost certainly want (3,1) on windows, and I'm
-            guessing (1,0) on Mac.
+            Name one where the font's sub-tables disagree and the wanted
+            one is not the Unicode one: (1,0) is Mac-Roman and (3,0) the
+            Windows symbol range, each numbering its characters its own
+            way.
         glyphClass -- the class used for creating new glyphs,
             if not provided, self.defaultGlyphClass is used.
         quality -- rendering quality for the font, the number

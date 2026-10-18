@@ -349,6 +349,56 @@ class TestChoosingHowAContextIsMade:
             assert name in str(raised.value)
 
 
+class TestARefusalThatFollowsSurfacesThisProcessHad:
+    """A driver that stops handing out contexts part-way through a run.
+
+    Every GL test after it fails, in that process, for a reason that is not in
+    any of them: on Windows a display driver reset (a Display 4101 in the
+    system log) takes the process's contexts with it and refuses new ones. The
+    first refusal is where that gets said, since a run of it reports the driver
+    rather than the code under test.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _nothing_given_yet(self, monkeypatch):
+        monkeypatch.setattr(glcontext, '_given', 0)
+
+    def test_the_first_refusal_is_a_machine_without_gl(self):
+        with pytest.raises(GLUnavailable) as refused:
+            glcontext.refuse('no window')
+        assert str(refused.value) == 'no window'
+        assert not isinstance(refused.value, glcontext.DriverGone)
+
+    def test_a_refusal_after_one_is_the_driver_having_stopped(self):
+        glcontext.given_a_surface()
+        glcontext.given_a_surface()
+        with pytest.raises(glcontext.DriverGone) as gone:
+            glcontext.refuse('no window')
+        said = str(gone.value)
+        assert said.startswith('no window, having been given 2 in this process')
+        assert 'display driver reset' in said
+        assert '4101' in said
+
+    def test_the_driver_having_stopped_is_still_a_gl_being_unavailable(self):
+        """A caller that has not been taught the difference keeps its old
+        behaviour rather than seeing an exception it does not catch."""
+        glcontext.given_a_surface()
+        with pytest.raises(GLUnavailable):
+            glcontext.refuse('no window')
+
+    def test_what_refused_it_is_carried_as_the_cause(self):
+        glcontext.given_a_surface()
+        cause = RuntimeError('wglCreateContextAttribsARB refused')
+        with pytest.raises(glcontext.DriverGone) as gone:
+            glcontext.refuse('no context', cause)
+        assert gone.value.__cause__ is cause
+
+    def test_the_count_is_what_this_process_was_given(self):
+        assert glcontext.surfaces_given() == 0
+        glcontext.given_a_surface()
+        assert glcontext.surfaces_given() == 1
+
+
 class TestWhichPlatformsRenderWithoutAWindow:
     @pytest.mark.parametrize('platform', ['win32', 'cygwin'])
     def test_windows_renders_on_a_pbuffer(self, platform):
@@ -403,7 +453,10 @@ class TestWhichPlatformsRenderWithoutAWindow:
             self, monkeypatch):
         """The EGL binding is here, so the failure is a defect in the engine,
         and reads as one rather than as a machine without EGL."""
-        pytest.importorskip('OpenGL.EGL')
+        # `exc_type`: PyOpenGL's EGL module is there and raises ImportError
+        # where the platform has no EGL library, which is a machine to skip on
+        # rather than an import to report.
+        pytest.importorskip('OpenGL.EGL', exc_type=ImportError)
         monkeypatch.setattr(glcontext, 'offscreen_backend', lambda: 'egl')
         monkeypatch.setitem(sys.modules, 'OpenGLContext.windowsystem.egl', None)
         with pytest.raises(ImportError) as raised:

@@ -218,7 +218,7 @@
         <RigidBody USE="STAND-BODY" containerField="body1"/>
         <RigidBody USE="SHAFT-BODY-2" containerField="body2"/></SingleAxisHingeJoint>
       <MotorJoint containerField="joints" enabledAxes="1" motor1Axis="1 0 0"
-                  axis1Torque="0.05" autoCalc="true">
+                  axis1Torque="0.008" autoCalc="true">
         <RigidBody USE="STAND-BODY" containerField="body1"/>
         <RigidBody USE="SHAFT-BODY-1" containerField="body2"/></MotorJoint>
       <UniversalJoint containerField="joints" anchorPoint="3.0 2.2 -2.5" axis1="0 1 0"

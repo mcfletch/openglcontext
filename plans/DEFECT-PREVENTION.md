@@ -229,6 +229,7 @@ The rules. Each looks at a syntax tree with a symbol table of the file
 | OGC222 | test with no assertion | tests that cannot fail | a `test_*` function with no `assert`, no `pytest.raises`/`warns`, and no call to a function whose name starts `assert` or `check` |
 | OGC223 | `pass` in a test's handler | tests that cannot fail | `except ...: pass` in the `test` scope |
 | OGC231 | accumulation with no removal | unbounded accumulation | a `self` or module-level container appended to or written by key in a method, with no `pop`, `clear`, `del`, `popleft`, slice assignment or `maxlen` on it anywhere in the class or module |
+| OGC232 | override renames inherited parameter | algorithm and specification errors | an override that renames a base method's parameter by a leading `_`, where the base and the subclass are in the project; the base is resolved through the classes' modules and imports, so a cross-module base is read from disk |
 | OGC241 | window pragma over logic | logic in window-bound code | a `# pragma: no cover` block marked window or GL whose body branches on values that are not GL results; plus a per-project count ratchet of such pragmas |
 | OGC251 | command without a parser | inert declarations | a console-script entry point (from `pyproject.toml`) whose function does not construct an `ArgumentParser` or call one that does |
 

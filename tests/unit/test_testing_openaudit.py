@@ -103,6 +103,18 @@ def test_an_import_made_by_an_engine_module_is_not(audit, tmp_path):
     assert audit.take() == []
 
 
+def test_a_shared_library_search_made_by_an_engine_module_is_not(audit):
+    """``find_library`` runs ldconfig or a compiler and reads what they write."""
+    engine = _module('auditedpkg.audio.example', '''
+        import ctypes.util
+
+        def find():
+            return ctypes.util.find_library('auditedpkg-no-such-library')
+    ''')
+    assert engine['find']() is None
+    assert audit.take() == []
+
+
 def test_the_packages_own_data_is_not(audit, tmp_path):
     _module('auditedpkg.scenegraph.example', OPENER)['read'](
         str(tmp_path / 'auditedpkg' / 'shader.glsl'))

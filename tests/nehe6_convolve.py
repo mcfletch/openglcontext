@@ -71,6 +71,7 @@ class TestContext( BaseContext ):
     different images can have different convolutions applied.
     """)
         if not glInitImagingARB():
+            print("No ARB Imaging extension available")
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
         self.imageIDs = [
             self.loadImage (),
@@ -231,4 +232,6 @@ class TestContext( BaseContext ):
     
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'profile':'compatibility'
+    })

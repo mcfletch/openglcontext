@@ -127,7 +127,12 @@ class TestDecodes:
         assert gtextures.decodes('image/png') and gtextures.decodes('image/jpeg')
 
     def test_unknown_format(self):
-        assert not gtextures.decodes('image/ktx2')
+        assert not gtextures.decodes('image/x-made-up')
+
+    @pytest.mark.parametrize('installed', [True, False])
+    def test_ktx2_where_the_transcoder_is_installed(self, monkeypatch, installed):
+        monkeypatch.setattr(gtextures.basisu, 'available', lambda: installed)
+        assert gtextures.decodes('image/ktx2') is installed
 
 
 def _textured_mesh(image):

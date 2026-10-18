@@ -660,6 +660,24 @@ class TestWiring:
         assert graph.audioNode(source) is None
 
 
+class TestReadings:
+    def test_the_nodes_driven_are_listed_inputs_after_what_reads_them(self, graph):
+        source = tone()
+        destination = snd.AudioDestination(children=[snd.Gain(children=[source])])
+        frame(graph, destination)
+        assert graph.nodes == (destination, destination.children[0], source)
+
+    def test_a_cleared_graph_drives_no_nodes(self, graph):
+        frame(graph, snd.AudioDestination(children=[tone()]))
+        graph.clear()
+        assert graph.nodes == ()
+
+    def test_a_frames_time_is_kept(self, graph):
+        assert graph.seconds == 0.0
+        frame(graph, snd.AudioDestination(children=[tone()]))
+        assert 0.0 < graph.seconds < 1.0
+
+
 class TestDocuments:
     def test_an_x3d_document_builds_the_engines_nodes(self):
         from vrml import x3d as vrml_x3d

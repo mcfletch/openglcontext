@@ -134,7 +134,9 @@ A surface far from the camera is drawn from a coarser tessellation, half,
 a quarter and an eighth of the count at the distance levels of the
 :py:mod:`tessellation LOD <OpenGLContext.scenegraph.tessellationlod>`; each
 level is kept separately. ``OPENGLCONTEXT_LOD=off`` draws every surface at
-its own count.
+its own count. A surface's shadow is drawn from the level its view last drew,
+so a surface whose control points move is tessellated once a frame. Its
+bounding volume is the box of its control points, which holds every level.
 
 Which way a surface faces
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -203,6 +205,89 @@ X3D's: their control points are fields rather than a ``Coordinate``, the
 degree comes from the length of the knot vector rather than an order, weights
 apply to control points given as they are, and sampling is set by a sampling
 node. A ``.wrl`` file builds these classes (``loaders.vrml97.vrml97_prototypes``).
+
+A world that declares them with the ``EXTERNPROTO`` the blaxxun and
+Bitmanagement Contact browsers' exporters wrote builds the same classes
+(:doc:`Loading VRML97 <vrml97>`).
+
+A ``NurbsSurface`` needs ``uDimension`` times ``vDimension`` control points.
+With more, the first that many are the net and the rest are left out, with a
+warning; with fewer, the surface is not drawn and an error is logged. Each
+such message is logged once per node, however often the surface is built.
+
+Each node's bounding volume is the box of its control points, which contains
+the surface where the weights are positive.
+
+CoordinateDeformer
+~~~~~~~~~~~~~~~~~~
+
+``CoordinateDeformer`` is the extension's free-form deformation node: a group
+with a lattice of ``controlPoint`` values, and a dimension, a knot vector and
+an order along each of u, v and w (``uDimension``, ``uKnot``, ``uOrder`` and
+so on; the order defaults to 2). The control points are listed with u running
+fastest, then v, then w, and a direction needs as many knots as its dimension
+plus its order. ``weight`` takes one positive weight per control point.
+
+Each point of each ``Coordinate`` in ``inputCoord`` is a parameter (u, v, w).
+The volume's position there is written to the same index of the
+``Coordinate`` at the same place in ``outputCoord``, so a geometry among the
+children that uses an output ``Coordinate`` is drawn deformed:
+
+.. code-block:: text
+
+   #X3D V4.0 utf8
+   PROFILE Immersive
+   COMPONENT NURBS:1
+   COMPONENT OpenGLContext:1
+   DEF FFD CoordinateDeformer {
+     uDimension 2 vDimension 2 wDimension 2
+     uKnot [ 0 0 1 1 ] vKnot [ 0 0 1 1 ] wKnot [ 0 0 1 1 ]
+     controlPoint [ 0 0 0, 1 0 0, 0 1 0, 1 1 0, 0 0 1, 1 0 1, 0 1 1, 2 2 2 ]
+     inputCoord [ Coordinate { point [ 0 0 0, 1 0 0, 0 1 0, 1 1 1 ] } ]
+     outputCoord [ DEF Moved Coordinate { } ]
+     children Shape {
+       geometry NurbsPatchSurface {
+         uDimension 2 vDimension 2 uOrder 2 vOrder 2
+         controlPoint USE Moved
+       }
+     }
+   }
+
+The output ``Coordinate`` is a ``NurbsPatchSurface``'s ``controlPoint`` here,
+so the deformer moves the surface's control net. An ``IndexedFaceSet`` or any
+other geometry with a ``coord`` uses it the same way. In a VRML97 world, where
+a ``NurbsSurface`` holds its control points as a field, a ``ROUTE`` from the
+output's ``point_changed`` to the surface's ``set_controlPoint`` carries them.
+
+A ``Transform`` at the same place in ``inputTransform`` is applied to the
+input points before they are read as parameters. The outputs are written when
+the group is first drawn, and again when a control point, a weight, an input
+point, an input transform or one of the three node lists is set, directly or
+by a ROUTE. A parameter outside a direction's knots is held at their end.
+
+Where the fields describe no volume, the points are not deformed: each output
+is its input, and a warning names what is wrong. The published Contact worlds
+that use the node leave its lattice to a ``Script``, which is not run, so
+their meshes are drawn as modelled.
+
+X3D has no such node. It is in the engine's own component, ``OpenGLContext``:
+an X3D document of any encoding names it after ``COMPONENT OpenGLContext:1``,
+and the X3D writers write a scene holding one with that statement. A browser
+without the component does not read such a document. A VRML97 world names
+the node with no declaration.
+
+.. figure:: images/nurbs/deformer.jpg
+   :alt: A marble column standing straight, bent, twisted and swollen inside a yellow lattice, beside a brass capsule passing through a lattice with a narrow neck
+
+   ``oglc-deformer`` at four points of its cycle. Both shapes are
+   ``NurbsPatchSurface`` nodes whose control points are a deformer's output.
+   A ``CoordinateInterpolator`` routed to the left deformer's
+   ``controlPoint`` bends, twists and swells the column. A
+   ``PositionInterpolator`` routed to the ``Transform`` in the right
+   deformer's ``inputTransform`` carries the capsule through a lattice whose
+   middle is drawn in. ``g`` shows and hides the lattices. The document,
+   X3D in the ClassicVRML encoding, is written by
+   ``OpenGLContext.bin.deformer_demo.prepare``.
 
 The nodes
 ~~~~~~~~~
@@ -419,6 +504,9 @@ Demonstrations:
 
 - ``oglc-x3d-nurbs`` - every X3D NURBS node, read from a document; ``t``
   steps the ``NurbsSet``'s tessellation scale through 1, 2 and a quarter.
+- ``oglc-deformer`` - two ``CoordinateDeformer`` nodes read from an X3D
+  document, each moving a NURBS surface's control points: an animated
+  lattice, and a surface carried through a fixed one.
 - ``tests/molehill.py`` - four surfaces meeting.
 - ``tests/molehill_edit.py`` - dragging their control points; see
   :doc:`editing` for ``ControlNet``.

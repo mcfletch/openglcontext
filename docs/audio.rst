@@ -847,3 +847,82 @@ echo, a room, a compressor and an ``Analyser`` raising a meter.
 The scene is ``SoundScene`` in ``OpenGLContext/bin/x3d_sound.py``, which holds
 no GL; :doc:`tests/x3d_sound.py <tutorials/x3d_sound>` is the same scene as a
 tutorial.
+
+.. _audio-stress:
+
+Measuring a scene's sound
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``oglc-x3d-sound-stress`` plays ``OpenGLContext/bin/x3d_sound_stress.x3d``
+through a silent device and prints what it cost. The document has 128
+sounding stations on rings that turn about the listener, between walls and
+over a floor with ``AcousticProperties``. The stations take eight forms in
+turn, which between them use every node of the Sound component and each of
+its modes; interpolators turn the rings, sweep the filters and swell the
+gains, so each frame places every sound again.
+
+.. code-block:: text
+
+   $ oglc-x3d-sound-stress
+   537 sound nodes, 158 rendered; 128 placed sounds, 32 voices
+   first frame     111.10 ms
+   each frame        3.90 ms  (worst 76.36)
+   each block        5.04 ms  (worst 6.60) of 1764 frames at 44100 Hz, which play for 40.00 ms
+   audio thread       13%   of real time (worst block 17%)
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Line
+     - What it measures
+   * - sound nodes, rendered
+     - The X3D sound nodes kept in step each frame, and the graph nodes the
+       last block rendered. The mixer renders only the nodes something is
+       heard through, so the sounds past the voice budget cost the audio
+       thread nothing.
+   * - first frame
+     - The frame that makes every graph node and reads every clip
+   * - each frame
+     - Keeping the graph in step with the scene, on the thread that draws:
+       the median frame and the slowest. It comes out of the frame's time,
+       and grows with the sound nodes whether or not they are heard. The
+       slowest is a frame in which Python collected garbage.
+   * - each block
+     - One block mixed on the audio thread, and how long that block plays
+       for. A block that takes longer to mix than it plays for is heard as a
+       gap.
+   * - audio thread
+     - The block's time as a share of what it plays for. The audio thread
+       runs Python, so this share of one core is also taken from the thread
+       that draws.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Option
+     - Meaning
+   * - ``--stations N``
+     - Measure a document of ``N`` stations in place of the shipped 128
+   * - ``--seconds S``
+     - Scene time to play, in seconds (default 2)
+   * - ``--block FRAMES``
+     - Frames mixed at a time (default: what a playback device asks for,
+       40 ms of them). A smaller block costs more of real time, since each
+       node's work has a fixed part.
+   * - ``--rate HZ``
+     - Sample rate in hertz (default 44100)
+   * - ``--voices N``
+     - The voice budget (default ``AudioSettings.voices``, 32)
+   * - ``--write DIR``
+     - Write the document and the clips it names to ``DIR``, print its path
+       and measure nothing; ``oglc-view`` opens it
+
+The scene is drawn in a hidden window on a clock stepped 60 times a second,
+so the command needs a GL context and no sound device. From code,
+``OpenGLContext.bin.x3d_sound_stress.measure(path)`` returns the same
+readings as a ``Report`` for any X3D document with sound nodes, and
+``document(stations)`` returns the scene's text at any size.
+``SoundGraph.seconds`` is the latest frame's time and ``SoundGraph.nodes``
+the X3D nodes it drove, for an application's own overlay.

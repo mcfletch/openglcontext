@@ -327,7 +327,9 @@ def test_a_backend_names_the_context_to_pyopengl_by_its_handle():
     ('wgl', 'OpenGL.WGL.offscreen'),
 ])
 def test_each_window_system_binds_pyopengl_to_the_platform_handle(name, toolkit):
-    pytest.importorskip(toolkit)
+    # `exc_type`: EGL and WGL are modules that import and then report the
+    # platform library they could not find.
+    pytest.importorskip(toolkit, exc_type=ImportError)
     chosen = windowsystem.load(name)
     unopened = chosen.__new__(chosen)
     assert unopened.glHandle() == contextdata.getContext()

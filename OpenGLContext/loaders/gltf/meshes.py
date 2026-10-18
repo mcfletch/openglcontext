@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import enum
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 
@@ -120,41 +120,15 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
             extent = splats.splats().bounds()
             return splats, extent if extent is not None else _bounds_from_points(
                 np.asarray(splats.positions, np.float32).reshape(-1, 3))
-    if _draco.draco_extension(primitive) is not None:
-        try:
-            arrays = _draco.draco_arrays(g, primitive, resolver)
-        except ValueError as err:
-            # A malformed Draco stream (bad bufferView, no POSITION, an attribute
-            # with no accessor) raises here. Skip just this primitive and keep
-            # loading the scene, matching the DracoPy-absent path below rather than
-            # aborting the whole load. Scoped to the decode step so a non-Draco bug
-            # downstream still surfaces.
-            log.warning("glTF: skipping malformed Draco primitive: %s", err)
-            return None, None
-        if arrays is None:                       # DracoPy absent -> skip primitive
-            return None, None
-        positions = arrays['positions']
-        indices = arrays['indices']
-        normals, texcoords = arrays.get('normals'), arrays.get('texcoords')
-        texcoords1, tangents = arrays.get('texcoords1'), arrays.get('tangents')
-        colors = arrays.get('colors')
-        skin_joints, skin_weights = arrays.get('skin_joints'), arrays.get('skin_weights')
-    else:
-        positions = _read_floats(g, attrs.POSITION, resolver)
-        indices = None
-        if primitive.indices is not None:
-            indices = _read_accessor(g, primitive.indices, resolver).astype(np.uint32).ravel()
-        normals = _read_floats(g, attrs.NORMAL, resolver) if attrs.NORMAL is not None else None
-        texcoords = (_read_texcoords(g, attrs.TEXCOORD_0, resolver)
-                     if attrs.TEXCOORD_0 is not None else None)
-        texcoords1 = (_read_texcoords(g, attrs.TEXCOORD_1, resolver)
-                      if getattr(attrs, 'TEXCOORD_1', None) is not None else None)
-        tangents = _read_floats(g, attrs.TANGENT, resolver) if attrs.TANGENT is not None else None
-        colors = _read_colors(g, attrs.COLOR_0, resolver) if attrs.COLOR_0 is not None else None
-        skin_joints = (_read_accessor(g, attrs.JOINTS_0, resolver).astype(np.uint32)
-                       if getattr(attrs, 'JOINTS_0', None) is not None else None)
-        skin_weights = (_read_normalized(g, attrs.WEIGHTS_0, resolver)
-                        if getattr(attrs, 'WEIGHTS_0', None) is not None else None)
+    arrays = _primitive_arrays(g, primitive, resolver)
+    if arrays is None:
+        return None, None
+    positions = arrays['positions']
+    indices = arrays.get('indices')
+    normals, texcoords = arrays.get('normals'), arrays.get('texcoords')
+    texcoords1, tangents = arrays.get('texcoords1'), arrays.get('tangents')
+    colors = arrays.get('colors')
+    skin_joints, skin_weights = arrays.get('skin_joints'), arrays.get('skin_weights')
     indices, draw_mode = _triangulate_indices(
         getattr(primitive, 'mode', None), indices, len(positions))
     if draw_mode is None:
@@ -221,6 +195,72 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
             # of the mesh cache exactly as a morphed or skinned mesh is kept out.
             shape._gltf_unshareable = True
     return shape, bounds
+
+
+#: Each vertex semantic the loader reads: the key it is returned under, and
+#: the accessor reader that applies its normalisation.
+_VERTEX_READERS: dict[str, tuple[str, Callable[..., np.ndarray]]] = {
+    'POSITION': ('positions', _read_floats),
+    'NORMAL': ('normals', _read_floats),
+    'TEXCOORD_0': ('texcoords', _read_texcoords),
+    'TEXCOORD_1': ('texcoords1', _read_texcoords),
+    'TANGENT': ('tangents', _read_floats),
+    'COLOR_0': ('colors', _read_colors),
+    'JOINTS_0': ('skin_joints',
+                 lambda g, index, resolver: _read_accessor(
+                     g, index, resolver).astype(np.uint32)),
+    'WEIGHTS_0': ('skin_weights', _read_normalized),
+}
+
+
+def _accessor_arrays(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
+                     resolver: Resolver,
+                     skip: frozenset[str] = frozenset()) -> dict[str, np.ndarray]:
+    """A primitive's vertex arrays and ``indices`` read from its accessors,
+    keyed as :func:`_primitive_shape` reads them.
+
+    Semantics in ``skip`` are left out, and so are the indices when ``skip``
+    is not empty: that is a Draco primitive, whose stream holds them.
+    """
+    attrs = primitive.attributes
+    out: dict[str, np.ndarray] = {}
+    for semantic, (key, reader) in _VERTEX_READERS.items():
+        index = getattr(attrs, semantic, None)
+        if index is not None and semantic not in skip:
+            out[key] = reader(g, index, resolver)
+    if not skip and primitive.indices is not None:
+        out['indices'] = _read_accessor(
+            g, primitive.indices, resolver).astype(np.uint32).ravel()
+    return out
+
+
+def _primitive_arrays(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
+                      resolver: Resolver) -> Optional[dict[str, np.ndarray]]:
+    """A primitive's vertex arrays and indices; None for a Draco primitive
+    that cannot be drawn, with the reason logged.
+
+    A Draco primitive is decoded from its stream, and an attribute the
+    extension does not compress is read from its own accessor. Without
+    DracoPy, a primitive whose accessors hold the uncompressed data is read
+    from them. A malformed stream (bad bufferView, no POSITION, an attribute
+    with no accessor) skips the primitive and the scene loads on.
+    """
+    if _draco.draco_extension(primitive) is None:
+        return _accessor_arrays(g, primitive, resolver)
+    if not _draco.HAVE_DRACO:
+        if _draco.has_fallback(g, primitive):
+            return _accessor_arrays(g, primitive, resolver)
+        _draco.warn_missing_once(resolver)
+        return None
+    try:
+        arrays = _draco.draco_arrays(g, primitive, resolver)
+    except ValueError as err:
+        log.warning("glTF: skipping malformed Draco primitive: %s", err)
+        return None
+    compressed = _draco.compressed_semantics(primitive) | {'POSITION'}
+    for key, value in _accessor_arrays(g, primitive, resolver, compressed).items():
+        arrays.setdefault(key, value)
+    return arrays
 
 
 def _reads_tangents(material: Any) -> bool:

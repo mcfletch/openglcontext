@@ -1065,6 +1065,9 @@ class DamageIndicator(HUDWidget):
     #: The most that are shown at once.  A firefight can ask for dozens and
     #: the ones underneath contribute nothing a player can see.
     capacity = field.newField('capacity', 'SFInt32', 1, 8)
+    #: A steady wash on all four edges, 0 to 1, that does not fade: a state
+    #: such as being wounded, where a hit is an event.  Hits show over it.
+    level = field.newField('level', 'SFFloat', 1, 0.0)
 
     #: The clock :meth:`tick` was last given, which is what :meth:`paint`
     #: draws against so a fade is the same on screen as in a test.
@@ -1093,8 +1096,19 @@ class DamageIndicator(HUDWidget):
         del self.marks[:-int(self.capacity)]
         return mark
 
+    def hurt_all(self, intensity: float = 1.0,
+                 now: Optional[float] = None) -> list[DamageMark]:
+        """Show a hit with no direction, on every edge at once.
+
+        For harm that comes from the player's own course -- a fall, a
+        collision -- where there is no one to turn towards.
+        """
+        found = [self.hurt(bearing, intensity, now) for _name, bearing in EDGES]
+        return [mark for mark in found if mark is not None]
+
     def clear(self) -> None:
-        """Drop everything -- a respawn, a new match."""
+        """Drop everything -- a respawn, a new match.  ``level`` is a field
+        and stays as set."""
         self.marks = []
 
     def tick(self, now: float) -> None:
@@ -1124,6 +1138,10 @@ class DamageIndicator(HUDWidget):
                 share = math.cos(mark.bearing - facing) * strength
                 if share > 1e-6:
                     lit[name] = max(lit.get(name, 0.0), share)
+        steady = max(0.0, min(1.0, float(self.level)))
+        if steady > 0.0:
+            for name, _facing in EDGES:
+                lit[name] = max(lit.get(name, 0.0), steady)
         return lit
 
     def edges(self, metrics: FontMetrics

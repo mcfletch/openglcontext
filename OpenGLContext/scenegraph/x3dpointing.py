@@ -35,6 +35,7 @@ from vrml.x3d import pointing
 from vrml.x3d import nodes as x3d
 from vrml.x3d.nodes import X3DPointingDeviceSensorNode
 
+from OpenGLContext.events.mouseevents import unprojected
 from OpenGLContext.scenegraph.anchor import Anchor
 
 __all__ = ['CylinderSensor', 'GeoTouchSensor', 'PlaneSensor', 'PointerSensing', 'SphereSensor', 'Surface',
@@ -42,21 +43,6 @@ __all__ = ['CylinderSensor', 'GeoTouchSensor', 'PlaneSensor', 'PointerSensing', 
 
 #: The button that presses a sensor.
 PRIMARY = 0
-
-
-def unprojected(view: Any, x: float, y: float, depth: float) -> np.ndarray:
-    """The world point at window position (x, y) and depth in [0, 1]
-
-    `view` carries the row-vector ``modelViewMatrix`` and ``projectionMatrix``
-    and the ``viewport`` (x, y, width, height) a picked event has.
-    """
-    vx, vy, width, height = (float(value) for value in view.viewport)
-    device = np.array([2.0 * (x - vx) / width - 1.0, 2.0 * (y - vy) / height - 1.0,
-                       2.0 * depth - 1.0, 1.0])
-    combined = np.asarray(view.modelViewMatrix, np.float64) @ np.asarray(view.projectionMatrix,
-                                                                           np.float64)
-    found = device @ np.linalg.inv(combined)
-    return np.asarray(found[:3] / found[3])
 
 
 #: A window depth in front of the camera whatever the far plane: the render

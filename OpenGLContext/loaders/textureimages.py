@@ -14,8 +14,11 @@ nodes upload (:mod:`OpenGLContext.scenegraph.cubemaptexture`,
   (luminance, alpha, red, RG, RGB, RGBA, BGR, BGRA) or of the S3TC formats.
 - KTX 2 (Khronos): the same, by Vulkan format (R8, R8G8, R8G8B8, B8G8R8,
   R8G8B8A8, B8G8R8A8, UNORM or SRGB, and BC1 to BC3), uncompressed or
-  supercompressed by zlib. Basis Universal and Zstandard supercompression are
-  not read. Only the first mip level is read.
+  supercompressed by zlib; and a Basis Universal payload (ETC1S or UASTC),
+  transcoded by the optional opengl_basisu (:mod:`OpenGLContext.loaders.basisu`),
+  whose 2D array is read as a volume of its layers. Zstandard supercompression
+  of other formats is not read. Only the first mip level is read.
+- ``.basis`` (Binomial's Basis Universal container): as a Basis KTX 2.
 - NRRD (teem's "nearly raw raster data"): volumes of one to four
   components, raw, gzip, bzip2 or text encoded, attached or in a detached
   data file. Samples wider than a byte are scaled from their range in the
@@ -45,6 +48,8 @@ from collections.abc import Callable, Sequence
 from typing import Optional
 
 import numpy as np
+
+from OpenGLContext.loaders import basisu
 
 __all__ = [
     'MAX_TEXELS', 'TextureImageError', 'CubeFaces', 'Volume',
@@ -377,6 +382,8 @@ def read_ktx2(data: bytes) -> tuple[str, list[np.ndarray]]:
     """
     if not is_ktx2(data) or len(data) < 104:
         raise TextureImageError('not a KTX 2 file')
+    if basisu.is_basis(data):
+        return _read_basis(data)
     (vk_format, _type_size, width, height, depth, layers, faces, _levels,
      scheme) = struct.unpack_from('<9I', data, 12)
     if scheme in _KTX2_SCHEMES or (vk_format == 0 and scheme != 3):
@@ -586,12 +593,12 @@ def _bytes(values: np.ndarray) -> np.ndarray:
 # -- one entry point each ------------------------------------------------------
 
 def read_cube(data: bytes) -> list[np.ndarray]:
-    """Six faces from a DDS or KTX cube map, or from one picture of six faces
+    """Six faces from a DDS, KTX or Basis Universal cube map, or from one picture of six faces
 
     A picture is laid out as :func:`cube_from_layout` reads. Raises
     :class:`TextureImageError` for anything else.
     """
-    if is_dds(data) or is_ktx(data) or is_ktx2(data):
+    if _is_container(data):
         kind, found = _read_container(data)
         if kind == 'cube':
             return found
@@ -603,14 +610,14 @@ def read_cube(data: bytes) -> list[np.ndarray]:
 
 def read_volume(data: bytes,
                 fetch: Optional[Callable[[str], bytes]] = None) -> np.ndarray:
-    """A volume from a DDS, KTX or NRRD file
+    """A volume from a DDS, KTX, Basis Universal or NRRD file
 
     ``fetch`` reads an NRRD's detached data (:func:`read_nrrd`). A file
     holding a single picture is a volume one slice deep.
     """
     if is_nrrd(data):
         return read_nrrd(data, fetch)[1][0]
-    if is_dds(data) or is_ktx(data) or is_ktx2(data):
+    if _is_container(data):
         kind, found = _read_container(data)
         if kind == 'volume':
             return found[0]
@@ -622,12 +629,27 @@ def read_volume(data: bytes,
 
 
 def _read_container(data: bytes) -> tuple[str, list[np.ndarray]]:
-    """A DDS, KTX 1.1 or KTX 2 file's kind and pixels"""
+    """A DDS, KTX 1.1, KTX 2 or ``.basis`` file's kind and pixels"""
     if is_dds(data):
         return read_dds(data)
     if is_ktx2(data):
         return read_ktx2(data)
+    if basisu.is_basis(data):
+        return _read_basis(data)
     return read_ktx(data)
+
+
+def _read_basis(data: bytes) -> tuple[str, list[np.ndarray]]:
+    """A Basis Universal file's kind and pixels (:func:`OpenGLContext.loaders.basisu.read`)"""
+    try:
+        return basisu.read(data)
+    except basisu.BasisTextureError as err:
+        raise TextureImageError(str(err)) from err
+
+
+def _is_container(data: bytes) -> bool:
+    """Whether ``data`` is a DDS, KTX 1.1, KTX 2 or ``.basis`` file"""
+    return is_dds(data) or is_ktx(data) or is_ktx2(data) or basisu.is_basis(data)
 
 
 def _picture(data: bytes) -> np.ndarray:

@@ -63,8 +63,8 @@ def _mesh(scene):
 
 class TestRequired:
     def test_an_unread_required_extension_is_reported(self, caplog):
-        load_gltf(_document(required=['KHR_texture_basisu', 'EXT_made_up']))
-        assert 'KHR_texture_basisu' in caplog.text and 'EXT_made_up' in caplog.text
+        load_gltf(_document(required=['EXT_made_up', 'EXT_made_up_too']))
+        assert 'EXT_made_up_too' in caplog.text and 'EXT_made_up' in caplog.text
 
     def test_a_read_required_extension_is_not(self, caplog):
         load_gltf(_document(required=['KHR_mesh_quantization', 'KHR_meshopt_compression']))
@@ -73,7 +73,8 @@ class TestRequired:
     @pytest.mark.parametrize('name', [
         'KHR_accessor_float16', 'KHR_accessor_float64', 'KHR_materials_variants',
         'KHR_meshopt_compression', 'EXT_meshopt_compression', 'EXT_texture_avif',
-        'KHR_draco_mesh_compression', 'KHR_animation_pointer', 'KHR_node_visibility'])
+        'KHR_draco_mesh_compression', 'KHR_animation_pointer', 'KHR_node_visibility',
+        'KHR_texture_basisu'])
     def test_the_list_holds_what_the_loader_reads(self, name):
         assert name in SUPPORTED_EXTENSIONS
 
@@ -94,3 +95,27 @@ class TestTangents:
 
     def test_no_tangents_where_nothing_reads_them(self):
         assert _mesh(load_gltf(_document({}))).tangents is None
+
+
+class TestClearcoatNormalScale:
+    def test_the_scale_is_the_materials(self):
+        material = _mesh_shape_material({'extensions': {'KHR_materials_clearcoat': {
+            'clearcoatFactor': 1.0,
+            'clearcoatNormalTexture': {'index': 0, 'scale': 0.25}}}})
+        assert material.clearcoatNormalScale == pytest.approx(0.25)
+
+    def test_the_default_is_one(self):
+        material = _mesh_shape_material({'extensions': {'KHR_materials_clearcoat': {
+            'clearcoatFactor': 1.0, 'clearcoatNormalTexture': {'index': 0}}}})
+        assert material.clearcoatNormalScale == pytest.approx(1.0)
+
+
+def _mesh_shape_material(material):
+    scene = load_gltf(_document(material))
+    stack = [scene.group]
+    while stack:
+        node = stack.pop()
+        if getattr(node, 'geometry', None) is not None:
+            return node.appearance.material
+        stack.extend(getattr(node, 'children', None) or [])
+    raise AssertionError('no shape')

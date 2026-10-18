@@ -144,6 +144,16 @@ proposed by Blaxxun Interactive (see :doc:`NURBS <nurbs>`):
 - `NurbsCurve
   <http://www.blaxxun.com/developer/contact/3d/nurbs/spec/nodes.htm#NurbsCurve>`__
 
+- `CoordinateDeformer
+  <https://www.bitmanagement.com/developer/contact/nurbs/spec/nodes.htm>`__
+
+A world written for the blaxxun or Bitmanagement Contact browsers declares
+these nodes with an ``EXTERNPROTO`` whose URLs begin
+``"urn:inet:blaxxun.com:node:NurbsSurface"``. Such a declaration is read as
+the engine's own node of that name, and the prototype file its other URLs name
+is not fetched. The references that are read this way, and how an application
+adds one, are in PyVRML97's ``docs/x3d.rst`` (``vrml.x3d.knownprotos``).
+
 OpenGLContext adds these nodes, which are not part of the VRML97
 specification:
 
@@ -230,6 +240,13 @@ it in code that handles arbitrary nodes:
    # get all fields for a node/prototype
    fields = protofunctions.getFields( node )
    fields = protofunctions.getFields( proto )
+   # get its events
+   events = protofunctions.getFields( node, 1 )
+
+``getField`` returns a ``vrml.field.Field`` or a ``vrml.field.Event`` and
+raises ``AttributeError`` for any other name. Only a ``Field`` holds a value,
+so check with ``isinstance(found, field.Field)`` before calling ``fset``,
+``fget`` or ``fhas`` on the result of a lookup by name.
 
 Create a node and change its fields like any Python object:
 

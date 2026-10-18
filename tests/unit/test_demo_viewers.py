@@ -19,7 +19,7 @@ import sys
 
 import pytest
 
-from OpenGLContext.testing.glcontext import display_answers
+from OpenGLContext.testing.glcontext import client_opens_a_window
 from OpenGLContext.testing.paths import tests_root
 
 pytest.importorskip('tkinter')
@@ -29,8 +29,8 @@ from OpenGLContext.demos.tk_viewer import pathOf, rowId
 DRIVER = tests_root(__file__) / 'helpers' / '_tk_viewer_drive.py'
 
 needs_display = pytest.mark.skipif(
-    not display_answers(),
-    reason='Tk needs an X display that answers; run under xvfb-run to exercise it')
+    not client_opens_a_window(),
+    reason='no window can be opened here (under X, run it with xvfb-run)')
 
 
 def _drive(*steps):

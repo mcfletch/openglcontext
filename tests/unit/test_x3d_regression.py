@@ -272,6 +272,57 @@ def test_bless_promotes_what_was_drawn_and_reviewed(monkeypatch, tmp_path, capsy
         assert image.tobytes() == reviewed
 
 
+def test_bless_within_promotes_the_renders_close_to_their_reference(monkeypatch, tmp_path):
+    names = ('a', 'b', 'c', 'd')
+    root = write_corpus(str(tmp_path / 'corpus'),
+                        {'Geometry/Box/%s.x3d' % name: '' for name in names})
+    monkeypatch.setattr(R, 'render_scene', _fake_render)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
+    baselines, out_dir = str(tmp_path / 'b'), str(tmp_path / 'renders')
+    arguments = ['--corpus', root, '--baseline-root', baselines, '--out-dir', out_dir,
+                 '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--reference', 'web3d']
+    R.main(arguments)
+    for name, difference in zip(names, (0.0, 0.4, 3.0, None)):
+        path = os.path.join(out_dir, 'ConformanceNist.Geometry.Box.%s.json' % name)
+        with open(path) as stream:
+            record = json.load(stream)
+        record['reference_difference'] = difference
+        with open(path, 'w') as stream:
+            json.dump(record, stream)
+    assert R.main(arguments + ['--bless', '--bless-within', '0.5']) == 0
+    assert sorted(os.listdir(baselines)) == [
+        'ConformanceNist.Geometry.Box.a.json', 'ConformanceNist.Geometry.Box.a.png',
+        'ConformanceNist.Geometry.Box.b.json', 'ConformanceNist.Geometry.Box.b.png']
+
+
+def test_bless_within_and_a_part_both_choose(monkeypatch, tmp_path):
+    root = write_corpus(str(tmp_path / 'corpus'), {'Geometry/Box/a.x3d': '', 'Geometry/Box/b.x3d': ''})
+    monkeypatch.setattr(R, 'render_scene', _fake_render)
+    monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                        lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
+    baselines, out_dir = str(tmp_path / 'b'), str(tmp_path / 'renders')
+    arguments = ['--corpus', root, '--baseline-root', baselines, '--out-dir', out_dir,
+                 '--report', str(tmp_path / 'r.html'), '--size', '32x24', '--reference', 'web3d']
+    R.main(arguments)
+    for name in ('a', 'b'):
+        path = os.path.join(out_dir, 'ConformanceNist.Geometry.Box.%s.json' % name)
+        with open(path) as stream:
+            record = json.load(stream)
+        record['reference_difference'] = 0.1
+        with open(path, 'w') as stream:
+            json.dump(record, stream)
+    assert R.main(arguments + ['--bless', 'Box/b', '--bless-within', '0.5']) == 0
+    assert sorted(os.listdir(baselines)) == ['ConformanceNist.Geometry.Box.b.json',
+                                             'ConformanceNist.Geometry.Box.b.png']
+
+
+def test_bless_within_without_bless_is_refused(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        R.main(['--corpus', str(tmp_path), '--bless-within', '0.5'])
+    assert '--bless-within' in capsys.readouterr().err
+
+
 def test_no_corpus_says_how_to_fetch_one(tmp_path, capsys):
     assert R.main(['--corpus', str(tmp_path), '--out-dir', str(tmp_path / 'o'),
                    '--report', str(tmp_path / 'r.html')]) == 2

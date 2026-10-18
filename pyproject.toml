@@ -66,6 +66,11 @@ glfw = ["glfw>=2.0"]
 # MovieTexture's H.264 movie. The encoder and the decoder are the ones in the
 # graphics driver; this brings in the bindings that reach them.
 video = ["pyopengl-video>=1.0.0a1"]
+# Basis Universal textures: glTF's KHR_texture_basisu and KTX 2 or .basis files
+# named by X3D texture nodes, transcoded to the block formats the GPU samples.
+# opengl_basisu compiles Binomial's transcoder (Apache-2.0) into a wheel. Not
+# in `all` until opengl_basisu is on PyPI, where `dev` installs from.
+basisu = ["opengl_basisu>=0.1.0a1"]
 # gltf is now pretty much core to OpenGLContext...
 gltf = []
 draco = ["DracoPy>=1.4"]
@@ -107,7 +112,6 @@ oglc-terrain = "OpenGLContext.bin.terrain_view:main"
 oglc-gltf-demo = "OpenGLContext.bin.gltf_demo:main"
 oglc-gltf-regression = "OpenGLContext.bin.gltf_regression:main"
 oglc-x3d-regression = "OpenGLContext.bin.x3d_regression:main"
-oglc-x3d-geospatial = "OpenGLContext.bin.x3d_geospatial_demo:main"
 oglc-ui-demo = "OpenGLContext.bin.ui_demo:main"
 oglc-mirrors = "OpenGLContext.bin.mirrors_demo:main"
 oglc-audio-demo = "OpenGLContext.bin.audio_demo:main"
@@ -118,12 +122,14 @@ oglc-cover = "OpenGLContext.bin.cover_demo:main"
 oglc-character-sheet = "OpenGLContext.bin.character_sheet:main"
 oglc-x3d = "OpenGLContext.bin.x3d_demo:main"
 oglc-x3d-nurbs = "OpenGLContext.bin.x3d_nurbs:main"
+oglc-deformer = "OpenGLContext.bin.deformer_demo:main"
 oglc-x3d-rigidbody = "OpenGLContext.bin.x3d_rigidbody:main"
 oglc-x3d-shaders = "OpenGLContext.bin.x3d_shaders_demo:main"
 oglc-x3d-particles = "OpenGLContext.bin.x3d_particles:main"
 oglc-x3d-splats = "OpenGLContext.bin.x3d_splats:main"
 oglc-x3d-materials = "OpenGLContext.bin.x3d_materials:main"
 oglc-x3d-sound = "OpenGLContext.bin.x3d_sound:main"
+oglc-x3d-sound-stress = "OpenGLContext.bin.x3d_sound_stress:main"
 oglc-x3d-volume = "OpenGLContext.bin.x3d_volume:main"
 oglc-x3d-layering = "OpenGLContext.bin.x3d_layering:main"
 oglc-x3d-movie = "OpenGLContext.bin.x3d_movie:main"
@@ -173,9 +179,9 @@ OpenGLContext = [
     "resources/environment/*.jpg",
     # The X3D documents `oglc-x3d`, `oglc-x3d-nurbs`, `oglc-x3d-shaders`,
     # `oglc-x3d-particles`, `oglc-x3d-rigidbody`, `oglc-x3d-sound`,
-    # `oglc-x3d-volume`, `oglc-x3d-layering` and `oglc-x3d-movie` open, and
-    # the film `oglc-x3d-movie` records, and the packaged shader
-    # `oglc-x3d-shaders` reads.
+    # `oglc-x3d-sound-stress`, `oglc-x3d-volume`, `oglc-x3d-layering` and
+    # `oglc-x3d-movie` open, and the film `oglc-x3d-movie` records, and the
+    # packaged shader `oglc-x3d-shaders` reads.
     "bin/*.x3d", "bin/*.glsl",
     # The exception to the rule above: the demos' packaging recipe is read
     # rather than opened -- a PyInstaller spec, a build script and the
@@ -421,6 +427,7 @@ open_audit_sanctioned = [
     "OpenGLContext.scenegraph.tilesterrain",
     "OpenGLContext.scenegraph.vegetation.clumps",
     "OpenGLContext.scenegraph.vegetation.cover",
+    "OpenGLContext.scenegraph.vegetation.field",
     "OpenGLContext.scenegraph.vegetation.nearmesh",
     "OpenGLContext.ui.pictures",
     "OpenGLContext.viewer.adapters",
