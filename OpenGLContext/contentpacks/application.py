@@ -27,7 +27,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, NamedTuple, TextIO
 
 from . import catalog, fetch
 from .pack import ContentPack, human_bytes
@@ -36,8 +36,8 @@ from .store import CONTENT_OVERRIDE, ContentStore
 if TYPE_CHECKING:
     from OpenGLContext.loaders.assets import AssetLibrary
 
-__all__ = ['Application', 'Consent', 'NotInstalled', 'ask_on_console',
-           'console_progress']
+__all__ = ['Application', 'Consent', 'Need', 'NotInstalled', 'ask_on_console',
+           'console_progress', 'ensure_needs']
 
 #: What ``consent`` is: shown the packs a fetch would bring, it answers
 #: whether to go ahead.
@@ -46,6 +46,22 @@ Consent = Callable[[Sequence[ContentPack]], bool]
 
 class NotInstalled(LookupError):
     """The application's own art is not on this machine, and nothing ships it."""
+
+
+class Need(NamedTuple):
+    """A pack to fetch: the store it goes into and the pack it lands within.
+
+    ``within`` is the base pack a needed pack is unpacked inside, None for a
+    pack that stands alone.
+    """
+
+    pack: ContentPack
+    store: ContentStore
+    within: ContentPack | None = None
+
+    def present(self) -> bool:
+        """Whether the pack is already in its store."""
+        return self.store.root_for(self.pack, self.within) is not None
 
 
 class Application:
@@ -148,6 +164,20 @@ class Application:
         """
         return fetch.missing_base(self.registry(), store or self.store())
 
+    def needs(self, store: ContentStore | None = None) -> list[Need]:
+        """What this application has to fetch before it can start, as :class:`Need` records.
+
+        Empty where the art is already here: the base pack installed, or the
+        ``fallback`` directory present. Several applications' needs (and
+        packs that are not base packs) are fetched together by
+        :func:`ensure_needs`, which asks consent once for all of them.
+        """
+        where = store or self.store()
+        wanted = fetch.base_fetches(self.registry(), where)
+        if wanted and self.fallback is not None and os.path.isdir(self.fallback):
+            return []
+        return [Need(pack, where, within) for pack, within in wanted]
+
     def base_job(self, store: ContentStore | None = None,
                  on_progress: Callable[[], None] | None = None,
                  cache_dir: str | None = None) -> fetch.FetchJob:
@@ -186,6 +216,36 @@ class Application:
         return True
 
 
+def ensure_needs(needs: Sequence[Need], consent: Consent | None = None,
+                 progress: Callable[[int, int | None], None] | None = None,
+                 started: Callable[[ContentPack], None] | None = None,
+                 cache_dir: str | None = None) -> bool:
+    """Fetch every pack in ``needs`` that is not here, in the foreground; whether all are.
+
+    ``consent`` is shown the packs still to fetch, all of them at once, and
+    answers whether to go ahead; without one they are fetched. ``started`` is
+    called with each pack as its download begins. True when nothing was
+    missing or everything arrived; False when ``consent`` declined. A failed
+    download raises what :func:`~OpenGLContext.contentpacks.fetch.fetch_pack`
+    raises: an ``IOError`` for content that did not arrive, whole.
+    """
+    wanted = [need for need in needs if not need.present()]
+    if not wanted:
+        return True
+    shown: list[ContentPack] = []
+    for need in wanted:
+        if need.pack not in shown:
+            shown.append(need.pack)
+    if consent is not None and not consent(shown):
+        return False
+    for need in wanted:
+        if started is not None:
+            started(need.pack)
+        fetch.fetch_pack(need.pack, need.store, progress=progress, cancel=None,
+                         cache_dir=cache_dir, within=need.within)
+    return True
+
+
 def ask_on_console(assume_yes: bool = False, stream: TextIO | None = None,
                    answer: Callable[[str], str] | None = None) -> Consent:
     """A consent that lists the packs on ``stream`` and asks yes or no.
@@ -215,13 +275,16 @@ def ask_on_console(assume_yes: bool = False, stream: TextIO | None = None,
 
 def console_progress(stream: TextIO | None = None,
                      step: int = 5) -> Callable[[int, int | None], None]:
-    """A progress callback printing every ``step`` per cent on one line."""
+    """A progress callback printing every ``step`` per cent on one line, and
+    starting over when the count goes back to the start (the next download)."""
     shown = [-step]
 
     def progress(done: int, total: int | None) -> None:
         if not total:
             return
         at = min(100, int(done * 100 / total))
+        if at < shown[0]:
+            shown[0] = -step    # a second download begins again from nothing
         if at >= shown[0] + step:
             shown[0] = at
             out = stream if stream is not None else sys.stdout

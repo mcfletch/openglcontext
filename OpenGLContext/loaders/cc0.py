@@ -140,6 +140,24 @@ def pack_directory() -> Optional[str]:
         return None
 
 
+def pack_needs() -> list[Any]:
+    """The engine's texture pack as a :class:`~OpenGLContext.contentpacks.application.Need`
+
+    Empty where the pack is installed or the registry does not offer it, so the
+    list can be handed with an application's own needs to
+    :func:`~OpenGLContext.contentpacks.application.ensure_needs`.
+    """
+    from OpenGLContext.contentpacks import ContentStore, catalog
+    from OpenGLContext.contentpacks.application import Need
+    from OpenGLContext.viewer.source import ENGINE_REGISTRY, ENGINE_STORE
+
+    pack = catalog.pack_for_key(PACK, catalog.load(ENGINE_REGISTRY))
+    if pack is None:
+        return []
+    need = Need(pack, ContentStore(ENGINE_STORE))
+    return [] if need.present() else [need]
+
+
 def ensure_pack(consent: Optional[Any] = None) -> bool:
     """Fetch the engine's texture pack if it is not here; whether it is now.
 

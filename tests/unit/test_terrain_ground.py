@@ -31,6 +31,8 @@ from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 
+pytestmark = pytest.mark.usefixtures('no_installed_content')
+
 EXTENT = 100.0
 
 

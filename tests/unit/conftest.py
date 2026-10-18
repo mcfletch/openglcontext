@@ -121,3 +121,15 @@ def blender():
     if found is None:
         pytest.skip('Blender is not installed')
     return found
+
+
+@pytest.fixture
+def no_installed_content(tmp_path, monkeypatch):
+    """The per-user content store is empty: no pack fetched on this machine is found.
+
+    A pack a developer has installed (``release-assets.py --install``, or a first run of a
+    game) lives under the per-user application directory, so a test that means no pack to be
+    installed moves that directory.
+    """
+    monkeypatch.setattr('OpenGLContext.userpaths.appdatadirectory',
+                        lambda: str(tmp_path / 'appdata'))

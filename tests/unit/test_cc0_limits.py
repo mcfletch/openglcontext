@@ -15,6 +15,8 @@ import pytest
 from OpenGLContext.loaders import cc0
 from OpenGLContext import userpaths
 
+pytestmark = pytest.mark.usefixtures('no_installed_content')
+
 
 def _archive(members):
     buf = io.BytesIO()

@@ -14,6 +14,8 @@ import pytest
 from OpenGLContext.loaders import cc0
 from OpenGLContext import userpaths
 
+pytestmark = pytest.mark.usefixtures('no_installed_content')
+
 
 @pytest.fixture(autouse=True)
 def cache_under_tmp(tmp_path, monkeypatch):

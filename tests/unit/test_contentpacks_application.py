@@ -208,3 +208,58 @@ class TestOnTheConsole:
         consent = application.ask_on_console(stream=io.StringIO())
         monkeypatch.setattr('builtins.input', lambda _prompt: 'yes')
         assert consent(game.needed_to_start())
+
+
+class TestNeeds:
+    """Several applications' packs, fetched on one consent"""
+
+    def test_a_first_run_needs_the_base_pack(self, game) -> None:
+        assert [need.pack.key for need in game.needs()] == ['racer/cars']
+
+    def test_the_fallback_directory_is_the_art_where_it_exists(self, game, tmp_path) -> None:
+        game.fallback = str(tmp_path)
+        assert game.needs() == []
+
+    def test_one_consent_covers_every_application(self, game, tmp_path, served) -> None:  # noqa: F811 the fixture imported above
+        where, base = served
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        built = an_art_pack(where, 'more.tar.gz')
+        other = Application(
+            'racer-more', a_registry(other_dir, base + '/more.tar.gz',
+                                     sha256=archive.digest(str(built))),
+            base='racer/cars', root=str(tmp_path / 'store-more'),
+            cache_dir=str(tmp_path / 'cache'))
+        asked, started = [], []
+        assert application.ensure_needs(
+            [*game.needs(), *other.needs()],
+            consent=lambda packs: asked.append([p.key for p in packs]) or True,
+            started=lambda pack: started.append(pack.key))
+        assert asked == [['racer/cars', 'racer/cars']]     # one prompt, two packs
+        assert started == ['racer/cars', 'racer/cars']
+        assert game.needs() == [] and other.needs() == []
+
+    def test_declining_fetches_nothing(self, game) -> None:
+        assert not application.ensure_needs(game.needs(), consent=lambda _packs: False)
+        assert game.needs() != []
+
+    def test_nothing_missing_asks_nothing(self, game) -> None:
+        game.ensure_base()
+        assert application.ensure_needs(
+            game.needs(), consent=lambda _packs: pytest.fail('asked'))
+
+    def test_a_download_that_fails_raises_an_ioerror(self, tmp_path, served) -> None:  # noqa: F811 the fixture imported above
+        _, base = served
+        game = Application('racer', a_registry(tmp_path, base + '/gone.tar.gz', sha256='0' * 64),
+                           base='racer/cars', root=str(tmp_path / 'store'),
+                           cache_dir=str(tmp_path / 'cache'))
+        with pytest.raises(IOError):
+            application.ensure_needs(game.needs())
+
+    def test_progress_starts_over_for_the_next_download(self) -> None:
+        said = io.StringIO()
+        progress = application.console_progress(stream=said, step=50)
+        for _ in range(2):
+            for done in (0, 50, 100):
+                progress(done, 100)
+        assert said.getvalue().count('%') == 6

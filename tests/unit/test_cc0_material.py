@@ -7,6 +7,8 @@ from OpenGLContext.contentpacks import catalog, fetch
 from OpenGLContext.contentpacks import store as content_store
 from OpenGLContext.loaders import cc0
 
+pytestmark = pytest.mark.usefixtures('no_installed_content')
+
 
 @pytest.fixture
 def maps(tmp_path, monkeypatch):
@@ -142,3 +144,15 @@ def test_the_pack_is_not_fetched_when_consent_is_declined(empty_store, monkeypat
 
     assert cc0.ensure_pack(consent=decline) is False
     assert [pack.key for pack in asked] == [cc0.PACK] and not fetched
+
+
+def test_the_pack_is_a_need_until_it_is_installed(empty_store):
+    from OpenGLContext.contentpacks.application import Need
+    needs = cc0.pack_needs()
+    assert [type(need) for need in needs] == [Need]
+    assert needs[0].pack.key == cc0.PACK and not needs[0].present()
+
+
+def test_no_need_where_the_registry_does_not_offer_the_pack(empty_store, monkeypatch):
+    monkeypatch.setattr(catalog, 'load', lambda path: [])
+    assert cc0.pack_needs() == []

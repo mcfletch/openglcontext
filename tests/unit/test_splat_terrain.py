@@ -14,6 +14,8 @@ from OpenGLContext.scenegraph.terrain.ground import GroundPatch
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
 
+pytestmark = pytest.mark.usefixtures('no_installed_content')
+
 
 def _hf():
     grid = np.linspace(0, 1, 8)[:, None] * np.ones((8, 8))
