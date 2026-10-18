@@ -219,18 +219,23 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
         glEnable(GL_PROGRAM_POINT_SIZE)
 
-        # Enable blending for particle effects
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        # Blend for particle effects; the transparent phase has set the blending
+        # it draws with, which this leaves as it is
+        pass_blends = bool(getattr(mode, 'transparent', False))
+        if not pass_blends:
+            glEnable(GL_BLEND)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         # Keep the packed object-id MRT attachment out of the blend (finding
         # 4.6): blending it uses the id's own alpha byte as the factor, which
         # is 0 for most ids, so the id would be multiplied to zero and the
         # point would be unpickable. Best-effort; drivers without indexed
-        # blend enables (or a single-attachment target) simply skip it.
-        try:
-            glDisablei(GL_BLEND, _OBJECT_ID_ATTACHMENT)
-        except Exception:
-            pass
+        # blend enables (or a single-attachment target) simply skip it. The
+        # transparent phase has done this for the targets it draws into.
+        if not pass_blends:
+            try:
+                glDisablei(GL_BLEND, _OBJECT_ID_ATTACHMENT)
+            except Exception:
+                pass
 
         glBindVertexArray(vao)
         try:
@@ -238,7 +243,8 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         finally:
             glBindVertexArray(0)
 
-        glDisable(GL_BLEND)
+        if not pass_blends:
+            glDisable(GL_BLEND)
         glDisable(GL_PROGRAM_POINT_SIZE)
 
         # Restore the lit shader

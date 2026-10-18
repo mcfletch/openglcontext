@@ -645,6 +645,11 @@ class ParticleSystem(Ticked, Shape, x3d.ParticleSystem, GLLayer):
             self._drawPlacements(super().Render, mode)
         return 1
 
+    def drawsWeighted(self) -> bool:
+        """True for a GEOMETRY system, whose copies are drawn as shapes; the other
+        systems are drawn by this node's own program"""
+        return bool(self.placesGeometry)
+
     def RenderTransparent(self, mode: Any = None) -> Any:
         """The particles: a GEOMETRY system's blended copies, or one instanced draw of the rest"""
         self.advance(systemtime.systemTime())

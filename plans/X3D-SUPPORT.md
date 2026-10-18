@@ -245,7 +245,7 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     floor's and wall's mipmaps), x3d_layering (2.4%)
   - [x] order-independent transparency:
     `ContextDefinition.orderIndependentTransparency`
-    (`OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY`, off as in X_ITE):
+    (`OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY`, on by default; X_ITE's is off):
     weighted blended, X_ITE's weight and composite (`passes/oit.py`,
     `shaders/_oit_inc.glsl`); the targets take the view's opaque depth copy
     as their depth buffer. Found on the way and fixed: a pick of a

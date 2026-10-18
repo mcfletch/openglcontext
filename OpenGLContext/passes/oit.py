@@ -1,9 +1,9 @@
 """Order-independent transparency: weighted blended, as X_ITE draws it
 
 ``ContextDefinition.orderIndependentTransparency``
-(``OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY``, off by default, X_ITE's
-default too) draws a view's transparent surfaces into two targets instead of
-blending them over the frame in back-to-front order:
+(``OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY``, on by default) draws a
+view's transparent surfaces into two targets instead of blending them over the
+frame in back-to-front order:
 
 - the first adds each fragment's colour times its opacity ``a`` and a weight
   ``w``, and keeps the product of ``1 - a`` in its alpha;
@@ -36,9 +36,9 @@ __all__ = ['enabled', 'weight', 'OITTargets']
 
 
 def default_enabled() -> bool:
-    """``OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY``, else off"""
+    """``OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY``, else on"""
     from OpenGLContext import renderoptions
-    return renderoptions.env_flag_once('OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY', False)
+    return renderoptions.env_flag_once('OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY', True)
 
 
 def enabled(source: Any) -> bool:
@@ -76,11 +76,10 @@ void main() {
 }"""
 
 
-def _texture(width: int, height: int) -> int:
+def _texture(width: int, height: int, internal: int, layout: int) -> int:
     texture = int(GL.glGenTextures(1))
     GL.glBindTexture(GL.GL_TEXTURE_2D, texture)
-    GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA16F, width, height, 0, GL.GL_RGBA,
-                    GL.GL_FLOAT, None)
+    GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, internal, width, height, 0, layout, GL.GL_FLOAT, None)
     for parameter, value in ((GL.GL_TEXTURE_MIN_FILTER, GL.GL_NEAREST),
                              (GL.GL_TEXTURE_MAG_FILTER, GL.GL_NEAREST),
                              (GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE),
@@ -109,7 +108,8 @@ class OITTargets:
     def _ensure(self, width: int, height: int) -> None:
         if self.size != (width, height):
             self._release_targets()
-            self.textures = (_texture(width, height), _texture(width, height))
+            self.textures = (_texture(width, height, GL.GL_RGBA16F, GL.GL_RGBA),
+                             _texture(width, height, GL.GL_R16F, GL.GL_RED))
             self.framebuffer = int(GL.glGenFramebuffers(1))
             GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.framebuffer)
             for attachment, texture in zip((GL.GL_COLOR_ATTACHMENT0, GL.GL_COLOR_ATTACHMENT1),

@@ -49,7 +49,13 @@ def test_the_environment_is_the_default(monkeypatch):
     assert 'orderIndependentTransparency' in contextdefinition.ContextDefinition.RENDERING_FIELDS
 
 
-def test_off_by_default():
+def test_on_by_default():
+    assert oit.enabled(contextdefinition.ContextDefinition())
+
+
+def test_the_environment_can_turn_it_off(monkeypatch):
+    monkeypatch.setenv('OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY', 'no')
+    renderoptions.reset_env_cache()
     assert not oit.enabled(contextdefinition.ContextDefinition())
 
 
@@ -60,7 +66,8 @@ SWAPPED = document(quad(b'-3', b'0 0 1', b'0.5'), quad(b'-2', b'1 0 0', b'0.5'))
 
 
 def test_sorted_blending_depends_on_the_order_drawn(gl_context):
-    assert abs(drawn(TWO)[16, 16][2] - drawn(SWAPPED)[16, 16][2]) > 50
+    assert abs(drawn(TWO, orderIndependentTransparency=False)[16, 16][2]
+               - drawn(SWAPPED, orderIndependentTransparency=False)[16, 16][2]) > 50
 
 
 def test_weighted_blending_mixes_the_two_surfaces(gl_context):
@@ -84,7 +91,7 @@ def test_a_transparent_line_is_weighted_too(gl_context):
     line = (b"<Shape><Appearance><Material emissiveColor='1 1 1' transparency='0.5'/>"
             b"</Appearance><IndexedLineSet coordIndex='0 1'>"
             b"<Coordinate point='-1 0.013 -1 1 0.013 -1'/></IndexedLineSet></Shape>")
-    plain = drawn(document(line))[16, 16]
+    plain = drawn(document(line), orderIndependentTransparency=False)[16, 16]
     weighted = drawn(document(line), orderIndependentTransparency=True)[16, 16]
     assert tuple(weighted) == pytest.approx(tuple(plain), abs=4)
 
@@ -108,3 +115,69 @@ def test_a_transparent_surface_is_picked(gl_context, weighted):
                 break
     assert touch.isOver is True
     assert tuple(touch.hitPoint_changed)[2] == pytest.approx(-3, abs=0.05)
+
+
+SHADED = (b"<Shape><Appearance><Material transparency='0.5'/>"
+          b"<ComposedShader language='GLSL'>"
+          b"<field name='colour' type='SFColor' accessType='inputOutput' value='1 0 0'/>"
+          b"<ShaderPart type='VERTEX'><![CDATA[#version 330 core\n"
+          b"in vec4 x3d_Vertex; uniform mat4 x3d_ModelViewMatrix;"
+          b" uniform mat4 x3d_ProjectionMatrix;\n"
+          b"void main() { gl_Position = x3d_ProjectionMatrix * x3d_ModelViewMatrix * x3d_Vertex; }"
+          b"]]></ShaderPart><ShaderPart type='FRAGMENT'><![CDATA[#version 330 core\n"
+          b"uniform vec3 colour; out vec4 fragColour;\n"
+          b"void main() { fragColour = vec4(colour, 0.5); }]]></ShaderPart>"
+          b"</ComposedShader></Appearance><IndexedFaceSet coordIndex='0 1 2 3'>"
+          b"<Coordinate point='-5 -5 -4 5 -5 -4 5 5 -4 -5 5 -4'/></IndexedFaceSet></Shape>")
+
+
+@pytest.mark.parametrize("shaded_depth", [b'-4', b'-1'])
+def test_a_shape_with_a_program_of_its_own_is_blended_in_order(gl_context, shaded_depth):
+    """A custom-shader shape is drawn between the weighted surfaces by its depth"""
+    scene = document(SHADED.replace(b'-4', shaded_depth), quad(b'-2', b'0 1 0', b'0.5'))
+    plain = drawn(scene, orderIndependentTransparency=False)[16, 16]
+    weighted = drawn(scene, orderIndependentTransparency=True)[16, 16]
+    assert tuple(weighted) == pytest.approx(tuple(plain), abs=4)
+    assert plain[0] > 40 and plain[1] > 100
+
+
+def test_only_shapes_the_pass_draws_are_weighted():
+    from OpenGLContext.scenegraph import basenodes  # noqa: PLC0415 kept with its use
+    assert basenodes.Shape().drawsWeighted()
+    shaded = basenodes.Shape(appearance=basenodes.Appearance(
+        shaders=[basenodes.ComposedShader()]))
+    assert not shaded.drawsWeighted()
+
+
+def test_a_shape_naming_a_blend_mode_is_not_weighted():
+    from OpenGLContext.scenegraph import basenodes, rendermodes  # noqa: PLC0415 kept with its use
+    blended = basenodes.Shape(appearance=basenodes.Appearance(
+        blendMode=rendermodes.BlendMode(sourceColorFactor='ONE')))
+    assert not blended.drawsWeighted()
+
+
+def test_text_is_not_weighted():
+    from OpenGLContext.scenegraph import basenodes  # noqa: PLC0415 kept with its use
+    assert not basenodes.Shape(geometry=basenodes.Text(string=['x'])).drawsWeighted()
+
+
+def test_a_transparent_point_set_is_weighted_as_the_blend_gives(gl_context):
+    points = (b"<Shape><Appearance><Material emissiveColor='1 1 1' transparency='0.5'/>"
+              b"<PointProperties pointSizeScaleFactor='20'/></Appearance>"
+              b"<PointSet><Coordinate point='0 0 -3'/></PointSet></Shape>")
+    plain = drawn(document(points), orderIndependentTransparency=False)[16, 16]
+    weighted = drawn(document(points), orderIndependentTransparency=True)[16, 16]
+    assert plain[0] > 100
+    assert tuple(weighted) == pytest.approx(tuple(plain), abs=4)
+
+
+def test_a_transparent_textured_surface_is_weighted_as_the_blend_gives(gl_context):
+    textured = (b"<Shape><Appearance><Material emissiveColor='1 1 1' transparency='0.5'/>"
+                b"<PixelTexture image='1 1 3 0xFF8000'/></Appearance>"
+                b"<IndexedFaceSet coordIndex='0 1 2 3'>"
+                b"<Coordinate point='-5 -5 -3 5 -5 -3 5 5 -3 -5 5 -3'/>"
+                b"<TextureCoordinate point='0 0 1 0 1 1 0 1'/></IndexedFaceSet></Shape>")
+    plain = drawn(document(textured), orderIndependentTransparency=False)[16, 16]
+    weighted = drawn(document(textured), orderIndependentTransparency=True)[16, 16]
+    assert plain[0] > 100
+    assert tuple(weighted) == pytest.approx(tuple(plain), abs=4)

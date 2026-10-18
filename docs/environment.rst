@@ -217,8 +217,9 @@ Lighting and shadows
        of one sample a pixel and is not antialiased.
    * - ``OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY``
      - yes/no
-     - off
-     - Transparent surfaces drawn by weighted blending, in no order. See
+     - on
+     - Transparent surfaces drawn by weighted blending, in no order; ``no`` blends
+       them back to front by each shape's origin. See
        :ref:`x3d-browser-options`.
    * - ``OPENGLCONTEXT_PRIMITIVE_QUALITY``
      - ``auto``, ``low``, ``medium``, ``high``

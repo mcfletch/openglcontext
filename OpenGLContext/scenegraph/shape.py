@@ -398,6 +398,20 @@ class Shape(basenodes.Shape):
         """
         return not _standing(self.geometry)
 
+    def drawsWeighted(self) -> bool:
+        """Whether the pass's own programs draw this shape
+
+        Order-independent transparency weights only what they draw, with the
+        blending it chooses: an appearance bringing a program of its own writes
+        its own colours, one naming a BlendMode or DepthMode sets the state it
+        is drawn in, and a geometry with ``blendsInOrder`` set draws with
+        blend state of its own.
+        """
+        appearance = self.drawnAppearance
+        return not (getattr(appearance, 'bringsProgram', False)
+                    or rendermodes.has_modes(appearance)
+                    or getattr(self.geometry, 'blendsInOrder', False))
+
     def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         if self.drawnAppearance:

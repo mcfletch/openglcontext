@@ -1118,8 +1118,8 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
 
         self.refreshZones([record for _obj_index, record in transparent])
 
-        def draw_all(ids: Optional[dict]) -> None:
-            for _obj_index, record in transparent:
+        def draw_all(records: list, ids: Optional[dict]) -> None:
+            for _obj_index, record in records:
                 _key, mvmatrix, tmatrix, bvolume, path, node = record
                 self.matrix = mvmatrix
                 self.renderPath = path
@@ -1145,21 +1145,22 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                 finally:
                     self._restoreShapeId(masked)
         try:
-            targets = self._beginOrderIndependent(shader)
-            if targets is None:
-                # The colours alone: the ids are drawn below, nearest first
-                if id_map is not None:
-                    glColorMaski( OBJECT_ID_ATTACHMENT, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE )
-                try:
-                    draw_all(None)
-                finally:
+            for weighted, records in self._weightingRuns(transparent):
+                targets = self._beginOrderIndependent(shader) if weighted else None
+                if targets is None:
+                    # The colours alone: the ids are drawn below, nearest first
                     if id_map is not None:
-                        glColorMaski( OBJECT_ID_ATTACHMENT, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE )
-            else:
-                try:
-                    draw_all(None)
-                finally:
-                    self._endOrderIndependent(shader, targets)
+                        glColorMaski( OBJECT_ID_ATTACHMENT, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE )
+                    try:
+                        draw_all(records, None)
+                    finally:
+                        if id_map is not None:
+                            glColorMaski( OBJECT_ID_ATTACHMENT, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE )
+                else:
+                    try:
+                        draw_all(records, None)
+                    finally:
+                        self._endOrderIndependent(shader, targets)
             if id_map is not None:
                 # The picking ids and depth of the nearest transparent surface,
                 # which a pick reads its shape and its point from: drawn again
@@ -1168,7 +1169,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
                 glColorMaski(0, False, False, False, False)
                 glDepthMask(1)
                 try:
-                    draw_all(id_map)
+                    draw_all(transparent, id_map)
                 finally:
                     glColorMaski(0, True, True, True, True)
                     glDepthMask(0)
@@ -1321,6 +1322,28 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         if not self.toneMapped:
             return tonemapping.ENGINE
         return tonemapping.display( self, getattr( self, 'scene', None ) )
+
+    def _weightingRuns( self, transparent: list ) -> list[tuple[bool, list]]:
+        """``transparent``, farthest first, as runs of ``(weighted, records)``
+
+        A run is weighted where order-independent transparency is on and its
+        records are drawn by the pass's own programs
+        (:meth:`~OpenGLContext.scenegraph.shape.Shape.drawsWeighted`); the
+        records between two such runs are blended in order, so a particle
+        system behind a window is still drawn behind it.
+        """
+        from OpenGLContext.passes import oit  # noqa: PLC0415 GL module, imported where used
+        if not oit.enabled( self ):
+            return [(False, transparent)]
+        runs: list[tuple[bool, list]] = []
+        for entry in transparent:
+            asks = getattr( entry[1][5], 'drawsWeighted', None )
+            weighted = bool( asks and asks() )
+            if runs and runs[-1][0] == weighted:
+                runs[-1][1].append( entry )
+            else:
+                runs.append( (weighted, [entry]) )
+        return runs
 
     def _beginOrderIndependent( self, shader: Any ) -> Optional[Any]:
         """The view's OIT targets, bound for its transparent surfaces, or None

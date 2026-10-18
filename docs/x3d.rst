@@ -1893,7 +1893,7 @@ default (:doc:`environment`). ``auto`` gives a VRML97 or X3D document X_ITE
      - unset; ``oglc-x3d-regression`` draws with 4
    * - ``OrderIndependentTransparency``
      - ``orderIndependentTransparency``
-     - off
+     - on (X_ITE's is off)
    * - ``PrimitiveQuality``
      - ``primitiveQuality``
      - ``medium``: 20 sides for a Cone and a Cylinder, 32 sides and 14
@@ -1911,10 +1911,18 @@ targets the view's size, and the pair is composed over the opaque scene. The
 result does not depend on the order the surfaces are drawn in, which sorting
 by each shape's origin gets wrong for shapes that interpenetrate or share an
 origin; two surfaces of equal opacity close together are mixed evenly rather
-than the nearer drawn over the farther. The PBR pass's programs for
-surfaces, lines and points write the targets; volumes, particle systems and
-Gaussian splats, which have programs of their own, are not weighted. A pick finds the nearest transparent surface and its
-point, with or without it.
+than the nearer drawn over the farther. A single surface blends as it does
+in order.
+
+The PBR pass's programs for surfaces, lines and points write the targets.
+Volumes, particle systems, Gaussian splats and shapes whose appearance brings
+a program of its own are not weighted: they are blended in order, farthest
+first, between the weighted runs, so a particle system behind a window is
+drawn behind it. A view with no transparent surface does no extra work. A
+view with one pays for a copy of its opaque depth, a clear of the two targets
+(RGBA16F and R16F, ten bytes a pixel) and a full-view composite; measured on an
+integrated GPU that is about 0.2 ms at 1080p and 1 ms at 4K. A pick finds the
+nearest transparent surface and its point, with or without it.
 
 Distance level of detail steps down from the primitive quality as the
 viewer moves away (``OPENGLCONTEXT_LOD``). A change of either quality applies

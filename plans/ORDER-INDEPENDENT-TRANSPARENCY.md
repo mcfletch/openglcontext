@@ -1,6 +1,23 @@
 # Order-Independent Transparency (OIT) Plan
 
-## Status: Planned
+## Status: Implemented (weighted blended, core profile, on by default)
+
+Landed as `passes/oit.py` and `shaders/_oit_inc.glsl`, with X_ITE 16.4.3's
+weight and composite (`ContextDefinition.orderIndependentTransparency`,
+`OPENGLCONTEXT_ORDER_INDEPENDENT_TRANSPARENCY`; user documentation in
+`docs/x3d.rst`). The targets are RGBA16F (colour times opacity times weight,
+product of 1 - opacity) and R16F (opacity times weight), depth-tested against
+a copy of the view's opaque depth.
+
+- Weighted: shapes the pass's own programs draw (surfaces, lines, points).
+- Blended in order, between the weighted runs: volumes, particle systems,
+  Gaussian splats, text, and shapes whose appearance brings a program or names
+  a BlendMode or DepthMode (`Shape.drawsWeighted`, `Text.blendsInOrder`).
+- Cost, integrated GPU, frames with a transparent surface: 0.2 ms at 1080p, 1 ms
+  at 4K, of which 0.5 ms at 4K is the depth copy. A view with none pays nothing.
+- Not done: the compatibility profile; bounding the clear, copy and composite
+  to the screen rectangle of the transparent draws.
+- Not done: the other options below (depth peeling, linked lists).
 
 ## Problem Statement
 

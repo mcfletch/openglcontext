@@ -39,6 +39,9 @@ class Text( basenodes.Text ):
     #: Text is drawn with anti-aliased edges, so its shape is blended
     #: (:meth:`OpenGLContext.scenegraph.shape.Shape.sortKey`).
     softEdges = True
+    #: Text draws with its own program and blend state, so it is blended in
+    #: order rather than weighted (:meth:`OpenGLContext.scenegraph.shape.Shape.drawsWeighted`).
+    blendsInOrder = True
 
     def effectiveFontStyle( self ) -> Any:
         """The FontStyle the text is drawn with: its own; else, in a VRML97 or
