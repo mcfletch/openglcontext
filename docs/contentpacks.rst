@@ -631,7 +631,8 @@ adding options of the application's own, read back from ``build.options``),
 does not build, such as other people's packages), ``bundle`` (also write the
 registry and its preview pictures as one zip, see :ref:`bundles`), ``store``
 (the store ``--install`` writes into, ``ContentStore(namespace)`` by default),
-``tag``, ``notes`` and ``description``.
+``remote`` (the git remote tags are pushed to, ``origin`` by default),
+``notes`` and ``description``.
 
 The steps ``publish.main`` and a ``declare`` take between them are the same
 for every application:
@@ -647,8 +648,8 @@ for every application:
    The archive's bytes depend only on the content: entries are sorted, every
    entry and the gzip header have a fixed timestamp, and entries have no owner
    and one file mode. The same content gives the same digest on any machine,
-   so you can rebuild from a tag and show that the result is the released
-   archive. It refuses a tree holding a symbolic link or a Git LFS pointer
+   so you can check out an archive's tag, run the command its message names
+   and show that the result is the released archive. It refuses a tree holding a symbolic link or a Git LFS pointer
    (the small text file a checkout made without ``git lfs pull`` holds in
    place of a large one), naming each, so neither reaches a release.
 
@@ -661,23 +662,27 @@ for every application:
    is rewritten only by ``--write-registry`` or ``--push``, so a draft build
    never leaves the shipped registry describing archives nobody published.
 
+   Each archive is released under a tag of its own, :ref:`named for it
+   <bundle-tags>`, so the bundles of one application are published on separate
+   schedules.
+
 #. Install the packs on this machine and test the application against them
    (``--install``). ``publish.install(pack, store, archives)`` leaves the same
    result as a download: digest checked, unpacking size-limited, content in
    the directory a first run looks in, each pack a chooser offers installed
    with what it needs inside it. Only the network transfer is skipped.
 
-#. Attach the archives to a release (``--push``), with
-   ``publish.push(publish.repository(pack.url), tag, paths)``. This runs the
-   GitHub CLI. It creates the release at that tag the first time, and replaces
-   the release's assets after that. A GitHub release asset can be up to 2 GB,
-   with no limit on the number of assets and no bandwidth charge, at a URL of
-   the form ``https://github.com/<owner>/<repo>/releases/download/<tag>/<file>``.
-   Use a tag only for content, separate from the code's release tags. A
-   rebuilt pack pushed to the same tag keeps its URL and changes its bytes;
-   the registry's new ``sha256`` is what makes installed copies update (see
-   :ref:`Installing <installing>`), so give every pack you rebuild in place a
-   digest.
+#. Attach the archives to their releases (``--push``). ``publish.main`` sends
+   the new tags to the remote, then for each tag runs the GitHub CLI through
+   ``publish.push(publish.repository(pack.url), tag, paths)``, which creates
+   the release the first time and replaces the release's assets after that. A
+   file a release already carries is not sent again
+   (``publish.missing_assets``). A GitHub release asset can be up to 2 GB, with
+   no limit on the number of assets and no bandwidth charge, at a URL of the
+   form ``https://github.com/<owner>/<repo>/releases/download/<tag>/<file>``.
+   The tags are only for content, apart from the code's release tags. The
+   registry's ``sha256`` is what makes installed copies update (see
+   :ref:`Installing <installing>`).
 
 #. Publish the preview pictures with the registry, because a chooser shows
    them before anything is downloaded. ``bundle=True`` attaches
@@ -690,7 +695,7 @@ for every application:
    ./release-assets.py --install         # ...and put them in this machine's store
    ./release-assets.py --reinstall       # ...replacing the copies installed there
    ./release-assets.py --write-registry  # ...and write the shipped registry
-   ./release-assets.py --push            # ...attach them to the release tag,
+   ./release-assets.py --push            # ...attach each to its release,
                                          #    and write the shipped registry
 
 ``--install`` keeps a pack that is already installed; ``--reinstall`` replaces
@@ -708,6 +713,41 @@ tarball cut off at a member boundary reads as a valid, shorter archive: the
 missing files are simply absent, and no error is raised. A compressed one at
 least fails to decompress. With a digest, a short download is refused instead
 of producing content that renders wrongly later.
+
+.. _bundle-tags:
+
+Bundle tags
+~~~~~~~~~~~
+
+Every archive is released under its own tag, ``content-<archive>-v<N>``:
+``content-textures-v1``, then ``content-textures-v2`` when the textures change.
+The tag is an annotated git tag in the application's repository, on the commit
+the archive was built from. Its message gives the archive's file name, digest
+and size and the command that built it, so a bundle can be made again by
+checking out the tag and running that command.
+
+``publish.main`` chooses the tag for each archive:
+
+* An archive whose digest is the shipped registry's keeps the tag that
+  registry's URL names, whatever the tag is called. A registry written before
+  bundles had tags of their own, naming ``content-v1``, stays valid.
+* An archive whose digest differs takes the number after the highest that
+  bundle has in the repository's tags and in the registry. Tags made on
+  another clone are counted once they are fetched (``git fetch --tags``).
+* A draft build only chooses: the tags are made when the shipped registry is
+  written (``--write-registry`` or ``--push``), and only for archives that
+  are new. A command that writes the shipped registry exits 2 before it builds
+  anything when the application is not in a git repository or has tracked
+  files that differ from the last commit, since the tag names that commit. The
+  registry file is not counted.
+* ``--push`` sends the tags to the remote before it makes any release, because
+  ``gh release create`` makes a tag the remote lacks as a plain one at the
+  head of the default branch. ``tools/publish-content.py`` does the same
+  before it creates a release.
+
+With ``bundle=True`` the registry zip is a bundle of its own,
+``content-<namespace>-registry-v<N>``, given a new number whenever the shipped
+registry changes.
 
 .. _licensing:
 

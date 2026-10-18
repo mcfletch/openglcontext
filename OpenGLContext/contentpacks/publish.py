@@ -6,6 +6,14 @@ what was just built into this machine's own store so the application can be
 driven against it, and attach the same files to the release the registry's URLs
 already name.
 
+Every archive is released under a tag of its own, ``content-<archive>-v<N>``
+(:mod:`~OpenGLContext.contentpacks.bundletags`), so an application's bundles
+are published on separate schedules. An archive whose digest is the shipped
+registry's keeps that registry's tag; one that differs takes the next number.
+When the shipped registry is written the new tags are made in the
+application's git repository, annotated, on the commit the archives were built
+from; ``--push`` sends them to the remote before it makes the releases.
+
 :func:`install` is what makes a content release testable before it is a
 release. It leaves exactly what a download would leave -- the digest checked,
 the unpacking bounded, the content in the directory a first run looks in -- with
@@ -13,7 +21,8 @@ only the transfer left out, because the file is already on this disk.
 
     >>> from OpenGLContext.contentpacks import publish
     >>> publish.install(pack, store, 'dist/content')        # doctest: +SKIP
-    >>> publish.push('mcfletch/glisteel', 'content-v1',     # doctest: +SKIP
+    >>> publish.push('mcfletch/glisteel',                   # doctest: +SKIP
+    ...              'content-glisteel-ashdown-v1',
     ...              ['dist/content/glisteel-ashdown.tar.gz'])
 
 An application's own ``release-assets.py`` says what to build and what the
@@ -42,6 +51,7 @@ import argparse
 import json
 import logging
 import os
+import shlex
 import subprocess
 import sys
 import urllib.parse
@@ -55,14 +65,15 @@ from OpenGLContext.loaders.documentvalues import (
     JSONObject, parse_object, require_array, require_object,
 )
 
-from . import archive, catalog
+from . import archive, bundletags, catalog
 from .pack import ContentPack
 from .store import CONTENT_OVERRIDE, ContentStore
 
 log = logging.getLogger(__name__)
 
 __all__ = ['Build', 'Built', 'GITHUB', 'Release', 'built', 'bundle_registry',
-           'fresh_directory', 'install', 'main', 'push', 'repository']
+           'fresh_directory', 'install', 'main', 'missing_assets', 'push',
+           'release_tag', 'repository']
 
 #: The command a release is attached with. GitHub's own, which knows where the
 #: credentials are kept; nothing here handles a token.
@@ -137,6 +148,17 @@ def install(pack: ContentPack, store: ContentStore, archives: str,
     return store.install(pack, path, within, replace=replace)
 
 
+def _release_asset(url: str) -> list[str]:
+    """The path segments of a GitHub release-asset URL."""
+    parts = urllib.parse.urlparse(url)
+    path = parts.path.strip('/').split('/')
+    if parts.netloc.lower() not in ('github.com', 'www.github.com') \
+            or len(path) < 6 or path[2] != 'releases' or path[3] != 'download':
+        raise ValueError('%s is not a GitHub release asset, so there is no '
+                         'repository to attach one to' % (url,))
+    return path
+
+
 def repository(url: str) -> str:
     """The ``owner/name`` a release-asset URL belongs to.
 
@@ -144,13 +166,13 @@ def repository(url: str) -> str:
     fetched from a repository is published to that repository, and two places
     saying so is one place to be wrong.
     """
-    parts = urllib.parse.urlparse(url)
-    path = parts.path.strip('/').split('/')
-    if parts.netloc.lower() not in ('github.com', 'www.github.com') \
-            or len(path) < 3 or path[2] != 'releases':
-        raise ValueError('%s is not a GitHub release asset, so there is no '
-                         'repository to attach one to' % (url,))
+    path = _release_asset(url)
     return '%s/%s' % (path[0], path[1])
+
+
+def release_tag(url: str) -> str:
+    """The tag a release-asset URL is served from."""
+    return urllib.parse.unquote(_release_asset(url)[4])
 
 
 def push(repository: str, tag: str, paths: Sequence[str],
@@ -194,12 +216,36 @@ def push(repository: str, tag: str, paths: Sequence[str],
                           '(exit %d): %s' % (GITHUB, repository, tag, found,
                                              said.strip()))
     except FileNotFoundError as error:
-        raise IOError('%s is not installed, and it is what a release is '
-                      'attached with: see https://cli.github.com/'
-                      % (GITHUB,)) from error
+        raise IOError(_NO_GITHUB_CLI) from error
     if status != 0:
         raise IOError('%s exited %d; nothing was attached to %s'
                       % (GITHUB, status, tag))
+
+
+def missing_assets(repository: str, tag: str, paths: Sequence[str],
+                   ask: Asker | None = None) -> list[str]:
+    """The ``paths`` whose file names ``repository``'s release at ``tag`` lacks.
+
+    All of them where the tag has no release. Only the names are compared; the
+    digest of a file already attached is the registry's to vouch for, which
+    ``tools/publish-content.py`` checks.
+    """
+    asker = ask if ask is not None else _ask
+    try:
+        found, said = asker([GITHUB, 'release', 'view', '--repo', repository,
+                             '--json', 'assets', '--', tag])
+    except FileNotFoundError as error:
+        raise IOError(_NO_GITHUB_CLI) from error
+    if found != 0:
+        if _NOT_FOUND in said.lower():
+            return list(paths)
+        raise IOError('%s could not say what %s carries at %s (exit %d): %s'
+                      % (GITHUB, repository, tag, found, said.strip()))
+    document = parse_object(said.encode('utf-8'), 'gh release view')
+    attached = {require_object(one, 'gh release asset').get('name')
+                for one in require_array(document.get('assets') or [],
+                                         'gh release assets')}
+    return [path for path in paths if os.path.basename(path) not in attached]
 
 
 class Built(NamedTuple):
@@ -207,6 +253,11 @@ class Built(NamedTuple):
     path: str
     size: int
     sha256: str
+
+    @property
+    def name(self) -> str:
+        """The archive's file name without its extension, which names its tag."""
+        return os.path.basename(self.path).removesuffix('.tar.gz')
 
 
 @dataclass
@@ -222,11 +273,15 @@ class Release:
     writes its registry beside the archives in ``into``, and ``--install``
     reads that one.
 
+    The tag in each entry's URL is the archive's own
+    (:mod:`~OpenGLContext.contentpacks.bundletags`). ``remote`` is the git
+    remote the tags are pushed to.
+
     ``keep_unbuilt`` keeps the shipped registry's other entries -- packs this
     command does not build, such as other people's packages -- and replaces
     only those it built. ``bundle`` also writes the registry and its preview
-    pictures as one zip, attached with the archives. ``store`` opens the store
-    ``--install`` writes into, ``ContentStore(namespace)`` if not given.
+    pictures as one zip, released under a tag of its own. ``store`` opens the
+    store ``--install`` writes into, ``ContentStore(namespace)`` if not given.
     ``arguments`` adds options of the application's own to the parser.
     """
     namespace: str
@@ -234,10 +289,10 @@ class Release:
     catalog: str
     declare: Callable[['Build'], list[dict[str, Any]]]
     into: str
-    tag: str = 'content-v1'
     title: str = ''
     notes: str = ''
     description: str = ''
+    remote: str = 'origin'
     keep_unbuilt: bool = False
     bundle: bool = False
     store: Callable[[], ContentStore] | None = None
@@ -253,17 +308,22 @@ class Build:
     """One run of a release command: where it writes and what it wrote.
 
     Handed to :attr:`Release.declare`. ``options`` is the parsed command line,
-    including anything :attr:`Release.arguments` added.
+    including anything :attr:`Release.arguments` added. ``repository`` is the
+    git repository the application is in, None where it is in none.
     """
 
-    def __init__(self, release: Release, tag: str, into: str,
-                 options: argparse.Namespace) -> None:
+    def __init__(self, release: Release, into: str,
+                 options: argparse.Namespace,
+                 repository: bundletags.BundleRepository | None = None
+                 ) -> None:
         self.release = release
-        self.tag = tag
         self.into = into
         self.options = options
+        self.repository = repository
         #: Every archive written so far, in order.
         self.archives: list[Built] = []
+        self._tags: dict[str, str] = {}
+        self._shipped = _shipped_tags(release.catalog)
 
     def staging(self, name: str) -> str:
         """An empty directory under ``into`` to assemble a pack in."""
@@ -276,6 +336,35 @@ class Build:
         made = Built(path, os.path.getsize(path), archive.digest(path))
         self.archives.append(made)
         return made
+
+    def tag_for(self, built: Built) -> str:
+        """The tag ``built`` is released under.
+
+        The tag the shipped registry names for this file when its digest is
+        the registry's, since those are the bytes already released; otherwise
+        the number after the highest this bundle has in the repository and in
+        the registry.
+        """
+        if built.path not in self._tags:
+            shipped = self._shipped.get(os.path.basename(built.path))
+            if shipped is not None and shipped[1] == built.sha256:
+                tag = shipped[0]
+            else:
+                taken = [tag for tag, _digest in self._shipped.values()]
+                if self.repository is not None:
+                    taken.extend(self.repository.tags())
+                tag = bundletags.next_tag(built.name, taken)
+            self._tags[built.path] = tag
+        return self._tags[built.path]
+
+    def untagged(self) -> list[tuple[Built, str]]:
+        """The archives built so far whose tag is not yet in the repository."""
+        if self.repository is None:
+            return []
+        existing = set(self.repository.tags())
+        return [(made, self.tag_for(made)) for made in self.archives
+                if bundletags.is_bundle_tag(self.tag_for(made))
+                and self.tag_for(made) not in existing]
 
     def entry(self, name: str, built: Built, *, title: str, copyright: str,
               marker: str, directory: str | None = None,
@@ -290,7 +379,8 @@ class Build:
         entry: dict[str, Any] = {
             'key': '%s/%s' % (self.release.namespace, name),
             'title': title,
-            'url': self.release.url % (self.tag, os.path.basename(built.path)),
+            'url': self.release.url % (self.tag_for(built),
+                                       os.path.basename(built.path)),
             'directory': directory or name,
             'archive': 'tar',
             'approximate_bytes': built.size,
@@ -309,49 +399,66 @@ def main(release: Release, argv: Sequence[str] | None = None,
     Builds what ``release.declare`` builds and writes the registry beside it;
     ``--write-registry`` also writes the shipped one, ``--install`` or
     ``--reinstall`` puts what was built into this machine's store, and
-    ``--push`` attaches it to the release at ``--tag`` and writes the shipped
-    registry, since the release then serves what it describes. ``run`` and
-    ``ask`` are handed to :func:`push`.
+    ``--push`` attaches each archive to the release at its own tag and writes
+    the shipped registry, since the releases then serve what it describes.
+    Writing the shipped registry makes the annotated git tags of the archives
+    that are new and needs the application's tracked files committed, since a
+    tag names the commit its archive is rebuilt from; a command that cannot
+    tag exits 2 before it builds anything. ``run`` and ``ask`` are handed to
+    :func:`push`.
     """
     options = _parser(release).parse_args(argv)
     into = os.path.abspath(options.into)
+    shipped = options.push or options.write_registry
+    clone = bundletags.BundleRepository.containing(
+        os.path.dirname(os.path.abspath(release.catalog)), release.remote)
+    if shipped:
+        refused = bundletags.refusal(
+            clone, os.path.dirname(os.path.abspath(release.catalog)),
+            ignoring=[release.catalog])
+        if refused is not None:
+            print(refused, file=sys.stderr)
+            return 2
     os.makedirs(into, exist_ok=True)
-    build = Build(release, options.tag, into, options)
+    build = Build(release, into, options, clone)
     try:
         entries = release.declare(build)
-    except SystemExit as refused:
-        print(refused, file=sys.stderr)
+    except SystemExit as refused_build:
+        print(refused_build, file=sys.stderr)
         return 2
     document = _document(release, entries)
+    text = json.dumps(document, indent=1) + '\n'
     local = os.path.join(into, catalog.MANIFEST)
-    atomicfiles.write_text(local, json.dumps(document, indent=1) + '\n')
+    atomicfiles.write_text(local, text)
     catalog.load(local)
-    shipped = options.push or options.write_registry
-    if shipped:
-        atomicfiles.write_text(release.catalog,
-                               json.dumps(document, indent=1) + '\n')
+    pending = build.untagged()
+    registry_tag = _registry_tag(
+        release, clone, fresh=bool(pending) or _differs(release.catalog, text))
+    command = shlex.join([os.path.basename(sys.argv[0]), *(
+        argv if argv is not None else sys.argv[1:])])
+    if shipped and clone is not None:
+        _tag_bundles(clone, pending, command, registry_tag)
+        atomicfiles.write_text(release.catalog, text)
     for one in entries:
         print('  %-28s %6.1f MB  %s' % (one['key'],
                                         one['approximate_bytes'] / 1048576,
                                         one['sha256'][:12]))
     print('registry written to %s%s' % (
         local, ' and %s' % (release.catalog,) if shipped else ''))
-    attached = [one.path for one in build.archives]
-    if release.bundle:
+    attached: dict[str, list[str]] = {}
+    for made in build.archives:
+        attached.setdefault(build.tag_for(made), []).append(made.path)
+    if registry_tag is not None:
         bundle = bundle_registry(
             local, os.path.join(into, '%s-registry.zip' % (release.namespace,)),
             pictures=os.path.dirname(os.path.abspath(release.catalog)))
         print('registry bundle: %s (%.0f KB)' % (
             os.path.basename(bundle), os.path.getsize(bundle) / 1024))
-        attached.append(bundle)
+        attached.setdefault(registry_tag, []).append(bundle)
     if options.install or options.reinstall:
         _install_built(release, local, entries, into, options.reinstall)
-    if options.push:
-        push(repository(release.url % (options.tag, 'x')), options.tag,
-             attached, title='%s %s' % (release.title or release.namespace,
-                                        options.tag),
-             notes=release.notes or None, run=run, ask=ask)
-        print('attached %d files to %s' % (len(attached), options.tag))
+    if options.push and clone is not None:
+        _publish(release, clone, attached, run, ask)
     return 0
 
 
@@ -381,15 +488,13 @@ def bundle_registry(manifest: str, path: str, pictures: str | None = None
 
 def _parser(release: Release) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=release.description or None)
-    parser.add_argument('--tag', default=release.tag,
-                        help='the release tag the archives are attached to '
-                             '(default: %(default)s)')
     parser.add_argument('--into', default=release.into,
                         help='where to write the archives and the registry '
                              'that describes them (default: %(default)s)')
     parser.add_argument('--write-registry', action='store_true',
                         help='also write the registry the application ships '
-                             '(%s); --push does this too' % (release.catalog,))
+                             '(%s) and tag the archives that are new; --push '
+                             'does this too' % (release.catalog,))
     parser.add_argument('--install', action='store_true',
                         help="install what was built into this machine's own "
                              'store, so the application runs against it with '
@@ -399,10 +504,11 @@ def _parser(release: Release) -> argparse.ArgumentParser:
                         help='install what was built, replacing what the store '
                              'already holds under each key')
     parser.add_argument('--push', action='store_true',
-                        help='attach the archives to the release at --tag, '
-                             'creating it if it is not there yet, and write '
-                             'the shipped registry (needs the GitHub CLI and '
-                             'an account that may write to the repository)')
+                        help='attach each archive to the release at its own '
+                             'tag, creating it if it is not there yet, and '
+                             'write the shipped registry (needs the GitHub '
+                             'CLI and an account that may write to the '
+                             'repository)')
     if release.arguments is not None:
         release.arguments(parser)
     return parser
@@ -453,6 +559,110 @@ def _install_built(release: Release, registry: str,
 
 #: What ``gh release view`` prints, lower-cased, for a tag with no release.
 _NOT_FOUND = 'release not found'
+
+_NO_GITHUB_CLI = ('%s is not installed, and it is what a release is attached '
+                  'with: see https://cli.github.com/' % (GITHUB,))
+
+
+def _shipped_tags(path: str) -> dict[str, tuple[str, str]]:
+    """The tag and digest the registry at ``path`` gives each archive file.
+
+    Entries that are not GitHub release assets, such as other people's
+    packages, are left out. A registry that is not there gives nothing.
+    """
+    if not os.path.isfile(path):
+        return {}
+    with open(path, 'rb') as handle:
+        document = parse_object(handle.read(), path)
+    found: dict[str, tuple[str, str]] = {}
+    for one in _entries(document, path):
+        url, digest = one.get('url'), one.get('sha256')
+        if not isinstance(url, str) or not isinstance(digest, str):
+            continue
+        try:
+            tag = release_tag(url)
+        except ValueError:
+            continue
+        found[urllib.parse.urlparse(url).path.rsplit('/', 1)[-1]] = (tag,
+                                                                     digest)
+    return found
+
+
+def _differs(path: str, text: str) -> bool:
+    """Whether the file at ``path`` is not ``text``; true where it is not there."""
+    if not os.path.isfile(path):
+        return True
+    with open(path, encoding='utf-8') as handle:
+        return handle.read() != text
+
+
+def _registry_tag(release: Release, clone: bundletags.BundleRepository | None,
+                  fresh: bool) -> str | None:
+    """The tag the registry bundle is released under; None where there is none.
+
+    A registry that differs from the shipped one, or that describes a new
+    archive, is a new bundle. Otherwise the newest tag is the one it is
+    already released under.
+    """
+    if not release.bundle:
+        return None
+    name = '%s-registry' % (release.namespace,)
+    taken = clone.tags() if clone is not None else []
+    newest = bundletags.latest_tag(name, taken)
+    if newest is not None and not fresh:
+        return newest
+    return bundletags.next_tag(name, taken)
+
+
+def _message(subject: str, filename: str, command: str,
+             built: Built | None = None) -> str:
+    """The note an annotated tag carries: what was built, and how to build it again."""
+    lines = [subject, '', '- archive: %s' % (filename,)]
+    if built is not None:
+        lines += ['- sha256: %s' % (built.sha256,), '- bytes: %d' % (built.size,)]
+    lines.append('- built with: %s' % (command,))
+    return '\n'.join(lines)
+
+
+def _tag_bundles(clone: bundletags.BundleRepository,
+                 pending: list[tuple[Built, str]], command: str,
+                 registry_tag: str | None) -> None:
+    """Make the annotated tag of each archive in ``pending``, and the registry's.
+
+    The tag is on the commit the archives were built from, which is the last
+    commit: the tracked files were committed before the build started.
+    """
+    for made, tag in pending:
+        clone.annotate(tag, _message('%s content bundle' % (made.name,),
+                                     os.path.basename(made.path), command, made))
+        print('tagged %s' % (tag,))
+    if registry_tag is not None and registry_tag not in clone.tags():
+        clone.annotate(registry_tag, _message(
+            'registry bundle', registry_tag.rsplit('-v', 1)[0] + '.zip', command))
+        print('tagged %s' % (registry_tag,))
+
+
+def _publish(release: Release, clone: bundletags.BundleRepository,
+             attached: dict[str, list[str]], run: Runner | None,
+             ask: Asker | None) -> None:
+    """Send the tags to the remote, then attach each tag's files to its release.
+
+    The tags go first: ``gh release create`` makes a tag that is not on the
+    remote as a plain one at the head of the default branch. Files a release
+    already carries are not sent again.
+    """
+    held = set(clone.tags())
+    clone.push([tag for tag in attached if tag in held])
+    for tag, paths in attached.items():
+        where = repository(release.url % (tag, 'x'))
+        absent = missing_assets(where, tag, paths, ask=ask)
+        if not absent:
+            print('%s already carries %d files' % (tag, len(paths)))
+            continue
+        push(where, tag, absent,
+             title='%s %s' % (release.title or release.namespace, tag),
+             notes=release.notes or None, run=run, ask=ask)
+        print('attached %d files to %s' % (len(absent), tag))
 
 
 def _run(argv: Sequence[str]) -> int:

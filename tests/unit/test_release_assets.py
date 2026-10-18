@@ -7,6 +7,7 @@ registry it writes is pointed into the test's own directory.
 
 import importlib.util
 import os
+import subprocess
 import tarfile
 
 import pytest
@@ -23,6 +24,25 @@ def script(tmp_path, monkeypatch):
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, 'CATALOG', str(tmp_path / 'packs.json'))
     return module
+
+
+def git(where, *arguments):
+    done = subprocess.run(['git', '-C', str(where), *arguments],
+                          capture_output=True, text=True, check=True)
+    return done.stdout.strip()
+
+
+def a_clone(tmp_path):
+    """The directory the shipped registry is written into, as a repository.
+
+    The registry is written only where its archives can be tagged.
+    """
+    git(tmp_path, 'init')
+    git(tmp_path, 'config', 'user.name', 'Test')
+    git(tmp_path, 'config', 'user.email', 'test@example.com')
+    (tmp_path / 'source.txt').write_text('source')
+    git(tmp_path, 'add', 'source.txt')
+    git(tmp_path, 'commit', '-m', 'source')
 
 
 def a_world(tmp_path, credits=True):
@@ -74,17 +94,27 @@ class TestWhereTheRegistryIsWritten:
         assert not (tmp_path / 'packs.json').exists()
 
     def test_asking_for_it_writes_the_shipped_one(self, script, tmp_path):
+        a_clone(tmp_path)
         into = tmp_path / 'dist'
         assert script.main(['--world', a_world(tmp_path), '--into', str(into),
                             '--write-registry']) == 0
         assert (tmp_path / 'packs.json').read_text() == \
             (into / 'packs.json').read_text()
 
+    def test_the_gallery_pack_is_tagged_apart_from_the_textures(
+            self, script, tmp_path):
+        a_clone(tmp_path)
+        script.main(['--only', 'gallery', '--world', a_world(tmp_path),
+                     '--into', str(tmp_path / 'dist'), '--write-registry'])
+        assert git(tmp_path, 'tag', '--list', 'content-*') == \
+            'content-gallery-world-v1'
+
     def test_building_one_pack_keeps_the_entries_of_the_other_in_the_shipped_registry(
             self, script, tmp_path):
         """The textures and the gallery are published separately; publishing one must not
         drop the other from the registry the engine ships."""
         import json
+        a_clone(tmp_path)
         (tmp_path / 'packs.json').write_text(json.dumps({
             'namespace': 'openglcontext',
             'packs': [{'key': 'openglcontext/textures', 'title': 'CC0 PBR textures',

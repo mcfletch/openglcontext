@@ -260,6 +260,21 @@ to git. The alternative considered was a content repository per game.
 - The URL form is stable and needs no new registry field:
   `https://github.com/<owner>/<repo>/releases/download/<tag>/<file>`.
 
+**Amended 2026-10-18: one tag per archive.** A shared `content-v1` tag made every
+bundle of an application release together, and a rebuilt archive could only
+replace a file or move the whole application to `content-v2`. Each archive now
+has an annotated git tag, `content-<archive>-v<N>`
+(`contentpacks/bundletags.py`), made by `publish.main` when the shipped registry
+is written: on the commit the archive was built from, with the archive's digest,
+size and build command in its message. The `--tag` option and `Release.tag` are
+gone. An archive whose digest is the shipped registry's keeps the tag that
+registry names, so `content-v1` and `content-v2` stay as they are; one that
+differs takes the next number. Writing the shipped registry needs the tracked
+files committed. `--push` and `tools/publish-content.py` send the tags to the
+remote before any release is created, since `gh release create` would otherwise
+make a plain tag at the head of the default branch. The registry zip is a
+bundle of its own, `content-<namespace>-registry-v<N>`.
+
 A separate repository earns its keep when the content has a different licence, a
 different cadence, or a different set of contributors from the code — which is
 the case for community-contributed tracks and not for the ones we bake. The

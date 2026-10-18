@@ -94,7 +94,9 @@ OpenGLContext/
 │                     # download job -- docs/contentpacks.rst
 │   ├── application.py  # One application's packs: its registry, its store,
 │   │                 # the first-run fetch and where its art is now
-│   └── publish.py    # The release command every release-assets.py runs
+│   ├── publish.py    # The release command every release-assets.py runs
+│   └── bundletags.py # The annotated git tag of each archive a release
+│                     # builds, named content-<archive>-v<N> -- docs/contentpacks.rst#bundle-tags
 ├── packs.json        # The content packs this project publishes: the
 │                     # bust-gallery world's URL, digest and terms, written
 │                     # by release-assets.py, read by oglc-view --pack

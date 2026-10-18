@@ -8,6 +8,7 @@ files to a release when it is time.
 
 import json
 import os
+import subprocess
 import sys
 
 import pytest
@@ -138,6 +139,39 @@ class TestAttachingThemToARelease:
         with pytest.raises(ValueError):
             publish.repository('https://example.com/packs/ashdown.tar.gz')
 
+    def test_the_tag_comes_from_the_url_the_registry_names(self) -> None:
+        assert publish.release_tag(a_pack().url) == 'content-v1'
+
+    def test_a_url_that_names_no_tag_is_not_a_release_asset(self) -> None:
+        with pytest.raises(ValueError):
+            publish.release_tag('https://github.com/mcfletch/glisteel/releases')
+
+    def test_the_files_a_release_lacks_are_the_ones_not_named_on_it(self
+                                                                    ) -> None:
+        said = json.dumps({'assets': [{'name': 'a.tar.gz'}]})
+        assert publish.missing_assets(
+            'mcfletch/glisteel', 'content-a-v1', ['/x/a.tar.gz', '/x/b.tar.gz'],
+            ask=lambda _argv: (0, said)) == ['/x/b.tar.gz']
+
+    def test_a_tag_with_no_release_lacks_every_file(self) -> None:
+        assert publish.missing_assets(
+            'mcfletch/glisteel', 'content-a-v1', ['a.tar.gz'],
+            ask=lambda _argv: (1, 'release not found')) == ['a.tar.gz']
+
+    def test_a_failure_to_ask_is_not_taken_for_a_missing_release_here_either(
+            self) -> None:
+        with pytest.raises(IOError, match='bad credentials'):
+            publish.missing_assets(
+                'mcfletch/glisteel', 'content-a-v1', ['a.tar.gz'],
+                ask=lambda _argv: (4, 'bad credentials'))
+
+    def test_without_the_command_asking_says_what_to_install(self) -> None:
+        def absent(_argv):
+            raise FileNotFoundError('gh')
+        with pytest.raises(IOError, match='cli.github.com'):
+            publish.missing_assets('mcfletch/glisteel', 'content-a-v1',
+                                   ['a.tar.gz'], ask=absent)
+
     def after_terminator(self, argv):
         return argv[argv.index('--') + 1:]
 
@@ -239,6 +273,29 @@ def a_release(tmp_path, declare, **named):
     return publish.Release(**fields)
 
 
+def git(where, *arguments):
+    done = subprocess.run(['git', '-C', str(where), *arguments],
+                          capture_output=True, text=True, check=True)
+    return done.stdout.strip()
+
+
+def a_clone(tmp_path):
+    """The game's repository: one commit, and a bare ``origin`` to push to."""
+    remote = tmp_path / 'origin.git'
+    subprocess.run(['git', 'init', '--bare', str(remote)], check=True,
+                   capture_output=True)
+    game = tmp_path / 'game'
+    game.mkdir(exist_ok=True)
+    git(game, 'init')
+    git(game, 'config', 'user.name', 'Test')
+    git(game, 'config', 'user.email', 'test@example.com')
+    git(game, 'remote', 'add', 'origin', str(remote))
+    (game / 'source.txt').write_text('source')
+    git(game, 'add', 'source.txt')
+    git(game, 'commit', '-m', 'source')
+    return game
+
+
 def a_tree(tmp_path, name, files):
     where = tmp_path / 'art' / name
     for leaf, text in files.items():
@@ -282,7 +339,8 @@ class TestTheReleaseCommand:
             'glisteel/cars', 'glisteel/forest-art', 'glisteel/ashdown']
         cars = packs[0]
         assert cars.base
-        assert cars.url == URL % ('content-v1', 'glisteel-cars.tar.gz')
+        assert cars.url == URL % ('content-glisteel-cars-v1',
+                                  'glisteel-cars.tar.gz')
         assert cars.sha256 == archive.digest(
             str(tmp_path / 'dist' / 'glisteel-cars.tar.gz'))
 
@@ -293,13 +351,6 @@ class TestTheReleaseCommand:
         shipped.write_text('{"namespace": "glisteel", "packs": []}')
         publish.main(release, ['--install'])
         assert shipped.read_text() == '{"namespace": "glisteel", "packs": []}'
-
-    def test_the_tag_is_in_every_url(self, tmp_path) -> None:
-        release = a_release(tmp_path, cars_and_track(tmp_path))
-        publish.main(release, ['--tag', 'content-v9'])
-        document = (tmp_path / 'dist' / 'packs.json').read_text()
-        assert 'content-v9/glisteel-ashdown.tar.gz' in document
-        assert 'content-v1' not in document
 
     def test_installing_places_each_pack_as_a_download_would(self,
                                                              tmp_path) -> None:
@@ -343,7 +394,7 @@ class TestTheReleaseCommand:
                                                            tmp_path) -> None:
         """A registry that also lists other people's packages keeps them."""
         shipped = tmp_path / 'game' / 'packs.json'
-        shipped.parent.mkdir()
+        a_clone(tmp_path)
         theirs = {'key': 'glisteel/theirs', 'title': 'Theirs',
                   'url': 'https://example.com/theirs.zip',
                   'directory': 'theirs', 'archive': 'zip',
@@ -359,24 +410,6 @@ class TestTheReleaseCommand:
             'glisteel/cars', 'glisteel/forest-art', 'glisteel/ashdown',
             'glisteel/theirs']
         assert written['packs'][-1] == theirs
-
-    def test_pushing_attaches_the_archives_and_the_bundle(self,
-                                                          tmp_path) -> None:
-        (tmp_path / 'game' / 'previews').mkdir(parents=True)
-        (tmp_path / 'game' / 'previews' / 'ashdown.jpg').write_bytes(b'jpg')
-        release = a_release(tmp_path, cars_and_track(tmp_path), bundle=True,
-                            title='glisteel content')
-        ran = []
-        assert publish.main(release, ['--push'],
-                            run=lambda argv: ran.append(argv) or 0,
-                            ask=lambda _argv: (0, '{}')) == 0
-        attached = [os.path.basename(one) for one in ran[0][ran[0].index(
-            'content-v1') + 1:]]
-        assert attached == ['glisteel-cars.tar.gz', 'glisteel-art.tar.gz',
-                            'glisteel-ashdown.tar.gz',
-                            'glisteel-registry.zip']
-        assert (tmp_path / 'game' / 'packs.json').read_text() == \
-            (tmp_path / 'dist' / 'packs.json').read_text()
 
     def test_the_bundle_is_the_registry_and_its_pictures(self,
                                                          tmp_path) -> None:
@@ -417,3 +450,326 @@ class TestTheReleaseCommand:
         publish.main(release, [])
         publish.main(release, [])
         assert found == [[], []]
+
+
+def one_bundle(tmp_path, text='car'):
+    """A release of one bundle whose content is ``text``."""
+    cars = a_tree(tmp_path, 'cars', {'cars/hero.glb': text})
+
+    def declare(build):
+        return [build.entry('cars', build.archive(cars, 'glisteel-cars'),
+                            title='The cars', copyright='ours',
+                            marker='cars/hero.glb', base=True)]
+    return declare
+
+
+def tags_of(game):
+    return git(game, 'tag', '--list', 'content-*').split()
+
+
+class TestEachBundleHasItsOwnTag:
+    """A bundle is released on its own schedule, under a tag that names it."""
+
+    def test_every_url_names_the_tag_of_the_bundle_it_serves(self,
+                                                             tmp_path) -> None:
+        release = a_release(tmp_path, cars_and_track(tmp_path))
+        publish.main(release, [])
+        urls = {one.key: one.url for one in catalog.load(
+            str(tmp_path / 'dist' / 'packs.json'))}
+        assert urls == {
+            'glisteel/cars': URL % ('content-glisteel-cars-v1',
+                                    'glisteel-cars.tar.gz'),
+            'glisteel/forest-art': URL % ('content-glisteel-art-v1',
+                                          'glisteel-art.tar.gz'),
+            'glisteel/ashdown': URL % ('content-glisteel-ashdown-v1',
+                                       'glisteel-ashdown.tar.gz')}
+
+    def test_a_draft_build_makes_no_tag(self, tmp_path) -> None:
+        game = a_clone(tmp_path)
+        publish.main(a_release(tmp_path, cars_and_track(tmp_path)), [])
+        assert tags_of(game) == []
+
+    def test_shipping_the_registry_tags_each_bundle_annotated(self,
+                                                              tmp_path) -> None:
+        game = a_clone(tmp_path)
+        publish.main(a_release(tmp_path, cars_and_track(tmp_path)),
+                     ['--write-registry'])
+        assert tags_of(game) == ['content-glisteel-art-v1',
+                                 'content-glisteel-ashdown-v1',
+                                 'content-glisteel-cars-v1']
+        assert git(game, 'cat-file', '-t', 'content-glisteel-cars-v1') == 'tag'
+        assert git(game, 'rev-list', '-n1', 'content-glisteel-cars-v1') == \
+            git(game, 'rev-parse', 'HEAD')
+
+    def test_the_tag_says_how_to_make_the_bundle_again(self, tmp_path) -> None:
+        game = a_clone(tmp_path)
+        publish.main(a_release(tmp_path, one_bundle(tmp_path)),
+                     ['--write-registry'])
+        said = git(game, 'for-each-ref', '--format=%(contents)',
+                   'refs/tags/content-glisteel-cars-v1')
+        digest = archive.digest(str(tmp_path / 'dist' / 'glisteel-cars.tar.gz'))
+        assert '- archive: glisteel-cars.tar.gz' in said
+        assert '- sha256: %s' % (digest,) in said
+        assert '- bytes: %d' % os.path.getsize(
+            tmp_path / 'dist' / 'glisteel-cars.tar.gz') in said
+        assert '- built with: ' in said and '--write-registry' in said
+
+    def test_a_bundle_that_has_not_changed_keeps_its_tag(self,
+                                                         tmp_path) -> None:
+        game = a_clone(tmp_path)
+        release = a_release(tmp_path, one_bundle(tmp_path))
+        publish.main(release, ['--write-registry'])
+        publish.main(release, ['--write-registry'])
+        assert tags_of(game) == ['content-glisteel-cars-v1']
+
+    def test_a_bundle_that_has_changed_takes_the_next_number(self,
+                                                             tmp_path) -> None:
+        game = a_clone(tmp_path)
+        publish.main(a_release(tmp_path, one_bundle(tmp_path)),
+                     ['--write-registry'])
+        release = a_release(tmp_path, one_bundle(tmp_path, 'a new car'))
+        publish.main(release, ['--write-registry'])
+        assert tags_of(game) == ['content-glisteel-cars-v1',
+                                 'content-glisteel-cars-v2']
+        shipped = catalog.load(str(tmp_path / 'game' / 'packs.json'))
+        assert shipped[0].url == URL % ('content-glisteel-cars-v2',
+                                        'glisteel-cars.tar.gz')
+
+    def test_a_change_to_one_bundle_leaves_the_others_where_they_are(
+            self, tmp_path) -> None:
+        game = a_clone(tmp_path)
+        declare = cars_and_track(tmp_path)
+        publish.main(a_release(tmp_path, declare), ['--write-registry'])
+        (tmp_path / 'art' / 'ashdown' / 'tileset.json').write_text('{"v": 2}')
+        publish.main(a_release(tmp_path, declare), ['--write-registry'])
+        assert tags_of(game) == [
+            'content-glisteel-art-v1', 'content-glisteel-ashdown-v1',
+            'content-glisteel-ashdown-v2', 'content-glisteel-cars-v1']
+
+    def test_a_draft_that_changed_is_named_for_the_number_after_the_shipped(
+            self, tmp_path) -> None:
+        a_clone(tmp_path)
+        publish.main(a_release(tmp_path, one_bundle(tmp_path)),
+                     ['--write-registry'])
+        publish.main(a_release(tmp_path, one_bundle(tmp_path, 'newer')), [])
+        draft = catalog.load(str(tmp_path / 'dist' / 'packs.json'))
+        assert draft[0].url.endswith(
+            'content-glisteel-cars-v2/glisteel-cars.tar.gz')
+
+    def test_a_bundle_the_registry_names_under_the_old_shared_tag_keeps_it(
+            self, tmp_path) -> None:
+        game = a_clone(tmp_path)
+        publish.main(a_release(tmp_path, one_bundle(tmp_path)), [])
+        built = catalog.load(str(tmp_path / 'dist' / 'packs.json'))[0]
+        shipped = json.loads((tmp_path / 'dist' / 'packs.json').read_text())
+        shipped['packs'][0]['url'] = URL % ('content-v1',
+                                            'glisteel-cars.tar.gz')
+        (tmp_path / 'game' / 'packs.json').write_text(json.dumps(shipped))
+
+        publish.main(a_release(tmp_path, one_bundle(tmp_path)),
+                     ['--write-registry'])
+
+        assert built.sha256 == catalog.load(
+            str(tmp_path / 'game' / 'packs.json'))[0].sha256
+        assert tags_of(game) == []
+        assert 'content-v1/glisteel-cars.tar.gz' in (
+            tmp_path / 'game' / 'packs.json').read_text()
+
+    def test_an_entry_served_from_elsewhere_names_no_tag_of_ours(
+            self, tmp_path) -> None:
+        game = a_clone(tmp_path)
+        elsewhere = {'key': 'glisteel/theirs', 'title': 'Theirs',
+                     'url': 'https://example.com/glisteel-cars.tar.gz',
+                     'directory': 'theirs', 'archive': 'tar',
+                     'approximate_bytes': 10, 'copyright': 'theirs',
+                     'marker': 'x', 'sha256': '00' * 32}
+        (game / 'packs.json').write_text(json.dumps(
+            {'namespace': 'glisteel', 'packs': [elsewhere]}))
+        git(game, 'add', 'packs.json')
+        git(game, 'commit', '-m', 'registry')
+        publish.main(a_release(tmp_path, one_bundle(tmp_path)),
+                     ['--write-registry'])
+        assert tags_of(game) == ['content-glisteel-cars-v1']
+
+    def test_a_tag_that_is_numbered_is_not_taken_twice(self, tmp_path) -> None:
+        """A tag made on another clone and fetched is counted."""
+        game = a_clone(tmp_path)
+        git(game, 'tag', '-a', '-m', 'elsewhere', 'content-glisteel-cars-v4')
+        publish.main(a_release(tmp_path, one_bundle(tmp_path)),
+                     ['--write-registry'])
+        assert tags_of(game) == ['content-glisteel-cars-v4',
+                                 'content-glisteel-cars-v5']
+
+
+class TestShippingNeedsATaggableTree:
+    def test_a_directory_in_no_repository_is_refused(self, tmp_path,
+                                                     capsys) -> None:
+        release = a_release(tmp_path, one_bundle(tmp_path))
+        assert publish.main(release, ['--write-registry']) == 2
+        assert 'not in a git repository' in capsys.readouterr().err
+        assert not (tmp_path / 'game' / 'packs.json').exists()
+
+    def test_uncommitted_files_are_refused_before_anything_is_built(
+            self, tmp_path, capsys) -> None:
+        game = a_clone(tmp_path)
+        (game / 'source.txt').write_text('edited')
+        built = []
+
+        def declare(build):
+            built.append(True)
+            return one_bundle(tmp_path)(build)
+        assert publish.main(a_release(tmp_path, declare), ['--push']) == 2
+        assert 'source.txt' in capsys.readouterr().err
+        assert built == []
+        assert tags_of(game) == []
+
+    def test_the_registry_the_command_writes_is_not_an_uncommitted_file(
+            self, tmp_path) -> None:
+        game = a_clone(tmp_path)
+        (game / 'packs.json').write_text('{"namespace": "glisteel", "packs": []}')
+        git(game, 'add', 'packs.json')
+        git(game, 'commit', '-m', 'registry')
+        release = a_release(tmp_path, one_bundle(tmp_path))
+        assert publish.main(release, ['--write-registry']) == 0
+        assert publish.main(release, ['--write-registry']) == 0
+
+    def test_a_draft_build_needs_no_repository(self, tmp_path) -> None:
+        release = a_release(tmp_path, one_bundle(tmp_path))
+        assert publish.main(release, []) == 0
+
+
+class Gh:
+    """The GitHub CLI, standing in: a release is a tag and some file names."""
+
+    def __init__(self, releases=None):
+        self.releases = releases if releases is not None else {}
+        self.ran = []
+
+    def ask(self, argv):
+        tag = argv[argv.index('--') + 1]
+        if tag not in self.releases:
+            return 1, 'release not found'
+        return 0, json.dumps({'assets': [{'name': name}
+                                         for name in self.releases[tag]]})
+
+    def run(self, argv):
+        self.ran.append(argv)
+        tag = argv[argv.index('--') + 1]
+        names = [os.path.basename(one) for one in argv[argv.index('--') + 2:]]
+        self.releases.setdefault(tag, []).extend(names)
+        return 0
+
+    def attached(self):
+        """Per command, the tag and the file names it attached."""
+        return [(argv[argv.index('--') + 1],
+                 [os.path.basename(one)
+                  for one in argv[argv.index('--') + 2:]])
+                for argv in self.ran]
+
+
+class TestPublishingEachBundleUnderItsTag:
+    def test_each_bundle_is_attached_to_its_own_release(self,
+                                                        tmp_path) -> None:
+        a_clone(tmp_path)
+        gh = Gh()
+        release = a_release(tmp_path, cars_and_track(tmp_path))
+        assert publish.main(release, ['--push'], run=gh.run, ask=gh.ask) == 0
+        assert gh.attached() == [
+            ('content-glisteel-cars-v1', ['glisteel-cars.tar.gz']),
+            ('content-glisteel-art-v1', ['glisteel-art.tar.gz']),
+            ('content-glisteel-ashdown-v1', ['glisteel-ashdown.tar.gz'])]
+        assert (tmp_path / 'game' / 'packs.json').read_text() == \
+            (tmp_path / 'dist' / 'packs.json').read_text()
+
+    def test_the_tags_are_on_the_remote_before_the_releases_are_made(
+            self, tmp_path) -> None:
+        """``gh release create`` makes a tag that is not there, at the head of
+        the default branch and not annotated."""
+        a_clone(tmp_path)
+        seen = []
+
+        class Watching(Gh):
+            def run(self, argv):
+                seen.append(git(tmp_path / 'origin.git', 'tag').split())
+                return super().run(argv)
+        gh = Watching()
+        publish.main(a_release(tmp_path, one_bundle(tmp_path)), ['--push'],
+                     run=gh.run, ask=gh.ask)
+        assert seen == [['content-glisteel-cars-v1']]
+        assert git(tmp_path / 'origin.git', 'cat-file', '-t',
+                   'content-glisteel-cars-v1') == 'tag'
+
+    def test_a_bundle_already_on_its_release_is_not_attached_again(
+            self, tmp_path) -> None:
+        a_clone(tmp_path)
+        gh = Gh()
+        release = a_release(tmp_path, cars_and_track(tmp_path))
+        publish.main(release, ['--push'], run=gh.run, ask=gh.ask)
+        gh.ran.clear()
+        publish.main(release, ['--push'], run=gh.run, ask=gh.ask)
+        assert gh.ran == []
+
+    def test_a_registry_shipped_by_an_earlier_run_is_still_published(
+            self, tmp_path) -> None:
+        a_clone(tmp_path)
+        gh = Gh()
+        release = a_release(tmp_path, one_bundle(tmp_path))
+        publish.main(release, ['--write-registry'])
+        publish.main(release, ['--push'], run=gh.run, ask=gh.ask)
+        assert gh.attached() == [
+            ('content-glisteel-cars-v1', ['glisteel-cars.tar.gz'])]
+
+    def test_only_the_bundle_that_changed_is_published(self,
+                                                       tmp_path) -> None:
+        a_clone(tmp_path)
+        gh = Gh()
+        declare = cars_and_track(tmp_path)
+        publish.main(a_release(tmp_path, declare), ['--push'],
+                     run=gh.run, ask=gh.ask)
+        gh.ran.clear()
+        (tmp_path / 'art' / 'ashdown' / 'tileset.json').write_text('{"v": 2}')
+        publish.main(a_release(tmp_path, declare), ['--push'],
+                     run=gh.run, ask=gh.ask)
+        assert gh.attached() == [
+            ('content-glisteel-ashdown-v2', ['glisteel-ashdown.tar.gz'])]
+
+    def test_the_registry_bundle_has_a_tag_of_its_own(self, tmp_path) -> None:
+        (tmp_path / 'game' / 'previews').mkdir(parents=True)
+        game = a_clone(tmp_path)
+        (game / 'previews' / 'ashdown.jpg').write_bytes(b'jpg')
+        git(game, 'add', 'previews')
+        git(game, 'commit', '-m', 'previews')
+        gh = Gh()
+        release = a_release(tmp_path, cars_and_track(tmp_path), bundle=True,
+                            title='glisteel content')
+        publish.main(release, ['--push'], run=gh.run, ask=gh.ask)
+        assert gh.attached()[-1] == (
+            'content-glisteel-registry-v1', ['glisteel-registry.zip'])
+        assert 'content-glisteel-registry-v1' in tags_of(game)
+        assert 'glisteel-registry.zip' not in [
+            name for tag, names in gh.attached()[:-1] for name in names]
+
+    def test_the_registry_bundle_is_reissued_when_the_registry_changes(
+            self, tmp_path) -> None:
+        game = a_clone(tmp_path)
+        gh = Gh()
+        publish.main(a_release(tmp_path, one_bundle(tmp_path), bundle=True),
+                     ['--push'], run=gh.run, ask=gh.ask)
+        publish.main(a_release(tmp_path, one_bundle(tmp_path), bundle=True),
+                     ['--push'], run=gh.run, ask=gh.ask)
+        assert tags_of(game).count('content-glisteel-registry-v2') == 0
+        publish.main(a_release(tmp_path, one_bundle(tmp_path, 'newer'),
+                               bundle=True),
+                     ['--push'], run=gh.run, ask=gh.ask)
+        assert 'content-glisteel-registry-v2' in tags_of(game)
+
+    def test_the_release_is_titled_for_the_application_and_the_tag(
+            self, tmp_path) -> None:
+        a_clone(tmp_path)
+        gh = Gh()
+        release = a_release(tmp_path, one_bundle(tmp_path),
+                            title='glisteel content')
+        publish.main(release, ['--push'], run=gh.run, ask=gh.ask)
+        create = gh.ran[0]
+        assert create[create.index('--title') + 1] == \
+            'glisteel content content-glisteel-cars-v1'
