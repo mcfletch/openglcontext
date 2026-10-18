@@ -1,18 +1,13 @@
-name: Tests
-
-# The suite against two unrelated OpenGL implementations, on every push to
-# develop.
+# The suite against Mesa's llvmpipe on Linux, under Xvfb, on every push to
+# develop. GLFW opens its window on the X server and Mesa rasterises on the
+# CPU: no GPU, and the same renderer on every run -- which is what makes a
+# difference between runs mean something.
 #
-#   * Mesa's llvmpipe on Linux, under Xvfb. GLFW opens its window on the X
-#     server and Mesa rasterises on the CPU: no GPU, and the same renderer on
-#     every run -- which is what makes a difference between runs mean something.
-#   * Apple's GL on the macOS runners, which are real machines with real GPUs.
-#     A second vendor's driver is the half llvmpipe cannot cover: a shader or a
-#     call we get away with under Mesa because Mesa is lenient fails there.
-#
-# Both are free for public repositories. A GPU runner is not: GitHub's is a
-# larger runner, billed per minute on Team/Enterprise plans and never free,
-# whatever the repository's visibility.
+# There is no macOS job. GitHub's macOS runners expose only Apple's software
+# renderer, and GLFW asks macOS for an accelerated pixel format, so it can make
+# no window context there ("NSGL: Failed to find a suitable pixel format").
+# A GPU runner is not free: GitHub's is a larger runner, billed per minute on
+# Team/Enterprise plans and never free, whatever the repository's visibility.
 #
 # Two groups of tests are left to a machine with a GPU in it:
 #
@@ -24,10 +19,9 @@ name: Tests
 #   this job does not pretend to guard rendering.
 #
 #   `performance` on llvmpipe -- an assertion about how fast something draws is
-#   unanswerable on a CPU rasteriser. The macOS jobs do run them, since those
-#   machines have a GPU. `OpenGLContext.testing.plugin` skips them on a software
-#   renderer of its own accord, so this is belt and braces rather than the only
-#   guard.
+#   unanswerable on a CPU rasteriser. `OpenGLContext.testing.plugin` skips them
+#   on a software renderer of its own accord, so this is belt and braces rather
+#   than the only guard.
 
 on:
   push:
@@ -107,74 +101,3 @@ jobs:
           -m "serial and not visual and not performance"
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-
-  macos:
-    name: macOS ${{ matrix.os }} / Apple GL
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install OpenGLContext and its test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --pre -e .[dev]
-          python -m pip install 'setuptools>=77' wheel
-
-      - name: Report the renderer under test
-        # Exits non-zero where no context can be made: a suite that found no GL
-        # would skip its way to green having rendered nothing, which reads the
-        # same as a pass.  It also says which backend answered -- GLFW asks
-        # macOS for an accelerated pixel format and nothing else, so on a
-        # runner with no accelerated renderer it makes no context at all and
-        # the CGL fallback is what runs.
-        run: |
-          python -c "
-          from OpenGLContext.testing import glcontext
-          description = glcontext.describe_gl()
-          if description is None:
-              raise SystemExit('no GL context could be created')
-          print('backend', glcontext.backend())
-          print(description)
-          "
-
-      - name: Report what each profile gives
-        # describe_gl asks for no profile in particular, which on macOS is the
-        # 2.1 legacy one.  What the core requests return is what the suite runs
-        # on, so each is made and its version, shading language and limits
-        # printed.  CGL answers a request it cannot meet with a lower context
-        # rather than a refusal.
-        continue-on-error: true
-        run: |
-          python -c "
-          from OpenGL import GL
-          from OpenGLContext.testing import glcontext
-          for profile, version in (('any', (2, 1)), ('core', (3, 3)), ('core', (4, 1))):
-              try:
-                  with glcontext.hidden_window('probe', profile=profile, version=version):
-                      text = lambda name: (GL.glGetString(name) or b'').decode()
-                      print(profile, version, glcontext.backend(),
-                            '|', text(GL.GL_RENDERER), '|', text(GL.GL_VERSION),
-                            '| GLSL', text(GL.GL_SHADING_LANGUAGE_VERSION),
-                            '| attribs', GL.glGetIntegerv(GL.GL_MAX_VERTEX_ATTRIBS))
-              except Exception as error:
-                  print(profile, version, 'refused:', error)
-          "
-
-      - name: Run the tests
-        # Apple's GL is 4.1 core with no compatibility profile at all, so the
-        # fixed-function render arms have no context to run in and skip. What
-        # this job is here for is the core-profile half against an
-        # implementation that is not Mesa.
-        run: python -m pytest -v -m "not serial and not visual"
-
-      - name: Run the tests that need a quiet machine
-        run: python -m pytest -v -m "serial and not visual"

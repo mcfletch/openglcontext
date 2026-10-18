@@ -339,9 +339,9 @@ for the measurements.
 Continuous integration
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Continuous integration runs on two OpenGL implementations that are free for
-a public repository: Mesa's llvmpipe on a Linux runner under ``xvfb-run``,
-and Apple's GL on the macOS runners, which have GPUs. GitHub's GPU runners
+Continuous integration runs on Mesa's llvmpipe on a Linux runner under
+``xvfb-run``, which is free for a public repository. GitHub's macOS runners
+have no accelerated renderer, so there is no macOS job; GitHub's GPU runners
 are billed per minute for all repositories.
 
 .. code-block:: bash
