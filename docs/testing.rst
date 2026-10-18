@@ -71,6 +71,16 @@ All three fixtures **skip** the test when the machine has no GL target.
 Invalid arguments, such as an unknown profile name, raise ``ValueError``
 instead, so a mistake does not silently skip the test.
 
+A driver that has already given this process contexts and then refuses one is
+not a machine without GL -- it is a display driver that has reset, taking the
+process's contexts with it and refusing every later one. That raises
+``DriverGone`` rather than ``GLUnavailable``, and the plugin **ends the
+session** with it: the GL tests after such a point would each report the driver
+rather than themselves. On Windows the reset is a Display event 4101 in the
+system log, *stopped responding and has successfully recovered*; a run that
+ends this way is to be started again, and a run that ends this way repeatedly
+has work in it that hangs the GPU.
+
 These fixtures create a bare GLFW window. A test that runs a whole
 ``Context``, such as a demo script or an application's context class,
 declares the profile on the class instead. The profile then applies on
@@ -137,6 +147,14 @@ runner can use it directly:
 
 ``gl_available()`` returns whether a context can be created at all, for
 example for a module-level ``skipif``. It is computed once per process.
+
+``client_opens_a_window()`` is the question a test of a toolkit has -- Tk, GLUT,
+anything that puts a window on the screen rather than rendering into a hidden
+one. It answers per platform: where the windows come from an X server it is
+``display_answers()``, so ``DISPLAY`` has to name a server that is there and
+that lets this process in; on Windows and macOS, where the windows come from the
+platform, it runs a client and reports what happened. Asking ``display_answers``
+everywhere skips such tests on a platform that has no X and does not need one.
 
 ``describe_gl()`` returns a description of the GL implementation: the
 vendor, renderer and version strings, and whether it rasterises on the CPU.

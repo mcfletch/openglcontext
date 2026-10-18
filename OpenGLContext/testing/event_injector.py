@@ -60,6 +60,11 @@ except ImportError:
 #: platform the stream goes over a loopback TCP connection instead.
 HAVE_UNIX_SOCKETS = hasattr(socket, 'AF_UNIX')
 
+#: The family the stream is carried on where there are Unix domain sockets.
+#: Read through ``getattr`` because the constant is declared only on the
+#: platforms that have it, and this module is imported on the others.
+AF_UNIX: int = getattr(socket, 'AF_UNIX', -1)
+
 #: The loopback transport's rendezvous: the listener binds port 0, lets the
 #: kernel choose, and writes the number it got into the file the caller named.
 #: The caller therefore still names one path and nothing above here has to know
@@ -69,7 +74,7 @@ LOOPBACK_HOST = '127.0.0.1'
 
 def _stream_socket() -> socket.socket:
     """A stream socket of whichever family carries events on this platform."""
-    family = socket.AF_UNIX if HAVE_UNIX_SOCKETS else socket.AF_INET
+    family = AF_UNIX if HAVE_UNIX_SOCKETS else int(socket.AF_INET)
     return socket.socket(family, socket.SOCK_STREAM)
 
 
@@ -150,14 +155,13 @@ class EventInjector:
         self._conn = None
 
     def _setup_stdin(self) -> None:
-        """Set up non-blocking stdin reading."""
-        if fcntl is None:
+        """Put stdin in non-blocking mode, which is how this transport reads."""
+        if sys.platform == 'win32' or fcntl is None:
             raise RuntimeError(
                 'stdin event injection needs fcntl, which this platform does '
                 'not have; give --event-socket a path to use the socket '
                 'transport instead'
             )
-        # Make stdin non-blocking
         fd = sys.stdin.fileno()
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)

@@ -10,6 +10,7 @@ Usage:  _tk_backend_drive.py <step> [<step> ...]
 """
 import os
 import sys
+import time
 
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'tk')
 os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
@@ -116,8 +117,23 @@ def compatibility():
 
 def resize():
     context = built()
-    context.windowsystem.root.geometry('240x180')
-    context.windowsystem.root.update()
+    root = context.windowsystem.root
+    # On screen for this step: `OPENGLCONTEXT_HIDDEN` withdraws the window, and
+    # a withdrawn window is not one a window manager resizes -- on Windows the
+    # geometry is remembered and no `<Configure>` arrives, so there is nothing
+    # for the viewport to follow. The suite's own window flashes on and off
+    # anyway, since the context is made on a mapped window and withdrawn after.
+    root.deiconify()
+    root.geometry('240x180')
+    # The window manager answers the request with a message the widget is
+    # reconfigured by afterwards, so the `<Configure>` can arrive a few turns of
+    # the loop later. Waited for rather than assumed: a viewport that never
+    # follows still reports the size it had, and the case still fails.
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        root.update()
+        if tuple(int(value) for value in context.getViewPort()) == (240, 180):
+            break
     context.OnDraw(force=1)
     context.setCurrent()
     say('VIEWPORT', ' '.join(

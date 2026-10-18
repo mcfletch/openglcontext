@@ -12,6 +12,27 @@ See :mod:`OpenGLContext.testing.plugin`.
 import pytest
 
 from OpenGLContext.testing import plugin
+from OpenGLContext.testing.glcontext import DriverGone, GLUnavailable
+
+
+class TestWhatAnUnavailableGlComesTo:
+    """A machine that cannot serve a test, and a driver that has stopped.
+
+    The first is a skip: the test was never going to run here. The second is
+    the end of the session -- the driver gave this process contexts and has
+    stopped, so the GL tests after it would each report the driver rather than
+    themselves, as 55 failures, 35 errors and 219 skips on 2026-09-27.
+    """
+
+    def test_a_machine_with_no_gl_is_a_skip(self):
+        with pytest.raises(pytest.skip.Exception) as skipped:
+            plugin.unavailable(GLUnavailable('glfw is not importable'))
+        assert 'glfw is not importable' in str(skipped.value)
+
+    def test_a_driver_that_has_stopped_ends_the_session(self):
+        with pytest.raises(pytest.exit.Exception) as stopped:
+            plugin.unavailable(DriverGone('the driver would not create a window'))
+        assert 'would not create a window' in str(stopped.value)
 
 
 class TestWhatAMarkerAsksFor:

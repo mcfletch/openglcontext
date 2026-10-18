@@ -338,7 +338,9 @@ The budget is for a whole frame, across every view.
      - A GPU time the reflections aim to stay under. The texels drawn are
        scaled by the measured time, between a quarter and all of the budget.
        Each measurement arrives two frames late and is applied once, weighed
-       by the scale the frame it measured was drawn at.
+       by the scale the frame it measured was drawn at. A GL with no timer
+       queries measures nothing, and the target then changes nothing: the
+       reflections are drawn at the full texel budget.
 
 The first five are counts and sizes, so a capture or a visual baseline draws
 the same reflections every run. The time target adapts to the machine, which

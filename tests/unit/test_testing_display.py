@@ -24,6 +24,19 @@ from OpenGLContext.testing.glcontext import X_CLIENT, display_answers
 #: run on.
 NOBODY = 79
 
+#: A display with no host in it names the platform's local transport, which is
+#: a Unix domain socket where there is one. Windows has no AF_UNIX in Python,
+#: so neither the sockets these cases stand up nor the answer they expect of
+#: one exists there.
+needs_unix_sockets = pytest.mark.skipif(
+    not hasattr(socket, 'AF_UNIX'), reason='no Unix domain sockets on this platform')
+
+#: `display_answers` is checked against what a client finds, which says
+#: anything only where the client reads `DISPLAY`: tkinter on Windows draws
+#: through Win32 and opens a window whatever `DISPLAY` says.
+needs_a_client_that_reads_display = pytest.mark.skipif(
+    sys.platform == 'win32', reason='tkinter on Windows does not read DISPLAY')
+
 
 def _listening_unix(path):
     connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -40,6 +53,7 @@ class TestWhatItAnswers:
     def test_a_display_nothing_listens_on(self):
         assert not display_answers(':%d' % NOBODY)
 
+    @needs_unix_sockets
     def test_a_socket_left_behind_by_a_server_that_has_gone(self, tmp_path):
         path = tmp_path / ('X%d' % NOBODY)
         closed = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -48,6 +62,7 @@ class TestWhatItAnswers:
         assert path.exists()
         assert not display_answers(':%d' % NOBODY, directory=str(tmp_path))
 
+    @needs_unix_sockets
     def test_something_listening_that_is_not_a_server_we_may_use(self, tmp_path):
         """A connection is accepted and a client still cannot open a window."""
         pytest.importorskip('tkinter')
@@ -71,6 +86,42 @@ class TestWhatItAnswers:
         assert not display_answers()
 
 
+class TestWhetherAWindowCanBeOpenedAtAll:
+    """The question a Tk or GLUT test has, which is about X on one platform.
+
+    Asking `display_answers` everywhere skipped those tests on Windows with a
+    reason about an X display and `xvfb-run`, on a machine whose windows come
+    from Win32 and where `DISPLAY` means nothing.
+    """
+
+    def test_where_the_windows_come_from_an_x_server_it_is_that_question(self, monkeypatch):
+        asked = []
+        monkeypatch.setattr(sys, 'platform', 'linux')
+        monkeypatch.setattr(glcontext, 'display_answers',
+                            lambda **named: asked.append(named) or True)
+        assert glcontext.client_opens_a_window() is True
+        assert asked == [{'timeout': 30.0}]
+
+    def test_where_they_come_from_the_platform_no_display_is_named(self, monkeypatch):
+        named = []
+        monkeypatch.setattr(sys, 'platform', 'win32')
+        monkeypatch.setattr(glcontext, '_client_opens',
+                            lambda display, timeout: named.append(display) or True)
+        monkeypatch.setattr(glcontext, 'display_answers',
+                            lambda **_named: pytest.fail('asked X about a Win32 window'))
+        assert glcontext.client_opens_a_window() is True
+        assert named == ['']
+
+    def test_a_platform_with_no_client_to_run_is_taken_at_its_word(self, monkeypatch):
+        """As a display that accepts a connection is, with no client to try."""
+        monkeypatch.setattr(sys, 'platform', 'win32')
+        monkeypatch.setitem(sys.modules, 'tkinter', None)
+        monkeypatch.setattr(glcontext, '_client_opens',
+                            lambda display, timeout: pytest.fail('ran a client'))
+        assert glcontext.client_opens_a_window() is True
+
+
+@needs_a_client_that_reads_display
 class TestAgainstARealClient:
     """Its answer is the answer a client gets, whatever this machine has."""
 

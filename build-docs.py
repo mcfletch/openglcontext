@@ -258,11 +258,16 @@ SPHINX_LOCALE = 'C.UTF-8'
 
 
 def sphinx_environment() -> dict[str, str]:
-    """This process's environment, with ``LC_ALL`` set to :data:`SPHINX_LOCALE` where its locale is not installed."""
+    """This process's environment, with ``LC_ALL`` set to :data:`SPHINX_LOCALE` where the locale it names is not installed."""
     environment = dict(os.environ)
+    #: ``LC_ALL`` outranks ``LANG``, as it does for every other program.
+    named = environment.get('LC_ALL') or environment.get('LANG')
     current = locale.setlocale(locale.LC_ALL)
     try:
-        locale.setlocale(locale.LC_ALL, '')
+        # The name itself rather than ``''``: the empty name reads the
+        # environment only where the C library does, and Windows' does not, so
+        # a locale nothing can set goes unnoticed there.
+        locale.setlocale(locale.LC_ALL, named or '')
     except locale.Error:
         environment['LC_ALL'] = SPHINX_LOCALE
     finally:
