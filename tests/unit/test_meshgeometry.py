@@ -166,6 +166,13 @@ def test_a_line_set_is_drawn_as_its_polylines():
     assert list(lines.drawn().coordIndex) == [0, 1, 2, -1, 3, 4, -1]
 
 
+def test_a_line_set_without_coordinates_is_no_polylines():
+    """Basic/development/ProfileExampleInterchange: a LineSet with a colour and nothing else"""
+    lines = read('<LineSet><ColorRGBA color="1 1 1 1"/></LineSet>')
+    drawn = lines.drawn()
+    assert list(drawn.coordIndex) == [] and not drawn.coord
+
+
 def _centre(image):
     h, w = image.shape[:2]
     return image[h // 2 - 4:h // 2 + 4, w // 2 - 4:w // 2 + 4].reshape(-1, 3).mean(axis=0)
