@@ -53,7 +53,10 @@ def highlight(specular, glossiness):
     from OpenGLContext.loaders.loader import Loader  # noqa: PLC0415 kept with its use
     from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
     scene = Loader.loads(SPHERES % (specular, glossiness), 'sg.x3d')
-    with scene_context(scene, size=(48, 48), environment={'OPENGLCONTEXT_IBL': 'off'}) as context:
+    # A document is drawn without a tone curve, which clips a highlight above 1
+    # in each channel; the curve keeps the specular colour's hue there.
+    with scene_context(scene, size=(48, 48), toneMapping='aces_narkowicz',
+                       environment={'OPENGLCONTEXT_IBL': 'off'}) as context:
         return drawn_image(context)[24, 24].astype(int)
 
 

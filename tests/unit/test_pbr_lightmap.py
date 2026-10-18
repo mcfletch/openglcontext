@@ -59,8 +59,9 @@ class TestShaderSource:
     def test_reads_the_lightmap_as_linear_light(self):
         # A lightmap is a radiosity solution written straight to 8 bits, not an
         # sRGB colour texture. Running it through the sRGB decode would crush
-        # the midtones and leave a baked level looking unlit.
-        assert not re.search(r'toLinear\s*\(\s*texture\s*\(\s*lightmapTexture',
+        # the midtones and leave a baked level looking unlit. (A Phong draw's
+        # ambientTexture shares the sampler and is a colour map.)
+        assert not re.search(r'lightmap\s*=\s*toLinear\s*\(\s*texture\s*\(\s*lightmapTexture',
                              _frag())
         assert re.search(r'texture\s*\(\s*lightmapTexture[^;]*\*\s*lightmapStrength',
                          _frag())

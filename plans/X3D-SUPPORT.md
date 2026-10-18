@@ -214,7 +214,11 @@ worktrees `pyvrml97/.claude/worktrees/x3d-complete` and
     linear. In a document an UnlitMaterial and a no-material appearance are lit
     in sRGB, as X_ITE draws them: `UnlitMaterial emissiveColor 0.5` is 128,
     where it was 188, and a MultiTexture on one combines its layers as
-    displayed
+    displayed. One colour model serves the pass: `drawLinear` in `pbr.frag`
+    is false for a Phong draw, an unlit draw in a document and a material
+    flagged `DISPLAYED_BIT` unless the colour space is linear, so their
+    colours are display values, textures are read as they are and the
+    X3D fog modes mix in the displayed colour
   - [x] shading: `ContextDefinition.shading` (`OPENGLCONTEXT_SHADING`): point,
     wireframe (polygon modes), flat (the face's normal from the position's
     derivatives), gouraud, phong. `auto` is gouraud for a document, X_ITE's

@@ -55,13 +55,14 @@ def test_with_samples_an_edge_is_blended(gl_context):
     assert partial(image) > 20
 
 
-GLASS = (b"<X3D version='4.0'><Scene><Viewpoint position='0 0 0'/>"
+GLASS = (b"<X3D version='4.0'><head><component name='X_ITE' level='1'/></head>"
+         b"<Scene><Viewpoint position='0 0 0'/>"
          b"<NavigationInfo headlight='false'/>"
          b"<Shape><Appearance><Material emissiveColor='1 0 0'/></Appearance>"
          b"<IndexedFaceSet coordIndex='0 1 2 3'>"
          b"<Coordinate point='-5 -5 -4 5 -5 -4 5 5 -4 -5 5 -4'/></IndexedFaceSet></Shape>"
-         b"<Shape><Appearance><PhysicalMaterial baseColor='1 1 1' metallic='0' roughness='0'"
-         b" transmission='1'/></Appearance>"
+         b"<Shape><Appearance><PhysicalMaterial baseColor='1 1 1' metallic='0' roughness='0'>"
+         b"<TransmissionMaterialExtension transmission='1'/></PhysicalMaterial></Appearance>"
          b"<IndexedFaceSet coordIndex='0 1 2 3'>"
          b"<Coordinate point='-1 -1 -2 1 -1 -2 1 1 -2 -1 1 -2'/></IndexedFaceSet></Shape>"
          b"</Scene></X3D>")

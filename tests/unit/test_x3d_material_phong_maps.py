@@ -23,11 +23,11 @@ def pixel(field_name, color):
     return '<PixelTexture containerField="%s" image="1 1 4 %s"/>' % (field_name, color)
 
 
-def drawn(material, maps='', intensity='1', ambient='0', at=(16, 16)):
+def drawn(material, maps='', intensity='1', ambient='0', at=(16, 16), **definition):
     from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 GL
     document = SCENE % dict(material=material, maps=maps, intensity=intensity, ambient=ambient)
     scene = Loader.loads(document.encode('utf-8'), 'scene.x3d')
-    with scene_context(scene, size=(32, 32)) as context:
+    with scene_context(scene, size=(32, 32), **definition) as context:
         drawn_image(context)
         return drawn_image(context)[at].astype(int)
 
@@ -39,6 +39,15 @@ def test_the_ambient_texture_colours_the_ambient_term(gl_context):
                    ambient='1')
     assert plain == pytest.approx((255, 255, 255), abs=3)
     assert tinted == pytest.approx((255, 0, 0), abs=3)
+
+
+def test_the_ambient_texture_is_a_colour_map_in_linear_light(gl_context):
+    # A mid-grey texel lit in linear light is decoded, so the frame's encoding
+    # returns it as authored; read raw it would display as 188.
+    material = 'diffuseColor="1 1 1" ambientIntensity="1"'
+    shown = drawn(material, pixel('ambientTexture', '0x808080FF'), intensity='0',
+                  ambient='1', colorSpace='linear')
+    assert shown == pytest.approx((128, 128, 128), abs=3)
 
 
 def test_the_specular_texture_colours_the_highlight(gl_context):

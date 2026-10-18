@@ -917,6 +917,8 @@ void shadeFragment() {
         // ambientTexture.rgb, the shininess times shininessTexture.a, the
         // specular colour times specularTexture.rgb.
         vec3 ambient = phongAmbientIntensity * diffuse;
+        // The Material's ambientTexture shares the lightmap unit; it is a colour
+        // map, decoded like the other Phong maps, where the PBR lightmap is linear.
         if (hasLightmap) ambient *= toLinear(texture(lightmapTexture, uvFor(CH_LIGHTMAP)).rgb);
         float shininess = phongShininess;
         if (hasMetallicRoughness)

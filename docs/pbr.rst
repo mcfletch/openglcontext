@@ -701,7 +701,8 @@ writes its result as it is.
 
 - ``linear_when_physical_material`` (what ``auto`` gives) - a
   ``PhysicalMaterial`` and every glTF material are lit in linear light; in a
-  document, a ``Material`` and an unlit appearance are lit in sRGB.
+  document, a ``Material``, an ``UnlitMaterial`` and an unlit appearance are
+  lit in sRGB.
 - ``linear`` - every material is lit in linear light.
 - ``srgb`` - every material is lit in sRGB, and the frame is not encoded.
 
