@@ -65,7 +65,7 @@ glfw = ["glfw>=2.0"]
 # Recording what the engine draws to an H.264 video file, and playing a
 # MovieTexture's H.264 movie. The encoder and the decoder are the ones in the
 # graphics driver; this brings in the bindings that reach them.
-video = ["pyopengl-video>=1.0.0a3"]
+video = ["pyopengl-video>=1.0.0a2"]
 # Basis Universal textures: glTF's KHR_texture_basisu and KTX 2 or .basis files
 # named by X3D texture nodes, transcoded to the block formats the GPU samples.
 # opengl_basisu compiles Binomial's transcoder (Apache-2.0) into a wheel. Not
