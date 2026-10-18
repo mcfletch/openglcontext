@@ -146,6 +146,29 @@ jobs:
           print(description)
           "
 
+      - name: Report what each profile gives
+        # describe_gl asks for no profile in particular, which on macOS is the
+        # 2.1 legacy one.  What the core requests return is what the suite runs
+        # on, so each is made and its version, shading language and limits
+        # printed.  CGL answers a request it cannot meet with a lower context
+        # rather than a refusal.
+        continue-on-error: true
+        run: |
+          python -c "
+          from OpenGL import GL
+          from OpenGLContext.testing import glcontext
+          for profile, version in (('any', (2, 1)), ('core', (3, 3)), ('core', (4, 1))):
+              try:
+                  with glcontext.hidden_window('probe', profile=profile, version=version):
+                      text = lambda name: (GL.glGetString(name) or b'').decode()
+                      print(profile, version, glcontext.backend(),
+                            '|', text(GL.GL_RENDERER), '|', text(GL.GL_VERSION),
+                            '| GLSL', text(GL.GL_SHADING_LANGUAGE_VERSION),
+                            '| attribs', GL.glGetIntegerv(GL.GL_MAX_VERTEX_ATTRIBS))
+              except Exception as error:
+                  print(profile, version, 'refused:', error)
+          "
+
       - name: Run the tests
         # Apple's GL is 4.1 core with no compatibility profile at all, so the
         # fixed-function render arms have no context to run in and skip. What
