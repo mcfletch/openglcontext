@@ -57,7 +57,10 @@ class IndexedLineSet(
         return ('IndexedLineSet', pts, idx, col, bool(self.colorPerVertex))
 
     def _expand_line_vertices(self) -> tuple[Any, Any]:
-        """Expand the polylines to flat ``GL_LINES`` vertex/colour pairs (M, 3)."""
+        """Expand the polylines to flat ``GL_LINES`` vertex/colour pairs (M, 3);
+        empty for a set with no coordinates."""
+        if not self.coord:
+            return np.zeros((0, 3), 'f'), np.zeros((0, 3), 'f')
         points = np.asarray(coordinates.points(self.coord), dtype='f')
         indices = expandIndices(self.coordIndex)
         colors = (np.asarray(self.color.color, dtype='f')

@@ -38,7 +38,7 @@ from collections.abc import Iterator
 from typing import Any, Optional
 
 import numpy as np
-from vrml import cache, protofunctions
+from vrml import cache, node, protofunctions
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.scenegraph import (
@@ -543,7 +543,10 @@ class DrawnAs:
 
 
 def polylines(points: Any, counts: "list[int]") -> Any:
-    """An engine IndexedLineSet of runs of `points`, `counts` points each"""
+    """An engine IndexedLineSet of runs of `points`, `counts` points each
+
+    Where `points` is None or a null node the set has no coordinates.
+    """
     from OpenGLContext.scenegraph.indexedlineset import IndexedLineSet  # noqa: PLC0415 imports GL
     index: "list[int]" = []
     start = 0
@@ -552,6 +555,8 @@ def polylines(points: Any, counts: "list[int]") -> Any:
             index.extend(range(start, start + count))
             index.append(-1)
         start += max(count, 0)
+    if points is None or isinstance(points, node.NullNode):
+        return IndexedLineSet(coordIndex=index, colorPerVertex=True)
     coord = points if isinstance(points, x3d.X3DCoordinateNode) else x3d.Coordinate(point=points)
     return IndexedLineSet(coord=coord, coordIndex=index, colorPerVertex=True)
 

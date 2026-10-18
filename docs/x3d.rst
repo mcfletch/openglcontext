@@ -215,6 +215,7 @@ both renderers. A ``MultiTextureCoordinate``'s entries are
 ``TEXCOORD_0``, ``TEXCOORD_1`` and so on, and an entry's ``mapping`` label is
 what a material's ``...TextureMapping`` names. The renderer reads two
 coordinate sets. A ``LineSet`` is drawn as an ``IndexedLineSet``. A
+line, point or triangle set with no ``Coordinate`` node draws nothing. A
 ``Sphere``'s texture, and a ``Cylinder``'s or ``Cone``'s side, wraps
 anticlockwise seen from above from a seam at the back (-Z), with v 0 at the
 bottom; a cylinder's top cap shows its image with the image's top toward -Z,
