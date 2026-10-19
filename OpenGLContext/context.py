@@ -40,7 +40,7 @@ from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node, cache
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeVar, cast
 from collections.abc import Callable, Mapping, Sequence
 import weakref
 import os
@@ -49,6 +49,9 @@ import time
 import logging
 
 if TYPE_CHECKING:
+    # 3.11's Self; the runtime floor is 3.10 and `from __future__ import
+    # annotations` leaves every annotation unevaluated.
+    from typing import Self
     from configparser import ConfigParser
 
     from OpenGLContext.contextdefinition import ContextDefinition
