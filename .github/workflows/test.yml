@@ -9,7 +9,7 @@
 # A GPU runner is not free: GitHub's is a larger runner, billed per minute on
 # Team/Enterprise plans and never free, whatever the repository's visibility.
 #
-# Two groups of tests are left to a machine with a GPU in it:
+# Three groups of tests are not run here:
 #
 #   `visual` -- the reference images are blessed on one renderer, and a second
 #   renderer's rasterisation differs from them by more than the pixel gate
@@ -17,6 +17,10 @@
 #   render). Comparing against them here would report a driver difference as a
 #   regression. Per-renderer baselines would settle it; until there are some,
 #   this job does not pretend to guard rendering.
+#
+#   `serial` -- the tests that compare wall-clock margins and want the machine to
+#   themselves. A shared runner rasterising on the CPU is not that machine.
+#   They run under tools/preflight.py.
 #
 #   `performance` on llvmpipe -- an assertion about how fast something draws is
 #   unanswerable on a CPU rasteriser. `OpenGLContext.testing.plugin` skips them
@@ -43,7 +47,7 @@ jobs:
   llvmpipe:
     name: Linux / llvmpipe
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -90,14 +94,5 @@ jobs:
         run: >
           xvfb-run -a python -m pytest -v
           -m "not serial and not visual and not performance"
-        env:
-          LIBGL_ALWAYS_SOFTWARE: '1'
-
-      - name: Run the tests that need a quiet machine
-        # Short, and wants the machine to itself: these compare wall-clock
-        # margins, and the ratio compresses under concurrent load.
-        run: >
-          xvfb-run -a python -m pytest -v
-          -m "serial and not visual and not performance"
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'

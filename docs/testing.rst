@@ -347,7 +347,10 @@ are billed per minute for all repositories.
 .. code-block:: bash
 
    xvfb-run -a python -m pytest -m "not serial and not visual and not performance"
-   xvfb-run -a python -m pytest -m "serial and not visual and not performance"
+
+The ``serial`` tests compare wall-clock margins and want the machine to
+themselves, which a shared runner rasterising on the CPU is not; they run from
+``tools/preflight.py`` on a developer's machine.
 
 To reproduce a CI failure on a machine with a GPU, set
 ``LIBGL_ALWAYS_SOFTWARE=1`` to use the software renderer.
