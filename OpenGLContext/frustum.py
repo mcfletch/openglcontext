@@ -61,7 +61,8 @@ def boxes_outside(centres: Any, halves: Any, matrices: Any, planes: Any) -> Any:
     Box ``i`` is ``centres[i]`` plus or minus ``halves[i]`` along each axis of
     its own space, placed by the row-vector ``matrices[i]`` (a point ``p``
     lands at ``p @ M``). ``centres`` and ``halves`` may be one ``(3,)`` box for
-    every matrix. ``planes`` are ``(a, b, c, d)`` rows with the kept side where
+    every matrix. ``matrices`` of None says the boxes are already in the space
+    of the planes. ``planes`` are ``(a, b, c, d)`` rows with the kept side where
     ``a*x + b*y + c*z + d >= 0``.
 
     The decision is the one testing the eight corners makes: a box is outside
@@ -70,6 +71,12 @@ def boxes_outside(centres: Any, halves: Any, matrices: Any, planes: Any) -> Any:
     where the corner furthest in front of it is the centre's distance plus
     the half-extents along the absolute normal.
     """
+    if matrices is None:
+        planes = np.asarray(planes, 'd')
+        normals = planes[:, :3].T
+        nearest = (np.reshape(centres, (-1, 3)) @ normals + planes[:, 3]
+                   + np.reshape(halves, (-1, 3)) @ np.abs(normals))
+        return (nearest < 0).any(axis=1)
     matrices = np.asarray(matrices)
     planes = np.asarray(planes, matrices.dtype)
     count = len(matrices)

@@ -31,6 +31,7 @@ from OpenGLContext.scenegraph.instancedgl import (
     instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
     InstancedVegBase, _BIG, LOD_NEAR, LOD_FAR)
+from OpenGLContext.scenegraph.vegetation.viewcull import CulledRows
 
 
 class InstancedBillboards(InstancedVegBase):
@@ -51,13 +52,17 @@ class InstancedBillboards(InstancedVegBase):
     :param near_cut: >0 adds an inner fade-in ending at this eye distance.
     :param bounds: (sx, sy, sz) node bounding box (kept large so a follow-field is
         never frustum-culled as a whole).
+
+    Each draw streams only the cards the view can see (:class:`CulledRows`), so
+    cards given in spatial order cost the GPU least; ``cull`` False streams them all.
     """
     INSTANCE_LOCATIONS = (2, 3, 4)
 
     def __init__(self, positions: np.ndarray, yaws: np.ndarray, scales: np.ndarray,
                  texture: str, width: float = 0.62, near_fade: bool = False,
                  far_fade: float = 0.0, near_cut: float = 0.0, sun_level: float = 0.5,
-                 bounds: "tuple[float, float, float]" = _BIG) -> None:
+                 bounds: "tuple[float, float, float]" = _BIG,
+                 cull: bool = True) -> None:
         super(InstancedBillboards, self).__init__()
         self.pos = np.asarray(positions, np.float32)
         self.yaws = np.asarray(yaws, np.float32)
@@ -70,8 +75,9 @@ class InstancedBillboards(InstancedVegBase):
         self.near_cut = float(near_cut)
         self.sun_level = float(sun_level)
         self.bounds = bounds
+        self.cull = bool(cull)
         self._gl: Any = None
-        self._pending = False
+        self._pending = True
 
     def _instance_rows(self) -> np.ndarray:
         return instance_rows(self.pos, self.yaws, self.scales, self.shades)
@@ -94,8 +100,12 @@ class InstancedBillboards(InstancedVegBase):
         self._ibuf = InstanceBuffer()
         glBindBuffer(GL_ARRAY_BUFFER, self._ibuf.id)
         setup_instance_attribs(2, 3, 4)
-        self._ibuf.upload(self._instance_rows())
         glBindVertexArray(0)
+        # A card faces the camera and reaches half its width either side of its base,
+        # and its height up.
+        self._visible = CulledRows(self._ibuf, reach=0.5 * self.width, rise=1.0,
+                                   enabled=self.cull, triangles=2)
+        self._pending = True
         self._tex = texture_rgba(self.texture, srgb=True)
         self.U = {n: glGetUniformLocation(self._prog, n) for n in
                   ("uModelView", "uProjection", "pine", "uWidth", "uNearFade", "uFarFade",
@@ -142,9 +152,16 @@ class InstancedBillboards(InstancedVegBase):
 
     def _stream(self) -> bool:
         if self._pending:
-            self._ibuf.upload(self._instance_rows())
+            self._visible.reach = 0.5 * self.width
+            self._visible.enabled = self.cull
+            self._visible.stage(self._instance_rows())
             self._pending = False
-        return self._ibuf.count > 0
+            if not len(self.pos):
+                self._visible.show(None)     # an emptied set empties the buffer
+        return len(self.pos) > 0
+
+    def _show(self, mode: Any) -> bool:
+        return self._visible.show(mode) > 0
 
     def _draw(self, mode: Any) -> None:
         glActiveTexture(GL_TEXTURE0)

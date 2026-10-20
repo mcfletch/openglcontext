@@ -104,6 +104,15 @@ class InstancedVegBase(vnodes.PointSet, GLLayer):
         """Upload any staged per-instance data; return True if there is anything to draw."""
         raise NotImplementedError
 
+    def _show(self, mode: Any) -> bool:
+        """Prepare the instances for the view of ``mode``; whether any are to be drawn.
+
+        A node that streams only the instances a view can see does it here
+        (:class:`~OpenGLContext.scenegraph.vegetation.viewcull.CulledRows`), and a draw in a
+        view that sees none of them goes no further.
+        """
+        return True
+
     def _draw(self, mode: Any) -> None:
         """Bind VAO(s)/textures + per-frame uniforms and issue the instanced draw."""
         raise NotImplementedError
@@ -117,7 +126,7 @@ class InstancedVegBase(vnodes.PointSet, GLLayer):
             return 1
         if not self.ensure_gl():
             return 1
-        if not self._stream():
+        if not self._stream() or not self._show(mode):
             return 1
         # Import here (not at module load) to avoid a passes<->scenegraph import cycle;
         # this is the same deferral PBRMesh._apply_draw_state uses.

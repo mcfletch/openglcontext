@@ -284,6 +284,16 @@ BLOCK_METRES = 32.0
 BLOCK_CELLS_LEAST = 16
 
 
+def _spatially(parts: tuple) -> tuple:
+    """A block's per-instance arrays, positions first, in Morton order of the positions."""
+    if len(parts[0]) < 2:
+        return parts
+    # Imported here: the passes package imports the scenegraph.
+    from OpenGLContext.passes.instancing import morton_order
+    order = np.asarray(morton_order(parts[0]))
+    return tuple(part[order] for part in parts)
+
+
 class ScatterBlocks:
     """:func:`world_grid_scatter` kept by the block, so each place is scattered once.
 
@@ -299,7 +309,10 @@ class ScatterBlocks:
     ``finish(points, yaws, scales)`` runs on each block as it is made and
     returns the per-instance arrays to keep, positions first: whatever a
     caller works out per instance from where it stands -- how much sun
-    reaches it -- is worked out once with the rest.
+    reaches it -- is worked out once with the rest. A block keeps its plants in
+    Morton order of their places, so a disc's plants lie in memory in compact
+    runs, which is what lets a draw stream only those in view
+    (:class:`~OpenGLContext.scenegraph.vegetation.viewcull.CulledRows`).
 
     A block further than :attr:`keep` disc radii from the centre of the last
     disc asked for is let go, so what is held follows the camera rather than
@@ -387,6 +400,7 @@ class ScatterBlocks:
                 self.salt, self.scale_range)
             if self.finish is not None:
                 found = tuple(self.finish(*found))
+            found = _spatially(found)
         finally:
             with self._lock:
                 del self._making[key]

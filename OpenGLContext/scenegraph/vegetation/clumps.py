@@ -35,6 +35,7 @@ from OpenGLContext.scenegraph.instancedgl import (
     FOG_UNIFORMS, load_program, texture_rgba, delete_gl, setup_instance_attribs,
     instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import InstancedVegBase, _BIG
+from OpenGLContext.scenegraph.vegetation.viewcull import CulledRows
 
 _CT = {5120: 'b', 5121: 'B', 5122: 'h', 5123: 'H', 5125: 'I', 5126: 'f'}
 _NC = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4}
@@ -221,13 +222,18 @@ class InstancedClumps(InstancedVegBase):
     :param sun: world-space direction the sunlight travels, down from the sun
         (matches the terrain/tree sun).
     :param bounds: node AABB, kept large so a follow-field is not culled as a whole.
+
+    Each draw streams only the instances the view can see (:class:`CulledRows`),
+    so rows given in spatial order cost the GPU least; ``cull`` False streams them
+    all.
     """
     def __init__(self, P: np.ndarray, N: np.ndarray, UV: np.ndarray, idx: np.ndarray,
                  texture: "str | Image.Image",
                  sun: "tuple[float, float, float]" = (-0.5, -1.0, -0.35),
                  fade_start: float = 1.0e9, fade_end: float = 1.0e9,
                  cut_start: float = 0.0, cut_end: float = 0.0,
-                 bounds: "tuple[float, float, float]" = _BIG) -> None:
+                 bounds: "tuple[float, float, float]" = _BIG,
+                 cull: bool = True) -> None:
         super(InstancedClumps, self).__init__()
         self.P = np.ascontiguousarray(P, np.float32)
         self.N = np.ascontiguousarray(N, np.float32)
@@ -246,8 +252,10 @@ class InstancedClumps(InstancedVegBase):
         self.cut_start = float(cut_start)
         self.cut_end = float(cut_end)
         self.bounds = bounds
+        self.cull = bool(cull)
         self._gl: Any = None
-        self._pending: "Optional[np.ndarray]" = None
+        self._rows = instance_rows(np.zeros((0, 3)), (), ())
+        self._pending = False
 
     def update_instances(self, positions: np.ndarray, yaws: np.ndarray,
                          scales: np.ndarray,
@@ -257,12 +265,12 @@ class InstancedClumps(InstancedVegBase):
         ``shades`` is how much of the sun reaches each clump, in [0, 1]; left
         out, the whole set is in full sun.
         """
-        self._pending = instance_rows(positions, yaws, scales, shades)
+        self._rows = instance_rows(positions, yaws, scales, shades)
+        self._pending = True
 
     def _instance_rows(self) -> np.ndarray:
         """The staged set, for a caller checking what will be drawn."""
-        return (self._pending if self._pending is not None
-                else instance_rows(np.zeros((0, 3)), (), ()))
+        return self._rows
 
     def _init_gl(self) -> None:
         self._prog = load_program("veg_mesh.vert", "veg_clump.frag")
@@ -283,6 +291,15 @@ class InstancedClumps(InstancedVegBase):
         glBindBuffer(GL_ARRAY_BUFFER, self._ibuf.id)
         setup_instance_attribs(3, 4, 5)
         glBindVertexArray(0)
+        # Rows are in the mesh's units, which are heights of one: a blade reaches
+        # sideways as far as the mesh does, and up as far as it is tall.
+        reach = float(np.hypot(self.P[:, 0], self.P[:, 2]).max()) if len(self.P) else 0.0
+        top = float(self.P[:, 1].max()) if len(self.P) else 0.0
+        bottom = float(self.P[:, 1].min()) if len(self.P) else 0.0
+        self._visible = CulledRows(self._ibuf, reach=reach, rise=max(top, 0.0),
+                                   drop=max(-bottom, 0.0), enabled=self.cull,
+                                   triangles=len(self.idx) // 3)
+        self._pending = True
         self.U = {x: glGetUniformLocation(self._prog, x) for x in
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",
                    "skyAmbient", "groundAmbient", *FOG_UNIFORMS,
@@ -309,10 +326,16 @@ class InstancedClumps(InstancedVegBase):
         self._gl = None
 
     def _stream(self) -> bool:
-        if self._pending is not None:
-            self._ibuf.upload(self._pending)
-            self._pending = None
-        return self._ibuf.count > 0
+        if self._pending:
+            self._visible.enabled = self.cull
+            self._visible.stage(self._rows)
+            self._pending = False
+            if not len(self._rows):
+                self._visible.show(None)     # an emptied set empties the buffer
+        return len(self._rows) > 0
+
+    def _show(self, mode: Any) -> bool:
+        return self._visible.show(mode) > 0
 
     def _draw(self, mode: Any) -> None:
         glActiveTexture(GL_TEXTURE0)
