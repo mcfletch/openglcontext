@@ -110,11 +110,12 @@ class CaptureTarget:
 
 
 #: The unit, in pixels, that each codec's picture size is a multiple of. 4:2:0
-#: video codes pairs of lines. AV1 on the GPU's encoder codes whole blocks of
-#: eight and states the real size only in a render-size field that players such
-#: as ffmpeg do not apply, so a picture of another size is played with padding
-#: along its bottom and right edges.
-SIZE_UNIT = {'h264': 2, 'hevc': 2, 'vp9': 2, 'av1': 8}
+#: video codes pairs of lines. AV1 on the GPU's encoder (VA-API on AMD) codes
+#: whole blocks of sixteen and states the real size only in a render-size field
+#: that players such as ffmpeg do not apply, so a picture of another size is
+#: played with padding along its bottom and right edges: 360 rows are played as
+#: 362 and 1044 as 1056, while 352 and 1040 are exact.
+SIZE_UNIT = {'h264': 2, 'hevc': 2, 'vp9': 2, 'av1': 16}
 
 
 def recording_size(width: int, height: int, codec: str = 'h264') -> tuple[int, int]:

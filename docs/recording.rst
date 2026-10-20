@@ -415,8 +415,8 @@ Limits
 ------
 
 - A recording started from the viewport is rounded down to a multiple of 2
-  pixels each way, and to a multiple of 8 for AV1, which the GPU codes in
-  blocks of eight and players show with padding otherwise.
+  pixels each way, and to a multiple of 16 for AV1, which the GPU codes in
+  blocks of sixteen and players show with padding otherwise.
 
 - The file is MP4, with H.264, HEVC, VP9 or AV1 in it. Which of those a
   machine writes, and the largest frame, depend on its encoder: the

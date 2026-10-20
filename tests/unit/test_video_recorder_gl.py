@@ -308,16 +308,17 @@ def test_a_context_is_waiting_for_its_recording_until_the_first_frame_is_kept(tm
     ('hevc', 1857, 1045, (1856, 1044)),
     ('vp9', 1001, 777, (1000, 776)),
     ('av1', 1856, 1044, (1856, 1040)),
-    ('av1', 1279, 719, (1272, 712)),
+    ('av1', 1280, 360, (1280, 352)),
+    ('av1', 1279, 719, (1264, 704)),
 ])
 def test_a_recording_is_sized_to_what_its_codec_codes_whole(codec, width, height, expected):
-    """4:2:0 codes pairs of lines; AV1 on the GPU codes blocks of eight, and players show the padding."""
+    """4:2:0 codes pairs of lines; AV1 on the GPU codes blocks of sixteen, and players show the padding."""
     assert recorder.recording_size(width, height, codec) == expected
 
 
 def test_a_viewport_smaller_than_the_codec_unit_is_refused():
     with pytest.raises(ValueError, match='too small'):
-        recorder.recording_size(7, 300, 'av1')
+        recorder.recording_size(15, 300, 'av1')
 
 
 class FakeClock:
