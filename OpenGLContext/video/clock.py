@@ -54,8 +54,9 @@ class FixedStepClock:
         denominator)`` pair. The pair is what keeps a long recording at 29.97
         from drifting: the step is 1001/30000 of a second, not a rounding of it.
     start -- the time the first frame happens at. By default the clock this one
-        replaces is asked, so a recording continues the world's time rather than
-        restarting it.
+        replaces is asked when this one is installed, so a recording continues
+        the world's time rather than restarting it, and one that waited to be
+        installed does not set the world back by the wait.
 
     Installed by using it as a context manager, or with :meth:`install` and
     :meth:`restore`. Nothing advances it: call :meth:`advance` once per frame
@@ -77,6 +78,7 @@ class FixedStepClock:
         self.step = denominator / numerator
         #: Frames finished since the clock started.
         self.frames = 0
+        self._start_given = start is not None
         self.start = systemtime.systemTime() if start is None else float(start)
         self._previous: Any = None
         self._installed = False
@@ -112,6 +114,8 @@ class FixedStepClock:
     def install(self) -> "FixedStepClock":
         """Take over as the engine's time source."""
         if not self._installed:
+            if not self._start_given and not self.frames:
+                self.start = systemtime.systemTime()
             self._previous = systemtime.setTimeSource(self)
             self._installed = True
         return self

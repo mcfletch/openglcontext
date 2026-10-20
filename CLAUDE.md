@@ -427,7 +427,10 @@ OpenGLContext/
 │   ├── layout.py     # Row/Column/Grid (built on hud.GUIBox)
 │   ├── draw.py       # The GL renderer: one program, one batched buffer
 │   └── generate.py   # A settings page from a node's fields (UI_HINTS)
-├── video/            # H.264 capture of the colour buffer -- docs/recording.rst
+├── video/            # Capture of the colour buffer in H.264, HEVC, VP9 or AV1 -- docs/recording.rst
+│   ├── codecs.py     # The codec names a recording takes; no GL
+│   ├── commandline.py  # The --record options a program offers and the
+│   │                 # request they make; no GL -- docs/recording.rst#recording-commandline
 │   └── playback.py   # A MovieTexture's movie decoded into one texture per
 │                     # context -- docs/x3d.rst#x3d-movies
 ├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.rst

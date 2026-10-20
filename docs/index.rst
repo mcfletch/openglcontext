@@ -280,8 +280,9 @@ Features
   - :doc:`Session telemetry <telemetry>`: a whole session recorded to one file,
     to read back or replay
 
-  - :doc:`Video recording <recording>`: a context's frames encoded to H.264 on
-    the GPU's own encoder, supported on NVIDIA cards under Linux
+  - :doc:`Video recording <recording>`: a context's frames encoded to H.264, HEVC, VP9 or AV1
+    on the GPU's own encoder, on NVIDIA and AMD cards under Linux and Intel
+    under Windows
 
   - :doc:`Packaging <packaging>`: a PyInstaller bundle, using hooks the engine
     ships, or a Debian package that carries its own interpreter

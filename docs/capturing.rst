@@ -5,8 +5,8 @@ Capturing the Render
 
 A program built on OpenGLContext can keep what it draws in three ways: a
 screenshot taken with a key, a single settled frame written to a PNG by
-``oglc-view`` or by your own code, and an H.264 video recorded on the GPU's
-own encoder. All three read the frame at the same point, just before it is
+``oglc-view`` or by your own code, and a video (H.264, HEVC, VP9 or AV1) recorded on
+the GPU's own encoder. All three read the frame at the same point, just before it is
 shown.
 
 .. _present:
@@ -133,8 +133,8 @@ reads through the test machinery; see :ref:`Comparing pixels <pixels>`.
 Recording video
 ---------------
 
-``pyopengl-video`` encodes the frames a context draws to an H.264 file on the
-GPU's own video encoder. Each frame is copied into a texture that the encoder
+``pyopengl-video`` encodes the frames a context draws to an MP4 file on the
+GPU's own video encoder, in H.264, HEVC, VP9 or AV1. Each frame is copied into a texture that the encoder
 reads in place, so only the compressed video leaves the graphics card. It is
 an optional extra:
 

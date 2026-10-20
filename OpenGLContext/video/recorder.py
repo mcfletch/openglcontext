@@ -1,4 +1,4 @@
-"""Recording a context's frames to an H.264 video file.
+"""Recording a context's frames to an MP4 video file, in H.264, HEVC, VP9 or AV1.
 
 A recording is a copy and an encode per frame. The frame the renderer has just
 drawn is blitted into a texture the video encoder has been told about, and the
@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import numpy as np
 import logging
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -47,12 +49,13 @@ from OpenGL.GL import (
     glReadBuffer, glTexImage2D, glTexParameteri,
 )
 
+from OpenGLContext.video import codecs
 from OpenGLContext.video.clock import FixedStepClock
 
 log = logging.getLogger(__name__)
 
 __all__ = ['VideoRecorder', 'RecordingMixin', 'CaptureTarget', 'copy_frame',
-           'RecordingUnavailable']
+           'RecordingUnavailable', 'recording_size', 'RecordingProgress']
 
 
 class RecordingUnavailable(RuntimeError):
@@ -106,6 +109,27 @@ class CaptureTarget:
             self.texture = 0
 
 
+#: The unit, in pixels, that each codec's picture size is a multiple of. 4:2:0
+#: video codes pairs of lines. AV1 on the GPU's encoder codes whole blocks of
+#: eight and states the real size only in a render-size field that players such
+#: as ffmpeg do not apply, so a picture of another size is played with padding
+#: along its bottom and right edges.
+SIZE_UNIT = {'h264': 2, 'hevc': 2, 'vp9': 2, 'av1': 8}
+
+
+def recording_size(width: int, height: int, codec: str = 'h264') -> tuple[int, int]:
+    """The size to record a `width` by `height` viewport at: rounded down to the codec's unit.
+
+    Raises :class:`ValueError` for a viewport smaller than one unit.
+    """
+    unit = SIZE_UNIT[codecs.canonical(codec)]
+    size = (width - width % unit, height - height % unit)
+    if min(size) <= 0:
+        raise ValueError('a %dx%d viewport is too small to record in %s: the picture is a '
+                         'multiple of %d pixels each way' % (width, height, codec, unit))
+    return size
+
+
 def copy_frame(framebuffer: int, size: tuple[int, int],
                source: int = 0, buffer: int | None = None) -> None:
     """Copy the frame just drawn into `framebuffer`, turning it the right way up.
@@ -153,6 +177,8 @@ class VideoRecorder:
     """Writes the frames a context draws to a video file.
 
     - ``path`` - the ``.mp4`` to write
+    - ``codec`` - ``'h264'``, ``'hevc'``, ``'vp9'`` or ``'av1'``, where the
+      GPU's encoder has it; ``'h265'`` and ``'avc'`` are taken too
     - ``fps`` - frames per second, as a number or an exact
       ``(numerator, denominator)`` pair
     - ``size`` - the recording's size; by default the viewport at the first
@@ -169,14 +195,18 @@ class VideoRecorder:
     - ``encoder`` - anything else is passed to the encoder: ``bitrate``,
       ``preset``, ``tuning``, ``gop``, ``bframes``; see the pyopengl-video
       documentation.
+
+    Raises :class:`ValueError` for a codec that is not one of
+    :data:`~OpenGLContext.video.codecs.CODECS`.
     """
 
     def __init__(self, path: str | Path, fps: float | tuple[int, int] = 60,
                  size: tuple[int, int] | None = None,
                  seconds: float | None = None, frames: int | None = None,
                  start_after: float = 0.0, fixed_step: bool = True,
-                 **encoder: Any) -> None:
+                 codec: str = 'h264', **encoder: Any) -> None:
         self.path = Path(path)
+        self.codec = codecs.canonical(codec)
         self.fps = fps
         self.size = size
         self.encoder_options = encoder
@@ -204,6 +234,25 @@ class VideoRecorder:
         """Whether more frames are still wanted."""
         return not self._closed and (self.limit is None
                                      or self.frames_written < self.limit)
+
+    def seconds_for(self, frames: int) -> float:
+        """How many seconds of video `frames` frames make at this recording's rate."""
+        numerator, denominator = FixedStepClock._as_ratio(self.fps)
+        return frames * denominator / numerator
+
+    @property
+    def seconds_written(self) -> float:
+        """Seconds of video kept so far."""
+        return self.seconds_for(self.frames_written)
+
+    @property
+    def started(self) -> bool:
+        """Whether the encoder is open: the first frame has been kept.
+
+        Until then the recording is waiting out :attr:`start_after`, and the
+        world is not yet on the recording's clock.
+        """
+        return self._encoder is not None
 
     def capture(self) -> bool:
         """Record the frame in the back buffer. Returns whether it took it.
@@ -260,13 +309,13 @@ class VideoRecorder:
         pyopengl_video, mp4 = load_encoder_api()
         if self.size is None:
             _x, _y, width, height = (int(value) for value in glGetIntegerv(GL_VIEWPORT))
-            # H.264 codes in pairs of lines, so an odd size has to lose a row or
-            # a column somewhere; losing it here keeps the encoder's own error
-            # away from a caller who only asked to record a window.
-            self.size = (width - width % 2, height - height % 2)
+            # A size the codec does not code whole loses rows or columns
+            # somewhere; losing them here keeps the encoder's own error away
+            # from a caller who only asked to record a window.
+            self.size = recording_size(width, height, self.codec)
         try:
             self._encoder = pyopengl_video.open_encoder(
-                *self.size, fps=self.fps, **self.encoder_options)
+                *self.size, codec=self.codec, fps=self.fps, **self.encoder_options)
         except pyopengl_video.EncoderUnavailable as error:
             raise RecordingUnavailable(str(error)) from error
         # One input per frame the encoder may be holding: it reads a texture for
@@ -278,7 +327,7 @@ class VideoRecorder:
         self._movie = mp4.MP4Writer(self.path, self._encoder)
         if self.clock is not None:
             self.clock.install()
-        log.info('recording %sx%s to %s', self.size[0], self.size[1], self.path)
+        log.info('recording %sx%s %s to %s', self.size[0], self.size[1], self.codec, self.path)
 
     def close(self) -> None:
         """Finish the file and give everything back. Safe to call twice."""
@@ -306,6 +355,52 @@ class VideoRecorder:
         self.close()
 
 
+class RecordingProgress:
+    """Says how far a recording has got, once an `interval` of real time.
+
+    A recording is paced by frames, so a minute of video takes as long to
+    record as its frames take to draw, which is more than a minute for a heavy
+    scene. The line says how much video is written and how long the rest is
+    expected to take at the rate so far.
+
+    - ``interval`` - seconds of real time between lines
+    - ``clock`` - the real-time clock, which a test replaces
+    """
+
+    def __init__(self, interval: float = 5.0,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.interval = interval
+        self.clock = clock
+        self._began: float | None = None
+        self._first = 0
+        self._next = 0.0
+
+    def report(self, recording: VideoRecorder) -> str | None:
+        """The line to print now, or None when it is not time or nothing is kept yet."""
+        if not recording.frames_written:
+            return None
+        now = self.clock()
+        if self._began is None:
+            self._began = now
+            self._first = recording.frames_written
+            self._next = now + self.interval
+            return None
+        if now < self._next:
+            return None
+        self._next = now + self.interval
+        rate = (recording.frames_written - self._first) / max(now - self._began, 1e-9)
+        done = recording.seconds_written
+        line = 'recording: %.0f' % done
+        if recording.limit is not None:
+            line += ' of %.0f s' % recording.seconds_for(recording.limit)
+        else:
+            line += ' s'
+        line += ', %.0f frames a second' % rate
+        if recording.limit is not None and rate > 0:
+            line += ', about %.0f s to go' % ((recording.limit - recording.frames_written) / rate)
+        return line
+
+
 class RecordingMixin(object):
     """Gives a context a record-to-video mode.
 
@@ -319,15 +414,28 @@ class RecordingMixin(object):
     #: Quit once the recording is done, which is what a headless run of a fixed
     #: length wants.
     quitWhenRecorded: bool = True
+    #: Prints how far the recording has got every few seconds; None prints nothing.
+    recordingProgress: RecordingProgress | None = None
 
     def setupRecording(self, path: str | Path | None, **options: Any) -> None:
         """Arrange to record to `path`; a path of None records nothing."""
         self.recorder = VideoRecorder(path, **options) if path else None
+        self.recordingProgress = RecordingProgress() if path else None
 
     @property
     def recording(self) -> bool:
         """Whether this run is being recorded."""
         return self.recorder is not None
+
+    @property
+    def awaiting_recording(self) -> bool:
+        """Whether a recording is set up and has yet to keep its first frame.
+
+        True while the recording waits out its ``start_after``. A program with
+        something that runs in real time, a game or an animation, holds it
+        while this is true, so the video opens on the start of the run.
+        """
+        return self.recorder is not None and not self.recorder.started
 
     def wantsMoreFrames(self) -> bool:
         """A recording still running needs frames to record.
@@ -355,6 +463,10 @@ class RecordingMixin(object):
             return False
         self.recorder.capture()
         if self.recorder.recording:
+            line = (self.recordingProgress.report(self.recorder)
+                    if self.recordingProgress is not None else None)
+            if line:
+                print(line, flush=True)
             return True
         # Finished, rather than merely waiting for the scene to arrive: those
         # both look like a frame that was not kept.

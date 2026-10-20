@@ -53,8 +53,8 @@ create your own demos or tools.
 - Rigged characters - skeletal animation with several clips playing at
   once, attachments on a hand, distance LOD, and crowds posed on the GPU.
 
-- Records what it draws - H.264 straight from the framebuffer to the
-  GPU's video encoder, on a clock that counts frames.
+- Records what it draws - H.264, HEVC, VP9 or AV1 straight from the
+  framebuffer to the GPU's video encoder, on a clock that counts frames.
 
 - Viewer Application - `oglc-view model.glb`. With embedded links to sample
   content you can browse through the embedded UI.

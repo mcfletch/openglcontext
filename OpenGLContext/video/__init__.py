@@ -1,7 +1,7 @@
 """Recording what the engine draws.
 
 :class:`~OpenGLContext.video.recorder.VideoRecorder` takes the frame a context
-has just drawn and writes it to an H.264 video file, with the frame going
+has just drawn and writes it to an MP4 video file (H.264, HEVC, VP9 or AV1), with the frame going
 straight from the framebuffer to the GPU's video encoder.
 
 Recording needs the ``video`` extra::

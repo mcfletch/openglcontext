@@ -3,7 +3,8 @@ Recording video
 
 .. rst-class:: introduction
 
-A **recorder** writes the frames a context draws to an H.264 video file. Each
+A **recorder** writes the frames a context draws to an MP4 video file, in
+H.264, HEVC, VP9 or AV1. Each
 frame is copied from the framebuffer into a texture that the GPU's video
 encoder reads in place, so only the compressed video crosses the bus. By
 default the world advances by exactly one frame's worth of time for each
@@ -90,6 +91,63 @@ also how long a ``--fly-through`` takes when nothing is recorded, and
 
 A recorded frame has no caption and no developer overlay, the same as a
 screenshot. See :ref:`Recording a video <video>` on the viewer page.
+
+.. _recording-commandline:
+
+Recording from a program's command line
+----------------------------------------
+
+A program with a recording mode offers the same options as every other one by
+adding them from ``OpenGLContext.video.commandline``, which imports no GL and
+loads no encoder until a recording is requested:
+
+.. code-block:: python
+
+   import argparse
+   from OpenGLContext.video.commandline import (
+       RecordingRequest, add_recording_arguments, require_recording,
+   )
+
+   parser = argparse.ArgumentParser()
+   add_recording_arguments(parser, seconds=30, fps=60, delay=3)
+   arguments = parser.parse_args()
+   request = require_recording(parser, RecordingRequest.from_namespace(arguments))
+
+   # in the context's OnInit
+   if request:
+       self.setupRecording(request.path, **request.options())
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Option
+     - Meaning
+   * - ``--record PATH``
+     - The ``.mp4`` to write. Without it nothing is recorded.
+   * - ``--record-codec CODEC``
+     - ``h264``, ``hevc``, ``vp9`` or ``av1``; ``h265`` and ``avc`` are
+       accepted. An unknown name is a usage error that lists the choices.
+   * - ``--record-seconds SECONDS``
+     - How long the video is; above zero.
+   * - ``--record-fps FPS``
+     - Frames a second; above zero.
+   * - ``--record-delay SECONDS``
+     - Seconds of real time to let the world arrive before the first frame
+       is kept; zero or more.
+   * - ``--record-bitrate BITS``
+     - Bits a second; 0 leaves the choice to the encoder.
+
+``add_recording_arguments`` takes the defaults the program wants for length,
+rate, delay and codec. ``require_recording`` ends the program with a usage
+error when the ``video`` extra is not installed, before any window opens.
+Whether the GPU encodes the codec is known once a GL context is current, so a
+codec it lacks is reported by the first frame.
+
+A program with something that runs in real time holds it while
+``awaiting_recording`` is true, which is from ``setupRecording`` until the first
+frame is kept. The video then opens on the start of the run, and the world's
+clock continues from where it stood when recording began.
 
 .. _recording-context:
 
@@ -190,6 +248,12 @@ These are the arguments of ``setupRecording()`` and ``VideoRecorder``:
      - Frames per second, as a number or an exact ``(numerator, denominator)``
        pair. Use the pair for rates such as 29.97, so a long recording does
        not drift.
+   * - ``codec``
+     - ``'h264'``
+     - ``'h264'``, ``'hevc'``, ``'vp9'`` or ``'av1'``; ``'h265'`` and
+       ``'avc'`` are taken too. The GPU's encoder has to produce it: a codec
+       it lacks raises ``RecordingUnavailable`` at the first frame, and
+       ``pyopengl_video.encoders()`` lists what a machine has.
    * - ``size``
      - the viewport
      - The recording keeps the size it starts at. If the window is resized
@@ -206,10 +270,36 @@ These are the arguments of ``setupRecording()`` and ``VideoRecorder``:
      - True
      - Advance the engine's clock by one frame per frame recorded. See
        :ref:`recording-clock`.
+   * - ``bitrate``
+     - 0.25 bits per pixel
+     - Bits per second, from the encoder's default of the frame size times the
+       rate times 0.25: 1080p60 is about 31 Mbit/s. Dense foliage at 60 frames
+       a second blocks and smears at a quarter of that. A scene with little
+       detail needs less.
    * - anything else
      -
-     - Passed to the encoder: ``bitrate``, ``preset``, ``tuning``, ``gop``,
-       ``bframes``.
+     - Passed to the encoder: ``preset``, ``tuning``, ``gop``, ``rate_control``,
+       ``qp``, ``bframes``.
+
+.. _recording-progress:
+
+Progress, and a recording that is cut off
+-----------------------------------------
+
+A recording is paced by frames, so a minute of video takes as long to record
+as its frames take to draw. ``RecordingMixin`` prints a line every five
+seconds of real time, from ``RecordingProgress``:
+
+.. code-block:: text
+
+   recording: 35 of 120 s, 31 frames a second, about 170 s to go
+
+Set ``recordingProgress`` to None to print nothing.
+
+The MP4 writer states the file's sample tables at checkpoints as it goes, so a
+program that dies mid-recording leaves a file that plays up to its last
+checkpoint, a second or so before the end. The finished file is an ordinary
+MP4 with one ``moov`` box last.
 
 .. _recording-clock:
 
@@ -324,7 +414,14 @@ screenshot key and writing one settled frame to a PNG.
 Limits
 ------
 
-- H.264 only, up to 4096×4096, in an MP4 file.
+- A recording started from the viewport is rounded down to a multiple of 2
+  pixels each way, and to a multiple of 8 for AV1, which the GPU codes in
+  blocks of eight and players show with padding otherwise.
+
+- The file is MP4, with H.264, HEVC, VP9 or AV1 in it. Which of those a
+  machine writes, and the largest frame, depend on its encoder: the
+  pyopengl-video README has the table, and ``pyopengl_video.encoders()`` and
+  each backend's ``largest(codec)`` answer for the machine at hand.
 
 - Supported encoders - NVIDIA and AMD on Linux, and Intel on Windows; Intel on
   Linux uses the AMD code path and is untested. NVIDIA and AMD on Windows are

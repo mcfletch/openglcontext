@@ -244,3 +244,132 @@ def test_waiting_for_the_scene_is_not_the_recording_finishing(tmp_path):
         assert recorder.recording is False        # now it is done
     finally:
         recorder.close()
+
+
+def encoded_codecs():
+    """The codecs the hardware here encodes; asked with a GL context current."""
+    return {codec for backend in pytest.importorskip('pyopengl_video').encoders()
+            for codec in backend.codecs}
+
+
+@pytest.mark.parametrize('codec', ['h264', 'hevc', 'vp9', 'av1'])
+@pytest.mark.usefixtures('encoder_available')
+def test_a_recording_is_written_in_the_codec_asked_for(tmp_path, codec):
+    if codec not in encoded_codecs():
+        pytest.skip('this GPU does not encode %s' % codec)
+    from pyopengl_video import codecs as encoder_codecs
+    from pyopengl_video.mp4 import MP4Reader
+
+    path = tmp_path / ('%s.mp4' % codec)
+    with VideoRecorder(path, fps=FPS, size=SIZE, codec=codec, frames=8) as recording:
+        for index in range(8):
+            draw_a_distinctive_frame(index)
+            recording.capture()
+
+    with MP4Reader(path) as movie:
+        assert encoder_codecs.canonical(movie.video.codec) == codec
+        assert movie.video.size == SIZE
+
+
+def test_a_recording_in_an_unknown_codec_is_refused_before_anything_opens(tmp_path):
+    with pytest.raises(ValueError, match='theora'):
+        VideoRecorder(tmp_path / 'x.mp4', codec='theora')
+
+
+def test_a_codec_is_taken_by_any_of_its_spellings(tmp_path):
+    assert VideoRecorder(tmp_path / 'x.mp4', codec='H265').codec == 'hevc'
+
+
+def test_a_recording_that_has_not_kept_a_frame_has_not_started(tmp_path):
+    recording = VideoRecorder(tmp_path / 'x.mp4')
+    assert recording.started is False
+
+
+@pytest.mark.usefixtures('encoder_available')
+def test_a_recording_has_started_once_it_has_its_first_frame(tmp_path):
+    with VideoRecorder(tmp_path / 'x.mp4', fps=FPS, size=SIZE) as recording:
+        draw_a_distinctive_frame()
+        recording.capture()
+        assert recording.started is True
+
+
+def test_a_context_is_waiting_for_its_recording_until_the_first_frame_is_kept(tmp_path):
+    class Window(recorder.RecordingMixin):
+        pass
+
+    window = Window()
+    assert window.awaiting_recording is False
+    window.setupRecording(tmp_path / 'x.mp4', start_after=5)
+    assert window.awaiting_recording is True
+
+
+@pytest.mark.parametrize('codec, width, height, expected', [
+    ('h264', 1856, 1044, (1856, 1044)),
+    ('hevc', 1857, 1045, (1856, 1044)),
+    ('vp9', 1001, 777, (1000, 776)),
+    ('av1', 1856, 1044, (1856, 1040)),
+    ('av1', 1279, 719, (1272, 712)),
+])
+def test_a_recording_is_sized_to_what_its_codec_codes_whole(codec, width, height, expected):
+    """4:2:0 codes pairs of lines; AV1 on the GPU codes blocks of eight, and players show the padding."""
+    assert recorder.recording_size(width, height, codec) == expected
+
+
+def test_a_viewport_smaller_than_the_codec_unit_is_refused():
+    with pytest.raises(ValueError, match='too small'):
+        recorder.recording_size(7, 300, 'av1')
+
+
+class FakeClock:
+    """A clock the test moves, for a recording's progress."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+def test_progress_is_silent_until_a_frame_has_been_kept(tmp_path):
+    progress = recorder.RecordingProgress(interval=5, clock=FakeClock())
+    assert progress.report(VideoRecorder(tmp_path / 'x.mp4', seconds=120)) is None
+
+
+def test_progress_says_how_far_the_recording_is_and_how_long_is_left(tmp_path):
+    clock = FakeClock()
+    progress = recorder.RecordingProgress(interval=5, clock=clock)
+    recording = VideoRecorder(tmp_path / 'x.mp4', fps=60, seconds=120)
+    recording.frames_written = 1
+    assert progress.report(recording) is None              # the first kept frame starts the timing
+    clock.now += 10
+    recording.frames_written = 301                         # 300 frames in 10 s: 30 a second
+    assert progress.report(recording) == (
+        'recording: 5 of 120 s, 30 frames a second, about 230 s to go')
+
+
+def test_progress_is_reported_once_an_interval_not_every_frame(tmp_path):
+    clock = FakeClock()
+    progress = recorder.RecordingProgress(interval=5, clock=clock)
+    recording = VideoRecorder(tmp_path / 'x.mp4', fps=60, seconds=120)
+    recording.frames_written = 1
+    progress.report(recording)
+    clock.now += 5
+    recording.frames_written = 151
+    assert progress.report(recording) is not None
+    clock.now += 1
+    recording.frames_written = 181
+    assert progress.report(recording) is None
+    clock.now += 4
+    recording.frames_written = 301
+    assert progress.report(recording) is not None
+
+
+def test_a_recording_with_no_length_reports_what_it_has(tmp_path):
+    clock = FakeClock()
+    progress = recorder.RecordingProgress(interval=5, clock=clock)
+    recording = VideoRecorder(tmp_path / 'x.mp4', fps=30)
+    recording.frames_written = 1
+    progress.report(recording)
+    clock.now += 10
+    recording.frames_written = 301
+    assert progress.report(recording) == 'recording: 10 s, 30 frames a second'

@@ -51,6 +51,26 @@ def test_it_starts_from_the_clock_it_replaced_when_given_no_start():
         assert clock() == 4242.0
 
 
+def test_it_starts_from_the_time_it_is_installed_not_the_time_it_was_made():
+    """A recording waiting for a world to arrive must not set the world's time back."""
+    now = [100.0]
+    systemtime.setTimeSource(lambda: now[0])
+    clock = FixedStepClock(fps=60)
+    now[0] = 106.0
+    with clock:
+        assert systemtime.systemTime() == 106.0
+        assert clock.elapsed == 0.0
+
+
+def test_a_start_that_was_given_is_kept_whenever_it_is_installed():
+    now = [100.0]
+    systemtime.setTimeSource(lambda: now[0])
+    clock = FixedStepClock(fps=60, start=3.0)
+    now[0] = 106.0
+    with clock:
+        assert systemtime.systemTime() == 3.0
+
+
 def test_leaving_restores_whatever_was_there_rather_than_the_wall_clock():
     """Nested recordings, or a replay driving a recording, must not lose a clock."""
     systemtime.setTimeSource(lambda: 7.0)

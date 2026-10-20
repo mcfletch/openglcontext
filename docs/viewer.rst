@@ -530,7 +530,8 @@ Recording a video
    oglc-view world.glb --capture-video walk.mp4 --fly-through \
        --video-seconds 16 --video-fps 30 --size 1280x720
 
-``--capture-video`` records the frames the viewer draws to an H.264 file and
+``--capture-video`` records the frames the viewer draws to an H.264 file (the
+viewer's codec is the encoder's default) and
 exits when the recording is complete. ``--video-seconds`` sets the length
 (default 12) and ``--video-fps`` the frame rate (default 30). The encoder is
 in the graphics driver and frames stay on the GPU, so recording costs little

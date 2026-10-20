@@ -53,8 +53,8 @@ Optional extras add the packages for particular features:
    The playback backend that sends sound to a sound card. :doc:`Audio <audio>`
    is part of the core install and mixes without it, but plays nothing.
 ``OpenGLContext[video]``
-   :doc:`Recording what the engine draws <recording>` to an H.264 file, using
-   the video encoder in the graphics driver.
+   :doc:`Recording what the engine draws <recording>` to an MP4 file in H.264, HEVC, VP9
+   or AV1, using the video encoder in the graphics driver.
 ``OpenGLContext[basisu]``
    Basis Universal textures, through ``opengl_basisu``: glTF's
    :ref:`KHR_texture_basisu <gltf-basisu>`, and KTX 2 or ``.basis`` files named
@@ -513,8 +513,8 @@ Shipping it
   settled frame to a PNG from the viewer or your own code, and recording
   video with pyopengl-video.
 
-- :doc:`Recording Video <recording>` -- writing a context's frames to an H.264
-  file, from the framebuffer to the GPU's video encoder, on a clock that
+- :doc:`Recording Video <recording>` -- writing a context's frames to an MP4
+  file in any of four codecs, from the framebuffer to the GPU's video encoder, on a clock that
   counts frames.
 
 - :doc:`Packaging an Application <packaging>` -- giving someone a game with no
