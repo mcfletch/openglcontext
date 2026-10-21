@@ -572,10 +572,40 @@ number of materials. This renderer uses one program. A material is a uniform
 buffer switched with one bind. Clearcoat, sheen and transmission are branches
 on uniforms that have the same value for a whole draw call, so every fragment
 in the draw takes the same branch, which costs little on desktop GPUs. Every
-draw still pays for the registers and uniforms of the optional lobes, even
-when a material uses none of them. On a weak GPU this can lower occupancy, so
-the three lobes are also behind the compile-time defines ``USE_CLEARCOAT``,
-``USE_SHEEN`` and ``USE_TRANSMISSION``, all on by default. A constrained
-platform can compile one smaller program without some lobes, for the whole
-scene. The choice is made per platform, never per material; the scene always
-binds exactly one program.
+draw still pays for the registers and uniforms of the optional parts, even
+when a material uses none of them. With every part compiled in, the fragment
+shader is tens of thousands of instructions and spills registers, which on an
+integrated GPU can slow each pixel several times over.
+
+``ContextDefinition.shaderFeatures`` (environment
+``OPENGLCONTEXT_SHADER_FEATURES``) chooses which optional parts the program is
+compiled with. ``all``, the default, compiles every part the driver has the
+texture units for. ``none`` compiles none, and a comma-separated list compiles
+just those:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Name
+     - Part of the shader
+   * - ``clearcoat``, ``sheen``, ``transmission``
+     - The three lobes (``USE_CLEARCOAT``, ``USE_SHEEN``, ``USE_TRANSMISSION``).
+   * - ``extension-textures``
+     - The maps of the glTF material extensions: iridescence thickness,
+       transmission and the like.
+   * - ``texture-layers``
+     - An X3D appearance's texture layers and texture projectors.
+   * - ``planar-reflection``
+     - The reflection atlas that mirrors and water read (:doc:`reflections`).
+   * - ``zone-probes``
+     - A zone's own environment probe (:doc:`zones`).
+   * - ``volume-scatter``
+     - The scattering buffer of volume materials.
+
+A part that is left out draws as if the material did not ask for it: a mirror
+reflects the environment probe, a transmissive surface is opaque. The choice is
+read once, when the program compiles at the first frame, and is made for the
+whole scene, never per material; the scene always binds exactly one program.
+A game that uses PBR materials with textures and nothing else sets
+``shaderFeatures='none'``.

@@ -446,25 +446,48 @@ PBR_OPTIONAL_FEATURES = ('CLEARCOAT', 'SHEEN', 'TRANSMISSION')
 def pbr_feature_defines(enabled: Optional[Any] = None) -> list:
     """USE_* defines choosing which optional lobes the PBR uber-shader includes.
 
-    FUTURE FEATURE -- not wired into compile() yet. Today the program is always
-    built with every lobe ON (see the USE_* fallbacks in pbr.frag), so the whole
-    scene keeps using one shader.
-
-    The intended use is a *per-platform / per-settings* decision made ONCE, at
-    program-compile time -- NOT per material. A constrained profile (say low-end
-    integrated graphics) could drop transmission + clearcoat to shrink the
-    uber-shader's register footprint for the entire scene, trading feature support
-    for occupancy. Because the choice is global, the scene still binds a single
-    program: this never causes per-material shader swapping.
-
     ``enabled`` is an iterable of names from PBR_OPTIONAL_FEATURES to keep; ``None``
-    keeps them all (the default program). Feed the result in at compile time::
-
-        preprocess_shader('pbr.frag', shadow_defines(...) + pbr_feature_defines(cfg))
+    keeps them all. The program is compiled with the lobes the application's
+    ``shaderFeatures`` names (:func:`shader_features`), once for the whole scene,
+    so the scene still binds a single program and never swaps shaders per material.
     """
     keep = set(PBR_OPTIONAL_FEATURES if enabled is None else enabled)
     return ['#define USE_%s %d' % (f, 1 if f in keep else 0)
             for f in PBR_OPTIONAL_FEATURES]
+
+
+#: The optional parts of the PBR program, by the names ``ContextDefinition.shaderFeatures``
+#: gives them. Each is compiled in where the driver has the texture units for it, and each
+#: adds to the registers every pixel of every draw is shaded with, so a program that never
+#: draws a mirror is faster without the mirror's code in it.
+#:
+#: ``clearcoat``, ``sheen`` and ``transmission`` are the lobes of
+#: :data:`PBR_OPTIONAL_FEATURES`; ``extension-textures`` the maps of the glTF material
+#: extensions (iridescence thickness, transmission and the like); ``texture-layers`` an
+#: X3D appearance's texture layers and projectors; ``planar-reflection`` the reflection
+#: atlas; ``zone-probes`` a zone's own environment probe; ``volume-scatter`` the volume
+#: scattering buffer.
+SHADER_FEATURES: tuple[str, ...] = (
+    'clearcoat', 'sheen', 'transmission', 'extension-textures', 'texture-layers',
+    'planar-reflection', 'zone-probes', 'volume-scatter')
+
+
+def shader_features(text: Optional[str]) -> Optional[frozenset[str]]:
+    """The features a ``shaderFeatures`` value names, or None for all of them.
+
+    ``text`` is ``all`` (or nothing), ``none`` or a comma-separated list of
+    :data:`SHADER_FEATURES`. A name that is not one is reported and left out.
+    """
+    words = [word.strip().lower() for word in (text or '').split(',') if word.strip()]
+    if not words or words == ['all']:
+        return None
+    if words == ['none']:
+        return frozenset()
+    unknown = [word for word in words if word not in SHADER_FEATURES]
+    if unknown:
+        log.warning("ignoring shader features %s: expected %s", ', '.join(unknown),
+                    ', '.join(SHADER_FEATURES))
+    return frozenset(word for word in words if word in SHADER_FEATURES)
 
 
 #: The bit of the block's flags word saying the vertex colours are baked light
@@ -619,6 +642,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
     #: and the extension maps :attr:`ext_channels` says the driver has units for.
     texture_units: tuple[tuple[str, int], ...] = tuple(PBR_UNITS.items())
     _ext_channels: Mapping[str, int] = MappingProxyType({})
+    #: The optional parts compiled in (:data:`SHADER_FEATURES`): None for every one the
+    #: driver can run. Read when the program compiles.
+    features: Optional[frozenset[str]] = None
 
     @property
     def ext_channels(self) -> Mapping[str, int]:
@@ -666,38 +692,46 @@ class PBRShaderProgram(VRML97ShaderProgram):
             # Bake the driver's shadow-light budget / cube path into pbr.frag,
             # mirroring the VRML97 program.
             self.MAX_SHADOW_LIGHTS, self.shadow_cube_array = resolve_shadow_config()
+            # What the application declared (``shaderFeatures``); None is every
+            # feature the driver has units for.
+            wanted = self.features
+
+            def wants(name: str) -> bool:
+                return wanted is None or name in wanted
             # Sampler-budget gate: extension textures (units 16+) only exist on a GPU
             # reporting more than the 16-unit GL 3.3 minimum (llvmpipe reports 16).
             self.texture_budget = int(glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS))
-            self.ext_channels = ext_texture_channels(self.texture_budget)
+            ext_textures = (wants('extension-textures')
+                            and ext_textures_supported(self.texture_budget))
+            self.ext_channels = (ext_texture_channels(self.texture_budget)
+                                 if wants('extension-textures') else {})
             # Reflections of the scene are read from a unit past the joint
             # palette; where the fragment stage stops short of it every
             # mirror reflects the environment probe alone.
             self.planar_reflection_supported = (
-                self.texture_budget >= REFLECTION_UNITS_NEEDED)
+                wants('planar-reflection') and self.texture_budget >= REFLECTION_UNITS_NEEDED)
             # A zone's own environment probe is a layer of the cube-map array
             # the scene's probe then lives in, which needs the same GL 4.0 /
             # ARB_texture_cube_map_array support the point-shadow cube arrays
             # do -- and the #extension line that support already enables.
-            self.zone_probes_supported = bool(self.shadow_cube_array)
+            self.zone_probes_supported = wants('zone-probes') and bool(self.shadow_cube_array)
             # The texture layers' cube map and 3D texture, and the texture
             # projectors' images, where the fragment stage has samplers left.
-            self.layer_samplers_supported = pbr_fragment_samplers(
-                ext_textures_supported(self.texture_budget),
-                self.planar_reflection_supported, bool(self.shadow_cube_array),
-                self.MAX_SHADOW_LIGHTS) + LAYER_SAMPLERS_NEEDED <= self.texture_budget
+            declared = pbr_fragment_samplers(
+                ext_textures, self.planar_reflection_supported, bool(self.shadow_cube_array),
+                self.MAX_SHADOW_LIGHTS)
+            self.layer_samplers_supported = (
+                wants('texture-layers') and declared + LAYER_SAMPLERS_NEEDED <= self.texture_budget)
             # The volume-scatter buffer's sampler, where one is left after those.
-            self.volume_scatter_supported = pbr_fragment_samplers(
-                ext_textures_supported(self.texture_budget),
-                self.planar_reflection_supported, bool(self.shadow_cube_array),
-                self.MAX_SHADOW_LIGHTS) + (LAYER_SAMPLERS_NEEDED if self.layer_samplers_supported
-                                           else 0) + 1 <= self.texture_budget
+            self.volume_scatter_supported = (
+                wants('volume-scatter')
+                and declared + (LAYER_SAMPLERS_NEEDED if self.layer_samplers_supported else 0) + 1
+                <= self.texture_budget)
             ext_defines = ['#define TEXTURE_LAYER_SAMPLERS %d'
                            % (1 if self.layer_samplers_supported else 0),
                            '#define TEXTURE_PROJECTORS %d'
                            % (1 if self.layer_samplers_supported else 0),
-                           '#define PBR_EXT_TEXTURES %d'
-                           % (1 if ext_textures_supported(self.texture_budget) else 0),
+                           '#define PBR_EXT_TEXTURES %d' % (1 if ext_textures else 0),
                            '#define PBR_PLANAR_REFLECTION %d'
                            % (1 if self.planar_reflection_supported else 0),
                            '#define PBR_VOLUME_SCATTER %d'
@@ -705,6 +739,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
                            '#define PBR_ZONE_PROBES %d'
                            % (1 if self.zone_probes_supported else 0),
                            '#define MAX_ZONE_LAYERS %d' % (MAX_ZONE_LAYERS,)]
+            if wanted is not None:
+                ext_defines += pbr_feature_defines(
+                    [lobe for lobe in PBR_OPTIONAL_FEATURES if lobe.lower() in wanted])
             # Vertex-shader skinning needs a texture unit of its own for the
             # joint palette; a driver whose combined budget does not reach it
             # compiles the skinning out and the deform stays on the CPU.
@@ -1542,7 +1579,11 @@ class PBRPass(flatcore.FlatPass):
 
     def getShaderProgram(self) -> VRML97ShaderProgram:
         if self._shader_program_instance is None:
-            self._shader_program_instance = PBRShaderProgram()
+            program = PBRShaderProgram()
+            program.features = shader_features(renderoptions.choice(
+                self, 'shaderFeatures',
+                renderoptions.env_text_once('OPENGLCONTEXT_SHADER_FEATURES', 'all')))
+            self._shader_program_instance = program
         return self._shader_program_instance
 
     # Must match MAX_INSTANCE_MATERIALS in pbr.frag (sized to the 16 KB UBO min:

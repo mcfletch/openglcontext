@@ -10,12 +10,13 @@
 // by uniform-valued branches (coherent across a draw, so cheap on desktop GPUs),
 // not per-fragment divergence. Its one real cost is the register/uniform
 // footprint every draw pays even when the material uses none of those features.
-// On a weak tier (integrated Intel) that hurts occupancy; the escape hatch is the
-// USE_CLEARCOAT / USE_SHEEN / USE_TRANSMISSION defines below. These are a FUTURE
-// per-platform / per-settings knob (pbrpass.pbr_feature_defines): a constrained
-// profile can compile ONE leaner program with some lobes dropped for the whole
-// scene -- it is NOT a per-material permutation and never swaps shaders per draw.
-// They default ON, so the shipped program (and a standalone compile) is complete.
+// On a weak tier (integrated Intel) that hurts occupancy: with every feature compiled
+// in, this program is tens of thousands of instructions and spills registers.
+// The USE_CLEARCOAT / USE_SHEEN / USE_TRANSMISSION defines below, and the PBR_* and
+// TEXTURE_* gates, compile features out. The application chooses them once for the
+// whole scene (ContextDefinition.shaderFeatures, see pbrpass.shader_features); the
+// scene still binds exactly one program and never swaps shaders per material.
+// They default ON, so a standalone compile is complete.
 
 #define MAX_LIGHTS 8
 // MAX_SHADOW_LIGHTS is injected at compile time (derived from the driver's real

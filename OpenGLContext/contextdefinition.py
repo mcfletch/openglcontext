@@ -295,6 +295,16 @@ class ContextDefinition( node.Node ):
     planarReflections = field.newField( "planarReflections", "SFBool", 1,
                                         lambda: renderoptions.env_flag(
                                             'OPENGLCONTEXT_PLANAR_REFLECTIONS', True))
+    #: The optional parts the PBR program is compiled with: "all" (the default),
+    #: "none", or a comma-separated list of clearcoat, sheen, transmission,
+    #: extension-textures, texture-layers, planar-reflection, zone-probes and
+    #: volume-scatter (env: OPENGLCONTEXT_SHADER_FEATURES). Each part left out
+    #: lightens every pixel's shading; a scene that draws one it left out
+    #: draws without it. A window-creation setting: it takes effect when the
+    #: program is compiled, at the first frame. See OpenGLContext.passes.pbrpass.
+    shaderFeatures = field.newField( "shaderFeatures", "SFString", 1,
+                                     lambda: renderoptions.env_text(
+                                         'OPENGLCONTEXT_SHADER_FEATURES', 'all'))
     #: The most mirror views drawn in one frame. 0 takes the strategy's own:
     #: 16 where one submission reaches several views, 2 where each costs a
     #: draw of the scene (env: OPENGLCONTEXT_REFLECTION_VIEWS).

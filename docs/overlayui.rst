@@ -278,6 +278,12 @@ field on the ``ContextDefinition``, and the screen shows all of them:
        The developer overlay's Render section shows what they cost
        (:doc:`hud`).
      - ``OPENGLCONTEXT_PLANAR_REFLECTIONS``
+   * - ``shaderFeatures``
+     - ``all``/``none``/list
+     - The optional parts the PBR program is compiled with; each one left
+       out makes every pixel cheaper to shade (:doc:`ubershader`). Read when
+       the program compiles, at the first frame.
+     - ``OPENGLCONTEXT_SHADER_FEATURES``
    * - ``reflectionViews``
      - int, 0-16
      - The most mirror views a frame draws; 0 is the strategy's own.
