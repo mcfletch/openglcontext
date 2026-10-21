@@ -12,6 +12,7 @@ work can be handed to a thread that must not touch GL.
 """
 import json
 import os
+import types
 
 import numpy as np
 import pytest
@@ -26,6 +27,7 @@ from OpenGLContext.scenegraph.vegetation.cover import (
     read_cover_manifest,
 )
 from OpenGLContext.loaders.documentvalues import DocumentValues, DocumentError
+from OpenGLContext.scenegraph.vegetation.viewcull import CulledRows
 from tests.unit.test_clump_glb import _many_glb_bytes, _ribbon, _two_blades
 
 EXTENT = 4096.0
@@ -410,6 +412,30 @@ class TestTheCardsBeyondTheGeometry:
         assert rung.far_cards.far_fade == pytest.approx(500.0)
 
 
+class _Buffer:
+    """What a clump layer streams into when there is no GL context to own one."""
+
+    def __init__(self) -> None:
+        self.count = 0
+        self.rows = np.zeros((0, 0), 'f4')
+
+    def upload(self, rows) -> None:
+        self.rows, self.count = np.array(rows), len(rows)
+
+
+def _streamed(layer):
+    """The rows a draw of ``layer`` streams to the GPU, with no GL context.
+
+    The layer's staged rows through the same ``CulledRows`` and the same disc
+    the layer draws with.
+    """
+    buffer = _Buffer()
+    culled = CulledRows(buffer, reach=0.5, rise=1.0)
+    culled.stage(layer._instance_rows())  # noqa: SLF001 the rows the clump layer stages, read without a GL context
+    culled.show(types.SimpleNamespace(), layer.disc)
+    return buffer.rows
+
+
 class TestTheGeometryNearTheCamera:
     """Two levels of detail, because the outer ring of the disc is most of the
     plants: full geometry close in, a decimated mesh over the rest of it."""
@@ -440,19 +466,21 @@ class TestTheGeometryNearTheCamera:
         assert len(by_place.clumps_far.idx) == len(by_name.clumps_far.idx)
         assert len(by_place.clumps_near.idx) == len(by_name.clumps_near.idx)
 
-    def test_the_full_detail_rung_covers_only_the_inner_disc(self, tmp_path) -> None:
+    def test_the_full_detail_rung_draws_the_inner_disc_and_not_much_more(self, tmp_path) -> None:
         cover = self._clumped(tmp_path, card_radius=90.0)
         cover.update((0.0, 0.0, 0.0))
         rung = cover.rungs[0]
-        drawn = rung.clumps_near._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
-        assert len(drawn)
-        reach = np.hypot(drawn[:, 0], drawn[:, 2]).max()
-        assert reach <= 30.0 * CLUMP_LOD_FRAC + 1.0
+        staged = rung.clumps_near._instance_rows()  # noqa: SLF001 the rows the clump layer stages, read without a GL context
+        drawn = _streamed(rung.clumps_near)
+        inner = np.hypot(staged[:, 0], staged[:, 2]) < 30.0 * CLUMP_LOD_FRAC
+        assert inner.any()
+        assert {tuple(row) for row in staged[inner]} <= {tuple(row) for row in drawn}
+        assert len(drawn) < 0.5 * len(staged)
 
     def test_the_coarse_rung_covers_the_whole_disc(self, tmp_path) -> None:
         cover = self._clumped(tmp_path, card_radius=90.0)
         cover.update((0.0, 0.0, 0.0))
-        drawn = cover.rungs[0].clumps_far._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
+        drawn = _streamed(cover.rungs[0].clumps_far)
         assert float(np.hypot(drawn[:, 0], drawn[:, 2]).max()) > 30.0 * 0.8
 
     def test_the_geometry_tracks_the_camera_without_rescattering(
@@ -464,9 +492,11 @@ class TestTheGeometryNearTheCamera:
         scattered = cover.selections
         cover.update((5.0, 0.0, 0.0))
         assert cover.selections == scattered          # too small a step to re-scatter
-        drawn = cover.rungs[0].clumps_near._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
-        assert float(np.hypot(drawn[:, 0] - 5.0, drawn[:, 2]).max()) \
-            <= 30.0 * CLUMP_LOD_FRAC + 1.0            # ...yet centred on the camera
+        staged = cover.rungs[0].clumps_near._instance_rows()  # noqa: SLF001 the rows the clump layer stages, read without a GL context
+        drawn = {tuple(row) for row in _streamed(cover.rungs[0].clumps_near)}
+        inner = np.hypot(staged[:, 0] - 5.0, staged[:, 2]) < 30.0 * CLUMP_LOD_FRAC
+        assert inner.any()
+        assert {tuple(row) for row in staged[inner]} <= drawn   # ...yet centred on the camera
 
     def test_walking_does_not_make_the_field_pulse(self, tmp_path) -> None:
         """The property the cache and the per-frame re-centring exist for.
@@ -481,7 +511,7 @@ class TestTheGeometryNearTheCamera:
         counted = []
         for step in np.arange(0.0, 36.0, 1.0):    # across three re-scatters
             cover.update((0.0, 0.0, float(step)))
-            drawn = cover.rungs[0].clumps_far._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
+            drawn = _streamed(cover.rungs[0].clumps_far)
             ahead = drawn[:, 2] - step
             counted.append(int(((ahead > 18.0) & (ahead < 28.0)).sum()))
         counted = np.asarray(counted)
@@ -498,27 +528,35 @@ class TestTheGeometryNearTheCamera:
                   if type(node).__name__ == 'InstancedClumps']
         assert len(clumps) == 1
         cover.update((0.0, 0.0, 0.0))
-        drawn = clumps[0]._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
+        drawn = _streamed(clumps[0])
         assert float(np.hypot(drawn[:, 0], drawn[:, 2]).max()) > 30.0 * 0.8
 
-    def test_a_small_step_draws_from_what_is_already_up(self, tmp_path) -> None:
-        """Re-choosing the drawn plants copies and uploads them; a step the
-        shader's own fade covers does not need it."""
+    def test_a_step_that_does_not_rescatter_stages_nothing_again(self, tmp_path) -> None:
+        """Staging a set copies it; the cache is staged once for the scatter it came from
+        and the camera's steps over it move a disc."""
         cover = self._clumped(tmp_path, card_radius=90.0)
         rung = cover.rungs[0]
-        uploads = []
+        staged = []
         original = rung.clumps_far.update_instances
 
         def counting(*arrays):
-            uploads.append(len(arrays[0]))
+            staged.append(len(arrays[0]))
             return original(*arrays)
         rung.clumps_far.update_instances = counting
         cover.update((0.0, 0.0, 0.0))
-        for step in (0.2, 0.4, 0.6):
+        for step in (0.2, 0.4, 0.6, 3.0):
             cover.update((step, 0.0, 0.0))
-        assert len(uploads) == 1
-        cover.update((3.0, 0.0, 0.0))
-        assert len(uploads) == 2
+        assert len(staged) == 1
+        cover.update((40.0, 0.0, 0.0))
+        assert len(staged) == 2
+
+    def test_each_geometry_node_is_given_a_disc_about_the_live_camera(self, tmp_path) -> None:
+        cover = self._clumped(tmp_path, card_radius=90.0)
+        cover.update((0.0, 0.0, 0.0))
+        cover.update((0.6, 0.0, 2.0))
+        rung = cover.rungs[0]
+        assert rung.clumps_far.disc == (0.6, 2.0, pytest.approx(30.0))
+        assert rung.clumps_near.disc == (0.6, 2.0, pytest.approx(30.0 * CLUMP_LOD_FRAC))
 
     def test_what_is_up_covers_the_disc_around_the_live_camera(
             self, tmp_path) -> None:
@@ -527,8 +565,7 @@ class TestTheGeometryNearTheCamera:
         cover.update((0.6, 0.0, 0.0))
         points = cover.rungs[0].cache[0]
         wanted = np.hypot(points[:, 0] - 0.6, points[:, 2]) < 30.0
-        drawn = {tuple(row) for row in
-                 np.round(cover.rungs[0].clumps_far._instance_rows()[:, :3], 4)}  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
+        drawn = {tuple(row) for row in np.round(_streamed(cover.rungs[0].clumps_far)[:, :3], 4)}
         assert {tuple(row) for row in np.round(points[wanted], 4)} <= drawn
 
     def test_retuning_moves_the_fade_windows_with_the_radius(self, tmp_path) -> None:

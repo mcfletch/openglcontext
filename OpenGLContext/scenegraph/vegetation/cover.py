@@ -72,6 +72,7 @@ from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.grid import BLOCK_METRES, Ground, Patches, ScatterBlocks
+from OpenGLContext.scenegraph.vegetation.viewcull import DISC_MARGIN_METRES
 
 __all__ = ['CoverSpecies', 'CoverRung', 'GroundCover', 'control_weight',
            'CLUMP_RADIUS', 'CARD_RADIUS', 'FAR_RADIUS', 'COVER_JITTER',
@@ -107,19 +108,12 @@ CLUMP_LOD_FRAC = 0.45
 #: carpet growing in as you walk.
 CLUMP_FADE = 0.8
 
-#: How far past its radius each geometry rung is chosen from the cache, in
-#: metres, and so how far the camera moves before :meth:`GroundCover.select`
-#: chooses again. The shader fades each rung out by its distance from the live
-#: camera, so a plant chosen in this margin is not drawn until the camera
-#: comes nearer to it.
-CLUMP_SELECT_SLACK = 1.0
-
 #: How much wider than the drawn disc the geometry scatter is cached, in metres.
-#: :meth:`GroundCover.select` chooses the drawn subsets from that cache against
-#: the camera, so the disc has to hold plants out to its full radius and its
-#: slack even once its centre has fallen behind -- which is why this is
-#: :data:`SETTLED_METRES` and :data:`CLUMP_SELECT_SLACK` together.
-CLUMP_STREAM_MARGIN = SETTLED_METRES + CLUMP_SELECT_SLACK
+#: Each geometry rung streams the plants within its radius of the live camera out
+#: of that cache, so the cache has to hold plants out to the radius and to the
+#: margin the clusters streamed are widened by (:data:`DISC_MARGIN_METRES`) even
+#: once its centre has fallen behind the camera by :data:`SETTLED_METRES`.
+CLUMP_STREAM_MARGIN = SETTLED_METRES + DISC_MARGIN_METRES
 
 #: A camera that moves faster than this between two updates, in metres a second, has
 #: been put somewhere else, and its jump is not a speed. The longest time a scatter is
@@ -435,8 +429,9 @@ class CoverRung:
                 near = load_clump_glb(species.clump, mesh=species.clumpMesh)
                 self.clumps_near = InstancedClumps(*near[:4], near[4], sun=sun)
         #: The geometry scatter, cached over a disc wider than the drawn one so
-        #: :meth:`GroundCover.select` always has plants to draw out to the full
-        #: radius even once the cache's centre has fallen behind the camera.
+        #: the geometry nodes, which stage all of it, always have plants to draw
+        #: out to the full radius even once the cache's centre has fallen behind
+        #: the camera.
         self.cache: Optional[tuple] = None
         #: Where this species gathers itself, and what that costs the grid it
         #: is scattered on -- see
@@ -587,7 +582,6 @@ class GroundCover(Group):
         # children is a VRML ChildrenTypedField descriptor that coerces a node list.
         self.children = [_drawn(node) for rung in self.rungs
                          for node in rung.nodes]
-        self._drawn_at: Optional[tuple] = None
         self.retune()
 
     def _told(self, name: str, value: Any) -> None:
@@ -679,7 +673,6 @@ class GroundCover(Group):
         self.card_radius = max(self.card_radius, self.clump_radius)
         self.far_radius = max(self.far_radius, self.card_radius)
         self._near_at = self._far_at = None
-        self._drawn_at = None
         for rung in self.rungs:
             rung.retune(self.clump_radius, self.card_radius, self.far_radius, self.fade)
 
@@ -799,7 +792,10 @@ class GroundCover(Group):
         for rung, (cards, clumps) in zip(self.rungs, payload, strict=True):
             rung.cards.update_instances(*cards)
             rung.cache = clumps
-        self._drawn_at = None                  # a new cache: re-choose from it
+            if clumps is not None:
+                for node in (rung.clumps_far, rung.clumps_near):
+                    if node is not None:
+                        node.update_instances(*clumps)
 
     @property
     def has_far(self) -> bool:
@@ -879,37 +875,24 @@ class GroundCover(Group):
     # -- the per-frame half, which is a pair of distance masks -----------------
 
     def select(self, x: float, z: float) -> None:
-        """Choose the drawn geometry from the cache, for a camera here.
+        """Draw the geometry within its radii of a camera here.
 
-        The coarse rung draws every plant within ``clump_radius`` of the
-        camera and the full-detail rung the subset within ``CLUMP_LOD_FRAC`` of
-        that -- so the disc tracks the walk, and its leading edge fades in
-        through the level-of-detail band instead of jumping in density each
-        time a re-scatter recentres it. Each subset reaches
-        :data:`CLUMP_SELECT_SLACK` further, and is chosen again only once the
-        camera has moved that far: the shader's fade, measured from the live
-        camera, hides what is chosen early, so a walk copies and uploads the
-        subsets every metre rather than every frame.
+        The coarse rung draws every plant within ``clump_radius`` of the camera
+        and the full-detail rung the subset within ``CLUMP_LOD_FRAC`` of that --
+        so the disc tracks the walk, and its leading edge fades in through the
+        level-of-detail band instead of jumping in density each time a
+        re-scatter recentres it. Each node is handed the whole cache when it
+        arrives (:meth:`apply_near`) and a disc to draw within now
+        (:attr:`~OpenGLContext.scenegraph.vegetation.base.InstancedVegBase.disc`),
+        which is a test of the clusters of its rows and no copy of the rows. The
+        shader's fade, measured from the live camera, hides the plants in the
+        margin the clusters are streamed with.
         """
-        if self._drawn_at is not None and math.hypot(
-                x - self._drawn_at[0], z - self._drawn_at[1]) < CLUMP_SELECT_SLACK:
-            return
-        self._drawn_at = (x, z)
-        outer = (self.clump_radius + CLUMP_SELECT_SLACK) ** 2
-        inner = (self.clump_radius * CLUMP_LOD_FRAC + CLUMP_SELECT_SLACK) ** 2
         for rung in self.rungs:
-            if rung.cache is None:
-                continue
-            points, yaws, scales, lit = rung.cache
-            away = (points[:, 0] - x) ** 2 + (points[:, 2] - z) ** 2
-            for node, reach in ((rung.clumps_far, outer),
-                                (rung.clumps_near, inner)):
-                if node is None:
-                    continue
-                within = away < reach
-                node.update_instances(points[within], yaws[within],
-                                      scales[within],
-                                      None if lit is None else lit[within])
+            if rung.clumps_far is not None:
+                rung.clumps_far.disc = (x, z, self.clump_radius)
+            if rung.clumps_near is not None:
+                rung.clumps_near.disc = (x, z, self.clump_radius * CLUMP_LOD_FRAC)
 
     # -- scatter and selection in line, for a caller with no worker -----------
 
@@ -1080,7 +1063,7 @@ class GroundCover(Group):
         self.field = field
         self.mask, self.holes, self.shade, self.canopy = mask, holes, shade, canopy
         self._replace_tables()
-        self._near_at = self._far_at = self._drawn_at = None
+        self._near_at = self._far_at = None
         for rung in self.rungs:
             rung.cache = None
             for node in rung.nodes:

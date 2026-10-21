@@ -300,12 +300,19 @@ and casts no shadow until it is set True again; a profiling run leaves one
 layer out this way. A node whose shaders will not compile on the driver sets
 its ``failed`` attribute, logs one warning and draws nothing from then on.
 
-``select`` is the per-frame step: it re-centres the drawn geometry on the
-current camera. Without it, the disc lags behind the walker and the density of
-the middle-distance cover pulses. Each geometry level is chosen
-``CLUMP_SELECT_SLACK`` (1 m) past its radius, and chosen again only once the
-camera has moved that far; the shader fades each level by its distance from
-the live camera, so what is chosen early is not drawn until it is in reach.
+``select`` is the per-frame step: it moves the disc each geometry level is drawn
+within onto the current camera. Without it, the disc lags behind the walker and
+the density of the middle-distance cover pulses. Each geometry node is given the
+whole cache when a scatter arrives, and its ``disc`` (the x and z of the camera
+and the level's radius, in metres) on every ``select``. The node cuts its rows
+into clusters of neighbouring rows, as it does for the view, and streams the
+clusters that reach the disc widened by ``DISC_MARGIN_METRES`` (1 m), so moving
+the disc costs a test of the clusters and a copy of the rows drawn, not of the
+cache. A disc that has moved less than that margin since the clusters were
+chosen needs nothing further. The shader fades each level by its distance from
+the live camera, so what is streamed in the margin is not drawn until it is in
+reach. ``disc`` is an attribute of every instanced vegetation node; None streams
+the whole set.
 
 .. _wheretheygrow:
 

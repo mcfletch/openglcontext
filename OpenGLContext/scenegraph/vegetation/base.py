@@ -58,6 +58,11 @@ class InstancedVegBase(vnodes.PointSet, GLLayer):
     #: world-space sun direction, or None for the camera-faced billboards, which use
     #: a flat sun term rather than a per-fragment eye-space sun vector.
     sun: "Optional[np.ndarray]" = None
+    #: The x and z of a centre and a radius, in metres, outside which the node streams no
+    #: instances; None streams the whole set. A layer that is handed everything scattered
+    #: about a camera and draws the plants within some radius of it moves this with the
+    #: camera, which costs the clusters it reaches and not the whole set.
+    disc: "Optional[tuple[float, float, float]]" = None
 
     if TYPE_CHECKING:
         # What the preamble needs of the subclass, declared for a checker and
@@ -107,9 +112,9 @@ class InstancedVegBase(vnodes.PointSet, GLLayer):
     def _show(self, mode: Any) -> bool:
         """Prepare the instances for the view of ``mode``; whether any are to be drawn.
 
-        A node that streams only the instances a view can see does it here
-        (:class:`~OpenGLContext.scenegraph.vegetation.viewcull.CulledRows`), and a draw in a
-        view that sees none of them goes no further.
+        A node that streams only the instances a view can see, within its :attr:`disc`, does it
+        here (:class:`~OpenGLContext.scenegraph.vegetation.viewcull.CulledRows`), and a draw in
+        a view that sees none of them goes no further.
         """
         return True
 

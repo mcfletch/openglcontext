@@ -161,7 +161,7 @@ class InstancedBillboards(InstancedVegBase):
         return len(self.pos) > 0
 
     def _show(self, mode: Any) -> bool:
-        return self._visible.show(mode) > 0
+        return self._visible.show(mode, self.disc) > 0
 
     def _draw(self, mode: Any) -> None:
         glActiveTexture(GL_TEXTURE0)

@@ -13,7 +13,7 @@ from OpenGLContext.loaders.tiles3d.frustum import look_at, perspective
 from OpenGLContext.passes.instancing import morton_order
 from OpenGLContext.scenegraph.instancedgl import instance_rows
 from OpenGLContext.scenegraph.vegetation.viewcull import (
-    CLUSTER_ROWS, MARGIN_METRES, MIN_TRIANGLES, CulledRows,
+    CLUSTER_ROWS, DISC_MARGIN_METRES, MARGIN_METRES, MIN_TRIANGLES, CulledRows,
 )
 
 
@@ -214,3 +214,173 @@ class TestClusters:
         culled, buffer = _culled(rows)
         mode = _view(toward=(0.0, 1.7, 1.0), fovy=3.0, aspect=1.0)
         assert culled.show(mode) <= len(rows)
+
+
+class TestADisc:
+    """Rows beyond a radius of the camera are not wanted, however the view looks."""
+
+    def test_rows_beyond_the_radius_are_not_sent(self) -> None:
+        rows = _scatter(count=6000, radius=60.0)
+        culled, buffer = _culled(rows)
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 20.0))
+        assert 0 < len(buffer.uploads[-1]) < 0.5 * len(rows)
+
+    def test_every_row_within_the_radius_is_sent(self) -> None:
+        rows = _scatter(count=6000, radius=60.0)
+        culled, buffer = _culled(rows)
+        culled.show(types.SimpleNamespace(), (3.0, -2.0, 20.0))
+        sent = {tuple(row) for row in buffer.uploads[-1]}
+        near = np.hypot(rows[:, 0] - 3.0, rows[:, 2] + 2.0) < 20.0
+        assert near.any()
+        assert all(tuple(row) in sent for row in rows[near])
+
+    def test_a_disc_and_a_view_together_send_what_both_want(self) -> None:
+        rows = _scatter(count=40000, radius=60.0)
+        culled, buffer = _culled(rows)
+        mode = _view()
+        count = culled.show(mode, (0.0, 0.0, 25.0))
+        in_both = _in_view(rows, mode) & (np.hypot(rows[:, 0], rows[:, 2]) < 25.0)
+        sent = {tuple(row) for row in buffer.uploads[-1]}
+        assert all(tuple(row) in sent for row in rows[in_both])
+        assert count < _in_view(rows, mode).sum()
+
+    def test_a_disc_wider_than_the_set_sends_every_row(self) -> None:
+        rows = _scatter(count=6000, radius=30.0)
+        culled, _ = _culled(rows)
+        assert culled.show(types.SimpleNamespace(), (0.0, 0.0, 200.0)) == len(rows)
+
+    def test_a_set_cheaper_to_draw_than_to_test_is_still_cut_to_the_disc(self) -> None:
+        rows = _scatter(count=3000, radius=60.0)
+        culled, _ = _culled(rows, triangles=1)
+        assert culled.show(types.SimpleNamespace(), (0.0, 0.0, 15.0)) < len(rows)
+
+    def test_a_disc_does_nothing_with_culling_turned_off(self) -> None:
+        rows = _scatter()
+        culled, _ = _culled(rows, enabled=False)
+        assert culled.show(types.SimpleNamespace(), (0.0, 0.0, 5.0)) == len(rows)
+
+    def test_a_disc_about_a_point_the_rows_are_not_near_sends_nothing(self) -> None:
+        culled, buffer = _culled(_scatter(radius=60.0))
+        assert culled.show(types.SimpleNamespace(), (500.0, 500.0, 20.0)) == 0
+        assert buffer.count == 0
+
+
+class TestWhenADiscUploads:
+    def test_the_same_disc_twice_uploads_once(self) -> None:
+        culled, buffer = _culled(_scatter())
+        for _ in range(2):
+            culled.show(types.SimpleNamespace(), (0.0, 0.0, 20.0))
+        assert len(buffer.uploads) == 1
+
+    def test_a_disc_that_moves_less_than_its_margin_uploads_nothing_more(self) -> None:
+        culled, buffer = _culled(_scatter())
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 20.0))
+        culled.show(types.SimpleNamespace(), (0.5 * DISC_MARGIN_METRES, 0.0, 20.0))
+        assert len(buffer.uploads) == 1
+
+    def test_a_disc_that_moves_past_its_margin_uploads_again(self) -> None:
+        culled, buffer = _culled(_scatter())
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 20.0))
+        culled.show(types.SimpleNamespace(), (25.0, 0.0, 20.0))
+        assert len(buffer.uploads) == 2
+
+    def test_a_disc_that_moves_on_still_has_its_rows_sent(self) -> None:
+        rows = _scatter(count=6000, radius=60.0)
+        culled, buffer = _culled(rows)
+        for x in np.arange(0.0, 30.0, 0.7):
+            culled.show(types.SimpleNamespace(), (float(x), 0.0, 20.0))
+            sent = {tuple(row) for row in buffer.uploads[-1]}
+            near = np.hypot(rows[:, 0] - x, rows[:, 2]) < 20.0
+            assert all(tuple(row) in sent for row in rows[near])
+
+    def test_staging_again_uploads_for_the_same_disc(self) -> None:
+        culled, buffer = _culled(_scatter())
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 20.0))
+        culled.stage(_scatter(seed=8))
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 20.0))
+        assert len(buffer.uploads) == 2
+
+    def test_a_view_without_a_disc_after_one_with_replaces_it(self) -> None:
+        rows = _scatter(count=6000, radius=60.0)
+        culled, buffer = _culled(rows)
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 10.0))
+        assert culled.show(types.SimpleNamespace()) == len(rows)
+        assert len(buffer.uploads) == 2
+
+
+class _CountingBoxes:
+    """Counts the frustum tests a CulledRows makes, which are the costly half of a check."""
+
+    def __init__(self, monkeypatch) -> None:
+        from OpenGLContext.scenegraph.vegetation import viewcull
+        self.calls = 0
+        real = viewcull.frustums.boxes_outside
+
+        def counting(*arguments):
+            self.calls += 1
+            return real(*arguments)
+        monkeypatch.setattr(viewcull.frustums, 'boxes_outside', counting)
+
+
+class TestASmallSetUnderADisc:
+    """A set cheaper to draw than to cull by the frustum is still limited to its disc."""
+
+    def test_the_view_does_not_cut_it(self) -> None:
+        rows = _scatter(count=3000, radius=30.0)
+        culled, _ = _culled(rows, triangles=1)
+        in_disc = np.hypot(rows[:, 0], rows[:, 2]) < 100.0
+        assert culled.show(_view(), (0.0, 0.0, 100.0)) == in_disc.sum()
+
+    def test_a_disc_that_has_not_moved_far_is_covered_without_a_frustum_test(
+            self, monkeypatch) -> None:
+        culled, buffer = _culled(_scatter(radius=60.0), triangles=1)
+        boxes = _CountingBoxes(monkeypatch)
+        culled.show(_view(), (0.0, 0.0, 20.0))
+        culled.show(_view(toward=(1.0, 1.7, 0.0)), (0.4 * DISC_MARGIN_METRES, 0.0, 20.0))
+        assert boxes.calls == 0
+        assert len(buffer.uploads) == 1
+
+    def test_a_disc_that_has_moved_past_its_margin_is_chosen_again(self) -> None:
+        culled, buffer = _culled(_scatter(radius=60.0), triangles=1)
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 20.0))
+        culled.show(types.SimpleNamespace(), (30.0, 0.0, 20.0))
+        assert len(buffer.uploads) == 2
+
+    def test_a_disc_that_grows_is_chosen_again(self) -> None:
+        culled, buffer = _culled(_scatter(radius=60.0), triangles=1)
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 20.0))
+        culled.show(types.SimpleNamespace(), (0.0, 0.0, 40.0))
+        assert len(buffer.uploads) == 2
+
+
+class TestAnythingSentWhole:
+    def test_a_set_every_cluster_of_which_is_wanted_is_not_chosen_again_each_view(self) -> None:
+        culled, buffer = _culled(_scatter(count=2000, radius=10.0))
+        culled.show(_view(eye=(0.0, 1.7, 30.0)))
+        culled.show(_view(eye=(0.0, 1.7, 30.0), toward=(0.0, 1.7, 0.0)))
+        culled.show(_view(eye=(0.0, 1.7, 30.0), toward=(0.0, 1.7, 0.0)))
+        assert len(buffer.uploads) == 1
+
+    def test_a_set_sent_whole_for_want_of_a_disc_is_cut_to_one_when_it_has_one(self) -> None:
+        rows = _scatter(count=6000, radius=60.0)
+        culled, buffer = _culled(rows)
+        assert culled.show(types.SimpleNamespace()) == len(rows)
+        assert culled.show(types.SimpleNamespace(), (0.0, 0.0, 10.0)) < len(rows)
+
+
+class TestTheDecisionIsTheFrustumsOwn:
+    """The clusters a view wants are those ``frustum.boxes_outside`` does not put outside."""
+
+    def test_the_clusters_wanted_by_a_view_are_the_ones_the_frustum_keeps(self) -> None:
+        from OpenGLContext.frustum import boxes_outside
+        rows = _scatter(count=20000, radius=80.0)
+        culled, _ = _culled(rows)
+        for toward in ((0.0, 1.7, -1.0), (1.0, 1.7, 0.3), (-0.4, 2.5, 1.0)):
+            mode = _view(toward=toward)
+            planes = np.asarray(mode.frustum.planes, 'd')
+            culled.show(mode)
+            for margin in (0.0, MARGIN_METRES):
+                widened = planes.copy()
+                widened[:, 3] += margin
+                kept = ~boxes_outside(*culled._boxes, None, widened)  # noqa: SLF001 the boxes are the thing compared
+                assert np.array_equal(culled._wanted(planes, None, margin, 0.0), kept)  # noqa: SLF001 the decision is the thing compared
