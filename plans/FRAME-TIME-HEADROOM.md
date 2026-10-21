@@ -68,10 +68,45 @@ added one frame a second: what is left costs the same for any number of instance
 - A glisteel frame captured under load can come out with the road dark and lit in another run of
   the same scene, with either culling. Image-based lighting that adapts to the frame rate is the
   likely cause and has not been confirmed.
-- Remaining main-thread cost by stage: the opaque pass 5.7 ms (the PBR shapes, 1.0 ms of it the
-  material setup for each), shadow maps 2.0 ms, view preparation 2.3 ms, the update 2.3 ms. Candidates
-  from a read of the pass code, with estimates that were not measured: the same-material early-out
-  in `configure_appearance` also wants the same `Appearance`; `appearance_alpha` runs 240 times a
-  frame; `x3d_lit` 336 times; instance grouping runs twice a frame and rebuilds its depth groups
-  whenever a caster moves; the gather refills every row each frame; far shadow cascades redrawn when
-  nothing in them changed.
+- Remaining main-thread cost by stage: the opaque pass 3.4 ms (the PBR shapes, 0.7 ms of it the
+  material setup for each), shadow maps 2.0 ms, view preparation 2.3 ms, the update 2.3 ms.
+
+## Pass work, measured one change at a time
+
+Each change was measured on identical frames (a fixed clock, so every run plays the same course),
+by main-thread CPU per frame over 2,400 frames, alternating the builds for three rounds. The
+benchmark's own repeat of the same code differs by 1.5 per cent, so a change under about 0.3 ms
+was kept only where a call count, or a stage's time with the work it replaced, shows it.
+
+Kept:
+
+- An instance grouping works a shape out once: the key's answer serves the flag, so the
+  grouping's 288 shape lookups a frame are 185. 0.83 ms to 0.57 ms in the grouping's own timer;
+  about 0.1 ms of the frame.
+- The opaque pass sets up no draw for a shape whose geometry draws with its own program: matrix
+  uploads a frame 146 to 95, zone setups 83 to 32, 0.4 ms of that pass's timer.
+- `shadowFarInterval`, off by default: the cascades beyond the nearest drawn every second or third
+  frame. Depth draws a frame 3 to 2 (interval 2) and 1.7 (3); the main thread 11.8 ms to 11.1
+  (2) and 10.8 (3). At 3 the hill runner's frame differs from every-frame shadows in 0.017 per
+  cent of its pixels, none by more than 12 of 255.
+
+All kept together, the main thread's CPU per frame on the same frames is 11.68 ms before, 11.49
+with the interval at 1 and 10.87 with it at 2.
+
+Not kept, with what was measured:
+
+- A memo of `appearance_alpha`, `x3d_lit` and `Appearance.sortKey`: they cost 0.13, 0.12 and 0.21 ms
+  a frame in all, at about one call for each shape. A cross-frame memo wants field-observer
+  invalidation, including a texture's alpha, which changes as its image loads.
+- Keeping the walk's rows from one frame to the next: 0.04 to 0.07 ms off a 0.77 ms walk. The time is
+  the scenegraph's per-path lookups (`transformMatrix` 2.4 us, `getPoints` 1.2 us, twice a path),
+  and not the array writes.
+- Skipping the per-shape fill style, texgen, wave, vertex colour and solid colour setters when
+  nothing changed: with all of them stubbed out the frame is 0.14 ms shorter.
+- The per-draw transforms in one buffer: the matrix upload is 0.25 ms of a frame, under 2 per
+  cent, for a change to both shaders and a second draw path.
+- `greatestDepth` reading the walk's answer in place of asking each volume again: at most 0.18 ms.
+
+Left, each under 0.3 ms: the second `getPoints` per path, the caster-geometry arrays rebuilt each
+frame (`_casterWorldGeometry`, 0.23 ms), and the PBR shape's `configure_appearance`, which costs
+0.66 ms for 34 shapes and whose same-material early-out also wants the same `Appearance`.
