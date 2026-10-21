@@ -1050,18 +1050,24 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
             self.matrix = mvmatrix
             self.renderPath = path
 
+            # A geometry that draws with a program of its own reads none of what is set
+            # here for this one: it is drawn where `self.matrix` says.
+            own = getattr(getattr(node, 'geometry', None), 'drawsOwnProgram', False)
+
             # Set matrices for this object (pass the program to avoid a per-draw
             # glGetIntegerv(GL_CURRENT_PROGRAM) round-trip).
-            shader.set_matrices(mvmatrix, self.projection, program=prog)
+            if not own:
+                shader.set_matrices(mvmatrix, self.projection, program=prog)
 
             # Set object ID for MRT selection buffer (stable per-path id; the
             # persistent map is maintained by _objectIdFor, not rebuilt here).
             # A non-pickable shape masks the id attachment instead, reading
             # through to whatever is behind it.
             masked = self._writeShapeId(shader, path, node, prog, id_map)
-            self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
-            self.applyZones(shader, path, tmatrix, bvolume, prog)
-            self.applyPlanarReflection(shader, record, prog)
+            if not own:
+                self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
+                self.applyZones(shader, path, tmatrix, bvolume, prog)
+                self.applyPlanarReflection(shader, record, prog)
 
             try:
                 node.Render(mode=self)
