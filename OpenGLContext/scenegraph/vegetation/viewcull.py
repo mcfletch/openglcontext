@@ -19,6 +19,9 @@ import math
 from typing import Any, Optional, Protocol
 
 import numpy as np
+from OpenGL.GL import (
+    GL_TRIANGLES, GL_UNSIGNED_INT, glDrawArraysInstanced, glDrawElementsInstanced,
+)
 
 from OpenGLContext import frustum as frustums
 
@@ -162,6 +165,21 @@ class CulledRows:
         self._shown_by_frustum = planes is not None
         self._uploaded = True
         return int(self.buffer.count)
+
+    def draw_arrays(self, copies: int = 1) -> None:
+        """Draw the rows streamed as triangles read in order, from the vertex array bound.
+
+        ``copies`` is how many times over each instance is drawn in a shared draw of views.
+        """
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 3 * self.triangles, int(self.buffer.count) * copies)
+
+    def draw_elements(self, copies: int = 1) -> None:
+        """Draw the rows streamed as indexed triangles, from the vertex array bound."""
+        glDrawElementsInstanced(GL_TRIANGLES, 3 * self.triangles, GL_UNSIGNED_INT, None,
+                                int(self.buffer.count) * copies)
+
+    def release(self) -> None:
+        """Let go of what this holds on the GPU, which is nothing: the buffer is its owner's."""
 
     def _planes(self, mode: Any) -> Optional[np.ndarray]:
         """The planes of the view being drawn, or None where every row is to be sent.

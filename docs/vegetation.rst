@@ -314,6 +314,29 @@ the live camera, so what is streamed in the margin is not drawn until it is in
 reach. ``disc`` is an attribute of every instanced vegetation node; None streams
 the whole set.
 
+.. _vegetation-gpu-cull:
+
+Culling on the GPU
+~~~~~~~~~~~~~~~~~~
+
+Where the driver has compute shaders and indirect draws (OpenGL 4.3, or the
+``ARB_compute_shader`` and ``ARB_shader_storage_buffer_object`` extensions with
+4.0 draws), the ground cover's clumps and cards are culled by the GPU. A layer
+uploads the set once, when it is staged. Each draw runs a compute pass
+(``shaders/veg_cull.comp``, ``vegetation.gpucull.GPUCulledRows``) with one thread
+for each instance. A thread keeps its instance when the instance's box reaches
+into every plane of the pass's frustum and into the layer's ``disc``, writes it
+to the buffer the draw reads its instance attributes from, and counts it in an
+indirect draw command. The draw is issued from that command, so the processor
+does no work per instance and reads nothing back. An instance's box reaches
+``reach`` sideways of its base point and ``rise`` above and ``drop`` below it,
+each times its scale. A shared draw of several views counts each instance once
+for each view it is sent to.
+
+``OPENGLCONTEXT_GPU_CULL=0`` keeps the processor's culling, which the other
+drivers use. The instances kept are drawn in no fixed order; a layer's draw is
+depth tested and alpha cut, so the order does not show.
+
 .. _wheretheygrow:
 
 Where each species grows

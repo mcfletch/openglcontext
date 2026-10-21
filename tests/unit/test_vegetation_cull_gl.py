@@ -14,7 +14,7 @@ from PIL import Image
 from OpenGLContext.frustum import Frustum
 from OpenGLContext.loaders.tiles3d.frustum import look_at, perspective
 from OpenGLContext.passes.instancing import morton_order
-from OpenGLContext.scenegraph.vegetation import viewcull
+from OpenGLContext.scenegraph.vegetation import gpucull, viewcull
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.clumps import InstancedClumps
 
@@ -25,6 +25,8 @@ SIZE = (160, 100)
 def window(gl_window, monkeypatch):
     # The fields here are far smaller than the sets a game tests.
     monkeypatch.setattr(viewcull, 'MIN_TRIANGLES', 0)
+    # These are the processor's culling; test_gpu_cull_gl.py is the GPU's.
+    monkeypatch.setattr(gpucull, 'gpu_cull_is_available', lambda: False)
     return gl_window('vegetation-cull', size=SIZE, forward_compatible=True)
 
 

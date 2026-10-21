@@ -1,0 +1,77 @@
+#version 330 core
+#extension GL_ARB_compute_shader : require
+#extension GL_ARB_shader_storage_buffer_object : require
+// readonly/writeonly are reserved words until GLSL 4.20; see skeleton_world.comp.
+#extension GL_ARB_shader_image_load_store : require
+
+// One thread per instance of a set staged on the GPU: keep the instances whose
+// box reaches into the view and the disc, packing them at the front of the
+// buffer the draw reads its per-instance attributes from, and counting them
+// in the indirect draw command the draw is issued from.
+//
+// A row is six floats (x, y, z, yaw, scale, shade), the layout of
+// scenegraph.instancedgl.INSTANCE_FLOATS. An instance's box reaches `reach`
+// sideways of its base point, `rise` above it and `drop` below it, each times
+// the instance's scale, which is the box viewcull.CulledRows gives a cluster.
+// A plane keeps the points where dot(n, p) + d >= 0, and a box is outside when
+// its corner furthest in front of a plane is still behind it.
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer Source {
+    float source[];
+};
+layout(std430, binding = 1) writeonly buffer Visible {
+    float visible[];
+};
+// An indirect draw command: the vertex count, then the instance count this
+// pass adds to, then the fields that stay zero. Instances are counted in
+// copies of themselves when a shared draw sends each one to several views.
+layout(std430, binding = 2) buffer Command {
+    uint command[];
+};
+
+const int ROW = 6;
+const int MAX_PLANES = 8;
+
+uniform vec4 uPlanes[MAX_PLANES];
+// The planes in use. None sends every instance on to the disc.
+uniform int uPlaneCount;
+// The disc's centre x and z, and its radius; a negative radius is no disc.
+uniform vec3 uDisc;
+// reach, rise, drop
+uniform vec3 uExtent;
+uniform int uCount;
+uniform uint uCopies;
+
+void main() {
+    uint at = gl_GlobalInvocationID.x;
+    if (at >= uint(uCount)) {
+        return;
+    }
+    int base = int(at) * ROW;
+    vec3 point = vec3(source[base], source[base + 1], source[base + 2]);
+    float scale = abs(source[base + 4]);
+    float reach = uExtent.x * scale;
+    float rise = uExtent.y * scale;
+    float drop = uExtent.z * scale;
+
+    if (uDisc.z >= 0.0) {
+        if (length(point.xz - uDisc.xy) - reach > uDisc.z) {
+            return;
+        }
+    }
+    vec3 centre = point + vec3(0.0, 0.5 * (rise - drop), 0.0);
+    vec3 half_ = vec3(reach, 0.5 * (rise + drop), reach);
+    for (int i = 0; i < uPlaneCount; ++i) {
+        vec4 plane = uPlanes[i];
+        if (dot(plane.xyz, centre) + plane.w + dot(abs(plane.xyz), half_) < 0.0) {
+            return;
+        }
+    }
+    uint slot = atomicAdd(command[1], uCopies) / uCopies;
+    int out_ = int(slot) * ROW;
+    for (int k = 0; k < ROW; ++k) {
+        visible[out_ + k] = source[base + k];
+    }
+}

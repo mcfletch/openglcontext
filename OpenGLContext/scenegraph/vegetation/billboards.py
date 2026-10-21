@@ -31,7 +31,7 @@ from OpenGLContext.scenegraph.instancedgl import (
     instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
     InstancedVegBase, _BIG, LOD_NEAR, LOD_FAR)
-from OpenGLContext.scenegraph.vegetation.viewcull import CulledRows
+from OpenGLContext.scenegraph.vegetation.gpucull import rows_culler
 
 
 class InstancedBillboards(InstancedVegBase):
@@ -103,8 +103,8 @@ class InstancedBillboards(InstancedVegBase):
         glBindVertexArray(0)
         # A card faces the camera and reaches half its width either side of its base,
         # and its height up.
-        self._visible = CulledRows(self._ibuf, reach=0.5 * self.width, rise=1.0,
-                                   enabled=self.cull, triangles=2)
+        self._visible = rows_culler(self._ibuf, reach=0.5 * self.width, rise=1.0,
+                                    enabled=self.cull, triangles=2)
         self._pending = True
         self._tex = texture_rgba(self.texture, srgb=True)
         self.U = {n: glGetUniformLocation(self._prog, n) for n in
@@ -131,6 +131,7 @@ class InstancedBillboards(InstancedVegBase):
         """Free this node's GL objects (VAO, buffers, texture, program). GL thread."""
         if not self._gl:
             return
+        self._visible.release()
         delete_gl(vaos=[self._vao], buffers=[self._mvb, self._ibuf.id],
                   textures=[self._tex], programs=list(self.programs.programs()))
         self._gl = None
@@ -169,5 +170,5 @@ class InstancedBillboards(InstancedVegBase):
         glEnable(GL_DEPTH_TEST)
         glBindVertexArray(self._vao)
         with self._instanced(mode) as copies:
-            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, self._ibuf.count * copies)
+            self._visible.draw_arrays(copies)
         glBindVertexArray(0)

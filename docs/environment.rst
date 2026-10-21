@@ -325,6 +325,13 @@ How much work per frame
      - yes/no
      - on
      - Blend between animation clips on the GPU.
+   * - ``OPENGLCONTEXT_GPU_CULL``
+     - yes/no
+     - on
+     - Cull instanced vegetation on the GPU: the set is uploaded once and a
+       compute pass keeps the instances in the view and the disc. Off, or on a
+       driver without compute shaders and indirect draws, the processor
+       chooses clusters of rows and uploads them.
    * - ``OPENGLCONTEXT_PICKING``
      - yes/no
      - on

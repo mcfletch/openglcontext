@@ -35,7 +35,7 @@ from OpenGLContext.scenegraph.instancedgl import (
     FOG_UNIFORMS, load_program, texture_rgba, delete_gl, setup_instance_attribs,
     instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import InstancedVegBase, _BIG
-from OpenGLContext.scenegraph.vegetation.viewcull import CulledRows
+from OpenGLContext.scenegraph.vegetation.gpucull import rows_culler
 
 _CT = {5120: 'b', 5121: 'B', 5122: 'h', 5123: 'H', 5125: 'I', 5126: 'f'}
 _NC = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4}
@@ -296,9 +296,9 @@ class InstancedClumps(InstancedVegBase):
         reach = float(np.hypot(self.P[:, 0], self.P[:, 2]).max()) if len(self.P) else 0.0
         top = float(self.P[:, 1].max()) if len(self.P) else 0.0
         bottom = float(self.P[:, 1].min()) if len(self.P) else 0.0
-        self._visible = CulledRows(self._ibuf, reach=reach, rise=max(top, 0.0),
-                                   drop=max(-bottom, 0.0), enabled=self.cull,
-                                   triangles=len(self.idx) // 3)
+        self._visible = rows_culler(self._ibuf, reach=reach, rise=max(top, 0.0),
+                                    drop=max(-bottom, 0.0), enabled=self.cull,
+                                    triangles=len(self.idx) // 3)
         self._pending = True
         self.U = {x: glGetUniformLocation(self._prog, x) for x in
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",
@@ -321,6 +321,7 @@ class InstancedClumps(InstancedVegBase):
         """Free this node's GL objects (VAO, buffers, texture, program). GL thread."""
         if not self._gl:
             return
+        self._visible.release()
         delete_gl(vaos=[self._vao], buffers=[self._mvb, self._ib, self._ibuf.id],
                   textures=[self._tex], programs=list(self.programs.programs()))
         self._gl = None
@@ -345,6 +346,5 @@ class InstancedClumps(InstancedVegBase):
         glDepthMask(GL_TRUE)
         glBindVertexArray(self._vao)
         with self._instanced(mode) as copies:
-            glDrawElementsInstanced(GL_TRIANGLES, len(self.idx), GL_UNSIGNED_INT, None,
-                                    self._ibuf.count * copies)
+            self._visible.draw_elements(copies)
         glBindVertexArray(0)
