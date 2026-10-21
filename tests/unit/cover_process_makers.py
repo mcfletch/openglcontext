@@ -1,4 +1,6 @@
 """The scatter a ground cover's child process is built from, for ``test_cover_process``."""
+import time
+
 import numpy as np
 
 from OpenGLContext.scenegraph.terrain import HeightField
@@ -38,3 +40,19 @@ class Faulty:
 
 def faulty():
     return Faulty()
+
+
+class Slow:
+    """Takes its time over ground to make ahead, as a long road does."""
+
+    def __init__(self):
+        self.inner = CoverScatterMaker(cover())
+
+    def make(self, key):
+        if key[0] == 'warm':
+            time.sleep(0.15 * (len(key[1]) if isinstance(key[1], list) else 1))
+        return self.inner.make(key)
+
+
+def slow():
+    return Slow()

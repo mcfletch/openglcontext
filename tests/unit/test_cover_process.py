@@ -60,7 +60,7 @@ class TestWhatTheChildMakes:
     def test_ground_warmed_ahead_is_not_scattered_again_by_the_disc_that_reaches_it(
             self, child) -> None:
         remote = child()
-        remote.warm(0, 'cards', 0.0, -80.0, 90.0, 2.0, 1.0)
+        remote.warm([(0, 'cards', 0.0, -80.0, 90.0, 2.0, 1.0)])
         warmed = remote.scattered()
         remote.disc(0, 'cards', 0.0, -80.0, 90.0, 2.0, 1.0)
         assert remote.scattered() == warmed > 0
@@ -147,6 +147,29 @@ class TestWhenTheCoverUsesIt:
         process.wait_until_ready()
         remote.shutdown()
         assert process.closed
+
+    def test_shutting_down_does_not_wait_for_ground_still_being_made_ahead(self, child) -> None:
+        cover = local_cover(background=True)
+        process = child('slow')
+        cover.use_process(process)
+        process.wait_until_ready()
+        cover.update((0.0, 0.0, 0.0))
+        cover.wait(60.0)
+        cover.prepare([(0.0, -10.0 * step) for step in range(1, 13)])
+        time.sleep(0.5)                       # the worker is part-way through
+        started = time.perf_counter()
+        cover.shutdown()
+        assert time.perf_counter() - started < 2.0
+
+    def test_ground_to_make_ahead_goes_to_the_child_in_batches(self, child) -> None:
+        cover = local_cover()
+        process = child()
+        cover.use_process(process)
+        process.wait_until_ready()
+        cover.update((0.0, 0.0, 0.0))
+        before = process.requests
+        cover.prepare([(0.0, -20.0 * step) for step in range(1, 8)])
+        assert 0 < process.requests - before <= 7
 
     def test_the_frame_that_asks_does_not_wait_for_the_child(self, child) -> None:
         remote = local_cover(background=True)

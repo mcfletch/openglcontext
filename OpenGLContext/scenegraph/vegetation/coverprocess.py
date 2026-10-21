@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from OpenGLContext.loaders.tiles3d.tileprocess import TileProcesses, TileProcessError
@@ -92,10 +93,13 @@ class CoverProcess:
         :meth:`GroundCover._scatter <OpenGLContext.scenegraph.vegetation.cover.GroundCover>` makes."""
         return self._request(('disc', rung, role, x, z, radius, density, height))  # type: ignore[no-any-return]  # a pickled tuple of arrays
 
-    def warm(self, rung: int, role: str, x: float, z: float, radius: float,
-             density: float, height: float) -> None:
-        """Make the blocks the disc about ``(x, z)`` will reach, so asking for it finds them made."""
-        self._request(('warm', rung, role, x, z, radius, density, height))
+    def warm(self, requests: "Sequence[tuple]") -> None:
+        """Make the blocks that discs will reach, so asking for them finds them made.
+
+        Each of ``requests`` is ``(rung, role, x, z, radius, density, height)``, as :meth:`disc`
+        takes them.
+        """
+        self._request(('warm', list(requests)))
 
     def scattered(self) -> int:
         """How many blocks of ground the child has scattered."""
@@ -131,8 +135,8 @@ class CoverScatterMaker:
             _, rung, role, x, z, radius, density, height = key
             return self.cover._scatter_here(self.cover.rungs[rung], role, x, z, radius, density, height)  # noqa: SLF001 the scatter this process exists to run
         if kind == 'warm':
-            _, rung, role, x, z, radius, density, height = key
-            self.cover._warm_here(rung, role, x, z, radius, density, height)  # noqa: SLF001 the scatter this process exists to run
+            for request in key[1]:
+                self.cover._warm_here(*request)  # noqa: SLF001 the scatter this process exists to run
             return None
         if kind == 'built':
             return self.cover.scattered

@@ -119,6 +119,9 @@ CLUMP_FADE = 0.8
 #: once its centre has fallen behind the camera by :data:`SETTLED_METRES`.
 CLUMP_STREAM_MARGIN = SETTLED_METRES + DISC_MARGIN_METRES
 
+#: How many blocks' worth of ground are asked for ahead of the camera in one request to a process.
+WARM_BATCH = 8
+
 #: A camera that moves faster than this between two updates, in metres a second, has
 #: been put somewhere else, and its jump is not a speed. The longest time a scatter is
 #: reckoned to take to arrive, in seconds; the furthest ahead of the camera a disc is
@@ -541,6 +544,8 @@ class GroundCover(Group):
         self._tables = threading.RLock()
         #: The child process that scatters for this cover, once it has one; see :meth:`use_process`.
         self._remote: Optional[CoverProcess] = None
+        #: Whether :meth:`shutdown` is stopping the scatter: ground not yet made is left unmade.
+        self._closing = False
         self._near_at: Optional[np.ndarray] = None
         self._far_at: Optional[np.ndarray] = None
         self.species = kinds
@@ -884,6 +889,7 @@ class GroundCover(Group):
         """Make the blocks the discs of the near scatter would need at each of ``places``."""
         here = self._near_at
         clumps_radius = self.clump_radius + self._stream_margin
+        wanted = []
         for x, z in places:
             # What the next disc would let go of at once is not made.
             away = 0.0 if here is None else max(abs(x - here[0]), abs(z - here[2]))
@@ -891,27 +897,32 @@ class GroundCover(Group):
                 kind = rung.species
                 density = kind.density * self.density_scale
                 if away <= ScatterBlocks.keep * self.card_radius:
-                    self._warm_one(index, 'cards', x, z, self.card_radius, density * CARD_SHARE,
-                                   kind.height)
+                    wanted.append((index, 'cards', x, z, self.card_radius, density * CARD_SHARE,
+                                   kind.height))
                 if rung.clumps_far is not None and away <= ScatterBlocks.keep * clumps_radius:
-                    self._warm_one(index, 'clumps', x, z, clumps_radius, density, kind.height)
+                    wanted.append((index, 'clumps', x, z, clumps_radius, density, kind.height))
+        for start in range(0, len(wanted), WARM_BATCH):
+            if self._closing:
+                return
+            self._warm_batch(wanted[start:start + WARM_BATCH])
 
-    def _warm_one(self, rung: int, role: str, x: float, z: float, radius: float,
-                  density: float, height: float) -> None:
-        """Make the blocks one species' ``role`` disc about ``(x, z)`` reaches, where the
-        scatter is made."""
+    def _warm_batch(self, batch: "list[tuple]") -> None:
+        """Make the blocks each of ``batch`` reaches, where the scatter is made."""
         remote = self._remote if self._remote is not None and self._remote.ready else None
         if remote is not None:
             try:
-                remote.warm(rung, role, x, z, radius, density, height)
+                remote.warm(batch)
                 return
             except CoverProcessError as err:
                 self._stop_using_process(err, remote)
-        self._warm_here(rung, role, x, z, radius, density, height)
+        for request in batch:
+            if self._closing:
+                return
+            self._warm_here(*request)
 
     def _warm_here(self, rung: int, role: str, x: float, z: float, radius: float,
                    density: float, height: float) -> None:
-        """:meth:`_warm_one` made by this process, whatever :meth:`use_process` was given."""
+        """Make the blocks one species' ``role`` disc about ``(x, z)`` reaches, in this process."""
         self._blocks_for(self.rungs[rung], role, radius, density, height).warm(x, z, radius)
 
     def _warm_worker(self) -> Any:
@@ -1099,13 +1110,17 @@ class GroundCover(Group):
     def shutdown(self) -> None:
         """Stop the background scatter's threads and the process given to :meth:`use_process`,
         if there are any; the cover scatters in line afterwards."""
-        if self._stop_workers is not None:
-            self._stop_workers()
-            self._stop_workers = None
-        self._worker = self._far_worker = self._warm_thread = None
-        remote, self._remote = self._remote, None
-        if remote is not None:
-            remote.close()
+        self._closing = True
+        try:
+            if self._stop_workers is not None:
+                self._stop_workers()
+                self._stop_workers = None
+            self._worker = self._far_worker = self._warm_thread = None
+            remote, self._remote = self._remote, None
+            if remote is not None:
+                remote.close()
+        finally:
+            self._closing = False
 
     def relocate(self, field: Ground,
                  mask: Optional[Callable[[Any, Any], Any]] = None,
