@@ -215,6 +215,11 @@ field on the ``ContextDefinition``, and the screen shows all of them:
        cascades fitted to it and a fade over its last fifth. 0 fits them to the
        farthest caster.
      - ``OPENGLCONTEXT_SHADOW_DISTANCE``
+   * - ``shadowFarInterval``
+     - int, 1–4
+     - Frames between draws of each cascade beyond the nearest. 1 draws every cascade
+       every frame.
+     - ``OPENGLCONTEXT_SHADOW_FAR_INTERVAL``
    * - ``maximumLights``
      - int, 0–8
      - Lights bound in one frame, the headlight among them. The shader's own

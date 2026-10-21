@@ -151,6 +151,12 @@ Lighting and shadows
      - How far from the camera a directional light's shadows are made. The
        cascades are fitted to that distance and the shadows fade out over its
        last fifth. ``0`` fits them to the farthest caster.
+   * - ``OPENGLCONTEXT_SHADOW_FAR_INTERVAL``
+     - integer 1–4
+     - ``1``
+     - Frames between draws of each cascade beyond the nearest. ``1`` draws every
+       cascade every frame; above ``1`` they are drawn in turn and used again while the
+       slice each serves stays inside it. See :ref:`shadows-far-interval`.
    * - ``OPENGLCONTEXT_MAXIMUM_LIGHTS``
      - integer 0–8
      - ``8``

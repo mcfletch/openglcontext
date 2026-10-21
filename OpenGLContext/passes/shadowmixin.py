@@ -153,6 +153,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         matrix: np.ndarray
         projection: np.ndarray
         _caster_points: Optional[np.ndarray]
+        frameState: Any
 
         def getModelView(self) -> np.ndarray: ...
         def frameGather(self) -> Any: ...
@@ -185,6 +186,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     _caster_sig: Optional[tuple] = None
     _caster_points_raw: Optional[np.ndarray] = None
     _caster_aabb: Optional[np.ndarray] = None
+    #: Each directional light's last cascades, by slot, made on first use: what
+    #: ``shadowFarInterval`` draws from again.
+    _cascadeMemo: dict[int, tuple[Any, ...]]
     #: Each box volume's own centre and half-extents, by ``id``, with the
     #: volume held so a reused address is not mistaken for it. A volume is
     #: the same object while its shape is unchanged, so this is worked out
@@ -471,6 +475,10 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         caster_bounds = self._caster_aabb
         # Build every cascade's (view, proj) up front, collecting the receiver
         # corners of all cascades.
+        interval = max(1, int(renderoptions.number(
+            self, 'shadowFarInterval',
+            renderoptions.env_number('OPENGLCONTEXT_SHADOW_FAR_INTERVAL', 1, integer=True))))
+        kept = self._cascadesKept(slot, direction, count, smap) if interval > 1 else None
         cascades = []
         all_corners = []
         prev = near
@@ -480,10 +488,22 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             far_frac = self._depth01(camera_proj, far_d)
             corners = shadowmath.frustum_corners_world(
                 camera_view, camera_proj, near_frac, far_frac)
-            view, proj = shadowmath.directional_cascade(
-                direction, corners, texel_snap=self.shadow_resolution,
-                caster_bounds=caster_bounds)
-            cascades.append((view, proj, far_d))
+            reused = False
+            if interval > 1 and c > 0:
+                held = kept.get(c) if kept is not None else None
+                if held is not None and not self._cascadeDue(c, interval) \
+                        and shadowmath.cascade_covers(held[0], held[1], corners):
+                    view, proj = held
+                    reused = True
+                else:
+                    view, proj = shadowmath.directional_cascade(
+                        direction, shadowmath.padded_corners(corners, 1.0 + 0.05 * interval),
+                        texel_snap=self.shadow_resolution, caster_bounds=caster_bounds)
+            else:
+                view, proj = shadowmath.directional_cascade(
+                    direction, corners, texel_snap=self.shadow_resolution,
+                    caster_bounds=caster_bounds)
+            cascades.append((view, proj, far_d, reused))
             all_corners.append(corners)
             prev = far_d
         # R3: cull the caster pool ONCE per light instead of once per cascade. An
@@ -505,21 +525,59 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         cascade_splits = []
         biases = []
         texel_bias = light_depth_bias(light_node)
-        for c, (view, proj, far_d) in enumerate(cascades):
-            if not smap.bind_layer(base_layer + c, self.shadow_resolution, self._array_layers()):
-                return None
-            try:
-                self._renderDepth(occluders, view, proj, grouping=grouping)
-            finally:
-                smap.unbind()
+        for c, (view, proj, far_d, reused) in enumerate(cascades):
+            if not reused:
+                if not smap.bind_layer(base_layer + c, self.shadow_resolution, self._array_layers()):
+                    return None
+                try:
+                    self._renderDepth(occluders, view, proj, grouping=grouping)
+                finally:
+                    smap.unbind()
             lights.append((view, proj))
             cascade_splits.append(far_d)
             # Each cascade fits its own box, so a world bias is a different share
             # of each one's depth range.
             biases.append(shadowmath.depth_bias_terms(
                 proj, texel_bias, self.shadow_resolution))
+        if interval > 1:
+            self._keepCascades(slot, direction, smap, cascades)
         return {'kind': 'directional', 'slot': slot, 'light_index': light_index,
                 'lights': lights, 'splits': cascade_splits, 'biases': biases, 'fade': fade}
+
+    def _cascadeDue(self, cascade: int, interval: int) -> bool:
+        """Whether ``cascade``, beyond the nearest, is drawn in this frame's turn.
+
+        Each is drawn once in ``interval`` frames, in turn, so the frames cost about the same.
+        Outside a frame every cascade is due.
+        """
+        state = self.frameState
+        return state is None or (state.number + cascade) % interval == 0
+
+    def _cascadesKept(self, slot: int, direction: np.ndarray, count: int,
+                      smap: Any) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+        """The cascades of a directional light's last draw that may be used again.
+
+        None of them where the light turned, the cascades are of another number or size, or the
+        shadow map was made again, since what they drew is then not what a map holds.
+        """
+        memo = self.__dict__.get('_cascadeMemo', {}).get(slot)
+        if memo is None:
+            return {}
+        held_direction, held_count, held_resolution, held_texture, cascades = memo
+        if (held_count != count or held_resolution != self.shadow_resolution
+                or held_texture != smap.texture
+                or not np.allclose(held_direction, direction, atol=1e-6)):
+            return {}
+        kept: dict[int, tuple[np.ndarray, np.ndarray]] = cascades
+        return kept
+
+    def _keepCascades(self, slot: int, direction: np.ndarray, smap: Any,
+                      cascades: Sequence[tuple[Any, Any, Any, bool]]) -> None:
+        """Keep a directional light's cascades, for :meth:`_cascadesKept`."""
+        self.__dict__.setdefault('_cascadeMemo', {})[slot] = (np.array(direction, 'd'), len(cascades),
+                                   self.shadow_resolution, smap.texture,
+                                   {c: (view, proj) for c, (view, proj, _far, _reused)
+                                    in enumerate(cascades)})
 
     def _renderPoint(self, path: Any, light_node: Any, slot: int, light_index: int,
                      caps: ShadowCapabilities) -> Optional[dict]:

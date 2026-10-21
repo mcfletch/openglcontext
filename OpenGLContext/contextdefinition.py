@@ -217,6 +217,13 @@ class ContextDefinition( node.Node ):
     #: (env: OPENGLCONTEXT_SHADOW_DISTANCE).
     shadowDistance = field.newField( "shadowDistance", "SFFloat", 1,
                                      lambda: float(renderoptions.env_number('OPENGLCONTEXT_SHADOW_DISTANCE', 0.0)))
+    #: Frames between draws of each cascade beyond the nearest. 1 draws every cascade every
+    #: frame. Above 1, those cascades are fitted with room to spare, drawn in turn, and used
+    #: again while the slice of the view each serves stays inside it, which saves their depth
+    #: draws at the cost of a shadow that lags the camera by a frame or two at distance
+    #: (env: OPENGLCONTEXT_SHADOW_FAR_INTERVAL).
+    shadowFarInterval = field.newField( "shadowFarInterval", "SFInt32", 1,
+                                        lambda: int(renderoptions.env_number('OPENGLCONTEXT_SHADOW_FAR_INTERVAL', 1, integer=True)))
     #: Lights the shader will bind in one frame. Lower is faster in a scene
     #: with many lights; the shader's own ceiling still applies.
     #: (env: OPENGLCONTEXT_MAXIMUM_LIGHTS)
@@ -443,6 +450,8 @@ class ContextDefinition( node.Node ):
                            'maximum': 4, 'step': 1},
         'shadowDistance': {'label': 'Shadow distance', 'minimum': 0.0,
                            'maximum': 1000.0, 'step': 10.0},
+        'shadowFarInterval': {'label': 'Far shadow interval', 'minimum': 1,
+                              'maximum': 4, 'step': 1},
         'maximumLights': {'label': 'Lights', 'minimum': 0, 'maximum': 8,
                           'step': 1},
         'bloom': {'label': 'Bloom'},
@@ -509,7 +518,8 @@ class ContextDefinition( node.Node ):
     #: Fields a settings screen shows under "Rendering", in the order they
     #: should read: the expensive things first, the diagnostics last.
     RENDERING_FIELDS = (
-        'shadows', 'shadowsSoft', 'shadowCascades', 'shadowDistance', 'maximumLights',
+        'shadows', 'shadowsSoft', 'shadowCascades', 'shadowDistance', 'shadowFarInterval',
+        'maximumLights',
         'bloom', 'toneMapping', 'exposure', 'colorSpace', 'shading',
         'orderIndependentTransparency', 'primitiveQuality', 'textureQuality', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',

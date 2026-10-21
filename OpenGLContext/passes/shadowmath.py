@@ -260,6 +260,34 @@ def directional_cascade(light_dir: Vec3, corners_world: np.ndarray,
     return view.astype('f'), proj.astype('f')
 
 
+def padded_corners(corners_world: np.ndarray, scale: float) -> np.ndarray:
+    """``corners_world`` grown about their centre to ``scale`` times their size.
+
+    A cascade fitted to them reaches that much further than the slice it serves, so it keeps
+    serving the slice for as long as the slice moves less than the room made.
+    """
+    corners = np.asarray(corners_world, dtype='d')
+    if scale == 1.0:
+        return corners
+    centre = corners.mean(axis=0)
+    return centre + (corners - centre) * float(scale)
+
+
+def cascade_covers(view: Matrix4, proj: Matrix4, corners_world: np.ndarray,
+                   tolerance: float = 0.01) -> bool:
+    """Whether a cascade's light view and orthographic projection contain ``corners_world``.
+
+    A cascade is a box; a receiver in the slice is shadowed from it only where the box holds it,
+    sideways and in depth. ``tolerance`` is a share of the box's half width, which the fit's
+    snapping to texels takes from the edges.
+    """
+    corners = np.asarray(corners_world, dtype='d')
+    homogeneous = np.concatenate([corners, np.ones((corners.shape[0], 1))], axis=1)
+    clip = homogeneous @ np.asarray(view, dtype='d') @ np.asarray(proj, dtype='d')
+    ndc = clip[:, :3] / clip[:, 3:4]
+    return bool(np.all(np.abs(ndc) <= 1.0 + tolerance))
+
+
 def _extend_near_for_casters(caster_bounds: np.ndarray, view: Matrix4,
                              mins: np.ndarray, maxs: np.ndarray,
                              near: float) -> float:

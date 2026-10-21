@@ -67,9 +67,12 @@ control them:
    * - ``OPENGLCONTEXT_SHADOW_DISTANCE=metres``
      - how far from the camera directional shadows are made (default 0:
        as far as the farthest caster); see :ref:`shadows-distance`
+   * - ``OPENGLCONTEXT_SHADOW_FAR_INTERVAL=n``
+     - frames between draws of each cascade beyond the nearest (default 1: every
+       frame); see :ref:`shadows-far-interval`
 
 Each variable sets the default of a ``ContextDefinition`` field
-(``shadows``, ``shadowsSoft``, ``shadowCascades``, ``shadowDistance``), which a settings screen
+(``shadows``, ``shadowsSoft``, ``shadowCascades``, ``shadowDistance``, ``shadowFarInterval``), which a settings screen
 can change while the program runs. See :doc:`environment` and
 :ref:`overlayui-settings`.
 
@@ -157,6 +160,21 @@ of it. A scene that streams its casters in at a radius sets the distance a littl
 inside that radius, and the shadows of a caster arriving at the edge of the set
 start at nothing. The field applies to the camera the slices are fitted to;
 in another view of a :doc:`multi-view <multiview>` window the shadows are not faded.
+
+.. _shadows-far-interval:
+
+Each cascade is a depth draw of every caster that reaches it, so a scene with three cascades
+draws its casters three times a frame. ``ContextDefinition.shadowFarInterval``
+(``OPENGLCONTEXT_SHADOW_FAR_INTERVAL``) is the number of frames between draws of each cascade
+beyond the nearest, which holds what moves and is seen closely and is drawn every frame. At
+``1``, the default, every cascade is drawn every frame. Above ``1`` each of the others is fitted
+to a slice 5 per cent larger for each frame of the interval, drawn in its turn, and
+used again while the slice of the view it serves stays inside it. A cascade is drawn at once
+when the slice leaves it, the light turns, or the number or size of the maps changes. The cost is
+a shadow at distance that lags the camera by up to the interval, and the resolution the room
+takes: a slice fitted 10 per cent larger has 10 per cent fewer texels to the metre. A
+caster that moves in the farther slices is drawn where it was until its cascade's turn.
+Captures that must match another run's pixels leave it at ``1``.
 
 With :doc:`several views <multiview>` in one window, the slices are fitted to
 the active view's camera, and every view reads the same maps. Where the active

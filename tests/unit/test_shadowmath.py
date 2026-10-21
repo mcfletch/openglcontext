@@ -380,3 +380,50 @@ class TestWorldBounds:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestACascadeThatStillCoversASlice:
+    """A cascade drawn some frames ago serves a slice of the view until the slice leaves it."""
+
+    LIGHT = (0.3, -1.0, 0.2)
+
+    def _slice(self, shift=(0.0, 0.0, 0.0)):
+        """The corners of a slice of view frustum, as a box 20 m wide, 6 high and 40 deep."""
+        x, y, z = np.meshgrid((-10.0, 10.0), (0.0, 6.0), (-60.0, -20.0), indexing='ij')
+        return np.stack([x.ravel(), y.ravel(), z.ravel()], 1) + np.asarray(shift)
+
+    def _cascade(self, corners, snap=2048):
+        return shadowmath.directional_cascade(self.LIGHT, corners, texel_snap=snap)
+
+    def test_it_covers_the_slice_it_was_fitted_to(self):
+        slice_ = self._slice()
+        view, proj = self._cascade(slice_)
+        assert shadowmath.cascade_covers(view, proj, slice_)
+
+    def test_it_does_not_cover_a_slice_that_has_moved_off_it(self):
+        view, proj = self._cascade(self._slice())
+        assert not shadowmath.cascade_covers(view, proj, self._slice((0.0, 0.0, -45.0)))
+
+    def test_a_fit_given_room_covers_a_slice_that_has_moved_a_little(self):
+        padded = shadowmath.padded_corners(self._slice(), 1.15)
+        view, proj = self._cascade(padded)
+        assert shadowmath.cascade_covers(view, proj, self._slice((0.0, 0.0, -2.0)))
+        assert not shadowmath.cascade_covers(view, proj, self._slice((0.0, 0.0, -45.0)))
+
+    def test_a_fit_given_no_room_does_not_cover_the_slice_moved_the_same_distance(self):
+        view, proj = self._cascade(self._slice())
+        assert not shadowmath.cascade_covers(view, proj, self._slice((0.0, 0.0, -2.0)))
+
+    def test_padding_grows_the_slice_about_its_centre(self):
+        slice_ = self._slice()
+        padded = shadowmath.padded_corners(slice_, 1.5)
+        assert np.allclose(padded.mean(axis=0), slice_.mean(axis=0))
+        assert np.allclose(np.ptp(padded, axis=0), 1.5 * np.ptp(slice_, axis=0))
+
+    def test_no_padding_is_the_corners_as_they_were(self):
+        slice_ = self._slice()
+        assert np.array_equal(shadowmath.padded_corners(slice_, 1.0), slice_)
+
+    def test_a_slice_the_light_cannot_reach_in_depth_is_not_covered(self):
+        view, proj = self._cascade(self._slice())
+        assert not shadowmath.cascade_covers(view, proj, self._slice((0.0, 400.0, 0.0)))
