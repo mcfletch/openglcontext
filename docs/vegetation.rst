@@ -314,6 +314,30 @@ the live camera, so what is streamed in the margin is not drawn until it is in
 reach. ``disc`` is an attribute of every instanced vegetation node; None streams
 the whole set.
 
+.. _vegetation-scatter-process:
+
+Scattering in a child process
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A scatter on a worker thread shares the interpreter lock with the thread that renders. At a
+vehicle's speed the scatter is running most of the time, and each time it holds the lock
+the frame waits for it. ``GroundCover.use_process(process)`` hands the scatter to a child
+process instead (``vegetation.coverprocess``).
+
+``CoverProcess(factory, args)`` starts a child that builds ``factory(*args)``, named as
+``"package.module:function"``, and holds what it returns: a ``CoverScatterMaker`` made from a
+``GroundCover`` of the same ground, species, ``mask``, ``shade`` and ``canopy`` as the cover that
+uses it. The cover asks the child for each disc and for the ground ``prepare`` makes ahead, and
+receives the arrays. The child's cover scatters in line, with the same code, so what it
+answers is what the parent would have made, and it keeps the blocks it has made as the parent's
+cover does. Draw nodes are not needed in the child.
+
+The child starts in the background. The cover scatters in line until ``CoverProcess.ready`` is
+true, and again if the child stops or cannot answer a request. ``wait_until_ready`` waits
+for the child. ``GroundCover.shutdown`` closes it. The cover takes its rules from the child's
+factory while it has a process: changing ``mask``, ``holes``, ``shade`` or ``canopy`` afterwards
+changes the parent's and not the child's.
+
 .. _vegetation-gpu-cull:
 
 Culling on the GPU

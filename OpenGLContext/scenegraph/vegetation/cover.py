@@ -50,6 +50,7 @@ from __future__ import annotations
 # posixpath, not os.path: these join a reference rather than open a file,
 # and a baked world is as likely to be served over http as read off disk.
 # Forward slashes are a path on every platform and a URL as well.
+import logging
 import math
 import posixpath
 import threading
@@ -72,7 +73,10 @@ from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.grid import BLOCK_METRES, Ground, Patches, ScatterBlocks
+from OpenGLContext.scenegraph.vegetation.coverprocess import CoverProcess, CoverProcessError
 from OpenGLContext.scenegraph.vegetation.viewcull import DISC_MARGIN_METRES
+
+log = logging.getLogger(__name__)
 
 __all__ = ['CoverSpecies', 'CoverRung', 'GroundCover', 'control_weight',
            'CLUMP_RADIUS', 'CARD_RADIUS', 'FAR_RADIUS', 'COVER_JITTER',
@@ -535,6 +539,8 @@ class GroundCover(Group):
         #: Blocks scattered into tables since replaced; :attr:`scattered` adds the live ones.
         self._retired = 0
         self._tables = threading.RLock()
+        #: The child process that scatters for this cover, once it has one; see :meth:`use_process`.
+        self._remote: Optional[CoverProcess] = None
         self._near_at: Optional[np.ndarray] = None
         self._far_at: Optional[np.ndarray] = None
         self.species = kinds
@@ -713,8 +719,41 @@ class GroundCover(Group):
         Changing the mask, the holes, the shade or the canopy scatters
         everything again.
         """
+        remote = self._remote if self._remote is not None and self._remote.ready else None
+        found = None
+        if remote is not None:
+            try:
+                found = remote.disc(self.rungs.index(rung), role, x, z, radius, density, height)
+            except CoverProcessError as err:
+                self._stop_using_process(err)
+        if found is None:
+            found = self._blocks_for(rung, role, radius, density, height).disc(x, z, radius)
+        return found if len(found) == 4 else (*found, None)
+
+    def _scatter_here(self, rung: CoverRung, role: str, x: float, z: float,
+                      radius: float, density: float, height: float) -> tuple:
+        """:meth:`_scatter` made by this process, whatever :meth:`use_process` was given."""
         found = self._blocks_for(rung, role, radius, density, height).disc(x, z, radius)
         return found if len(found) == 4 else (*found, None)
+
+    def use_process(self, process: CoverProcess) -> None:
+        """Have ``process`` make the scatter, for as long as it is up.
+
+        The process holds a cover built from the same ground, species and rules as this one;
+        this cover keeps its own, so that it scatters in line until the process is
+        :attr:`~CoverProcess.ready` and again if the process stops. Changing ``mask``,
+        ``holes``, ``shade`` or ``canopy`` afterwards changes this cover's rules and not the
+        process's, so a cover given a process takes them from the process's factory.
+        :meth:`shutdown` stops the process.
+        """
+        self._remote = process
+
+    def _stop_using_process(self, error: Exception) -> None:
+        """Scatter in line from now on: the process stopped, or could not answer."""
+        log.warning('ground cover scatters in line: its process stopped: %s', error)
+        remote, self._remote = self._remote, None
+        if remote is not None:
+            remote.close()
 
     def _replace_tables(self) -> None:
         """Start the tables of kept blocks again, counting what the old ones made."""
@@ -846,15 +885,32 @@ class GroundCover(Group):
         for x, z in places:
             # What the next disc would let go of at once is not made.
             away = 0.0 if here is None else max(abs(x - here[0]), abs(z - here[2]))
-            for rung in self.rungs:
+            for index, rung in enumerate(self.rungs):
                 kind = rung.species
                 density = kind.density * self.density_scale
                 if away <= ScatterBlocks.keep * self.card_radius:
-                    self._blocks_for(rung, 'cards', self.card_radius, density * CARD_SHARE,
-                                     kind.height).warm(x, z, self.card_radius)
+                    self._warm_one(index, 'cards', x, z, self.card_radius, density * CARD_SHARE,
+                                   kind.height)
                 if rung.clumps_far is not None and away <= ScatterBlocks.keep * clumps_radius:
-                    self._blocks_for(rung, 'clumps', clumps_radius, density,
-                                     kind.height).warm(x, z, clumps_radius)
+                    self._warm_one(index, 'clumps', x, z, clumps_radius, density, kind.height)
+
+    def _warm_one(self, rung: int, role: str, x: float, z: float, radius: float,
+                  density: float, height: float) -> None:
+        """Make the blocks one species' ``role`` disc about ``(x, z)`` reaches, where the
+        scatter is made."""
+        remote = self._remote if self._remote is not None and self._remote.ready else None
+        if remote is not None:
+            try:
+                remote.warm(rung, role, x, z, radius, density, height)
+                return
+            except CoverProcessError as err:
+                self._stop_using_process(err)
+        self._warm_here(rung, role, x, z, radius, density, height)
+
+    def _warm_here(self, rung: int, role: str, x: float, z: float, radius: float,
+                   density: float, height: float) -> None:
+        """:meth:`_warm_one` made by this process, whatever :meth:`use_process` was given."""
+        self._blocks_for(self.rungs[rung], role, radius, density, height).warm(x, z, radius)
 
     def _warm_worker(self) -> Any:
         """The thread that makes blocks ahead of the camera, started on first use."""
@@ -1039,11 +1095,15 @@ class GroundCover(Group):
         return all(bool(worker.wait(timeout)) for worker in self._workers())
 
     def shutdown(self) -> None:
-        """Stop the background scatter's threads, if there are any."""
+        """Stop the background scatter's threads and the process given to :meth:`use_process`,
+        if there are any; the cover scatters in line afterwards."""
         if self._stop_workers is not None:
             self._stop_workers()
             self._stop_workers = None
         self._worker = self._far_worker = self._warm_thread = None
+        remote, self._remote = self._remote, None
+        if remote is not None:
+            remote.close()
 
     def relocate(self, field: Ground,
                  mask: Optional[Callable[[Any, Any], Any]] = None,
