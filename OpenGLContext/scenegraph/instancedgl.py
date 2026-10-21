@@ -33,6 +33,7 @@ from OpenGL.GL import (
 )
 from OpenGL.GL.shaders import compileProgram, compileShader
 
+from OpenGLContext import contextresources
 from OpenGLContext.scenegraph.fog import FOG_DENSITY
 from OpenGLContext.scenegraph.walk import reachable
 
@@ -366,6 +367,8 @@ class GLLayer:
     failed: bool = False
     #: The node's GL objects, None until :meth:`_init_gl` has made them.
     _gl: Any = None
+    #: The context they were made in.
+    _gl_context: Any = None
 
     def _init_gl(self) -> None:
         """Make the node's GL objects and set ``_gl``. GL thread."""
@@ -382,7 +385,14 @@ class GLLayer:
         """Whether the node is to draw now, making its GL objects if need be."""
         if not self.drawn or self.failed:
             return False
+        context = contextresources.context_key()
+        if self._gl is not None and self._gl_context != context:
+            # Made in another context, where its names mean nothing, or are somebody
+            # else's: drawn here, they are made again, and the old ones are left to
+            # the context they belong to.
+            self._gl = None
         if self._gl is None:
+            self._gl_context = context
             try:
                 self._init_gl()
             except Exception as err:

@@ -155,3 +155,44 @@ def test_delete_gl_swallows_bad_handles(monkeypatch):
     ]
     assert all(args[1].dtype == np.uint32 for _, args in attempted[:-1])
     assert attempted[-1] == ('glDeleteProgram', (4,))
+
+
+class _Elsewhere:
+    """Which GL context is current, as ``contextresources.context_key`` answers it."""
+
+    def __init__(self, monkeypatch):
+        from OpenGLContext import contextresources
+        self.key = 'first'
+        monkeypatch.setattr(contextresources, 'context_key', lambda: self.key)
+
+
+def test_a_layer_drawn_in_the_context_it_was_made_in_is_not_made_again(monkeypatch):
+    _Elsewhere(monkeypatch)
+    n = _Node()
+    n.ensure_gl()
+    n.ensure_gl()
+    assert n.inits == 1
+
+
+def test_a_layer_drawn_in_another_context_makes_its_objects_again(monkeypatch):
+    where = _Elsewhere(monkeypatch)
+    n = _Node()
+    n.ensure_gl()
+    where.key = 'second'
+    assert n.ensure_gl() is True
+    assert n.inits == 2
+    n.ensure_gl()
+    assert n.inits == 2
+
+
+def test_a_layer_made_in_one_context_is_not_deleted_from_another(monkeypatch):
+    """Names mean nothing outside the context that issued them, and in another context
+    the same numbers may be somebody else's objects."""
+    where = _Elsewhere(monkeypatch)
+    n = _Node()
+    disposed = []
+    n.dispose = lambda: disposed.append(1)
+    n.ensure_gl()
+    where.key = 'second'
+    n.ensure_gl()
+    assert disposed == []
