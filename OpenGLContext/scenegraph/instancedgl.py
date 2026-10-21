@@ -58,6 +58,10 @@ def frame_fog(mode: Any) -> "tuple[int, float, Sequence[float]]":
     :data:`DEFAULT_FOG` where the scene binds none. A bound Fog with no visible range is
     no fog.
     """
+    framed = getattr(mode, 'frameFog', None)
+    if callable(framed):
+        asked = framed()
+        return DEFAULT_FOG if asked is None else asked
     current = getattr(mode, 'currentFog', None)
     path = current() if current is not None else None
     if path is None:

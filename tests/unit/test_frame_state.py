@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 
 from OpenGLContext import frustum
-from OpenGLContext.passes import _flat, flatcore, multiviewpass, renderpass
+from OpenGLContext.passes import _flat, flatcore, multiviewpass, pbrpass, renderpass, tonemapping
+from OpenGLContext.scenegraph.instancedgl import DEFAULT_FOG, frame_fog
 from OpenGLContext.scenegraph import basenodes
 
 
@@ -97,3 +98,83 @@ def test_a_views_combined_matrix_is_of_the_projection_it_draws_with(render_scene
         assert np.allclose(frame.modelproj,
                            np.asarray(frame.modelView) @ np.asarray(frame.projection),
                            atol=1e-5)
+
+
+def _fogged_pass(**named):
+    fog = basenodes.Fog(color=(0.2, 0.4, 0.6), visibilityRange=100.0, **named)
+    passing = pbrpass.PBRPass.__new__(pbrpass.PBRPass)
+    _flat.SGObserver.__init__(passing, basenodes.sceneGraph(children=[
+        fog, basenodes.Shape(geometry=basenodes.Box())]), [])
+    passing.frustum = frustum.Frustum(planes=np.zeros((0, 4), 'f'))
+    return passing, fog
+
+
+class TestWhatEveryLayerOfAFrameAsksFor:
+    """The vegetation, the terrain and every other layer that draws with its own program ask the
+    pass for the frame's tone curve and fog, once each, and every node of them is told the same."""
+
+    def test_within_a_frame_the_display_is_worked_out_once(self, monkeypatch):
+        passing, _ = _fogged_pass()
+        made = []
+        real = tonemapping.display
+        monkeypatch.setattr(tonemapping, 'display', lambda *a, **k: made.append(1) or real(*a, **k))
+        with passing.drawingFrame():
+            first = passing.frameDisplay()
+            assert [passing.frameDisplay() for _ in range(5)] == [first] * 5
+        assert len(made) == 1
+
+    def test_the_next_frame_works_it_out_again(self, monkeypatch):
+        passing, _ = _fogged_pass()
+        made = []
+        real = tonemapping.display
+        monkeypatch.setattr(tonemapping, 'display', lambda *a, **k: made.append(1) or real(*a, **k))
+        for _ in range(3):
+            with passing.drawingFrame():
+                passing.frameDisplay()
+                passing.frameDisplay()
+        assert len(made) == 3
+
+    def test_outside_a_frame_every_asking_works_it_out(self, monkeypatch):
+        passing, _ = _fogged_pass()
+        made = []
+        real = tonemapping.display
+        monkeypatch.setattr(tonemapping, 'display', lambda *a, **k: made.append(1) or real(*a, **k))
+        passing.frameDisplay()
+        passing.frameDisplay()
+        assert len(made) == 2
+
+    def test_a_pass_that_does_not_tone_map_answers_the_engines_curve_whatever_the_frame_holds(self):
+        passing, _ = _fogged_pass()
+        with passing.drawingFrame():
+            passing.frameDisplay()
+            passing.toneMapped = False
+            assert passing.frameDisplay() is tonemapping.ENGINE
+
+    def test_within_a_frame_the_fog_is_worked_out_once(self, monkeypatch):
+        passing, fog = _fogged_pass()
+        asked = []
+        real = fog.fogParameters
+        monkeypatch.setattr(type(fog), 'fogParameters',
+                            lambda self, matrix: asked.append(1) or real(matrix))
+        with passing.drawingFrame():
+            found = frame_fog(passing)
+            assert [frame_fog(passing) for _ in range(5)] == [found] * 5
+        assert len(asked) == 1
+        assert found[2] == pytest.approx((0.2, 0.4, 0.6))
+
+    def test_the_next_frame_has_the_fog_as_it_has_become(self):
+        passing, fog = _fogged_pass()
+        with passing.drawingFrame():
+            before = frame_fog(passing)
+        fog.color = (0.9, 0.1, 0.1)
+        with passing.drawingFrame():
+            after = frame_fog(passing)
+        assert before[2] == pytest.approx((0.2, 0.4, 0.6))
+        assert after[2] == pytest.approx((0.9, 0.1, 0.1))
+
+    def test_a_scene_with_no_fog_has_the_default(self):
+        passing = pbrpass.PBRPass.__new__(pbrpass.PBRPass)
+        _flat.SGObserver.__init__(passing, basenodes.sceneGraph(children=[
+            basenodes.Shape(geometry=basenodes.Box())]), [])
+        with passing.drawingFrame():
+            assert frame_fog(passing) == DEFAULT_FOG

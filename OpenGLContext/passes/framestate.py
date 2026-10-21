@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import itertools
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     import numpy as np
@@ -31,13 +31,18 @@ _NUMBERS = itertools.count(1)
 class FrameState:
     """The state one frame shares among its stages."""
 
-    __slots__ = ('gathered', 'number', 'reach', 'refusesShare')
+    __slots__ = ('display', 'fogs', 'gathered', 'number', 'reach', 'refusesShare')
 
     def __init__(self) -> None:
         #: This frame's place in the process's frames, counting from 1.
         self.number = next(_NUMBERS)
         #: This frame's walk of the scene, once it has been made.
         self.gathered: Optional['GatheredPaths'] = None
+        #: The tone curve, colour space and exposure the frame is written with, once asked
+        #: for: every layer that draws with its own program asks, and each is told the same.
+        self.display: Any = None
+        #: The fog the frame's layers are drawn in, by the layer drawn, once asked for.
+        self.fogs: dict[Any, Any] = {}
         #: Where each shape of the walk is and how far it reaches, the world
         #: centres and radii of :func:`~OpenGLContext.passes.reflection.reach`,
         #: once a mirror view has asked.

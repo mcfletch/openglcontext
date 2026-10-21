@@ -1321,7 +1321,31 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         from OpenGLContext.passes import tonemapping  # noqa: PLC0415 contextdefinition imports it first
         if not self.toneMapped:
             return tonemapping.ENGINE
-        return tonemapping.display( self, getattr( self, 'scene', None ) )
+        state = self.frameState
+        if state is not None and state.display is not None:
+            held: 'tonemapping.Display' = state.display
+            return held
+        shown = tonemapping.display( self, getattr( self, 'scene', None ) )
+        if state is not None:
+            state.display = shown
+        return shown
+
+    def frameFog( self ) -> Any:
+        """The ``(mode, density, colour)`` the bound Fog fogs the frame's layers by, or None where
+        the scene binds none.
+
+        Worked out once for each layer drawn in a frame, since every layer that draws with its
+        own program asks and each is told the same.
+        """
+        state = self.frameState
+        layer = self.drawingLayer() if hasattr( self, 'drawingLayer' ) else None
+        if state is not None and layer in state.fogs:
+            return state.fogs[layer]
+        path = self.currentFog()
+        found = None if path is None else path[-1].fogParameters( path.transformMatrix() )
+        if state is not None:
+            state.fogs[layer] = found
+        return found
 
     def _weightingRuns( self, transparent: list ) -> list[tuple[bool, list]]:
         """``transparent``, farthest first, as runs of ``(weighted, records)``
