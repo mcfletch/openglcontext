@@ -186,6 +186,13 @@ class Shape(basenodes.Shape):
                 self.geometry.render(textured=False, mode=mode)
             return
 
+        # A layer that makes its own GL objects draws with its own program, which reads
+        # none of the pass's material, textures or fill style.
+        if (getattr(self.geometry, 'drawsOwnProgram', False)
+                and not getattr(self.drawnAppearance, 'bringsProgram', False)
+                and not rendermodes.has_modes(self.drawnAppearance)):
+            return self.geometry.render(textured=getattr(mode, 'visible', True), mode=mode)
+
         # The one colour geometry with no material of its own is drawn in --
         # a line, a point cloud. Published here because the appearance belongs
         # to the shape and the geometry node does not see it.

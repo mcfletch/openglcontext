@@ -50,6 +50,9 @@ class InstancedVegBase(vnodes.PointSet, GLLayer):
     which :attr:`programs` keeps.
     """
     _BIG = _BIG
+    #: The node draws with a program of its own, so a Shape holding it sets none of the
+    #: pass's material, texture or fill style state for it.
+    drawsOwnProgram = True
     #: One draw serves every view that sees the node.
     multiviewShared = True
     #: The locations of the per-instance attributes, which a shared draw by the
