@@ -1669,7 +1669,18 @@ class PBRPass(flatcore.FlatPass):
                 memo[shape] = (made_from, stamps, key, flag)
             return key, flag
 
-        return (lambda shape: answer(shape)[0]), (lambda shape: answer(shape)[1])
+        # The pair serves one grouping, which asks a shape its key and then whether it can be
+        # drawn instanced: the first asking answers the second.
+        last: list[Any] = [None, None]
+
+        def answered(shape: Any) -> tuple[Any, bool]:
+            if last[0] is None or last[0]() is not shape:
+                last[1] = answer(shape)
+                last[0] = weakref.ref(shape)
+            found: tuple[Any, bool] = last[1]
+            return found
+
+        return (lambda shape: answered(shape)[0]), (lambda shape: answered(shape)[1])
 
     def _keyFor(self, shape: Any, collapse: bool) -> Any:
         from OpenGLContext.passes.instancing import (

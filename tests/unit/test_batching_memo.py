@@ -121,3 +121,42 @@ def test_a_shape_that_has_gone_leaves_nothing_behind(monkeypatch):
     del shape
     gc.collect()
     assert len(passing._batchMemo) == 0
+
+
+class TestWhatOneGroupingAsksOnce:
+    """An instance grouping asks a shape for its key and then whether it can be drawn
+    instanced; the work of the first answers the second."""
+
+    def _counted(self, monkeypatch):
+        from OpenGLContext.passes import pbrpass
+        monkeypatch.delenv('OPENGLCONTEXT_INSTANCE_COLLAPSE', raising=False)
+        asked = []
+        real = pbrpass.pbr_material
+        monkeypatch.setattr(pbrpass, 'pbr_material', lambda appearance: asked.append(1) or real(appearance))
+        return asked
+
+    def test_a_shape_asked_for_its_key_and_then_its_flag_is_worked_out_once(self, monkeypatch):
+        asked = self._counted(monkeypatch)
+        key, instanceable = PBRPass.__new__(PBRPass).batchers()
+        shape = _shape()
+        key(shape)
+        instanceable(shape)
+        assert len(asked) == 1
+
+    def test_each_shape_is_worked_out_in_its_turn(self, monkeypatch):
+        asked = self._counted(monkeypatch)
+        key, instanceable = PBRPass.__new__(PBRPass).batchers()
+        shapes = [_shape() for _ in range(3)]
+        for shape in shapes:
+            key(shape)
+            instanceable(shape)
+        assert len(asked) == 3
+
+    def test_the_answers_are_the_same_either_way(self, monkeypatch):
+        self._counted(monkeypatch)
+        shape = _shape()
+        key, instanceable = PBRPass.__new__(PBRPass).batchers()
+        together = (key(shape), instanceable(shape))
+        apart = (PBRPass.__new__(PBRPass).batchers()[0](shape),
+                 PBRPass.__new__(PBRPass).batchers()[1](shape))
+        assert together == apart
