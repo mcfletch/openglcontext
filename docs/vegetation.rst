@@ -300,6 +300,14 @@ and casts no shadow until it is set True again; a profiling run leaves one
 layer out this way. A node whose shaders will not compile on the driver sets
 its ``failed`` attribute, logs one warning and draws nothing from then on.
 
+A node holding GL objects made in one context and drawn in another makes them again for
+the context it is drawn in: a name means nothing outside the context that issued it.
+Every instanced vegetation node also has ``drawsOwnProgram`` True, which says the
+``Shape`` holding it need not set the pass's material, textures or fill style for it: the
+node draws with its own program and reads none of them. A geometry of any kind that does
+the same sets it, and a shape whose appearance brings a program or sets render modes is
+drawn as before.
+
 ``select`` is the per-frame step: it moves the disc each geometry level is drawn
 within onto the current camera. Without it, the disc lags behind the walker and
 the density of the middle-distance cover pulses. Each geometry node is given the
