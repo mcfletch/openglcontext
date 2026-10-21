@@ -31,6 +31,7 @@ from OpenGLContext.scenegraph.instancedgl import (
     instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
     InstancedVegBase, _BIG, LOD_NEAR, LOD_FAR)
+from OpenGLContext.scenegraph.vegetation.gpucull import GPUCulledRows, gpu_cull_is_available
 from OpenGLContext.scenegraph.terrain.splat import DEFAULT_SUN
 
 
@@ -195,7 +196,11 @@ class InstancedMeshLOD(InstancedVegBase):
             self._buffers.append(ibuf.id)
             ov, onc = self._mkvao(op[0], op[1], op[2], op[3], ibuf)
             bv, bnc = self._mkvao(bp[0], bp[1], bp[2], bp[3], ibuf)
-            self._sp.append(dict(buf=ibuf, o=(ov, onc, tex(sd["o_tex"])), b=(bv, bnc, tex(sd["b_tex"]))))
+            # Where the GPU culls, a species is staged once and each draw keeps the trees in view.
+            cull = (GPUCulledRows(ibuf, reach=CROWN_SPREAD, rise=CROWN_RISE, vertices=(onc, bnc))
+                    if gpu_cull_is_available() else None)
+            self._sp.append(dict(buf=ibuf, cull=cull, o=(ov, onc, tex(sd["o_tex"])),
+                                 b=(bv, bnc, tex(sd["b_tex"]))))
         self.U = {x: glGetUniformLocation(self._prog, x) for x in
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",
                    "skyAmbient", "groundAmbient", *FOG_UNIFORMS,
@@ -215,6 +220,9 @@ class InstancedMeshLOD(InstancedVegBase):
         """Free this node's GL objects (VAOs, buffers, textures, program). GL thread."""
         if self._gl is None:
             return
+        for held in self._sp:
+            if held["cull"] is not None:
+                held["cull"].release()
         delete_gl(vaos=self._vaos, buffers=self._buffers, textures=self._textures,
                   programs=[*self.programs.programs(), self._depth_prog])
         self._vaos = []
@@ -226,9 +234,24 @@ class InstancedMeshLOD(InstancedVegBase):
     def _stream(self) -> bool:
         if self._pending is not None:
             for s, inst in self._pending.items():
-                self._sp[s]["buf"].upload(inst)
+                held = self._sp[s]
+                if held["cull"] is not None:
+                    held["cull"].stage(inst)
+                else:
+                    held["buf"].upload(inst)
             self._pending = None
         return any(s["buf"].count for s in self._sp)
+
+    def _show(self, mode: Any) -> bool:
+        self._cull(mode)
+        return True
+
+    def _cull(self, mode: Any) -> None:
+        """Keep, for the view of ``mode``, the trees of each species the GPU culls; a map
+        being made for a light keeps them all."""
+        for held in self._sp:
+            if held["cull"] is not None and held["buf"].count:
+                held["cull"].show(mode)
 
     def render(self, mode: Any = None, **kw: Any) -> int:
         """Draw the trees, or write them into the shadow map being made."""
@@ -245,6 +268,7 @@ class InstancedMeshLOD(InstancedVegBase):
         """
         if not self.ensure_gl() or not self._stream():
             return 1
+        self._cull(mode)
         previous = mode.current_program() if hasattr(mode, "current_program") else 0
         glUseProgram(self._depth_prog)
         glUniformMatrix4fv(self._depth_U["uModelView"], 1, GL_FALSE,
@@ -266,13 +290,16 @@ class InstancedMeshLOD(InstancedVegBase):
             n = s["buf"].count
             if not n:
                 continue
-            for part in ("o", "b"):
+            for number, part in enumerate(("o", "b")):
                 v, cnt, t = s[part]
                 glBindTexture(GL_TEXTURE_2D, t)
                 glBindVertexArray(v)
                 with self._instanced(mode) as copies:
-                    glDrawElementsInstanced(GL_TRIANGLES, cnt, GL_UNSIGNED_INT, None,
-                                            n * copies)
+                    if s["cull"] is not None:
+                        s["cull"].draw_elements(copies, number)
+                    else:
+                        glDrawElementsInstanced(GL_TRIANGLES, cnt, GL_UNSIGNED_INT, None,
+                                                n * copies)
         glBindVertexArray(0)
 
 

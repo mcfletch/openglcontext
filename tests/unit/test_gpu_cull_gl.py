@@ -18,7 +18,9 @@ from OpenGLContext.loaders.tiles3d.frustum import look_at, perspective
 from OpenGLContext.scenegraph.instancedgl import InstanceBuffer, instance_rows
 from OpenGLContext.scenegraph.vegetation import gpucull, viewcull
 from OpenGLContext.scenegraph.vegetation.gpucull import GPUCulledRows
+from OpenGLContext.scenegraph.vegetation.nearmesh import InstancedMeshLOD
 from tests.unit.test_vegetation_cull_gl import SIZE, _cards, _clumps, _mode, _picture
+from tests.unit.test_vegetation_gl_render import _species_npz
 
 REACH, RISE, DROP = 0.5, 2.0, 0.25
 
@@ -262,3 +264,84 @@ class TestTheLayersDrawn:
         node.dispose()
         assert np.array_equal(before, _picture(node, mode))
 
+
+
+def _trees(tmp_path, count=60, seed=5):
+    """A ring of trees about the camera, of one species with a trunk and a crown."""
+    rng = np.random.default_rng(seed)
+    angle = rng.uniform(0.0, 2.0 * np.pi, count)
+    away = rng.uniform(6.0, 40.0, count)
+    pos = np.stack([away * np.cos(angle), np.zeros(count), away * np.sin(angle)], 1).astype('f4')
+    node = InstancedMeshLOD(pos, rng.uniform(0.0, 6.28, count).astype('f4'),
+                            rng.uniform(2.0, 6.0, count).astype('f4'), [_species_npz(tmp_path)])
+    node.update(0.0, 0.0, radius=60.0)
+    return node
+
+
+@pytest.mark.usefixtures('window')
+class TestSeveralPartsOfOneSet:
+    """A species draws its trunk and its crown from one set of instances."""
+
+    def test_every_part_is_counted_with_the_instances_kept(self) -> None:
+        rows, mode = _rows(), _view()
+        culler = GPUCulledRows(InstanceBuffer(), reach=REACH, rise=RISE, drop=DROP,
+                               vertices=(3, 6))
+        culler.stage(rows)
+        culler.show(mode)
+        kept = len(_expected(rows, mode))
+        assert culler.visible_count() == kept
+        assert culler.visible_count(part=1) == kept
+
+    def test_each_part_is_drawn_with_its_own_vertex_count(self) -> None:
+        culler = GPUCulledRows(InstanceBuffer(), reach=REACH, rise=RISE, vertices=(3, 6))
+        culler.stage(_rows(count=10))
+        culler.show(types.SimpleNamespace())
+        assert [culler.vertex_count(part) for part in (0, 1)] == [3, 6]
+
+    def test_a_view_drawn_into_a_shadow_map_is_not_cut_by_the_cameras(self) -> None:
+        rows, mode = _rows(), _view()
+        culler = _culler(rows)
+        mode.shadow_pass = True
+        assert culler.show(mode) == len(rows)
+        assert culler.visible_count() == len(rows)
+
+
+@pytest.mark.usefixtures('window')
+class TestTrees:
+    def test_the_picture_is_the_one_every_tree_makes(self, tmp_path, monkeypatch) -> None:
+        mode = _mode()
+        with monkeypatch.context() as unculled:
+            unculled.setattr(gpucull, 'gpu_cull_is_available', lambda: False)
+            everything = _picture(_trees(tmp_path), mode)
+        node = _trees(tmp_path)
+        culled = _picture(node, mode)
+        assert node._sp[0]['cull'].visible_count() > 0  # noqa: SLF001 the culler a species draws with
+        assert (everything[..., :3] != 0.1).any()
+        assert np.array_equal(everything, culled)
+
+    def test_the_gpu_is_handed_fewer_trees(self, tmp_path) -> None:
+        node = _trees(tmp_path)
+        _picture(node, _mode())
+        assert 0 < node._sp[0]['cull'].visible_count() < 0.6 * 60  # noqa: SLF001 the culler a species draws with
+
+    def test_the_trees_that_cast_a_shadow_are_all_of_them(self, tmp_path) -> None:
+        node = _trees(tmp_path)
+        shadow = _mode()
+        shadow.shadow_pass = True
+        node.render(shadow)
+        assert gl.glGetError() == gl.GL_NO_ERROR
+        assert node._sp[0]['cull'].visible_count() == 60  # noqa: SLF001 the culler a species draws with
+
+    def test_an_empty_species_draws_nothing(self, tmp_path) -> None:
+        node = _trees(tmp_path)
+        node.stage({0: np.zeros((0, 6), 'f4')})
+        assert node.render(_mode()) == 1
+        assert gl.glGetError() == gl.GL_NO_ERROR
+
+    def test_a_node_made_again_after_dispose_draws_its_staged_set(self, tmp_path) -> None:
+        node = _trees(tmp_path)
+        mode = _mode()
+        before = _picture(node, mode)
+        node.dispose()
+        node.update(0.0, 0.0, radius=60.0)
+        assert np.array_equal(before, _picture(node, mode))

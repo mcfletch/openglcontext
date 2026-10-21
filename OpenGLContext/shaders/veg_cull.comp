@@ -24,14 +24,17 @@ layout(std430, binding = 0) readonly buffer Source {
 layout(std430, binding = 1) writeonly buffer Visible {
     float visible[];
 };
-// An indirect draw command: the vertex count, then the instance count this
-// pass adds to, then the fields that stay zero. Instances are counted in
-// copies of themselves when a shared draw sends each one to several views.
+// Indirect draw commands, five words each: the vertex count, then the instance
+// count this pass adds to, then the fields that stay zero. A set drawn in
+// several parts has a command for each, all counting the same instances.
+// Instances are counted in copies of themselves when a shared draw sends each
+// one to several views.
 layout(std430, binding = 2) buffer Command {
     uint command[];
 };
 
 const int ROW = 6;
+const int COMMAND_WORDS = 5;
 const int MAX_PLANES = 8;
 
 uniform vec4 uPlanes[MAX_PLANES];
@@ -43,6 +46,7 @@ uniform vec3 uDisc;
 uniform vec3 uExtent;
 uniform int uCount;
 uniform uint uCopies;
+uniform int uCommands;
 
 void main() {
     uint at = gl_GlobalInvocationID.x;
@@ -70,6 +74,9 @@ void main() {
         }
     }
     uint slot = atomicAdd(command[1], uCopies) / uCopies;
+    for (int part = 1; part < uCommands; ++part) {
+        atomicAdd(command[part * COMMAND_WORDS + 1], uCopies);
+    }
     int out_ = int(slot) * ROW;
     for (int k = 0; k < ROW; ++k) {
         visible[out_ + k] = source[base + k];

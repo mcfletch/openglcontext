@@ -16,8 +16,10 @@ keeps the processor's.
 """
 from __future__ import annotations
 
+import ctypes
 import logging
 import os
+from collections.abc import Sequence
 from typing import Any, Optional, Protocol
 
 import numpy as np
@@ -49,6 +51,8 @@ MAX_PLANES = 8
 #: Bytes of an indirect draw command: five 32-bit words, of which an arrays draw
 #: reads four.
 COMMAND_BYTES = 20
+#: The most parts one set is drawn in.
+MAX_PARTS = 4
 #: How much larger than the set the buffer it is drawn from is made, so that a set
 #: that grows by a scatter does not make a new store every time.
 HEADROOM = 1.5
@@ -63,14 +67,14 @@ class RowCuller(Protocol):
 
     def show(self, mode: Any, disc: Optional[Disc] = None) -> int: ...
 
-    def draw_arrays(self, copies: int = 1) -> None: ...
+    def draw_arrays(self, copies: int = 1, part: int = 0) -> None: ...
 
-    def draw_elements(self, copies: int = 1) -> None: ...
+    def draw_elements(self, copies: int = 1, part: int = 0) -> None: ...
 
     def release(self) -> None: ...
 
 
-_UNIFORMS = ('uPlanes', 'uPlaneCount', 'uDisc', 'uExtent', 'uCount', 'uCopies')
+_UNIFORMS = ('uPlanes', 'uPlaneCount', 'uDisc', 'uExtent', 'uCount', 'uCopies', 'uCommands')
 _AVAILABLE: Optional[bool] = None
 #: Each context's culling program and its uniforms' locations.
 _PROGRAMS: dict[Any, tuple[int, dict[str, int]]] = {}
@@ -146,8 +150,10 @@ class GPUCulledRows:
     Takes what :class:`~OpenGLContext.scenegraph.vegetation.viewcull.CulledRows` does: the
     ``buffer`` the draw reads its instance attributes from, how far an instance reaches
     sideways, above and below its base point (``reach``, ``rise`` and ``drop``, each for a
-    scale of one), and how many ``triangles`` one instance draws. Each instance is tested
-    by its own box rather than a cluster's.
+    scale of one), and how many ``triangles`` one instance draws. A set drawn in several
+    parts of different sizes, as a tree is in a trunk and a crown, gives the vertex count of
+    each as ``vertices`` instead; every part is counted with the same instances. Each
+    instance is tested by its own box rather than a cluster's.
 
     :meth:`stage` takes the set, and :meth:`show` runs the pass for the view of ``mode`` and
     the ``disc``. :meth:`draw_arrays` and :meth:`draw_elements` then issue the draw from the
@@ -158,7 +164,8 @@ class GPUCulledRows:
     """
 
     def __init__(self, buffer: InstanceBuffer, reach: float, rise: float,
-                 drop: float = 0.0, enabled: bool = True, triangles: int = 1) -> None:
+                 drop: float = 0.0, enabled: bool = True, triangles: int = 1,
+                 vertices: Optional[Sequence[int]] = None) -> None:
         self.buffer = buffer
         self.reach = float(reach)
         self.rise = float(rise)
@@ -171,24 +178,34 @@ class GPUCulledRows:
         self._copies = 1
         self._source = 0
         self._command = 0
-        self._fresh = np.array([3 * self.triangles, 0, 0, 0, 0], np.uint32)
+        counts = tuple(int(n) for n in vertices) if vertices else (3 * self.triangles,)
+        if not 0 < len(counts) <= MAX_PARTS:
+            raise ValueError('a set is drawn in 1 to %d parts, not %d' % (MAX_PARTS, len(counts)))
+        self._fresh = np.zeros((len(counts), 5), np.uint32)
+        self._fresh[:, 0] = counts
 
     # -- the set ---------------------------------------------------------------
     def stage(self, rows: np.ndarray) -> None:
         """Take a new set; the next :meth:`show` uploads it."""
         self._rows = rows
         self._dirty = True
+        self.buffer.count = len(rows)
+
+    @property
+    def count(self) -> int:
+        """How many rows are staged, which is as many as can be drawn."""
+        return len(self._rows)
 
     def _upload(self) -> None:
         """Put the staged set on the GPU, with room in the draw's buffer for all of it."""
         rows = np.ascontiguousarray(self._rows, np.float32).reshape(-1, INSTANCE_FLOATS)
         self._dirty = False
         self._count = len(rows)
-        self.buffer.count = 0
         if not self._source:
             self._source, self._command = (int(name) for name in glGenBuffers(2))
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, self._command)
-            glBufferData(GL_SHADER_STORAGE_BUFFER, COMMAND_BYTES, self._fresh, GL_DYNAMIC_COPY)
+            glBufferData(GL_SHADER_STORAGE_BUFFER, self._fresh.nbytes, self._fresh,
+                         GL_DYNAMIC_COPY)
         if not self._count:
             return
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, self._source)
@@ -216,7 +233,7 @@ class GPUCulledRows:
 
     def _planes(self, mode: Any) -> Optional[np.ndarray]:
         held = getattr(mode, 'frustum', None)
-        if held is None:
+        if held is None or getattr(mode, 'shadow_pass', False):
             return None
         planes = np.asarray(held.planes, np.float32).reshape(-1, 4)[:MAX_PLANES]
         return planes if len(planes) else None
@@ -226,7 +243,7 @@ class GPUCulledRows:
         current = int(glGetIntegerv(GL_CURRENT_PROGRAM))
         glUseProgram(program)
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, self._command)
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, COMMAND_BYTES, self._fresh)
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, self._fresh.nbytes, self._fresh)
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, self._source)
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, self.buffer.id)
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, self._command)
@@ -239,26 +256,31 @@ class GPUCulledRows:
         glUniform3f(U['uExtent'], self.reach, self.rise, self.drop)
         glUniform1i(U['uCount'], self._count)
         glUniform1ui(U['uCopies'], self._copies)
+        glUniform1i(U['uCommands'], len(self._fresh))
         glDispatchCompute((self._count + GROUP - 1) // GROUP, 1, 1)
         glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_COMMAND_BARRIER_BIT)
         glUseProgram(current)
 
     # -- drawing ---------------------------------------------------------------
-    def draw_arrays(self, copies: int = 1) -> None:  # noqa: ARG002 the command holds the copies
+    def draw_arrays(self, copies: int = 1, part: int = 0) -> None:  # noqa: ARG002 the command holds the copies
         """Draw the instances kept as triangles read in order, from the vertex array bound."""
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, self._command)
-        glDrawArraysIndirect(GL_TRIANGLES, None)
+        glDrawArraysIndirect(GL_TRIANGLES, ctypes.c_void_p(part * COMMAND_BYTES))
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0)
 
-    def draw_elements(self, copies: int = 1) -> None:  # noqa: ARG002 the command holds the copies
+    def draw_elements(self, copies: int = 1, part: int = 0) -> None:  # noqa: ARG002 the command holds the copies
         """Draw the instances kept as indexed triangles, from the vertex array bound."""
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, self._command)
-        glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, None)
+        glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, ctypes.c_void_p(part * COMMAND_BYTES))
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0)
 
+    def vertex_count(self, part: int = 0) -> int:
+        """The vertices each instance of ``part`` is drawn with."""
+        return int(self._fresh[part, 0])
+
     # -- reading back, for a test or a debugging aid -----------------------------
-    def visible_count(self) -> int:
-        """The instance count the draw is issued with: instances kept, times the views each goes to.
+    def visible_count(self, part: int = 0) -> int:
+        """The instance count ``part`` is drawn with: instances kept, times the views each goes to.
 
         Reads the command back, which waits for the GPU.
         """
@@ -268,8 +290,8 @@ class GPUCulledRows:
             return 0
         glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT)
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, self._command)
-        data = glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, COMMAND_BYTES)
-        return int(np.frombuffer(data, np.uint32)[1])
+        data = glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, self._fresh.nbytes)
+        return int(np.frombuffer(data, np.uint32).reshape(-1, 5)[part, 1])
 
     def visible_rows(self) -> np.ndarray:
         """The rows kept, in the order the pass packed them. Waits for the GPU."""

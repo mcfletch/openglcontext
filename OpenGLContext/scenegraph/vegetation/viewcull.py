@@ -166,14 +166,14 @@ class CulledRows:
         self._uploaded = True
         return int(self.buffer.count)
 
-    def draw_arrays(self, copies: int = 1) -> None:
+    def draw_arrays(self, copies: int = 1, part: int = 0) -> None:  # noqa: ARG002 one part is drawn
         """Draw the rows streamed as triangles read in order, from the vertex array bound.
 
         ``copies`` is how many times over each instance is drawn in a shared draw of views.
         """
         glDrawArraysInstanced(GL_TRIANGLES, 0, 3 * self.triangles, int(self.buffer.count) * copies)
 
-    def draw_elements(self, copies: int = 1) -> None:
+    def draw_elements(self, copies: int = 1, part: int = 0) -> None:  # noqa: ARG002 one part is drawn
         """Draw the rows streamed as indexed triangles, from the vertex array bound."""
         glDrawElementsInstanced(GL_TRIANGLES, 3 * self.triangles, GL_UNSIGNED_INT, None,
                                 int(self.buffer.count) * copies)
