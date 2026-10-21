@@ -157,6 +157,14 @@ Lighting and shadows
      - The number of lights the shader binds in one frame, the headlight
        among them. A lower value is faster in a scene with many lights. The shader's own maximum still
        applies.
+   * - ``OPENGLCONTEXT_SHADER_FEATURES``
+     - ``all``, ``none``, or a list
+     - ``all``
+     - The optional parts the PBR program is compiled with: a comma-separated list of
+       ``clearcoat``, ``sheen``, ``transmission``, ``extension-textures``,
+       ``texture-layers``, ``planar-reflection``, ``zone-probes`` and ``volume-scatter``. A part
+       left out lightens every pixel's shading, and a scene that draws one it left out draws
+       without it. It takes effect when the program is compiled, at the first frame.
    * - ``OPENGLCONTEXT_IBL``
      - ``auto``, ``full``, ``analytic``, ``off``
      - ``auto``
