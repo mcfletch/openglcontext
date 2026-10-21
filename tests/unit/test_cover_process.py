@@ -119,6 +119,21 @@ class TestWhenTheCoverUsesIt:
         assert remote._remote is None  # noqa: SLF001 the cover has stopped asking
         assert process.closed
 
+    def test_a_request_that_fails_after_the_cover_has_a_new_process_does_not_stop_the_new_one(
+            self, child) -> None:
+        """A worker still waiting on the old process when the cover is given another."""
+        remote = local_cover()
+        old, new = child('faulty'), child()
+        remote.use_process(old)
+        old.wait_until_ready()
+        new.wait_until_ready()
+        stale = remote._remote  # noqa: SLF001 the process a request in flight was sent to
+        remote.use_process(new)
+        remote._stop_using_process(RuntimeError('the old one stopped'), stale)  # noqa: SLF001 what a worker does when its request fails
+        assert remote._remote is new  # noqa: SLF001 the cover keeps asking the new process
+        assert not new.closed
+        assert stale.closed
+
     def test_a_child_that_has_been_closed_is_not_asked(self, child) -> None:
         inline, remote, process = self._both(child)
         process.wait_until_ready()

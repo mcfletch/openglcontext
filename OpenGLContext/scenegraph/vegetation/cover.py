@@ -725,7 +725,7 @@ class GroundCover(Group):
             try:
                 found = remote.disc(self.rungs.index(rung), role, x, z, radius, density, height)
             except CoverProcessError as err:
-                self._stop_using_process(err)
+                self._stop_using_process(err, remote)
         if found is None:
             found = self._blocks_for(rung, role, radius, density, height).disc(x, z, radius)
         return found if len(found) == 4 else (*found, None)
@@ -748,12 +748,14 @@ class GroundCover(Group):
         """
         self._remote = process
 
-    def _stop_using_process(self, error: Exception) -> None:
-        """Scatter in line from now on: the process stopped, or could not answer."""
-        log.warning('ground cover scatters in line: its process stopped: %s', error)
-        remote, self._remote = self._remote, None
-        if remote is not None:
-            remote.close()
+    def _stop_using_process(self, error: Exception, remote: CoverProcess) -> None:
+        """Scatter in line from now on, if ``remote`` is still the process asked: it stopped, or
+        could not answer. A request that fails after the cover was given another process is the
+        old one's, and the new one is left as it is."""
+        if self._remote is remote:
+            log.warning('ground cover scatters in line: its process stopped: %s', error)
+            self._remote = None
+        remote.close()
 
     def _replace_tables(self) -> None:
         """Start the tables of kept blocks again, counting what the old ones made."""
@@ -904,7 +906,7 @@ class GroundCover(Group):
                 remote.warm(rung, role, x, z, radius, density, height)
                 return
             except CoverProcessError as err:
-                self._stop_using_process(err)
+                self._stop_using_process(err, remote)
         self._warm_here(rung, role, x, z, radius, density, height)
 
     def _warm_here(self, rung: int, role: str, x: float, z: float, radius: float,
