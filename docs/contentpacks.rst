@@ -567,6 +567,23 @@ variable:
 
    store = ContentStore('glisteel', search=[beside_the_executable])
 
+A machine makes no request for a pack it already holds, in any of three forms:
+
+* unpacked in a searched directory, as above;
+* installed in the store, where an earlier run or ``release-assets.py
+  --install`` put it, provided the install record names the same digest (or the
+  same URL, for a pack that declares no digest) as the registry;
+* as the archive in the download cache under the URL the registry names. The
+  next start unpacks it into the store, checks its digest and fetches nothing.
+
+Copying the store's ``content`` directory, or the download cache, from a
+machine that has the packs to one that is offline is therefore enough. The
+same holds for the other downloads the engine makes (glTF sample models, HDR
+panoramas, tiles, the engine's texture pack and ambientCG materials): each is
+looked for on disk first, and the network is used only when it is not there.
+An archive in the cache whose digest differs from the registry's is not the
+pack the registry names, so it is removed and fetched again.
+
 .. _contentpacks-where:
 
 Where things are stored
