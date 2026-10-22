@@ -144,6 +144,9 @@ class DebugPanel(HUDWidget):
         #: What the providers last said.  Not a field: it is this frame's
         #: reading, not authored data.
         self.sections: list[DebugSection] = []
+        #: The rows the column widths were last measured for, and those widths.
+        self._shown: tuple[tuple[str, tuple[str, ...]], ...] = ()
+        self._widths: tuple[int, int] = (0, 0)
 
     # -- measurement ------------------------------------------------------
     def columnWidths(self, metrics: FontMetrics) -> tuple[int, int]:
@@ -151,7 +154,15 @@ class DebugPanel(HUDWidget):
 
         One pair for the whole overlay rather than per section, so the values
         of every subsystem line up in one column and the eye runs down it.
+
+        A column keeps the widest it has been while the same rows are shown:
+        a proportional font gives ``99.99`` and ``100.00`` different widths,
+        and a plate that resized with every reading could not be read.  A
+        change of rows -- a section added or taken away, a new name -- starts
+        the measurement again.
         """
+        shown = tuple((section.title, tuple(name for name, _ in section.rows))
+                      for section in self.sections)
         labels = 0
         values = 0
         for section in self.sections:
@@ -159,7 +170,12 @@ class DebugPanel(HUDWidget):
             for name, value in section.rows:
                 labels = max(labels, metrics.text_width(name))
                 values = max(values, metrics.text_width(value))
-        return (labels, values)
+        if shown == self._shown:
+            labels = max(labels, self._widths[0])
+            values = max(values, self._widths[1])
+        self._shown = shown
+        self._widths = (labels, values)
+        return self._widths
 
     def lineCount(self) -> int:
         """Headings and rows together -- how many lines will be drawn."""

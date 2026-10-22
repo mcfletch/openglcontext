@@ -145,6 +145,34 @@ class TestLayout:
         overlay.refresh()
         assert overlay.panel.natural_size(metrics)[0] > narrow
 
+    def test_the_plate_does_not_shrink_as_a_value_gets_shorter(self, overlay,
+                                                              metrics):
+        readings = iter([[('fps', '100.00')], [('fps', '99.99')],
+                         [('fps', '9.99')]])
+        overlay.register('Frame', lambda: next(readings))
+        widths = []
+        for _frame in range(3):
+            overlay.refresh()
+            widths.append(overlay.panel.natural_size(metrics)[0])
+        assert widths[0] == widths[1] == widths[2]
+
+    def test_the_plate_still_grows_for_a_longer_value(self, overlay, metrics):
+        readings = iter([[('fps', '9.99')], [('fps', '100.00')]])
+        overlay.register('Frame', lambda: next(readings))
+        overlay.refresh()
+        narrow = overlay.panel.natural_size(metrics)[0]
+        overlay.refresh()
+        assert overlay.panel.natural_size(metrics)[0] > narrow
+
+    def test_the_plate_shrinks_when_the_rows_change(self, overlay, metrics):
+        overlay.register('Map', lambda: [('name', 'a very much longer name')])
+        overlay.refresh()
+        wide = overlay.panel.natural_size(metrics)[0]
+        overlay.unregister('Map')
+        overlay.register('Map', lambda: [('id', 'x')])
+        overlay.refresh()
+        assert overlay.panel.natural_size(metrics)[0] < wide
+
     def test_two_sections_are_taller_than_one(self, overlay, metrics):
         overlay.register('One', lambda: [('a', 1)])
         overlay.refresh()

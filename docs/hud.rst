@@ -6,7 +6,9 @@ HUD & developer overlay
 A **HUD layer** draws game information over the live world: a reticule, a
 health bar, an ammunition count, a message that fades. It never takes input.
 The **developer overlay** is a HUD layer that shows diagnostics, such as the
-frame rate, from registered providers. HUD layers are drawn under any open
+frame rate, from registered providers. Its plate widens for a longer reading
+and keeps that width while the same rows are shown, so changing digits do not
+resize it; adding or removing a row measures it afresh. HUD layers are drawn under any open
 :doc:`overlay panel <overlayui>`, by the same batched renderer, in the same
 few draw calls.
 
