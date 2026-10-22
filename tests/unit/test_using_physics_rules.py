@@ -156,12 +156,32 @@ class TestTheKick:
         course.fire()
         assert course.position == pytest.approx(course.muzzle, abs=1e-6)
 
-    def test_the_aim_is_locked_while_the_ball_is_in_the_air(self):
+    def test_the_aim_can_be_adjusted_while_the_ball_is_in_the_air(self):
         course = aimed_game()
         course.fire()
         before = course.aim.bearing
         course.adjust(bearing=5)
-        assert course.aim.bearing == before
+        course.set_aim('power', 30.0)
+        assert course.aim.bearing == before + 5
+        assert course.aim.power == 30.0
+        assert tuple(course.course.gun.along) == pytest.approx(
+            along(course.aim.bearing, course.aim.elevation), abs=1e-6)
+
+    def test_adjusting_the_aim_does_not_change_the_ball_in_the_air(self):
+        course = aimed_game()
+        course.fire()
+        velocity = tuple(course.world.linear_velocity[course.ball.index])
+        course.adjust(bearing=5, elevation=10, power=10)
+        assert tuple(course.world.linear_velocity[course.ball.index]) == velocity
+        assert course.state == 'flying'
+
+    def test_the_ball_selected_in_flight_is_the_next_one_fired(self):
+        course = aimed_game(level=WALL)
+        course.fire()
+        course.select('rubber')
+        shoot(course, 8.0)
+        course.fire()
+        assert course.flying.name == 'rubber'
 
     def test_a_new_shot_takes_the_last_ball_out_of_the_world(self):
         course = aimed_game()
@@ -1075,13 +1095,13 @@ class TestTheWheels:
         assert tuple(course.course.gun.turn.rotation) == pytest.approx(
             (0, 1, 0, math.radians(15.0)), abs=1e-5)
 
-    def test_a_wheel_turned_while_the_ball_is_in_the_air_moves_nothing(self):
+    def test_a_wheel_turned_while_the_ball_is_in_the_air_sets_the_next_shot(self):
         course = game.Game(random.Random(3))
         wheels = game.Wheels(course.set_aim)
         wheels.show(course.aim)
         course.fire()
         drag(wheels.wheels[2], 100.0)
-        assert course.aim.power == game.Aim().power
+        assert course.aim.power > game.Aim().power
 
 
 @pytest.mark.usefixtures('gl_context')

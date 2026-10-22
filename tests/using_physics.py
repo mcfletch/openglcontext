@@ -920,10 +920,9 @@ class Game:
         return tuple(float(part) for part in self.world.position[self.ball.index])
 
     def adjust(self, **change: float) -> None:
-        """Move the aim, unless a ball is in the air."""
-        if self.state != 'flying':
-            self.aim.adjust(**change)
-            self.point()
+        """Move the aim and turn the cannon to it; a ball already in the air keeps its course."""
+        self.aim.adjust(**change)
+        self.point()
 
     def set_aim(self, name: str, value: float) -> None:
         """Move one field of the aim to ``value``, as far as `adjust` allows."""
@@ -1215,7 +1214,7 @@ class TestContext(BaseContext):
 
     def OnWheel(self, name, value):
         '''A wheel sets the field a pair of keys steps, through the same
-        `adjust`, so it is locked while a ball is in the air as they are.'''
+        `adjust`, so either can set up the next shot while a ball is in the air.'''
         self.game.set_aim(name, value)
         self.update()
 
