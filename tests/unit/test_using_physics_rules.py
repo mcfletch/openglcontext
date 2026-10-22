@@ -1,9 +1,8 @@
-"""The physics cannon game's rules, with no window: the kick, the hit and the misses.
+"""The physics cannon game's rules, with no window: the balls, the courses and the score.
 
 ``tests/using_physics.py`` leaves every question about the flight to the
 physics world, so these fire real shots and read what the world answered.
 """
-import functools
 import importlib.util
 import math
 import random
@@ -28,6 +27,26 @@ def _load():
 
 game = _load()
 
+#: The ball kinds, and the levels by what is in them.
+BALLS = [ammo.name for ammo in game.AMMO]
+OPEN, WALL, CRATES, CROSSWIND, FERRY, PORTCULLIS = range(6)
+
+#: The shots that win each course, for ``Game(random.Random(1), level=n)``, in
+#: the order they are fired: the ball, the bearing as an offset from straight
+#: at the target, the elevation, the power and the seconds to wait before
+#: firing.  Each power is in the middle of a run of powers that win, found by
+#: ``find_shot`` below.  The crates cover the mark on course 3, so a lead ball
+#: clears them for the steel one.  When the physics changes enough to move
+#: them, ``find_shot`` finds new ones.
+SOLUTIONS: dict[int, list[tuple[str, float, float, float, float]]] = {
+    OPEN: [('steel', 0.0, 45.0, 22.913, 0.0)],
+    WALL: [('steel', 0.0, 45.0, 22.913, 0.0)],
+    CRATES: [('lead', 0.0, 45.0, 22.86, 0.0), ('steel', 0.0, 45.0, 22.86, 0.0)],
+    CROSSWIND: [('steel', 1.0, 30.0, 24.42, 0.0)],
+    FERRY: [('steel', 0.0, 30.0, 23.96, 2.0)],
+    PORTCULLIS: [('steel', 1.0, 30.0, 24.4, 3.0)],
+}
+
 
 def along(bearing, elevation):
     """The unit vector a barrel at ``bearing`` and ``elevation`` degrees points along.
@@ -41,49 +60,90 @@ def along(bearing, elevation):
             -math.sin(turn) * math.cos(rise))
 
 
-def aimed_game(seed=1):
+def toward_target(course):
+    """The bearing that points the cannon at the foot of the target."""
+    return math.degrees(math.atan2(-(course.target.z - course.cannon.z),
+                                   course.target.x - course.cannon.x))
+
+
+def aimed_game(seed=1, level=OPEN, ammo='steel'):
     """A course with the cannon turned along the line to the target, at 45 degrees."""
-    course = game.Game(random.Random(seed))
-    course.aim.bearing = math.degrees(math.atan2(-(course.target.z - course.cannon.z),
-                                                 course.target.x - course.cannon.x))
+    course = game.Game(random.Random(seed), level=level)
+    course.select(ammo)
+    course.aim.bearing = toward_target(course)
     course.aim.elevation = 45.0
     course.point()
     return course
 
 
-def shoot(course, power=None, bearing=None):
-    """Fire and run the world until the shot is decided; the game's state: ``won`` for a hit."""
+def shoot(course, power=None, bearing=None, ammo=None, elevation=None, wait=0.0):
+    """Fire after ``wait`` seconds and run the world until the shot is decided.
+
+    The game's state is ``cleared`` for a hit.  Waiting is how a shot is
+    timed against a sliding target or a gate.
+    """
     course.state = 'aiming'
-    if power is not None:
-        course.aim.power = power
-    if bearing is not None:
-        course.aim.bearing = bearing
+    for _ in range(round(wait * 20)):
+        course.tick(0.05)
+    if ammo is not None:
+        course.select(ammo)
+    for name, value in (('power', power), ('bearing', bearing), ('elevation', elevation)):
+        if value is not None:
+            setattr(course.aim, name, value)
     course.point()
     course.fire()
     for _ in range(int(game.LONGEST / 0.05) + 10):
-        course.tick(0.05)
         if course.state != 'flying':
             break
+        course.tick(0.05)
     return course.state
 
 
-@functools.cache
-def winning_power(seed=1):
-    """The power at which the physics world lands the ball on the target.
+def vacuum_power(course, elevation):
+    """The power that would land a ball on the target if the air and the hazards were not there."""
+    horizontal = math.hypot(course.target.x - course.cannon.x, course.target.z - course.cannon.z)
+    rise = course.target.top + game.BALL_RADIUS - course.muzzle[1]
+    angle = math.radians(elevation)
+    room = 2.0 * math.cos(angle) ** 2 * (horizontal * math.tan(angle) - rise)
+    return math.sqrt(9.81 * horizontal ** 2 / room)
 
-    Found by firing, a shot at a time, since the world is what says whether
-    one hits.  The same course is played by every test, so it is found once.
+
+def find_shot(seed, level, ammo='steel', elevation=45.0, offset=0.0, wait=0.0,
+              spread=1.5, step=0.1):
+    """Every power near the vacuum one that wins, found by firing.
+
+    The bearing is ``offset`` degrees from straight at the target, and the
+    shot is fired after ``wait`` seconds.
     """
-    course = aimed_game(seed)
-    for tenth in range(100, 400, 2):
-        if shoot(course, tenth / 10.0) == 'won':
-            return tenth / 10.0
-    pytest.fail('no power in range hit the target')
+    probe = aimed_game(seed, level, ammo)
+    centre = vacuum_power(probe, elevation)
+    wins = []
+    for index in range(int(2 * spread / step) + 1):
+        power = centre - spread + index * step
+        course = aimed_game(seed, level, ammo)
+        outcome = shoot(course, power, course.aim.bearing + offset, elevation=elevation,
+                        wait=wait)
+        if outcome in ('cleared', 'finished'):
+            wins.append(round(power, 3))
+    return wins
+
+
+def winning_power():
+    """The power at which the physics world lands the ball on the open course's target."""
+    return SOLUTIONS[OPEN][0][3]
+
+
+def put(course, point):
+    """Stand the ball at ``point`` with no velocity."""
+    index = course.ball.index
+    course.world.place_body(index, position=point)
+    course.world.linear_velocity[index] = 0.0
 
 
 class TestTheKick:
-    def test_the_impulse_gives_the_ball_the_power_along_the_barrel(self):
-        course = aimed_game()
+    @pytest.mark.parametrize('ammo', BALLS)
+    def test_the_impulse_gives_every_ball_the_power_along_the_barrel(self, ammo):
+        course = aimed_game(ammo=ammo)
         course.aim.power = 20.0
         course.fire()
         expected = along(course.aim.bearing, course.aim.elevation)
@@ -111,13 +171,85 @@ class TestTheKick:
         assert course.world.live_body_count == before
 
 
-class TestWhatThePhysicsDecides:
-    def test_a_ball_that_comes_to_rest_over_the_target_is_a_hit(self):
-        course = aimed_game()
-        assert shoot(course, winning_power()) == 'won'
+class TestTheBalls:
+    def test_the_three_kinds_are_light_and_bouncy_through_to_heavy_and_dead(self):
+        steel, rubber, lead = (game.AMMO_BY_NAME[name] for name in ('steel', 'rubber', 'lead'))
+        assert rubber.mass < steel.mass < lead.mass
+        assert rubber.material.restitution > steel.material.restitution > lead.material.restitution
 
-    def test_too_little_power_is_a_miss(self):
-        assert shoot(aimed_game(), winning_power() - 3.0) == 'aiming'
+    def test_each_kind_has_a_key_and_a_look(self):
+        assert list(game.SELECT_KEYS.values()) == BALLS
+        assert all(ammo.look in game.looks() for ammo in game.AMMO)
+
+    def hops(self, ammo, onto='ground'):
+        """How high a ball dropped from 6 m rises after its first bounce, in metres."""
+        course = aimed_game(level=FERRY, ammo=ammo)
+        course.fire()
+        spot = course.body_of(onto).transform.translation
+        far = 60.0 if onto == 'ground' else 0.0
+        put(course, (spot[0], 6.0, spot[2] + far))
+        before, peak, bounced = 0.0, 0.0, False
+        for _ in range(300):
+            course.tick(1 / 60)
+            speed = float(course.world.linear_velocity[course.ball.index][1])
+            height = float(course.world.position[course.ball.index][1])
+            bounced = bounced or (before < -1.0 and speed > 0.0)
+            if bounced:
+                peak = max(peak, height)
+                if speed <= 0.0:
+                    break
+            before = speed
+        return peak
+
+    def test_rubber_hops_higher_than_steel_and_lead_stays_down(self):
+        rubber, steel, lead = (self.hops(name) for name in ('rubber', 'steel', 'lead'))
+        assert rubber > steel > lead
+
+    def test_the_springboard_throws_rubber_higher_than_the_ground_does(self):
+        assert self.hops('rubber', 'springboard') > 2.0 * self.hops('rubber')
+
+    def struck(self, ammo):
+        """The fastest a crate is moving after a ball fired at 30 m/s into the stack."""
+        course = aimed_game(level=PORTCULLIS, ammo=ammo)
+        course.world.gravity.gravity = 0.0
+        course.fire()
+        centre = np.mean([course.world.position[body.index] for body in course.crates], axis=0)
+        put(course, centre - (6.0, 0.0, 0.0))
+        course.world.linear_velocity[course.ball.index] = (30.0, 0.0, 0.0)
+        fastest = 0.0
+        for _ in range(60):
+            course.tick(1 / 60)
+            speeds = [np.linalg.norm(course.world.linear_velocity[body.index])
+                      for body in course.crates]
+            fastest = max(fastest, max(speeds))
+        return fastest
+
+    def test_a_heavy_ball_sends_crates_flying_faster_than_a_light_one(self):
+        assert self.struck('lead') > 1.5 * self.struck('rubber')
+
+    def test_the_wind_moves_a_light_ball_further_than_a_heavy_one(self):
+        drift = {}
+        for ammo in BALLS:
+            course = aimed_game(level=CROSSWIND, ammo=ammo)
+            course.world.gravity.gravity = 0.0
+            course.aim.bearing, course.aim.elevation = 0.0, 20.0
+            course.point()
+            course.fire()
+            for _ in range(30):
+                course.tick(1 / 60)
+            drift[ammo] = float(course.world.linear_velocity[course.ball.index][2])
+            mass = game.AMMO_BY_NAME[ammo].mass
+            assert drift[ammo] == pytest.approx(course.course.wind / mass * 0.5, rel=0.05)
+        wind = course.course.wind
+        assert abs(drift['rubber']) > abs(drift['steel']) > abs(drift['lead'])
+        assert all(np.sign(value) == np.sign(wind) for value in drift.values())
+
+
+class TestWhatTheShotDoes:
+    def test_a_ball_that_comes_to_rest_short_of_the_target_is_a_miss(self):
+        course = aimed_game()
+        assert shoot(course, winning_power() - 3.0) == 'aiming'
+        assert course.message == 'Missed.'
 
     def test_too_much_power_is_a_miss(self):
         assert shoot(aimed_game(), winning_power() + 4.0) == 'aiming'
@@ -128,89 +260,85 @@ class TestWhatThePhysicsDecides:
         power = winning_power()
         assert shoot(course, power, course.aim.bearing + turn) == 'aiming'
 
+    def test_a_ball_that_touches_the_ground_is_still_flying(self):
+        heard = []
+        course = aimed_game()
+        course.on_event = lambda kind, detail=None: heard.append((kind, course.state))
+        shoot(course, winning_power() - 3.0)
+        assert ('impact', 'flying') in heard
+        assert heard[-1] == ('miss', 'aiming')
+
+    def test_a_ball_fired_into_its_own_tower_is_a_miss(self):
+        course = aimed_game()
+        assert shoot(course, 10.0, elevation=-10.0) == 'aiming'
+
+    def test_a_ball_that_flies_too_long_is_a_miss(self, monkeypatch):
+        monkeypatch.setattr(game, 'LONGEST', 2.0)
+        course = aimed_game()
+        course.world.gravity.gravity = 0.0
+        assert shoot(course, 40.0, 0.0) == 'aiming'
+
+    def test_a_ball_that_falls_out_of_the_world_is_a_miss(self):
+        course = aimed_game()
+        course.fire()
+        course.world.place_body(course.ball.index, position=(0.0, game.FALLEN - 1.0, 0.0))
+        course.tick(1 / 60)
+        assert course.state == 'aiming'
+
+    def test_a_ball_that_stops_is_a_miss_after_it_has_been_still_a_while(self):
+        course = aimed_game()
+        course.fire()
+        put(course, (0.0, game.BALL_RADIUS, 0.0))
+        course.tick(game.SETTLED_TIME / 2.0)
+        assert course.state == 'flying'
+        course.tick(game.SETTLED_TIME)
+        assert course.state == 'aiming'
+
     def test_a_miss_allows_another_shot(self):
         course = aimed_game()
         assert shoot(course, 8.0) == 'aiming'
         course.fire()
         assert course.state == 'flying'
 
-    def test_a_ball_fired_into_its_own_tower_is_a_miss(self):
-        course = aimed_game()
-        course.aim.elevation = -10.0
-        assert shoot(course, 10.0) == 'aiming'
-
-    def test_a_ball_that_leaves_the_world_ends_the_shot(self):
-        course = aimed_game()
-        course.world.gravity.gravity = 0.0
-        assert shoot(course, 40.0, 0.0) == 'aiming'
-
-    def test_the_next_fire_after_a_win_lays_out_a_new_course(self):
-        course = aimed_game()
-        shoot(course, winning_power())
-        old = course.target
-        course.fire()
-        assert course.state == 'aiming'
-        assert course.target != old
-
-
-class TestTheScene:
-    def test_the_world_is_geometry_before_it_is_physics(self):
-        course = game.build_course(random.Random(5), game.looks())
-        assert len(course.solids) == 3          # the ground and the two towers
-        assert len(course.nodes) == 6           # and the target's mark and the cannon
-        assert node_mesh(course.pad) is not None
-
-    def test_the_courses_nodes_are_bodies_in_the_world(self):
-        course = aimed_game()
-        bound = {body.transform for body in course.manager.bodies}
-        assert set(course.course.solids) <= bound
-        assert course.course.pad in bound
-        assert course.course.pad not in course.course.nodes
-
-    def test_the_bodies_write_their_poses_onto_the_nodes(self):
-        course = aimed_game()
-        course.fire()
-        start = tuple(course.ball.transform.translation)
-        course.tick(0.5)
-        assert tuple(course.ball.transform.translation) != start
-
-    def test_a_hit_calls_on_success_and_a_miss_on_failure(self):
+    def test_the_events_of_a_shot_come_in_order(self):
         heard = []
         course = aimed_game()
-        course.on_success = lambda: heard.append('success')
-        course.on_failure = lambda: heard.append('failure')
-        shoot(course, 8.0)
+        course.on_event = lambda kind, detail=None: heard.append(kind)
         shoot(course, winning_power())
-        assert heard == ['failure', 'success']
+        assert heard[0] == 'fire'
+        assert heard[-1] == 'hit'
+        assert set(heard) <= {'fire', 'impact', 'hit'}
 
 
-class TestTheHitSlab:
-    """The trigger is a few centimetres over the target's top and 30 cm deep."""
+class TestTheMark:
+    """The mark is a slab a few centimetres over the target's top and 30 cm deep."""
+
+    def pad(self, course):
+        return course.course.kind('pad')[0].node
 
     def test_the_slab_stands_5_cm_over_the_top_and_reaches_30_cm_down(self):
         course = aimed_game()
-        low, high = node_mesh(course.course.pad)[0].min(axis=0), node_mesh(course.course.pad)[0].max(axis=0)
-        centre = course.course.pad.translation
+        points = node_mesh(self.pad(course))[0]
+        low, high = points.min(axis=0), points.max(axis=0)
+        centre = self.pad(course).translation
         top = course.target.top
         assert centre[1] + high[1] == pytest.approx(top + game.PAD_ABOVE, abs=1e-5)
         assert centre[1] + low[1] == pytest.approx(top - game.PAD_DEPTH, abs=1e-5)
-        assert tuple(high - low)[0] == pytest.approx(2 * game.TARGET_HALF)
+        assert tuple(high - low)[0] == pytest.approx(1.8 * game.TARGET_HALF)
 
-    def drop_at(self, height_over_top):
-        """A ball with no gravity, put at a height over the target's top; was it a hit?"""
+    def test_the_mark_is_drawn(self):
         course = aimed_game()
+        assert self.pad(course) in course.course.nodes
+
+    def drop_at(self, height_over_top, level=OPEN):
+        """A ball with no gravity, put at a height over the target's top; was it a hit?"""
+        course = aimed_game(level=level)
         course.world.gravity.gravity = 0.0
-        course.state = 'flying'
-        node = game.surfaces.shape(game.surfaces.sphere(game.BALL_RADIUS), course.look['steel'],
-                                   translation=(course.target.x,
-                                                course.target.top + height_over_top,
-                                                course.target.z))
-        course.ball = course.manager.attach(
-            node, game.model.Motion(type=game.model.DYNAMIC, mass=game.BALL_MASS),
-            strategy='primitive')
+        course.fire()
+        put(course, (course.target.x, course.target.top + height_over_top, course.target.z))
         for _ in range(10):
-            course.manager.advance(1 / 60)
-        return course.state == 'won'
+            course.tick(1 / 60)
+        return course.state in ('cleared', 'finished')
 
     def test_a_ball_resting_on_the_target_is_a_hit(self):
         assert self.drop_at(game.BALL_RADIUS)
@@ -218,8 +346,303 @@ class TestTheHitSlab:
     def test_a_ball_20_cm_clear_of_the_top_is_not(self):
         assert not self.drop_at(game.BALL_RADIUS + game.PAD_ABOVE + 0.20)
 
+    def test_crates_on_the_mark_are_not_a_hit(self):
+        course = aimed_game(level=CRATES)
+        course.fire()
+        put(course, (0.0, 5.0, 0.0))
+        for _ in range(30):
+            course.tick(1 / 60)
+        assert course.state == 'flying'
 
-class TestTheReport:
+    def test_a_ball_on_top_of_the_crates_is_not_a_hit(self):
+        assert not self.drop_at(2 * game.CRATE + game.BALL_RADIUS, level=CRATES)
+
+
+class TestTheScore:
+    def test_a_clear_pays_for_the_balls_left_over(self):
+        course = aimed_game()
+        shoot(course, winning_power())
+        assert course.state == 'cleared'
+        assert course.score == game.CLEAR_BONUS + game.PER_BALL * course.shots_left
+
+    def test_more_misses_first_pay_less(self):
+        first = aimed_game()
+        shoot(first, winning_power())
+        later = aimed_game()
+        shoot(later, 8.0)
+        shoot(later, winning_power())
+        assert later.score == first.score - game.PER_BALL
+
+    def land_on_mark(self, course):
+        course.fire()
+        put(course, (course.target.x, course.target.top + game.BALL_RADIUS, course.target.z))
+        course.tick(1 / 60)
+
+    def test_crates_knocked_off_their_place_are_paid_for(self):
+        course = aimed_game(level=CRATES)
+        for body in course.crates:
+            course.world.place_body(body.index, position=(0.0, 3.0, 40.0))
+        assert course.toppled == len(course.crates) == 8
+        self.land_on_mark(course)
+        assert course.score == (game.CLEAR_BONUS + game.PER_BALL * course.shots_left
+                                + game.PER_CRATE * 8)
+
+    def test_crates_still_standing_are_not_counted(self):
+        assert aimed_game(level=CRATES).toppled == 0
+
+    def test_a_ricochet_off_the_springboard_is_paid_for(self):
+        course = aimed_game(level=WALL, ammo='rubber')
+        course.fire()
+        spot = course.body_of('springboard').transform.translation
+        put(course, (spot[0], 2.0, spot[2]))
+        for _ in range(60):
+            course.tick(1 / 60)
+            if course.ricochet:
+                break
+        assert course.ricochet
+        put(course, (course.target.x, course.target.top + game.BALL_RADIUS, course.target.z))
+        course.tick(1 / 60)
+        assert course.score == (game.CLEAR_BONUS + game.PER_BALL * course.shots_left
+                                + game.RICOCHET_BONUS)
+        assert course.message.startswith('Ricochet!')
+
+    def test_a_hit_with_no_ricochet_does_not_say_so(self):
+        course = aimed_game()
+        shoot(course, winning_power())
+        assert not course.message.startswith('Ricochet')
+
+
+class TestTheCourses:
+    @pytest.mark.parametrize('index', range(len(game.LEVELS)))
+    def test_every_course_builds_a_world_with_a_body_for_each_piece(self, index):
+        course = aimed_game(level=index)
+        bound = {body.transform for body in course.manager.bodies}
+        assert {piece.node for piece in course.course.pieces} == bound
+        assert course.level is game.LEVELS[index]
+        assert course.course.kind('ground') and course.course.kind('pad')
+
+    @pytest.mark.parametrize('index, kinds', [
+        (OPEN, set()),
+        (WALL, {'wall', 'springboard'}),
+        (CRATES, {'crate'}),
+        (CROSSWIND, {'wall'}),
+        (FERRY, {'springboard'}),
+        (PORTCULLIS, {'gate', 'crate'}),
+    ])
+    def test_each_course_has_the_hazards_it_names(self, index, kinds):
+        course = aimed_game(level=index).course
+        assert {piece.kind for piece in course.pieces} - {'ground', 'tower', 'pad'} == kinds
+
+    def test_the_crates_stand_in_a_square_of_columns_and_rows_high(self):
+        course = aimed_game(level=CRATES)
+        assert len(course.crates) == 8
+        tops = sorted({round(float(course.world.position[body.index][1]), 1)
+                       for body in course.crates})
+        assert tops == [round(course.target.top + game.CRATE * (row + 0.5), 1)
+                        for row in range(2)]
+
+    def test_the_wall_stands_between_the_towers(self):
+        course = aimed_game(level=WALL)
+        wall = course.course.kind('wall')[0].node
+        assert course.cannon.x < wall.translation[0] < course.target.x
+        assert wall.translation[1] == pytest.approx(game.LEVELS[WALL].wall / 2.0)
+
+    def test_the_pole_stands_only_where_the_wind_blows(self):
+        assert aimed_game(level=OPEN).course.flag is None
+        assert aimed_game(level=CROSSWIND).course.flag is not None
+
+    @pytest.mark.parametrize('seed', [1, 2, 3, 4, 5, 6])
+    def test_the_pennant_streams_the_way_the_wind_blows(self, seed):
+        course = aimed_game(seed, level=CROSSWIND).course
+        pennant = course.flag.children[1]
+        assert np.sign(pennant.translation[2] - course.target.z) == np.sign(course.wind)
+
+    def test_the_wind_blows_either_way_from_one_course_to_the_next(self):
+        winds = {aimed_game(seed, level=CROSSWIND).course.wind for seed in range(1, 12)}
+        assert winds == {-game.LEVELS[CROSSWIND].wind, game.LEVELS[CROSSWIND].wind}
+
+    def test_the_balls_a_course_allows_are_the_ones_it_counts(self):
+        course = aimed_game(level=WALL)
+        assert course.stock == {'steel': 4, 'rubber': 3, 'lead': 0}
+        assert [ammo.name for ammo in course.carried] == ['steel', 'rubber']
+
+    def test_a_ball_the_course_does_not_carry_cannot_be_loaded(self):
+        course = aimed_game(level=OPEN)
+        course.select('lead')
+        assert course.chosen == 'steel'
+
+    def test_a_ball_the_course_carries_can_be_loaded(self):
+        course = aimed_game(level=WALL)
+        course.select('rubber')
+        assert course.chosen == 'rubber'
+
+    def test_the_first_ball_is_the_first_the_course_carries(self):
+        assert game.Game(random.Random(1), level=CRATES).chosen == 'steel'
+
+    def test_firing_a_spent_kind_loads_nothing(self):
+        course = aimed_game(level=WALL)
+        course.stock['rubber'] = 0
+        course.select('rubber')
+        course.fire()
+        assert course.ball is None and course.state == 'aiming'
+        assert 'rubber' in course.message
+
+    def test_the_bounds_hold_the_whole_course_and_the_sliding_target(self):
+        course = aimed_game(level=FERRY)
+        low, high = course.course.bounds()
+        slide = game.LEVELS[FERRY].slide
+        assert low[2] < course.target.z - slide - course.target.half
+        assert high[2] > course.target.z + slide + course.target.half
+        assert high[1] > course.target.top
+
+    @pytest.mark.parametrize('index', range(len(game.LEVELS)))
+    def test_every_course_can_be_won(self, index):
+        course = aimed_game(1, index)
+        for ball, offset, elevation, power, wait in SOLUTIONS[index]:
+            outcome = shoot(course, power, toward_target(course) + offset, ball, elevation, wait)
+        assert outcome in ('cleared', 'finished'), (
+            'no longer wins: find_shot() in this module finds new powers')
+
+
+class TestThePlay:
+    def test_a_cleared_course_leads_to_the_next(self):
+        course = aimed_game()
+        shoot(course, winning_power())
+        course.fire()
+        assert (course.index, course.state) == (1, 'aiming')
+        assert course.score > 0
+
+    def test_the_last_course_cleared_finishes_the_game(self):
+        course = aimed_game(level=len(game.LEVELS) - 1)
+        course.fire()
+        put(course, (course.target.x, course.target.top + game.BALL_RADIUS, course.target.z))
+        course.tick(1 / 60)
+        assert course.state == 'finished'
+        assert 'Every course' in course.message
+
+    def test_a_finished_game_starts_again_from_nothing(self):
+        course = aimed_game(level=len(game.LEVELS) - 1)
+        course.score = 900
+        course.state = 'finished'
+        course.fire()
+        assert (course.index, course.state, course.score) == (0, 'aiming', 0)
+
+    def test_each_miss_uses_a_ball(self):
+        course = aimed_game()
+        assert course.shots_left == 6
+        shoot(course, 8.0)
+        assert course.shots_left == 5
+
+    def test_the_last_miss_loses_the_course(self):
+        heard = []
+        course = aimed_game()
+        course.on_event = lambda kind, detail=None: heard.append(kind)
+        for _ in range(5):
+            assert shoot(course, 8.0) == 'aiming'
+        assert shoot(course, 8.0) == 'lost'
+        assert heard.count('miss') == 5 and heard[-1] == 'lost'
+
+    def test_a_lost_game_starts_again_from_the_first_course(self):
+        course = aimed_game(level=WALL)
+        course.score = 700
+        for _ in range(course.shots_left):
+            shoot(course, 8.0)
+        assert course.state == 'lost'
+        course.fire()
+        assert (course.index, course.state, course.score) == (0, 'aiming', 0)
+
+    def test_the_next_kind_is_loaded_when_the_chosen_one_runs_out(self):
+        course = aimed_game(level=WALL)
+        for _ in range(4):
+            shoot(course, 8.0)
+        assert course.stock['steel'] == 0
+        assert course.chosen == 'rubber'
+
+    def test_a_hit_on_the_last_ball_wins(self):
+        course = aimed_game()
+        for _ in range(5):
+            shoot(course, 8.0)
+        shoot(course, winning_power())
+        assert course.state == 'cleared'
+
+    def test_a_win_does_not_report_a_loss(self):
+        heard = []
+        course = aimed_game()
+        course.on_event = lambda kind, detail=None: heard.append(kind)
+        shoot(course, winning_power())
+        assert 'lost' not in heard and 'miss' not in heard
+
+    def test_the_status_names_the_course_the_score_and_the_balls(self):
+        course = aimed_game(level=WALL)
+        lines = course.status()
+        assert lines[:2] == ['course 2/6 The Wall', 'score 0']
+        assert lines[2:4] == ['>1 steel x4', ' 2 rubber x3']
+        assert lines[4] == 'space fire  v views'
+        assert ' '.join(lines[5:]) == game.LEVELS[WALL].hint
+
+    def test_the_status_marks_the_ball_that_is_loaded(self):
+        course = aimed_game(level=WALL)
+        course.select('rubber')
+        assert course.status()[2:4] == [' 1 steel x4', '>2 rubber x3']
+
+    def test_the_status_gives_the_wind_only_where_there_is_some(self):
+        assert not any('wind' in line for line in aimed_game(level=OPEN).status())
+        windy = aimed_game(level=CROSSWIND)
+        assert any(line.startswith('wind 3.0 N to the') for line in windy.status())
+
+
+class TestTheMovers:
+    def test_the_gate_is_closed_then_open_then_closed_again(self):
+        period = game.GATE_PERIOD
+        assert game.gate_open(0.0) == 0.0
+        assert game.gate_open(period / 2.0) == 1.0
+        assert game.gate_open(period) == pytest.approx(0.0)
+        assert all(0.0 <= game.gate_open(t * period / 40.0) <= 1.0 for t in range(41))
+
+    def test_the_gate_is_closed_a_third_of_the_time_and_open_a_third(self):
+        samples = [game.gate_open(t * game.GATE_PERIOD / 300.0) for t in range(300)]
+        assert sum(value == 0.0 for value in samples) / 300.0 == pytest.approx(1 / 3, abs=0.02)
+        assert sum(value == 1.0 for value in samples) / 300.0 == pytest.approx(1 / 3, abs=0.02)
+
+    def test_the_gate_sinks_below_the_ground_when_it_opens(self):
+        course = aimed_game(level=PORTCULLIS)
+        gate = course.course.kind('gate')[0].node
+        height = game.LEVELS[PORTCULLIS].gate
+        assert gate.translation[1] == pytest.approx(height / 2.0)
+        for _ in range(int(game.GATE_PERIOD / 2.0 * 60)):
+            course.tick(1 / 60)
+        assert gate.translation[1] + height / 2.0 < 0.0
+
+    def test_the_sliding_tower_and_its_mark_move_together(self):
+        course = aimed_game(level=FERRY)
+        tower = [piece.node for piece in course.course.kind('tower')][-1]
+        mark = course.course.kind('pad')[0].node
+        offset = tower.translation[2] - mark.translation[2]
+        reach = 0.0
+        for _ in range(int(game.SLIDE_PERIOD * 60)):
+            course.tick(1 / 60)
+            reach = max(reach, abs(tower.translation[2] - course.target.z))
+            assert tower.translation[2] - mark.translation[2] == pytest.approx(offset, abs=0.1)
+        assert reach == pytest.approx(game.LEVELS[FERRY].slide, abs=0.5)
+
+    def test_a_ball_on_the_sliding_mark_is_a_hit(self):
+        course = aimed_game(level=FERRY)
+        for _ in range(int(game.SLIDE_PERIOD / 4.0 * 60)):
+            course.tick(1 / 60)
+        mark = course.course.kind('pad')[0].node.translation
+        course.fire()
+        put(course, (mark[0], course.target.top + game.BALL_RADIUS, mark[2]))
+        course.tick(1 / 60)
+        assert course.state == 'cleared'
+
+    def test_the_pose_functions_start_at_home(self):
+        home = (3.0, 4.0, 5.0)
+        assert tuple(game.swing(home, 7.0)(0.0)) == home
+        assert tuple(game.drop(home, 7.0)(0.0)) == home
+        assert game.swing(home, 7.0)(game.SLIDE_PERIOD / 4.0)[2] == pytest.approx(12.0)
+
+
+class TestTheSounds:
     RATE = 8000
 
     @pytest.fixture
@@ -231,13 +654,18 @@ class TestTheReport:
         made.close()
 
     def test_the_report_is_a_boom_that_dies_away(self):
-        clip = game.Report(self.RATE).clip
+        clip = game.Sounds(self.RATE).clips['report']
         assert clip.sample_rate == self.RATE
         assert len(clip.samples) / self.RATE > 0.9
         assert float(abs(clip.samples).max()) <= 1.0
         loud = float(abs(clip.samples[:self.RATE // 10]).max())
         late = float(abs(clip.samples[-self.RATE // 10:]).max())
         assert late < 0.3 * loud
+
+    def test_the_fanfare_is_four_notes(self):
+        clip = game.Sounds(self.RATE).clips['fanfare']
+        assert clip.sample_rate == self.RATE
+        assert len(clip.samples) / self.RATE == pytest.approx(0.64, abs=0.02)
 
     def test_the_report_grows_louder_with_the_power(self):
         low, high = game.POWER_LIMIT
@@ -252,14 +680,17 @@ class TestTheReport:
         assert game.report_gain(low - 100.0) == pytest.approx(game.REPORT_GAIN[0])
         assert game.report_gain(high + 100.0) == pytest.approx(game.REPORT_GAIN[1])
 
-    def test_playing_the_report_starts_a_voice_in_the_engine(self, engine):
-        report = game.Report(self.RATE)
-        assert report.play(engine, (0.0, 3.0, 0.0), game.POWER_LIMIT[1]) is not None
+    @pytest.mark.parametrize('name', ['report', 'thud', 'crash', 'fanfare'])
+    def test_playing_a_sound_starts_a_voice_in_the_engine(self, engine, name):
+        sounds = game.Sounds(self.RATE)
+        assert sounds.play(engine, name, (0.0, 3.0, 0.0)) is not None
         engine.mixer.mix(self.RATE // 10)
         assert engine.mixer.active_voices > 0
 
-    def test_a_report_with_no_engine_is_silence_and_no_error(self):
-        assert game.Report(self.RATE).play(None, (0.0, 0.0, 0.0), game.POWER_LIMIT[1]) is None
+    def test_a_sound_with_no_engine_is_silence_and_no_error(self):
+        sounds = game.Sounds(self.RATE)
+        assert sounds.play(None, 'thud', (0.0, 0.0, 0.0)) is None
+        assert sounds.fire(None, (0.0, 0.0, 0.0), game.POWER_LIMIT[1]) is None
 
 
 class _NoWindowCannon(game.TestContext):
@@ -267,6 +698,16 @@ class _NoWindowCannon(game.TestContext):
 
     def getViewPlatform(self):
         return self.platform
+
+
+class _Burst:
+    """Stands in for the sparks emitter, and records where it was told to burst."""
+
+    def __init__(self):
+        self.at = []
+
+    def burst_at(self, position, direction=None, **named):
+        self.at.append((position, direction))
 
 
 def heard_context(rate=8000):
@@ -283,24 +724,25 @@ def heard_context(rate=8000):
     from OpenGLContext.move import viewplatform
 
     context = object.__new__(_NoWindowCannon)
-    context.game = game.Game(random.Random(3))
+    context.game = game.Game(random.Random(3), on_event=context.OnGame)
     context.platform = viewplatform.ViewPlatform()
-    context.engine = AudioEngine(device=NullDevice(sample_rate=rate), voices=4)
+    context.engine = AudioEngine(device=NullDevice(sample_rate=rate), voices=8)
     context.loaded = SimpleNamespace(translation=None, children=[])
+    context.waiting = {ammo.name: object() for ammo in game.AMMO}
     context.trail = SimpleNamespace(point=[])
     context.line = SimpleNamespace(coordIndex=[])
-    context.waiting = []
     context.wheels = game.Wheels(context.game.set_aim)
     context.readout = SimpleNamespace(lines=[])
-    context.message = ''
-    context.report = game.Report(rate)
+    context.sounds = game.Sounds(rate)
+    context.sparks, context.fireworks = _Burst(), _Burst()
+    context.wash = SimpleNamespace(colour=None, strength=0.0)
     context.update()
     return context
 
 
 def peak_dbfs(context, power, blocks=12, frames=1024):
     """The loudest sample one shot mixes, in dBFS."""
-    context.report.play(context.engine, context.game.muzzle, power)
+    context.sounds.fire(context.engine, context.game.muzzle, power)
     peak = 0.0
     for _ in range(blocks):
         peak = max(peak, float(np.abs(context.engine.mixer.mix(frames)).max()))
@@ -311,10 +753,10 @@ def peak_dbfs(context, power, blocks=12, frames=1024):
 AUDIBLE_DBFS = -30.0
 
 
-class TestTheReportReachesTheCamera:
-    """The shot is played straight into the engine, so the ears follow the camera.
+class TestTheSoundsReachTheCamera:
+    """The sounds are played straight into the engine, so the ears follow the camera.
 
-    Nothing else moves the listener here, so the report is only audible if the
+    Nothing else moves the listener here, so a sound is only audible if the
     context puts the listener where the camera is each frame.
     """
 
@@ -348,51 +790,67 @@ class TestTheReportReachesTheCamera:
         assert loud > quiet + 10.0
         assert quiet > AUDIBLE_DBFS
 
+    def test_firing_plays_the_report(self, heard):
+        context = heard()
+        context.game.fire()
+        context.engine.mixer.mix(self.RATE // 10)
+        assert context.engine.mixer.active_voices > 0
 
-class TestTheLimitOnShots:
-    def miss(self, course):
-        shoot(course, 8.0)
+    def impact(self, context, ammo, speed=9.0):
+        from types import SimpleNamespace
+        context.game.flying = game.AMMO_BY_NAME[ammo]
+        context.OnGame('impact', SimpleNamespace(approach=speed, point=np.array([1.0, 0.0, 2.0]),
+                                                 normal=np.array([0.0, 1.0, 0.0])))
 
-    def test_each_shot_uses_one(self):
-        course = aimed_game()
-        assert course.shots_left == game.MAX_SHOTS
-        self.miss(course)
-        assert course.shots_left == game.MAX_SHOTS - 1
+    def test_a_hard_impact_of_steel_makes_a_sound_and_sparks(self, heard):
+        context = heard()
+        self.impact(context, 'steel')
+        context.engine.mixer.mix(self.RATE // 10)
+        assert context.engine.mixer.active_voices > 0
+        assert context.sparks.at == [((1.0, 0.0, 2.0), (0.0, 1.0, 0.0))]
 
-    def test_the_tenth_miss_loses_the_game(self):
-        heard = []
-        course = aimed_game()
-        course.on_game_over = lambda: heard.append('over')
-        for _ in range(game.MAX_SHOTS - 1):
-            self.miss(course)
-            assert course.state == 'aiming'
-        self.miss(course)
-        assert course.state == 'lost'
-        assert heard == ['over']
+    def test_a_hard_impact_of_rubber_makes_a_sound_and_no_sparks(self, heard):
+        context = heard()
+        self.impact(context, 'rubber')
+        context.engine.mixer.mix(self.RATE // 10)
+        assert context.engine.mixer.active_voices > 0
+        assert context.sparks.at == []
 
-    def test_a_lost_game_takes_no_more_shots_until_space_starts_the_next(self):
-        course = aimed_game()
-        for _ in range(game.MAX_SHOTS):
-            self.miss(course)
-        old = course.target
-        course.fire()
-        assert course.state == 'aiming'
-        assert course.target != old
-        assert course.shots_left == game.MAX_SHOTS
+    def test_a_soft_touch_makes_neither(self, heard):
+        context = heard()
+        self.impact(context, 'steel', speed=game.IMPACT_SPEED / 2.0)
+        context.engine.mixer.mix(self.RATE // 10)
+        assert context.engine.mixer.active_voices == 0
+        assert context.sparks.at == []
 
-    def test_a_hit_on_the_last_shot_wins(self):
-        course = aimed_game()
-        for _ in range(game.MAX_SHOTS - 1):
-            self.miss(course)
-        shoot(course, winning_power())
-        assert course.state == 'won'
+    def test_a_hit_throws_fireworks_and_turns_the_screen_green(self, heard):
+        context = heard()
+        context.OnGame('hit', 500)
+        assert len(context.fireworks.at) == 1
+        assert context.wash.colour == game.WIN_WASH
+        assert context.wash.strength == game.WASH_STRENGTH
 
-    def test_a_win_does_not_call_game_over(self):
-        heard = []
-        course = aimed_game()
-        course.on_game_over = lambda: heard.append('over')
-        shoot(course, winning_power())
-        assert heard == []
+    def test_a_lost_course_turns_the_screen_red(self, heard):
+        context = heard()
+        context.OnGame('lost', None)
+        assert context.wash.colour == game.LOSE_WASH
+
+    def test_a_crate_crash_is_heard(self, heard):
+        from types import SimpleNamespace
+        context = heard()
+        context.OnGame('crash', SimpleNamespace(approach=6.0, point=np.zeros(3)))
+        context.engine.mixer.mix(self.RATE // 10)
+        assert context.engine.mixer.active_voices > 0
+
+    def test_the_loaded_ball_follows_the_selection(self, heard):
+        context = heard()
+        context.game.start_level(WALL)
+        context.game.select('rubber')
+        context.update()
+        assert context.loaded.children == [context.waiting['rubber']]
+        context.game.fire()
+        context.update()
+        assert context.loaded.children == []
 
 
 class TestTheCannonsFrames:
@@ -400,14 +858,18 @@ class TestTheCannonsFrames:
 
     ANGLES = [(0, 0), (25, 40), (-35, 70), (50, -10)]
 
+    @staticmethod
+    def gun():
+        return game.build_course(game.LEVELS[OPEN], random.Random(2), game.looks()).gun
+
     @pytest.mark.parametrize('bearing, elevation', ANGLES)
     def test_the_barrel_points_where_the_bearing_and_elevation_say(self, bearing, elevation):
-        gun = game.build_course(random.Random(2), game.looks()).gun
+        gun = self.gun()
         gun.aim(bearing, elevation)
         assert tuple(gun.along) == pytest.approx(along(bearing, elevation), abs=1e-6)
 
     def test_the_camera_is_30_cm_to_the_right_of_the_barrel(self):
-        gun = game.build_course(random.Random(2), game.looks()).gun
+        gun = self.gun()
         gun.aim(0, 0)                  # barrel along +x, so its right is +z
         eye = gun.to_world(game.EYE)
         pivot = gun.turn.translation
@@ -415,7 +877,7 @@ class TestTheCannonsFrames:
 
     def test_one_cannon_aimed_again_and_again_follows_each_aim(self):
         """The paths keep their matrices until a rotation above them changes."""
-        gun = game.build_course(random.Random(2), game.looks()).gun
+        gun = self.gun()
         for bearing, elevation in self.ANGLES + self.ANGLES[::-1]:
             gun.aim(bearing, elevation)
             assert tuple(gun.along) == pytest.approx(along(bearing, elevation), abs=1e-6)
@@ -423,7 +885,7 @@ class TestTheCannonsFrames:
 
     @pytest.mark.parametrize('bearing, elevation', ANGLES)
     def test_the_muzzle_is_a_barrel_length_from_the_pivot(self, bearing, elevation):
-        gun = game.build_course(random.Random(2), game.looks()).gun
+        gun = self.gun()
         gun.aim(bearing, elevation)
         pivot = gun.turn.translation
         expected = tuple(p + game.BARREL * d
@@ -433,7 +895,7 @@ class TestTheCannonsFrames:
     @pytest.mark.parametrize('bearing, elevation', ANGLES)
     def test_the_camera_stands_behind_the_pivot_and_looks_along_the_barrel(
             self, bearing, elevation):
-        gun = game.build_course(random.Random(2), game.looks()).gun
+        gun = self.gun()
         gun.aim(bearing, elevation)
 
         class Platform:
@@ -463,7 +925,6 @@ class TestTheCannonsFrames:
         looking = tuple(sees[i] * math.cos(angle) + cross[i] * math.sin(angle)
                         + (x, y, z)[i] * dot * (1 - math.cos(angle)) for i in range(3))
         assert looking == pytest.approx(along(bearing, elevation), abs=1e-6)
-
 
 
 def drag(wheel, pixels):

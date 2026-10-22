@@ -458,9 +458,12 @@ rotation, which are the body's pose. A node that draws no triangles raises
 ``OpenGLContext.physics.gltf_world.node_mesh(node)`` is the geometry attach
 reads: ``(points, triangle_indices)`` in the node's frame, or None.
 
-The :doc:`cannon game <tutorials/using_physics>` is built this way: towers and
-a ball made with ``attach``, one ``apply_impulse`` to fire, and a trigger over
-the target to say it was hit.
+The :doc:`cannon game <tutorials/using_physics>` is built this way: towers,
+walls, crates and balls made with ``attach``, one ``apply_impulse`` to fire,
+``set_force`` for the wind, a trigger over the target to say it was hit, and
+kinematic bodies steered by ``KinematicAnimator`` for the sliding target and
+the gate. Its steel, rubber and lead balls differ only in mass and in the
+``Material`` they are given.
 
 .. _walking:
 
