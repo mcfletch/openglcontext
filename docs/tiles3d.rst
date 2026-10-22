@@ -337,7 +337,10 @@ loopback socket that needs a token the parent made for it, and ends when the
 socket closes. Anything the payload holds has to pickle; a factory that raises, a
 ``make`` that raises and a child that stops each raise ``TileProcessError`` for
 the tile, which is asked for again at a later update, and a stopped child is
-replaced. ``shutdown()`` stops the children;
+replaced. A terminal's Ctrl-C reaches every child as well as the program: a child
+ends on it, or on the parent closing the connection, without printing a
+traceback, and a request it was making raises ``TileProcessInterrupted`` (a
+``TileProcessError``) to say the program is ending. ``shutdown()`` stops the children;
 :class:`~OpenGLContext.loaders.tiles3d.tileprocess.TileProcesses` is the pool
 itself, for use without the node.
 

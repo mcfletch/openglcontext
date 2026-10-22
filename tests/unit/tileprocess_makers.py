@@ -1,5 +1,6 @@
 """Makers the tile process tests start in child processes."""
 import os
+import signal
 import time
 
 import numpy as np
@@ -16,6 +17,9 @@ class Maker:
             raise ValueError('no tile %s' % key)
         if key == 'die':
             os._exit(3)
+        if key == 'interrupt':
+            os.kill(os.getpid(), signal.SIGINT)
+            time.sleep(5.0)
         time.sleep(self.delay)
         return os.getpid(), np.full((200, 300), float(key), dtype='f')
 

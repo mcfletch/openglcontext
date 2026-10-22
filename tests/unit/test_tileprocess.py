@@ -1,5 +1,6 @@
 """Tile content made in child processes."""
 import os
+import signal
 import threading
 import time
 
@@ -7,7 +8,9 @@ import numpy as np
 import pytest
 
 from OpenGLContext.loaders.tiles3d.generated import GeneratedTileset
-from OpenGLContext.loaders.tiles3d.tileprocess import TileProcesses, TileProcessError
+from OpenGLContext.loaders.tiles3d.tileprocess import (
+    INTERRUPTED, TileProcesses, TileProcessError, TileProcessInterrupted,
+)
 
 MAKERS = 'tests.unit.tileprocess_makers'
 
@@ -75,6 +78,52 @@ def test_closing_stops_the_processes_and_refuses_more_work(processes):
     assert all(child.poll() is not None for child in children)
     with pytest.raises(TileProcessError, match='closed'):
         pool.make(3)
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='SIGINT is delivered to a child through a console event there')
+class TestAnInterruptReachingEveryProcess:
+    """A terminal's Ctrl-C goes to the parent and to each child at once."""
+
+    def test_a_child_idle_when_interrupted_ends_without_a_traceback(self, processes, capfd):
+        pool = processes(count=1)
+        pool.make(1)
+        child = pool._children[0].process
+        child.send_signal(signal.SIGINT)
+        assert child.wait(timeout=10) == INTERRUPTED
+        assert capfd.readouterr().err == ''
+
+    def test_a_child_interrupted_while_making_ends_without_a_traceback(self, processes, capfd):
+        pool = processes(count=1)
+        with pytest.raises(TileProcessInterrupted, match='interrupted'):
+            pool.make('interrupt')
+        assert capfd.readouterr().err == ''
+
+    def test_an_interrupted_child_is_replaced_for_the_next_request(self, processes):
+        pool = processes(count=1)
+        with pytest.raises(TileProcessInterrupted):
+            pool.make('interrupt')
+        assert pool.make(2)[1][0, 0] == 2.0
+
+    def test_an_interrupt_is_a_tile_process_error_to_a_caller_that_does_not_ask(self):
+        assert issubclass(TileProcessInterrupted, TileProcessError)
+
+    def test_a_dead_child_is_not_taken_for_an_interrupted_one(self, processes):
+        with pytest.raises(TileProcessError, match='stopped') as raised:
+            processes(count=1).make('die')
+        assert not isinstance(raised.value, TileProcessInterrupted)
+
+
+def test_a_parent_that_closes_the_connection_mid_request_leaves_the_child_quiet(processes, capfd):
+    pool = processes(args=(0.5,), count=1)
+    pool.make(0)
+    child = pool._children[0]
+    asking = threading.Thread(target=lambda: pytest.raises(TileProcessError, pool.make, 1))
+    asking.start()
+    time.sleep(0.2)
+    child.sock.close()
+    asking.join()
+    assert child.process.wait(timeout=10) == 0
+    assert capfd.readouterr().err == ''
 
 
 def test_a_count_below_one_is_refused():

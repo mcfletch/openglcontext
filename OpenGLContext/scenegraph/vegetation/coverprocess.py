@@ -28,17 +28,18 @@ import threading
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from OpenGLContext.loaders.tiles3d.tileprocess import TileProcesses, TileProcessError
+from OpenGLContext.loaders.tiles3d.tileprocess import TileProcesses, TileProcessError, TileProcessInterrupted
 
 if TYPE_CHECKING:
     from OpenGLContext.scenegraph.vegetation.cover import GroundCover
 
 log = logging.getLogger(__name__)
 
-__all__ = ['CoverProcess', 'CoverProcessError', 'CoverScatterMaker']
+__all__ = ['CoverProcess', 'CoverProcessError', 'CoverProcessInterrupted', 'CoverScatterMaker']
 
 #: A request the child could not answer, or a child that stopped.
 CoverProcessError = TileProcessError
+CoverProcessInterrupted = TileProcessInterrupted
 
 
 class CoverProcess:
@@ -68,6 +69,8 @@ class CoverProcess:
             self._processes.make(('process',))
         except CoverProcessError as err:
             self._failed = True
+            if isinstance(err, CoverProcessInterrupted):
+                return
             log.warning('the ground cover process did not start: %s', err)
             return
         self._ready.set()

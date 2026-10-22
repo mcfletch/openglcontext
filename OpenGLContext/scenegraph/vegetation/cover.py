@@ -73,7 +73,9 @@ from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.grid import BLOCK_METRES, Ground, Patches, ScatterBlocks
-from OpenGLContext.scenegraph.vegetation.coverprocess import CoverProcess, CoverProcessError
+from OpenGLContext.scenegraph.vegetation.coverprocess import (
+    CoverProcess, CoverProcessError, CoverProcessInterrupted,
+)
 from OpenGLContext.scenegraph.vegetation.viewcull import DISC_MARGIN_METRES
 
 log = logging.getLogger(__name__)
@@ -758,7 +760,8 @@ class GroundCover(Group):
         could not answer. A request that fails after the cover was given another process is the
         old one's, and the new one is left as it is."""
         if self._remote is remote:
-            log.warning('ground cover scatters in line: its process stopped: %s', error)
+            if not isinstance(error, CoverProcessInterrupted):
+                log.warning('ground cover scatters in line: its process stopped: %s', error)
             self._remote = None
         remote.close()
 

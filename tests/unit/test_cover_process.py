@@ -12,7 +12,7 @@ import time
 import numpy as np
 import pytest
 
-from OpenGLContext.scenegraph.vegetation.coverprocess import CoverProcess
+from OpenGLContext.scenegraph.vegetation.coverprocess import CoverProcess, CoverProcessInterrupted
 from tests.unit.cover_process_makers import cover as local_cover
 
 MAKERS = 'tests.unit.cover_process_makers'
@@ -133,6 +133,25 @@ class TestWhenTheCoverUsesIt:
         assert remote._remote is new  # noqa: SLF001 the cover keeps asking the new process
         assert not new.closed
         assert stale.closed
+
+    def test_a_child_that_ended_on_an_interrupt_is_not_reported_as_a_fault(self, child, caplog) -> None:
+        remote = local_cover()
+        process = child()
+        remote.use_process(process)
+        process.wait_until_ready()
+        with caplog.at_level('WARNING'):
+            remote._stop_using_process(CoverProcessInterrupted('interrupted'), process)  # noqa: SLF001 what a worker does when its request fails
+        assert remote._remote is None  # noqa: SLF001 the cover scatters in line from here
+        assert caplog.records == []
+
+    def test_a_child_that_stopped_is_reported(self, child, caplog) -> None:
+        remote = local_cover()
+        process = child()
+        remote.use_process(process)
+        process.wait_until_ready()
+        with caplog.at_level('WARNING'):
+            remote._stop_using_process(RuntimeError('it stopped'), process)  # noqa: SLF001 what a worker does when its request fails
+        assert 'it stopped' in caplog.text
 
     def test_a_child_that_has_been_closed_is_not_asked(self, child) -> None:
         inline, remote, process = self._both(child)

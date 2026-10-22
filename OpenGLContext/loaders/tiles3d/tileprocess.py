@@ -38,16 +38,25 @@ from collections.abc import Callable
 from importlib import import_module
 from typing import Any
 
-__all__ = ['TileProcesses', 'TileProcessError']
+__all__ = ['TileProcesses', 'TileProcessError', 'TileProcessInterrupted']
 
 #: Seconds a child has to start, import its factory and connect.
 START_TIMEOUT = 60.0
+#: Seconds a child whose connection broke is given to be seen ending.
+EXIT_GRACE = 0.5
+#: The status a child ends with when an interrupt stopped it: 128 and SIGINT's number.
+INTERRUPTED = 130
 _LENGTH = struct.Struct('!Q')
 
 
 class TileProcessError(RuntimeError):
     """A tile could not be made by a child process: the maker raised (the message is its
     traceback), or the child stopped."""
+
+
+class TileProcessInterrupted(TileProcessError):
+    """A child ended on an interrupt. A terminal's Ctrl-C reaches every process of its group, so
+    the application is ending too, and this is not a fault in the child."""
 
 
 def _send(sock: socket.socket, message: Any) -> None:
@@ -130,6 +139,13 @@ class _Child:
             raise TileProcessError(result)
         return result
 
+    def interrupted(self) -> bool:
+        """Whether the child ended on an interrupt."""
+        try:
+            return self.process.wait(timeout=EXIT_GRACE) == INTERRUPTED
+        except subprocess.TimeoutExpired:
+            return False
+
     def kill(self) -> None:
         sock = getattr(self, 'sock', None)
         if sock is not None:
@@ -192,9 +208,12 @@ class TileProcesses:
                 self._children.append(child)
             return child.make(key)
         except (OSError, EOFError) as err:
+            interrupted = child is not None and child.interrupted()
             if child is not None:
                 self._forget(child)
                 child = None
+            if interrupted:
+                raise TileProcessInterrupted('a tile process was interrupted while making %r' % (key,)) from err
             raise TileProcessError('a tile process stopped while making %r: %s' % (key, err)) from err
         except TileProcessError:
             raise
@@ -221,9 +240,23 @@ def _close_weakly(ref: "weakref.ref[TileProcesses]") -> None:
         processes.close()
 
 
-def _serve() -> None:
+def _serve() -> int:
     """The child's end: connect, build the maker, and make a payload for each key until the
-    socket closes."""
+    socket closes. The exit status: :data:`INTERRUPTED` when an interrupt stopped it, else 0.
+
+    The parent closing the socket, or ending, is how a child is told to stop, so a connection
+    that fails is an ending and prints nothing.
+    """
+    try:
+        _converse()
+    except KeyboardInterrupt:
+        return INTERRUPTED
+    except (EOFError, OSError):
+        pass
+    return 0
+
+
+def _converse() -> None:
     host, port, token = sys.stdin.readline().split()
     sock = socket.create_connection((host, int(port)))
     _send(sock, token)
@@ -231,15 +264,12 @@ def _serve() -> None:
     sys.path.extend(p for p in paths if p not in sys.path)
     try:
         maker = _factory(factory)(*args)
-    except BaseException:
+    except Exception:
         _send(sock, traceback.format_exc())
         return
     _send(sock, None)
     while True:
-        try:
-            key = _receive(sock)
-        except (EOFError, OSError):
-            return
+        key = _receive(sock)
         if key is None:
             return
         try:
@@ -250,4 +280,4 @@ def _serve() -> None:
 
 
 if __name__ == '__main__':  # pragma: no cover - runs in the child
-    _serve()
+    sys.exit(_serve())
