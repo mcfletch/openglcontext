@@ -121,6 +121,10 @@ PAD_ABOVE, PAD_DEPTH = 0.05, 0.30
 LONGEST = 40.0
 FALLEN = -10.0
 
+#: How far outside the box round the course a ball may go, in metres, before
+#: the shot is over.
+FAR = 40.0
+
 #: A shot is over when the ball has moved slower than SETTLED_SPEED metres a
 #: second for SETTLED_TIME seconds.
 SETTLED_SPEED, SETTLED_TIME = 0.5, 0.75
@@ -697,6 +701,12 @@ class Course:
         high_z = max(self.cannon.z, self.target.z) + reach + level.slide
         return ((low_x, 0.0, low_z), (high_x, high, high_z))
 
+    def beyond(self, point: tuple[float, ...]) -> bool:
+        """Whether ``point`` is more than FAR metres outside the course's box, across the ground."""
+        low, high = self.bounds()
+        return bool(point[0] < low[0] - FAR or point[0] > high[0] + FAR
+                    or point[2] < low[2] - FAR or point[2] > high[2] + FAR)
+
 
 def build_course(level: Level, rng: Any, look: dict[str, Any]) -> Course:
     """Two towers at random heights, distances and offsets across the line, and the level's hazards."""
@@ -950,63 +960,73 @@ class Game:
         now = self.world.position[[body.index for body in self.crates]]
         return int((numpy.linalg.norm(now - self.homes, axis=1) > TOPPLED).sum())
 
-    def fire(self) -> None:
-        """Send the ball; after a course is over, build the next one instead."""
+    def fire(self) -> bool:
+        """Send the ball; after a course is over, build the next one instead.
+
+        True where a ball was sent or a course started.  False while a ball is
+        in the air, which has to settle or leave the area first, and where the
+        loaded kind of ball has run out.
+        """
         if self.state == 'cleared':
             self.start_level(self.index + 1)
-        elif self.state in ('lost', 'finished'):
+            return True
+        if self.state in ('lost', 'finished'):
             self.score = 0
             self.start_level(0)
-        elif self.state == 'aiming':
-            if not self.stock[self.chosen]:
-                self.message = 'No %s balls left.  Choose another.' % self.chosen
-                return
-            self.release()
-            ammo = AMMO_BY_NAME[self.chosen]
-            '''=Go=
+            return True
+        if self.state == 'flying':
+            self.message = 'Wait for the ball to land.'
+            return False
+        if not self.stock[self.chosen]:
+            self.message = 'No %s balls left.  Choose another.' % self.chosen
+            return False
+        self.release()
+        ammo = AMMO_BY_NAME[self.chosen]
+        '''=Go=
 
-            The ball is a sphere, a node like the towers, attached as a
-            dynamic body at the mouth of the barrel, standing still.  The
-            kinds of ball differ in the mass and the material they are given.
-            `apply_impulse` adds an impulse in newton seconds, and the body's
-            velocity becomes impulse over mass: the mass times the power,
-            along the barrel, so every ball leaves the barrel at the same
-            speed and the heavy ones carry more punch.  `set_force` pushes a
-            body with a steady force until it is changed, which is the wind:
-            the same force moves a light ball further than a heavy one.  A
-            sphere resting on the ground rolls under any push, so the force is
-            taken away at the ball's first touch.'''
-            node = surfaces.shape(surfaces.sphere(BALL_RADIUS), self.look[ammo.look],
-                                  translation=self.muzzle)
-            self.ball = self.manager.attach(
-                node, model.Motion(type=model.DYNAMIC, mass=ammo.mass),
-                material=self.materials[ammo.name], strategy='primitive')
-            '''The impulse is the power along the barrel's own axis, carried
-            into the world by the cannon's frame of reference.'''
-            kick = ammo.mass * self.aim.power * self.course.gun.along
-            assert self.ball.index is not None
-            self.world.apply_impulse(self.ball.index, tuple(float(part) for part in kick))
-            if self.course.wind:
-                self.world.set_force(self.ball.index, (0.0, 0.0, self.course.wind))
-            '''=What the ball touched=
+        The ball is a sphere, a node like the towers, attached as a
+        dynamic body at the mouth of the barrel, standing still.  The
+        kinds of ball differ in the mass and the material they are given.
+        `apply_impulse` adds an impulse in newton seconds, and the body's
+        velocity becomes impulse over mass: the mass times the power,
+        along the barrel, so every ball leaves the barrel at the same
+        speed and the heavy ones carry more punch.  `set_force` pushes a
+        body with a steady force until it is changed, which is the wind:
+        the same force moves a light ball further than a heavy one.  A
+        sphere resting on the ground rolls under any push, so the force is
+        taken away at the ball's first touch.'''
+        node = surfaces.shape(surfaces.sphere(BALL_RADIUS), self.look[ammo.look],
+                              translation=self.muzzle)
+        self.ball = self.manager.attach(
+            node, model.Motion(type=model.DYNAMIC, mass=ammo.mass),
+            material=self.materials[ammo.name], strategy='primitive')
+        '''The impulse is the power along the barrel's own axis, carried
+        into the world by the cannon's frame of reference.'''
+        kick = ammo.mass * self.aim.power * self.course.gun.along
+        assert self.ball.index is not None
+        self.world.apply_impulse(self.ball.index, tuple(float(part) for part in kick))
+        if self.course.wind:
+            self.world.set_force(self.ball.index, (0.0, 0.0, self.course.wind))
+        '''=What the ball touched=
 
-            A subscription to the ball's own contacts hears each time it
-            touches another body.  Touching the ground or a tower does not end
-            the shot, because a rubber ball keeps going.  The game looks at
-            what was touched: a bounce off the springboard or a wall that
-            ends in a hit is a ricochet, and scores extra.'''
-            self.subscription = self.manager.events.subscribe(
-                self._touched, body=self.ball, phases=('begin',))
-            self.stock[ammo.name] -= 1
-            if not self.stock[ammo.name]:
-                self.chosen = next((name for name, count in self.stock.items() if count),
-                                   ammo.name)
-            self.flying = ammo
-            self.state = 'flying'
-            self.elapsed = self.slow = 0.0
-            self.ricochet = False
-            self.message = ''
-            self.on_event('fire', ammo)
+        A subscription to the ball's own contacts hears each time it
+        touches another body.  Touching the ground or a tower does not end
+        the shot, because a rubber ball keeps going.  The game looks at
+        what was touched: a bounce off the springboard or a wall that
+        ends in a hit is a ricochet, and scores extra.'''
+        self.subscription = self.manager.events.subscribe(
+            self._touched, body=self.ball, phases=('begin',))
+        self.stock[ammo.name] -= 1
+        if not self.stock[ammo.name]:
+            self.chosen = next((name for name, count in self.stock.items() if count),
+                               ammo.name)
+        self.flying = ammo
+        self.state = 'flying'
+        self.elapsed = self.slow = 0.0
+        self.ricochet = False
+        self.message = ''
+        self.on_event('fire', ammo)
+        return True
 
     def release(self) -> None:
         """Take the last ball out of the world."""
@@ -1074,7 +1094,8 @@ class Game:
         self.elapsed += seconds
         speed = float(numpy.linalg.norm(self.world.linear_velocity[self.ball.index]))
         self.slow = self.slow + seconds if speed < SETTLED_SPEED else 0.0
-        if self.position[1] < FALLEN or self.slow >= SETTLED_TIME or self.elapsed > LONGEST:
+        if (self.position[1] < FALLEN or self.course.beyond(self.position)
+                or self.slow >= SETTLED_TIME or self.elapsed > LONGEST):
             self._miss()
 
     def status(self) -> list[str]:
@@ -1244,17 +1265,21 @@ class TestContext(BaseContext):
 
     def OnFire(self, event):
         was = self.game.state
+        '''A ball in the air has to settle or leave the area before the next
+        is fired, and `fire` says whether it sent one.  A new course makes its
+        nodes and bodies afresh, so what is left is to put the new nodes in the
+        scene.  The path of the last shot stays on screen in blue to aim the
+        next one by.'''
+        if not self.game.fire():
+            self.update()
+            return
         self.wash.strength = 0.0
-        '''A new course makes its nodes and bodies afresh, so what is left is
-        to put the new nodes in the scene.  The path of the last shot stays
-        on screen in blue to aim the next one by.'''
-        self.game.fire()
         if was in ('cleared', 'lost', 'finished'):
             self.ghost.point = [self.game.muzzle, self.game.muzzle]
             self.ghost_line.coordIndex = [0, 1, -1]
             self.lay_out()
             self.frameViews()
-        elif self.game.ball is not None:
+        else:
             self.ghost.point = list(self.trail.point)
             self.ghost_line.coordIndex = list(range(len(self.trail.point))) + [-1]
             self.shot.children = [self.game.ball.transform]

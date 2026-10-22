@@ -183,6 +183,43 @@ class TestTheKick:
         course.fire()
         assert course.flying.name == 'rubber'
 
+    def test_firing_sends_a_ball_and_says_so(self):
+        course = aimed_game()
+        assert course.fire() is True
+        assert course.state == 'flying'
+
+    def test_nothing_is_fired_while_a_ball_is_in_the_air(self):
+        heard = []
+        course = aimed_game()
+        course.fire()
+        ball, left = course.ball, dict(course.stock)
+        course.on_event = lambda kind, detail=None: heard.append(kind)
+        for _ in range(3):
+            assert course.fire() is False
+        assert course.ball is ball and course.stock == left
+        assert heard == []
+        assert course.message == 'Wait for the ball to land.'
+
+    def test_the_next_ball_can_be_fired_once_the_last_has_settled(self):
+        course = aimed_game()
+        assert shoot(course, 8.0) == 'aiming'
+        assert course.fire() is True
+
+    def test_a_ball_far_beyond_the_area_ends_the_shot(self):
+        course = aimed_game()
+        course.world.gravity.gravity = 0.0
+        assert shoot(course, 40.0, 0.0, elevation=0.0) == 'aiming'
+        assert course.elapsed < game.LONGEST / 2.0
+        assert course.course.beyond(course.position)
+
+    def test_a_ball_within_the_margin_beyond_the_area_is_still_flying(self):
+        course = aimed_game()
+        low, high = course.course.bounds()
+        assert not course.course.beyond((high[0] + game.FAR - 1.0, 0.0, 0.0))
+        assert course.course.beyond((high[0] + game.FAR + 1.0, 0.0, 0.0))
+        assert course.course.beyond((0.0, 0.0, low[2] - game.FAR - 1.0))
+        assert not course.course.beyond((0.0, high[1] + 500.0, 0.0))
+
     def test_a_new_shot_takes_the_last_ball_out_of_the_world(self):
         course = aimed_game()
         shoot(course, 12.0)
@@ -755,6 +792,9 @@ def heard_context(rate=8000):
     context.readout = SimpleNamespace(lines=[])
     context.sounds = game.Sounds(rate)
     context.sparks, context.fireworks = _Burst(), _Burst()
+    context.ghost = SimpleNamespace(point=[])
+    context.ghost_line = SimpleNamespace(coordIndex=[])
+    context.shot = SimpleNamespace(children=[])
     context.wash = SimpleNamespace(colour=None, strength=0.0)
     context.update()
     return context
@@ -861,6 +901,18 @@ class TestTheSoundsReachTheCamera:
         context.OnGame('crash', SimpleNamespace(approach=6.0, point=np.zeros(3)))
         context.engine.mixer.mix(self.RATE // 10)
         assert context.engine.mixer.active_voices > 0
+
+    def test_space_in_flight_leaves_the_trail_and_the_last_path_alone(self, heard):
+        context = heard()
+        context.OnFire(None)
+        context.game.tick(0.2)
+        context.update()
+        trail, ghost = list(context.trail.point), list(context.ghost.point)
+        context.OnFire(None)
+        # The trail carries on from where it was, and is not started again
+        assert list(context.trail.point)[:len(trail)] == trail
+        assert list(context.ghost.point) == ghost
+        assert context.game.state == 'flying'
 
     def test_the_loaded_ball_follows_the_selection(self, heard):
         context = heard()
