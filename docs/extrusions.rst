@@ -57,6 +57,25 @@ The nodes
 x is the distance out from the axis, added to the sweep radius, and y is
 height.
 
+A contour whose last point repeats its first is read as closed by that
+repeat, and the repeat is dropped. ``normals2d``, where given, has one outward
+normal per remaining point. A node whose contour and normals disagree in
+length draws nothing and logs a warning.
+
+Scenes written for the GLE-based nodes carry over with four changes. Angles
+are radians, and the GLE nodes converted ``totalAngle`` at twice the true rate,
+so a GLE scene's ``totalAngle`` doubles to keep the same number of turns.
+GLE's contour normals were one per contour *edge*; a square or other
+hard-cornered section is drawn with ``normals 'facet'`` rather than with
+those normals. ``textureMode`` is now ``texture``, so ``'cylinder vertex'`` is
+``'vertex_cyl'`` and ``'cylinder vertex model'`` is ``'vertex_model_cyl'``.
+There is no ``up`` field: GLE's default ``up`` of (1, 0, 0) put the contour's
+x along the axis and its y outward, the reverse of the r-z reading, so a
+generated texture lands on different faces of the same section: on a square
+section ``vertex_cyl`` textures the walls and leaves the top plain.
+``'arc_length'`` covers every face at a fixed size, and is what
+``tests/glelathe.py``, a scene ported from GLE, uses.
+
 .. figure:: images/extrusions/fig_lathe.png
    :alt: A lathe under six sets of parameters
 

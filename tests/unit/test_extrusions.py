@@ -177,6 +177,19 @@ class TestCaching:
         assert node.geometry(_FakePass()) is None
         assert 'could not be generated' in caplog.text
 
+    def test_a_mesh_whose_arrays_disagree_is_not_drawn(self, caplog):
+        """Fewer normals than positions would have GL read past the buffer."""
+
+        class Malformed(Lathe):
+            def build(self):
+                built = Lathe(contour=SECTION, sides=8).build().merged()
+                primitive = built.primitives[0]
+                primitive.attributes['NORMAL'] = primitive.normals[:-4]
+                return built
+
+        assert Malformed().geometry(_FakePass()) is None
+        assert 'could not be generated' in caplog.text
+
     def test_a_node_that_cannot_be_built_draws_nothing(self):
         assert Lathe(contour=[(0, 0), (1, 1)]).render(mode=_FakePass()) == 0
 

@@ -109,12 +109,13 @@ class SweptGeometry(nodetypes.Geometry, node.Node):
         if built is not None:
             return built
         try:
-            generated = self.build()
+            merged = self.build().merged()
+            # Arrays of unequal length would have GL read past the shorter one.
+            merged.validate()
         except Exception:
             log.warning('%s could not be generated from its fields',
                         type(self).__name__, exc_info=True)
             return None
-        merged = generated.merged()
         if not merged.primitives or merged.primitives[0].vertex_count == 0:
             return None
         built = mesh_from_primitive(merged.primitives[0], solid=bool(self.solid))
@@ -221,7 +222,8 @@ class Lathe(SweptGeometry):
     """A contour swept around the z axis, its plane staying radial.
 
     contour -- (N, 2) points in the r-z plane: x out from the axis, y up
-    normals2d -- optional outward normals for the contour
+    normals2d -- optional outward normals, one per contour point (a repeated
+        closing point is dropped and takes none)
     startRadius -- distance from the axis where the sweep begins
     deltaRadius -- change in that radius per full turn
     startZ -- height where the sweep begins

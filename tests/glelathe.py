@@ -5,7 +5,10 @@
 
 A washer, a drill-like screw through its centre, and a cone-shaped spring
 around it -- one `Lathe`, one `Screw` and one `Spiral`, all built from the
-same square contour and turning under an `OrientationInterpolator`.
+same square contour and turning under an `OrientationInterpolator`. The
+square has hard corners, so all three are drawn with `normals 'facet'`. The
+washer and spring are textured by `arc_length`: model units both around the
+square and along the sweep, so the checker is one unit square on every face.
 
 The geometry is generated as vertex arrays, so this renders in a core
 profile as well as a compatibility one. See `extrusions_shapes.py` for the
@@ -27,11 +30,6 @@ contour = array([
     (0,0),
 ],'d')
 
-normals = array([
-    (0,-1), (1,0),
-    (0,1), (-1,0),
-],'d')
-
     
 
 class TestContext( BaseContext ):
@@ -48,7 +46,7 @@ it is a cone-shaped "spring" extending some distance downward.""")
                 url = "wrls/irradiation.jpg",
             ),
             textureTransform = TextureTransform(
-                scale = [8,1],
+                scale = [1,1],
             ),
         )
         self.sg = sceneGraph(
@@ -63,19 +61,20 @@ it is a cone-shaped "spring" extending some distance downward.""")
                                 Shape(
                                     geometry = extrusions.Lathe(
                                         contour = contour,
-                                        normals2d = normals,
                                         startRadius = 1.5,
                                         sides = 48,
+                                        normals = 'facet',
+                                        texture = 'arc_length',
                                     ),
                                     appearance = appearance,
                                 ),
                                 Shape(
                                     geometry = extrusions.Screw(
                                         contour = contour,
-                                        normals2d = normals,
                                         startZ = -5,
                                         endZ = 5,
-                                        totalAngle = 5 * pi,
+                                        totalAngle = 10 * pi,
+                                        normals = 'facet',
                                     ),
                                     appearance = Appearance(
                                         material=Material(),
@@ -84,13 +83,14 @@ it is a cone-shaped "spring" extending some distance downward.""")
                                 Shape(
                                     geometry = extrusions.Spiral(
                                         contour = contour,
-                                        normals2d = normals,
                                         startRadius = 3,
                                         deltaRadius = 1.5,
                                         startZ = 0,
                                         deltaZ = 1.5,
-                                        totalAngle = 8 * pi,
+                                        totalAngle = 16 * pi,
                                         sides = 48,
+                                        normals = 'facet',
+                                        texture = 'arc_length',
                                     ),
                                     appearance = appearance,
                                 ),
