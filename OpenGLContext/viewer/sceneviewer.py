@@ -77,7 +77,9 @@ from OpenGLContext.viewer.options import PlacedLight, ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
 from OpenGLContext.multiview.grid import Grid
-from OpenGLContext.viewer.source import UnknownMember, resolve_source
+from OpenGLContext.viewer.source import (
+    UnknownMember, declare_content_roots, resolve_source,
+)
 
 # ViewerContext is built by the module __getattr__ at the end of this file
 # rather than defined here, so that importing this module chooses no window
@@ -363,6 +365,11 @@ class SceneViewerMixin( CaptionMixin,
         A subclass that gets its scenes elsewhere -- a catalogue, a generator --
         overrides this.
         """
+        try:
+            declare_content_roots(self.options.content_roots)
+        except ValueError as error:
+            commentary.warn("ERROR: %s\n" % (error,))
+            raise SystemExit(2) from None
         named = self.options.source or os.environ.get('GLTF')
         try:
             self.source = resolve_source(named)

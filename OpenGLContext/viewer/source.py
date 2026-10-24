@@ -19,6 +19,7 @@ answers the scene it holds.
 """
 import hashlib
 import os
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Optional
 
 from OpenGLContext import atomicfiles, userpaths
@@ -33,7 +34,8 @@ if TYPE_CHECKING:
     from OpenGLContext.loaders.gltf.scene import GLTFScene
 
 __all__ = ['ARCHIVE_SUFFIXES', 'ENGINE_REGISTRY',
-           'UnknownMember', 'is_archive', 'is_url', 'load_gltf_source',
+           'UnknownMember', 'declare_content_roots', 'is_archive', 'is_url',
+           'load_gltf_source',
            'open_archive', 'open_pack', 'pack_named', 'resolve_source',
            'split_member']
 
@@ -238,6 +240,17 @@ def open_pack(key: str, registry: str = ENGINE_REGISTRY,
                                           pack.copyright))
         root = fetch.fetch_pack(pack, where)
     return os.path.join(root, pack.marker)
+
+
+def declare_content_roots(roots: Sequence[str]) -> None:
+    """Declare each of ``roots`` a content root, before a source is read.
+
+    A world under one may reference any file under it rather than only those
+    under its own directory (:func:`resolver.add_content_root`). Raises
+    ``ValueError`` for a root that is not a directory.
+    """
+    for root in roots:
+        resolver.add_content_root(root)
 
 
 def resolve_source(source: Optional[str],

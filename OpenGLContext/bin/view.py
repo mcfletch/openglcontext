@@ -103,7 +103,7 @@ from OpenGLContext.viewer.adapters import (
 from OpenGLContext.viewer.sceneviewer import ViewerContext
 from OpenGLContext.viewer.options import PlacedLight, ViewerOptions
 from OpenGLContext.viewer.source import (
-    UnknownMember, open_pack, resolve_source,
+    UnknownMember, declare_content_roots, open_pack, resolve_source,
 )
 
 
@@ -142,6 +142,13 @@ def _positive_float(text: str) -> float:
         raise argparse.ArgumentTypeError('expected a number above zero, got %r'
                                          % (text,))
     return value
+
+
+def _directory(text: str) -> str:
+    """A path naming an existing directory."""
+    if not os.path.isdir(text):
+        raise argparse.ArgumentTypeError('%r is not a directory' % (text,))
+    return text
 
 
 def _format_names() -> list[str]:
@@ -226,6 +233,12 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
                              'from its name (%s); for a URL that serves a scene '
                              'from a path with no suffix'
                              % ', '.join(_format_names()))
+    parser.add_argument('--content-root', dest='content_roots', action=_Accumulate,
+                        type=_directory, metavar='DIR',
+                        help='let a scene read from a file under DIR reference '
+                             'any file under DIR, such as a ../maps folder '
+                             'beside its own; without one a scene reads only '
+                             'under its own directory. Repeat for more')
     parser.add_argument('--camera', metavar='NAME|INDEX',
                         help='initial camera, by the name the scene gives it '
                              '(preferred) or 0-based index')
@@ -375,6 +388,7 @@ def main(argv: Optional[list[str]] = None, prog: str = 'oglc-view') -> Any:
         except (IOError, UnknownMember, BadCatalog) as error:
             parser.error(str(error))
     source = options.source or renderoptions.env_text('GLTF') or None
+    declare_content_roots(options.content_roots)
     if options.list_cameras:
         if not source:
             parser.error('nothing to list cameras for (pass a path or a URL)')

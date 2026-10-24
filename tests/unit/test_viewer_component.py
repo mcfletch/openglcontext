@@ -14,6 +14,7 @@ import os
 
 import pytest
 
+from OpenGLContext.loaders import resolver
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.light import Light
 from OpenGLContext.testing.paths import tests_root
@@ -115,6 +116,19 @@ class TestConfiguredByOptionsAlone:
         monkeypatch.delenv('GLTF', raising=False)
         viewer = _viewer()
         viewer.options.source = '/no/such/model.glb'
+        with pytest.raises(SystemExit):
+            viewer.prepareSource()
+
+    def test_the_content_roots_are_declared_before_the_source_opens(self, tmp_path):
+        viewer = _viewer(content_roots=(str(tmp_path),))
+        try:
+            viewer.prepareSource()
+            assert os.path.realpath(tmp_path) in resolver.content_roots()
+        finally:
+            resolver.remove_content_root(str(tmp_path))
+
+    def test_a_content_root_that_is_not_a_directory_is_fatal(self, tmp_path):
+        viewer = _viewer(content_roots=(str(tmp_path / 'missing'),))
         with pytest.raises(SystemExit):
             viewer.prepareSource()
 

@@ -12,6 +12,7 @@ import importlib
 import pytest
 
 from OpenGLContext.bin import view as V
+from OpenGLContext.loaders import resolver
 from OpenGLContext.testing.paths import tests_root
 from OpenGLContext.viewer.options import OPTION_NAMES, ViewerOptions
 
@@ -55,6 +56,57 @@ class TestTheCommandLineFillsInTheOptions:
     def test_a_bad_point_is_refused_by_the_parser(self):
         with pytest.raises(SystemExit):
             V.parse_args([GLTF_MODEL, '--eye', '1,2'])
+
+    def test_content_roots_are_given_one_per_option(self, tmp_path):
+        first, second = tmp_path / 'one', tmp_path / 'two'
+        first.mkdir()
+        second.mkdir()
+        options = V.parse_args([GLTF_MODEL, '--content-root', str(first),
+                                '--content-root', str(second)])
+        assert options.content_roots == (str(first), str(second))
+
+    def test_a_content_root_that_is_not_a_directory_is_refused(self, tmp_path):
+        with pytest.raises(SystemExit):
+            V.parse_args([GLTF_MODEL, '--content-root', str(tmp_path / 'missing')])
+
+
+@pytest.fixture
+def withdrawn_roots():
+    """Withdraw the content roots a test declares, which last for the process."""
+    before = set(resolver.content_roots())
+    yield
+    for root in set(resolver.content_roots()) - before:
+        resolver.remove_content_root(root)
+
+
+@pytest.fixture
+def shared_maps(tmp_path):
+    """A world in its own directory, its texture in a sibling one."""
+    (tmp_path / 'worlds').mkdir()
+    (tmp_path / 'maps').mkdir()
+    (tmp_path / 'maps' / 'brick.png').write_bytes(b'png')
+    return tmp_path
+
+
+class TestContentRoots:
+    def test_a_world_reaches_a_sibling_directory_under_its_root(
+            self, monkeypatch, shared_maps, withdrawn_roots):
+        monkeypatch.setattr(V, 'apply_render_env', lambda _options: None)
+        monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
+                            classmethod(lambda _cls, **_window: None))
+        V.main([VRML_WORLD, '--content-root', str(shared_maps)])
+        found = resolver.contain(str(shared_maps / 'worlds'), '../maps/brick.png')
+        assert found == os.path.realpath(shared_maps / 'maps' / 'brick.png')
+
+    def test_listing_cameras_reads_under_the_roots_too(
+            self, capsys, shared_maps, withdrawn_roots):
+        assert V.main([VRML_CAMERAS, '--list-cameras',
+                       '--content-root', str(shared_maps)]) == 0
+        assert os.path.realpath(shared_maps) in resolver.content_roots()
+
+    def test_without_one_a_world_stays_in_its_own_directory(self, shared_maps):
+        with pytest.raises(IOError):
+            resolver.contain(str(shared_maps / 'worlds'), '../maps/brick.png')
 
 
 class TestListingCameras:

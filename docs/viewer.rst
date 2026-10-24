@@ -132,6 +132,25 @@ A URL to an archive follows a redirect to any public https host, which is how
 release hosts such as GitHub serve their assets (see :ref:`Fetching
 <fetching>` on the content-packs page).
 
+.. _viewer-content-roots:
+
+Textures beside a world
+~~~~~~~~~~~~~~~~~~~~~~~
+
+A scene read from a file may reference only files under its own directory, so
+a world in ``site/vrml/old/`` that names ``../maps/brick.jpg`` loads without
+that texture (see :doc:`untrusted`). ``--content-root DIR`` declares ``DIR`` a
+:ref:`content root <untrusted-content-roots>`, and a scene under it may then
+reference any file under ``DIR``:
+
+.. code-block:: bash
+
+   oglc-view site/vrml/old/world.wrl --content-root site/vrml
+
+The option may be given more than once. A directory that does not exist is
+refused before a window opens. The root applies to every file the viewer
+reads while it runs, so name a directory whose files you would open anyway.
+
 Streamed datasets take extra options:
 
 - ``--sse`` - the screen-space error target, in pixels. Lower values load more
@@ -596,8 +615,8 @@ No command line is involved:
 line fills in the same object, since ``argparse`` uses one as its namespace,
 so each flag and its field share one default. The fields, by group:
 
-- the source: ``source``, ``format``, ``pack``, and ``views`` (one view or
-  four);
+- the source: ``source``, ``format``, ``pack``, ``content_roots`` (a tuple
+  of directories), and ``views`` (one view or four);
 - cameras: ``camera``, ``no_cameras``, ``list_cameras``;
 - auto-framing: ``yaw``, ``margin``, ``elevation``, ``tilt``, ``eye``,
   ``look_at``;

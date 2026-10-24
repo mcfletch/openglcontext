@@ -61,6 +61,11 @@ class ViewerOptions:
     #: A content pack to open instead of a source, by key: one the engine
     #: publishes, such as ``openglcontext/gallery``, fetched on first use.
     pack: Optional[str] = None
+    #: Directories declared content roots before the source opens
+    #: (:func:`OpenGLContext.loaders.resolver.add_content_root`): a world read
+    #: from a file under one may reference any file under it, such as a
+    #: ``../maps`` folder beside its own. They apply to the whole process.
+    content_roots: tuple[str, ...] = ()
 
     #: Open with one view of the scene (``'single'``) or four (``'quad'``) --
     #: the plan, the front and left elevations, and the camera the viewer
