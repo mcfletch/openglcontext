@@ -17,16 +17,21 @@ ground answers each tile once.
 from __future__ import annotations
 
 import collections
+import concurrent.futures
 import functools
 import math
 import threading
 from collections.abc import Callable, Hashable, Sequence
 from typing import Any
 
+import logging
+
 import numpy as np
 
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.sources import Changes
+
+log = logging.getLogger(__name__)
 
 __all__ = ['DOME_SINK', 'Landscape', 'NearbyColliders', 'SampledGround', 'TRUNK_HEIGHT',
            'TRUNK_SINK', 'dome_proxy', 'ground_figures']
@@ -135,6 +140,10 @@ class SampledGround:
     grid ``spacing`` metres apart, and a point is answered by interpolating its
     tile. The tiles last ``kept`` at a time and are made by whichever thread
     asks first. ``sample`` takes arrays of any shape, or numbers.
+
+    A tile of ground with rock on it takes a tenth of a second to make, which a
+    walker must not wait for. :meth:`prefetch` makes the tiles about a point on a
+    thread of its own, so they are there when the walker reaches them.
     """
 
     def __init__(self, ground: Any, spacing: float = SAMPLE_SPACING, tile: float = TILE_METRES,
@@ -149,10 +158,13 @@ class SampledGround:
         self._kept = int(kept)
         self._tiles: collections.OrderedDict[tuple[int, int], np.ndarray] = collections.OrderedDict()
         self._lock = threading.Lock()
+        self._done = threading.Condition(self._lock)
+        self._pending: set[tuple[int, int]] = set()
+        self._pool: concurrent.futures.ThreadPoolExecutor | None = None
         self._last: tuple[np.ndarray, np.ndarray, tuple[np.ndarray, np.ndarray, np.ndarray]] | None = None
 
     def __getattr__(self, name: str) -> Any:
-        if name in ('ground', '_tiles', '_lock', '_last'):
+        if name in ('ground', '_tiles', '_lock', '_last', '_done', '_pending', '_pool'):
             raise AttributeError(name)
         return getattr(self.ground, name)
 
@@ -161,6 +173,47 @@ class SampledGround:
         """How many tiles are kept."""
         with self._lock:
             return len(self._tiles)
+
+    def prefetch(self, x: float, z: float, around: int = 1) -> None:
+        """Make the tiles within ``around`` tiles of ``(x, z)`` on a thread of their own, nearest first."""
+        centre = (float(x) / self.tile, float(z) / self.tile)
+        here = (math.floor(centre[0]), math.floor(centre[1]))
+        keys = sorted(((here[0] + i, here[1] + j)
+                       for i in range(-around, around + 1) for j in range(-around, around + 1)),
+                      key=lambda key: math.hypot(key[0] + 0.5 - centre[0], key[1] + 0.5 - centre[1]))
+        with self._lock:
+            wanted = [key for key in keys if key not in self._tiles and key not in self._pending]
+            self._pending.update(wanted)
+            if wanted and self._pool is None:
+                self._pool = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix='ground-tiles')
+            pool = self._pool
+        for key in wanted:
+            assert pool is not None
+            pool.submit(self._make, key)
+
+    def _make(self, key: tuple[int, int]) -> None:
+        """Make one tile ahead of its asking."""
+        try:
+            self._tile_of(key)
+        except Exception:
+            log.exception('the ground tile %r could not be made', key)
+        finally:
+            with self._done:
+                self._pending.discard(key)
+                self._done.notify_all()
+
+    def wait(self, timeout: float | None = None) -> bool:
+        """Wait until the tiles asked for ahead are made; False if ``timeout`` seconds were not enough."""
+        with self._done:
+            return self._done.wait_for(lambda: not self._pending, timeout)
+
+    def close(self) -> None:
+        """Stop making tiles ahead. The tiles made stay, and an asked-for tile is still made."""
+        with self._lock:
+            pool, self._pool = self._pool, None
+        if pool is not None:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     def _tile_of(self, key: tuple[int, int]) -> np.ndarray:
         """The samples of tile ``key``, ``(cells + 1, cells + 1)`` with rows along z."""
@@ -280,6 +333,7 @@ class Landscape:
         #: The sets of trunks that share a shape, one for each radius class.
         self.trunks: list[Any] = []
         self._removed = False
+        self._following: Any = None
         if trunks is not None and len(trunks):
             self._stand_trunks(np.asarray(trunks, dtype='d').reshape(-1, 3), radii,
                                float(trunk_height), float(trunk_sink), float(radius_step),
@@ -309,15 +363,48 @@ class Landscape:
             self.trunks.append(self.physics.add_static_instances(
                 Proxy.cylinder(height, float(radius)), centres, **material))
 
+    def follow(self, focus: Callable[[], Sequence[float]]) -> Any:
+        """Make the tiles of a ground read through :class:`SampledGround` about ``focus()`` ahead of its asking.
+
+        ``focus`` is called once a frame and answers where the walker, or whatever else
+        moves over the ground, is. Returns the source, whose ``remove()`` stops it, or
+        None for a ground that is not read through tiles.
+        """
+        if not isinstance(self.surface, SampledGround):
+            return None
+        self._following = self.physics.add_collider_source(_TilesAhead(self.surface), focus=focus)
+        return self._following
+
     def remove(self) -> None:
         """Take the ground and the trunks out of the world. Removing twice is harmless."""
         if self._removed:
             return
         self._removed = True
+        if self._following is not None:
+            self._following.remove()
+        if isinstance(self.surface, SampledGround):
+            self.surface.close()
         self.body.remove()
         for trunk in self.trunks:
             trunk.remove()
         self.trunks = []
+
+
+class _TilesAhead:
+    """A collider source that makes no body: it asks a ground for the tiles about the focus."""
+
+    def __init__(self, ground: SampledGround) -> None:
+        self.ground = ground
+        self._tile: tuple[int, int] | None = None
+
+    def update(self, focus: Sequence[float]) -> Changes:
+        """Have the tiles about ``focus`` made, once the focus is in a tile it has not been in."""
+        tile = (math.floor(float(focus[0]) / self.ground.tile),
+                math.floor(float(focus[2]) / self.ground.tile))
+        if tile != self._tile:
+            self._tile = tile
+            self.ground.prefetch(float(focus[0]), float(focus[2]))
+        return Changes()
 
 
 @functools.lru_cache(maxsize=512)

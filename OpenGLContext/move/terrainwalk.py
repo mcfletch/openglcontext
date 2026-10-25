@@ -156,6 +156,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         self._tw_pose: tuple[float, ...] | None = None
         self._tw_clamped = None
         self._tw_landscape = Landscape(physics, height_field, collider_pos, collider_radius)
+        self._tw_landscape.follow(self._tw_focus)
         if self.physicsPlatform is not None:
             self.standAvatarOnTerrain()
 

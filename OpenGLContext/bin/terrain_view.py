@@ -211,6 +211,8 @@ def make_avatar(physics: Any, surface: Surface | None, extent: float, capabiliti
         if answer is not None:
             physics.add_collider_source(NearbyColliders(answer, reach=COLLIDER_REACH),
                                         focus=lambda: character.position)
+    if landscape is not None:
+        landscape.follow(lambda: character.position)
     avatar = PhysicsViewPlatform.over(character, yaw=yaw)
     avatar.bind((spawn[0], spawn[1] + 6.0, spawn[2]))
     return avatar, landscape

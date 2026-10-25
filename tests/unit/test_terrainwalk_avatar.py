@@ -97,6 +97,17 @@ class TestTheAvatarInTheWorld:
         assert eye(host)[1] == pytest.approx(5.0 + host.eye_height, abs=2e-3)
         assert eye(host)[2] < -1.0
 
+    def test_a_ground_that_is_slow_to_sample_is_read_ahead_of_the_walker(self, clock):
+        from OpenGLContext.scenegraph.rockground import RockyGround
+        from OpenGLContext.scenegraph.terrain.relief import RockRelief
+
+        rock = RockRelief(where=lambda x, z: np.ones(np.shape(x)), height=0.5)
+        host = walking(clock, field=RockyGround(flat_field(height=5.0), rock, spacing=0.5))
+        run(host, clock, 0.2)
+        surface = host._tw_landscape.surface  # noqa: SLF001 the landscape the mix-in keeps, which it does not expose
+        assert surface.wait(30.0)
+        assert surface.tile_count >= 9
+
     def test_the_scenes_own_shapes_are_not_made_into_bodies(self, clock):
         host = walking(clock)
         assert host.physics.definition.colliders == 'explicit'

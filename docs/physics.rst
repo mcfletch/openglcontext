@@ -1191,7 +1191,10 @@ Radii are rounded up to the next 0.05 m, and trunks of one radius share one shap
 and are added in one call. A ground that is not a ``HeightField`` is read through
 ``SampledGround``, which keeps 32 m tiles of its samples on a grid as fine as
 its ``spacing``, because a character asks for dozens of heights in a step and
-rock displacement is slow to compute.
+rock displacement is slow to compute. A tile of rocky ground takes a tenth of a
+second to make, so ``landscape.follow( focus )`` has the tiles within one of the
+focus's made on a thread of their own, ahead of the walker reaching them; a tile
+asked for before it is ready is made by the asker.
 
 ``NearbyColliders( answer )`` is a collider source for things that come and go:
 rocks, posts, a scatter streamed round the focus. ``answer( x, z, reach )``

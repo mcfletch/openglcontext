@@ -6,6 +6,7 @@ shape for each radius class. The rocks are made as a focus nears them and droppe
 as it leaves.
 """
 import threading
+import time
 
 import numpy as np
 import pytest
@@ -158,6 +159,34 @@ class TestALandscapeInTheWorld:
         physics.frame(0.02)
         assert physics.raycast((4.0, 50.0, 4.0), (0.0, -1.0, 0.0)) is None
 
+    def test_a_landscape_that_follows_a_focus_makes_the_tiles_ahead_of_it(self, physics):
+        ground = CountingGround()
+        landscape = Landscape(physics, ground)
+        focus = [10.0, 0.0, 10.0]
+        landscape.follow(lambda: tuple(focus))
+        physics.frame(0.02)
+        assert landscape.surface.wait(10.0)
+        assert landscape.surface.tile_count == 9
+        focus[0] = 100.0
+        physics.frame(0.02)
+        assert landscape.surface.wait(10.0)
+        assert landscape.surface.tile_count > 9
+        landscape.remove()
+
+    def test_a_landscape_that_follows_a_focus_asks_again_only_in_another_tile(self, physics):
+        ground = CountingGround()
+        landscape = Landscape(physics, ground)
+        focus = [10.0, 0.0, 10.0]
+        landscape.follow(lambda: tuple(focus))
+        physics.frame(0.02)
+        landscape.surface.wait(10.0)
+        calls = ground.calls
+        focus[0] = 12.0
+        physics.frame(0.02)
+        landscape.surface.wait(10.0)
+        assert ground.calls == calls
+        landscape.remove()
+
     def test_a_landscape_with_nothing_to_stand_on_it_is_only_the_ground(self, physics):
         landscape = Landscape(physics, flat_field())
         assert landscape.trunk_count == 0 and landscape.trunks == []
@@ -249,6 +278,54 @@ class TestSampledGround:
         first = cached.sample(x, z)
         x[0] = 30.0
         assert cached.sample(x, z)[0] != first[0]
+
+    def test_the_tiles_around_a_point_are_made_ahead_of_the_asking(self):
+        ground = CountingGround()
+        cached = SampledGround(ground, spacing=0.5, tile=32.0)
+        cached.prefetch(10.0, 10.0)
+        assert cached.wait(10.0)
+        assert cached.tile_count == 9
+        calls = ground.calls
+        cached.sample(np.array([-20.0, 40.0]), np.array([45.0, -30.0]))
+        assert ground.calls == calls
+        cached.close()
+
+    def test_making_tiles_ahead_does_not_hold_up_the_caller(self):
+        class Slow(CountingGround):
+            def sample(self, x, z):
+                time.sleep(0.05)
+                return super().sample(x, z)
+
+        cached = SampledGround(Slow(), spacing=1.0, tile=16.0)
+        started = time.perf_counter()
+        cached.prefetch(0.0, 0.0)
+        assert time.perf_counter() - started < 0.04
+        assert cached.wait(10.0)
+        cached.close()
+
+    def test_a_tile_asked_for_while_it_is_made_ahead_is_not_made_twice_by_the_asking(self):
+        ground = CountingGround()
+        cached = SampledGround(ground, spacing=0.5, tile=32.0)
+        cached.prefetch(10.0, 10.0)
+        cached.wait(10.0)
+        cached.prefetch(10.0, 10.0)
+        cached.wait(10.0)
+        assert ground.calls == 9
+        cached.close()
+
+    def test_tiles_asked_for_ahead_are_made_nearest_first(self):
+        order = []
+
+        class Ordered(CountingGround):
+            def sample(self, x, z):
+                order.append((round(float(x[0, 0]) / 32.0), round(float(z[0, 0]) / 32.0)))
+                return super().sample(x, z)
+
+        cached = SampledGround(Ordered(), spacing=1.0, tile=32.0)
+        cached.prefetch(10.0, 10.0)
+        cached.wait(10.0)
+        assert order[0] == (0, 0)
+        cached.close()
 
     def test_the_tiles_it_keeps_are_bounded(self):
         cached = SampledGround(CountingGround(), spacing=1.0, tile=16.0, kept=4)

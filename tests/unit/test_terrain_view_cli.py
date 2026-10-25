@@ -516,6 +516,15 @@ class TestMakeAvatar:
         assert landscape is not None
         physics.close()
 
+    def test_the_ground_about_the_avatar_is_read_ahead_of_it(self):
+        physics = self.physics()
+        _, landscape = T.make_avatar(physics, self.hill(), 400.0, self.capabilities(),
+                                     (0.0, 5.0, 0.0), 0.6)
+        self.settle(physics, 0.2)
+        assert landscape.surface.wait(30.0)
+        assert landscape.surface.tile_count >= 9
+        physics.close()
+
     def test_the_scenes_shapes_are_not_made_into_bodies(self):
         physics = self.physics()
         T.make_avatar(physics, self.hill(), 400.0, self.capabilities(), (0.0, 5.0, 0.0), 0.6)
