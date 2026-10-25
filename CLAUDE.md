@@ -87,10 +87,20 @@ OpenGLContext/
 │   │                 # not a command
 │   ├── x3d_geospatial_demo.py  # The valley tests/tutorials/world/x3d_geospatial.py opens,
 │   │                 # as an X3D Geospatial document; scenery, not a command
-│   └── x3d_sound_stress.py  # oglc-x3d-sound-stress: a document of many
-│                     # sounds, and the frame and block time playing it costs
-│                     # -- docs/audio.rst#audio-stress
+│   ├── x3d_sound_stress.py  # oglc-x3d-sound-stress: a document of many
+│   │                 # sounds, and the frame and block time playing it costs
+│   │                 # -- docs/audio.rst#audio-stress
+│   └── gait.py       # oglc-gait: the ground speed and foot landings of a
+│                     # model's locomotion clips -- docs/characters.rst#characters-gait-measure
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
+│   ├── locomotion.py # ClipMap (roles to clips), Locomotion: a character's
+│   │                 # speed and state as clips, rates and footsteps -- no GL
+│   │                 # -- docs/characters.rst#characters-locomotion
+│   ├── gaitmeasure.py  # A clip's ground speed and foot landings, measured
+│   │                 # from its pose -- no GL -- docs/characters.rst#characters-gait-measure
+│   ├── facing.py     # Heading, ground tilt and lean of a character's node,
+│   │                 # and the fit of a model to its capsule -- no GL
+│   │                 # -- docs/characters.rst#characters-facing
 │   └── hanim.py      # X3D HAnim's arithmetic: names and levels, skin weights,
 │                     # BVH channels, poses, limits -- no GL -- docs/characters.rst#characters-hanim
 ├── contentpacks/     # Data an application fetches rather than ships: the
@@ -176,6 +186,11 @@ OpenGLContext/
 │   ├── navigationinfo.py  # A scene's bound NavigationInfo: its headlight
 │   │                 # and the movement mode its type asks for -- no GL
 │   ├── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
+│   ├── followcam.py  # FollowCamera: look-ahead, damped following, an arm that
+│   │                 # keeps out of the scenery -- no GL -- docs/navigation.rst#navigation-follow
+│   ├── pathmover.py  # PathMover: the velocity that runs a character along a
+│   │                 # RoadCourse and hops between its lanes -- no GL
+│   │                 # -- docs/navigation.rst#navigation-pathmover
 │   └── terrainfollow.py  # A WALK document's viewer kept on the ground under
 │                     # gravity -- no GL -- docs/x3d.rst
 ├── multiview/        # Several views of one scene -- docs/multiview.rst
