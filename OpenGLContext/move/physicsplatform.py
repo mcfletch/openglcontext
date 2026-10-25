@@ -71,7 +71,14 @@ class PhysicsViewPlatform:
 
     # -- binding ---------------------------------------------------------
     def bind(self, position: Any) -> Any:
-        """Safe-bind the capsule at ``position`` (the capsule *centre*)."""
+        """Safe-bind the capsule at ``position`` (the capsule *centre*).
+
+        Over a service character the body the world sees moves with it.
+        """
+        if self.managed is not None:
+            feet = np.asarray(position, dtype='d')[:3] - np.array(
+                [0.0, self.character.height * 0.5, 0.0])
+            return self.managed.teleport(feet)
         return self.character.safe_bind(position)
 
     def bind_eye(self, eye: Any) -> Any:

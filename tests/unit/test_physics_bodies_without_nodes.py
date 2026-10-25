@@ -198,3 +198,14 @@ def test_a_platform_over_a_framed_character_leaves_the_stepping_to_the_frame(inl
     for _ in range(30):
         platform.update(1 / 60)
     assert me.position[2] == pytest.approx(0.0)
+
+
+def test_binding_a_platform_over_a_character_moves_the_body_the_world_sees(inline):
+    inline.add_static(None, proxy=floor())
+    me = inline.add_character(position=(0, 0.05, 0))
+    me.framed = False
+    platform = PhysicsViewPlatform.over(me)
+    assert platform.bind_eye((20.0, 1.6, 0.0)) is not False
+    hit = inline.raycast((10.0, 1.0, 0.0), (1.0, 0.0, 0.0), 30.0)
+    assert hit is not None and hit.body is me.body
+    assert me.position[0] == pytest.approx(20.0, abs=0.01)
