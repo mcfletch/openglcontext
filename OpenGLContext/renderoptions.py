@@ -142,8 +142,9 @@ ENVIRONMENT: tuple[str, ...] = (
     # under gravity and collides it with the scene; the framing yaw turns the
     # model on the turntable a model with no camera of its own is framed
     # against.  A reference image rendered with either inherited is a
-    # reference for whatever the parent process happened to be carrying.
-    'OPENGLCONTEXT_PHYSICS', 'OPENGLCONTEXT_VIEW_YAW',
+    # reference for whatever the parent process happened to be carrying.  The
+    # physics mode decides which step a body is in when a frame is drawn.
+    'OPENGLCONTEXT_PHYSICS', 'OPENGLCONTEXT_PHYSICS_MODE', 'OPENGLCONTEXT_VIEW_YAW',
     # Whether an OGLC_hook tag in a glTF is read decides what the file's
     # materials and nodes become -- a lake either moves or is a flat sheet --
     # so a reference image rendered under an inherited one is a reference for
