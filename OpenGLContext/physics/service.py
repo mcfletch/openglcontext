@@ -484,22 +484,32 @@ class Physics:
         unknown = set(options) - self._OPTIONS
         if unknown:
             raise TypeError('unknown option %s' % ', '.join(sorted(unknown)))
+        named = options.get('material')
         body = self._add_placed(kind, proxy, (0.0, 0.0, 0.0), None, self._material(options),
-                                int(options.get('collision_filter', -1)))
+                                int(options.get('collision_filter', -1)),
+                                named if isinstance(named, str) else None)
         self._by_node[key] = body
         return body
 
     def _add_placed(self, kind: str, proxy: Proxy, position: Any, orientation: Any = None,
-                    material: Any = None, collision_filter: int = -1) -> Body:
-        """A static body with no node, standing at ``position`` turned by the quaternion ``orientation``."""
+                    material: Any = None, collision_filter: int = -1,
+                    named: str | None = None) -> Body:
+        """A static body with no node, standing at ``position`` turned by the quaternion ``orientation``.
+
+        ``named`` is the name of its material, which says what a strike on it sounds like.
+        """
         uid = next(self._uids)
         quaternion = (0.0, 0.0, 0.0, 1.0) if orientation is None else tuple(
             float(v) for v in orientation)
         place = tuple(float(v) for v in position)
+        sounding = self.materials.sound_of(named) is not None
         spec = BodySpec(uid, kind, proxy, model.Motion(type=model.STATIC), place, quaternion,
-                        material, collision_filter)
+                        material, collision_filter, report=sounding)
         body = Body(self, uid, kind, None, proxy, np.asarray(place), quat_to_vrml_rotation(quaternion),
                     0.0)
+        body.material = named
+        if sounding:
+            self._send_world('logging', True)
         self._bodies[uid] = body
         if self._enabled and not self._closed:
             self._send(Command('add', uid, (spec,), next(self._seq)))
@@ -614,7 +624,8 @@ class Physics:
         bytes of a ``.glb``, or a path or URL; the character wears it in a node
         it makes, appended to ``parent`` where that is given, scaled to the
         capsule's height unless ``fit`` is false, and turned toward where the
-        character goes unless ``facing`` is false. ``animations`` is a
+        character goes unless ``facing`` is false. The model's shapes are not
+        scenery: the world collides with the capsule alone. ``animations`` is a
         :class:`~OpenGLContext.character.locomotion.ClipMap`, ``'ual'`` for the
         Universal Animation Library's names or ``'guess'`` to match the model's
         clip names to the roles; the model then plays them for what the
@@ -632,6 +643,7 @@ class Physics:
 
             if fit:
                 self._fit_model(wearing, caps)
+            _not_scenery(wearing.group)
             turn = Transform(children=[wearing.group])
             if node is None:
                 node = Transform(translation=tuple(float(v) for v in position), children=[turn])
@@ -1225,6 +1237,20 @@ class StaticInstances:
             self._alive = False
             self.physics._send_world('remove_many', self._first, self.count)
             self.physics._specs.pop(self._first, None)
+
+
+def _not_scenery(group: Any) -> None:
+    """Mark each shape under ``group`` as one the world does not collide with.
+
+    A character is its capsule; the model it wears is drawn where the capsule
+    is and must not become a static body of its own.
+    """
+    stack = [group]
+    while stack:
+        node = stack.pop()
+        if getattr(node, 'geometry', None) is not None:
+            node.collide = False
+        stack.extend(getattr(node, 'children', None) or ())
 
 
 def _sampled_heights(ground: Any, extent: Any, margin: float = 0.2) -> tuple[float, float]:

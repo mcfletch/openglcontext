@@ -175,3 +175,25 @@ def test_queries_from_this_thread_are_safe_while_the_worker_steps():
         assert failures == []
     finally:
         service.close()
+
+
+def test_a_body_that_has_not_moved_is_not_made_into_a_proxy_again_by_the_next_query(
+        physics, monkeypatch):
+    from OpenGLContext.physics import queries
+
+    physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)), proxy=Proxy.trimesh(
+        np.array([[-10, 0, -10], [10, 0, -10], [10, 0, 10], [-10, 0, 10]], dtype='d'),
+        np.array([[0, 2, 1], [0, 3, 2]])))
+    built = []
+    real = queries.make_proxy
+    monkeypatch.setattr(queries, 'make_proxy',
+                        lambda shape, *pose: built.append(shape.type) or real(shape, *pose))
+    first = physics.sweep_sphere((0, 3, 0), (0, -1, 0), 5.0, 0.25)
+    made = len(built)
+    second = physics.sweep_sphere((0, 4, 0), (0, -1, 0), 6.0, 0.25)
+    assert first == pytest.approx(3.25, abs=0.01)
+    assert second == pytest.approx(4.25, abs=0.01)
+    assert made >= 1
+    assert len(built) == made
+    assert physics.overlap(Proxy.sphere(0.5), (0, -0.3, 0))
+    assert len(built) == made + 1                              # the probe, which is new each time

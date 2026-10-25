@@ -11,6 +11,7 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import basenodes, surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
+from ._character_assets import character_glb
 from ._locomotion_assets import marching, striding, walker_glb, waving
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
@@ -55,6 +56,15 @@ def test_a_character_with_a_model_gets_a_node_that_holds_it(physics):
     assert tuple(me.node.translation) == pytest.approx(tuple(me.position))
     holders = [me.node, *me.node.children]
     assert any(model.group in getattr(node, 'children', ()) for node in holders)
+
+
+def test_the_model_a_character_wears_is_not_scenery_for_the_world_to_collide_with(physics):
+    scene = basenodes.sceneGraph(children=[])
+    worn = CharacterModel.load(character_glb())
+    worn.group.children.append(surfaces.shape(surfaces.block((0.5, 1.8, 0.5)), LOOK))
+    physics.add_character(model=worn, position=(0, 0.05, 0), parent=scene)
+    assert physics.scenery_changed(scene, 1) == 0
+    assert physics.scenery.derived == {}
 
 
 def test_the_node_is_added_to_the_parent_given(physics):

@@ -1,6 +1,7 @@
 """The world the physics service builds: ground, instances, driven bodies, materials, gravity zones."""
 import numpy as np
 import pytest
+from omi_audio import synth
 
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
@@ -76,6 +77,25 @@ def test_a_ground_is_a_static_body_found_by_the_object(physics):
 def test_the_grounds_bounds_are_found_by_sampling_when_none_are_given(physics):
     body = physics.add_ground(Slope(), extent=((-10, -10), (10, 10)))
     assert body.proxy.shape.type == 'heightfield'
+
+
+def test_a_ground_takes_the_material_it_is_given(physics):
+    physics.materials.define('moss', friction=0.8, footstep='soft.ogg')
+    body = physics.add_ground(Slope(), extent=((-50, -50), (50, 50)), material='moss')
+    assert body.material == 'moss'
+
+
+def test_a_ball_struck_on_a_ground_of_a_material_with_a_sound_plays_it():
+    thud = synth.impact(0.2, seed=1)
+    audio = RecordingAudio()
+    service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0, tickHz=100.0),
+                      audio=lambda: audio)
+    service.materials.define('moss', friction=0.8, restitution=0.0, sound=thud)
+    service.add_ground(Slope(), extent=((-50, -50), (50, 50)), material='moss')
+    service.add_dynamic(ball(0.5, at=(-10.0, 3.0, 0.0)), proxy='sphere', restitution=0.0)
+    run_for(service, 1.5)
+    assert len(audio.played(thud)) >= 1
+    service.close()
 
 
 def test_proxy_heightfield_wraps_a_grid_of_heights():
@@ -228,6 +248,20 @@ def test_a_material_with_a_sound_plays_it_where_a_body_lands():
     assert len(plays) == 1
     assert plays[0].at[1] == pytest.approx(0.0, abs=0.1)
     assert 0.0 < plays[0].gain <= 1.0
+    service.close()
+
+
+def test_a_material_sound_may_be_a_clip_the_script_made():
+    thud = synth.impact(0.2, seed=1)
+    audio = RecordingAudio()
+    service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0, tickHz=100.0),
+                      audio=lambda: audio)
+    service.materials.define('stone', friction=0.6, restitution=0.0, sound=thud)
+    service.add_static(block((20, 1, 20), at=(0, -0.5, 0)), proxy='box', material='stone')
+    service.add_dynamic(ball(0.5, at=(0, 2, 0)), proxy='sphere', restitution=0.0)
+    run_for(service, 1.0)
+    [play] = audio.played(thud)
+    assert play.source is thud
     service.close()
 
 

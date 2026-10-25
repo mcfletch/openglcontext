@@ -10,10 +10,11 @@ from __future__ import annotations
 from collections.abc import Collection
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+from weakref import WeakKeyDictionary
 
 import numpy as np
 from omi_physics import model
-from omi_physics.body import SphereProxy, make_proxy, world_aabb
+from omi_physics.body import SphereProxy, make_proxy, pose_key, world_aabb
 from omi_physics.collide import collide
 
 if TYPE_CHECKING:
@@ -53,14 +54,22 @@ def _candidates(world: PhysicsWorld, lo: np.ndarray, hi: np.ndarray,
             and world.handle_of(world.ref(j)) is not None]
 
 
-def _proxy(world: PhysicsWorld, index: int, cache: dict[int, Any],
-           triggers: bool = False) -> Any:
-    found = cache.get(index)
-    if found is None:
-        shape = world.trigger_shape[index] if triggers else world.collider_shape[index]
-        found = cache[index] = make_proxy(world.shapes[shape], world.position[index],
-                                          world.orientation[index])
-    return found
+#: Each world's proxies for the bodies queries have met: a proxy for a mesh
+#: costs a grid over its triangles, and a body that has not moved keeps its own.
+_PROXIES: WeakKeyDictionary[Any, dict[tuple[int, bool], tuple[model.Shape, tuple[float, ...], Any]]] = (
+    WeakKeyDictionary())
+
+
+def _proxy(world: PhysicsWorld, index: int, triggers: bool = False) -> Any:
+    """The proxy of body ``index`` where it is now, made again only where its shape or pose differ."""
+    held = _PROXIES.setdefault(world, {})
+    shape = world.shapes[world.trigger_shape[index] if triggers else world.collider_shape[index]]
+    pose = pose_key(world.position[index], world.orientation[index])
+    found = held.get((index, triggers))
+    if found is None or found[0] is not shape or found[1] != pose:
+        found = held[(index, triggers)] = (
+            shape, pose, make_proxy(shape, world.position[index], world.orientation[index]))
+    return found[2]
 
 
 def sweep_sphere(world: PhysicsWorld, origin: Any, direction: Any, distance: float,
@@ -81,11 +90,10 @@ def sweep_sphere(world: PhysicsWorld, origin: Any, direction: Any, distance: flo
     near = _candidates(world, np.minimum(start, end) - radius, np.maximum(start, end) + radius, skip)
     if not near:
         return None
-    cache: dict[int, Any] = {}
 
     def touching(travelled: float) -> bool:
         probe = SphereProxy(start + heading * travelled, radius)
-        return any(collide(-1, j, probe, _proxy(world, j, cache)) for j in near)
+        return any(collide(-1, j, probe, _proxy(world, j)) for j in near)
 
     if touching(0.0):
         return 0.0
@@ -116,6 +124,5 @@ def overlapping(world: PhysicsWorld, shape: model.Shape, position: Any, orientat
     centre = np.asarray(position, dtype='d')
     lo, hi = world_aabb(shape, centre, quaternion)
     probe = make_proxy(shape, centre, quaternion)
-    cache: dict[int, Any] = {}
     return [j for j in _candidates(world, lo, hi, skip, triggers)
-            if collide(-1, j, probe, _proxy(world, j, cache, triggers))]
+            if collide(-1, j, probe, _proxy(world, j, triggers))]

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from omi_physics import model
 
 if TYPE_CHECKING:
+    from OpenGLContext.audio.manager import SoundSource
     from OpenGLContext.physics.service import Physics
 
 __all__ = ['Materials', 'PhysicsMaterial']
@@ -29,9 +30,9 @@ class PhysicsMaterial:
     """A named material: how it grips and bounces, and the sound a strike on it makes."""
     name: str
     material: model.Material
-    sound: str | None = None
+    sound: SoundSource | None = None
     #: A clip played where a character's foot lands on a body of this material.
-    footstep: str | None = None
+    footstep: SoundSource | None = None
 
 
 class Materials:
@@ -57,16 +58,17 @@ class Materials:
         return found
 
     def define(self, name: str, friction: float | None = None, restitution: float | None = None,
-               sound: str | None = None, static_friction: float | None = None,
+               sound: SoundSource | None = None, static_friction: float | None = None,
                dynamic_friction: float | None = None,
-               footstep: str | None = None) -> PhysicsMaterial:
+               footstep: SoundSource | None = None) -> PhysicsMaterial:
         """Make a material called ``name``; defining it again replaces it.
 
         ``friction`` sets both coefficients, ``static_friction`` and
         ``dynamic_friction`` one each. ``restitution`` is the fraction of the
         closing speed a bounce keeps. ``sound`` is a clip played where a body
         of this material is struck, and ``footstep`` one played where a
-        character's foot lands on it.
+        character's foot lands on it. Each is a path, URL, name given to
+        ``audio.load`` or a decoded :class:`~omi_audio.clip.Clip`.
         """
         base = model.Material()
         material = model.Material(
@@ -89,12 +91,12 @@ class Materials:
             raise ValueError('pair needs friction, or both static_friction and dynamic_friction')
         self._physics._send_world('pair_friction', one.name, other.name, float(static), float(dynamic))
 
-    def sound_of(self, name: str | None) -> str | None:
+    def sound_of(self, name: str | None) -> SoundSource | None:
         """The sound of the material called ``name``, or None."""
         found = self._known.get(name) if name else None
         return None if found is None else found.sound
 
-    def footstep_of(self, name: str | None) -> str | None:
+    def footstep_of(self, name: str | None) -> SoundSource | None:
         """The footstep clip of the material called ``name``, or None."""
         found = self._known.get(name) if name else None
         return None if found is None else found.footstep
@@ -102,12 +104,12 @@ class Materials:
     @property
     def has_footsteps(self) -> bool:
         """Whether any material has a footstep clip."""
-        return any(known.footstep for known in self._known.values())
+        return any(known.footstep is not None for known in self._known.values())
 
     @property
     def has_sounds(self) -> bool:
         """Whether any material has a sound."""
-        return any(known.sound for known in self._known.values())
+        return any(known.sound is not None for known in self._known.values())
 
 
 def _pick(default: float, *values: float | None) -> float:

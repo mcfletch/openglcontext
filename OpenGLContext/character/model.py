@@ -51,9 +51,16 @@ class CharacterModel:
     # -- construction -----------------------------------------------------
     @classmethod
     def load(cls, source: Any, **named: Any) -> "CharacterModel":
-        """Load a character from a path, a URL or the bytes of a ``.glb``."""
-        from OpenGLContext.loaders.gltf import load_gltf
-        return cls(load_gltf(source, **named))
+        """Load a character from a path, an http(s) URL or the bytes of a ``.glb``.
+
+        A URL is fetched once into the loader's cache.
+        """
+        from OpenGLContext.loaders import gltf
+        from OpenGLContext.loaders.resolver import is_url
+
+        if isinstance(source, str) and is_url(source):
+            return cls(gltf.load_gltf_url(source, **named))
+        return cls(gltf.load_gltf(source, **named))
 
     @classmethod
     def from_scene(cls, scene: Any, **named: Any) -> "CharacterModel":
