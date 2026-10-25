@@ -147,6 +147,15 @@ PATHS = [
         'physics',
         pages=['physics_getting_started'],
         scripts=[
+            'physics_stairs',
+            'physics_stairs_colour',
+            'physics_stairs_thread',
+            'physics_stairs_shapes',
+            'physics_stairs_material',
+            'physics_stairs_gravity',
+            'physics_stairs_sound',
+            'physics_stairs_surface_sound',
+            'physics_stairs_tuning',
             'physics_room_drop',
             'physics_bounce',
             'physics_friction',
@@ -159,6 +168,18 @@ PATHS = [
             'physics_cook_view',
             'physics_navigate',
             'physics_stress',
+        ],
+    ),
+    TutorialPath(
+        'Characters on Land',
+        """A rigged character that runs across a landscape: ground it collides
+        with, clips that play for what the body is doing, a camera that follows
+        it, the sounds of its landings, and footsteps that follow the surface.""",
+        'character',
+        [
+            'character_run',
+            'character_jump',
+            'character_footsteps',
         ],
     ),
     TutorialPath(
