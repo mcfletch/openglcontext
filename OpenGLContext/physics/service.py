@@ -141,6 +141,7 @@ class Physics:
         runtime.on_events.append(self._on_worker_events)
         runtime.before_step.append(self._run_step_handlers('before-step'))
         runtime.after_step.append(self._run_step_handlers('after-step'))
+        runtime.wants_steps.append(self.handlers.has_step_handlers)
 
     def _ensure_started(self) -> None:
         if self._enabled and not self._closed:

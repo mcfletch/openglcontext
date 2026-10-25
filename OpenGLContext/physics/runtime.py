@@ -66,6 +66,8 @@ class WorldRuntime:
         self.after_step: list[Callable[[Step], Any]] = []
         #: Called with the events a step made, right after it, on the stepping thread.
         self.on_events: list[Callable[[list[PhysicsEvent]], Any]] = []
+        #: Asked by :meth:`busy`; one that answers True keeps the world stepping while nothing moves.
+        self.wants_steps: list[Callable[[], bool]] = []
         self.applied_seq = 0
         self.version = 0
         #: Events a ``settle`` command left to be set once the next snapshot is published.
@@ -417,7 +419,14 @@ class WorldRuntime:
                 log.exception('physics hook %r failed', hook)
 
     def busy(self) -> bool:
-        """Whether a step would change anything: a dynamic body is awake or a kinematic one moves."""
+        """Whether the world needs its next step.
+
+        It does while a dynamic body is awake, a kinematic one moves, a body has
+        a driver, or one of :attr:`wants_steps` answers True. A world that is not
+        busy is not stepped, so its clock stands until a command arrives.
+        """
+        if self.drivers or any(wants() for wants in self.wants_steps):
+            return True
         _uids, indices, _rows = self._mover_table()
         if len(indices) == 0:
             return False

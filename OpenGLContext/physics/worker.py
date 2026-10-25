@@ -10,9 +10,13 @@ which thread steps it. Both forms take commands from any thread through an
     A command made while it is stepping (from a step hook or a physics callback)
     is applied at once; any other is applied at the start of the next call.
 :class:`ThreadWorker`
-    Steps the world on a daemon thread at the definition's rate. The thread
-    blocks while no body is awake and the inbox is empty, so a resting scene
-    costs no ticks.
+    Steps the world on a daemon thread at the definition's rate.
+
+Neither steps a world that is not
+:meth:`~OpenGLContext.physics.runtime.WorldRuntime.busy` when no command has
+arrived: the thread blocks and the inline worker returns at once, so a resting
+scene costs no steps. A registered step handler or a driven body keeps the world
+busy.
 """
 from __future__ import annotations
 
@@ -80,6 +84,8 @@ class InlineWorker:
         self.runtime = runtime if runtime is not None else WorldRuntime(definition)
         self.inbox = Inbox()
         self._stepping = False
+        #: The command sequence the last published snapshot included; -1 before the first.
+        self._published_seq = -1
 
     def submit(self, command: Command) -> None:
         """Apply ``command`` now if the world is mid-step, else at the next :meth:`collect`."""
@@ -89,20 +95,32 @@ class InlineWorker:
             self.inbox.post(command)
 
     def collect(self, dt: float) -> Outbox:
-        """Apply the waiting commands, run the steps ``dt`` seconds hold and publish the result."""
-        self._advance(dt)
+        """Apply the waiting commands, run the steps ``dt`` seconds hold and publish the result.
+
+        A frame with no command applied since the last snapshot, in a world that
+        is not :meth:`~OpenGLContext.physics.runtime.WorldRuntime.busy`, steps
+        nothing and publishes nothing: the last snapshot still stands, as on a
+        :class:`ThreadWorker` that has gone idle, and the frame's time is not
+        carried toward the next step.
+        """
         runtime = self.runtime
+        commands = self.inbox.drain()
+        if (not commands and self._published_seq == runtime.applied_seq
+                and self._published_seq >= 0 and not runtime.busy()):
+            return Outbox(None, runtime.take_events())
+        self._advance(dt, commands)
+        self._published_seq = runtime.applied_seq
         return Outbox(runtime.snapshot(runtime.alpha), runtime.take_events())
 
     def step(self, dt: float) -> None:
         """Advance by ``dt`` seconds and leave the result for the next :meth:`collect`."""
-        self._advance(dt)
+        self._advance(dt, self.inbox.drain())
 
-    def _advance(self, dt: float) -> None:
+    def _advance(self, dt: float, commands: list[Command]) -> None:
         self._stepping = True
         try:
             self.runtime.bind_thread()
-            for command in self.inbox.drain():
+            for command in commands:
                 self.runtime.apply(command)
             self.runtime.step_frame(dt)
         finally:

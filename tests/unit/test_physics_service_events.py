@@ -472,3 +472,24 @@ def test_the_journal_can_be_compared_on_replay():
     for index, (name, fields) in enumerate(marks):
         assert comparison.mark(index, name, fields)
     physics.close()
+
+
+def test_a_step_handler_is_called_every_step_of_a_world_at_rest():
+    physics = make()
+    physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)))
+    body = physics.add_dynamic(ball(at=(0, 0.5, 0)))
+    for _ in range(2000):
+        physics.frame(0.02)
+        if body.asleep:
+            break
+    assert body.asleep
+    seen = []
+
+    @physics_callback
+    def count(step):
+        seen.append(step.index)
+
+    physics.addEventHandler('before-step', function=count)
+    run_for(physics, 0.1, frame=0.01)
+    assert len(seen) == 10
+    physics.close()

@@ -158,6 +158,10 @@ class HandlerTable:
                     break
         return heard
 
+    def has_step_handlers(self) -> bool:
+        """Whether a live ``'before-step'`` or ``'after-step'`` handler is registered."""
+        return any(h.active and h.event in STEP_EVENTS for h in self._handlers)
+
     def of_step(self, event: str) -> list[Handler]:
         """The live handlers for ``'before-step'`` or ``'after-step'``."""
         return [h for h in self._handlers if h.event == event and h.active]

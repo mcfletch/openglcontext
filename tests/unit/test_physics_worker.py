@@ -250,3 +250,86 @@ def test_both_workers_give_the_same_poses_for_the_same_commands():
                            reference.runtime.snapshot().position, atol=1e-9)
     finally:
         thread.stop()
+
+
+# -- a world where nothing moves ------------------------------------------------
+
+def settled_inline(**named) -> InlineWorker:
+    """An inline worker whose ball has come to rest on the floor."""
+    worker = InlineWorker(definition(**named))
+    worker.submit(floor())
+    worker.submit(ball(position=(0, 0.6, 0)))
+    for _ in range(3000):
+        worker.collect(0.01)
+        if not worker.runtime.busy():
+            return worker
+    raise AssertionError('the ball did not come to rest')
+
+
+def test_inline_does_not_step_a_world_where_nothing_moves():
+    worker = settled_inline()
+    steps = worker.runtime.world.step_count
+    outs = [worker.collect(0.01) for _ in range(60)]
+    assert worker.runtime.world.step_count == steps
+    assert all(out.snapshot is None for out in outs)
+
+
+def test_inline_steps_again_once_a_command_arrives():
+    worker = settled_inline()
+    steps = worker.runtime.world.step_count
+    worker.submit(Command('impulse', 1, ((0.0, 2.0, 0.0), None), seq=99))
+    out = worker.collect(0.01)
+    assert worker.runtime.world.step_count == steps + 1
+    assert out.snapshot is not None and out.snapshot.applied_seq == 99
+
+
+def test_inline_publishes_a_command_applied_by_a_flush_between_frames():
+    worker = settled_inline()
+    worker.submit(Command('damping', 1, (0.5, None), seq=77))
+    worker.flush()
+    out = worker.collect(0.01)
+    assert out.snapshot is not None and out.snapshot.applied_seq == 77
+
+
+def test_inline_publishes_its_first_frame_with_nothing_to_step():
+    worker = InlineWorker(definition())
+    assert worker.collect(0.01).snapshot is not None
+    assert worker.collect(0.01).snapshot is None
+
+
+def test_inline_keeps_stepping_a_still_world_that_a_step_hook_wants():
+    worker = settled_inline()
+    seen = []
+    worker.runtime.after_step.append(lambda step: seen.append(step.index))
+    worker.runtime.wants_steps.append(lambda: True)
+    for _ in range(5):
+        worker.collect(0.01)
+    assert len(seen) == 5
+
+
+def test_inline_keeps_stepping_a_still_world_with_a_driven_body():
+    worker = settled_inline()
+    worker.submit(Command('add', 5, (BodySpec(5, 'kinematic', Proxy.box((1, 1, 1)),
+                                              model.Motion(type=model.KINEMATIC),
+                                              position=(5, 0.5, 0)),)))
+    worker.submit(Command('drive', 5, (lambda t: ((5.0, 0.5, 0.0), None),)))
+    worker.collect(0.01)
+    steps = worker.runtime.world.step_count
+    for _ in range(5):
+        worker.collect(0.01)
+    assert worker.runtime.world.step_count == steps + 5
+
+
+def test_a_thread_worker_keeps_ticking_while_a_step_hook_wants(threaded):
+    threaded.submit(floor())
+    threaded.submit(ball(position=(0, 0.6, 0)))
+    wanted = [True]
+    threaded.runtime.wants_steps.append(lambda: wanted[0])
+    threaded.start()
+    assert threaded.wait_ticks(5)
+    assert not threaded.idle
+    wanted[0] = False
+    deadline = time.monotonic() + 15.0
+    while not threaded.idle and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert threaded.idle
