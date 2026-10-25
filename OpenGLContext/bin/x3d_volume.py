@@ -3,6 +3,8 @@
 
     oglc-x3d-volume [--directory DIR]
 
+Keys::
+
     1-9, 0  the left specimen's render style: 1 opacity map, 2 boundary
             enhancement, 3 cartoon, 4 composed edge and silhouette, 5 edge
             enhancement, 6 maximum intensity projection, 7 shaded,

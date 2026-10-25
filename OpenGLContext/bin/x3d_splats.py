@@ -3,6 +3,8 @@
 
     oglc-x3d-splats [--directory DIR]
 
+Keys::
+
     d      the vase's harmonics above degree 0 off and on
     s      the splats' shadows off and on (their castShadow)
     g      the vase written as a KHR_gaussian_splatting glTF, beside the document
@@ -13,7 +15,7 @@ a ``GaussianSplats`` node in the document: flat splats laid over a lathed
 surface, each coloured by spherical harmonics to degree 3 fitted to how
 polished brass under this sky looks from every side (:func:`brass`), so its
 sheen moves as the viewer does. The hedge is a ``KHR_gaussian_splatting``
-glTF the document ``Inline``s: leaves scattered through a rounded block,
+glTF the document reads through an ``Inline``: leaves scattered through a rounded block,
 shaded darker inside. Both cast shadows on the terrace, a marble floor with
 a sandstone plinth and a steel ball, drawn as meshes. docs/x3d.rst
 describes the node.

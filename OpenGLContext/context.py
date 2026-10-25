@@ -1002,7 +1002,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         The engine opens nothing outside the world itself: this logs the url
         and answers False. An application that opens web pages or other
         windows overrides it, choosing what of the document's urls it trusts
-        (:doc:`untrusted`).
+        (:doc:`/untrusted`).
         """
         log.info('Anchor url %r (target %r) not followed: OnAnchorElsewhere opens nothing',
                  url, target)

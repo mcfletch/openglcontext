@@ -288,7 +288,7 @@ def report_gain(power: float) -> float:
 
 
 class Sounds:
-    """What the game sounds like, made from arithmetic.
+    """What the game sounds like, made from arithmetic."""
 
     '''=The sounds=
 
@@ -302,7 +302,6 @@ class Sounds:
     the shot's power, so a gentle shot is audible and a hard one is at full
     volume.  `play` takes a `rate`, and the same thud at a higher rate is a
     lighter ball.'''
-    """
 
     def __init__(self, sample_rate: int | None = None) -> None:
         options = {} if sample_rate is None else {'sample_rate': sample_rate}
@@ -387,7 +386,7 @@ SCALES = (
 
 
 class Wheel:
-    """A thumb-wheel on the screen that sets one field of the aim, labelled with its value.
+    """A thumb-wheel on the screen that sets one field of the aim, labelled with its value."""
 
     '''=A drag sensor=
 
@@ -417,7 +416,6 @@ class Wheel:
     wheel's does.  Its axis is behind the panel and a frame of four chrome
     bars stands in front of its top and bottom, so what shows is the part
     of the drum that stands out through the frame.'''
-    """
 
     def __init__(self, scale: Scale, look: dict[str, Any],
                  on_turn: Callable[[str, float], None]) -> None:
@@ -484,7 +482,7 @@ def frame(width: float, height: float, material: Any) -> list[Any]:
 
 
 class Wheels:
-    """The three wheels on a panel at the left of the view, drawn over the scene.
+    """The three wheels on a panel at the left of the view, drawn over the scene."""
 
     '''=On the screen=
 
@@ -496,7 +494,6 @@ class Wheels:
     headlight.  A pick is resolved through the topmost layer under the
     pointer, so the wheels take the pointer and the world behind them does
     not.'''
-    """
 
     def __init__(self, on_turn: Callable[[str, float], None]) -> None:
         look = looks()

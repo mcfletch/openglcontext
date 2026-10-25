@@ -11,7 +11,7 @@ sets of Gaussian splats in it:
   and ``opacities`` one per splat, and spherical harmonics to degree 3 that
   carry how polished brass under this sky looks from every side, so its
   sheen moves as the viewer does;
-* the hedge is a glTF file the document ``Inline``s, whose one primitive
+* the hedge is a glTF file the document reads through an ``Inline``, whose one primitive
   carries ``KHR_gaussian_splatting``: leaves scattered through a rounded
   block, their colour degree 0 alone.
 

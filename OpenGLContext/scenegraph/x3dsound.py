@@ -23,10 +23,11 @@ PeriodicWave               :class:`~omi_audio.graph.PeriodicWave`
 MicrophoneSource,          :class:`~omi_audio.graph.CaptureSource`, an input
 StreamAudioSource          opened only where the application allows capture
 ListenerPointSource        silence; it moves where the spatial sounds are heard
-Gain, Delay, BiquadFilter, the graph node of the same name
-Convolver, WaveShaper,
+Gain, Delay,               the graph node of the same name
+BiquadFilter, Convolver,
+WaveShaper, Analyser,
 DynamicsCompressor,
-Analyser, ChannelSplitter,
+ChannelSplitter,
 ChannelMerger,
 ChannelSelector
 =========================  ====================================================

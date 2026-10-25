@@ -1,7 +1,7 @@
 """X3D documents read into the engine's scenegraph
 
-`.x3d` and `.x3dz` (XML), `.x3dv` and `.x3dvz` (ClassicVRML), `.x3dj`
-(JSON) and `.x3db` (the compressed binary encoding) are read by `vrml.x3d`, which builds each node from the engine's class
+``.x3d`` and ``.x3dz`` (XML), ``.x3dv`` and ``.x3dvz`` (ClassicVRML), ``.x3dj``
+(JSON) and ``.x3db`` (the compressed binary encoding) are read by `vrml.x3d`, which builds each node from the engine's class
 for it where the engine implements the X3D node (:func:`prototypes`) and from
 the X3D declaration otherwise. The scene is an
 :class:`~OpenGLContext.scenegraph.scenegraph.X3DScene`, so a context draws it

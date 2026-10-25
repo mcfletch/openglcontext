@@ -9,7 +9,7 @@ over its geometry and releasing it there calls
 Where each url leads is :func:`anchor_targets`, X_ITE's reading of an
 Anchor: ``#name``, or the document's own name with ``#name``, binds that
 viewpoint; another X3D or VRML document the document may reach (the
-resolver's rules, :doc:`untrusted`) is loaded in place of the world, binding
+resolver's rules, :doc:`/untrusted`) is loaded in place of the world, binding
 the viewpoint its fragment names; a page (``.html``, ``.htm``, ``.xhtml``), a
 document the rules refuse, or any url with a ``target=`` parameter other than
 ``_self`` goes to the application.

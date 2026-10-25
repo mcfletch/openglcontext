@@ -1,7 +1,7 @@
 """Shader source assembly: #include resolution, define injection, shadow budget.
 
 Free functions, no ``self`` coupling: they read ``.glsl`` files under
-:data:`SHADER_DIR`, splice ``#include``s, and inject the per-driver
+:data:`SHADER_DIR`, splice ``#include`` lines, and inject the per-driver
 ``#define``/``#extension`` lines. This is the shader *text* pipeline;
 :mod:`shaderpass` is the GL program object that consumes it. :mod:`shaderpass`
 re-exports :data:`SHADER_DIR` and :func:`preprocess_shader`, both imported by
@@ -76,12 +76,12 @@ def _resolve_includes(src: str, seen: set) -> str:
 
 
 def resolve_includes(src: str) -> str:
-    """``src``, a shader's text held in Python, with its ``#include``s spliced in"""
+    """``src``, a shader's text held in Python, with its ``#include`` lines spliced in"""
     return _resolve_includes(src, set())
 
 
 def preprocess_shader(filename: str, defines: Optional[list] = None) -> str:
-    """Read a shader, resolve its ``#include``s, inject ``defines`` after #version.
+    """Read a shader, resolve its ``#include`` lines, inject ``defines`` after #version.
 
     ``defines`` is a list of literal preprocessor lines (``#define`` / ``#extension``)
     spliced immediately after the ``#version`` directive -- the only place
@@ -185,7 +185,7 @@ def load_fragment_source(filename: str, max_shadow_lights: int,
                          cube_array: bool, extra_defines: Optional[list] = None) -> str:
     """Read a lit fragment shader assembled for the current driver tier.
 
-    Resolves its ``#include``s (the shared shadow / BRDF / colour code) and injects
+    Resolves its ``#include`` lines (the shared shadow / BRDF / colour code) and injects
     the shadow budget defines (``MAX_SHADOW_LIGHTS``, and ``SHADOW_CUBE_ARRAY`` plus
     the enabling ``#extension`` when cube-arrays are available), so the same source
     serves every driver tier. ``extra_defines`` appends further ``#define`` lines

@@ -8,8 +8,8 @@ program links; the ones before it say `isSelected FALSE`, the one chosen
 the chosen one's sources are still loading, and where none links, the shape
 is drawn with its material and texture as if it listed no shaders.
 
-- `ComposedShader` links its `ShaderPart`s, one or more a stage;
-  `ProgramShader` links its `ShaderProgram`s, a stage each, and sets the
+- `ComposedShader` links its `ShaderPart` nodes, one or more a stage;
+  `ProgramShader` links its `ShaderProgram` nodes, a stage each, and sets the
   fields each declares on the one program.
 - `PackagedShader` of GLSL is one text compiled once for each stage it tests
   the macro of (``X3D_VERTEX_SHADER``, ...; :func:`~OpenGLContext.scenegraph.x3dglsl.packaged_stages`).

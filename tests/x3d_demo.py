@@ -11,7 +11,7 @@ spheres are gold, copper and steel ``PhysicalMaterial`` metals on sandstone
 plinths drawn with an X3D 4 ``Material`` and its ``diffuseTexture``.  The sun
 is a global ``DirectionalLight`` with ``shadows`` true; the alcove's lamp is
 a ``DirectionalLight`` with ``global`` false, so it lights only the bronze
-ball beside it.  The vase is a glTF model the document ``Inline``s.
+ball beside it.  The vase is a glTF model the document reads through an ``Inline``.
 '''
 import os
 import tempfile

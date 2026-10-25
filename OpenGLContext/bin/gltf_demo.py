@@ -279,7 +279,7 @@ class TestContext(ViewerContext):
     def loadScene(self) -> Any:
         """Customise the scene loader to load from our catalog instead of self.source
         
-        Overrides :py:method:`OpenGLContext.viewer.SceneViewer.loadScene`
+        Overrides :py:meth:`OpenGLContext.viewer.SceneViewer.loadScene`
         to look into self.catalog at our current index. It then sets our label
         so that the user can see which file is currently loaded.
         """

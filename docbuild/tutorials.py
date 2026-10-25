@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import io
 import logging
 import os
 import re
 import sys
+import tokenize
 from collections.abc import Iterable
 
 from docbuild import markup
@@ -292,12 +294,22 @@ def parse(path: str, script: str = '') -> Tutorial:
 
     ``script`` is where it is under ``tests/``, for the page to say; the
     file's name by default.
+
+    Raises :class:`ValueError` for a ``'''`` block that Python reads as part of
+    another string, such as commentary written inside a class's docstring.
     """
     with open(path, encoding='utf8') as handle:
         text = handle.read().replace('\r\n', '\n')
+    strings = _string_starts(text)
     pieces: list[Piece] = []
     position = 0
     for match in COMMENTARY.finditer(text):
+        if match.start(1) not in strings:
+            raise ValueError(
+                "%s:%d: the ''' commentary is inside another string; close "
+                'that string before the commentary starts'
+                % (path, text.count('\n', 0, match.start(1)) + 1)
+            )
         _code(pieces, text[position : match.start()])
         if match.group('commentary').strip():
             pieces.append(Piece('commentary', match.group('commentary')))
@@ -309,6 +321,18 @@ def parse(path: str, script: str = '') -> Tutorial:
         pieces=pieces,
         script=script,
     )
+
+
+def _string_starts(text: str) -> set[int]:
+    """The offset in ``text`` of each string literal Python reads in it."""
+    lines = [0]
+    for line in text.split('\n'):
+        lines.append(lines[-1] + len(line) + 1)
+    return {
+        lines[token.start[0] - 1] + token.start[1]
+        for token in tokenize.generate_tokens(io.StringIO(text).readline)
+        if token.type == tokenize.STRING
+    }
 
 
 def _code(pieces: list[Piece], text: str) -> None:

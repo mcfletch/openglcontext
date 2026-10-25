@@ -277,6 +277,43 @@ class TestReadingAScript:
         code = [piece.text for piece in tutorial.pieces if piece.kind == 'code']
         assert any('An ordinary docstring' in piece for piece in code)
 
+    def test_commentary_inside_a_docstring_is_refused(self, tmp_path):
+        """``'''`` inside a ``\"\"\"`` string is part of that string, not commentary.
+
+        Split there, the page shows the docstring unclosed and its closing
+        quotes as code of their own.
+        """
+        path = tmp_path / 'nested.py'
+        path.write_text(
+            "'''=T='''\n"
+            'class Sounds:\n'
+            '    """What the game sounds like.\n'
+            '\n'
+            "    '''=The sounds='''\n"
+            '    """\n',
+            encoding='utf8',
+        )
+        with pytest.raises(ValueError, match=r'nested\.py:5'):
+            tutorials.parse(str(path))
+
+    def test_a_string_after_commentary_is_code(self, tmp_path):
+        """A ``\"\"\"`` string under a commentary block, as the shader tutorials
+        write their GLSL, is code."""
+        path = tmp_path / 'glsl.py'
+        path.write_text(
+            "'''=T='''\n"
+            'shader = compile(\n'
+            "    '''the vertex stage:'''\n"
+            '    """\n'
+            '    void main() {}\n'
+            '    """\n'
+            ')\n',
+            encoding='utf8',
+        )
+        tutorial = tutorials.parse(str(path))
+        code = [piece.text for piece in tutorial.pieces if piece.kind == 'code']
+        assert any('void main() {}' in piece for piece in code)
+
     def test_collapsed_code_is_marked(self, tmp_path):
         path = tmp_path / 'x.py'
         path.write_text("'''=T=\n\nsay\n'''\n#collapse\nimport os\n", encoding='utf8')

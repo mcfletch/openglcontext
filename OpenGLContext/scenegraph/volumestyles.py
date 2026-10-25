@@ -29,7 +29,7 @@ is drawn as the default OpacityMapVolumeStyle.
 
 Normals are the normalised gradient of the voxels' first component (41.2.2.2.2),
 pointing from higher values to lower, unless a style's ``surfaceNormals``
-texture of three or more channels gives them. The gradient's magnitude (|Δf|)
+texture of three or more channels gives them. The gradient's magnitude (``|Δf|``)
 is measured in value per voxel, values running 0 to 1.
 
 The ten style nodes are the engine's classes at the end of this module, with
@@ -254,7 +254,7 @@ class Plan:
     textures: list[TextureSlot] = field(default_factory=list)
     roots: list[int] = field(default_factory=list)
     segmented: bool = False
-    #: Whether the march works out the voxels' gradient (normals, |Δf|).
+    #: Whether the march works out the voxels' gradient (normals, ``|Δf|``).
     gradient: bool = False
     #: Whether a style reads the scene's lights.
     lights: bool = False
