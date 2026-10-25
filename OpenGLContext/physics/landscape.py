@@ -363,7 +363,7 @@ class Landscape:
             self.trunks.append(self.physics.add_static_instances(
                 Proxy.cylinder(height, float(radius)), centres, **material))
 
-    def follow(self, focus: Callable[[], Sequence[float]]) -> Any:
+    def follow(self, focus: Callable[[], Any]) -> Any:
         """Make the tiles of a ground read through :class:`SampledGround` about ``focus()`` ahead of its asking.
 
         ``focus`` is called once a frame and answers where the walker, or whatever else
