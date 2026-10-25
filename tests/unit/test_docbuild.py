@@ -316,6 +316,13 @@ class TestTheTutorialPage:
     def test_it_says_which_script_it_came_from(self, page):
         assert '``tests/shader_1.py``' in page
 
+    def test_a_script_in_a_directory_says_where_it_is(self, tmp_path):
+        path = tmp_path / 'shader_1.py'
+        path.write_text(SCRIPT, encoding='utf8')
+        page = tutorials.render(tutorials.parse(str(path), script='shaders/shader_1'))
+        assert page.startswith('.. _tutorial-shader_1:')
+        assert '``tests/shaders/shader_1.py``' in page
+
 
 #: A method whose commentary sits between it and the class it belongs to.
 NESTED = '''\'\'\'=A title=\'\'\'
@@ -421,6 +428,12 @@ class TestTheIndex:
         page = tutorials.render_index(paths, ['shader_1'])
         assert '   physics_getting_started\n   shader_1' in page
 
+    def test_a_script_in_a_directory_is_listed_by_its_page(self):
+        paths = [tutorials.TutorialPath('Shaders', 'x', ['shaders/shader_1'])]
+        page = tutorials.render_index(paths, ['shader_1'])
+        assert '   shader_1' in page
+        assert 'shaders/' not in page
+
     def test_a_page_in_a_path_is_not_listed_twice(self):
         page = tutorials.render_index(tutorials.PATHS, [])
         assert page.count('physics_getting_started') == 1
@@ -440,6 +453,32 @@ class TestWritingThemAll:
         assert written == ['shader_1']
         assert (output / 'shader_1.rst').is_file()
         assert (output / 'index.rst').is_file()
+
+    def test_a_script_in_a_directory_gets_a_page_beside_the_others(self, tmp_path):
+        source = tmp_path / 'tests' / 'shaders'
+        source.mkdir(parents=True)
+        (source / 'shader_1.py').write_text(SCRIPT, encoding='utf8')
+        output = tmp_path / 'out'
+        written = tutorials.write(
+            output=str(output),
+            tests=str(tmp_path / 'tests'),
+            paths=[tutorials.TutorialPath('Shaders', 'x', ['shaders/shader_1'])],
+        )
+        assert written == ['shader_1']
+        assert (output / 'shader_1.rst').is_file()
+        assert '   shader_1' in (output / 'index.rst').read_text(encoding='utf8')
+
+    def test_two_scripts_named_alike_are_refused(self, tmp_path):
+        """Their pages would be one file."""
+        for directory in ('a', 'b'):
+            (tmp_path / directory).mkdir()
+            (tmp_path / directory / 'shader_1.py').write_text(SCRIPT, encoding='utf8')
+        with pytest.raises(ValueError, match='shader_1'):
+            tutorials.write(
+                output=str(tmp_path / 'out'),
+                tests=str(tmp_path),
+                paths=[tutorials.TutorialPath('Shaders', 'x', ['a/shader_1', 'b/shader_1'])],
+            )
 
     def test_a_missing_script_is_reported_rather_than_fatal(self, tmp_path, caplog):
         output = tmp_path / 'out'

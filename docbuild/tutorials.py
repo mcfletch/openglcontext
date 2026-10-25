@@ -10,6 +10,9 @@ them.
 
 The paths -- which scripts, in which order, under which heading -- are
 :data:`PATHS`.  A script not named there is not a tutorial, whatever it holds.
+A script is named by its path under ``tests/`` without ``.py``
+(``tutorials/core_context/getting_a_context``), and its page by the file's
+name alone (``getting_a_context``), so every page is in ``docs/tutorials``.
 """
 
 from __future__ import annotations
@@ -65,6 +68,12 @@ class Tutorial:
     name: str
     source: str
     pieces: list[Piece]
+    #: Where the script is under ``tests/``, without ``.py``, as :data:`PATHS`
+    #: names it.  The page is :attr:`name`, so every page sits in one directory.
+    script: str = ''
+
+    def __post_init__(self) -> None:
+        self.script = self.script or self.name
 
     @property
     def title(self) -> str:
@@ -270,11 +279,20 @@ PATHS = [
 HAND_WRITTEN = [('physics_getting_started', 'Adding physics to a scene')]
 
 
+def page_name(script: str) -> str:
+    """The page a script in :data:`PATHS` is written as: its file's name."""
+    return script.rsplit('/', 1)[-1]
+
+
 # --------------------------------------------------------------------------- #
 # Reading a script
 # --------------------------------------------------------------------------- #
-def parse(path: str) -> Tutorial:
-    """One script, split into its commentary and the code between it."""
+def parse(path: str, script: str = '') -> Tutorial:
+    """One script, split into its commentary and the code between it.
+
+    ``script`` is where it is under ``tests/``, for the page to say; the
+    file's name by default.
+    """
     with open(path, encoding='utf8') as handle:
         text = handle.read().replace('\r\n', '\n')
     pieces: list[Piece] = []
@@ -286,7 +304,10 @@ def parse(path: str) -> Tutorial:
         position = match.end()
     _code(pieces, text[position:])
     return Tutorial(
-        name=os.path.splitext(os.path.basename(path))[0], source=path, pieces=pieces
+        name=os.path.splitext(os.path.basename(path))[0],
+        source=path,
+        pieces=pieces,
+        script=script,
     )
 
 
@@ -346,7 +367,7 @@ def render(tutorial: Tutorial) -> str:
     out.append(
         '.. rst-class:: source-reference\n\n'
         'This walkthrough is written from ``tests/%s.py`` in the OpenGLContext '
-        'source, which runs as it stands.' % (tutorial.name,)
+        'source, which runs as it stands.' % (tutorial.script,)
     )
     return '\n\n'.join(block for block in out if block.strip()).rstrip() + '\n'
 
@@ -395,7 +416,11 @@ def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
     ]
     listed = set()
     for path in paths:
-        names = list(path.pages) + [name for name in path.scripts if name in written]
+        names = list(path.pages) + [
+            page_name(script)
+            for script in path.scripts
+            if page_name(script) in written
+        ]
         if not names:
             continue
         listed.update(names)
@@ -421,19 +446,32 @@ def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
 def write(
     output: str = OUTPUT, tests: str = TESTS, paths: Iterable[TutorialPath] = PATHS
 ) -> list[str]:
-    """Write a page for every tutorial, and the index; returns what was written."""
+    """Write a page for every tutorial, and the index; returns the pages written.
+
+    Every page goes directly in ``output``, named for its script's file, so
+    two scripts of one name in different directories are refused.
+    """
     paths = list(paths)
+    scripts: dict[str, str] = {}
+    for path in paths:
+        for script in path.scripts:
+            other = scripts.setdefault(page_name(script), script)
+            if other != script:
+                raise ValueError(
+                    'tutorial scripts %s and %s would both be the page %s'
+                    % (other, script, page_name(script))
+                )
     os.makedirs(output, exist_ok=True)
     written: list[str] = []
-    for path in paths:
-        for name in path.scripts:
-            source = os.path.join(tests, '%s.py' % (name,))
-            if not os.path.isfile(source):
-                log.warning('no such tutorial script: %s', source)
-                continue
-            tutorial = parse(source)
-            _replace(os.path.join(output, '%s.rst' % (name,)), render(tutorial))
-            written.append(name)
+    for name, script in scripts.items():
+        source = os.path.join(tests, '%s.py' % (script,))
+        if not os.path.isfile(source):
+            log.warning('no such tutorial script: %s', source)
+            continue
+        _replace(
+            os.path.join(output, '%s.rst' % (name,)), render(parse(source, script))
+        )
+        written.append(name)
     _replace(os.path.join(output, 'index.rst'), render_index(paths, written))
     return written
 

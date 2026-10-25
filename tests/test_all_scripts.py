@@ -752,7 +752,10 @@ def get_all_test_scripts(include_non_visual: bool = True) -> list[Path]:
     """
     all_scripts = []
 
-    for script_path in TESTS_DIR.glob('*.py'):
+    # The tutorials kept in directories of their own under tests/tutorials run
+    # beside the rest; tests/unit and the other directories are not scripts.
+    candidates = [*TESTS_DIR.glob('*.py'), *TESTS_DIR.glob('tutorials/**/*.py')]
+    for script_path in candidates:
         name = script_path.name
 
         # A leading underscore marks a module a demo imports rather than one to
@@ -1058,6 +1061,23 @@ class TestScripts:
         """Sanity: a reasonable number of scripts was discovered."""
         assert len(_ALL_TEST_SCRIPTS) > 50, (
             f"Expected 50+ scripts, found {len(_ALL_TEST_SCRIPTS)}")
+
+    def test_every_tutorial_script_is_run(self):
+        """A tutorial's page says its script runs as it stands; this runs it."""
+        from docbuild import tutorials  # noqa: PLC0415 the docs build's index of them, wanted by this test alone
+
+        collected = {
+            path.relative_to(TESTS_DIR).with_suffix('').as_posix()
+            for path in _ALL_TEST_SCRIPTS
+        }
+        missing = [
+            script
+            for path in tutorials.PATHS
+            for script in path.scripts
+            if script not in collected
+            and '%s.py' % (tutorials.page_name(script),) not in SKIP_SCRIPTS
+        ]
+        assert missing == []
 
     @pytest.mark.parametrize('script_path', _SCRIPT_PARAMS)
     def test_script(self, script_path):

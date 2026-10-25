@@ -17,7 +17,7 @@ from OpenGLContext.context import Context as BaseContext
 These imports are so that we will have something to show on our 3D window.
 '''
 from OpenGLContext.scenegraph.basenodes import (
-    Background, DirectionalLight, sceneGraph, Shape, Teapot, PBRMaterial,Appearance,
+    Background, DirectionalLight, sceneGraph, Shape, Teapot, PhysicalMaterial,Appearance,
 )
 
 '''
@@ -54,7 +54,7 @@ class TestContext(BaseContext):
             children=[
                 Shape(
                     geometry=Teapot(),
-                    appearance=Appearance(material=PBRMaterial(
+                    appearance=Appearance(material=PhysicalMaterial(
                         baseColor=(.95,0,0),
                         metallic=1.0,
                         clearcoat=1.0,
@@ -81,12 +81,12 @@ if __name__ == "__main__":
         'title':'Hello 3D World',
     })
 
-'''You can now run your Context from the command like like so::
+'''You can now run your Context from the command line like so::
 
     $ uv run --pre --with OpenGLContext python ./getting_a_context.py
 
-there are a large number of settings you can control through
-:doc:`environment` variables.
+There are a large number of settings you can control through
+:doc:`environment variables </environment>`, such as the backend::
 
     $ OPENGLCONTEXT_BACKEND=pygame python getting_a_context.py
     $ OPENGLCONTEXT_BACKEND=glut python getting_a_context.py
