@@ -120,6 +120,8 @@ physics.flush()                             # inline and standalone: apply the q
 physics.index_of(body)                      # inline and standalone: the body's slot in physics.world
 physics.drop_remainder()                    # inline and standalone: forget the time left over from a frame
 physics.add_character(...)                  # a walker; see Characters and view platforms
+physics.characters                          # the characters, in the order they were added
+physics.line_of_sight(start, end, skip=None)  # whether no body lies between two points
 physics.add_collider_source(source)         # colliders that come and go with a focus point
 physics.raycast(origin, direction, ...)     # synchronous queries; see Queries
 physics.post(function, *args)               # call function on the worker; returns None
@@ -299,7 +301,9 @@ physics.show_proxies(True)                   # draws the proxies, contacts and v
 `Proxy` wraps `omi_physics.model.Shape` and adds the constructors `box`, `sphere`,
 `capsule`, `convex(points)` and `trimesh(points, indices)`. `add_static` with a `trimesh`
 proxy takes the arrays directly, with no node, for a level whose collision mesh is cooked
-elsewhere.
+elsewhere: `physics.add_static(None, proxy=Proxy.trimesh(points, indices))`. The other
+`add_*` calls take `None` for the node the same way, with `translation=` and `rotation=`
+placing the body, so a hit capsule or a trigger volume needs no scenegraph node.
 `show_proxies` is the existing `PhysicsDebugDraw` overlay switched on from the service.
 
 ### Materials
@@ -474,7 +478,8 @@ closure cannot cross the boundary.
 hit = physics.raycast(origin, direction, max_distance=100.0, skip=body)   # RayHit or None
 hits = physics.raycast_many(origins, directions)       # arrays in, arrays out
 swept = physics.sweep_sphere(origin, direction, distance, radius)
-touching = physics.overlap(proxy, translation, rotation)
+touching = physics.overlap(proxy, translation, rotation)          # solid bodies
+inside = physics.overlap(proxy, translation, triggers=True)       # trigger volumes
 ```
 
 A query answers in the call, on the thread that makes it. On the render thread it reads
@@ -538,6 +543,12 @@ camera's wanted place, which also keeps it out of walls; the hill-runner chase c
 twig-bb's death camera are the two users in this workspace.
 
 A character that is dead, hidden or between rounds is `remove()`d.
+
+A game that orders the step with its other updates, or steps with its own clock, sets
+`character.framed = False`. The frame then leaves the character alone, and the owner
+calls `character.update(dt)`, or `PhysicsViewPlatform.update(dt)` over it.
+`PhysicsViewPlatform.bind` and `bind_eye` over a character move the body the world sees
+with the capsule.
 
 #### Characters and dynamic bodies
 
@@ -812,6 +823,20 @@ Changes.
 - Audio: `audio.listener = platform`, `audio.play(clip, at=, gain=, priority=, emitter=)`,
   and the submerge through `audio.engine`.
 - Its tests that build a bare `PhysicsWorld` build a standalone `Physics` instead.
+
+Landed (2026-10-25, in twig-bb's `physics-services` branch):
+- `twig_bb.hitboxes` gives each combatant a body: its character's, or a kinematic capsule
+  placed from the arena. A cast passes through the shooter and the dead, a sight line
+  through everyone, by `skip=`.
+- The player and the bots are `framed = False` characters stepped by `OnIdle` and the
+  rules with the game's own clock, so the order input, navigation, push volumes, rules
+  holds and the dt is the game's.
+- The submerge is `audio.muffle`. `audio.engine` opens the device, and walking into a
+  pool must not start one.
+- `raycast_many` is not used: a projectile's skip list differs per projectile, and its
+  bounce and detonation are decided one at a time.
+- A character is an obstacle to every other character, as the stand-in is a body the
+  controller treats as heavier than `pushMass`.
 
 ### openglcontext-forest
 
