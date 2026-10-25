@@ -1,10 +1,12 @@
 """oglc-terrain viewer: CLI parsing, world resolution, and the non-GL helpers
 (surface sampling, spawn search, scatter slicing, view-projection, input handlers,
-ground clamp and object collision). OnInit and the OnIdle movement loop drive a live
-window + streaming and are covered by the terrain render/subprocess tests, not here."""
+the avatar's input and camera, and the ground, trunks and rocks it walks among). OnInit
+drives a live window + streaming and is covered by the terrain render/subprocess tests,
+not here."""
 import os
 import subprocess
 import sys
+import time
 import types
 
 import numpy as np
@@ -349,47 +351,250 @@ class TestStream:
         assert np.asarray(seen['vp']).shape == (4, 4)
 
 
-class TestOnIdle:
-    def test_returns_zero_before_the_avatar_exists(self):
+class TestTheAvatarsFrame:
+    """The input before the world is stepped, and the camera after it."""
+
+    def _viewer(self, flying=False, avatar=None):
         inst = _inst()
-        assert inst.OnIdle() == 0
+        inst._keys = {}
+        inst._flying = flying
+        inst._sprint = False
+        inst._mult = 1.0
+        inst._speeds = dict(walk=16.0, sprint=90.0, fly=90.0)
+        inst._turning = False
+        inst.avatar = avatar
+        return inst
+
+    class Avatar:
+        """What the viewer asks of the platform it drives."""
+
+        def __init__(self):
+            self.calls = []
+            self.applied = []
+
+        def set_move(self, forward, strafe, mode='walk', speed=None):
+            self.calls.append(('move', forward, strafe, mode, speed))
+
+        def set_fly_move(self, forward, strafe, up, speed=None):
+            self.calls.append(('fly', forward, strafe, up, speed))
+
+        def turn(self, amount):
+            self.calls.append(('turn', amount))
+
+        def apply(self, context):
+            self.applied.append(context)
+
+        def camera_position(self):
+            return (1.0, 2.0, 3.0)
+
+    def test_a_held_key_walks_the_avatar_at_the_speed_of_the_tier(self):
+        avatar = self.Avatar()
+        inst = self._viewer(avatar=avatar)
+        inst._keys = {'w': 100.0, 'd': 100.0}
+        inst._steer(100.1, 0.016)
+        assert avatar.calls == [('move', 1.0, 1.0, 'walk', 16.0)]
+
+    def test_sprint_walks_at_the_sprint_speed_and_a_stale_key_is_let_go(self):
+        avatar = self.Avatar()
+        inst = self._viewer(avatar=avatar)
+        inst._sprint = True
+        inst._keys = {'w': 100.0, 's': 90.0}
+        inst._steer(100.1, 0.016)
+        assert avatar.calls == [('move', 1.0, 0.0, 'sprint', 90.0)]
+
+    def test_the_turn_keys_turn_the_avatar_and_ask_for_frames(self):
+        avatar = self.Avatar()
+        inst = self._viewer(avatar=avatar)
+        inst._keys = {'q': 100.0}
+        inst._steer(100.1, 0.1)
+        assert avatar.calls[0] == ('turn', pytest.approx(-0.18))
+        assert inst._turning is True
+        inst._keys = {}
+        inst._steer(100.2, 0.1)
+        assert inst._turning is False
+
+    def test_a_flier_is_moved_in_three_dimensions(self):
+        avatar = self.Avatar()
+        inst = self._viewer(flying=True, avatar=avatar)
+        inst._keys = {'w': 100.0, 'r': 100.0}
+        inst._steer(100.1, 0.016)
+        assert avatar.calls == [('fly', 1.0, 0.0, 1.0, 90.0)]
+
+    def test_the_input_waits_for_the_avatar(self):
+        inst = self._viewer()
+        inst._last = 0.0
+        inst._drive_avatar()
+        inst._follow_avatar()
+        assert inst.avatar is None
+
+    def test_the_input_step_is_the_time_since_the_last_but_never_more_than_a_twentieth(self):
+        avatar = self.Avatar()
+        inst = self._viewer(avatar=avatar)
+        inst._keys = {'q': time.time()}
+        inst._last = time.time() - 5.0
+        inst._drive_avatar()
+        assert avatar.calls[0] == ('turn', pytest.approx(-1.8 * 0.05))
+
+    def test_the_camera_follows_the_avatar_and_streams_to_its_eye(self):
+        avatar = self.Avatar()
+        inst = self._viewer(avatar=avatar)
+        inst.height_fn = None
+        inst.terrain = None
+        inst._veg = True
+        redraws = []
+        inst.triggerRedraw = lambda force=0: redraws.append(force)
+        inst._follow_avatar()
+        assert avatar.applied == [inst]
+        assert redraws == []
+        inst._turning = True
+        inst._follow_avatar()
+        assert redraws == [1]
 
 
-class TestGroundAndCollision:
-    def test_ground_clamp_is_skipped_for_a_raw_tileset(self):
+class TestWhatTheAvatarStandsOn:
+    def surface(self):
+        return T.Surface(P.terrain_height)
+
+    def test_the_surface_is_the_height_function_floored_at_the_water(self):
+        surface = self.surface()
+        x, z = np.meshgrid(np.linspace(-300, 300, 7), np.linspace(-300, 300, 5))
+        heights = surface.sample(x, z)
+        assert heights.shape == x.shape
+        assert heights.min() >= P.WATER_LEVEL
+        assert heights[2, 3] == pytest.approx(T._surface(P.terrain_height, x[2, 3], z[2, 3]))
+
+    def test_the_surface_answers_no_points_with_no_heights(self):
+        assert self.surface().sample(np.zeros(0), np.zeros(0)).shape == (0,)
+
+    def test_trunks_near_a_point_stand_on_the_surface(self):
+        surface = self.surface()
+        trees = np.array([[10.0, 12.0], [14.0, -30.0], [500.0, 500.0]])
+        positions, radii = T.trunks_near(trees, surface, 8.0, 8.0, 20.0)
+        assert positions.shape == (1, 3)
+        assert positions[0, 0] == 10.0 and positions[0, 2] == 12.0
+        assert positions[0, 1] == pytest.approx(surface.sample(10.0, 12.0))
+        assert radii.tolist() == [T.TRUNK_RADIUS]
+
+    def test_rocks_near_a_point_are_domes_a_walker_can_climb(self):
+        surface = self.surface()
+        rocks = np.array([[10.0, 12.0], [500.0, 500.0]])
+        positions, radii, rims, tops = T.rocks_near(rocks, np.array([1.0, 2.0]), surface,
+                                                    8.0, 8.0, 20.0)
+        assert positions.shape == (1, 3) and radii.tolist() == [1.0]
+        assert 0.0 < rims[0] < tops[0] < radii[0]
+
+
+class TestMakeAvatar:
+    """The avatar is a character in a physics world, on the ground the viewer draws."""
+
+    def physics(self):
+        from OpenGLContext.physics.service import Physics
+        from OpenGLContext.physics.settings import PhysicsDefinition
+
+        return Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0))
+
+    def capabilities(self):
+        from omi_physics.character import CharacterCapabilities
+
+        return CharacterCapabilities(eyeHeight=1.7, stepHeight=0.7, maxSlope=75.0)
+
+    def hill(self):
+        return T.Surface(lambda x, z: 5.0 + 0.0 * x)
+
+    def settle(self, physics, seconds=3.0):
+        for _ in range(int(seconds * 60)):
+            physics.frame(1 / 60)
+
+    def test_the_avatar_drops_onto_the_ground_and_stands_on_it(self):
+        physics = self.physics()
+        avatar, landscape = T.make_avatar(physics, self.hill(), 400.0, self.capabilities(),
+                                          (0.0, 5.0, 0.0), 0.6)
+        self.settle(physics)
+        assert avatar.feet_position()[1] == pytest.approx(5.0, abs=0.01)
+        assert avatar.managed.grounded
+        assert avatar.yaw == 0.6
+        assert landscape is not None
+        physics.close()
+
+    def test_the_scenes_shapes_are_not_made_into_bodies(self):
+        physics = self.physics()
+        T.make_avatar(physics, self.hill(), 400.0, self.capabilities(), (0.0, 5.0, 0.0), 0.6)
+        assert physics.definition.colliders == 'explicit'
+        physics.close()
+
+    def test_a_trunk_stops_the_avatar(self):
+        physics = self.physics()
+        surface = self.hill()
+        trees = np.array([[0.0, -6.0]])
+        avatar, _ = T.make_avatar(
+            physics, surface, 400.0, self.capabilities(), (0.0, 5.0, 0.0), 0.0,
+            trunks=lambda x, z, reach: T.trunks_near(trees, surface, x, z, reach))
+        self.settle(physics, 1.0)
+        for _ in range(60 * 2):
+            avatar.set_move(1.0, 0.0, speed=4.0)
+            physics.frame(1 / 60)
+        x, _, z = avatar.feet_position()
+        assert np.hypot(x, z + 6.0) == pytest.approx(T.TRUNK_RADIUS + 0.3, abs=0.05)
+
+    def test_a_rock_that_can_be_stepped_onto_is_climbed(self):
+        physics = self.physics()
+        surface = self.hill()
+        rocks = np.array([[0.0, -6.0]])
+        avatar, _ = T.make_avatar(
+            physics, surface, 400.0, self.capabilities(), (0.0, 5.0, 0.0), 0.0,
+            rocks=lambda x, z, reach: T.rocks_near(rocks, np.array([0.8]), surface, x, z, reach))
+        self.settle(physics, 1.0)
+        highest = 0.0
+        for _ in range(60 * 5):
+            avatar.set_move(1.0, 0.0, speed=4.0)
+            physics.frame(1 / 60)
+            highest = max(highest, avatar.feet_position()[1] - 5.0)
+        assert highest > 0.5
+        assert avatar.feet_position()[2] < -8.0
+
+    def test_a_tileset_with_no_ground_makes_the_avatar_alone(self):
+        physics = self.physics()
+        avatar, landscape = T.make_avatar(physics, None, 400.0, self.capabilities(),
+                                          (0.0, 200.0, 0.0), 0.6)
+        assert landscape is None
+        assert physics.definition.colliders == 'scene'
+        assert physics.characters == (avatar.managed,)
+        physics.close()
+
+
+class TestFlierFloor:
+    def test_the_floor_is_skipped_for_a_raw_tileset(self):
         inst = _inst()
         inst.height_fn = None
+        inst._flying = True
         ch = types.SimpleNamespace(position=np.array([0.0, -50.0, 0.0], 'd'),
                                    height=2.0, vy=-3.0, grounded=False)
         inst.avatar = types.SimpleNamespace(character=ch)
-        inst._ground_clamp()
+        inst._floor_flier()
         assert ch.position.tolist() == [0.0, -50.0, 0.0]     # left below any surface
         assert ch.vy == -3.0 and ch.grounded is False
 
-    def test_ground_clamp_snaps_the_avatar_onto_the_surface(self):
+    def test_a_flier_is_lifted_onto_the_surface(self):
         inst = _inst()
         inst.height_fn = P.terrain_height
-        inst._flying = False
+        inst._flying = True
         surf = T._surface(P.terrain_height, 0.0, 0.0)
         ch = types.SimpleNamespace(position=np.array([0.0, surf - 5.0, 0.0], 'd'),
                                    height=2.0, vy=-3.0, grounded=False)
         inst.avatar = types.SimpleNamespace(character=ch)
-        inst._ground_clamp()
+        inst._floor_flier()
         assert ch.position[1] == pytest.approx(surf + 1.0)   # base sits on the surface
-        assert ch.vy == 0.0 and ch.grounded is True
+        assert ch.vy == 0.0
 
-    def test_object_collision_pushes_the_avatar_out_of_a_trunk(self):
+    def test_a_walker_is_left_to_the_ground_body(self):
         inst = _inst()
-        ch = types.SimpleNamespace(
-            position=np.array([0.1, 5.0, 0.0], 'd'),
-            caps=types.SimpleNamespace(radius=0.3))
+        inst.height_fn = P.terrain_height
+        inst._flying = False
+        ch = types.SimpleNamespace(position=np.array([0.0, -50.0, 0.0], 'd'),
+                                   height=2.0, vy=-3.0, grounded=False)
         inst.avatar = types.SimpleNamespace(character=ch)
-        inst._tree_pos = np.array([[0.0, 0.0]])              # trunk at the origin
-        inst._rock_pos = np.zeros((0, 2))
-        inst._rock_rad = np.zeros(0)
-        inst._object_collision()
-        # pushed outward to at least the combined radius (0.45 trunk + 0.3 avatar)
-        assert np.hypot(ch.position[0], ch.position[2]) >= 0.74
+        inst._floor_flier()
+        assert ch.position.tolist() == [0.0, -50.0, 0.0]
 
 
 if __name__ == '__main__':

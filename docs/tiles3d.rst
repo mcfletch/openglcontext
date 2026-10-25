@@ -79,11 +79,13 @@ The viewer is ``bin/terrain_view.py``. It sets ``OPENGLCONTEXT_RENDERER=pbr``
 and the GLFW backend itself, because terrain tiles are PBR glTF and their
 per-vertex colours render only under the PBR pass. Keys are bound on both
 key-down and character events, because some Wayland/GLFW setups deliver only
-character events. The character controller moves the camera from ``OnIdle``,
-and the default free-fly navigator is unbound so that the two do not both
-move it. Ground collision is analytic: each frame the avatar is clamped to
-``height_fn(x, z)``, which matches the visible tiles exactly and cannot be
-passed through at any frame rate, so the floor needs no collision mesh.
+character events. The avatar is a character in the context's physics world
+(``terrain_view.make_avatar``), stepped by the physics service once a frame; the
+camera is put at its eye after the step, and the default free-fly navigator is
+unbound so that the two do not both move it. The ground is a body that answers
+its height from ``height_fn(x, z)``, the function the visible tiles were baked
+from, so the floor needs no collision mesh and a body added to the context lands
+on what is drawn. The trees and rocks within 32 m of the avatar are bodies too.
 Vegetation is instanced (one shared prototype per layer) in two fields that
 follow the camera (dense grass, sparse trees), with the full mesh near the
 camera and a single cone far away. Water is a translucent plane at the water
