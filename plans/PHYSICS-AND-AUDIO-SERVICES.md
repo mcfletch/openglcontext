@@ -28,10 +28,10 @@ What landed:
 
 Found while moving the tutorials, in `omi_physics`: a crouched character could not stand on a
 slope (fixed, `STAND_CLEARANCE`); a static body moved each step left the bodies that move with stale
-boxes, so a ball fell through the floor (fixed, `refit_aabbs`). Open: a box resting on a static
-trimesh slope slides whatever its friction, because `box_triangle_batch` makes one contact point
-for each triangle at the centre of the box, which has no restoring torque; a ramp is given
-`proxy='box'` until the box and the triangles have a contact manifold.
+boxes, so a ball fell through the floor (fixed, `refit_aabbs`); and a box resting on a static
+trimesh slope slid whatever its friction, because `box_triangle_batch` gave one contact point for each
+triangle, at the centre of the box, which has no restoring torque (fixed, `box_face_contacts` gives a
+contact at each corner that stands on the face).
 
 Not done:
 
