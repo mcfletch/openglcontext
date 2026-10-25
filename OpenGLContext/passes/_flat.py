@@ -1569,6 +1569,21 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
             )
             return 0
 
+    def renderPhysics( self, context: Any ) -> None:
+        """Tell the context's physics, where it has any, when the scene's shapes changed.
+
+        The physics service makes static bodies of the shapes no body claims.
+        A scene whose paths are as they were costs a comparison, and a context
+        that never asked for physics costs a lookup.
+        """
+        service = getattr( context, '_physics', None )
+        if service is None:
+            return
+        try:
+            service.scenery_changed( self.scene, self._pathGeneration )
+        except Exception as err:
+            log.warning( "Failure making the scene's colliders: %s", getTraceback( err ) )
+
     def selectLevels( self, matrix: Any ) -> None:
         """Let every LOD node choose its level for one viewer at ``matrix``.
 
@@ -2648,6 +2663,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
         # and one of them would eventually forget, leaving a default install
         # silent while a sound played directly through the engine still worked.
         self.renderAudio( context )
+        self.renderPhysics( context )
 
         if self._begin_bloom():
             try:

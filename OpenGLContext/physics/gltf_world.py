@@ -7,7 +7,8 @@ model.  If the document carries OMI physics bodies those are honoured directly
 static collision mesh.  Used by the ``oglc-gltf`` viewer's walk-around mode.
 """
 import weakref
-from typing import Any, Optional
+from collections.abc import Callable, Iterator
+from typing import Any, NamedTuple, Optional
 import numpy as np
 from vrml.x3d import nodes as x3d
 
@@ -147,22 +148,34 @@ def _append_mesh(world_points: np.ndarray, tri: Any, points: list[np.ndarray],
         tris.append(np.asarray(tri) + base)
 
 
-def _collect(node: Any, world_matrix: np.ndarray, buckets: dict[tuple[Any, ...], _Bucket],
-             groups: tuple[Any, ...], ancestry: tuple[Any, ...],
-             min_hull_size: float) -> None:
-    """Walk ``node`` and append each mesh's world-space verts/tris to its bucket.
+class MeshSite(NamedTuple):
+    """A node that draws a mesh, where it stands in the tree.
 
-    ``buckets`` holds one :class:`_Bucket` per tuple of the enabled X3D
-    ``Collision`` groups a mesh is inside, innermost first; ``groups`` is that
-    tuple here. ``ancestry`` is the nodes on the path from the root, so
-    instanced geometry reached by several transforms is collected once per
-    instance without infinite recursion.
+    ``groups`` are the enabled X3D ``Collision`` groups it is inside, innermost
+    first; ``world`` is its world matrix; ``geometry`` is what it draws.
     """
-    # Cycle-detect on the current path, NOT a global seen-set: instanced geometry
-    # shares one mesh node reachable via many parent transforms, and each instance
-    # must be collected with its own transform (a global seen-set would keep only
-    # the first, so e.g. the parthenon's instanced columns would have no collider).
+    node: Any
+    groups: tuple[Any, ...]
+    world: np.ndarray
+    geometry: Any
+
+
+def iter_meshes(node: Any, world_matrix: Optional[np.ndarray] = None,
+                groups: tuple[Any, ...] = (), ancestry: tuple[Any, ...] = (),
+                skip: Optional[Callable[[Any], bool]] = None) -> Iterator[MeshSite]:
+    """Each node at or under ``node`` that draws a mesh, with its world matrix.
+
+    A disabled X3D ``Collision`` group's subtree is left out and an enabled
+    one's proxy stands in for its children. ``skip(node)`` true leaves that
+    node's whole subtree out without reading it. Instanced geometry reached by
+    several transforms is met once per instance, and a node inside itself is
+    met once; cycles are detected on the current path, not globally.
+    """
+    if world_matrix is None:
+        world_matrix = np.eye(4)
     if any(above is node for above in ancestry):
+        return
+    if skip is not None and skip(node):
         return
     ancestry = ancestry + (node,)
     world = _local_matrix(node) @ world_matrix
@@ -173,23 +186,57 @@ def _collect(node: Any, world_matrix: np.ndarray, buckets: dict[tuple[Any, ...],
             return
         groups = (node,) + groups
         if node.proxy:
-            _collect(node.proxy, world, buckets, groups, ancestry, min_hull_size)
+            yield from iter_meshes(node.proxy, world, groups, ancestry, skip)
             return
     geom = getattr(node, 'geometry', None)
     if geom is not None:
-        mi = _mesh_positions_indices(geom)
-        if mi is not None:
-            pos, tri = mi
-            homog = np.column_stack([pos, np.ones(len(pos))])
-            bucket = buckets.setdefault(groups, _Bucket())
-            # A node holding a set of placements is that mesh once per placement,
-            # so collision has to be too -- a car must not drive through a tree
-            # it can see.
-            for placed in _placed_worlds(node, world):
-                _append_mesh(homog @ placed, tri, bucket.points, bucket.tris, bucket.state,
-                             min_hull_size)
+        yield MeshSite(node, groups, world, geom)
     for child in getattr(node, 'children', None) or ():
-        _collect(child, world, buckets, groups, ancestry, min_hull_size)
+        yield from iter_meshes(child, world, groups, ancestry, skip)
+
+
+def site_mesh(site: MeshSite, min_hull_size: float = 0.0,
+              mesh: Optional[tuple[np.ndarray, np.ndarray]] = None
+              ) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """The world-space ``(points, triangles)`` a mesh site draws, or None where it draws none.
+
+    A node holding a set of placements is that mesh once per placement.
+    ``mesh`` is the geometry's own ``(positions, triangles)`` where the caller
+    has them already.
+    """
+    mi = mesh if mesh is not None else _mesh_positions_indices(site.geometry)
+    if mi is None:
+        return None
+    pos, tri = mi
+    homog = np.column_stack([pos, np.ones(len(pos))])
+    points: list[np.ndarray] = []
+    tris: list[np.ndarray] = []
+    state: dict[str, int] = {'n': 0}
+    for placed in _placed_worlds(site.node, site.world):
+        _append_mesh(homog @ placed, tri, points, tris, state, min_hull_size)
+    if not points:
+        return None
+    return np.vstack(points), (np.vstack(tris) if tris else np.zeros((0, 3), dtype='i'))
+
+
+def _collect(node: Any, world_matrix: np.ndarray, buckets: dict[tuple[Any, ...], _Bucket],
+             groups: tuple[Any, ...], ancestry: tuple[Any, ...],
+             min_hull_size: float) -> None:
+    """Walk ``node`` and append each mesh's world-space verts/tris to its bucket.
+
+    ``buckets`` holds one :class:`_Bucket` per tuple of the enabled X3D
+    ``Collision`` groups a mesh is inside, innermost first.
+    """
+    for site in iter_meshes(node, world_matrix, groups, ancestry):
+        mi = _mesh_positions_indices(site.geometry)
+        if mi is None:
+            continue
+        pos, tri = mi
+        homog = np.column_stack([pos, np.ones(len(pos))])
+        bucket = buckets.setdefault(site.groups, _Bucket())
+        for placed in _placed_worlds(site.node, site.world):
+            _append_mesh(homog @ placed, tri, bucket.points, bucket.tris, bucket.state,
+                         min_hull_size)
 
 
 def _buckets(group: Any, min_hull_size: float) -> dict[tuple[Any, ...], _Bucket]:

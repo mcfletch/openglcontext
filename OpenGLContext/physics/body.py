@@ -27,7 +27,7 @@ Vector = tuple[float, float, float]
 class Body:
     """One body of a physics service: its node, its shape and its place in the world."""
 
-    def __init__(self, physics: Physics, uid: int, kind: str, node: Any, proxy: Proxy,
+    def __init__(self, physics: Physics, uid: int, kind: str, node: Any, proxy: Proxy | None,
                  position: Any, axis_angle: Any, mass: float,
                  linear_damping: float = 0.0, angular_damping: float = 0.0) -> None:
         self.physics = physics
@@ -37,7 +37,14 @@ class Body:
         self.kind = kind
         #: The scenegraph node the body drives; touch it on the render thread only.
         self.node = node
+        #: The shape; None for scenery whose triangles are still being cooked.
         self.proxy = proxy
+        #: Whether the service made this body from a shape of the scene, rather than
+        #: the application adding it.
+        self.derived = False
+        self._pending = False
+        #: Writes made before the body was in the world, sent when it is.
+        self._deferred: list[tuple[str, tuple[Any, ...]]] = []
         #: Kilograms; 0 for a body that is not dynamic.
         self.mass = mass
         #: False once the body has been removed.

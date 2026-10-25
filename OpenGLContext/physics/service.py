@@ -20,6 +20,8 @@ import collections
 import concurrent.futures
 import itertools
 import logging
+import queue
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -30,6 +32,7 @@ from omi_physics import mathutil, model
 from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.callbacks import is_physics_callback
+from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
 from OpenGLContext.physics.manager import write_pose
@@ -91,6 +94,12 @@ class Physics:
         self._gone: list[tuple[int, int]] = []
         self.worker: Worker = self._make_worker(definition.mode, None)
         self._install_hooks()
+        self.scenery = SceneryTracker(self)
+        self._cooker: concurrent.futures.ThreadPoolExecutor | None = None
+        self._cooked_results: queue.SimpleQueue[tuple[Body, BodySpec | None]] = queue.SimpleQueue()
+        self._outstanding = 0
+        #: How many scenery shapes have been cooked.
+        self.cooked = 0
 
     # -- the worker -----------------------------------------------------
     def _make_worker(self, mode: str, runtime: Any) -> Worker:
@@ -107,6 +116,11 @@ class Physics:
     def _ensure_started(self) -> None:
         if self._enabled and not self._closed:
             self.worker.start()
+
+    @property
+    def closed(self) -> bool:
+        """Whether :meth:`close` has been called."""
+        return self._closed
 
     @property
     def world(self) -> Any:
@@ -210,6 +224,7 @@ class Physics:
             node.translation = tuple(options['translation'])
         if options.get('rotation') is not None:
             node.rotation = tuple(options['rotation'])
+        self._claim(node)
         shape = self._proxy(node, proxy, kind)
         position = np.asarray(node.translation, dtype='d')[:3]
         axis_angle = np.asarray(node.rotation, dtype='d')[:4]
@@ -241,6 +256,16 @@ class Physics:
                 self._ensure_started()
         return body
 
+    def _claim(self, node: Any) -> None:
+        """Remove the scenery bodies made for ``node`` and for the shapes under it."""
+        stack = [node]
+        while stack:
+            current = stack.pop()
+            body = self._by_node.get(current)
+            if body is not None and body.derived:
+                self.remove(body)
+            stack.extend(getattr(current, 'children', None) or ())
+
     @staticmethod
     def _material(options: dict[str, Any]) -> Any:
         friction, restitution = options.get('friction'), options.get('restitution')
@@ -265,6 +290,83 @@ class Physics:
             return Proxy(proxy)
         return Proxy.from_node(proxy, 'auto', dynamic)
 
+    def scenery_changed(self, root: Any, generation: Any) -> int:
+        """Make static bodies of the shapes ``root`` holds that no body claims.
+
+        The render pass calls this each frame with the scene and a number that
+        changes when the scene's paths do; nothing is looked at while the number
+        is the same. Returns how many shapes were new. The shapes' triangles are
+        cooked off this thread and each body joins the world when its cooking is done.
+        """
+        return self.scenery.update(root, generation)
+
+    def _derive(self, node: Any) -> Body:
+        """A static body for scenery ``node``, waiting for its triangles to be cooked."""
+        uid = next(self._uids)
+        body = Body(self, uid, 'static', node, None, _ZERO3, (0.0, 0.0, 1.0, 0.0), 0.0)
+        body.derived = True
+        self._bodies[uid] = body
+        self._by_node[node] = body
+        return body
+
+    def _cook_later(self, body: Body, make_spec: Callable[[], BodySpec | None]) -> None:
+        """Run ``make_spec`` on the cooking thread; :meth:`frame` adds the body when it is done."""
+        body._pending = True
+        if self._cooker is None:
+            self._cooker = concurrent.futures.ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix='physics-cook')
+        self._outstanding += 1
+
+        def job() -> None:
+            try:
+                spec = make_spec()
+            except Exception:
+                log.exception('could not cook the collider of %r', body.node)
+                spec = None
+            self._cooked_results.put((body, spec))
+
+        self._cooker.submit(job)
+
+    @property
+    def cooking(self) -> int:
+        """How many scenery colliders are still being cooked."""
+        return self._outstanding
+
+    def wait_cooked(self, timeout: float = 10.0) -> bool:
+        """Wait until the cooking in progress is done and its bodies are in the world.
+
+        Returns False if it is not done in ``timeout`` seconds.
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            self._pump_cooked()
+            if self._outstanding == 0:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.002)
+
+    def _pump_cooked(self) -> None:
+        while True:
+            try:
+                body, spec = self._cooked_results.get_nowait()
+            except queue.Empty:
+                return
+            self._outstanding -= 1
+            self.cooked += 1
+            body._pending = False
+            deferred, body._deferred = body._deferred, []
+            if not body.alive:
+                continue
+            if spec is None:
+                self.remove(body)
+                continue
+            body.proxy = spec.proxy
+            if self._enabled and not self._closed:
+                self.worker.submit(Command('add', body.uid, (spec,), next(self._seq)))
+                for op, args in deferred:
+                    self.worker.submit(Command(op, body.uid, args, next(self._seq)))
+
     def cook(self, node: Any, strategy: str = 'auto', dynamic: bool = True) -> Proxy:
         """A :class:`Proxy` cooked from what ``node`` draws, to share between bodies."""
         return Proxy.from_node(node, strategy, dynamic)
@@ -280,6 +382,8 @@ class Physics:
         else:
             self.handlers.forget_body(body.uid)
         body.alive = False
+        if body.derived:
+            self.scenery.release(body.node)
         self._bodies.pop(body.uid, None)
         if self._by_node.get(body.node) is body:
             del self._by_node[body.node]
@@ -321,6 +425,9 @@ class Physics:
     def _command(self, op: str, body: Body, *args: Any) -> int:
         if not body.alive or not self._enabled or self._closed:
             return 0
+        if body._pending:
+            body._deferred.append((op, args))
+            return 0
         seq = next(self._seq)
         self.worker.submit(Command(op, body.uid, args, seq))
         return seq
@@ -361,6 +468,7 @@ class Physics:
         if not self._enabled or self._closed:
             self.render.apply()
             return False
+        self._pump_cooked()
         out = self.worker.collect(dt)
         wrote = False
         if out.snapshot is not None:
@@ -484,7 +592,7 @@ class Physics:
         else:
             for uid in handler.bodies:
                 if uid in self._bodies:
-                    self.worker.submit(Command('report', uid, (True,), next(self._seq)))
+                    self._command('report', self._bodies[uid], True)
         if handler.phase in ('persist', 'stay'):
             self._send_world('persist', True)
 
@@ -579,6 +687,8 @@ class Physics:
         if self._closed:
             return
         self._closed = True
+        if self._cooker is not None:
+            self._cooker.shutdown(wait=False, cancel_futures=True)
         self.worker.stop()
 
 

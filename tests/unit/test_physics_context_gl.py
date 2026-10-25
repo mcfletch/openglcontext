@@ -1,0 +1,66 @@
+"""Physics in a real window: no tick code, the scene's floor is the ground, an idle scene is left alone."""
+import time
+
+import pytest
+
+from OpenGLContext.scenegraph import basenodes, surfaces
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.testing.scenes import scene_context
+
+LOOK = PhysicalMaterial(baseColor=(0.6, 0.6, 0.6))
+
+
+def _shape(geometry, at):
+    return surfaces.shape(geometry, LOOK, translation=at)
+
+
+def _frames(context, until, seconds=20.0):
+    """Run the loop the way the main loop does, until ``until()`` or the time is up."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        context.runRenderQueue()
+        context.OnDraw(force=1)
+        if until():
+            return True
+        time.sleep(0.005)
+    return False
+
+
+def test_a_ball_comes_to_rest_on_the_scenes_floor_with_no_tick_code(gl_context):
+    floor = _shape(surfaces.block((20, 1, 20)), (0, -0.5, 0))
+    ball = _shape(surfaces.sphere(0.5), (0, 2.0, 0))
+    with scene_context([floor, ball], size=(48, 48)) as context:
+        body = context.physics.add_dynamic(ball, restitution=0.0)
+        body.apply_impulse((0, 0, 200))
+        assert _frames(context, lambda: context.physics.worker.idle)
+        assert ball.translation[1] == pytest.approx(0.5, abs=0.06)
+        assert ball.translation[2] > 0.0                      # the push carried it
+
+
+def test_an_idle_scene_asks_for_no_frames_and_the_worker_stops_ticking(gl_context):
+    floor = _shape(surfaces.block((20, 1, 20)), (0, -0.5, 0))
+    ball = _shape(surfaces.sphere(0.5), (0, 0.6, 0))
+    with scene_context([floor, ball], size=(48, 48)) as context:
+        context.physics.add_dynamic(ball, restitution=0.0)
+        assert _frames(context, lambda: context.physics.worker.idle)
+        steps = context.physics.worker.steps
+        time.sleep(0.3)
+        context.runRenderQueue()
+        assert context.physics.worker.steps == steps
+        assert context.physics.frame(0.016) is False
+
+
+def test_the_window_closes_the_worker(gl_context):
+    ball = _shape(surfaces.sphere(0.5), (0, 5, 0))
+    with scene_context([ball], size=(48, 48)) as context:
+        context.physics.add_dynamic(ball)
+        worker = context.physics.worker
+        assert worker.thread_id is not None
+    assert worker.thread_id is None
+
+
+def test_the_basenodes_scene_is_not_changed_by_physics_it_never_uses(gl_context):
+    ball = _shape(surfaces.sphere(0.5), (0, 5, 0))
+    with scene_context([basenodes.Group(children=[ball])], size=(48, 48)) as context:
+        context.OnDraw(force=1)
+        assert '_physics' not in context.__dict__
