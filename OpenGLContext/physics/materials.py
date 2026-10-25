@@ -30,6 +30,8 @@ class PhysicsMaterial:
     name: str
     material: model.Material
     sound: str | None = None
+    #: A clip played where a character's foot lands on a body of this material.
+    footstep: str | None = None
 
 
 class Materials:
@@ -56,20 +58,22 @@ class Materials:
 
     def define(self, name: str, friction: float | None = None, restitution: float | None = None,
                sound: str | None = None, static_friction: float | None = None,
-               dynamic_friction: float | None = None) -> PhysicsMaterial:
+               dynamic_friction: float | None = None,
+               footstep: str | None = None) -> PhysicsMaterial:
         """Make a material called ``name``; defining it again replaces it.
 
         ``friction`` sets both coefficients, ``static_friction`` and
         ``dynamic_friction`` one each. ``restitution`` is the fraction of the
         closing speed a bounce keeps. ``sound`` is a clip played where a body
-        of this material is struck.
+        of this material is struck, and ``footstep`` one played where a
+        character's foot lands on it.
         """
         base = model.Material()
         material = model.Material(
             staticFriction=_pick(base.staticFriction, static_friction, friction),
             dynamicFriction=_pick(base.dynamicFriction, dynamic_friction, friction),
             restitution=_pick(base.restitution, restitution))
-        made = PhysicsMaterial(name, material, sound)
+        made = PhysicsMaterial(name, material, sound, footstep)
         self._known[name] = made
         self._physics._send_world('material', name, material)
         return made
@@ -91,6 +95,16 @@ class Materials:
         """The sound of the material called ``name``, or None."""
         found = self._known.get(name) if name else None
         return None if found is None else found.sound
+
+    def footstep_of(self, name: str | None) -> str | None:
+        """The footstep clip of the material called ``name``, or None."""
+        found = self._known.get(name) if name else None
+        return None if found is None else found.footstep
+
+    @property
+    def has_footsteps(self) -> bool:
+        """Whether any material has a footstep clip."""
+        return any(known.footstep for known in self._known.values())
 
     @property
     def has_sounds(self) -> bool:

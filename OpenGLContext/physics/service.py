@@ -20,6 +20,7 @@ import collections
 import concurrent.futures
 import itertools
 import logging
+import os
 import queue
 import time
 from collections.abc import Callable, Iterable
@@ -155,6 +156,26 @@ class Physics:
             return self.worker.runtime.world
         raise RuntimeError('physics.world is for inline mode; use physics.run(fn) to reach '
                            'the world on its thread')
+
+    def slot_of(self, body: Body) -> int:
+        """The row ``body`` has in the arrays of :attr:`world`, inline mode only.
+
+        Waiting commands are applied first, so a body added a moment ago has
+        its row. Raises KeyError for a body the world does not hold.
+        """
+        runtime = self.worker.runtime
+        if not isinstance(self.worker, InlineWorker):
+            self.world  # noqa: B018 raises the error that names the inline-only rule
+        self.worker.flush()
+        return int(runtime.entry(body.uid).index)
+
+    def body_at(self, slot: int) -> Body | None:
+        """The body in row ``slot`` of the arrays of :attr:`world`, or None for a row no body has."""
+        world = self.world
+        if not 0 <= slot < len(world.bodies):
+            return None
+        uid = world.handle_of(world.ref(slot))
+        return None if uid is None else self._bodies.get(int(uid))
 
     # -- configuration --------------------------------------------------
     def set_config(self, definition: PhysicsDefinition) -> None:
@@ -527,20 +548,61 @@ class Physics:
             self._overlay = None
 
     def add_character(self, node: Any = None, capabilities: Any = None,
-                      position: Any = (0.0, 0.0, 0.0), gravity: float | None = None) -> Character:
+                      position: Any = (0.0, 0.0, 0.0), gravity: float | None = None, *,
+                      model: Any = None, animations: Any = None, parent: Any = None,
+                      fit: bool = True, facing: bool = True) -> Character:
         """Make a walker standing with its feet at ``position``.
 
         ``capabilities`` is a :class:`~omi_physics.character.CharacterCapabilities`
-        (speeds, jump height, capsule size, mass); ``node``, where given, is
-        placed at the feet each frame. The character is stepped in :meth:`frame`.
+        (speeds, jump height, capsule size, mass). The character is stepped in
+        :meth:`frame`.
+
+        ``node``, where given, is placed at the feet each frame. ``model`` is a
+        :class:`~OpenGLContext.character.model.CharacterModel`, a loaded glTF scene, the
+        bytes of a ``.glb``, or a path or URL; the character wears it in a node
+        it makes, appended to ``parent`` where that is given, scaled to the
+        capsule's height unless ``fit`` is false, and turned toward where the
+        character goes unless ``facing`` is false. ``animations`` is a
+        :class:`~OpenGLContext.character.locomotion.ClipMap`, ``'ual'`` for the
+        Universal Animation Library's names or ``'guess'`` to match the model's
+        clip names to the roles; the model then plays them for what the
+        character is doing.
         """
         from omi_physics.character import CharacterCapabilities  # noqa: PLC0415 only a service with walkers needs it
 
         caps = capabilities if capabilities is not None else CharacterCapabilities()
         pull = float(np.linalg.norm(self._gravity)) if gravity is None else float(gravity)
-        made = Character(self, node, caps, position, pull)
+        wearing = _model_of(model)
+        clip_map = _clip_map_of(animations, wearing)
+        turn = None
+        if wearing is not None:
+            from OpenGLContext.scenegraph.transform import Transform  # noqa: PLC0415 imports the scenegraph
+
+            if fit:
+                self._fit_model(wearing, caps)
+            turn = Transform(children=[wearing.group])
+            if node is None:
+                node = Transform(translation=tuple(float(v) for v in position), children=[turn])
+            else:
+                node.children = [*node.children, turn]
+            if parent is not None:
+                parent.children.append(node)
+        from OpenGLContext.character.facing import Facing  # noqa: PLC0415 only a character with a body needs it
+
+        made = Character(self, node, caps, position, pull, model=wearing, clip_map=clip_map,
+                         facing=Facing() if facing and wearing is not None else None,
+                         turn_node=turn)
         self._characters.append(made)
         return made
+
+    @staticmethod
+    def _fit_model(model: Any, capabilities: Any) -> None:
+        """Scale ``model`` to the capsule's standing height, its lowest point at the feet."""
+        from OpenGLContext.character.facing import fit_to_height, model_bounds  # noqa: PLC0415 only a character with a body needs it
+
+        bounds = model_bounds(model)
+        if bounds is not None:
+            fit_to_height(bounds[0], bounds[1], float(capabilities.standHeight)).place(model.group)
 
     def _character_replica(self) -> Replica:
         """The render thread's copy of the bodies, made on first use; characters step against it."""
@@ -1057,3 +1119,31 @@ def _sampled_heights(ground: Any, extent: Any, margin: float = 0.2) -> tuple[flo
     low, high = float(heights.min()), float(heights.max())
     pad = max(high - low, 1.0) * margin
     return low - pad, high + pad
+
+
+def _model_of(model: Any) -> Any:
+    """The :class:`CharacterModel` for what ``add_character`` was given as a model, or None."""
+    if model is None:
+        return None
+    from OpenGLContext.character.model import CharacterModel  # noqa: PLC0415 only a character with a body needs it
+
+    if isinstance(model, (bytes, bytearray, str, os.PathLike)):
+        return CharacterModel.load(model)
+    if hasattr(model, 'sceneGraph') and not hasattr(model, 'mixer'):
+        return CharacterModel.from_scene(model)
+    return model
+
+
+def _clip_map_of(animations: Any, model: Any) -> Any:
+    """The :class:`ClipMap` ``animations`` names, or None for none."""
+    if animations is None or model is None:
+        return None
+    from OpenGLContext.character.locomotion import ClipMap  # noqa: PLC0415 only a character with a body needs it
+
+    if isinstance(animations, ClipMap):
+        return animations
+    if animations == 'ual':
+        return ClipMap.ual()
+    if animations == 'guess':
+        return ClipMap.guess(model)
+    raise ValueError("animations is a ClipMap, 'ual' or 'guess', not %r" % (animations,))

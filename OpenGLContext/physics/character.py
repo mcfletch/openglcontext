@@ -19,6 +19,9 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import numpy as np
 from omi_physics.character import CharacterCapabilities, CharacterController, CharacterState
 
+from OpenGLContext.character.facing import Facing
+from OpenGLContext.character.locomotion import Locomotion, LocomotionInput
+
 from OpenGLContext.physics.handlers import weak_reference
 from OpenGLContext.physics.proxy import Proxy
 
@@ -27,7 +30,7 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.events import Collision
     from OpenGLContext.physics.service import Physics
 
-__all__ = ['Character', 'Landing']
+__all__ = ['Character', 'Footstep', 'Landing']
 
 _UP = np.array([0.0, 1.0, 0.0])
 
@@ -38,14 +41,39 @@ class Landing(NamedTuple):
     speed: float
 
 
+class Footstep(NamedTuple):
+    """A foot landing: who, which foot, how far through the stride, where, and on what material."""
+    character: Character
+    foot: str
+    phase: float
+    point: np.ndarray
+    material: str | None
+
+
 class Character:
     """A walker in a physics service."""
 
     def __init__(self, physics: Physics, node: Any, capabilities: CharacterCapabilities,
-                 feet: Any, gravity: float) -> None:
+                 feet: Any, gravity: float, *, model: Any = None, clip_map: Any = None,
+                 facing: Facing | None = None, turn_node: Any = None) -> None:
         self.physics = physics
         #: The node placed at the feet each frame, or None.
         self.node = node
+        #: The rigged model the character wears, or None.
+        self.model = model
+        #: Plays the model's clips for what the character is doing, or None.
+        self.locomotion: Locomotion | None = (
+            None if clip_map is None else Locomotion(clip_map, model))
+        #: What the locomotion settled on in the last frame, or None.
+        self.settled: Any = None
+        #: Turns the body toward where it goes or aims, and tilts it to the ground; or None.
+        self.facing = facing
+        #: The node the facing rotates, holding the model.
+        self.turn_node = turn_node
+        #: A direction to face instead of the one the character moves in, or None.
+        self.aim: Any = None
+        #: True makes the locomotion play the death clip.
+        self.dead = False
         self.capabilities = capabilities
         #: False once the character has been removed.
         self.alive = True
@@ -59,7 +87,10 @@ class Character:
             ignore=[replica.index_of(self.body.uid)])
         self._slot = replica.index_of(self.body.uid)
         self._knocks: list[np.ndarray] = []
-        self._landed: list[Callable[[], Callable[[Landing], Any] | None]] = []
+        self._listeners: dict[str, list[Callable[[], Callable[[Any], Any] | None]]] = {}
+        self._last_velocity = np.zeros(3)
+        if self.locomotion is not None:
+            self.locomotion.on_footstep(self._footfall)
         self.body.addEventHandler('hit', function=self._struck)
         physics._send_world('standin', self.body.uid, float(capabilities.pushMass))
         self._place_node()
@@ -117,9 +148,9 @@ class Character:
         return self.controller.landing
 
     @property
-    def facing(self) -> np.ndarray:
-        """The way the character was last told to move, a flat unit vector (zero before any move)."""
-        return np.array(self.controller._heading)
+    def heading(self) -> float:
+        """The way the body faces, in radians from +Z about +Y; 0 for a character with no facing."""
+        return 0.0 if self.facing is None else float(self.facing.heading)
 
     # -- doing --------------------------------------------------------------
     def set_move(self, direction: Any, mode: str = 'walk') -> None:
@@ -191,17 +222,28 @@ class Character:
                         **filters: Any) -> Any:
         """Call ``function`` when ``event`` happens to the character.
 
-        ``'landed'`` calls ``function(landing)`` with a :class:`Landing`; every
-        other name is an event of the character's body
+        ``'landed'`` calls ``function(landing)`` with a :class:`Landing`, and
+        ``'footstep'`` calls it with a :class:`Footstep`; every other name is an
+        event of the character's body
         (:meth:`Body.addEventHandler <OpenGLContext.physics.body.Body.addEventHandler>`).
         """
-        if event != 'landed':
+        if event not in ('landed', 'footstep'):
             return self.body.addEventHandler(event, function, **filters)
         if function is None:
-            self._landed.clear()
+            self._listeners.pop(event, None)
         else:
-            self._landed.append(weak_reference(function))
+            self._listeners.setdefault(event, []).append(weak_reference(function))
         return None
+
+    def play_action(self, name: str, layer: str = 'upper', **named: Any) -> Any:
+        """Play a clip on a layer over the locomotion, such as a wave on the arms.
+
+        Raises RuntimeError for a character with no model to play it on.
+        """
+        if self.locomotion is None:
+            raise RuntimeError('this character has no model; add_character(model=..., '
+                               'animations=...) gives it one')
+        return self.locomotion.play_action(name, layer, **named)
 
     def _struck(self, hit: Collision) -> None:
         """A body hit the stand-in: the blow it delivered becomes a knock, unless it was pushed."""
@@ -222,9 +264,43 @@ class Character:
         pushing = controller.pushing
         self._place_stand_in(pushing[1] if pushing is not None else controller.velocity)
         self._place_node()
+        self._animate(dt)
         landing = controller.landing
         if landing is not None:
-            self._tell_landed(Landing(self, float(landing)))
+            self._tell('landed', Landing(self, float(landing)))
+
+    def _animate(self, dt: float) -> None:
+        """Play the clips for what the character did this frame and turn the body."""
+        controller = self.controller
+        velocity = np.asarray(controller.velocity)
+        if self.locomotion is not None:
+            self.settled = self.locomotion.update(LocomotionInput(
+                speed=float(np.hypot(velocity[0], velocity[2])), vertical_speed=float(velocity[1]),
+                grounded=bool(controller.grounded), state=controller.state.value,
+                slide_progress=float(controller.slide_progress),
+                landing_speed=controller.landing, crouching=bool(controller.crouching),
+                dead=self.dead), dt)
+            if self.model is not None and hasattr(self.model, 'update'):
+                self.model.update(dt)
+        if self.facing is not None and dt > 0.0:
+            normal = controller.ground_normal if controller.ground_normal is not None else _UP
+            pose = self.facing.update(dt, velocity=velocity, aim=self.aim, normal=normal,
+                                      acceleration=(velocity - self._last_velocity) / dt)
+            if self.turn_node is not None:
+                self.turn_node.rotation = pose.rotation
+        self._last_velocity = velocity.copy()
+
+    def _footfall(self, foot: str, phase: float) -> None:
+        """A foot landed: tell the handlers, and play the footstep of the ground under it."""
+        feet = self.position
+        under = self.physics.raycast(feet + _UP * 0.3, (0.0, -1.0, 0.0), 0.8, skip=self.body)
+        material = None if under is None or under.body is None else under.body.material
+        step = Footstep(self, foot, float(phase), feet.copy(), material)
+        self._tell('footstep', step)
+        physics = self.physics
+        sound = physics.materials.footstep_of(material) if physics._audio is not None else None
+        if sound is not None and physics._audio is not None:
+            physics._audio().play(sound, at=tuple(float(v) for v in feet), gain=0.5)
 
     def _place_stand_in(self, velocity: Any) -> None:
         physics, body = self.physics, self.body
@@ -237,18 +313,19 @@ class Character:
         if self.node is not None:
             self.node.translation = tuple(float(v) for v in self.position)
 
-    def _tell_landed(self, landing: Landing) -> None:
+    def _tell(self, event: str, argument: Any) -> None:
         kept = []
-        for reference in self._landed:
+        for reference in self._listeners.get(event, ()):
             function = reference()
             if function is None:
                 continue
             kept.append(reference)
             try:
-                function(landing)
+                function(argument)
             except Exception:
-                self.physics.log_handler_failure(function, landing)
-        self._landed = kept
+                self.physics.log_handler_failure(function, argument)
+        if event in self._listeners:
+            self._listeners[event] = kept
 
 
 def stand_in_proxy(capabilities: CharacterCapabilities, reach: float) -> Proxy:
