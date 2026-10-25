@@ -127,3 +127,19 @@ def test_sync_to_scene_noop_when_unregistered():
 if __name__ == '__main__':
     import sys
     sys.exit(pytest.main([__file__, '-v']))
+
+
+def test_push_authored_pose_moves_a_static_body_where_the_next_step_finds_it():
+    t = Transform(translation=(0.0, 0.0, 0.0))
+    mgr = PhysicsManager(gravity=model.Gravity(gravity=0.0))
+    world = mgr.world
+    box = world.add_shape(model.Shape.box((1.0, 1.0, 1.0)))
+    body = PhysicsBody(t, model.Motion(type=model.STATIC), model.Collider(shape=box))
+    mgr.add(body)
+    mgr.advance(1 / 60)
+    t.translation = (7.0, 0.0, 0.0)
+    body.push_authored_pose()
+    mgr.advance(1 / 60)
+    i = body.index
+    centre = (world.aabb_min[i] + world.aabb_max[i]) / 2.0
+    assert np.allclose(centre, (7.0, 0.0, 0.0))

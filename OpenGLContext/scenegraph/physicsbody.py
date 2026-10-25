@@ -54,8 +54,15 @@ class PhysicsBody:
         """Copy the authored Transform pose into the world (tree → world)."""
         if self.index is None:
             return
-        self.world.position[self.index] = self.transform.translation[:3]
-        self.world.orientation[self.index] = vrml_rotation_to_quat(self.transform.rotation)
+        position = self.transform.translation[:3]
+        orientation = vrml_rotation_to_quat(self.transform.rotation)
+        if self.world.motion_type[self.index] == 0:
+            # A static body is moved through the world, which records it: a step
+            # refits only the static bodies it was told were moved.
+            self.world.place_body(self.index, position, orientation)
+            return
+        self.world.position[self.index] = position
+        self.world.orientation[self.index] = orientation
 
     def sync_to_scene(self, alpha: float = 1.0) -> None:
         """Write the (interpolated) world pose back onto the Transform."""
