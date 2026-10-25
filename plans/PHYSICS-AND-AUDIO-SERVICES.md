@@ -855,23 +855,20 @@ deterministic tests, and the engine's physics was not used. Audio is
 looping music voice with a priority, a muffle for the pause screen (`sound.py:38-55`) and
 footsteps (`session.py:91`).
 
-Audio moves in phase 6 whatever is decided below: `Sounds` takes `self.audio`, calls
+Audio moves in phase 6: `Sounds` takes `self.audio`, calls
 `play(..., rate=, priority=, loop=)`, sets `audio.muffle`, and loses its `None` checks
 because a disabled `Audio` returns inert voices. `tests/test_sound.py` uses
 `RecordingAudio` in place of its fake engine. Calls on the render thread start at once.
 
-Physics is a decision for the maintainer (decision 9). The demo advertises the engine, so
-the three ways it could use the engine's physics are:
-
-- A. The rules keep the runner and the engine adds the world around it. The tiles near
-  the runner become a collider source and a heightfield body. Coins that a hit costs spill
-  as dynamic bodies, fallen logs and boulders knocked off barriers tumble down the hill,
-  and a camera sweep keeps the chase camera out of rock. Rules stay the authority for
-  hits, so the pinned jump arc and event order do not change.
-- B. As A, with the runner an `add_character` in the world under gravity 42. Jump and
-  landing come from the controller, the rules read its events, and the pinned tests are
-  re-pinned to the controller's arc, which is stepped and not closed-form.
-- C. Audio only.
+The maintainer's decision (9) is that the runner becomes a character in the engine's world,
+and that audio moves whatever else happens. The engine features that make this ordinary,
+and not special to this game, are in [CHARACTER-LOCOMOTION.md](CHARACTER-LOCOMOTION.md):
+land as a collider, an exact jump, slide and knock-down states, a clip map and locomotion
+driver, a follow camera that avoids the world, and keys for a third-person character. That
+plan lists the steps for hill-runner: audio, then the land and barriers as bodies with the
+runner still the game's, then the runner as a character, then the engine's animation and
+camera in place of the game's. Its acceptance is that the pinned jump arc, the event order
+and the pilot's runs pass unchanged.
 
 ## Process mode (deferred)
 
@@ -966,7 +963,7 @@ Changes below the engine, in `omi_physics`:
 | 4 | Collision view, synchronous queries, characters, characters and dynamic bodies, the walk mode on characters | the concurrency stress test and the push, knockback and raft tests pass; twig-bb's walker tests pass on `Character` |
 | 5 | `Proxy`, `cook`, `show_proxies`, materials, pair rules, gravity zones; `Proxy.heightfield` and `add_static_instances`; tutorials 3 to 5 | tutorials pass; a ball rolled over the forest's ground stays on it and strikes a trunk |
 | 6 | `Audio`, `Voice`, thread-safe `play`, `RecordingAudio`, material sounds; tutorial 6 | `AudioYard._collide` deleted; hill-runner's audio moved |
-| 7 | Migrations, in order: `DemoScene` callers and marble-demo, glisteel, twig-bb, forest, then hill-runner's physics as decided. Then delete `DemoScene`, the public `ThreadedPhysicsManager` and `PhysicsWalkMixin` | each project's suite and determinism checks give the results they gave before; no caller of `manager.advance` outside the service |
+| 7 | Migrations, in order: `DemoScene` callers and marble-demo, glisteel, twig-bb, forest, then hill-runner's physics by CHARACTER-LOCOMOTION.md. Then delete `DemoScene`, the public `ThreadedPhysicsManager` and `PhysicsWalkMixin` | each project's suite and determinism checks give the results they gave before; no caller of `manager.advance` outside the service |
 | 8 | Deferred: `mode='process'`, taken up if phase 0 or a game shows the need | the same tests pass in every mode |
 
 ## Documentation to change
@@ -992,7 +989,7 @@ Changes below the engine, in `omi_physics`:
 
 ## Decisions
 
-Settled by the maintainer, 2026-10-25:
+Settled by the maintainer, 2026-10-25 and 2026-10-26:
 
 1. A handler runs on the render thread unless its function is marked
    `@Context.physics_callback`.
@@ -1005,9 +1002,6 @@ Settled by the maintainer, 2026-10-25:
 6. X3D `RigidBodyCollection` stays its own model.
 7. Characters and dynamic bodies interact in both directions.
 8. Characters step on the render thread.
-
-Open:
-
-9. hill-runner's physics. Options A, B and C are under hill-runner above. Recommendation:
-   A in phase 7, and B afterwards if the controller's jump can be tuned to feel the same.
-   A shows the engine's physics around the runner without touching the rules the tests pin.
+9. hill-runner's physics. The runner becomes an engine character and audio moves first, by
+   the steps in [CHARACTER-LOCOMOTION.md](CHARACTER-LOCOMOTION.md). Stepping stones that
+   put the world around the runner in first are taken where they help.
