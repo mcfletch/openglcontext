@@ -973,12 +973,17 @@ openglcontext-forest):
 - `terrain_view.make_avatar` does the same for `oglc-terrain`.
 - omi_physics gained `CollisionQuery.static_near` over a `StaticGrid` that reads recent
   changes from the world, rays at convex hulls, and a `dynamic_near` that reads only the
-  dynamic bodies; the character asks for the bodies near its capsule.
+  dynamic bodies; the character asks for the bodies near its capsule. The broad phase's
+  index of fixed bodies survives a few bodies coming and going (`LOOSE_LIMIT`), and a body
+  that `add_body` or `place_body` fits is not refitted by the next step.
+- `SampledGround` makes the tiles of a slow ground (rock displaced over a field) ahead of the
+  walker on a thread of its own: a tile of rock takes 0.1 s, which was a hitch of that size.
 - A character that has not moved sends the world no commands.
 - The forest has `b`, a boulder thrown from the camera.
-- Open: a world of 230,000 static trunks costs 2 to 4 ms per world step in checks that run
-  over every body (`_InertIndex.current`, `refit_aabbs`), and a rock added to it rebuilds
-  the broad phase's index of static bodies (about 50 ms on the worker thread).
+- Measured in the forest at 230,000 trunks, walking: the frame is 9 ms at the median against
+  8 ms before, the longest 30 ms against 30 ms. A world step is 2 to 3 ms in checks that
+  run over every body (`_InertIndex.current`, `refit_aabbs`, the copy of the previous
+  poses); the thread worker takes them off the frame, an inline world pays them in it.
 
 ### hill-runner
 
