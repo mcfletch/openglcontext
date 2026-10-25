@@ -1172,17 +1172,20 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """Make the physics service and have the render queue frame it.
 
         A capture or a recorded session runs the world inline, so the world is
-        a function of the clock and of what the game commanded.
+        a function of the clock and of what the game commanded, and a recorded
+        session writes the events its handlers hear to the journal.
         """
         from OpenGLContext.events.framestep import FrameStep
         from OpenGLContext.physics.service import Physics
         from OpenGLContext.physics.settings import definition_for
 
         definition = definition_for(self)
-        if self._captureClock is not None and definition.mode != 'inline':
+        if ((self._captureClock is not None or self.telemetry is not None)
+                and definition.mode != 'inline'):
             definition = definition.replaced(mode='inline')
         request = getattr(self, 'redrawRequest', None)
-        service = Physics(definition, wake=None if request is None else request.set)
+        service = Physics(definition, wake=None if request is None else request.set,
+                          mark=self.mark, recording=lambda: self.telemetry is not None)
         self.__dict__['_physicsSteps'] = FrameStep(longest=float(definition.maxCatchUp))
         queue = getattr(self, 'renderQueue', None)
         if queue is not None:

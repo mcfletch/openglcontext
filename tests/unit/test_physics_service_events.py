@@ -371,3 +371,86 @@ def test_render_set_from_a_marked_handler_reaches_the_scene_before_the_frame_end
     run_for(physics, 1.0)
     assert tuple(paint.baseColor)[:3] == pytest.approx((1, 0, 0))
     physics.close()
+
+
+# -- the telemetry journal -----------------------------------------------------------
+
+def journalled(**named):
+    """A service that writes every event a handler hears to a list, as a recording would."""
+    marks = []
+    physics = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0, tickHz=100.0),
+                      mark=lambda name, /, **fields: marks.append((name, fields)),
+                      recording=lambda: True, **named)
+    return physics, marks
+
+
+def landing(physics, node=None):
+    physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)), restitution=0.0)
+    node = node if node is not None else ball()
+    body = physics.add_dynamic(node, restitution=0.0)
+    listener = Listener()
+    body.addEventHandler('hit', function=listener.OnHit)
+    run_for(physics, 1.0)
+    return body, listener
+
+
+def test_an_event_a_handler_heard_is_written_to_the_journal_with_when_it_happened():
+    physics, marks = journalled()
+    body, listener = landing(physics)
+    assert len(marks) == 1
+    name, fields = marks[0]
+    assert name == 'physics-hit'
+    assert fields['step'] > 0 and fields['time'] > 0.0
+    assert (fields['a'], fields['b']) == ('#1', '#2')      # the lower-numbered body of the pair first
+    assert fields['approach'] > 3.0
+    physics.close()
+
+
+def test_a_bodys_def_name_is_how_the_journal_names_it():
+    physics, marks = journalled()
+    node = ball()
+    node.DEF = 'Ball'
+    landing(physics, node)
+    assert marks[0][1]['b'] == 'Ball'
+    physics.close()
+
+
+def test_events_nobody_listens_for_are_not_written():
+    physics, marks = journalled()
+    physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)))
+    physics.add_dynamic(ball())
+    run_for(physics, 1.0)
+    assert marks == []
+    physics.close()
+
+
+def test_nothing_is_written_when_nothing_is_recording():
+    marks = []
+    physics = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0, tickHz=100.0),
+                      mark=lambda name, /, **fields: marks.append(name), recording=lambda: False)
+    landing(physics)
+    assert marks == []
+    physics.close()
+
+
+def test_two_runs_of_the_same_scene_write_the_same_journal():
+    first, first_marks = journalled()
+    landing(first)
+    second, second_marks = journalled()
+    landing(second)
+    assert first_marks == second_marks and first_marks
+    first.close()
+    second.close()
+
+
+def test_the_journal_can_be_compared_on_replay():
+    from OpenGLContext.telemetry.replay import MarkComparison
+
+    physics, marks = journalled()
+    landing(physics)
+    recorded = [{'name': name, 'frame': index, 'fields': fields}
+                for index, (name, fields) in enumerate(marks)]
+    comparison = MarkComparison(recorded)
+    for index, (name, fields) in enumerate(marks):
+        assert comparison.mark(index, name, fields)
+    physics.close()

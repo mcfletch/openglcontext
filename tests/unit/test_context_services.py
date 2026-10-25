@@ -21,6 +21,8 @@ LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 class _Context(context_module.Context):
     """A context with the window taken out: the parts the services use."""
 
+    telemetry = None
+
     def __init__(self, physics=None, **definition):
         self.redrawRequest = threading.Event()
         self.renderQueue = RenderQueue(wake=self.redrawRequest.set)
@@ -31,6 +33,7 @@ class _Context(context_module.Context):
         self.redraws = []
         self.windowsystem = SimpleNamespace(release=lambda: None)
         self.sceneLoader = None
+        self.initializeEventManagers()
 
     def triggerRedraw(self, force=0):
         self.redraws.append(force)
@@ -181,3 +184,62 @@ def test_the_services_cost_a_context_that_does_not_use_them_nothing(ctx):
     ctx.renderQueue.run()
     ctx.releaseWindow()
     assert '_physics' not in ctx.__dict__ and '_audio' not in ctx.__dict__
+
+
+class _Listener:
+    def __init__(self):
+        self.heard = []
+
+    def OnHit(self, hit):
+        self.heard.append(hit)
+
+
+def _land(made, clock, **options):
+    made.physics.add_static(surfaces.shape(surfaces.block((20, 1, 20)), LOOK, translation=(0, -0.5, 0)))
+    body = made.physics.add_dynamic(ball(at=(0, 1.5, 0)), restitution=0.0)
+    return body
+
+
+def test_physics_events_are_added_to_a_context_by_their_physics_names(ctx, clock):
+    listener = _Listener()
+    body = _land(ctx, clock)
+    ctx.addEventHandler('physics-hit', body=body, function=listener.OnHit)
+    ctx.renderQueue.run()
+    for _ in range(40):
+        clock.now += 0.02
+        ctx.renderQueue.run()
+    assert len(listener.heard) == 1 and listener.heard[0].body is body
+
+
+def test_the_context_spelling_without_a_body_hears_every_body(ctx, clock):
+    listener = _Listener()
+    _land(ctx, clock)
+    ctx.addEventHandler('physics-hit', function=listener.OnHit)
+    ctx.renderQueue.run()
+    for _ in range(40):
+        clock.now += 0.02
+        ctx.renderQueue.run()
+    assert len(listener.heard) == 1
+
+
+def test_every_physics_event_name_has_a_manager(ctx):
+    for name in ('hit', 'touching', 'separate', 'enter', 'stay', 'exit', 'sleep', 'wake'):
+        assert ctx.getEventManager('physics-' + name) is not None
+
+
+def test_a_recorded_session_runs_the_world_inline_and_writes_its_events_to_the_journal(clock):
+    marks = []
+    made = _Context(physics=PhysicsDefinition(mode='thread', maxCatchUp=2.0))
+    made.telemetry = SimpleNamespace(mark=lambda name, /, **fields: marks.append((name, fields)))
+    try:
+        listener = _Listener()
+        body = _land(made, clock)
+        body.addEventHandler('hit', function=listener.OnHit)
+        assert made.physics.definition.mode == 'inline'
+        made.renderQueue.run()
+        for _ in range(40):
+            clock.now += 0.02
+            made.renderQueue.run()
+        assert [name for name, _fields in marks] == ['physics-hit']
+    finally:
+        made.releaseWindow()

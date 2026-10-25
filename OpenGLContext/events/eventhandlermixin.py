@@ -182,6 +182,9 @@ class EventHandlerMixin(HeldKeyMixin):
         self.__timeManager: Any = (
             self.TimeManagerClass() if self.TimeManagerClass else None
         )
+        from OpenGLContext.physics import eventmanager  # noqa: PLC0415 imports the physics service
+
+        eventmanager.install(self)
 
     ### Client API
     def addEventHandler(self, eventType: Any, *arguments: Any,

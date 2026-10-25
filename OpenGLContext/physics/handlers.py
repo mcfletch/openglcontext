@@ -16,7 +16,7 @@ from typing import Any
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.records import PhysicsEvent
 
-__all__ = ['EVENTS', 'STEP_EVENTS', 'Handler', 'HandlerTable']
+__all__ = ['EVENTS', 'NAME_OF', 'STEP_EVENTS', 'Handler', 'HandlerTable']
 
 #: The event names, and the (kind, phase) of the record each one hears.
 EVENTS: dict[str, tuple[str, str]] = {
@@ -29,6 +29,8 @@ EVENTS: dict[str, tuple[str, str]] = {
     'sleep': ('state', 'sleep'),
     'wake': ('state', 'wake'),
 }
+#: The event name of each (kind, phase) record.
+NAME_OF: dict[tuple[str, str], str] = {pair: name for name, pair in EVENTS.items()}
 #: Events of the world and not of a body: they receive a :class:`Step`.
 STEP_EVENTS = ('before-step', 'after-step')
 

@@ -31,7 +31,7 @@ from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.events import Collision
-from OpenGLContext.physics.handlers import STEP_EVENTS, Handler, HandlerTable
+from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
 from OpenGLContext.physics.manager import write_pose
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
 from OpenGLContext.physics.records import BodySpec, Command, PhysicsEvent, Step
@@ -62,11 +62,16 @@ class Physics:
     """The rigid-body world of one context, and the handles to what is in it."""
 
     def __init__(self, definition: PhysicsDefinition | None = None, *,
-                 wake: Callable[[], Any] | None = None) -> None:
+                 wake: Callable[[], Any] | None = None,
+                 mark: Callable[..., Any] | None = None,
+                 recording: Callable[[], bool] | None = None) -> None:
         definition = definition if definition is not None else PhysicsDefinition()
         definition.validate()
         self.definition = definition
         self._wake = wake
+        #: ``mark(name, **fields)`` writes to the session journal, when ``recording()`` says one is kept.
+        self._mark = mark
+        self._recording = recording
         #: Scene changes the worker queues for the render thread (``render.set`` and ``render.call``).
         self.render = Updates(wake=wake)
         self.handlers = HandlerTable()
@@ -502,8 +507,32 @@ class Physics:
         found = self._bodies.get(uid)
         return found if found is not None else self._retired.get(uid)
 
+    def _journal(self, event: PhysicsEvent) -> None:
+        """Write ``event`` to the session journal: what happened, to which bodies, and when."""
+        name = NAME_OF.get((event.kind, event.phase))
+        if name is None or self._mark is None:
+            return
+        fields: dict[str, Any] = {'step': event.step, 'time': round(float(event.time), 6),
+                                  'a': self._label(event.a)}
+        if event.b is not None:
+            fields['b'] = self._label(event.b)
+        if event.kind == 'contact':
+            fields['approach'] = round(float(event.approach), 4)
+            fields['impulse'] = round(float(event.impulse), 3)
+        self._mark('physics-' + name, **fields)
+
+    def _label(self, uid: int) -> str:
+        """How the journal names a body: its node's DEF name, else the order it was added in."""
+        body = self._body_of(uid)
+        given = getattr(getattr(body, 'node', None), 'DEF', None)
+        return str(given) if given else '#%d' % uid
+
     def _dispatch(self, events: Iterable[PhysicsEvent]) -> None:
+        journal = self._mark is not None and self._recording is not None and self._recording()
         for event in events:
+            if journal and (self.handlers.audience(event, physics=False)
+                            or self.handlers.audience(event, physics=True)):
+                self._journal(event)
             for handler, side in self.handlers.audience(event, physics=False):
                 self._call(handler, self._collision(event, side))
         self.handlers.prune()
