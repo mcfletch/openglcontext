@@ -705,7 +705,14 @@ joint, a contact filter or a call the service has not named is made in either
 mode.
 
 In ``thread`` mode the same steps run on a worker at ``tickHz``, which keeps the
-render thread free of a heavy world. A bounded capture, a recorded session and a
+render thread free of a heavy world. Under CPython's global interpreter lock the
+worker and the render thread share one core's worth of Python: the worker runs
+``tickHz`` steps a second of wall time, so while a step costs most of its tick
+the render thread's own physics work (characters, queries) runs at a fraction of
+its inline speed, and a longer frame lets the worker run more steps in it. At 30
+characters among 10 000 static posts, with a world whose step takes 14 ms of a
+16.7 ms tick, the characters cost 42 ms of render time a frame against 10 ms
+inline. A world whose steps cost a large share of the tick runs better inline. A bounded capture, a recorded session and a
 replay run inline whatever the mode says, so a captured frame is the same bytes
 on every run. A game that steps its world on a clock of its own, or only while it
 is not paused, sets the class attribute ``stepsPhysics = False`` on its context
@@ -777,7 +784,9 @@ Games' *Fix Your Timestep*):
 
 - Narrow phase - analytic tests for pairs of primitives, and GJK with EPA for
   convex against convex (cylinders and cones among them) and convex against
-  triangle (a moving body against a static mesh); a compound part by part.
+  triangle; a compound part by part. A sphere, a capsule or a box against a
+  static mesh is tested against all its nearby triangles in one call, and a
+  character's capsule against all its nearby static boxes in another.
 
 - Solver - sequential impulses (projected Gauss-Seidel) with warm starting and
   split-impulse position correction. Restitution and Coulomb friction combine
@@ -809,6 +818,43 @@ trajectories match the numpy backend within a tolerance, not bit for bit. The
 broad phase, narrow phase and solver run on the CPU with either backend. In
 ``tests/tutorials/physics/physics_stress.py``, the ``b`` key switches backends while the demo
 runs.
+
+.. _physics-cost:
+
+What a frame costs
+------------------
+
+A world at rest costs nothing. When no command has arrived and nothing moves,
+neither mode steps: the inline frame returns at once and the worker thread
+blocks, and the last published poses stand. A world stays busy, and is stepped,
+while a dynamic body is awake, a kinematic body moves, a body is driven by a pose
+function, or a ``before-step`` or ``after-step`` handler is registered, so a
+game's step handler runs every step whether or not anything moves. Its clock does
+not advance while it is not stepped.
+
+What a step costs follows what moves:
+
+- The broad phase sweeps the moving bodies against each other and against the
+  static ones near them; the static bodies are sorted once.
+- A pair with no awake dynamic body, no kinematic body, no trigger and no sensor
+  in it is left out of the step, so a sleeping pile costs its broad phase and
+  nothing more.
+- Collision filters are compared once per step for each pair of filters in use,
+  not once per pair of bodies.
+
+What the render thread does each frame follows what changed: a snapshot lists
+the rows of the bodies whose pose or velocity changed since the snapshot before
+(``Snapshot.changed``), and only those nodes are written and only those rows of
+the replica copied and refitted. A body that falls asleep is published once more,
+at the pose the world holds for it, so its node rests exactly where the body
+does.
+
+A character costs a gather of the static bodies near it per update and a
+depenetration against each: one call for every static box near it, one for the
+triangles of a mesh, a few spheres for a height field. At 30 characters among
+10 000 static boxes a frame of characters costs about 11 ms of Python on this
+machine; one runner on a streamed height-field hill steps at 120 Hz for about
+2 ms a frame.
 
 .. _walking:
 

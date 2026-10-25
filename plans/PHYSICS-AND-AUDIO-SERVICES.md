@@ -33,6 +33,22 @@ trimesh slope slid whatever its friction, because `box_triangle_batch` gave one 
 triangle, at the centre of the box, which has no restoring torque (fixed, `box_face_contacts` gives a
 contact at each corner that stands on the face).
 
+Frame cost, 2026-10-25 (`PHYSICS`, `CHARACTER` commits here; `WORLD`, `BROADPHASE`, `QUERY`,
+`COLLIDE`, `HEIGHTFIELD`, `CHARACTER` in `omi_physics`). A world at rest is not stepped inline, as
+the thread worker already idled; step handlers and drivers keep it busy on both. Snapshots list
+their changed rows, so node writes, replica sync and the snapshot itself follow what moved; a body
+that falls asleep is published at its exact pose (it was left at the interpolated pose of its last
+awake frame, 0.8 mm away in the benchmark). In `omi_physics`: collision filters through a table
+(every world took the per-pair path, since the default filter index is -1), resting pairs out of
+the step, a batched analytic capsule-box query for characters, sphere-mesh through the capsule
+batch, a scalar few-sphere path for grid ground to the bit, one static gather per character
+update. Measured on the benchmark of that day: a settled 1,000-body world 6.5 ms to 0.05 ms a
+frame inline; 30 characters among 10,000 posts 55 ms to 12 ms; the hill-runner's `Session.step`
+3.5 ms to 1.9 ms. Thread mode under the GIL: the worker's steps and the render thread's
+characters share one core, so a world whose step fills most of its tick slows the characters
+four to ten times (`docs/physics.rst`, Modes and settings); a duty-cycle limit on the worker, or
+running such worlds inline, is the open choice.
+
 Not done:
 
 - Phase 0, the numbers for 1,000 and 5,000 bodies inline against thread.
