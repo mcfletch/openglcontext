@@ -849,12 +849,23 @@ the replica copied and refitted. A body that falls asleep is published once more
 at the pose the world holds for it, so its node rests exactly where the body
 does.
 
-A character costs a gather of the static bodies near it per update and a
-depenetration against each: one call for every static box near it, one for the
-triangles of a mesh, a few spheres for a height field. At 30 characters among
-10 000 static boxes a frame of characters costs about 11 ms of Python on this
-machine; one runner on a streamed height-field hill steps at 120 Hz for about
-2 ms a frame.
+A step reads only the static bodies the world recorded as added, removed or
+placed since the step before (``PhysicsWorld.layout_epoch``); the others are not
+compared, refitted or copied. A pose written straight into a static body's
+``position`` or ``orientation`` is recorded with ``PhysicsWorld.moved(rows)``,
+and ``OMI_PHYSICS_CHECK_STATICS=1`` makes a step raise for one that was not. A
+step with no awake dynamic body, trigger, sensor or touching pair skips the
+collision pass, and a world with a few moving bodies is swept from them outward.
+
+A character holds the static bodies it gathered across updates while the layout
+is unchanged, and depenetrates against them: the few boxes near it one at a time
+with numbers, the triangles of a mesh in one call, and a height field as the
+column of spheres down its axis, of which only those low enough to touch a
+slope that gentle are slid. Its poses agree with the contact solver's to 1e-9 m
+a step. On this machine one walker on a box floor costs about 175 us a frame,
+30 among box posts about 5.3 ms, the forest walker about 1.7 ms, and the
+hill-runner's runner on its streamed height-field hill, stepped at 120 Hz with
+the rules and the camera, about 0.8 ms a frame.
 
 .. _walking:
 
