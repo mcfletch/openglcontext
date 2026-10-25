@@ -50,7 +50,8 @@ class PhysicsViewPlatform:
 
         It turns the keys' moves into the character's, and reads the camera from
         its eye. The service steps the character each frame, so :meth:`update`
-        does nothing.
+        does nothing, unless the character's ``framed`` is false: the caller then
+        steps it, and :meth:`update` does.
         """
         platform = cls.__new__(cls)
         platform.character = character.controller
@@ -218,6 +219,8 @@ class PhysicsViewPlatform:
     def update(self, dt: float) -> None:
         if self.managed is None:
             self.character.update(dt)
+        elif not self.managed.framed:
+            self.managed.update(dt)
 
     def camera_position(self) -> tuple[float, ...]:
         return tuple(self.character.eye())
