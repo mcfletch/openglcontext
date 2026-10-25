@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 from omi_physics import mathutil, model
-from omi_physics.contactevents import BodyRef, ContactEvent, TriggerEvent
+from omi_physics.contactevents import BodyRef, ContactEvent, TriggerEvent, Verdict
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.physics.records import BodySpec, Command, PhysicsEvent, Snapshot, Step
@@ -79,7 +79,10 @@ class WorldRuntime:
         self._movers: tuple[np.ndarray, np.ndarray, dict[int, int]] | None = None
         self._asleep: dict[int, bool] = {}
         self._watch_state = False
+        #: Stand-ins of characters, by id, with the heaviest body each pushes; see ``_filter``.
+        self.standins: dict[int, float] = {}
         self._thread = threading.get_ident()
+        self.world.set_contact_filter(self._filter)
 
     # -- bodies ---------------------------------------------------------
     def entry(self, uid: int) -> _Entry:
@@ -223,6 +226,28 @@ class WorldRuntime:
     def _op_post(self, uid: int, function: Callable[..., Any],  # noqa: ARG002 world-wide
                  arguments: tuple[Any, ...]) -> None:
         function(*arguments)
+
+    def _op_standin(self, uid: int, body: int, push_mass: float) -> None:  # noqa: ARG002 world-wide
+        self.standins[body] = float(push_mass)
+
+    def _filter(self, pair: Any) -> Any:
+        """Let a character's stand-in pass through a body heavier than the character can push.
+
+        The stand-in is infinitely heavy to the solver; without this it would
+        shove a truck. The character is blocked by such a body in its own step.
+        """
+        if not self.standins:
+            return Verdict.SOLVE
+        world = self.world
+        first, second = world.handle_of(pair.a), world.handle_of(pair.b)
+        for mine, other in ((first, second), (second, first)):
+            limit = self.standins.get(mine) if mine is not None else None
+            if limit is None or other is None or other not in self._entries:
+                continue
+            index = self._entries[other].index
+            if world.motion_type[index] == 2 and float(world.mass[index]) > limit:
+                return Verdict.IGNORE_PAIR
+        return Verdict.SOLVE
 
     def _op_noop(self, uid: int) -> None:
         """Do nothing; a command whose arrival wakes a blocked worker."""

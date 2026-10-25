@@ -32,6 +32,7 @@ from omi_physics.collisionquery import WorldQuery
 
 from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
+from OpenGLContext.physics.character import Character, stand_in_proxy
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
@@ -101,6 +102,7 @@ class Physics:
         #: The spec of each body in the world, to build the replica from when queries need it.
         self._specs: dict[int, BodySpec] = {}
         self._replica: Replica | None = None
+        self._characters: list[Character] = []
         self._cooker: concurrent.futures.ThreadPoolExecutor | None = None
         self._cooked_results: queue.SimpleQueue[tuple[Body, BodySpec | None]] = queue.SimpleQueue()
         self._outstanding = 0
@@ -390,6 +392,47 @@ class Physics:
                 for op, args in deferred:
                     self._send(Command(op, body.uid, args, next(self._seq)))
 
+    def add_character(self, node: Any = None, capabilities: Any = None,
+                      position: Any = (0.0, 0.0, 0.0), gravity: float | None = None) -> Character:
+        """Make a walker standing with its feet at ``position``.
+
+        ``capabilities`` is a :class:`~omi_physics.character.CharacterCapabilities`
+        (speeds, jump height, capsule size, mass); ``node``, where given, is
+        placed at the feet each frame. The character is stepped in :meth:`frame`.
+        """
+        from omi_physics.character import CharacterCapabilities  # noqa: PLC0415 only a service with walkers needs it
+
+        caps = capabilities if capabilities is not None else CharacterCapabilities()
+        pull = float(np.linalg.norm(self._gravity)) if gravity is None else float(gravity)
+        made = Character(self, node, caps, position, pull)
+        self._characters.append(made)
+        return made
+
+    def _character_replica(self) -> Replica:
+        """The render thread's copy of the bodies, made on first use; characters step against it."""
+        if self._replica is None:
+            self._replica = build(self._specs, self._snapshot)
+        return self._replica
+
+    def _add_standin(self, centre: Any, capabilities: Any, reach: float) -> Body:
+        """The kinematic body the world sees for a character, with no node."""
+        proxy = stand_in_proxy(capabilities, reach)
+        uid = next(self._uids)
+        spec = BodySpec(uid, 'kinematic', proxy, model.Motion(type=model.KINEMATIC),
+                        tuple(float(v) for v in centre), (0.0, 0.0, 0.0, 1.0), report=True)
+        body = Body(self, uid, 'kinematic', None, proxy, np.asarray(centre, dtype='d'),
+                    (0.0, 0.0, 1.0, 0.0), 0.0)
+        self._bodies[uid] = body
+        self._movers.append(body)
+        if self._enabled and not self._closed:
+            self._send(Command('add', uid, (spec,), next(self._seq)))
+            self._ensure_started()
+        return body
+
+    def log_handler_failure(self, function: Callable[..., Any], argument: Any) -> None:
+        """Log that a handler raised, once for each function."""
+        log.exception('physics handler %r failed on %r', function, argument)
+
     def cook(self, node: Any, strategy: str = 'auto', dynamic: bool = True) -> Proxy:
         """A :class:`Proxy` cooked from what ``node`` draws, to share between bodies."""
         return Proxy.from_node(node, strategy, dynamic)
@@ -408,7 +451,7 @@ class Physics:
         if body.derived:
             self.scenery.release(body.node)
         self._bodies.pop(body.uid, None)
-        if self._by_node.get(body.node) is body:
+        if body.node is not None and self._by_node.get(body.node) is body:
             del self._by_node[body.node]
         if body in self._movers:
             self._movers.remove(body)
@@ -507,20 +550,23 @@ class Physics:
             return False
         self._pump_cooked()
         out = self.worker.collect(dt)
-        wrote = False
         if out.snapshot is not None:
             self._snapshot = out.snapshot
             if self._replica is not None:
                 self._replica.sync(out.snapshot)
-            wrote = self._write_poses(out.snapshot)
+            self._write_poses(out.snapshot)
             moving = out.snapshot.awake & (out.snapshot.dynamic | (
                 np.abs(out.snapshot.linear_velocity).sum(axis=1) > 0.0))
             self._awake = bool(moving.any())
+        walking = False
+        for character in list(self._characters):
+            character.update(dt)
+            walking = walking or character.busy
         if out.events:
             self._dispatch(out.events)
         self._finish_removals()
         applied = self.render.apply()
-        return bool(self._awake or applied or wrote and self._awake)
+        return bool(self._awake or applied or walking)
 
     def _finish_removals(self) -> None:
         """End the handlers of the bodies the world has now removed and told its last events of."""
@@ -548,6 +594,8 @@ class Physics:
                     continue
                 body._placed = None
             if body.kind == 'dynamic' and not snapshot.awake[row]:
+                continue
+            if body.node is None:
                 continue
             write_pose(body.node, snapshot.position[row], snapshot.axis_angle[row])
             wrote = True

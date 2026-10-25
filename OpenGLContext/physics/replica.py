@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 from omi_physics import mathutil, model
+from omi_physics.collisionquery import WorldQuery
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.physics.records import BodySpec, Command, Snapshot
@@ -37,8 +38,14 @@ class Replica:
         self._index: dict[int, int] = {}
         self._shapes: dict[int, int] = {}
         self._rows: dict[int, int] | None = None
+        self._query = WorldQuery(self.world)
         self._rows_index: np.ndarray = np.zeros(0, dtype='i8')
         self._rows_take: np.ndarray = np.zeros(0, dtype='i8')
+
+    @property
+    def query(self) -> WorldQuery:
+        """The replica as a :class:`~omi_physics.collisionquery.CollisionQuery`."""
+        return self._query
 
     def __contains__(self, uid: int) -> bool:
         return uid in self._index
@@ -58,6 +65,8 @@ class Replica:
             self.add(command.args[0])
         elif command.op == 'remove':
             self.remove(command.uid)
+        elif command.op == 'velocity' and command.uid in self._index:
+            self.world.linear_velocity[self._index[command.uid]] = command.args[0]
         elif command.op == 'place' and command.uid in self._index:
             translation, axis_angle = command.args
             orientation = None
