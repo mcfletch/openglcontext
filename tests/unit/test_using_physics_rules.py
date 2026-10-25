@@ -133,11 +133,23 @@ def winning_power():
     return SOLUTIONS[OPEN][0][3]
 
 
+def velocity_of(course, body):
+    """The live velocity of ``body``: its row is found first, since finding it makes the world's arrays current."""
+    index = course.slot(body)
+    return course.world.linear_velocity[index]
+
+
+def position_of(course, body):
+    """The live position of ``body``."""
+    index = course.slot(body)
+    return course.world.position[index]
+
+
 def put(course, point):
     """Stand the ball at ``point`` with no velocity."""
-    index = course.ball.index
+    index = course.slot(course.ball)
     course.world.place_body(index, position=point)
-    course.world.linear_velocity[index] = 0.0
+    velocity_of(course, course.ball)[:] = 0.0
 
 
 class TestTheKick:
@@ -147,7 +159,7 @@ class TestTheKick:
         course.aim.power = 20.0
         course.fire()
         expected = along(course.aim.bearing, course.aim.elevation)
-        velocity = course.world.linear_velocity[course.ball.index]
+        velocity = velocity_of(course, course.ball)
         assert tuple(velocity) == pytest.approx(tuple(20.0 * part for part in expected),
                                                 rel=1e-6)
 
@@ -170,9 +182,9 @@ class TestTheKick:
     def test_adjusting_the_aim_does_not_change_the_ball_in_the_air(self):
         course = aimed_game()
         course.fire()
-        velocity = tuple(course.world.linear_velocity[course.ball.index])
+        velocity = tuple(velocity_of(course, course.ball))
         course.adjust(bearing=5, elevation=10, power=10)
-        assert tuple(course.world.linear_velocity[course.ball.index]) == velocity
+        assert tuple(velocity_of(course, course.ball)) == velocity
         assert course.state == 'flying'
 
     def test_the_ball_selected_in_flight_is_the_next_one_fired(self):
@@ -207,7 +219,7 @@ class TestTheKick:
 
     def test_a_ball_far_beyond_the_area_ends_the_shot(self):
         course = aimed_game()
-        course.world.gravity.gravity = 0.0
+        course.physics.gravity = (0.0, 0.0, 0.0)
         assert shoot(course, 40.0, 0.0, elevation=0.0) == 'aiming'
         assert course.elapsed < game.LONGEST / 2.0
         assert course.course.beyond(course.position)
@@ -223,8 +235,10 @@ class TestTheKick:
     def test_a_new_shot_takes_the_last_ball_out_of_the_world(self):
         course = aimed_game()
         shoot(course, 12.0)
+        course.physics.flush()
         before = course.world.live_body_count
         shoot(course, 12.0)
+        course.physics.flush()
         assert course.world.live_body_count == before
 
 
@@ -242,14 +256,14 @@ class TestTheBalls:
         """How high a ball dropped from 6 m rises after its first bounce, in metres."""
         course = aimed_game(level=FERRY, ammo=ammo)
         course.fire()
-        spot = course.body_of(onto).transform.translation
+        spot = course.body_of(onto).node.translation
         far = 60.0 if onto == 'ground' else 0.0
         put(course, (spot[0], 6.0, spot[2] + far))
         before, peak, bounced = 0.0, 0.0, False
         for _ in range(300):
             course.tick(1 / 60)
-            speed = float(course.world.linear_velocity[course.ball.index][1])
-            height = float(course.world.position[course.ball.index][1])
+            speed = float(velocity_of(course, course.ball)[1])
+            height = float(position_of(course, course.ball)[1])
             bounced = bounced or (before < -1.0 and speed > 0.0)
             if bounced:
                 peak = max(peak, height)
@@ -268,15 +282,15 @@ class TestTheBalls:
     def struck(self, ammo):
         """The fastest a crate is moving after a ball fired at 30 m/s into the stack."""
         course = aimed_game(level=PORTCULLIS, ammo=ammo)
-        course.world.gravity.gravity = 0.0
+        course.physics.gravity = (0.0, 0.0, 0.0)
         course.fire()
-        centre = np.mean([course.world.position[body.index] for body in course.crates], axis=0)
+        centre = np.mean([position_of(course, body) for body in course.crates], axis=0)
         put(course, centre - (6.0, 0.0, 0.0))
-        course.world.linear_velocity[course.ball.index] = (30.0, 0.0, 0.0)
+        velocity_of(course, course.ball)[:] = (30.0, 0.0, 0.0)
         fastest = 0.0
         for _ in range(60):
             course.tick(1 / 60)
-            speeds = [np.linalg.norm(course.world.linear_velocity[body.index])
+            speeds = [np.linalg.norm(velocity_of(course, body))
                       for body in course.crates]
             fastest = max(fastest, max(speeds))
         return fastest
@@ -288,13 +302,13 @@ class TestTheBalls:
         drift = {}
         for ammo in BALLS:
             course = aimed_game(level=CROSSWIND, ammo=ammo)
-            course.world.gravity.gravity = 0.0
+            course.physics.gravity = (0.0, 0.0, 0.0)
             course.aim.bearing, course.aim.elevation = 0.0, 20.0
             course.point()
             course.fire()
             for _ in range(30):
                 course.tick(1 / 60)
-            drift[ammo] = float(course.world.linear_velocity[course.ball.index][2])
+            drift[ammo] = float(velocity_of(course, course.ball)[2])
             mass = game.AMMO_BY_NAME[ammo].mass
             assert drift[ammo] == pytest.approx(course.course.wind / mass * 0.5, rel=0.05)
         wind = course.course.wind
@@ -332,13 +346,13 @@ class TestWhatTheShotDoes:
     def test_a_ball_that_flies_too_long_is_a_miss(self, monkeypatch):
         monkeypatch.setattr(game, 'LONGEST', 2.0)
         course = aimed_game()
-        course.world.gravity.gravity = 0.0
+        course.physics.gravity = (0.0, 0.0, 0.0)
         assert shoot(course, 40.0, 0.0) == 'aiming'
 
     def test_a_ball_that_falls_out_of_the_world_is_a_miss(self):
         course = aimed_game()
         course.fire()
-        course.world.place_body(course.ball.index, position=(0.0, game.FALLEN - 1.0, 0.0))
+        course.world.place_body(course.slot(course.ball), position=(0.0, game.FALLEN - 1.0, 0.0))
         course.tick(1 / 60)
         assert course.state == 'aiming'
 
@@ -390,7 +404,7 @@ class TestTheMark:
     def drop_at(self, height_over_top, level=OPEN):
         """A ball with no gravity, put at a height over the target's top; was it a hit?"""
         course = aimed_game(level=level)
-        course.world.gravity.gravity = 0.0
+        course.physics.gravity = (0.0, 0.0, 0.0)
         course.fire()
         put(course, (course.target.x, course.target.top + height_over_top, course.target.z))
         for _ in range(10):
@@ -438,7 +452,8 @@ class TestTheScore:
     def test_crates_knocked_off_their_place_are_paid_for(self):
         course = aimed_game(level=CRATES)
         for body in course.crates:
-            course.world.place_body(body.index, position=(0.0, 3.0, 40.0))
+            course.world.place_body(course.slot(body), position=(0.0, 3.0, 40.0))
+        course.physics.frame(0.0)
         assert course.toppled == len(course.crates) == 8
         self.land_on_mark(course)
         assert course.score == (game.CLEAR_BONUS + game.PER_BALL * course.shots_left
@@ -450,7 +465,7 @@ class TestTheScore:
     def test_a_ricochet_off_the_springboard_is_paid_for(self):
         course = aimed_game(level=WALL, ammo='rubber')
         course.fire()
-        spot = course.body_of('springboard').transform.translation
+        spot = course.body_of('springboard').node.translation
         put(course, (spot[0], 2.0, spot[2]))
         for _ in range(60):
             course.tick(1 / 60)
@@ -473,7 +488,7 @@ class TestTheCourses:
     @pytest.mark.parametrize('index', range(len(game.LEVELS)))
     def test_every_course_builds_a_world_with_a_body_for_each_piece(self, index):
         course = aimed_game(level=index)
-        bound = {body.transform for body in course.manager.bodies}
+        bound = {body.node for body in course.bodies}
         assert {piece.node for piece in course.course.pieces} == bound
         assert course.level is game.LEVELS[index]
         assert course.course.kind('ground') and course.course.kind('pad')
@@ -493,7 +508,7 @@ class TestTheCourses:
     def test_the_crates_stand_in_a_square_of_columns_and_rows_high(self):
         course = aimed_game(level=CRATES)
         assert len(course.crates) == 8
-        tops = sorted({round(float(course.world.position[body.index][1]), 1)
+        tops = sorted({round(float(position_of(course, body)[1]), 1)
                        for body in course.crates})
         assert tops == [round(course.target.top + game.CRATE * (row + 0.5), 1)
                         for row in range(2)]
@@ -694,9 +709,10 @@ class TestTheMovers:
 
     def test_the_pose_functions_start_at_home(self):
         home = (3.0, 4.0, 5.0)
-        assert tuple(game.swing(home, 7.0)(0.0)) == home
-        assert tuple(game.drop(home, 7.0)(0.0)) == home
-        assert game.swing(home, 7.0)(game.SLIDE_PERIOD / 4.0)[2] == pytest.approx(12.0)
+        assert tuple(game.swing(home, 7.0)(0.0)[0]) == home
+        assert tuple(game.drop(home, 7.0)(0.0)[0]) == home
+        assert game.swing(home, 7.0)(game.SLIDE_PERIOD / 4.0)[0][2] == pytest.approx(12.0)
+        assert game.swing(home, 7.0)(0.0)[1] is None
 
 
 class TestTheSounds:

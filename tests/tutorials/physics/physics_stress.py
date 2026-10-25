@@ -7,7 +7,9 @@ A large pile of boxes and spheres drops into a bowl to exercise the broad phase,
 islands, and sleeping under load.  The SoA world runs the per-body integration on
 numpy for small scenes and hands off to the GPU compute backend past ~10k awake
 bodies (``gpu_threshold``); press ``b`` to switch backends live and watch the step
-time change (the GPU win is largest for big collider-free swarms).
+time change (the GPU win is largest for big collider-free swarms).  The backend
+belongs to the world, which a script reaches as ``physics.world`` when the service
+is declared ``mode='inline'``.
 
 Bodies render through the instanced mesh path (all boxes of a size share one GPU
 batch), so the render cost stays flat as the pile grows.  The collision-proxy
@@ -23,16 +25,18 @@ Keys:
     b      toggle GPU / numpy physics backend
     r      reset
 '''
-import sys
 import numpy as np
 
-from OpenGLContext.events import systemtime
-from OpenGLContext.context import Context as BaseContext
+from omi_physics.backend import NumpyBackend, select_backend
 
-from omi_physics import model
-from OpenGLContext.physics import debugdraw
-from omi_physics.backend import select_backend, NumpyBackend
-from OpenGLContext.physics.demo import DemoScene, disable_vsync
+from OpenGLContext.context import Context as BaseContext
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.scenegraph import surfaces
+from OpenGLContext.scenegraph.basenodes import (
+    Appearance, Background, Box, DirectionalLight, Shape, Sphere, Transform, sceneGraph,
+)
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 WAVE = 40
 
@@ -40,31 +44,40 @@ WAVE = 40
 class TestContext(BaseContext):
     initialPosition = (0, 12, 26)
     initial_waves = 1               # --waves N: pre-populate N waves at startup
-    debug_flags = 0                 # --debug: enable the (expensive) proxy overlay
+    show_overlay = False            # --debug: draw the (expensive) proxy overlay
+    contextDefinition = ContextDefinition(physics=PhysicsDefinition(mode='inline'))
 
     def OnInit(self):
-        disable_vsync()
         self.rng = np.random.RandomState(7)
+        '''Every body of a kind shares one geometry node and one appearance,
+        which is what lets the renderer draw them as one batch.'''
+        self.cube = Box(size=(1, 1, 1))
+        self.ball = Sphere(radius=0.6)
+        self.wood = Appearance(material=PhysicalMaterial(
+            baseColor=(0.8, 0.7, 0.4), metallic=0.0, roughness=0.6))
+        self.steel = Appearance(material=PhysicalMaterial(
+            baseColor=(0.4, 0.6, 0.9), metallic=0.4, roughness=0.3))
+        self.bodies = []
         self.build()
         print(__doc__)
-        # NB: pass bound methods, not lambdas -- the event system holds handlers
+        # Pass bound methods, not lambdas: the event system holds handlers
         # weakly, so a lambda with no other reference is collected and never fires.
         self.addEventHandler('keypress', name='r', function=self.on_reset)
         self.addEventHandler('keypress', name=' ', function=self.on_add_wave)
         self.addEventHandler('keypress', name='b', function=self.on_toggle_backend)
-        print('physics backend:', self.scene.world.backend.name, flush=True)
-        self._last = systemtime.systemTime()
+        print('physics backend:', self.physics.world.backend.name, flush=True)
 
     def on_reset(self, event):
+        for body in self.bodies:
+            body.remove()
+        self.bodies = []
         self.build()
-        self.triggerRedraw(1)
 
     def on_add_wave(self, event):
         self.add_wave()
-        self.triggerRedraw(1)
 
     def on_toggle_backend(self, event):
-        world = self.scene.world
+        world = self.physics.world
         if world.backend.name == 'glcompute':
             world.backend = NumpyBackend()
         else:
@@ -74,44 +87,39 @@ class TestContext(BaseContext):
                 print('GPU backend unavailable:', err)
                 return
         print('physics backend:', world.backend.name, flush=True)
-        self.triggerRedraw(1)
 
     def build(self):
-        self.scene = DemoScene(debug_flags=self.debug_flags)
-        # a shallow bowl of static walls
-        self.scene.add_box(size=(24, 1, 24), position=(0, -0.5, 0),
-                           color=(0.5, 0.5, 0.55), dynamic=False)
+        '''A shallow bowl: a floor and four walls, shapes of the scene and so
+        static bodies.'''
+        stone = surfaces.pbr_material(surfaces.sandstone(256))
+        parts = [surfaces.shape(surfaces.block((24, 1, 24), repeat=4.0), stone,
+                                translation=(0, -0.5, 0))]
         for sx, sz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            if sx:
-                self.scene.add_box(size=(0.5, 5, 24), position=(sx * 12, 2.5, 0),
-                                   color=(0.45, 0.45, 0.5), dynamic=False)
-            else:
-                self.scene.add_box(size=(24, 5, 0.5), position=(0, 2.5, sz * 12),
-                                   color=(0.45, 0.45, 0.5), dynamic=False)
+            size = (0.5, 5, 24) if sx else (24, 5, 0.5)
+            parts.append(surfaces.shape(surfaces.block(size), stone,
+                                        translation=(sx * 12, 2.5, sz * 12)))
+        self.sg = sceneGraph(children=[
+            Background(skyColor=[(0.55, 0.62, 0.72)]),
+            DirectionalLight(direction=(-0.4, -1.0, -0.6), intensity=2.0),
+            *parts,
+        ])
+        self.physics.show_proxies(self.show_overlay)
         for _ in range(max(1, self.initial_waves)):
             self.add_wave()
-        self.sg = self.scene.scene_graph()
 
     def add_wave(self):
         for _ in range(WAVE):
             x, z = self.rng.uniform(-9, 9, 2)
             y = self.rng.uniform(8, 18)
             if self.rng.rand() < 0.5:
-                self.scene.add_box(size=(1, 1, 1), position=(x, y, z),
-                                   color=(0.8, 0.7, 0.4))
+                geometry, look = self.cube, self.wood
             else:
-                self.scene.add_sphere(radius=0.6, position=(x, y, z),
-                                      color=(0.4, 0.6, 0.9))
-        self.scene.advance(0.0)
-        self.sg = self.scene.scene_graph()
-
-    def OnIdle(self, *arguments):
-        now = systemtime.systemTime()
-        active = self.scene.advance(min(now - self._last, 0.05))
-        self._last = now
-        if active:
-            self.triggerRedraw(1)
-        return 1
+                geometry, look = self.ball, self.steel
+            node = Transform(translation=(x, y, z), children=[
+                Shape(geometry=geometry, appearance=look)])
+            self.sg.children.append(node)
+            self.bodies.append(self.physics.add_dynamic(
+                node, proxy='box' if geometry is self.cube else 'sphere'))
 
 
 if __name__ == '__main__':
@@ -123,5 +131,5 @@ if __name__ == '__main__':
                         help='draw the collision-proxy wireframe overlay (slow)')
     args, _ = parser.parse_known_args()
     TestContext.initial_waves = args.waves
-    TestContext.debug_flags = debugdraw.PROXIES | debugdraw.CONTACTS if args.debug else 0
+    TestContext.show_overlay = args.debug
     TestContext.ContextMainLoop()

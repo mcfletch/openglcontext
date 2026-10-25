@@ -348,3 +348,148 @@ def test_each_foot_plays_the_clip_of_the_material_under_it(gl_context):
         runs = [name for index, name in enumerate(context.steps)
                 if index == 0 or name != context.steps[index - 1]]
         assert runs == ['grass', 'stone', 'grass']
+
+
+# -- the older tutorials, on the service ------------------------------------------------
+
+def test_the_balls_rebound_higher_the_more_restitution_they_have(gl_context):
+    with running('physics', 'physics_bounce') as run:
+        run.frame()
+        balls = run.context.balls
+        rebound = [0.0] * len(balls)
+        landed = [False] * len(balls)
+        for _ in range(60 * 4):
+            run.frame()
+            for number, body in enumerate(balls):
+                height = float(body.position[1])
+                if height < run.module.RADIUS + 0.15:
+                    landed[number] = True
+                elif landed[number]:
+                    rebound[number] = max(rebound[number], height)
+        assert all(landed)
+        assert rebound == sorted(rebound)
+        assert rebound[-1] > 3 * rebound[1]
+
+
+def test_a_box_slides_on_the_steep_ramp_and_holds_on_the_shallow_ones(gl_context):
+    with running('physics', 'physics_friction') as run:
+        run.frame()
+        before = [np.array(body.position) for body in run.context.boxes]
+        run.seconds(3.0)
+        moved = [float(np.linalg.norm(np.array(body.position) - start))
+                 for body, start in zip(run.context.boxes, before)]
+        assert moved[0] < 0.1 and moved[1] < 0.1
+        assert moved[2] > 1.0
+
+
+def test_the_debris_falls_in_toward_the_planet(gl_context):
+    with running('physics', 'physics_gravity_zones') as run:
+        run.frame()
+        bodies = [body for body in run.physics._bodies.values() if body.kind == 'dynamic']
+        before = [float(np.linalg.norm(body.position)) for body in bodies]
+        run.seconds(1.0)
+        after = [float(np.linalg.norm(body.position)) for body in bodies]
+        assert len(bodies) == 14
+        assert all(now < then for now, then in zip(after, before))
+
+
+def test_a_ball_is_green_while_it_is_in_the_trigger_and_orange_again_after(gl_context):
+    with running('physics', 'physics_triggers') as run:
+        run.frame()
+        context = run.context
+        skins = [body.node.children[0].appearance.material for body in context.balls]
+
+        def colours():
+            return [tuple(round(float(v), 1) for v in skin.baseColor) for skin in skins]
+
+        assert len(skins) == 6
+        assert run.until(lambda: any(colour[1] == 1.0 for colour in colours()), seconds=5.0)
+        assert run.until(lambda: all(colour[1] < 1.0 for colour in colours())
+                         and run.clock.elapsed > 2.0, seconds=10.0)
+
+
+def test_the_bodies_dropped_into_the_room_come_to_rest_inside_it(gl_context):
+    with running('physics', 'physics_room_drop') as run:
+        run.frame()
+        size, bodies = run.module.SIZE, run.context.bodies
+        assert len(bodies) == 8
+        assert run.until(lambda: all(body.asleep for body in bodies), seconds=30.0)
+        for body in bodies:
+            x, y, z = body.position
+            assert abs(x) < size and abs(z) < size
+            assert 0.2 < y < 3.0
+        run.context.on_add(None)
+        assert len(run.context.bodies) == 9
+        run.context.on_reset(None)
+        assert len(run.context.bodies) == 8
+
+
+def test_the_pendulum_holds_its_arm_and_the_spinner_turns(gl_context):
+    with running('physics', 'physics_joints') as run:
+        run.frame()
+        bob = run.context.homes[0][0]
+        spinner = run.context.homes[-1][0]
+        pivot = np.array([-5.0, 6.0, 0.0])
+        lowest = 6.0
+        for _ in range(60 * 3):
+            run.frame()
+            assert np.linalg.norm(np.array(bob.position) - pivot) == pytest.approx(2.0, abs=0.15)
+            lowest = min(lowest, float(bob.position[1]))
+        assert abs(float(spinner.angular_velocity[1])) > 2.0
+        assert lowest < 4.5                                              # it has swung down
+
+
+def test_each_cooking_strategy_gives_the_proxy_it_names(gl_context):
+    with running('physics', 'physics_cook_view') as run:
+        run.frame()
+        seen = [run.context.proxy.shape.type]
+        for _ in range(2):
+            run.context.on_cycle(None)
+            run.frame()
+            seen.append(run.context.proxy.shape.type)
+        assert seen == run.module.STRATEGIES
+        assert run.until(lambda: run.context.body.asleep, seconds=20.0)
+        assert 0.3 < run.context.body.position[1] < 2.0
+
+
+def test_the_pile_falls_into_the_bowl_and_a_wave_adds_forty(gl_context):
+    with running('physics', 'physics_stress') as run:
+        run.frame()
+        context = run.context
+        assert len(context.bodies) == run.module.WAVE
+        assert run.until(lambda: all(body.position[1] < 4.0 for body in context.bodies),
+                         seconds=15.0)
+        assert all(abs(body.position[0]) < 12 and abs(body.position[2]) < 12
+                   for body in context.bodies)
+        context.on_add_wave(None)
+        assert len(context.bodies) == 2 * run.module.WAVE
+        assert run.physics.world.backend.name
+
+
+def test_a_ball_flashes_as_hard_as_it_landed_and_cools_again(gl_context):
+    with running('physics', 'using_collisions') as run:
+        run.frame()
+        glows = list(run.context.glows.values())
+        assert run.until(lambda: any(glow.strength > 0 for glow in glows), seconds=5.0)
+        landed = next(glow for glow in glows if glow.strength > 0)
+        assert 0.0 < landed.strength <= 1.0
+        harder = max(glows, key=lambda glow: glow.strength)
+        assert harder.strength >= landed.strength
+        assert run.until(lambda: all(float(glow.material.emissiveColor[0]) < 0.05
+                                     for glow in glows) and run.clock.elapsed > 4.0,
+                         seconds=20.0)
+
+
+def test_the_walker_crosses_the_level_on_its_own_and_stays_on_the_floor(gl_context):
+    with running('physics', 'physics_navigate') as run:
+        run.frame()
+        hero = run.context.hero
+        start = np.array(hero.position)
+        top = 0.0
+        for _ in range(60 * 6):
+            run.context.OnIdle()                                # the keys' share of the frame
+            run.frame()
+            top = max(top, float(hero.position[1]))
+        assert np.linalg.norm((np.array(hero.position) - start)[[0, 2]]) > 3.0
+        assert -0.1 < hero.position[1] < 2.5
+        assert np.allclose(run.context.getViewPlatform().position[:3], hero.eye, atol=0.5)

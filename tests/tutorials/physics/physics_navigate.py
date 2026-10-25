@@ -3,9 +3,10 @@
 
 [physics_navigate.py-screen-0001.png Screenshot]
 
-Walk through a level with walls, a doorway, a staircase, and a ramp using the
-:class:`PhysicsViewPlatform` character controller.  The capsule can't clip walls,
-climbs steps up to ``stepHeight``, and slides on steep slopes.  On bind it runs
+Walk through a level with walls, a doorway, a staircase, and a ramp as a
+physics *character*: a capsule the service steps each frame.  The capsule can't
+clip walls, climbs steps up to ``stepHeight``, and slides on steep slopes.
+``PhysicsViewPlatform.over`` puts the camera at its eyes, and on bind it runs
 **safe viewpoint binding** so the camera never starts stuck in the floor.
 
 The demo starts by auto-walking so it explores on its own; press **t** to take
@@ -18,48 +19,54 @@ Keys:
     space           jump                     f       toggle fly
 '''
 import numpy as np
-
-from OpenGLContext.events import systemtime
-from OpenGLContext.context import Context as BaseContext
-
-from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.physics.demo import DemoScene, disable_vsync
 from omi_physics.character import CharacterCapabilities
+
+from OpenGLContext.context import Context as BaseContext
+from OpenGLContext.events import systemtime
+from OpenGLContext.events.framestep import FrameStep
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from OpenGLContext.scenegraph import basenodes, surfaces
 
 HOLD = 0.25            # seconds a key press keeps driving movement (key-repeat refreshes it)
 
 
 class TestContext(BaseContext):
     def OnInit(self):
-        disable_vsync()
-        self.scene = DemoScene(debug_flags=0, background=(0.55, 0.62, 0.72))
-        build_level(self.scene)
+        level = build_level()
+        self.floor = level[0]
+        self.sg = basenodes.sceneGraph(children=[
+            basenodes.SimpleBackground(color=(0.55, 0.62, 0.72)),
+            *level,
+        ])
         self.headlight = basenodes.PointLight(
             location=(0, 2, 0), color=(1, 1, 0.95), intensity=0.8, radius=40)
-        sun = basenodes.DirectionalLight(direction=(-0.4, -1, -0.5),
-                                         color=(1, 0.98, 0.9), intensity=0.7)
-        self.sg = self.scene.scene_graph(extra=[sun, self.headlight])
-
-        self.platform_nav = PhysicsViewPlatform(
-            self.scene.world, CharacterCapabilities(walkSpeed=3.0, runSpeed=6.0,
-                                                    stepHeight=0.4), yaw=0.0)
-        self.platform_nav.bind((-8.0, 2.0, 6.0))
+        self.sg.children.append(self.headlight)
+        self.sg.children.append(basenodes.DirectionalLight(
+            direction=(-0.4, -1, -0.5), color=(1, 0.98, 0.9), intensity=0.7))
+        '''The shapes of the scene are static bodies, made as the scene is first
+        drawn.  The floor is made at once, so the walker has ground in the
+        first frame.'''
+        self.physics.add_static(self.floor, proxy='box')
+        '''``add_character`` makes a walker.  Its ``CharacterCapabilities`` are its
+        speeds in metres a second, the height of the step it climbs and its
+        capsule; ``PhysicsViewPlatform.over`` is the camera at its eyes.'''
+        self.hero = self.physics.add_character(
+            capabilities=CharacterCapabilities(walkSpeed=3.0, runSpeed=6.0, stepHeight=0.4),
+            position=(-8.0, 0.3, 6.0))
+        self.platform_nav = PhysicsViewPlatform.over(self.hero, yaw=0.0)
         # ViewPlatformMixin binds a default Smooth movement manager (arrow keys)
-        # to context.platform. PhysicsViewPlatform now owns the camera and writes
-        # it every frame via nav.apply(), so the two fight: while a built-in-nav
-        # key is held its interpolator glides the camera (its timer fires from
-        # DoEventCascade, after our nav.apply), then on release the timer stops
-        # and nav.apply snaps the camera back to the character pose. Unbind it so
-        # the character controller is the sole driver.
+        # to context.platform. The platform owns the camera and writes it every
+        # frame via nav.apply(), so the two fight: unbind it so the character
+        # is the sole driver.
         if self.movementManager is not None:
             self.movementManager.unbind(self)
             self.movementManager = None
         self._auto = True
         self._stuck_frames = 0
-        self._prev = self.platform_nav.character.position.copy()
+        self._prev = self.hero.position.copy()
         self._keys = {}
         self._run = False
+        self._steps = FrameStep(longest=0.05)
         print(__doc__)
         # Handlers must be bound methods: the event system holds them weakly, so
         # a lambda with no other reference would be collected and never fire.
@@ -79,7 +86,6 @@ class TestContext(BaseContext):
         # Fire the software key-repeat quickly so a held key doesn't stutter in the
         # gap between the initial press and the first repeat (HOLD is 0.25 s).
         self.keyRepeatDelay = 0.1
-        self._last = systemtime.systemTime()
 
     def _on_key(self, event):
         self._auto = False
@@ -93,22 +99,23 @@ class TestContext(BaseContext):
         self._run = not self._run
 
     def _on_jump(self, event):
-        self.platform_nav.jump()
+        self.hero.jump()
 
     def _toggle_fly(self, event):
-        self.platform_nav.set_fly(not self.platform_nav.character.flying)
+        self.hero.set_fly(not self.hero.controller.flying)
 
     def OnIdle(self, *arguments):
+        '''The service steps the walker before every frame.  What is left to
+        the script is the input: what the keys ask for, and the camera where
+        the walker has got to.'''
         now = systemtime.systemTime()
-        dt = min(now - self._last, 0.05)
-        self._last = now
+        dt = self._steps.step(now)
         nav = self.platform_nav
         if self._auto:
             self._auto_walk()
         else:
             self._manual(now, nav, dt)
-        nav.update(dt)
-        self.headlight.location = nav.camera_position()
+        self.headlight.location = tuple(self.hero.eye)
         nav.apply(self)
         self.triggerRedraw(1)
         return 1
@@ -123,14 +130,14 @@ class TestContext(BaseContext):
         if held('e'):
             nav.turn(2.0 * dt)          # e: turn right
         mode = 'run' if self._run else 'walk'
-        if nav.character.flying:
+        if self.hero.controller.flying:
             nav.set_fly_move(forward=forward, strafe=strafe)
         else:
             nav.set_move(forward=forward, strafe=strafe, mode=mode)
 
     def _auto_walk(self):
         nav = self.platform_nav
-        moved = np.linalg.norm((nav.character.position - self._prev)[[0, 2]])
+        moved = np.linalg.norm((self.hero.position - self._prev)[[0, 2]])
         if moved < 0.005:
             self._stuck_frames += 1
             if self._stuck_frames > 5:
@@ -138,32 +145,34 @@ class TestContext(BaseContext):
                 self._stuck_frames = 0
         else:
             self._stuck_frames = 0
-        self._prev = nav.character.position.copy()
+        self._prev = self.hero.position.copy()
         nav.set_move(forward=1.0, mode='walk')
 
 
-def build_level(scene):
-    scene.add_box(size=(24, 1, 24), position=(0, -0.5, 0),
-                  color=(0.62, 0.60, 0.55), dynamic=False)
+def build_level():
+    '''A walled room with a doorway, a staircase and a ramp, as shapes.'''
+    floor = surfaces.pbr_material(surfaces.checkered_marble(512, tiles=6))
+    outer = surfaces.pbr_material(surfaces.sandstone(256))
+    inner = surfaces.pbr_material(surfaces.plaster(256))
+    step = surfaces.pbr_material(surfaces.brick(256))
+    slab = surfaces.pbr_material(surfaces.tiles(256, count=6))
+    parts = []
     for sx in (1, -1):
-        scene.add_box(size=(0.4, 4, 24), position=(sx * 12, 2, 0),
-                      color=(0.78, 0.72, 0.62), dynamic=False)
+        parts.append(surfaces.shape(surfaces.block((0.4, 4, 24)), outer, translation=(sx * 12, 2, 0)))
     for sz in (1, -1):
-        scene.add_box(size=(24, 4, 0.4), position=(0, 2, sz * 12),
-                      color=(0.78, 0.72, 0.62), dynamic=False)
+        parts.append(surfaces.shape(surfaces.block((24, 4, 0.4)), outer, translation=(0, 2, sz * 12)))
     # interior wall with a doorway (two segments, a gap between)
-    scene.add_box(size=(0.4, 4, 8), position=(0, 2, -8),
-                  color=(0.82, 0.68, 0.55), dynamic=False)
-    scene.add_box(size=(0.4, 4, 8), position=(0, 2, 8),
-                  color=(0.82, 0.68, 0.55), dynamic=False)
+    parts.append(surfaces.shape(surfaces.block((0.4, 4, 8)), inner, translation=(0, 2, -8)))
+    parts.append(surfaces.shape(surfaces.block((0.4, 4, 8)), inner, translation=(0, 2, 8)))
     # a staircase
     for k in range(5):
-        scene.add_box(size=(3, 0.3, 2), position=(6, 0.15 + k * 0.3, -6 + k * 0.9),
-                      color=(0.85, 0.78, 0.55), dynamic=False)
+        parts.append(surfaces.shape(surfaces.block((3, 0.3, 2)), step,
+                                    translation=(6, 0.15 + k * 0.3, -6 + k * 0.9)))
     # a ramp
-    angle = np.radians(20)
-    scene.add_box(size=(6, 0.4, 4), position=(-7, 1.0, -6),
-                  color=(0.6, 0.72, 0.85), dynamic=False, rotation=(0, 0, 1, angle))
+    parts.append(surfaces.shape(surfaces.block((6, 0.4, 4)), slab, translation=(-7, 1.0, -6),
+                                rotation=(0, 0, 1, np.radians(20))))
+    return [surfaces.shape(surfaces.block((24, 1, 24), repeat=4.0), floor,
+                           translation=(0, -0.5, 0)), *parts]
 
 
 if __name__ == '__main__':

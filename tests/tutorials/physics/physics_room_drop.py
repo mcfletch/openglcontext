@@ -3,99 +3,103 @@
 
 [physics_room_drop.py-screen-0001.png Screenshot]
 
-A stack of boxes and spheres falls into a walled room and settles.  It exercises
-the whole engine: symplectic-Euler integration, primitive collision, the
-sequential-impulse solver, stacking, and sleeping.  The green wireframes are the
-collision proxies and the red stubs are contact normals, drawn by the physics
-debug overlay.
+Boxes and spheres fall into a walled room and settle: the world integrates
+their motion, collides them, solves the contacts so they stack, and puts them to
+sleep once they are still.  The room is only drawn: the floor and the walls are
+shapes in the scene, so each is a static body without a call.  The green
+wireframes are the collision proxies, drawn by ``physics.show_proxies``.
 
 Keys:
     space  drop another body
     r      reset the scene
-    d      cycle debug overlay (proxies / +aabbs / +velocity / all / off)
+    d      draw the collision proxies, or stop drawing them
 '''
 import numpy as np
 
-from OpenGLContext.events import systemtime
 from OpenGLContext.context import Context as BaseContext
+from OpenGLContext.scenegraph import surfaces
+from OpenGLContext.scenegraph.basenodes import (
+    Background, DirectionalLight, sceneGraph,
+)
 
-from omi_physics import model
-from OpenGLContext.physics.demo import DemoScene, disable_vsync
-from OpenGLContext.physics import debugdraw
+#: The room's half width, in metres, the thickness of its walls and their height.
+SIZE = 6.0
+WALL = 0.4
+HEIGHT = 4.0
 
-DEBUG_CYCLE = [
-    debugdraw.PROXIES | debugdraw.CONTACTS,
-    debugdraw.PROXIES | debugdraw.CONTACTS | debugdraw.AABBS,
-    debugdraw.PROXIES | debugdraw.VELOCITY | debugdraw.ACCELERATION | debugdraw.ANGULAR,
-    debugdraw.ALL,
-    0,
-]
+
+def make_room():
+    '''A floor and four walls, as shapes of the scene: the world makes a static
+    body of each.'''
+    floor = surfaces.pbr_material(surfaces.checkered_marble(512, tiles=6))
+    plaster = surfaces.pbr_material(surfaces.plaster(256))
+    parts = [surfaces.shape(surfaces.block((2 * SIZE, 1, 2 * SIZE), repeat=2 * SIZE), floor,
+                            translation=(0, -0.5, 0))]
+    for side in (-1, 1):
+        parts.append(surfaces.shape(
+            surfaces.block((WALL, HEIGHT, 2 * SIZE)), plaster,
+            translation=(side * SIZE, HEIGHT / 2, 0)))
+        parts.append(surfaces.shape(
+            surfaces.block((2 * SIZE, HEIGHT, WALL)), plaster,
+            translation=(0, HEIGHT / 2, side * SIZE)))
+    return parts
 
 
 class TestContext(BaseContext):
     initialPosition = (0, 7, 18)
 
     def OnInit(self):
-        disable_vsync()
         self.rng = np.random.RandomState(1234)
-        self._debug_index = 0
-        self.build_scene()
+        self.wood = surfaces.pbr_material(surfaces.wood(256))
+        self.metal = surfaces.pbr_material(surfaces.brushed_metal(256, surfaces.COPPER))
+        self.sg = sceneGraph(children=[
+            Background(skyColor=[(0.55, 0.62, 0.72)]),
+            DirectionalLight(direction=(-0.4, -1.0, -0.6), intensity=2.0),
+            *make_room(),
+        ])
+        self.bodies = []
+        self.proxies = True
+        self.physics.show_proxies(True)
+        for k in range(8):
+            self.drop_one(k)
         print(__doc__)
         self.addEventHandler('keypress', name='r', function=self.on_reset)
         self.addEventHandler('keypress', name=' ', function=self.on_add)
         self.addEventHandler('keypress', name='d', function=self.on_debug)
-        self._last = systemtime.systemTime()
-
-    def build_scene(self):
-        self.scene = DemoScene(debug_flags=DEBUG_CYCLE[self._debug_index])
-        room(self.scene)
-        for k in range(8):
-            self.drop_one(k)
-        self.scene.advance(0.0)
-        self.sg = self.scene.scene_graph()
 
     def drop_one(self, k):
-        x = self.rng.uniform(-2.5, 2.5)
-        z = self.rng.uniform(-2.5, 2.5)
-        y = 6.0 + 1.3 * k
+        '''A body is a node and a call.  The node is added to the scene, and
+        ``add_dynamic`` makes the world move it: a box of wood or a sphere of
+        copper, which the world fits to the mesh.  ``material`` names the
+        grip and bounce of ``wood`` or ``rubber``, two of the four presets.'''
+        x, z = self.rng.uniform(-2.5, 2.5, 2)
+        at = (x, 6.0 + 1.3 * k, z)
         if k % 2:
-            self.scene.add_box(size=(1, 1, 1), position=(x, y, z),
-                               color=(0.85, 0.75, 0.5), material='wood')
+            node = surfaces.shape(surfaces.block((1, 1, 1)), self.wood)
+            material = 'wood'
         else:
-            self.scene.add_sphere(radius=0.6, position=(x, y, z),
-                                  color=(0.4, 0.6, 0.9), material='rubber')
+            node = surfaces.shape(surfaces.sphere(0.6), self.metal)
+            material = 'rubber'
+        self.sg.children.append(node)
+        self.bodies.append(self.physics.add_dynamic(node, translation=at, material=material))
 
-    def OnIdle(self, *arguments):
-        now = systemtime.systemTime()
-        dt = min(now - self._last, 0.05)
-        self._last = now
-        if self.scene.advance(dt):
-            self.triggerRedraw(1)
-        return 1
+    def clear(self):
+        for body in self.bodies:
+            body.remove()
+            self.sg.children.remove(body.node)
+        self.bodies = []
 
     def on_reset(self, event):
-        self.build_scene()
+        self.clear()
+        for k in range(8):
+            self.drop_one(k)
 
     def on_add(self, event):
         self.drop_one(self.rng.randint(0, 100))
-        self.sg = self.scene.scene_graph()
 
     def on_debug(self, event):
-        self._debug_index = (self._debug_index + 1) % len(DEBUG_CYCLE)
-        self.scene.debug.flags = DEBUG_CYCLE[self._debug_index]
-
-
-def room(scene, size=6.0, wall=0.4, height=4.0):
-    s = size
-    scene.add_box(size=(2 * s, 1, 2 * s), position=(0, -0.5, 0),
-                  color=(0.5, 0.5, 0.55), dynamic=False)
-    for sx, sz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        if sx:
-            scene.add_box(size=(wall, height, 2 * s), position=(sx * s, height / 2, 0),
-                          color=(0.45, 0.45, 0.5), dynamic=False)
-        else:
-            scene.add_box(size=(2 * s, height, wall), position=(0, height / 2, sz * s),
-                          color=(0.45, 0.45, 0.5), dynamic=False)
+        self.proxies = not self.proxies
+        self.physics.show_proxies(self.proxies)
 
 
 if __name__ == '__main__':

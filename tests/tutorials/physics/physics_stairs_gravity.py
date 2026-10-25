@@ -30,11 +30,15 @@ class TestContext(Rolling):
         inside it, and nothing outside it.'''
         self.zone = self.physics.add_gravity_zone(
             Box(center=CENTRE, size=SIZE), gravity=(0, 14, 0))
-        '''A zone is not drawn. A translucent box of the same size marks it.'''
-        self.sg.children.append(Transform(translation=CENTRE, children=[Shape(
+        '''A zone is not drawn. A translucent box of the same size marks it.
+        A shape of the scene is a static body, and the ball must pass through
+        this one, so it says ``collide = False``.'''
+        marker = Shape(
             geometry=BoxGeometry(size=SIZE),
             appearance=Appearance(material=Material(
-                diffuseColor=(0.4, 0.7, 1.0), transparency=0.8)))]))
+                diffuseColor=(0.4, 0.7, 1.0), transparency=0.8)))
+        marker.collide = False
+        self.sg.children.append(Transform(translation=CENTRE, children=[marker]))
 
 
 if __name__ == '__main__':

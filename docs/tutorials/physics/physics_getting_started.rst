@@ -3,103 +3,125 @@ Adding physics to a scene
 
 .. rst-class:: introduction
 
-This tutorial builds a small physics scene — a walled room that objects fall
-into and stack up — using the same helper the demos use. By the end you will
-have an animated, interactive window with a live collision debug overlay. It
-mirrors ``tests/tutorials/physics/physics_room_drop.py``; run that file to see the finished
-result.
+This page builds a scene in which a ball rolls down a flight of stairs, one
+step at a time, with the lines each step adds. It follows
+``tests/tutorials/physics/physics_stairs.py``; run that file to see the
+finished result, and the tutorials after it in this path to change what the
+ball does, what it is made of and what it hears.
+
+A context has a physics world, ``self.physics``. The world is made the first
+time a script mentions it, steps itself, and is closed with the window. A
+script has no clock, no tick and no redraw request.
 
 .. _scene:
 
-1. A world and a floor
-----------------------
+1. The scene
+------------
 
-A ``DemoScene`` keeps a scenegraph and a physics world in lockstep. Static
-bodies (``dynamic=False``) never move — they are the world:
-
-.. code-block:: python
-
-   from OpenGLContext.physics.demo import DemoScene
-   from OpenGLContext.physics import debugdraw
-
-   scene = DemoScene(debug_flags=debugdraw.PROXIES | debugdraw.CONTACTS)
-   scene.add_box(size=(12,1,12), position=(0,-0.5,0), dynamic=False)   # floor
-   for sx, sz in ((1,0),(-1,0),(0,1),(0,-1)):                          # four walls
-       if sx:
-           scene.add_box(size=(0.4,4,12), position=(sx*6,2,0), dynamic=False)
-       else:
-           scene.add_box(size=(12,4,0.4), position=(0,2,sz*6), dynamic=False)
-
-.. _bodies:
-
-2. Dynamic bodies
------------------
-
-Dynamic boxes and spheres fall under gravity and collide. A material preset
-(``wood``, ``metal``, ``rubber``, ``ice``) sets friction and restitution:
+A shape in the scene is a static body, so the stairs and the floor need no call
+to hold something up. The scene is ordinary scenegraph nodes:
 
 .. code-block:: python
 
-   for k in range(8):
-       if k % 2:
-           scene.add_box(size=(1,1,1), position=(0, 6+k, 0), material='wood')
-       else:
-           scene.add_sphere(radius=0.6, position=(0.2, 6+k, 0), material='rubber')
+   from OpenGLContext.context import Context
+   from OpenGLContext.scenegraph import surfaces
+   from OpenGLContext.scenegraph.basenodes import (
+       Background, DirectionalLight, sceneGraph,
+   )
 
-.. _loop:
-
-3. The frame loop
------------------
-
-Step the world from real elapsed time and let it write the poses back onto the
-``Transform`` nodes. Inside an OpenGLContext ``TestContext``:
-
-.. code-block:: python
-
-   import time
-   from OpenGLContext.physics.demo import disable_vsync
-
-   class TestContext(BaseContext):
-       initialPosition = (0, 7, 18)
+   class StairsContext(Context):
        def OnInit(self):
-           disable_vsync()                 # uncap fps for a forced-redraw loop
-           self.scene = scene              # built as above
-           self.scene.advance(0.0)
-           self.sg = self.scene.scene_graph()
-           self._last = time.time()
-       def OnIdle(self, *arguments):
-           now = time.time()
-           self.scene.advance(min(now - self._last, 0.05))   # clamp the spiral of death
-           self._last = now
-           self.triggerRedraw(1)
-           return 1
+           self.stairs = make_stairs()      # blocks of sandstone, from surfaces.block
+           self.ball = make_ball()          # a steel sphere, from surfaces.sphere
+           self.sg = sceneGraph(children=[
+               Background(skyColor=[(0.55, 0.65, 0.8)]),
+               DirectionalLight(direction=(0.5, -0.7, -0.2), intensity=3.0),
+               self.stairs, self.ball,
+           ])
 
-``advance(dt)`` runs the fixed-timestep accumulator internally, so the
-simulation stays stable and deterministic regardless of frame rate.
+A game loads the stairs and the ball from files with
+``self.sceneLoader.load_now('stairs.glb').result.group``; a glTF file whose nodes
+carry ``OMI_physics_body`` blocks makes their bodies when it is mounted.
+
+.. _body:
+
+2. A body
+---------
+
+``add_dynamic`` makes a node a body the world moves. The pose is set with the
+call, so the ball is placed and added in one step:
+
+.. code-block:: python
+
+   self.body = self.physics.add_dynamic(
+       self.ball, translation=(0, 2.26, -1.0), mass=2.0, restitution=0.4)
+
+``mass`` is in kilograms and ``restitution`` is the fraction of the closing speed
+a bounce keeps. A body that names no mass takes it from the volume of its
+shape and the density of its material.
+
+.. _push:
+
+3. A push
+---------
+
+A body is moved by impulses (newton-seconds), velocities (metres a second) and
+forces (newtons), each a call on the ``Body``:
+
+.. code-block:: python
+
+   self.body.apply_impulse((0, 0, 8))       # 4 m/s on a 2 kg ball, down the stairs
+
+Each call is a command, applied at the start of the next step from whichever
+thread made it. Reading a body (``body.position``, ``body.velocity``) answers
+the last step the world published.
+
+.. _events:
+
+4. What it hit
+--------------
+
+A body tells the script what happened to it through events. ``'hit'`` is a body
+striking something, ``above`` the closing speed in metres a second a hit must
+exceed:
+
+.. code-block:: python
+
+   self.body.addEventHandler('hit', function=self.OnBallHit, above=1.0)
+
+   def OnBallHit(self, hit):
+       self.skin.baseColor = (1, 0, 0)
+
+The handler runs on the render thread between frames, so it may change the
+scene as any other handler does. Marking it ``@Context.physics_callback`` runs it
+on the thread that steps the world instead; it then sends scene changes with
+``self.physics.render.set(node, field=value)``.
 
 .. _debug:
 
-4. Reading the debug overlay
-----------------------------
+5. Seeing the collision shapes
+------------------------------
 
-With the debug flags set above you will see a green wireframe of each
-collision proxy and short red stubs at contact points (the contact normals).
-Add ``debugdraw.VELOCITY | debugdraw.ACCELERATION | debugdraw.ANGULAR`` to
-draw motion vectors: cyan velocity, orange acceleration, and magenta
-angular-velocity stubs at the box corners that make spin visible. Colour-code
-sleeping bodies with ``debugdraw.SLEEP``.
+``self.physics.show_proxies(True)`` draws a green wireframe of each collision
+proxy over the scene, and ``show_proxies(False)`` takes it out. The proxy is
+what the world collides with: a sphere or box where the mesh is exactly one,
+otherwise the convex hull of a dynamic body and the triangles of a static one.
+``proxy='sphere'``, ``'box'``, ``'convex'`` or another node chooses another.
 
 .. _next:
 
 Next steps
 ----------
 
-- Load a real physics asset: point the glTF loader at a Godot/Blender export
-  with ``OMI_physics_*`` extensions.
+- Change what the ball is made of: ``physics.materials.define`` and
+  ``material=``.
 
-- Cook a collider for an un-annotated mesh with ``cookery.cook_shape()`` (see
-  ``physics_cook_view.py``).
+- Make a region with gravity of its own: ``physics.add_gravity_zone``.
 
-- Walk around with the character controller (``physics_navigate.py``).
+- Walk around with a character: ``physics.add_character`` and
+  ``context.follow`` (see the Characters on Land path).
+
+- Load a real physics asset: point the glTF loader at a Godot or Blender
+  export with ``OMI_physics_*`` extensions.
 
 - Read the :doc:`Physics & Collision </physics>` overview for the full model.

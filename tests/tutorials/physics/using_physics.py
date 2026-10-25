@@ -54,7 +54,6 @@ from omi_audio import model as audiomodel
 from omi_audio import synth
 from omi_audio.clip import Clip
 from omi_physics import model
-from omi_physics.kinematic import KinematicAnimator
 from pydispatch import dispatcher
 
 ''':py:mod:`OpenGLContext.entropy` provides a random number generator that shares
@@ -72,7 +71,10 @@ from OpenGLContext.context import MultiViewContext as BaseContext
 that Timer and TimeSensors use to set the actual time for the simulation'''
 from OpenGLContext.events import systemtime
 from OpenGLContext.events.timer import Timer
-from OpenGLContext.physics.manager import PhysicsManager
+from OpenGLContext.physics.body import Body
+from OpenGLContext.physics.callbacks import physics_callback
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import particles, surfaces
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Coordinate, DirectionalLight, Group, IndexedLineSet, LayerSet,
@@ -81,7 +83,6 @@ from OpenGLContext.scenegraph.basenodes import (
 )
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.nodepath import NodePath
-from OpenGLContext.scenegraph.physicsbody import PhysicsBody
 from OpenGLContext.ui.hudwidgets import HUDLayer, ScreenWash, TextBlock
 from OpenGLContext.viewer.environment import sky_background
 
@@ -622,9 +623,14 @@ LEVELS = (
 
 
 def swing(home: tuple[float, float, float], reach: float) -> Callable[[float], Any]:
-    """A pose function: the position ``home`` moved ``reach`` metres either way along z."""
+    """A pose function: the position ``home`` moved ``reach`` metres either way along z.
+
+    A pose is the position and the rotation, which is None for a body that does not turn.
+    """
+    @physics_callback
     def pose(time: float) -> Any:
-        return (home[0], home[1], home[2] + reach * math.sin(2.0 * math.pi * time / SLIDE_PERIOD))
+        return ((home[0], home[1], home[2] + reach * math.sin(2.0 * math.pi * time / SLIDE_PERIOD)),
+                None)
     return pose
 
 
@@ -636,8 +642,9 @@ def gate_open(time: float) -> float:
 
 def drop(home: tuple[float, float, float], depth: float) -> Callable[[float], Any]:
     """A pose function: ``home`` lowered ``depth`` metres as the gate opens."""
+    @physics_callback
     def pose(time: float) -> Any:
-        return (home[0], home[1] - depth * gate_open(time), home[2])
+        return (home[0], home[1] - depth * gate_open(time), home[2]), None
     return pose
 
 
@@ -801,7 +808,7 @@ def flag(target: Platform, wind: float, look: dict[str, Any]) -> Any:
 
 
 class Game:
-    """The rules, over a physics world: a course, the aim, the balls and the score.
+    """The rules, over a physics service: a course, the aim, the balls and the score.
 
     ``state`` is ``aiming`` until the cannon fires, ``flying`` while the ball
     is in the air, then ``aiming`` again after a miss, ``cleared`` after a hit,
@@ -809,7 +816,8 @@ class Game:
     course is cleared.  Firing from any of the last three starts the next
     course, or the first again.
     Nothing here draws or reads a clock: `tick` is given the seconds that have
-    passed.
+    passed and steps the game's own `Physics`, a standalone service that needs no
+    context and no window.
 
     The world's events decide the game.  A ball in the target's slab is a hit,
     and a ball that stops, falls away or flies too long is a miss.  What the
@@ -822,6 +830,12 @@ class Game:
     def __init__(self, rng: Any = None, on_event: Callable[[str, Any], None] | None = None,
                  level: int = 0) -> None:
         self.rng = rng or entropy.randomizer('cannon')
+        self.bodies: dict[Body, Piece] = {}
+        self.slides: list[Callable[[Any], None]] = []
+        self._origin: float | None = None
+        self.physics = Physics(PhysicsDefinition(
+            mode='inline', tickHz=1.0 / STEP, maxCatchUp=1.0, linearDamping=0.0,
+            colliders='explicit'))
         self.look = looks()
         self.on_event = on_event or (lambda kind, detail=None: None)
         self.aim = Aim()
@@ -837,7 +851,7 @@ class Game:
         self.chosen = next(name for name, count in self.stock.items() if count)
         self.state = 'aiming'
         self.message = self.level.hint
-        self.ball: PhysicsBody | None = None
+        self.ball: Body | None = None
         self.flying: Ammo | None = None
         self.subscription: Any = None
         self.elapsed = self.slow = 0.0
@@ -848,21 +862,22 @@ class Game:
     def wire_up_physics(self) -> None:
         '''=Wiring up the physics=
 
-        The world is built and the physics is told about it afterwards.  A
-        `PhysicsManager` holds the simulation and writes each body's pose
-        onto the `Transform` it is bound to.  Gravity is the OMI gravity
-        model: 9.81 metres per second squared, downward.  Its default linear
-        damping is a drag that settles scenes; a cannon-ball has none, so it
-        is switched off.
+        The world is built and the physics is told about it afterwards.  The
+        game's `Physics` holds the simulation and writes each body's pose
+        onto the `Transform` it is bound to.  Gravity is 9.81 metres per
+        second squared downward.  Its default linear damping is a drag that
+        settles scenes; a cannon-ball has none, so the definition in
+        `__init__` switches it off.  `tickHz` is the fixed step: a ball at full
+        power crosses less than its own radius in one, so it cannot pass
+        through a surface.
 
-        `attach` makes a node a physics body.  It cooks the collision shape
-        from the geometry the node draws, binds the body to the node, and
-        returns the `PhysicsBody`.  `strategy='primitive'` asks for the box or
-        sphere the geometry fits, which the solver has exact tests for.  With
-        no `motion` the body is static: everything else collides with it and
-        it never moves.  A `Motion` of type DYNAMIC has a mass and falls; one
-        of type KINEMATIC is moved by the game and pushes whatever is in its
-        way.
+        `add_static`, `add_dynamic` and `add_kinematic` make a node a physics
+        body.  `proxy='box'` is the box the node's geometry fits and
+        `'sphere'` the sphere, which the solver has exact tests for.  A static
+        body never moves and everything else collides with it.  A dynamic one
+        has a mass and falls.  A kinematic one is moved by `drive`, and pushes
+        whatever is in its way.  Every piece is added by name, and the game
+        has set the service to make bodies only from what it adds.
 
         `material` names how a surface behaves: its friction and its
         restitution, the fraction of the closing speed a contact gives back.
@@ -870,35 +885,96 @@ class Game:
         rebounds far on the rubber springboard, less from the wood of the
         ground, and a lead ball hardly at all.'''
         course = self.course
-        self.manager = PhysicsManager(
-            gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)),
-            default_linear_damping=0.0, fixed_dt=STEP)
-        self.world = self.manager.world
-        self.materials = {ammo.name: self.world.add_material(ammo.material) for ammo in AMMO}
-        self.bodies: dict[PhysicsBody, Piece] = {}
-        self.animators: list[KinematicAnimator] = []
+        physics = self.physics
+        for body in self.bodies:
+            body.remove()
+        self.bodies = {}
+        self.slides = []
+        self._origin = None
+        physics.drop_remainder()
+        for ammo in AMMO:
+            physics.materials.define(
+                ammo.name, static_friction=ammo.material.staticFriction,
+                dynamic_friction=ammo.material.dynamicFriction,
+                restitution=ammo.material.restitution)
         for piece in course.pieces:
-            body = self.manager.attach(piece.node, piece.motion, material=piece.material,
-                                       strategy='primitive', trigger=piece.trigger)
+            body = self.add(piece)
             self.bodies[body] = piece
-            if piece.pose is not None:
-                self.animators.append(KinematicAnimator(self.world, body.index, piece.pose))
         self.pad = self.body_of('pad')
         self.crates = [body for body, piece in self.bodies.items() if piece.kind == 'crate']
-        self.homes = numpy.array([self.world.position[body.index] for body in self.crates])
+        self.homes = numpy.array([body.position for body in self.crates])
         '''=A trigger=
 
-        With `trigger=True` the geometry becomes a trigger instead: it stops
-        nothing and reports what enters it.  The red mark is one, so a ball
-        that lands on the target is inside it, and the game subscribes to its
-        `enter` events.  Crates resting on the mark are inside it too, which
-        is why the handler asks who came in.'''
-        self.manager.events.subscribe(self._entered, body=self.pad,
-                                      kinds=('trigger',), phases=('enter',))
-        if self.crates:
-            self.manager.events.subscribe(self._crashed, body=self.crates, above=CRASH_SPEED)
+        A piece that is a trigger stops nothing and reports what enters it.
+        The red mark is one, so a ball that lands on the target is inside it,
+        and the game registers for its `enter` events.  Crates resting on the
+        mark are inside it too, which is why the handler asks who came in.'''
+        self.pad.addEventHandler('enter', function=self._entered)
+        for crate in self.crates:
+            crate.addEventHandler('hit', function=self._crashed, above=CRASH_SPEED)
 
-    def body_of(self, kind: str) -> PhysicsBody:
+    def add(self, piece: Piece) -> Body:
+        '''One piece of the course as the kind of body its `motion` says.
+
+        A piece that moves on a pose is steered by it.  A sliding mark is a
+        trigger, which has no velocity to give, so a handler for the step
+        puts it where the pose says it is before each step.'''
+        physics = self.physics
+        shape = 'box'
+        pose = None if piece.pose is None else self._from_the_start(piece.pose)
+        if piece.trigger:
+            body = physics.add_trigger(piece.node, proxy=shape)
+            if pose is not None:
+                physics.addEventHandler('before-step', function=self._slide(body, piece.node, pose))
+            return body
+        if piece.motion is None:
+            return physics.add_static(piece.node, proxy=shape, material=piece.material)
+        if piece.motion.type == model.KINEMATIC:
+            body = physics.add_kinematic(piece.node, proxy=shape, material=piece.material)
+            assert pose is not None
+            body.drive(pose)
+            return body
+        return physics.add_dynamic(piece.node, proxy=shape, mass=piece.motion.mass,
+                                   material=piece.material)
+
+    def _from_the_start(self, pose: Callable[[float], Any]) -> Callable[[float], Any]:
+        '''``pose`` run on the seconds since the course began, which is the
+        service's time at the end of its first step.'''
+        @physics_callback
+        def run(time: float) -> Any:
+            if self._origin is None:
+                self._origin = time
+            return pose(time - self._origin)
+        return run
+
+    def _slide(self, body: Body, node: Any, pose: Callable[[float], Any]) -> Callable[[Any], None]:
+        '''A handler that puts ``body`` and its ``node`` where ``pose`` says they are at the end of each step.
+
+        A trigger is not written back onto its node by the service, so the
+        handler moves the node itself, through ``physics.render.set``: the
+        handler runs on the thread that steps the world, and a scene field is
+        set from the render thread.  It is kept in ``self.slides``, since the
+        service holds a handler weakly.'''
+        physics = self.physics
+
+        @physics_callback
+        def put(step: Any) -> None:
+            at = pose(step.time + step.dt)[0]
+            body.set_transform(translation=at)
+            physics.render.set(node, translation=at)
+        self.slides.append(put)
+        return put
+
+    @property
+    def world(self) -> Any:
+        """The live :class:`~omi_physics.world.PhysicsWorld` the service steps, for a test to read and set."""
+        return self.physics.world
+
+    def slot(self, body: Body) -> int:
+        """The row ``body`` has in the arrays of :attr:`world`."""
+        return self.physics.slot_of(body)
+
+    def body_of(self, kind: str) -> Body:
         """The body of the one piece of ``kind``."""
         return next(body for body, piece in self.bodies.items() if piece.kind == kind)
 
@@ -922,9 +998,9 @@ class Game:
     @property
     def position(self) -> tuple[float, ...]:
         """Where the ball is: in the world, or in the mouth of the barrel."""
-        if self.ball is None or self.ball.index is None:
+        if self.ball is None:
             return self.muzzle
-        return tuple(float(part) for part in self.world.position[self.ball.index])
+        return tuple(float(part) for part in self.ball.position)
 
     def adjust(self, **change: float) -> None:
         """Move the aim and turn the cannon to it; a ball already in the air keeps its course."""
@@ -954,7 +1030,7 @@ class Game:
         """How many crates have been knocked more than TOPPLED metres from where they stood."""
         if not self.crates:
             return 0
-        now = self.world.position[[body.index for body in self.crates]]
+        now = numpy.array([body.position for body in self.crates])
         return int((numpy.linalg.norm(now - self.homes, axis=1) > TOPPLED).sum())
 
     def fire(self) -> bool:
@@ -981,38 +1057,35 @@ class Game:
         ammo = AMMO_BY_NAME[self.chosen]
         '''=Go=
 
-        The ball is a sphere, a node like the towers, attached as a
-        dynamic body at the mouth of the barrel, standing still.  The
-        kinds of ball differ in the mass and the material they are given.
-        `apply_impulse` adds an impulse in newton seconds, and the body's
-        velocity becomes impulse over mass: the mass times the power,
-        along the barrel, so every ball leaves the barrel at the same
-        speed and the heavy ones carry more punch.  `set_force` pushes a
-        body with a steady force until it is changed, which is the wind:
-        the same force moves a light ball further than a heavy one.  A
-        sphere resting on the ground rolls under any push, so the force is
-        taken away at the ball's first touch.'''
+        The ball is a sphere, a node like the towers, made a dynamic body at
+        the mouth of the barrel, standing still.  The kinds of ball differ in
+        the mass and the material they are given.  `apply_impulse` adds an
+        impulse in newton seconds, and the body's velocity becomes impulse
+        over mass: the mass times the power, along the barrel, so every ball
+        leaves the barrel at the same speed and the heavy ones carry more
+        punch.  `set_force` pushes a body with a steady force until it is
+        changed, which is the wind: the same force moves a light ball further
+        than a heavy one.  A sphere resting on the ground rolls under any
+        push, so the force is taken away at the ball's first touch.  Each
+        call is a command, applied at the start of the next step.'''
         node = surfaces.shape(surfaces.sphere(BALL_RADIUS), self.look[ammo.look],
                               translation=self.muzzle)
-        self.ball = self.manager.attach(
-            node, model.Motion(type=model.DYNAMIC, mass=ammo.mass),
-            material=self.materials[ammo.name], strategy='primitive')
+        self.ball = self.physics.add_dynamic(
+            node, proxy='sphere', mass=ammo.mass, material=ammo.name)
         '''The impulse is the power along the barrel's own axis, carried
         into the world by the cannon's frame of reference.'''
         kick = ammo.mass * self.aim.power * self.course.gun.along
-        assert self.ball.index is not None
-        self.world.apply_impulse(self.ball.index, tuple(float(part) for part in kick))
+        self.ball.apply_impulse(tuple(float(part) for part in kick))
         if self.course.wind:
-            self.world.set_force(self.ball.index, (0.0, 0.0, self.course.wind))
+            self.ball.set_force((0.0, 0.0, self.course.wind))
         '''=What the ball touched=
 
-        A subscription to the ball's own contacts hears each time it
+        A handler on the ball's own hits hears each time it
         touches another body.  Touching the ground or a tower does not end
         the shot, because a rubber ball keeps going.  The game looks at
         what was touched: a bounce off the springboard or a wall that
         ends in a hit is a ricochet, and scores extra.'''
-        self.subscription = self.manager.events.subscribe(
-            self._touched, body=self.ball, phases=('begin',))
+        self.subscription = self.ball.addEventHandler('hit', function=self._touched)
         self.stock[ammo.name] -= 1
         if not self.stock[ammo.name]:
             self.chosen = next((name for name, count in self.stock.items() if count),
@@ -1031,7 +1104,7 @@ class Game:
             self.subscription.cancel()
             self.subscription = None
         if self.ball is not None:
-            self.manager.remove(self.ball)
+            self.ball.remove()
             self.ball = None
 
     def _entered(self, event: Any) -> None:
@@ -1046,8 +1119,8 @@ class Game:
         piece = self.bodies.get(event.other)
         if piece is not None and piece.kind in RICOCHETS:
             self.ricochet = True
-        if self.course.wind and self.ball is not None and self.ball.index is not None:
-            self.world.set_force(self.ball.index, (0.0, 0.0, 0.0))
+        if self.course.wind and self.ball is not None:
+            self.ball.set_force((0.0, 0.0, 0.0))
         self.on_event('impact', event)
 
     def _crashed(self, event: Any) -> None:
@@ -1079,17 +1152,15 @@ class Game:
     def tick(self, seconds: float) -> None:
         '''=Moving things=
 
-        A kinematic body is steered by an animator: given the seconds that
-        have passed it sets the velocity that carries the body to where its
-        pose says it will be.  That is done before the world advances, which
-        runs the fixed steps the seconds hold and delivers the events.'''
-        for animator in self.animators:
-            animator.update(seconds)
-        self.manager.advance(seconds)
-        if self.state != 'flying' or self.ball is None or self.ball.index is None:
+        A kinematic body is steered by the pose it was `drive`n with: at the
+        end of each step the service gives the pose the simulation time and
+        the body takes the velocity that carries it there.  `frame` runs the
+        fixed steps the seconds hold and delivers the events.'''
+        self.physics.frame(seconds)
+        if self.state != 'flying' or self.ball is None:
             return
         self.elapsed += seconds
-        speed = float(numpy.linalg.norm(self.world.linear_velocity[self.ball.index]))
+        speed = float(numpy.linalg.norm(self.ball.velocity))
         self.slow = self.slow + seconds if speed < SETTLED_SPEED else 0.0
         if (self.position[1] < FALLEN or self.course.beyond(self.position)
                 or self.slow >= SETTLED_TIME or self.elapsed > LONGEST):
@@ -1279,7 +1350,7 @@ class TestContext(BaseContext):
         else:
             self.ghost.point = list(self.trail.point)
             self.ghost_line.coordIndex = list(range(len(self.trail.point))) + [-1]
-            self.shot.children = [self.game.ball.transform]
+            self.shot.children = [self.game.ball.node]
             self.trail.point = [self.game.muzzle, self.game.muzzle]
         self.update()
 
@@ -1291,7 +1362,7 @@ class TestContext(BaseContext):
 
     def update(self):
         '''Write what the game says into the scene.  The ball's `Transform` is
-        moved by the physics manager, so what is left here is the camera, the
+        moved by the physics service, so what is left here is the camera, the
         path drawn behind the ball, and the text.'''
         game = self.game
         '''=The camera=

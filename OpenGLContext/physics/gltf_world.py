@@ -35,13 +35,14 @@ def _mesh_positions_indices(geom: Any) -> Optional[tuple[np.ndarray, np.ndarray]
 
     ``geom`` is a scenegraph geometry node; positions come from its ``positions``
     or its ``coord`` node's points in the scene and faces from ``indices`` or a fan-triangulated
-    ``coordIndex``. Triangle indices are an ``(M, 3)`` array.
+    ``coordIndex``. A geometry with neither, such as a ``Box`` or a ``Sphere``, gives
+    the triangles it draws (``meshArrays``). Triangle indices are an ``(M, 3)`` array.
     """
     pos = getattr(geom, 'positions', None)
     if pos is None:
         pos = coordinates.points(getattr(geom, 'coord', None))
     if pos is None or not len(pos):
-        return None
+        return _drawn_triangles(geom)
     pos = np.asarray(pos, dtype='d')
     idx = getattr(geom, 'indices', None)
     if idx is None:
@@ -54,6 +55,19 @@ def _mesh_positions_indices(geom: Any) -> Optional[tuple[np.ndarray, np.ndarray]
     idx = np.asarray(idx).ravel()
     tri = idx[:len(idx) - (len(idx) % 3)].reshape(-1, 3)
     return pos, tri
+
+
+def _drawn_triangles(geom: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """The triangles a geometry node draws as ``(positions, (M, 3) indices)``, or None where it draws none."""
+    from OpenGLContext.scenegraph.meshdata import geometry_arrays  # noqa: PLC0415 imports the scenegraph
+
+    found = geometry_arrays(geom)
+    if found is None:
+        return None
+    pos = np.asarray(found.attributes['POSITION'], dtype='d')
+    idx = np.arange(len(pos)) if found.indices is None else np.asarray(found.indices).ravel()
+    idx = idx[:len(idx) - (len(idx) % 3)]
+    return (pos, idx.reshape(-1, 3)) if len(idx) else None
 
 
 def _fan_triangulate(coord_index: np.ndarray) -> np.ndarray:

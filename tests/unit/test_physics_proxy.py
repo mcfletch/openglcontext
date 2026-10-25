@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, STRATEGIES, Proxy
-from OpenGLContext.scenegraph import surfaces
+from OpenGLContext.scenegraph import basenodes, surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.transform import Transform
 
@@ -74,6 +74,20 @@ def test_a_node_drawing_a_box_cooked_as_a_box():
 
 def test_a_node_drawing_a_sphere_cooked_as_a_sphere():
     proxy = Proxy.from_node(_ball(0.75), 'sphere')
+    assert proxy.shape.type == 'sphere'
+    assert proxy.shape.radius == pytest.approx(0.75, rel=0.05)
+
+
+def test_a_vrml_box_node_is_cooked_as_the_box_it_draws():
+    node = Transform(children=[basenodes.Shape(geometry=basenodes.Box(size=(1, 2, 3)))])
+    proxy = Proxy.from_node(node, 'auto', dynamic=True)
+    assert proxy.shape.type == 'box'
+    assert np.allclose(sorted(proxy.shape.size), [1, 2, 3], atol=1e-6)
+
+
+def test_a_vrml_sphere_node_is_cooked_as_the_sphere_it_draws():
+    node = Transform(children=[basenodes.Shape(geometry=basenodes.Sphere(radius=0.75))])
+    proxy = Proxy.from_node(node, 'sphere')
     assert proxy.shape.type == 'sphere'
     assert proxy.shape.radius == pytest.approx(0.75, rel=0.05)
 
