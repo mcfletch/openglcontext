@@ -352,7 +352,7 @@ class WorldRuntime:
             empty3, empty4 = np.zeros((0, 3)), np.zeros((0, 4))
             flags = np.zeros(0, dtype=bool)
             return Snapshot(self.version, world.step_count, world.time, self.applied_seq, rows,
-                            empty3, empty4, empty3, empty3, flags, flags)
+                            empty3, empty4, empty4, empty3, empty3, flags, flags)
         position = world.prev_position[indices] * (1.0 - alpha) + world.position[indices] * alpha
         if alpha >= 1.0:
             orientation = world.orientation[indices]
@@ -362,7 +362,7 @@ class WorldRuntime:
                 + world.orientation[indices] * alpha)
         return Snapshot(
             self.version, world.step_count, world.time, self.applied_seq, rows, position,
-            mathutil.quat_to_axis_angle(orientation),
+            mathutil.quat_to_axis_angle(orientation), orientation.copy(),
             world.linear_velocity[indices].copy(), world.angular_velocity[indices].copy(),
             world.awake[indices].copy(), world.motion_type[indices] == 2)
 

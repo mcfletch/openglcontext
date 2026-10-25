@@ -57,14 +57,14 @@ class SceneryTracker:
             return 0
         present = set()
         fresh = 0
-        for site in iter_meshes(root, skip=self._claimed):
+        for site in iter_meshes(root, skip=self._claimed, tagged=True):
             node = site.node
             if getattr(node, 'collide', True) is False:
                 continue
             present.add(node)
             if node in self.derived:
                 continue
-            fresh += self._start(site)
+            fresh += self._start_authored(site) if site.tag is not None else self._start(site)
         for node in [node for node in self.derived if node not in present]:
             physics.remove(self.derived.pop(node))
         return fresh
@@ -83,6 +83,34 @@ class SceneryTracker:
         self.physics._cook_later(body, lambda: self._spec(body, site, mesh))
         return 1
 
+    def _start_authored(self, site: MeshSite) -> int:
+        """Make the body a glTF node's ``OMI_physics_body`` describes."""
+        document, body = site.tag
+        physics = self.physics
+        node = site.node
+        proxies = document.__dict__.setdefault('_proxies', {})
+        shape_index = body.collider.shape if body.collider else body.trigger.shape
+        if not 0 <= shape_index < len(document.shapes):
+            log.warning('node %r names shape %d, which the document does not have',
+                        node, shape_index)
+            return 0
+        proxy = proxies.get(shape_index)
+        if proxy is None:
+            proxy = proxies[shape_index] = Proxy(document.shapes[shape_index])
+        motion = body.motion or model.Motion(type=model.STATIC)
+        material = None
+        if body.collider is not None and 0 <= body.collider.physicsMaterial < len(document.materials):
+            material = document.materials[body.collider.physicsMaterial]
+        kind = 'trigger' if body.trigger is not None and body.collider is None else {
+            model.DYNAMIC: 'dynamic', model.KINEMATIC: 'kinematic'}.get(motion.type, 'static')
+        pose = None
+        if kind in ('static', 'trigger'):
+            pose = (tuple(float(v) for v in site.world[3, :3]), _quaternion_of(site.world))
+        made = physics._add(kind, node, proxy, {'material': material}, motion=motion,
+                            pose=pose, derived=True)
+        self.derived[node] = made
+        return 1
+
     @staticmethod
     def _spec(body: Body, site: MeshSite, mesh: tuple[np.ndarray, np.ndarray]) -> BodySpec | None:
         """The body spec for ``site``, with its triangles in world space (on the cooking thread)."""
@@ -95,3 +123,24 @@ class SceneryTracker:
     def release(self, node: Any) -> None:
         """Forget the body made for ``node``, which has become the application's."""
         self.derived.pop(node, None)
+
+
+def _quaternion_of(world: np.ndarray) -> tuple[float, ...]:
+    """The turn of a row-vector world matrix as a quaternion ``(x, y, z, w)``, scale removed."""
+    rotation = np.array(world[:3, :3], dtype='d')
+    lengths = np.linalg.norm(rotation, axis=1)
+    m = (rotation / np.where(lengths > 0.0, lengths, 1.0)[:, None]).T
+    trace = m[0, 0] + m[1, 1] + m[2, 2]
+    if trace > 0.0:
+        w = float(np.sqrt(1.0 + trace)) / 2.0
+        x, y, z = (m[2, 1] - m[1, 2]) / (4 * w), (m[0, 2] - m[2, 0]) / (4 * w), (m[1, 0] - m[0, 1]) / (4 * w)
+    elif m[0, 0] > m[1, 1] and m[0, 0] > m[2, 2]:
+        r = float(np.sqrt(1.0 + m[0, 0] - m[1, 1] - m[2, 2])) * 2.0
+        w, x, y, z = (m[2, 1] - m[1, 2]) / r, r / 4.0, (m[0, 1] + m[1, 0]) / r, (m[0, 2] + m[2, 0]) / r
+    elif m[1, 1] > m[2, 2]:
+        r = float(np.sqrt(1.0 + m[1, 1] - m[0, 0] - m[2, 2])) * 2.0
+        w, x, y, z = (m[0, 2] - m[2, 0]) / r, (m[0, 1] + m[1, 0]) / r, r / 4.0, (m[1, 2] + m[2, 1]) / r
+    else:
+        r = float(np.sqrt(1.0 + m[2, 2] - m[0, 0] - m[1, 1])) * 2.0
+        w, x, y, z = (m[1, 0] - m[0, 1]) / r, (m[0, 2] + m[2, 0]) / r, (m[1, 2] + m[2, 1]) / r, r / 4.0
+    return (float(x), float(y), float(z), float(w))

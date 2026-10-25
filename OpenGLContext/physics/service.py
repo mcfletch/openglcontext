@@ -28,6 +28,7 @@ from typing import Any
 
 import numpy as np
 from omi_physics import mathutil, model
+from omi_physics.collisionquery import WorldQuery
 
 from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
@@ -37,10 +38,12 @@ from OpenGLContext.physics.events import Collision
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
 from OpenGLContext.physics.manager import write_pose
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
+from OpenGLContext.physics.queries import Hit, overlapping, sweep_sphere
+from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.records import BodySpec, Command, PhysicsEvent, Step
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
-from OpenGLContext.scenegraph.physicsbody import vrml_rotation_to_quat
+from OpenGLContext.scenegraph.physicsbody import quat_to_vrml_rotation, vrml_rotation_to_quat
 
 __all__ = ['Physics']
 
@@ -95,6 +98,9 @@ class Physics:
         self.worker: Worker = self._make_worker(definition.mode, None)
         self._install_hooks()
         self.scenery = SceneryTracker(self)
+        #: The spec of each body in the world, to build the replica from when queries need it.
+        self._specs: dict[int, BodySpec] = {}
+        self._replica: Replica | None = None
         self._cooker: concurrent.futures.ThreadPoolExecutor | None = None
         self._cooked_results: queue.SimpleQueue[tuple[Body, BodySpec | None]] = queue.SimpleQueue()
         self._outstanding = 0
@@ -216,7 +222,16 @@ class Physics:
     _OPTIONS = frozenset({'mass', 'density', 'translation', 'rotation', 'material', 'friction',
                           'restitution', 'linear_damping', 'angular_damping', 'collision_filter'})
 
-    def _add(self, kind: str, node: Any, proxy: Any, options: dict[str, Any]) -> Body:
+    def _add(self, kind: str, node: Any, proxy: Any, options: dict[str, Any], *,
+             motion: model.Motion | None = None,
+             pose: tuple[tuple[float, ...], tuple[float, ...]] | None = None,
+             derived: bool = False) -> Body:
+        """Make a body of ``kind`` for ``node``.
+
+        ``motion`` replaces the motion the options describe, ``pose`` is a world
+        position and quaternion in place of the node's own, and ``derived`` marks
+        a body the service made from the scene rather than one the application added.
+        """
         unknown = set(options) - self._OPTIONS
         if unknown:
             raise TypeError('unknown option %s for add_%s' % (', '.join(sorted(unknown)), kind))
@@ -228,30 +243,38 @@ class Physics:
         shape = self._proxy(node, proxy, kind)
         position = np.asarray(node.translation, dtype='d')[:3]
         axis_angle = np.asarray(node.rotation, dtype='d')[:4]
+        quaternion = tuple(vrml_rotation_to_quat(axis_angle))
+        if pose is not None:
+            position = np.asarray(pose[0], dtype='d')
+            quaternion = pose[1]
+            axis_angle = quat_to_vrml_rotation(quaternion)
         dynamic = kind == 'dynamic'
-        mass = 0.0
-        if dynamic:
-            mass = float(options['mass']) if options.get('mass') is not None else shape.mass(
-                float(options.get('density') or DEFAULT_DENSITY))
         linear = options.get('linear_damping')
         angular = options.get('angular_damping')
-        motion = model.Motion(
-            type={'dynamic': model.DYNAMIC, 'kinematic': model.KINEMATIC}.get(kind, model.STATIC),
-            mass=mass if dynamic else 1.0,
-            linearDamping=float(self.definition.linearDamping if linear is None else linear),
-            angularDamping=float(self.definition.angularDamping if angular is None else angular))
+        if motion is None:
+            mass = 0.0
+            if dynamic:
+                mass = float(options['mass']) if options.get('mass') is not None else shape.mass(
+                    float(options.get('density') or DEFAULT_DENSITY))
+            motion = model.Motion(
+                type={'dynamic': model.DYNAMIC, 'kinematic': model.KINEMATIC}.get(
+                    kind, model.STATIC),
+                mass=mass if dynamic else 1.0,
+                linearDamping=float(self.definition.linearDamping if linear is None else linear),
+                angularDamping=float(self.definition.angularDamping if angular is None else angular))
+        mass = float(motion.mass) if dynamic else 0.0
         uid = next(self._uids)
-        spec = BodySpec(uid, kind, shape, motion, tuple(position),
-                        tuple(vrml_rotation_to_quat(axis_angle)), self._material(options),
-                        int(options.get('collision_filter', -1)))
+        spec = BodySpec(uid, kind, shape, motion, tuple(position), quaternion,
+                        self._material(options), int(options.get('collision_filter', -1)))
         body = Body(self, uid, kind, node, shape, position, axis_angle, mass,
                     motion.linearDamping, motion.angularDamping)
+        body.derived = derived
         self._bodies[uid] = body
         self._by_node[node] = body
         if kind in ('dynamic', 'kinematic'):
             self._movers.append(body)
         if self._enabled and not self._closed:
-            self.worker.submit(Command('add', uid, (spec,), next(self._seq)))
+            self._send(Command('add', uid, (spec,), next(self._seq)))
             if kind in ('dynamic', 'kinematic'):
                 self._ensure_started()
         return body
@@ -363,9 +386,9 @@ class Physics:
                 continue
             body.proxy = spec.proxy
             if self._enabled and not self._closed:
-                self.worker.submit(Command('add', body.uid, (spec,), next(self._seq)))
+                self._send(Command('add', body.uid, (spec,), next(self._seq)))
                 for op, args in deferred:
-                    self.worker.submit(Command(op, body.uid, args, next(self._seq)))
+                    self._send(Command(op, body.uid, args, next(self._seq)))
 
     def cook(self, node: Any, strategy: str = 'auto', dynamic: bool = True) -> Proxy:
         """A :class:`Proxy` cooked from what ``node`` draws, to share between bodies."""
@@ -377,7 +400,7 @@ class Physics:
             return
         if self._enabled and not self._closed:
             seq = next(self._seq)
-            self.worker.submit(Command('remove', body.uid, (), seq))
+            self._send(Command('remove', body.uid, (), seq))
             self._gone.append((seq, body.uid))
         else:
             self.handlers.forget_body(body.uid)
@@ -396,18 +419,22 @@ class Physics:
     def body_for(self, node: Any, within: Any = None) -> Body | None:
         """The body of ``node``, or None.
 
+        A node with no body of its own answers with the one body under it, when
+        there is exactly one: the scenery body of the shape a glTF node holds.
         With ``within``, a node under it, the nearest ancestor on the way down
-        that has a body answers for a node that has none itself.
+        that has a body answers for a node that has none.
         """
         found = self._by_node.get(node)
-        if found is not None or within is None:
+        if found is not None:
             return found
-        path = _path_to(within, node)
-        for ancestor in reversed(path or ()):
-            found = self._by_node.get(ancestor)
-            if found is not None:
-                return found
-        return None
+        if within is not None:
+            path = _path_to(within, node)
+            for ancestor in reversed(path or ()):
+                found = self._by_node.get(ancestor)
+                if found is not None:
+                    return found
+        below = self.bodies_in(node)
+        return below[0] if len(below) == 1 else None
 
     def bodies_in(self, group: Any) -> list[Body]:
         """The bodies of the nodes at and under ``group``, in the order they are met."""
@@ -429,12 +456,22 @@ class Physics:
             body._deferred.append((op, args))
             return 0
         seq = next(self._seq)
-        self.worker.submit(Command(op, body.uid, args, seq))
+        self._send(Command(op, body.uid, args, seq))
         return seq
+
+    def _send(self, command: Command) -> None:
+        """Send ``command`` to the worker and keep the replica, where there is one, in step."""
+        if command.op == 'add':
+            self._specs[command.uid] = command.args[0]
+        elif command.op == 'remove':
+            self._specs.pop(command.uid, None)
+        if self._replica is not None:
+            self._replica.apply(command)
+        self.worker.submit(command)
 
     def _send_world(self, op: str, *args: Any) -> None:
         if not self._closed:
-            self.worker.submit(Command(op, 0, args, next(self._seq)))
+            self._send(Command(op, 0, args, next(self._seq)))
 
     def run(self, function: Callable[[Any], Any]) -> concurrent.futures.Future[Any]:
         """Call ``function(world)`` on the worker with the raw world; the future holds its answer.
@@ -473,6 +510,8 @@ class Physics:
         wrote = False
         if out.snapshot is not None:
             self._snapshot = out.snapshot
+            if self._replica is not None:
+                self._replica.sync(out.snapshot)
             wrote = self._write_poses(out.snapshot)
             moving = out.snapshot.awake & (out.snapshot.dynamic | (
                 np.abs(out.snapshot.linear_velocity).sum(axis=1) > 0.0))
@@ -545,6 +584,91 @@ class Physics:
         return _State(snapshot.position[row], snapshot.axis_angle[row],
                       snapshot.linear_velocity[row], snapshot.angular_velocity[row],
                       not bool(snapshot.awake[row]) and bool(snapshot.dynamic[row]))
+
+    # -- queries ---------------------------------------------------------
+    def _queryable(self) -> tuple[Any, Callable[[int], int | None], Callable[[int], int | None]]:
+        """The world this thread may read, and how to turn body ids into its slots and back.
+
+        An inline service is read live. A service on a thread is read through
+        the replica, made on first use.
+        """
+        if isinstance(self.worker, InlineWorker):
+            self.worker.flush()
+            runtime = self.worker.runtime
+            world = runtime.world
+
+            def slot(uid: int) -> int | None:
+                return runtime.entry(uid).index if uid in runtime else None
+
+            def uid_at(index: int) -> int | None:
+                handle = world.handle_of(world.ref(index))
+                return None if handle is None else int(handle)
+
+            return world, slot, uid_at
+        if self._replica is None:
+            self._replica = build(self._specs, self._snapshot)
+        replica = self._replica
+        return (replica.world, lambda uid: replica._index.get(uid), replica.uid_at)
+
+    @staticmethod
+    def _skipped(skip: Any, slot: Callable[[int], int | None]) -> set[int]:
+        if skip is None:
+            return set()
+        bodies = [skip] if isinstance(skip, Body) else list(skip)
+        return {index for index in (slot(body.uid) for body in bodies) if index is not None}
+
+    def raycast(self, origin: Any, direction: Any, max_distance: float = 100.0,
+                skip: Any = None) -> Hit | None:
+        """What a ray from ``origin`` along ``direction`` meets first, or None.
+
+        Answers in the call, from the world as the last tick left it. ``skip``
+        is a body, or a list of them, the ray passes through.
+        """
+        world, slot, uid_at = self._queryable()
+        found = WorldQuery(world).raycast(origin, direction, float(max_distance),
+                                          self._skipped(skip, slot))
+        return None if found is None else self._hit(found, uid_at)
+
+    def raycast_many(self, origins: Any, directions: Any, max_distance: float = 100.0,
+                     skip: Any = None) -> list[Hit | None]:
+        """Several rays at once, each answered as :meth:`raycast` would answer it."""
+        from omi_physics.raycast import raycast_many  # noqa: PLC0415 only a service that casts needs it
+
+        world, slot, uid_at = self._queryable()
+        found = raycast_many(world, origins, directions, float(max_distance),
+                             self._skipped(skip, slot))
+        return [None if one is None else self._hit(one, uid_at) for one in found]
+
+    def _hit(self, found: Any, uid_at: Callable[[int], int | None]) -> Hit:
+        uid = uid_at(int(found.body))
+        return Hit(None if uid is None else self._body_of(uid), np.asarray(found.point),
+                   np.asarray(found.normal), float(found.distance), int(found.triangle))
+
+    def sweep_sphere(self, origin: Any, direction: Any, distance: float, radius: float,
+                     skip: Any = None) -> float | None:
+        """How far a sphere of ``radius`` travels along ``direction`` before it touches a body.
+
+        None where it travels ``distance`` clear; 0 where it starts inside a body.
+        """
+        world, slot, _uid_at = self._queryable()
+        return sweep_sphere(world, origin, direction, float(distance), float(radius),
+                            self._skipped(skip, slot))
+
+    def overlap(self, proxy: Any, translation: Any, rotation: Any = None,
+                skip: Any = None) -> list[Body]:
+        """The bodies a shape overlaps when placed at ``translation``, turned by ``rotation``.
+
+        ``proxy`` is a :class:`Proxy` or a :class:`~omi_physics.model.Shape`;
+        ``rotation`` is an axis and an angle.
+        """
+        world, slot, uid_at = self._queryable()
+        shape = proxy.shape if isinstance(proxy, Proxy) else proxy
+        quaternion = (np.array([0.0, 0.0, 0.0, 1.0]) if rotation is None
+                      else vrml_rotation_to_quat(rotation))
+        found = overlapping(world, shape, translation, quaternion, self._skipped(skip, slot))
+        bodies = [self._body_of(uid) for uid in (uid_at(index) for index in found)
+                  if uid is not None]
+        return [body for body in bodies if body is not None]
 
     # -- events -------------------------------------------------------------
     def addEventHandler(self, event: str, function: Callable[..., Any] | None = None,

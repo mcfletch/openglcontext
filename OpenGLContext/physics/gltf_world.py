@@ -158,18 +158,24 @@ class MeshSite(NamedTuple):
     groups: tuple[Any, ...]
     world: np.ndarray
     geometry: Any
+    #: What the node is tagged with when it carries a physics body of its own
+    #: (``iter_meshes(tagged=True)``); the geometry is then None.
+    tag: Any = None
 
 
 def iter_meshes(node: Any, world_matrix: Optional[np.ndarray] = None,
                 groups: tuple[Any, ...] = (), ancestry: tuple[Any, ...] = (),
-                skip: Optional[Callable[[Any], bool]] = None) -> Iterator[MeshSite]:
+                skip: Optional[Callable[[Any], bool]] = None,
+                tagged: bool = False) -> Iterator[MeshSite]:
     """Each node at or under ``node`` that draws a mesh, with its world matrix.
 
     A disabled X3D ``Collision`` group's subtree is left out and an enabled
     one's proxy stands in for its children. ``skip(node)`` true leaves that
     node's whole subtree out without reading it. Instanced geometry reached by
     several transforms is met once per instance, and a node inside itself is
-    met once; cycles are detected on the current path, not globally.
+    met once; cycles are detected on the current path, not globally. With
+    ``tagged``, a node that carries an ``omiPhysics`` tag is met once, with the
+    tag, and what is under it is left out: its body stands for it.
     """
     if world_matrix is None:
         world_matrix = np.eye(4)
@@ -179,6 +185,11 @@ def iter_meshes(node: Any, world_matrix: Optional[np.ndarray] = None,
         return
     ancestry = ancestry + (node,)
     world = _local_matrix(node) @ world_matrix
+    if tagged:
+        tag = getattr(node, 'omiPhysics', None)
+        if tag is not None:
+            yield MeshSite(node, groups, world, None, tag)
+            return
     if isinstance(node, x3d.Collision):
         # X3D's Collision: a disabled one's children are walked through, and a
         # proxy collides in their place.
@@ -186,13 +197,13 @@ def iter_meshes(node: Any, world_matrix: Optional[np.ndarray] = None,
             return
         groups = (node,) + groups
         if node.proxy:
-            yield from iter_meshes(node.proxy, world, groups, ancestry, skip)
+            yield from iter_meshes(node.proxy, world, groups, ancestry, skip, tagged)
             return
     geom = getattr(node, 'geometry', None)
     if geom is not None:
         yield MeshSite(node, groups, world, geom)
     for child in getattr(node, 'children', None) or ():
-        yield from iter_meshes(child, world, groups, ancestry, skip)
+        yield from iter_meshes(child, world, groups, ancestry, skip, tagged)
 
 
 def site_mesh(site: MeshSite, min_hull_size: float = 0.0,

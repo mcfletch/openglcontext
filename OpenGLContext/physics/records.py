@@ -86,6 +86,8 @@ class Snapshot:
     rows: dict[int, int]
     position: np.ndarray
     axis_angle: np.ndarray
+    #: The same turns as unit quaternions ``(x, y, z, w)``.
+    orientation: np.ndarray
     linear_velocity: np.ndarray
     angular_velocity: np.ndarray
     awake: np.ndarray
