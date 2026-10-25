@@ -49,6 +49,10 @@ plan generalises.
    code.
 6. A scene with nothing awake costs nothing: no thread ticking, no frame requested.
 7. `audio.play(...)` works from any thread and needs nothing pumped.
+8. Characters, raycasts and sweeps answer within the call that asks, on the render
+   thread, in every mode.
+9. The games in this workspace move onto the service without losing a fixed step, a
+   replay or a test that runs without a window.
 
 Not in this plan: changes to the solver or the OMI data model, networking, rollback.
 
@@ -85,7 +89,12 @@ Four rules keep the transports interchangeable, the two built now and a process 
 - Poses cross as one array per tick. Events cross as a list. Scene updates are
   coalesced per (node, field), last write wins.
 - A read on a `Body` returns the last published snapshot, which is at most one tick
-  old. A write is a command and takes effect on the next tick.
+  old. A write is a command and takes effect on the next tick. In inline mode the
+  tick is the frame hook's own step, so a write made before the hook is in the step
+  that follows it.
+- A `Physics` needs no context. A tool, a headless trace or a test builds one, steps it
+  with `step(dt)` and reads it; the context's `physics` is the same object with a sink
+  for scene updates.
 
 ## API: physics
 
@@ -104,6 +113,12 @@ physics.add_kinematic(node, proxy=None)     # moved by code, pushes dynamic bodi
 physics.add_trigger(node, proxy=None)       # reports enter and exit, stops nothing
 physics.addEventHandler(event, function=fn, **filters)   # every body
 physics.body_for(node)                      # the Body of a node already in the scene
+physics.gravity = (0, -9.81, 0)             # a command; may change every frame
+physics.step(dt)                            # inline and standalone: advance by hand
+physics.world                               # inline and standalone only: the live PhysicsWorld
+physics.add_character(...)                  # a walker; see Characters and view platforms
+physics.add_collider_source(source)         # colliders that come and go with a focus point
+physics.raycast(origin, direction, ...)     # synchronous queries; see Queries
 physics.post(function, *args)               # call function on the worker; returns None
 physics.run(function)                       # escape hatch, below
 ```
@@ -127,15 +142,24 @@ same node at run time.
 |---|---|---|---|
 | `enabled` | SFBool | true (`OPENGLCONTEXT_PHYSICS`) | false: no worker, no colliders, bodies are inert |
 | `mode` | SFString | `thread` | `thread` or `inline` |
-| `tickHz` | SFFloat | 120 | simulation steps per second |
+| `tickHz` | SFFloat | 120 | the fixed step, in steps per second, in both modes |
+| `maxCatchUp` | SFFloat | 0.1 | longest span of time one frame steps, in seconds; the rest is dropped |
 | `gravity` | SFVec3f | 0 -9.81 0 | m/s squared, global |
 | `colliders` | SFString | `scene` | `scene`: shapes under `sg` are static bodies; `explicit`: only `add_static`; `none` |
 | `linearDamping`, `angularDamping` | SFFloat | 0.3, 1.5 | per second, as the world's current defaults |
 | `materials` | MFNode | presets | `PhysicsMaterial` nodes defined for the context |
 
-`mode='inline'` steps the world in the frame hook by the frame's time step
-(`events/framestep.py`). A bounded capture, `OPENGLCONTEXT_CAPTURE_FPS` and a
-telemetry replay select it, so a captured frame is the same bytes on every run.
+`mode='inline'` steps the world in the frame hook. The hook reads the frame's time
+(`events/framestep.py`), adds it to an accumulator capped at `maxCatchUp`, and runs as
+many whole steps of `1 / tickHz` as the accumulator holds. Which step a body was in
+when something happened is therefore the same on every run at a given frame time. A
+bounded capture, `OPENGLCONTEXT_CAPTURE_FPS` and a telemetry replay select it, so a
+captured frame is the same bytes on every run. A program that wants its own time, such
+as a replay's recorded frame times or a headless trace, calls `physics.step(dt)` itself;
+that is also how a `Physics` with no context advances.
+
+`mode='thread'` runs the same steps on the worker at `tickHz`. A game that controls its
+bodies between steps (below, under Events) uses `inline`.
 
 The node is declared in an X3D extension component, so an X3D document can carry it
 and the X3D writers write it back.
@@ -153,9 +177,18 @@ body.set_force(force)                       # held until set again; (0, 0, 0) cl
 body.set_velocity(velocity)
 body.set_transform(translation=None, rotation=None)   # teleport
 body.move_to(translation, over=1.0)         # kinematic bodies: glide, pushing what is in the way
+body.drive(pose)                            # kinematic bodies: pose(t) -> (translation, rotation), each step
+body.linear_damping = 0.5                   # per body; commands, like the writers above
+body.angular_damping = 2.0
 body.wake(); body.freeze(); body.remove()
 body.addEventHandler(event, function=fn, **filters)      # one body
 ```
+
+`drive` takes a physics callback. At each step the service calls it with the simulation
+time, moves the body to the pose it returns, and sets the body's velocity from the
+distance moved, so a dynamic body resting on it is carried and a hit against it has the
+right closing speed. A kinematic body moved by `set_transform` would be a teleport with
+no velocity.
 
 Every writer is a command. On the worker thread the same call is applied at once,
 so one handler body works in either place.
@@ -222,6 +255,26 @@ This needs one static body per `Shape`, not one merged mesh per scene as
 bodies cost little per frame; phase 3 measures it at 10,000 shapes. If the count
 hurts, scenery is merged and `body_for` splits the asked-for node out of its merge.
 
+### Collider sources
+
+```python
+physics.add_collider_source(HeightFieldColliders(...))     # bodies near a focus point
+physics.add_collider_source(scene.rocks)                   # analytic: a floor and pushes
+```
+
+A collider source is colliders that come and go with a focus point: ground chunks near
+a car, road sections, props, rocks near a walker. The focus is the context's view
+platform unless the source names a node. A source has one of two forms:
+
+- Body source. `update(focus)` returns bodies to add and bodies to remove.
+  `HeightFieldColliders`, `RoadColliders` and `PropColliders` (`physics/heightfield.py`,
+  `road.py`, `props.py`) already work this way; they become sources and the frame
+  hook calls them, so their adds and removes are commands and publish a new static
+  view.
+- Analytic source. `floor(x, z)` and `push_out(x, z, reach)` answer for characters
+  only, with no body at all. A terrain too large to cook (the forest's heightfield and
+  trunk cylinders) is this form.
+
 ### Proxies: what the engine collides with
 
 `proxy` says what shape stands for the node. `None` cooks it from the drawn mesh:
@@ -239,7 +292,9 @@ physics.show_proxies(True)                   # draws the proxies, contacts and v
 ```
 
 `Proxy` wraps `omi_physics.model.Shape` and adds the constructors `box`, `sphere`,
-`capsule`, `convex(points)` and `trimesh(points, indices)`.
+`capsule`, `convex(points)` and `trimesh(points, indices)`. `add_static` with a `trimesh`
+proxy takes the arrays directly, with no node, for a level whose collision mesh is cooked
+elsewhere.
 `show_proxies` is the existing `PhysicsDebugDraw` overlay switched on from the service.
 
 ### Materials
@@ -265,6 +320,35 @@ physics.add_gravity_zone(zone_node)         # a Zone node that carries gravity
 `Box`, `Sphere` and the other regions are `omi_physics.gravity`'s. `Zone` nodes
 with gravity and `OMI_physics_gravity` blocks in a loaded file are registered
 without a call (`physics/zones.py` already reads them).
+
+### X3D rigid bodies and gravity zones
+
+An X3D `RigidBodyCollection` is a world of its own (`physics/x3drigid.py`). It steps once
+a frame through the render queue at a fixed step, collides what its `collider` and its
+`Contact` nodes name and nothing else, and takes its gravity from its own `gravity`
+field. It reads no zones. This plan leaves that model as it is, for these reasons:
+
+- X3D lists what collides. Static scenery by default would change what a document does.
+- A collection's gravity is per collection. A context has one gravity and zone volumes.
+
+What follows from separate worlds:
+
+- Gravity zones. `Zone` gravity and `OMI_physics_gravity` act on bodies and characters of
+  `context.physics`. X3D bodies ignore them. A `RigidBodyCollection` extension field
+  `zoneGravity` (SFBool, default false, written through `x3dExtension`) lets a document
+  opt in; the collection's world then resolves the context's zone volumes as the
+  walker's does, for bodies with `useGlobalGravity`. The default keeps the collection to
+  the gravity the specification gives it.
+- Collisions. X3D bodies do not collide with `context.physics` bodies, scenery or
+  characters. A document that wants a body to meet scenery lists the scenery as a
+  `CollidableShape` in the collection's `collider`, which it can do today. Characters
+  are stopped by `Collision` groups and not by rigid bodies.
+- `CollisionSpace` groups collidables inside one collection, and bounds a collidable by
+  a box when its `useGeometry` is false. It plays no part in zones or in the service.
+- Events. `CollisionSensor` keeps routing a collection's touches. A later phase rebuilds
+  `RigidSystem` on a standalone, inline `Physics` with `colliders='none'`, which gives an
+  X3D body a `Body` handle: `physics.body_for(rigid_body_node)` and `addEventHandler('hit')`
+  then work on it, and the collection steps with the service's fixed step.
 
 ### Events
 
@@ -314,6 +398,19 @@ What each thread means for a handler:
   method, which applies at once, and it must not assign scene fields. Its return value is
   used only where an event asks a question, as a pre-solve contact verdict does.
 
+Two more events belong to the world and not to a body: `before-step` and `after-step`.
+`physics.addEventHandler('before-step', function=fn)` calls `fn(step)` before each fixed
+step, with a `Step` carrying `dt`, the step index and the simulation time, and
+`after-step` calls it after. A game that applies forces, reads contacts or moves bodies
+between steps does it here. Both are physics callbacks; in inline mode they run on the
+caller's thread at every step, and in thread mode on the worker.
+
+In inline mode a physics callback for a body event runs after the step that produced the
+event, so a frame of three steps calls it three times in step order, with the contacts
+of each. A render handler runs once per frame after the last step and receives every
+event the frame's steps made, in order, each carrying its step index. A controller that
+needs every contact of every step (`hit.step`, `hit.impulse`) uses the first.
+
 No handler call is fire-and-forget. What is asynchronous is the event's journey from its
 cause to the handler, and calls that cross threads, which return None: a `Body` method
 from the render thread, `render.set` and `render.call` from the worker. A function is
@@ -351,12 +448,80 @@ the start of a tick, and returns a future. It covers joints, custom contact filt
 and anything the service has not named. A later process mode would need an importable `'module:function'` string, because a
 closure cannot cross the boundary.
 
-### Queries
+### Queries and the static view
 
-`raycast` and `overlap` ask the world a question and want an answer. The first form is
-a callback, `physics.raycast(origin, direction, on_result=fn)`, answered by the
-frame hook on the next frame. A blocking `raycast_now` is added only if a caller needs
-it, and costs up to one tick of waiting in `thread` mode.
+```python
+hit = physics.raycast(origin, direction, max_distance=100.0, skip=body)   # RayHit or None
+hits = physics.raycast_many(origins, directions)       # arrays in, arrays out
+swept = physics.sweep_sphere(origin, direction, distance, radius)
+touching = physics.overlap(proxy, translation, rotation)
+```
+
+A query answers in the call, on the thread that makes it. On the render thread it reads
+the static view and the last snapshot:
+
+- The static view is an immutable, versioned copy of the static colliders (their ids,
+  shapes, world transforms and broadphase) that the worker publishes whenever the static
+  set changes. A reader holds the version it started with, so nothing locks, and a
+  streamed collider set (ground chunks near a car) publishes a new version at most once a
+  tick.
+- Dynamic bodies are at their positions in the last snapshot, one tick old. A
+  character is at its present position, because the render thread steps it.
+- `RayHit` carries the body, the triangle number and the point, as `omi_physics.raycast`
+  does today.
+- `raycast_many` takes arrays so a numpy projectile system keeps its per-frame cost in
+  one call.
+
+In inline mode the queries read the live world. Called from a physics callback they read
+the worker's live world.
+
+The static view also lets `CharacterController` and `raycast` run without the world. In
+`omi_physics` both take a `StaticQuery` protocol (static body ids, proxies, broadphase
+queries) that `PhysicsWorld` and the static view each implement.
+
+### Characters and view platforms
+
+`CharacterController` (`omi_physics/character.py`) is a kinematic capsule. It slides
+against static colliders, steps up ledges, jumps, flies and swims, and the caller steps
+it every frame; `PhysicsViewPlatform` reads the camera from its eye.
+
+```python
+me = physics.add_character(node=None, capabilities=None, position=(0, 1, 0))
+me.set_move(direction, mode='walk')         # 'walk', 'run', 'sprint', 'crouch'
+me.jump(); me.apply_impulse(velocity); me.set_crouch(True)
+me.position, me.eye, me.velocity, me.facing, me.grounded, me.swimming
+me.addEventHandler('enter', function=fn)    # triggers; same events as a Body
+me.remove()
+```
+
+Where a character runs:
+
+- On the render thread, in the frame hook, before the poses are written and before the
+  camera is read. Input reaches the camera with no tick between them, and the character's
+  queries are synchronous. It reads the static view and takes no lock.
+- In the worker's world it is a kinematic sensor body, placed by a command each frame, so
+  it enters trigger volumes and its events arrive like any body's. This is the
+  `body=True` option of today's `PhysicsViewPlatform`, made automatic when something
+  subscribes. A moving platform carries it through the snapshot's body positions.
+- The capsule's size comes from `CharacterCapabilities`, built from the bound
+  `NavigationInfo.avatarSize` as today. Crouching resizes the capsule.
+- Dynamic bodies do not push a character (decision 7). The character does not push them
+  either, as with `body=True` now.
+
+First person: the walk movement mode binds the view platform to a character. The platform
+keeps the mouse-look yaw and pitch and takes its position from `me.eye` once a frame.
+`PhysicsViewPlatform` becomes a camera adapter over a `Character`, and `PhysicsWalkMixin`
+(`setupPhysics`, `enablePhysics`, `stepPhysics`) is removed once the forest has moved.
+
+Third person: `add_character(node=model_group)` places the node at the capsule's feet and
+turns it to `me.facing`, which the game sets from the move or the aim. The node's
+animation reads `velocity`, `grounded`, `swimming` and the crouch state from the same
+object. A boom camera shortens its arm to a `sweep_sphere` from the character to the
+camera's wanted place, which also keeps it out of walls; the hill-runner chase camera and
+twig-bb's death camera are the two users in this workspace.
+
+A character that is dead, hidden or between rounds is `remove()`d or `enable(False)`d.
+Thirty bots each calling `update` against the static view is the load twig-bb has today.
 
 ### Failure
 
@@ -385,12 +550,26 @@ audio.volume = 0.8                                      # the player's volume
 A source is a path, URL, loaded name or `omi_audio.Clip`, including the synthesised
 clips in `omi_audio.synth`. Clips are cached by path.
 
-`play` is safe from any thread. It returns a `Voice` at once, and the frame hook
-starts the underlying engine voice, so the single-threaded contract of `AudioEngine`
-holds. `voice.stop()` before the hook runs cancels the start. A sound started from
-a physics event is therefore at most one frame late, plus the device buffer. An
-event carries its simulation `time`, and a later phase can offset the voice start
-inside the mixer block to remove the frame.
+`play` is safe from any thread. Called on the render thread it starts the engine voice
+in the call, as `engine.play` does today. Called from another thread it returns a
+`Voice` at once, and the frame hook starts the engine voice, so the single-threaded
+contract of `AudioEngine` holds; `voice.stop()` before the hook runs cancels the start.
+A sound started from a physics callback is therefore at most one frame late, plus the
+device buffer. An event carries its simulation `time`, and a later phase can offset the
+voice start inside the mixer block to remove the frame.
+
+The arguments the games use today are accepted: `play(source, at=, gain=, rate=,
+priority=, loop=, emitter=)`, with `emitter` an `omi_audio` `AudioEmitter` for a
+positional profile. Further:
+
+```python
+audio.listener = platform                   # default: the context's camera
+audio.muffle = 1.0                          # everything, as under water or on a pause screen
+audio.engine                                # the AudioEngine, render thread only; the escape hatch
+```
+
+`OpenGLContext.testing` gains `RecordingAudio`, an `Audio` that plays nothing and records
+each `play` call, so a game's tests assert on sounds without a device or a fake engine.
 
 `at=` takes a point, a `Body` (followed through its snapshot, which is cheap) or a
 scene node (followed through the path found when `play` is called). Scene nodes that
@@ -506,6 +685,124 @@ ContextDefinition(physics=PhysicsDefinition(enabled=False))   # not at all
 | a world setting | a field on `PhysicsDefinition` |
 | something the service lacks | `physics.run(fn)` against the raw world |
 
+## Migrating the games and demos
+
+The projects read below were surveyed in the main trees, not in worktrees. Each is moved
+in phase 7, after the API it needs exists, and each keeps its own checks green at every
+commit. Line references are to the code as surveyed.
+
+### marble-demo and the demos that use `DemoScene`
+
+Today. `DemoScene` (`game.py:132`) wraps a `PhysicsManager`. `OnIdle` (`run.py:335-350`)
+clamps `dt` to 0.05 and calls `game.advance`, which sets gravity from the tilt rig
+(`game.py:227`), runs the `KinematicAnimator`s that move the box spawners, steps the
+scene and updates the controller. The controller needs every contact of every step
+(`controller.py:378`), resets the marble by writing `position`, `linear_velocity` and
+`angular_velocity` (`controller.py:553-556`), and sand and water write per-body damping
+(`sand.py:116-125`, `water.py:219-232`). Pair friction is set per marble and surface
+(`materials.py:120-126`). Replay and recording depend on the lockstep.
+
+Changes.
+- `mode='inline'` with a fixed step; the `run.py` clock moves into the frame hook.
+- `physics.gravity = ...` each frame; `body.drive(pose)` in place of each
+  `KinematicAnimator`; `body.linear_damping`; `physics.materials.pair(...)`.
+- The controller's contact handling becomes physics callbacks, called per step.
+- The reset becomes `set_transform` and `set_velocity`.
+- `DemoScene` is deleted. Its other callers (`CollisionYard`, `AudioYard`, the physics
+  tutorials) move first, since they are the shortest.
+
+### glisteel
+
+Today. One main-thread loop. `Session.advance` (`session.py:581`) accumulates real time,
+capped at `MAXIMUM_CATCHUP` 0.1 s, and runs fixed steps of 1/120 s. Each step runs the
+driver, `car.update` (a `RaycastVehicle` applying forces), `physics.step`, then
+`impact_on` reads that must happen before the next step (`session.py:795`, `:912`).
+`trace.drive` runs it with no window. The world (`world.py:1028`) takes its colliders
+from `HeightFieldColliders`, `RoadColliders` and `PropColliders`, updated from the
+camera in `RaceWorld.stream` (`world.py:1147-1151`). Traffic is kinematic boxes placed,
+with their velocity written, every frame (`traffic.py:1003-1022`). Poses reach the scene
+by hand (`Car.follow`, `car.py:224-243`). Audio is a `VehicleSoundtrack` node in `sg`
+plus `impact.play()` inside the step (`session.py:811`).
+
+Changes.
+- `Session` holds a standalone `Physics` (`inline`, 120 Hz, `maxCatchUp` 0.1), so
+  `trace.drive` and the diagnostics need no context; the game's context uses its own.
+- The driver, `car.update` and the `impact_on` reads move into `before-step` and
+  `after-step` callbacks. The step, its order and its length are unchanged.
+- The three collider classes become collider sources.
+- Traffic becomes `add_kinematic` with `body.drive(pose)`.
+- `Car.follow` and the traffic `_follow` go: the car and traffic nodes are the bodies'
+  nodes, and the chase camera reads the car body's node so both share one pose.
+- The `RaycastVehicle` keeps using the raw world through `physics.world` in inline mode.
+- `sound.hit` calls `audio.play`; the soundtrack node stays.
+
+Acceptance. `trace.drive` on each scenario returns the numbers it returned before the
+change.
+
+### twig-bb
+
+Today. Two worlds. The map world (`collision.py:82-86`) is one static trimesh cooked from
+the drawn triangles, with a `SurfaceIndex` from triangle to material; it is never stepped,
+and every character and cast is a synchronous query against it. The player and each bot
+are a `CharacterController` (`walkers.py:100`, `viewer.py:1759`). Hitscan and sight
+queries (`combat.py:153,214,239`, `projectiles.py:478`, `blast.py:109`) are synchronous and
+come back with the body and triangle hit. Combatants are staged into the map world for each
+query by writing `collider_shape` (`combat.py:307-406`). The jump-pad world
+(`jumppads.py:346`) is a second, zero-gravity world of trigger volumes, stepped by hand.
+Projectiles are numpy arrays swept by ray. `OnIdle` (`viewer.py:1830-1891`) orders the
+player's walker, the pushes, then the rules, with a variable `dt`. Audio is
+`engine.listen(platform)` and `engine.play(clip, emitter=, position=, gain=, priority=)`
+(`combatsound.py:475-562`), with an underwater submerge each frame.
+
+Changes.
+- The map world is `add_static(proxy=Proxy.trimesh(points, indices))` with `colliders`
+  set to `none`; twig-bb keeps its `SurfaceIndex` and reads the triangle from `RayHit`.
+- The player and the bots are `add_character`. Their update is the frame hook's, ahead of
+  `rules.advance`, so the order in `OnIdle` holds.
+- `raycast` and `line_of_sight` become `physics.raycast(..., skip=body)`, which includes
+  characters, so the stage and unstage code and its direct `collider_shape` writes go.
+  `raycast_many` serves the projectile sweep.
+- The jump pads are `add_trigger` volumes in the one world, and their push uses a
+  synchronous `overlap`; the second world goes.
+- No worker thread starts: nothing in twig-bb is dynamic.
+- Audio: `audio.listener = platform`, `audio.play(clip, at=, gain=, priority=, emitter=)`,
+  and the submerge through `audio.engine`.
+- Its tests that build a bare `PhysicsWorld` build a standalone `Physics` instead.
+
+### openglcontext-forest
+
+Today. The walk is `PhysicsWalkMixin` and `terrainwalk.py`. The world is empty. The ground
+and the trunks are numpy arrays outside it, resolved by `resolveTerrain`
+(`terrainwalk.py:510-541`) in substeps of 0.35 m, and rocks arrive through
+`add_collider_source(scene.rocks.mounds_near)`, called at every substep
+(`terrainwalk.py:259-271`). `OnIdle` steps the walker by wall-clock time capped at 0.05 s
+and redraws every frame while walking. There is no audio. `run.py` calls `init_walk`,
+`add_collider_source` and `setupPhysics(enable=True)` (`run.py:179-183`).
+
+Changes. None until characters land in phase 4. Then the three calls become the walk
+movement mode plus two analytic collider sources, the terrain's floor and trunks and the
+rocks, registered with `physics.add_collider_source`. The walker stays on the render
+thread, so the data race between `mounds_near` and the `AsyncStreamer` threads stays what
+it is today. The redraw each frame while walking becomes a redraw while the character
+moves, falls or has input. The mixin is deleted after this move.
+
+### hill-runner
+
+Today. No `omi_physics`. The runner's gravity is a constant integrated in closed form
+(`runner.py:19,201-204`), `Game.advance` substeps at 1/120 s and stops at the first hit
+(`game.py:90-116`), and the hit rules are bands, lanes and forgiveness (`game.py:148-194`).
+Tests pin the jump arc (`test_runner.py:90,102,166`) and the order of events inside a frame
+(`test_game.py`). Audio is `Sounds(audioscene.engine_for(self))` (`app.py:123`), with
+`play(path, gain, rate)`, a looping music voice with a priority, a muffle for the pause
+screen (`sound.py:38-55`) and footsteps (`session.py:91`).
+
+Changes. The physics stays as it is: a shape overlap does not express its rules, and a
+trigger delivered once a frame would blur the order of a coin and a hit inside one frame.
+Audio moves in phase 6: `Sounds` takes `self.audio`, calls `play(..., rate=, priority=,
+loop=)`, sets `audio.muffle`, and loses its `None` checks because a disabled `Audio`
+returns inert voices. `tests/test_sound.py` uses `RecordingAudio` in place of its fake
+engine. Calls on the render thread start at once, so footsteps are no later than today.
+
 ## Process mode (deferred)
 
 Not part of the phases below until a game needs it. The rules in Design (plain-data
@@ -540,6 +837,9 @@ a game that needs it, and the node does not accept `mode='process'` until then.
 | `physics/body.py` | `Body` and the command records it enqueues |
 | `physics/worker.py` | the `Worker` protocol and its `Inline` and `Thread` forms, built on the existing `PhysicsManager` and `ThreadedSimulation` |
 | `physics/colliders.py` | scenery to static bodies: the rules, the cooking queue |
+| `physics/sources.py` | the collider-source protocol, and the focus the frame hook gives each source |
+| `physics/staticview.py` | the immutable, versioned static view and the queries that run on it |
+| `physics/character.py` | `Character`, the handle over `CharacterController`, and the frame-hook step |
 | `physics/settings.py` | `PhysicsDefinition`, beside `audio/settings.py` |
 | `audio/manager.py` | `Audio`, `Voice`, and the pending-call list the frame hook drains |
 
@@ -556,6 +856,10 @@ Changes below the engine, in `omi_physics`:
 - `ThreadedSimulation.start()` checks `_thread` without a lock, so two starts spawn
   two threads (`FREE-THREADING.md`, hazards list). The worker owns start and stop.
 - Contact events carry body ids and generations, not resolved objects.
+- A `StaticQuery` protocol that `PhysicsWorld` and the static view implement.
+  `CharacterController`, `raycast` and the sweeps take it in place of the world.
+- The world's fixed-step loop reports each step to a `before-step` and an `after-step`
+  hook, and tags every contact event with its step index (it already carries one).
 
 ## Determinism and tests
 
@@ -572,6 +876,12 @@ Changes below the engine, in `omi_physics`:
   no redraw request. A physics-driven redraw is asked for only while a body is
   awake.
 - `check_scaling` on the frame hook: its cost follows the bodies that moved.
+- Each game keeps its own determinism check. glisteel's `trace.drive` reproduces its
+  recorded numbers on a standalone inline `Physics`. twig-bb's determinism tests and
+  marble-demo's replay pass with the same seeds.
+- A stress test in thread mode adds and removes static colliders on every tick while the
+  render thread casts rays and steps a character; the results match a single-threaded
+  run of the same sequence.
 - A script test for each tutorial under `tests/tutorials/physics/`, captured under
   the fixed-step clock.
 
@@ -580,17 +890,15 @@ Changes below the engine, in `omi_physics`:
 | phase | content | done when |
 |---|---|---|
 | 0 | Measure: frame time and tick time at 1,000 and 5,000 bodies, inline against thread, on the GIL build and on 3.14t; the idle cost of `ThreadedSimulation` today | numbers are in this plan |
-| 1 | `Physics` inline and thread, `Body`, commands, frame hook, `PhysicsDefinition` on `ContextDefinition`, `enable`, `set_config`, `run`; tutorial 1 | tutorial 1 passes as written; idle scene asks for no frame |
-| 2 | Events: render and physics delivery, `render.set`, `render.call`, the `Collision` split; tutorials 2 and 2b | both tutorials pass; no handler holds a lock |
-| 3 | Scenery as static bodies, glTF OMI bodies registered on mount, teleport by assignment | the two cost tests pass; `physics_bounce.py` loses its `OnIdle` |
-| 4 | `Proxy`, `cook`, `show_proxies`, materials, pair rules, gravity zones; tutorials 3 to 5 | tutorials pass |
-| 5 | `Audio`, `Voice`, thread-safe `play`, material sounds; tutorial 6 | `AudioYard._collide` deleted |
-| 6 | Migrate `CollisionYard`, `AudioYard`, `DemoScene`, the marble, twig-bb and glisteel callers; delete `DemoScene` and the public `ThreadedPhysicsManager` | no caller of `manager.advance` outside the worker |
-| 7 | Deferred: `mode='process'`, taken up if phase 0 or a game shows the need | the same tests pass in every mode |
-
-The walking character (`PhysicsViewPlatform`) takes `with_world()` today. It moves
-onto the service in phase 6 as `physics.add_character()`, and the walk movement
-mode registers the camera body without a call.
+| 1 | `Physics`, standalone and in the context. Inline with a fixed step, catch-up and `step(dt)`; thread; `Body`, commands, frame hook, `PhysicsDefinition`, `enable`, `set_config`, `run`, `gravity`, `drive`, damping, `world` (inline); tutorial 1 | tutorial 1 passes as written; an idle scene asks for no frame; a standalone inline `Physics` reproduces glisteel's `trace.drive` numbers |
+| 2 | Events: render and physics delivery, `before-step` and `after-step`, per-step callbacks, `render.set`, `render.call`, the `Collision` split; tutorials 2 and 2b | both tutorials pass; no handler holds a lock |
+| 3 | Scenery as static bodies, glTF OMI bodies on mount, collider sources, teleport by assignment | the two cost tests pass; `physics_bounce.py` loses its `OnIdle` |
+| 4 | Static view, synchronous queries, characters, the walk mode on characters | the concurrency stress test passes; the terrain walk test and twig-bb's walker tests pass on `Character` |
+| 5 | `Proxy`, `cook`, `show_proxies`, materials, pair rules, gravity zones; tutorials 3 to 5 | tutorials pass |
+| 6 | `Audio`, `Voice`, thread-safe `play`, `RecordingAudio`, material sounds; tutorial 6 | `AudioYard._collide` deleted; hill-runner's audio moved |
+| 7 | Migrations, in order: `DemoScene` callers and marble-demo, glisteel, twig-bb, forest. Then delete `DemoScene`, the public `ThreadedPhysicsManager` and `PhysicsWalkMixin` | each project's suite and determinism checks give the results they gave before; no caller of `manager.advance` outside the service |
+| 8 | `RigidSystem` on a standalone inline `Physics`; `zoneGravity` on `RigidBodyCollection` | `body_for` works on an X3D body; the round trip of the extension field passes |
+| 9 | Deferred: `mode='process'`, taken up if phase 0 or a game shows the need | the same tests pass in every mode |
 
 ## Documentation to change
 
@@ -602,7 +910,12 @@ mode registers the camera body without a call.
   the new `physics/` and `audio/` modules.
 - `tests/tutorials/physics/`: the tutorials above, written as the `'''`-commentary
   files the doc build turns into pages.
-- `docs/x3d.rst`: `PhysicsDefinition` as an extension node.
+- `docs/x3d.rst`: `PhysicsDefinition` as an extension node, `zoneGravity`, and how the
+  rigid-body worlds relate to `context.physics`.
+- `docs/navigation.rst`: the walk movement mode on characters, and the third-person
+  character and boom camera.
+- `docs/testing.rst`: `RecordingAudio` and the standalone inline `Physics`.
+- Each migrated project's README or docs, where they describe how its world is stepped.
 - `omi_physics/docs/ARCHITECTURE.md`: the command inbox and the idle block.
 - `plans/PROJECT-PLAN.md`: a row for this plan, and a pointer from
   `COLLISION-EVENTS.md`, whose subscription layer this builds on.
@@ -634,6 +947,20 @@ mode registers the camera body without a call.
    physical properties (mass, friction, restitution) given as keywords, since the
    position is set on the node. If it meant position, `add_dynamic(node, at=(x, y, z))`
    is a trivial addition.
-6. X3D `RigidBodyCollection` keeps its own world and its own stepping. Moving it
-   onto the service means two authoring routes into one world, and is left until
-   after phase 6.
+6. X3D `RigidBodyCollection`. It keeps its own world, because X3D says what collides and
+   a context's scenery default would change a document. Phase 8 rebuilds it on a
+   standalone `Physics` and adds the opt-in `zoneGravity` field. Recommendation: accept.
+   The alternative is one shared world with a per-body collision list, which changes
+   what a document means.
+7. Dynamic bodies and characters. A character does not push, and is not pushed by,
+   dynamic bodies, as `body=True` behaves today. A crate that can be shoved by a walker,
+   or a walker shoved by a rolling boulder, needs the character to be a dynamic body
+   for those contacts, with the one-tick delay that brings. Recommendation: leave it out
+   of this plan and add `push=True` on `add_character` when a game asks.
+8. Characters on the render thread. This gives zero input latency and synchronous
+   queries, and costs the static view and its publication. Running characters on the
+   worker is simpler and adds a tick of latency to the camera. Recommendation: the
+   render thread; the latency is what a player feels first.
+9. Scope of the migration. hill-runner keeps its own physics and the forest keeps its
+   analytic ground. Recommendation: accept both; moving either gains nothing a player
+   sees and risks the tests that pin their feel.
