@@ -390,7 +390,7 @@ def set_cull_state(mode: Any, enabled: bool, front_face: int) -> None:
     if getattr(mode, '_cull_front_face', None) != front_face:
         glFrontFace(front_face)
         mode._cull_front_face = front_face
-    if getattr(mode, '_cull_face', GL_BACK) != culled:
+    if getattr(mode, '_cull_face', None) != culled:
         glCullFace(culled)
         mode._cull_face = culled
     if getattr(mode, '_cull_enabled', None) != enabled:

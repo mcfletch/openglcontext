@@ -50,7 +50,8 @@ class TestFrontFace:
 
 
 from OpenGL.GL import (
-    GL_CULL_FACE, GL_FRONT_FACE, glGetIntegerv, glIsEnabled,
+    GL_BACK, GL_CULL_FACE, GL_CULL_FACE_MODE, GL_FRONT, GL_FRONT_FACE, glCullFace,
+    glGetIntegerv, glIsEnabled,
 )
 
 
@@ -85,6 +86,13 @@ class TestApplyWindingCull:
         assert mode._cull_enabled is True  # noqa: SLF001 the pass's record of the cull state, which is what is under test
         set_cull_state(mode, False, GL_CCW)          # the next double-sided mesh
         assert not glIsEnabled(GL_CULL_FACE)
+
+    @pytest.mark.usefixtures('gl')
+    def test_a_pass_with_no_record_sets_the_culled_face(self):
+        """A record that has not been written says nothing about what GL has."""
+        glCullFace(GL_FRONT)
+        set_cull_state(types.SimpleNamespace(), True, GL_CCW)
+        assert int(glGetIntegerv(GL_CULL_FACE_MODE)) == GL_BACK
 
     @pytest.mark.usefixtures('gl')
     def test_missing_matrix_uses_base_winding(self):
