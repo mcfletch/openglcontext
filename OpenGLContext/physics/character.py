@@ -378,7 +378,10 @@ class Character:
             physics._audio().play(sound, at=tuple(float(v) for v in feet), gain=0.5)
 
     def _place_stand_in(self, velocity: Any) -> None:
-        """Put the stand-in at the capsule with ``velocity``, unless it is already so."""
+        """Put the stand-in at the capsule with ``velocity``, unless it is already so.
+
+        Placing a body and setting its velocity each wake it.
+        """
         physics, body = self.physics, self.body
         here = tuple(float(v) for v in self.controller.position)
         moving = tuple(float(v) for v in velocity)
@@ -387,8 +390,6 @@ class Character:
         self._stand_in_at = (here, moving)
         physics._command('place', body, here, None)
         physics._command('velocity', body, moving)
-        if any(moving):
-            physics._command('wake', body)
 
     def _place_node(self) -> None:
         if self.node is not None:

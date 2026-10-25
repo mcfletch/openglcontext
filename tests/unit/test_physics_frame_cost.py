@@ -273,3 +273,41 @@ def test_nodes_and_replica_agree_with_the_world_once_it_rests(mode):
         assert np.allclose(np.asarray(body.node.translation), live[slot], atol=1e-6, rtol=0.0)
         assert np.array_equal(replica.world.position[replica.index_of(body.uid)], live[slot])
     physics.close()
+
+
+# -- characters ----------------------------------------------------------------------
+
+def test_a_running_character_sends_its_stand_in_a_place_and_a_velocity_a_frame(monkeypatch):
+    physics = Physics(definition(mode='inline'))
+    physics.add_static(None, Proxy.box((60, 1, 60)), translation=(0, -0.5, 0))
+    character = physics.add_character(position=(0, 0.1, 0))
+    for _ in range(30):
+        physics.frame(FRAME)
+    sent = []
+    original = physics._send
+
+    def counting(command):
+        if command.uid == character.body.uid:
+            sent.append(command.op)
+        original(command)
+
+    monkeypatch.setattr(physics, '_send', counting)
+    character.set_move((1.0, 0.0, 0.0), 'run')
+    for _ in range(10):
+        physics.frame(FRAME)
+    assert sent and set(sent) <= {'place', 'velocity'}
+    physics.close()
+
+
+def test_a_character_standing_still_sends_its_stand_in_nothing(monkeypatch):
+    physics = Physics(definition(mode='inline'))
+    physics.add_static(None, Proxy.box((60, 1, 60)), translation=(0, -0.5, 0))
+    character = physics.add_character(position=(0, 0.1, 0))
+    for _ in range(120):
+        physics.frame(FRAME)
+    sent = []
+    monkeypatch.setattr(physics.worker, 'submit', sent.append)
+    for _ in range(10):
+        physics.frame(FRAME)
+    assert [command.op for command in sent if command.uid == character.body.uid] == []
+    physics.close()
