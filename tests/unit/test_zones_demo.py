@@ -1,7 +1,7 @@
 """``oglc-zones``: the court's zones, with no window.
 
 The scene the demo and its tutorial draw is :class:`ZoneCourt`, so what each
-zone holds and what the keys do are tested here; ``tests/zones_demo.py`` is
+zone holds and what the keys do are tested here; ``tests/tutorials/world/zones_demo.py`` is
 the rendered form, in the visual suite.
 """
 import pytest

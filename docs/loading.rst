@@ -275,7 +275,7 @@ there is logged rather than raised.
 
 :doc:`Loading VRML97 <vrml97>` lists the supported nodes and describes working
 with the scenegraph a world becomes: finding and naming nodes, field types,
-prototypes and routes. :doc:`tutorials/using_vrml97` is a complete program.
+prototypes and routes. :doc:`tutorials/core_context/using_vrml97` is a complete program.
 
 glTF and GLB models
 -------------------
@@ -297,7 +297,7 @@ animations. The meshes are ``PBRMesh`` nodes, drawn by the :doc:`PBR renderer
 <pbr>` in the core profile. :ref:`Loading from Python <gltf-python>` describes
 every attribute of the scene and how to load one model many times from a
 single parse; :doc:`Loading glTF <gltf>` covers the extensions the loader
-reads. :doc:`tutorials/using_gltf_model` is a complete program.
+reads. :doc:`tutorials/core_context/loading_gltf_model` is a complete program.
 
 Wavefront OBJ models
 --------------------
@@ -332,7 +332,7 @@ Smoothing groups (``s``) and groups (``g``) are ignored. OBJ records no unit,
 lights, cameras or animation, so the scale of the result is whatever the
 author modelled in, and a scene built around it supplies its own lights. A
 model moved without its ``.mtl`` file loads with every material light grey.
-:doc:`tutorials/using_obj` is a complete program.
+:doc:`tutorials/core_context/using_obj` is a complete program.
 
 .. _loading-meshfiles:
 

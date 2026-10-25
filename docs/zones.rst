@@ -86,7 +86,7 @@ a ``ZoneVisibility`` in a zone covering the whole court hides it, and one in
 the room, at a higher priority, shows it. ``z`` takes the rooms' zones away and
 puts them back, and ``t`` shows the statue from everywhere.
 ``OpenGLContext.bin.zones_demo.ZoneCourt`` builds the scene, and the
-:doc:`zones_demo tutorial <tutorials/zones_demo>` walks through it.
+:doc:`zones_demo tutorial <tutorials/world/zones_demo>` walks through it.
 ``oglc-audio-demo`` uses zones for its areas' ambience and reverb (see
 :ref:`Sound <audio-demos>`).
 

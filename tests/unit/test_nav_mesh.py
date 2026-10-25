@@ -80,7 +80,7 @@ def joined(*meshes):
 def zigzag():
     """A room with two overlapping walls, so the way through doubles back.
 
-    The geometry ``tests/navmesh_demo.py`` draws: a 16 m room, a wall at
+    The geometry ``tests/tutorials/core_context/navmesh_demo.py`` draws: a 16 m room, a wall at
     ``x=5`` reaching the far edge and a wall at ``x=11`` reaching the near
     one.  With ``clearance=1.8`` each wall clears the floor two cells either
     side of it, leaving a left room, a channel between ``x=6`` and ``x=10``

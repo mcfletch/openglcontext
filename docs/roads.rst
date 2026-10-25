@@ -19,7 +19,7 @@ editor that draws one under the cursor, needs only this module.
 .. figure:: images/demos/roads_demo.jpg
    :alt: A two-lane road curving away across rolling green ground, its dark carriageway between pale gravel shoulders and darker grass verges
 
-   ``python tests/roads_demo.py``: 452 m of two-lane road. See
+   ``python tests/tutorials/world/roads_demo.py``: 452 m of two-lane road. See
    :ref:`roads-demo`.
 
 One road
@@ -49,7 +49,7 @@ tile carries. Without ``spacing``, the points you give are swept as they are.
 Demo
 ~~~~
 
-``python tests/roads_demo.py`` sweeps 452 m of two-lane road from an alignment
+``python tests/tutorials/world/roads_demo.py`` sweeps 452 m of two-lane road from an alignment
 of straights and curves laid over a height function. From the centre line
 out, the section has a carriageway with centre dashes and edge lines, a gravel
 shoulder on each side, and a grass verge falling to the ground. Press

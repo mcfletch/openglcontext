@@ -131,7 +131,7 @@ Seeing it work
 .. figure:: images/demos/instancing_batched.jpg
    :alt: Three fields of spheres, blue, orange and green, above a row of boxes
 
-   ``python tests/instancing_batched.py`` — 296 shapes drawn in 4 calls. Each
+   ``python tests/tutorials/world/instancing_batched.py`` — 296 shapes drawn in 4 calls. Each
    field is built a different way, so the grouping rules can be told apart:
    the blue field shares one ``Sphere`` node across all 96 shapes, the orange
    field gives each shape its own equal ``Sphere``, and the green field shares
@@ -143,7 +143,7 @@ The demo prints the counts whenever they change:
 
 .. code-block:: bash
 
-   $ python tests/instancing_batched.py
+   $ python tests/tutorials/world/instancing_batched.py
    instancing ON   296 of 296 shapes -> 4 draws (296 instances in 4 groups)
    instancing OFF  296 of 296 shapes -> 296 draws (0 instances in 0 groups)
 

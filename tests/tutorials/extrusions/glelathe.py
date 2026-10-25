@@ -23,6 +23,10 @@ from OpenGLContext.arrays import *
 from math import pi
 from OpenGLContext.scenegraph import extrusions
 from OpenGLContext.scenegraph.basenodes import *
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 contour = array([
     (0,0), (1,0),
@@ -43,7 +47,7 @@ it is a cone-shaped "spring" extending some distance downward.""")
                 shininess = 1.0,
             ),
             texture = ImageTexture(
-                url = "wrls/irradiation.jpg",
+                url = os.path.join(HERE, 'irradiation.jpg'),
             ),
             textureTransform = TextureTransform(
                 scale = [1,1],

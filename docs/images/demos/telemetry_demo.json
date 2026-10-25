@@ -3,7 +3,7 @@
   "git": "v3.0.0a4-66-ge405489-dirty",
   "id": "demos/telemetry_demo",
   "licence": "BSD-3-Clause",
-  "module": "telemetry_demo",
+  "module": "tutorials/world/telemetry_demo",
   "producer": "script",
   "size": [
     1100,

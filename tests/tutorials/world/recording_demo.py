@@ -30,7 +30,7 @@ clock ran at and how big the file is:
       clock       fixed step
       file size   81983 bytes
 
-Run `python tests/recording_demo.py --record 90` to record without anyone
+Run `python tests/tutorials/world/recording_demo.py --record 90` to record without anyone
 pressing a key: the demo records that many frames, prints the report and
 exits. `--output PATH` chooses the file, which is `recording_demo.mp4` in
 the current directory otherwise, and the environment variables

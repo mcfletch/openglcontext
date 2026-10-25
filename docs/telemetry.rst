@@ -417,7 +417,7 @@ Example: the telemetry demo
 .. figure:: images/demos/telemetry_demo.jpg
    :alt: Four coloured spheres on dotted rings around a yellow lamp, each ring carrying a pale gate post, on a dark square plinth
 
-   ``python tests/telemetry_demo.py``: a session recorded, read back and
+   ``python tests/tutorials/world/telemetry_demo.py``: a session recorded, read back and
    replayed. Four bodies circle the lamp at different periods. Each time a
    body passes the gate post on its ring, the demo records a :ref:`mark
    <marks>`. With no ``OPENGLCONTEXT_TELEMETRY`` set, the demo calls
@@ -432,12 +432,12 @@ the file holds frames and marks but no input, then read the file back:
 .. code-block:: bash
 
    OPENGLCONTEXT_TELEMETRY=/tmp/orrery.jsonl OPENGLCONTEXT_AUTO_EXIT_FRAMES=450 \
-   python tests/telemetry_demo.py
+   python tests/tutorials/world/telemetry_demo.py
    python -m OpenGLContext.telemetry /tmp/orrery.jsonl
 
 .. code-block:: text
 
-   2026-08-21T03:14:15.667877+00:00  tests/telemetry_demo.py
+   2026-08-21T03:14:15.667877+00:00  tests/tutorials/world/telemetry_demo.py
      pid 1401636, python 3.12.3, linux, 300x300, core, seed 15227938117083888771
      ended: quit
 
@@ -477,7 +477,7 @@ recorded one:
 .. code-block:: bash
 
    OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/orrery.jsonl OPENGLCONTEXT_AUTO_EXIT_FRAMES=450 \
-   python tests/telemetry_demo.py
+   python tests/tutorials/world/telemetry_demo.py
 
 .. code-block:: text
 

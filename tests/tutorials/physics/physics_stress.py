@@ -16,7 +16,7 @@ frame and swamps the step at a few hundred bodies; pass ``--debug`` only when yo
 actually need to see the proxies.
 
 Usage:
-    oglc-test tests/physics_stress.py [--waves N] [--debug]
+    oglc-test tests/tutorials/physics/physics_stress.py [--waves N] [--debug]
 
 Keys:
     space  add another wave of bodies

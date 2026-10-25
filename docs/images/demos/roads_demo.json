@@ -3,7 +3,7 @@
   "git": "v3.0.0a4-66-ge405489-dirty",
   "id": "demos/roads_demo",
   "licence": "BSD-3-Clause",
-  "module": "roads_demo",
+  "module": "tutorials/world/roads_demo",
   "producer": "script",
   "size": [
     1100,

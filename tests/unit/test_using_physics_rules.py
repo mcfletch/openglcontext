@@ -1,6 +1,6 @@
 """The physics cannon game's rules, with no window: the balls, the courses and the score.
 
-``tests/using_physics.py`` leaves every question about the flight to the
+``tests/tutorials/physics/using_physics.py`` leaves every question about the flight to the
 physics world, so these fire real shots and read what the world answered.
 """
 import importlib.util
@@ -16,7 +16,7 @@ from OpenGLContext.testing.paths import tests_root
 
 
 def _load():
-    path = tests_root(__file__) / 'using_physics.py'
+    path = tests_root(__file__) / 'tutorials' / 'physics' / 'using_physics.py'
     spec = importlib.util.spec_from_file_location('_using_physics', path)
     module = importlib.util.module_from_spec(spec)
     # A dataclass looks its module up by name to read its annotations.

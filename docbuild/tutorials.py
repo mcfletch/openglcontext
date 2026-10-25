@@ -1,18 +1,17 @@
-"""The code-walkthrough tutorials, written from the scripts in ``tests/``.
+"""The code-walkthrough tutorials, written from the scripts in ``tests/tutorials``.
 
 Each tutorial is a runnable script whose commentary sits in ``'''`` strings
 between the statements, so the page and the program that page describes are
 the same file and cannot drift apart.  This reads those scripts, turns each
-into a page of commentary and code, and writes an index of the paths through
-them.
+into a page of commentary and code, and writes a page for each path through
+them and an index of the paths.
 
     python -m docbuild.tutorials --output docs/tutorials
 
 The paths -- which scripts, in which order, under which heading -- are
-:data:`PATHS`.  A script not named there is not a tutorial, whatever it holds.
-A script is named by its path under ``tests/`` without ``.py``
-(``tutorials/core_context/getting_a_context``), and its page by the file's
-name alone (``getting_a_context``), so every page is in ``docs/tutorials``.
+:data:`PATHS`.  Each path is a directory: its scripts, and the files they
+open, are in ``tests/tutorials/<directory>``, and its pages are written to
+``docs/tutorials/<directory>`` beside the screenshots they show.
 """
 
 from __future__ import annotations
@@ -22,21 +21,32 @@ import dataclasses
 import io
 import logging
 import os
+import posixpath
 import re
 import sys
 import tokenize
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from docbuild import markup
 
-__all__ = ['Tutorial', 'TutorialPath', 'PATHS', 'parse', 'render', 'write']
+__all__ = [
+    'Tutorial',
+    'TutorialPath',
+    'PATHS',
+    'hand_written',
+    'parse',
+    'render',
+    'render_index',
+    'render_path',
+    'write',
+]
 
 log = logging.getLogger('tutorials')
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-#: Where the scripts are.
-TESTS = os.path.join(HERE, 'tests')
+#: Where the scripts are: a directory for each path.
+SOURCE = os.path.join(HERE, 'tests', 'tutorials')
 
 #: Where the pages go.
 OUTPUT = os.path.join(HERE, 'docs', 'tutorials')
@@ -70,8 +80,8 @@ class Tutorial:
     name: str
     source: str
     pieces: list[Piece]
-    #: Where the script is under ``tests/``, without ``.py``, as :data:`PATHS`
-    #: names it.  The page is :attr:`name`, so every page sits in one directory.
+    #: Where the script is under ``tests/``, without ``.py``, for the page to
+    #: say (``tutorials/shaders/shader_1``).
     script: str = ''
 
     def __post_init__(self) -> None:
@@ -94,10 +104,21 @@ class TutorialPath:
 
     title: str
     description: str
+    #: The directory, under ``tests/tutorials`` and ``docs/tutorials``, the
+    #: scripts and the pages are in.
+    directory: str
+    #: The scripts, by file name without ``.py``.
     scripts: list[str]
-    #: Pages of ``docs/tutorials`` written by hand rather than from a script,
-    #: listed at the head of this path.
+    #: Pages in the directory under ``docs/tutorials`` written by hand rather
+    #: than from a script, listed at the head of this path.
     pages: list[str] = dataclasses.field(default_factory=list)
+
+    def sources(self, source: str = SOURCE) -> list[str]:
+        """The file each script is read from, in order."""
+        return [
+            os.path.join(source, self.directory, '%s.py' % (name,))
+            for name in self.scripts
+        ]
 
 
 PATHS = [
@@ -106,9 +127,10 @@ PATHS = [
         """How to get something on screen and make it move: loading a model in
         each of the three formats, playing the clips a rigged
         model was authored with, and walking a character along a route.""",
+        'core_context',
         [
-            'tutorials/core_context/getting_a_context',
-            'tutorials/core_context/loading_gltf_model',
+            'getting_a_context',
+            'loading_gltf_model',
             'keyboardevents',
             'using_clips',
             'crowd_demo',
@@ -122,6 +144,7 @@ PATHS = [
         'Physics',
         """Rigid bodies, the materials they are made of, the joints that hold
         them together, and what a game does with what the solver reports.""",
+        'physics',
         pages=['physics_getting_started'],
         scripts=[
             'physics_room_drop',
@@ -144,6 +167,7 @@ PATHS = [
         furniture over the frame, a settings page, a console, choosing a level
         by its picture, picking something in the world to drag, and an
         editor's four views of a model.""",
+        'interface',
         [
             'using_ui',
             'hud_demo',
@@ -161,6 +185,7 @@ PATHS = [
         mirrors, water, ground cover, levels of detail, roads, audio,
         particles, instanced batching, writing a scene out as glTF, reading
         one from X3D, and recording a session or a video of one.""",
+        'world',
         [
             'x3d_demo',
             'x3d_shaders',
@@ -191,6 +216,7 @@ PATHS = [
         curve, the joins and normals that decide how they look, turning a
         polygon into the triangles that draw it, and the glyphs of a font as
         solid text.""",
+        'extrusions',
         [
             'solid_font',
             'extrusions_shapes',
@@ -211,6 +237,7 @@ PATHS = [
         rendering.  It works through Blinn-Phong rendering of directional,
         point and spot lights, and the basics of geometric rendering with
         vertex buffer objects.""",
+        'shaders',
         [
             'shader_intro',
             'shader_1',
@@ -232,6 +259,7 @@ PATHS = [
         'Transformations and Matrices',
         """The matrices that map geometry into the cube the hardware draws,
         how to calculate them on the CPU, and how to hand them to a shader.""",
+        'transforms',
         ['transforms_1'],
     ),
     TutorialPath(
@@ -239,6 +267,7 @@ PATHS = [
         """A high-level path, introducing the OpenGLContext/VRML97 scenegraph.
         It covers more involved rendering tasks in less detail than the shader
         path: what to build rather than how the effect is achieved.""",
+        'scenegraph',
         [
             'lightobject',
             'molehill',
@@ -252,6 +281,7 @@ PATHS = [
         """Setting up shadow-map-based shadow casting.  These assume a reader
         comfortable with OpenGL; the last builds the same scene out of
         scenegraph nodes and lets OpenGLContext's own shadow pass light it.""",
+        'shadows',
         ['shadow_1', 'shadow_2', 'shadow_3'],
     ),
     TutorialPath(
@@ -259,6 +289,7 @@ PATHS = [
         """Translations of the NeHe series of tutorials.  These are low-level
         introductory tutorials using the legacy OpenGL API; the originals they
         are translated from are gentle and thorough.""",
+        'nehe',
         [
             'nehe1',
             'nehe2',
@@ -276,14 +307,14 @@ PATHS = [
     ),
 ]
 
-#: Pages in ``docs/tutorials`` that are written by hand rather than from a
-#: script, and so are listed in the index without being generated.
-HAND_WRITTEN = [('physics_getting_started', 'Adding physics to a scene')]
 
 
-def page_name(script: str) -> str:
-    """The page a script in :data:`PATHS` is written as: its file's name."""
-    return script.rsplit('/', 1)[-1]
+def hand_written(paths: Iterable[TutorialPath] = PATHS) -> list[str]:
+    """Each page the paths name that is written by hand, as its file under
+    ``docs/tutorials`` (``physics/physics_getting_started.rst``)."""
+    return [
+        '%s/%s.rst' % (path.directory, page) for path in paths for page in path.pages
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -356,8 +387,39 @@ def indent(text: str, prefix: str = '   ') -> str:
     return '\n'.join(prefix + line if line.strip() else '' for line in text.split('\n'))
 
 
-def render(tutorial: Tutorial) -> str:
-    """The page for one tutorial."""
+#: A ``:doc:`` role: its target alone, or its text and the target in ``<>``.
+DOC_ROLE = re.compile(r':doc:`(?P<text>[^`<]*<)?(?P<target>[^`<>]+)>?`')
+
+
+def resolve_links(text: str, pages: Mapping[str, str]) -> str:
+    """``text`` with each relative ``:doc:`` target made absolute.
+
+    Commentary is written as though every page were in ``docs/tutorials``: a
+    target naming a tutorial in ``pages`` (page name to document name) is that
+    tutorial wherever its path puts it, and any other relative target is read
+    from ``docs/tutorials``, so ``../shadows`` is ``/shadows``.
+    """
+
+    def resolve(match: re.Match[str]) -> str:
+        target = match.group('target')
+        if not target.startswith('/'):
+            target = '/' + pages.get(
+                target, posixpath.normpath(posixpath.join('tutorials', target))
+            )
+        if match.group('text') is None:
+            return ':doc:`%s`' % (target,)
+        return ':doc:`%s%s>`' % (match.group('text'), target)
+
+    return DOC_ROLE.sub(resolve, text)
+
+
+def render(tutorial: Tutorial, pages: Mapping[str, str] | None = None) -> str:
+    """The page for one tutorial.
+
+    ``pages`` maps each tutorial's page name to its document name
+    (``tutorials/shaders/shader_1``), for the links between them.
+    """
+    pages = pages or {}
     out: list[str] = [
         '.. _tutorial-%s:' % (tutorial.name,),
         heading(markup.escape(tutorial.title), 0),
@@ -373,7 +435,7 @@ def render(tutorial: Tutorial) -> str:
                 if block.kind in ('title', 'subtitle'):
                     out.append(heading(markup.escape(block.text), 1))
                 else:
-                    out.append(block.text)
+                    out.append(resolve_links(block.text, pages))
                 started = True
             continue
         depth, code = _dedent(piece.text)
@@ -425,42 +487,58 @@ def _expand_indent(line: str) -> str:
     return line[: len(line) - len(body)].expandtabs(8) + body
 
 
-def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
-    """The page listing the paths, and the toctree that carries them."""
+def _listed(path: TutorialPath, written: Iterable[str]) -> list[str]:
+    """The pages of ``path`` there are to list, in order, by name."""
     written = set(written)
+    return list(path.pages) + [
+        name for name in path.scripts if '%s/%s' % (path.directory, name) in written
+    ]
+
+
+def render_path(path: TutorialPath, written: Iterable[str]) -> str:
+    """The page of one path: what it covers, and the toctree of its tutorials.
+
+    ``written`` names the pages written from scripts, as ``directory/name``.
+    """
+    return '\n\n'.join(
+        [
+            '.. _tutorials-%s:' % (path.directory,),
+            heading(markup.escape(path.title), 0),
+            markup.wrap(' '.join(path.description.split())),
+            '.. toctree::\n   :maxdepth: 1\n\n%s'
+            % ('\n'.join('   %s' % (name,) for name in _listed(path, written)),),
+        ]
+    ) + '\n'
+
+
+def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
+    """The page listing the paths, each with a page of its own.
+
+    The toctree carrying the paths' pages is hidden, since the list after it
+    links each one with its description.
+    """
+    written = set(written)
+    listed = [path for path in paths if _listed(path, written)]
     out = [
         heading('OpenGLContext Tutorials', 0),
         markup.wrap(
             'Each of these is a runnable script in the OpenGLContext source, '
             'with the commentary written into the script beside the code it '
-            'describes.  The headings below group them by subject; a group '
-            'can be read straight through, or a page taken out of it on its '
-            'own.'
+            'describes.  They are grouped by subject into paths; a path can '
+            'be read straight through, or a page taken out of it on its own.'
         ),
+        '.. toctree::\n   :hidden:\n\n%s'
+        % ('\n'.join('   %s/index' % (path.directory,) for path in listed),),
     ]
-    listed = set()
-    for path in paths:
-        names = list(path.pages) + [
-            page_name(script)
-            for script in path.scripts
-            if page_name(script) in written
-        ]
-        if not names:
-            continue
-        listed.update(names)
-        out.append(heading(path.title, 1))
-        out.append(markup.wrap(' '.join(path.description.split())))
-        out.append(
-            '.. toctree::\n   :maxdepth: 1\n\n%s'
-            % ('\n'.join('   %s' % (name,) for name in names),)
+    out.extend(
+        ':doc:`%s <%s/index>`\n%s'
+        % (
+            markup.escape(path.title),
+            path.directory,
+            indent(markup.wrap(' '.join(path.description.split()))),
         )
-    others = [name for name, _ in HAND_WRITTEN if name not in listed]
-    if others:
-        out.append(heading('Other tutorials', 1))
-        out.append(
-            '.. toctree::\n   :maxdepth: 1\n\n%s'
-            % ('\n'.join('   %s' % (name,) for name in others),)
-        )
+        for path in listed
+    )
     return '\n\n'.join(out).rstrip() + '\n'
 
 
@@ -468,34 +546,39 @@ def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
 # Driving it
 # --------------------------------------------------------------------------- #
 def write(
-    output: str = OUTPUT, tests: str = TESTS, paths: Iterable[TutorialPath] = PATHS
+    output: str = OUTPUT, source: str = SOURCE, paths: Iterable[TutorialPath] = PATHS
 ) -> list[str]:
-    """Write a page for every tutorial, and the index; returns the pages written.
+    """Write a page for every tutorial, a page for each path and the index.
 
-    Every page goes directly in ``output``, named for its script's file, so
-    two scripts of one name in different directories are refused.
+    Returns the pages written from scripts, as ``directory/name``.  Each page
+    carries a label named for its script, so two scripts of one name are
+    refused.
     """
     paths = list(paths)
-    scripts: dict[str, str] = {}
+    pages: dict[str, str] = {}
     for path in paths:
-        for script in path.scripts:
-            other = scripts.setdefault(page_name(script), script)
-            if other != script:
+        for name in path.scripts:
+            page = 'tutorials/%s/%s' % (path.directory, name)
+            other = pages.setdefault(name, page)
+            if other != page:
                 raise ValueError(
-                    'tutorial scripts %s and %s would both be the page %s'
-                    % (other, script, page_name(script))
+                    'tutorial scripts %s and %s would both be labelled tutorial-%s'
+                    % (other, page, name)
                 )
-    os.makedirs(output, exist_ok=True)
     written: list[str] = []
-    for name, script in scripts.items():
-        source = os.path.join(tests, '%s.py' % (script,))
-        if not os.path.isfile(source):
-            log.warning('no such tutorial script: %s', source)
-            continue
-        _replace(
-            os.path.join(output, '%s.rst' % (name,)), render(parse(source, script))
-        )
-        written.append(name)
+    for path in paths:
+        directory = os.path.join(output, path.directory)
+        os.makedirs(directory, exist_ok=True)
+        for name, script in zip(path.scripts, path.sources(source)):
+            if not os.path.isfile(script):
+                log.warning('no such tutorial script: %s', script)
+                continue
+            tutorial = parse(script, 'tutorials/%s/%s' % (path.directory, name))
+            _replace(
+                os.path.join(directory, '%s.rst' % (name,)), render(tutorial, pages)
+            )
+            written.append('%s/%s' % (path.directory, name))
+        _replace(os.path.join(directory, 'index.rst'), render_path(path, written))
     _replace(os.path.join(output, 'index.rst'), render_index(paths, written))
     return written
 
@@ -513,11 +596,11 @@ def main(argv: list[str] | None = None) -> int:
         '--output', default=OUTPUT, help='where to write the pages (default: %(default)s)'
     )
     parser.add_argument(
-        '--tests', default=TESTS, help='where the scripts are (default: %(default)s)'
+        '--source', default=SOURCE, help='where the scripts are (default: %(default)s)'
     )
     options = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
-    written = write(options.output, options.tests)
+    written = write(options.output, options.source)
     log.info('%d tutorials written to %s', len(written), options.output)
     return 0
 

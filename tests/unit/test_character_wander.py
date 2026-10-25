@@ -55,7 +55,7 @@ def document():
 def demo():
     """The crowd demo, imported for the constants it measured off its model."""
     spec = importlib.util.spec_from_file_location(
-        'crowd_demo', os.path.join(HERE, 'crowd_demo.py'))
+        'crowd_demo', os.path.join(HERE, 'tutorials', 'core_context', 'crowd_demo.py'))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

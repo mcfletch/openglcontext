@@ -349,7 +349,7 @@ Seeing it work
 .. figure:: images/demos/recording_demo.jpg
    :alt: Eight coloured blocks ride a carousel around a white sphere on a grey floor, each casting a shadow, and a red lamp burns above and to the left
 
-   :doc:`python tests/recording_demo.py <tutorials/recording_demo>` - eight
+   :doc:`python tests/tutorials/world/recording_demo.py <tutorials/world/recording_demo>` - eight
    blocks turning and bobbing around a sphere. Every frame differs from the
    last, so an unevenly clocked recording of it shows a stutter. Press ``r``
    to start recording and again to stop and close the file; the lamp is red
@@ -361,7 +361,7 @@ records that many frames, prints what it wrote, and exits.
 
 .. code-block:: bash
 
-   $ python tests/recording_demo.py --record 90
+   $ python tests/tutorials/world/recording_demo.py --record 90
    recording to recording_demo.mp4 at 30 fps, 90 frames
    recorded 90 frames to recording_demo.mp4
      picture     300x300

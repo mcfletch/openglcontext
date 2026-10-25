@@ -171,7 +171,7 @@ Example: a round trip
 .. figure:: images/demos/bake_demo.jpg
    :alt: A cairn of grey boulders under a gold capstone, ringed by twelve pebbles on green vertex-coloured ground
 
-   ``python tests/bake_demo.py`` builds a scene in code, writes it to a
+   ``python tests/tutorials/world/bake_demo.py`` builds a scene in code, writes it to a
    ``.glb``, loads it back and draws it. What you see is the loaded file. Three
    of the boulders share one mesh, the twelve pebbles are one more mesh under an
    ``InstanceSet``, and the ground is a vertex-coloured ``terrain_patch`` placed
@@ -183,7 +183,7 @@ from the resulting scenegraph. The two columns are separate measurements:
 
 .. code-block:: bash
 
-   $ python tests/bake_demo.py
+   $ python tests/tutorials/world/bake_demo.py
    wrote /tmp/gltf-writer-demo-95gl6ypw/cairn.glb
                      written    read back
    nodes                   7            7

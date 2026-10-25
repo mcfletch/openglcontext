@@ -1,7 +1,7 @@
 """``oglc-cover``: the meadow's cover and its well, with no window.
 
 The scene the demo and its tutorial draw is :class:`Meadow`, so what grows
-where and what the keys do are tested here; ``tests/cover_meadow.py`` is the
+where and what the keys do are tested here; ``tests/tutorials/world/cover_meadow.py`` is the
 rendered form, in the visual suite.
 """
 import os

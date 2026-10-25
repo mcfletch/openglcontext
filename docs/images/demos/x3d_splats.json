@@ -3,7 +3,7 @@
   "git": "v3.0.0a4-836-g1dba0e39-dirty",
   "id": "demos/x3d_splats",
   "licence": "BSD-3-Clause",
-  "module": "x3d_splats",
+  "module": "tutorials/world/x3d_splats",
   "producer": "script",
   "size": [
     1100,

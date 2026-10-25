@@ -1,4 +1,4 @@
-"""The Geospatial valley `tests/x3d_geospatial.py` opens
+"""The Geospatial valley `tests/tutorials/world/x3d_geospatial.py` opens
 
 `x3d_geospatial.x3d` is written with its four tiles and their maps, read by
 the engine's loader and drawn through both renderers: the GeoLOD reads its

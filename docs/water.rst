@@ -13,7 +13,7 @@ a level whose water is never drawn.
 .. figure:: images/demos/water_demo.jpg
    :alt: Three rectangular pools cut in sand, each carrying a grid of orange floats: the left grid flat, the middle gently uneven, the right thrown about by large waves, with a river running across behind them
 
-   ``python tests/water_demo.py``: three of the named styles side by side, with a
+   ``python tests/tutorials/world/water_demo.py``: three of the named styles side by side, with a
    river behind them. See :ref:`water-demo`.
 
 .. code-block:: python
@@ -412,7 +412,7 @@ conversion.
 Demo
 ----
 
-``python tests/water_demo.py`` shows three of the named styles side by side over
+``python tests/tutorials/world/water_demo.py`` shows three of the named styles side by side over
 one bed, with a ``water_ribbon`` running behind them along a course that drops
 from one end to the other. Each pool holds a grid of floats placed on the
 surface with ``wave_height`` once a frame, so you can see the scale of the

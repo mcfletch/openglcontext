@@ -108,7 +108,7 @@ columns are VRML97 ``LOD`` nodes that change level at 12 and 24 metres. ``t``
 dresses each level in its own metal (gold, copper, steel, silver) so the
 switches can be seen while walking, and ``h`` sets every node's
 ``hysteresis`` to 0 and back. ``OpenGLContext.bin.lod_demo.LODHall`` builds
-the scene, and the :doc:`lod_hall tutorial <tutorials/lod_hall>` walks
+the scene, and the :doc:`lod_hall tutorial <tutorials/world/lod_hall>` walks
 through it.
 
 .. _lod-choosing:

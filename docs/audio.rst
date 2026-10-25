@@ -810,7 +810,7 @@ it the time step and the keys, and the render pass sets the zones' gains and
 reverb from where the camera is. ``box_gain``, above, is the same thing for an
 application that keeps its areas in code rather than as zones.
 
-:doc:`tests/audio_spatial.py <tutorials/audio_spatial>` is the tutorial for
+:doc:`tests/tutorials/world/audio_spatial.py <tutorials/world/audio_spatial>` is the tutorial for
 placement: one sound circles you (panning), one is far away (distance), and
 one is a cone you can hear only from in front.
 
@@ -845,7 +845,7 @@ echo, a room, a compressor and an ``Analyser`` raising a meter.
        (``ListenerPointSource``)
 
 The scene is ``SoundScene`` in ``OpenGLContext/bin/x3d_sound.py``, which holds
-no GL; :doc:`tests/x3d_sound.py <tutorials/x3d_sound>` is the same scene as a
+no GL; :doc:`tests/tutorials/world/x3d_sound.py <tutorials/world/x3d_sound>` is the same scene as a
 tutorial.
 
 .. _audio-stress:

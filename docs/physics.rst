@@ -39,7 +39,7 @@ A ``PhysicsBody`` binds an OMI ``motion`` and ``collider`` to a ``Transform``.
 The world writes the transform while the body is dynamic and awake. While the
 body sleeps or is kinematic, the world leaves the transform alone.
 
-The :doc:`Add physics to a scene <tutorials/physics_getting_started>` tutorial
+The :doc:`Add physics to a scene <tutorials/physics/physics_getting_started>` tutorial
 builds a scene like this step by step.
 
 .. _model:
@@ -134,7 +134,7 @@ available. Set ``OPENGLCONTEXT_PHYSICS_BACKEND`` to ``numpy``, ``gpu`` or
 ``auto`` to override the policy. The GPU computes in float32, so its
 trajectories match the numpy backend within a tolerance, not bit for bit. The
 broad phase, narrow phase and solver run on the CPU with either backend. In
-``tests/physics_stress.py``, the ``b`` key switches backends while the demo
+``tests/tutorials/physics/physics_stress.py``, the ``b`` key switches backends while the demo
 runs.
 
 .. _physics-collisions:
@@ -458,7 +458,7 @@ rotation, which are the body's pose. A node that draws no triangles raises
 ``OpenGLContext.physics.gltf_world.node_mesh(node)`` is the geometry attach
 reads: ``(points, triangle_indices)`` in the node's frame, or None.
 
-The :doc:`cannon game <tutorials/using_physics>` is built this way: towers,
+The :doc:`cannon game <tutorials/physics/using_physics>` is built this way: towers,
 walls, crates and balls made with ``attach``, one ``apply_impulse`` to fire,
 ``set_force`` for the wind, a trigger over the target to say it was hit, and
 kinematic bodies steered by ``KinematicAnimator`` for the sliding target and
@@ -982,38 +982,38 @@ The rest are scripts in ``tests/``. The test suite also runs each one as a
 visual-regression test: it exits after a set number of frames, captures the
 frame, and compares it with a reference image.
 
-- :doc:`physics_room_drop.py <tutorials/physics_room_drop>` - objects fall
+- :doc:`physics_room_drop.py <tutorials/physics/physics_room_drop>` - objects fall
   into a room and stack; the core engine and the debug overlay.
 
-- :doc:`physics_bounce.py <tutorials/physics_bounce>` - a row of balls with
+- :doc:`physics_bounce.py <tutorials/physics/physics_bounce>` - a row of balls with
   restitution from 0 to 1.
 
-- :doc:`physics_friction.py <tutorials/physics_friction>` - boxes on ramps,
+- :doc:`physics_friction.py <tutorials/physics/physics_friction>` - boxes on ramps,
   showing the friction at which they start to slide.
 
-- :doc:`physics_gravity_zones.py <tutorials/physics_gravity_zones>` - a planet
+- :doc:`physics_gravity_zones.py <tutorials/physics/physics_gravity_zones>` - a planet
   with point gravity.
 
-- :doc:`physics_triggers.py <tutorials/physics_triggers>` - sensor volumes and
+- :doc:`physics_triggers.py <tutorials/physics/physics_triggers>` - sensor volumes and
   a subscription to their ``enter`` and ``exit`` events.
 
-- :doc:`physics_events.py <tutorials/physics_events>` - the
+- :doc:`physics_events.py <tutorials/physics/physics_events>` - the
   ``oglc-physics-events`` yard, opening on a scene already struck: collision
   subscriptions, a pane broken before the solve and one after, a hitscan
   shot and a pressure plate.
 
-- :doc:`physics_joints.py <tutorials/physics_joints>` - a pendulum, a chain
+- :doc:`physics_joints.py <tutorials/physics/physics_joints>` - a pendulum, a chain
   and a motor.
 
-- :doc:`physics_cook_view.py <tutorials/physics_cook_view>` - cooks a collider
+- :doc:`physics_cook_view.py <tutorials/physics/physics_cook_view>` - cooks a collider
   and draws it over the mesh.
 
-- :doc:`physics_navigate.py <tutorials/physics_navigate>` - a first-person
+- :doc:`physics_navigate.py <tutorials/physics/physics_navigate>` - a first-person
   walk past walls, through a doorway, and up stairs and a ramp.
 
-- :doc:`physics_stress.py <tutorials/physics_stress>` - performance as the
+- :doc:`physics_stress.py <tutorials/physics/physics_stress>` - performance as the
   number of bodies grows.
 
-The :doc:`Add physics to a scene <tutorials/physics_getting_started>` tutorial
+The :doc:`Add physics to a scene <tutorials/physics/physics_getting_started>` tutorial
 builds the first of these from scratch. :doc:`navmesh` builds a navigation
 mesh from the same collision world.

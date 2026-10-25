@@ -18,6 +18,10 @@ from OpenGL.GL.ARB.multitexture import *
 import sys
 from OpenGLContext.events.timer import Timer
 from OpenGL.extensions import alternate
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 '''We set up alternate objects that will use whichever function 
 is available at run-time.'''
@@ -118,7 +122,7 @@ class TestContext( BaseContext ):
         except ImportError:
             from Image import open
         glActiveTexture(GL_TEXTURE0_ARB)
-        return texture.Texture( open(imageName) )
+        return texture.Texture( open(os.path.join(HERE, imageName)) )
     def loadLightMap( self, imageName = "lightmap1.jpg" ):
         """Load an image from a file using PIL as a lightmap (greyscale)
         """
@@ -127,7 +131,7 @@ class TestContext( BaseContext ):
         except ImportError:
             from Image import open
         glActiveTextureARB(GL_TEXTURE1) 
-        return texture.Texture( open(imageName) )
+        return texture.Texture( open(os.path.join(HERE, imageName)) )
         
     def drawCube( self ):
         """Draw a cube with texture coordinates"""

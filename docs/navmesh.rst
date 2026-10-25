@@ -286,7 +286,7 @@ Seeing it work
 .. figure:: images/demos/navmesh_demo.jpg
    :alt: An overhead view of a square room with two walls across it: the floor is covered in green wireframe triangles, an amber line zigzags from a blue sphere around both walls to an orange sphere, and a straighter cyan line follows the same route
 
-   :doc:`python tests/navmesh_demo.py <tutorials/navmesh_demo>` - a 16 m room
+   :doc:`python tests/tutorials/core_context/navmesh_demo.py <tutorials/core_context/navmesh_demo>` - a 16 m room
    with two walls that force the route into a zigzag. The green wireframe is
    the navmesh: 416 walkable cells from the 516 triangles of floor and wall
    passed to ``build()``. The dark bands beside each wall are the cells that
@@ -299,7 +299,7 @@ pull saved:
 
 .. code-block:: bash
 
-   $ python tests/navmesh_demo.py
+   $ python tests/tutorials/core_context/navmesh_demo.py
    navmesh 416 walkable cells from 516 triangles (max slope 50.0 degrees, clearance 1.8 m)
    goal (14.0, 14.0) | corridor 77 cells
      centres 79 points 48.82 m -> pulled 6 points 33.34 m (-31.7%)

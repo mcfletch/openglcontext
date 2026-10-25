@@ -356,9 +356,56 @@ class TestTheTutorialPage:
     def test_a_script_in_a_directory_says_where_it_is(self, tmp_path):
         path = tmp_path / 'shader_1.py'
         path.write_text(SCRIPT, encoding='utf8')
-        page = tutorials.render(tutorials.parse(str(path), script='shaders/shader_1'))
+        page = tutorials.render(
+            tutorials.parse(str(path), script='tutorials/shaders/shader_1')
+        )
         assert page.startswith('.. _tutorial-shader_1:')
-        assert '``tests/shaders/shader_1.py``' in page
+        assert '``tests/tutorials/shaders/shader_1.py``' in page
+
+
+#: Commentary linking pages in its own path, in another path and outside the
+#: tutorials, as ``markup`` writes each of them.
+LINKS = """'''=Links=
+
+The [shader_2.html next lesson], the [nehe1.html first NeHe lesson], the
+[../shadows.html shadows page], the [/structure.html structure page] and
+:doc:`Loading a glTF model <loading_gltf_model>`.
+'''
+"""
+
+
+class TestLinksBetweenPages:
+    """A page is written in its path's directory; links in the commentary are
+    written as though from ``docs/tutorials``, and each is resolved from there."""
+
+    PAGES = {
+        'shader_2': 'tutorials/shaders/shader_2',
+        'nehe1': 'tutorials/nehe/nehe1',
+        'loading_gltf_model': 'tutorials/core_context/loading_gltf_model',
+    }
+
+    @pytest.fixture
+    def page(self, tmp_path):
+        path = tmp_path / 'shader_1.py'
+        path.write_text(LINKS, encoding='utf8')
+        return tutorials.render(tutorials.parse(str(path)), pages=self.PAGES)
+
+    def test_a_tutorial_in_the_same_path_is_found_where_it_is(self, page):
+        assert ':doc:`next lesson </tutorials/shaders/shader_2>`' in page
+
+    def test_a_tutorial_in_another_path_is_found_where_it_is(self, page):
+        assert ':doc:`first NeHe lesson </tutorials/nehe/nehe1>`' in page
+
+    def test_a_role_written_by_hand_is_resolved_the_same_way(self, page):
+        assert (
+            ':doc:`Loading a glTF model </tutorials/core_context/loading_gltf_model>`'
+        ) in page
+
+    def test_a_page_above_the_tutorials_is_read_from_docs_tutorials(self, page):
+        assert ':doc:`shadows page </shadows>`' in page
+
+    def test_a_link_from_the_top_is_left_as_it_is(self, page):
+        assert ':doc:`structure page </structure>`' in page
 
 
 #: A method whose commentary sits between it and the class it belongs to.
@@ -440,92 +487,101 @@ class TestIndentation:
 
 
 class TestTheIndex:
-    def test_each_path_is_a_section_with_a_toctree(self):
-        paths = [tutorials.TutorialPath('Shaders', 'The shader path.', ['shader_1'])]
-        page = tutorials.render_index(paths, ['shader_1'])
-        assert 'Shaders\n-------' in page
+    """The index lists the paths; each path has a page of its own listing its
+    tutorials, so the sidebar carries a level for each path."""
+
+    @pytest.fixture
+    def shaders(self):
+        return tutorials.TutorialPath(
+            'Shaders', 'The shader path.', 'shaders', ['shader_1', 'gone']
+        )
+
+    def test_each_path_is_a_page_the_index_carries(self, shaders):
+        page = tutorials.render_index([shaders], ['shaders/shader_1'])
+        assert '.. toctree::\n   :hidden:\n\n   shaders/index' in page
+
+    def test_each_path_is_described_where_it_is_linked(self, shaders):
+        page = tutorials.render_index([shaders], ['shaders/shader_1'])
+        assert ':doc:`Shaders <shaders/index>`\n   The shader path.' in page
+
+    def test_a_path_with_nothing_written_is_not_listed(self, shaders):
+        assert 'shaders' not in tutorials.render_index([shaders], [])
+
+    def test_a_path_page_lists_its_tutorials(self, shaders):
+        page = tutorials.render_path(shaders, ['shaders/shader_1'])
+        assert page.startswith('.. _tutorials-shaders:\n\nShaders\n=======')
         assert 'The shader path.' in page
-        assert '.. toctree::' in page
-        assert '   shader_1' in page
+        assert '.. toctree::\n   :maxdepth: 1\n\n   shader_1' in page
 
-    def test_a_script_that_is_not_there_is_not_listed(self):
-        paths = [tutorials.TutorialPath('Shaders', 'x', ['shader_1', 'gone'])]
-        page = tutorials.render_index(paths, ['shader_1'])
-        assert 'gone' not in page
-
-    def test_the_hand_written_pages_are_listed_too(self):
-        page = tutorials.render_index([], [])
-        for name, _ in tutorials.HAND_WRITTEN:
-            assert name in page
+    def test_a_script_that_is_not_there_is_not_listed(self, shaders):
+        assert 'gone' not in tutorials.render_path(shaders, ['shaders/shader_1'])
 
     def test_a_path_can_open_with_a_page_written_by_hand(self):
         """A walkthrough belongs with the scripts it walks through."""
-        paths = [tutorials.TutorialPath('Physics', 'x', ['shader_1'],
-                                        pages=['physics_getting_started'])]
-        page = tutorials.render_index(paths, ['shader_1'])
-        assert '   physics_getting_started\n   shader_1' in page
-
-    def test_a_script_in_a_directory_is_listed_by_its_page(self):
-        paths = [tutorials.TutorialPath('Shaders', 'x', ['shaders/shader_1'])]
-        page = tutorials.render_index(paths, ['shader_1'])
-        assert '   shader_1' in page
-        assert 'shaders/' not in page
-
-    def test_a_page_in_a_path_is_not_listed_twice(self):
-        page = tutorials.render_index(tutorials.PATHS, [])
-        assert page.count('physics_getting_started') == 1
+        physics = tutorials.TutorialPath(
+            'Physics', 'x', 'physics', ['using_physics'],
+            pages=['physics_getting_started'],
+        )
+        page = tutorials.render_path(physics, ['physics/using_physics'])
+        assert '   physics_getting_started\n   using_physics' in page
 
 
 class TestWritingThemAll:
-    def test_every_named_script_gets_a_page(self, tmp_path):
-        source = tmp_path / 'tests'
-        source.mkdir()
-        (source / 'shader_1.py').write_text(SCRIPT, encoding='utf8')
+    @pytest.fixture
+    def source(self, tmp_path):
+        source = tmp_path / 'tutorials'
+        (source / 'shaders').mkdir(parents=True)
+        (source / 'shaders' / 'shader_1.py').write_text(SCRIPT, encoding='utf8')
+        return source
+
+    def test_every_named_script_gets_a_page_in_its_path(self, source, tmp_path):
         output = tmp_path / 'out'
         written = tutorials.write(
             output=str(output),
-            tests=str(source),
-            paths=[tutorials.TutorialPath('Shaders', 'x', ['shader_1'])],
+            source=str(source),
+            paths=[tutorials.TutorialPath('Shaders', 'x', 'shaders', ['shader_1'])],
         )
-        assert written == ['shader_1']
-        assert (output / 'shader_1.rst').is_file()
+        assert written == ['shaders/shader_1']
+        assert (output / 'shaders' / 'shader_1.rst').is_file()
+        assert (output / 'shaders' / 'index.rst').is_file()
         assert (output / 'index.rst').is_file()
 
-    def test_a_script_in_a_directory_gets_a_page_beside_the_others(self, tmp_path):
-        source = tmp_path / 'tests' / 'shaders'
-        source.mkdir(parents=True)
-        (source / 'shader_1.py').write_text(SCRIPT, encoding='utf8')
+    def test_a_page_says_where_its_script_is(self, source, tmp_path):
         output = tmp_path / 'out'
-        written = tutorials.write(
+        tutorials.write(
             output=str(output),
-            tests=str(tmp_path / 'tests'),
-            paths=[tutorials.TutorialPath('Shaders', 'x', ['shaders/shader_1'])],
+            source=str(source),
+            paths=[tutorials.TutorialPath('Shaders', 'x', 'shaders', ['shader_1'])],
         )
-        assert written == ['shader_1']
-        assert (output / 'shader_1.rst').is_file()
-        assert '   shader_1' in (output / 'index.rst').read_text(encoding='utf8')
+        page = (output / 'shaders' / 'shader_1.rst').read_text(encoding='utf8')
+        assert '``tests/tutorials/shaders/shader_1.py``' in page
 
-    def test_two_scripts_named_alike_are_refused(self, tmp_path):
-        """Their pages would be one file."""
-        for directory in ('a', 'b'):
-            (tmp_path / directory).mkdir()
-            (tmp_path / directory / 'shader_1.py').write_text(SCRIPT, encoding='utf8')
+    def test_two_scripts_named_alike_are_refused(self, source, tmp_path):
+        """Each page carries a label named for its script, and two would clash."""
+        (source / 'other').mkdir()
+        (source / 'other' / 'shader_1.py').write_text(SCRIPT, encoding='utf8')
         with pytest.raises(ValueError, match='shader_1'):
             tutorials.write(
                 output=str(tmp_path / 'out'),
-                tests=str(tmp_path),
-                paths=[tutorials.TutorialPath('Shaders', 'x', ['a/shader_1', 'b/shader_1'])],
+                source=str(source),
+                paths=[
+                    tutorials.TutorialPath('Shaders', 'x', 'shaders', ['shader_1']),
+                    tutorials.TutorialPath('Other', 'x', 'other', ['shader_1']),
+                ],
             )
 
     def test_a_missing_script_is_reported_rather_than_fatal(self, tmp_path, caplog):
         output = tmp_path / 'out'
         written = tutorials.write(
             output=str(output),
-            tests=str(tmp_path),
-            paths=[tutorials.TutorialPath('Shaders', 'x', ['gone'])],
+            source=str(tmp_path),
+            paths=[tutorials.TutorialPath('Shaders', 'x', 'shaders', ['gone'])],
         )
         assert written == []
         assert 'no such tutorial script' in caplog.text
+
+    def test_the_pages_written_by_hand_are_named_by_their_paths(self):
+        assert 'physics/physics_getting_started.rst' in tutorials.hand_written()
 
 
 class TestThePathsThemselves:
@@ -533,24 +589,34 @@ class TestThePathsThemselves:
 
     def test_every_named_script_is_there(self):
         missing = [
-            name
+            script
             for path in tutorials.PATHS
-            for name in path.scripts
-            if not os.path.isfile(os.path.join(tutorials.TESTS, '%s.py' % (name,)))
+            for script in path.sources()
+            if not os.path.isfile(script)
         ]
         assert missing == []
+
+    def test_every_script_in_a_path_s_directory_is_named(self):
+        """A tutorial directory holds the tutorials and what they import."""
+        unnamed = [
+            os.path.join(path.directory, name)
+            for path in tutorials.PATHS
+            for name in os.listdir(os.path.join(tutorials.SOURCE, path.directory))
+            if name.endswith('.py')
+            and not name.startswith('_')
+            and name[:-3] not in path.scripts
+        ]
+        assert unnamed == []
 
     def test_every_named_script_has_commentary_to_read(self):
         """``'''`` marks it; a script using ``\"\"\"`` documents as an empty page."""
         without = [
-            name
+            script
             for path in tutorials.PATHS
-            for name in path.scripts
+            for script in path.sources()
             if not [
                 piece
-                for piece in tutorials.parse(
-                    os.path.join(tutorials.TESTS, '%s.py' % (name,))
-                ).pieces
+                for piece in tutorials.parse(script).pieces
                 if piece.kind == 'commentary'
             ]
         ]
@@ -561,40 +627,40 @@ class TestThePathsThemselves:
         assert len(named) == len(set(named))
 
     def test_every_picture_a_tutorial_shows_is_there(self):
-        """A named picture that is not in ``docs/tutorials`` is a broken image."""
+        """A picture is committed beside the page that shows it."""
         missing = []
         for path in tutorials.PATHS:
-            for name in path.scripts:
-                source = os.path.join(tutorials.TESTS, '%s.py' % (name,))
-                for piece in tutorials.parse(source).pieces:
+            for name, script in zip(path.scripts, path.sources()):
+                for piece in tutorials.parse(script).pieces:
                     if piece.kind != 'commentary':
                         continue
                     for url in markup.pictures(piece.text):
-                        if not os.path.isfile(os.path.join(tutorials.OUTPUT, url)):
+                        if not os.path.isfile(
+                            os.path.join(tutorials.OUTPUT, path.directory, url)
+                        ):
                             missing.append('%s: %s' % (name, url))
         assert missing == []
 
     def test_every_page_a_path_names_by_hand_is_there(self):
         missing = [
-            name
-            for path in tutorials.PATHS
-            for name in path.pages
-            if not os.path.isfile(
-                os.path.join(tutorials.OUTPUT, '%s.rst' % (name,))
-            )
+            page
+            for page in tutorials.hand_written()
+            if not os.path.isfile(os.path.join(tutorials.OUTPUT, page))
         ]
         assert missing == []
 
 
 class TestEveryLinkedTutorialIsWritten:
-    """A page that links ``tutorials/<name>`` links a page the build writes:
-    one of :data:`tutorials.PATHS`, or a hand-written one."""
+    """A page that links ``tutorials/<path>/<name>`` links a page the build
+    writes: one of :data:`tutorials.PATHS`, or a hand-written one."""
 
     def written(self):
-        names = {'index'} | {name for name, _ in tutorials.HAND_WRITTEN}
+        names = {'index'}
         for path in tutorials.PATHS:
-            names.update(path.pages)
-            names.update(path.scripts)
+            names.add('%s/index' % (path.directory,))
+            names.update(
+                '%s/%s' % (path.directory, name) for name in path.pages + path.scripts
+            )
         return names
 
     def test_no_documentation_page_links_a_tutorial_nothing_writes(self):
@@ -603,16 +669,10 @@ class TestEveryLinkedTutorialIsWritten:
         linked = set()
         for page in glob.glob(os.path.join(here, 'docs', '*.rst')):
             with open(page, encoding='utf-8') as handle:
-                linked.update(re.findall(r'<tutorials/([A-Za-z0-9_]+)>',
-                                         handle.read()))
+                linked.update(re.findall(
+                    r':doc:`(?:[^`<]*<)?/?tutorials/([A-Za-z0-9_/]+)>?`',
+                    handle.read()))
         assert linked - self.written() == set()
-
-    def test_a_tutorial_s_screenshot_is_committed_beside_it(self):
-        here = os.path.dirname(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))))
-        picture = os.path.join(here, 'docs', 'tutorials',
-                               'physics_events.py-screen-0001.png')
-        assert os.path.isfile(picture)
 
 
 class TestTheZonesPageListsTheReaders:

@@ -7,7 +7,7 @@
   "git": "v3.0.0a4-66-ge405489-dirty",
   "id": "showcase/crowd",
   "licence": "BSD-3-Clause; model CC-BY 4.0",
-  "module": "crowd_demo",
+  "module": "tutorials/core_context/crowd_demo",
   "producer": "script",
   "size": [
     1200,

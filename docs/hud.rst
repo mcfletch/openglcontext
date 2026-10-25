@@ -104,7 +104,7 @@ The HUD demo
 .. figure:: images/demos/hud_demo.jpg
    :alt: A reticule, two bar meters, a lamp row, a message, a mini-map and an ammunition read-out drawn over a dusk world of pillars
 
-   ``python tests/hud_demo.py``: one ``HUDLayer`` over a lit world, with each
+   ``python tests/tutorials/interface/hud_demo.py``: one ``HUDLayer`` over a lit world, with each
    element placed by the corner it names.
 
 The demo shows every widget:
@@ -127,7 +127,7 @@ if the HUD were not there. The keys trigger the transient effects: :kbd:`x`
 takes a hit, :kbd:`v` puts a ``ScreenWash`` over the viewport, :kbd:`space`
 puts a hit mark on the reticule, :kbd:`m` posts a message, and
 :kbd:`alt`\ +\ :kbd:`f` shows the developer overlay, where the demo registers
-a section of its own at the top. :doc:`tutorials/hud_demo` walks through the
+a section of its own at the top. :doc:`tutorials/interface/hud_demo` walks through the
 code.
 
 .. _anchors:

@@ -1,7 +1,7 @@
 """``oglc-lod``: the hall's levels of detail, with no window.
 
 The scene the demo and its tutorial draw is :class:`LODHall`, so what each
-chain holds and what the keys do are tested here; ``tests/lod_hall.py`` is
+chain holds and what the keys do are tested here; ``tests/tutorials/world/lod_hall.py`` is
 the rendered form, in the visual suite.
 """
 import pytest

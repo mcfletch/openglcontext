@@ -51,7 +51,7 @@ SKIP = {'_build', 'api', '_static', '_templates', '_ext'}
 def pages():
     """Every page of the set, as (relative path, text).
 
-    The tutorials are included: they are written from ``tests/*.py`` and the
+    The tutorials are included: they are written from ``tests/tutorials`` and the
     screenshots they name are committed beside them, so a lost screenshot is
     exactly the failure this catches.
     """
@@ -186,6 +186,17 @@ class TestTheManifestAndTheTreeAgree:
                    if entry['producer'] == 'copy'
                    and not os.path.exists(os.path.join(DOCS, entry['source']))]
         assert not missing, 'sources that have gone: %s' % (missing,)
+
+    def test_every_script_a_picture_is_drawn_by_is_there(self):
+        """``module`` is the script's path under ``tests/``, without ``.py``."""
+        missing = [
+            (entry['id'], entry['module'])
+            for entry in entries()
+            if entry['producer'] == 'script'
+            and entry.get('cwd', 'openglcontext') == 'openglcontext'
+            and not os.path.exists(os.path.join(HERE, entry['module'] + '.py'))
+        ]
+        assert not missing, 'scripts that have gone: %s' % (missing,)
 
     def test_every_picture_declares_what_is_in_it(self):
         """A render carries the terms of the model in it, so it names them."""

@@ -8,7 +8,7 @@ single-channel glyph sheet or a height field read as a texture all rely on.
 accept, so the upload uses ``GL_R8``, which samples as ``(R, 0, 0, 1)``: green
 and blue dropped on the floor. A light map modulating a wall then annihilates
 two of its channels and leaves it dark red, which is what
-``tests/nehe6_multi.py`` and ``tests/multitexture_1.py`` were drawing.
+``tests/tutorials/nehe/nehe6_multi.py`` and ``tests/multitexture_1.py`` were drawing.
 
 The measurement has to be a sample, not a read of the stored texels:
 ``glGetTexImage`` returns what was uploaded and does not apply the swizzle, so

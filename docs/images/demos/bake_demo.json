@@ -3,7 +3,7 @@
   "git": "v3.0.0a4-66-ge405489-dirty",
   "id": "demos/bake_demo",
   "licence": "BSD-3-Clause",
-  "module": "bake_demo",
+  "module": "tutorials/world/bake_demo",
   "producer": "script",
   "size": [
     1100,

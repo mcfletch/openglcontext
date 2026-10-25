@@ -6,7 +6,7 @@ Adding physics to a scene
 This tutorial builds a small physics scene — a walled room that objects fall
 into and stack up — using the same helper the demos use. By the end you will
 have an animated, interactive window with a live collision debug overlay. It
-mirrors ``tests/physics_room_drop.py``; run that file to see the finished
+mirrors ``tests/tutorials/physics/physics_room_drop.py``; run that file to see the finished
 result.
 
 .. _scene:

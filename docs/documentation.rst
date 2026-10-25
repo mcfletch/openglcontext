@@ -259,7 +259,7 @@ Getting started
   as a component, and :ref:`adding a format <adapters>`.
 
 - :doc:`Tutorials <tutorials/index>` -- code walkthroughs, each built from a
-  runnable script in ``tests/``:
+  runnable script in ``tests/tutorials/``, one directory per path:
 
   - Using the Engine: loading a glTF, VRML97 or OBJ model, animating it, clips,
     a crowd, and an NPC on a navigation mesh
@@ -584,7 +584,7 @@ holds many examples. These show particular techniques:
 - Shader-based drawing
 
   - `Instanced rendering sample
-    <https://github.com/mcfletch/openglcontext/blob/main/tests/shader_instanced.py>`__
+    <https://github.com/mcfletch/openglcontext/blob/main/tests/tutorials/shaders/shader_instanced.py>`__
 
   - `Shader-based geometry scenegraph nodes
     <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/shaders.py>`__
@@ -601,7 +601,7 @@ holds many examples. These show particular techniques:
   <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/polygonsort.py>`__
 
 - `Multi-texturing
-  <https://github.com/mcfletch/openglcontext/blob/main/tests/nehe6_multi.py>`__
+  <https://github.com/mcfletch/openglcontext/blob/main/tests/tutorials/nehe/nehe6_multi.py>`__
 
 - `Saving buffers to disk
   <https://github.com/mcfletch/openglcontext/blob/main/tests/saveimage.py>`__
@@ -612,7 +612,7 @@ holds many examples. These show particular techniques:
   (mouse interaction)
 
 - `Particle systems
-  <https://github.com/mcfletch/openglcontext/blob/main/tests/particles_simple.py>`__
+  <https://github.com/mcfletch/openglcontext/blob/main/tests/tutorials/scenegraph/particles_simple.py>`__
 
 - `Display lists
   <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/displaylist.py>`__
@@ -632,7 +632,7 @@ holds many examples. These show particular techniques:
       <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/nurbs.py>`__
 
     - `Usage sample
-      <https://github.com/mcfletch/openglcontext/blob/main/tests/molehill.py>`__
+      <https://github.com/mcfletch/openglcontext/blob/main/tests/tutorials/scenegraph/molehill.py>`__
 
   - Array-based geometry
 

@@ -179,7 +179,7 @@ is cut round it and nothing grows over it. ``o`` closes the opening and opens
 it again, and ``d`` steps ``density_scale`` through 1, 0.5 and 0. The plants'
 cards and the grass's clump are drawn by the demo itself and written to the
 per-user cache the first time it runs. ``OpenGLContext.bin.cover_demo.Meadow``
-builds the scene, and the :doc:`cover_meadow tutorial <tutorials/cover_meadow>`
+builds the scene, and the :doc:`cover_meadow tutorial <tutorials/world/cover_meadow>`
 walks through it.
 
 Distance levels

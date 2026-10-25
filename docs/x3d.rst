@@ -19,7 +19,7 @@ The showcase
 ------------
 
 ``oglc-x3d`` opens ``OpenGLContext/bin/x3d_gallery.x3d``, an X3D 4 document,
-and :doc:`tests/x3d_demo.py <tutorials/x3d_demo>` is the same scene as a
+and :doc:`tests/tutorials/world/x3d_demo.py <tutorials/world/x3d_demo>` is the same scene as a
 tutorial. The document's floor and back wall are an ``IndexedTriangleSet``
 and an ``IndexedTriangleStripSet`` wearing ``PhysicalMaterial`` marble and
 brick; three ``PhysicalMaterial`` metals stand on sandstone plinths drawn
@@ -354,7 +354,7 @@ whose ``solid`` is false draws its inside.
    ``oglc-x3d-materials``: X_ITE's material extensions, modes and instances.
 
 ``oglc-x3d-materials`` writes and opens ``x3d_materials.x3d``, and
-:doc:`tests/x3d_materials.py <tutorials/x3d_materials>` is the same scene as a
+:doc:`tests/tutorials/world/x3d_materials.py <tutorials/world/x3d_materials>` is the same scene as a
 tutorial script.
 
 X_ITE's material extension nodes (the ``X_ITE`` component, which a document
@@ -643,7 +643,7 @@ process of its own, the first time the command runs.
 MP4 with an H.264 track, copied beside a copy of the document, since a
 ``MovieTexture`` reads a local file from its document's directory. The screens
 are 16:9 and the picture fills them.
-:doc:`tests/x3d_movie.py <tutorials/x3d_movie>` is the same scene as a
+:doc:`tests/tutorials/world/x3d_movie.py <tutorials/world/x3d_movie>` is the same scene as a
 tutorial.
 
 Lighting
@@ -1267,7 +1267,7 @@ the inset layer's own viewpoint; a brass frame drawn under the inset; and a
 wooden panel 16 pixels in from the bottom left with text in a
 ``ScreenFontStyle`` and a button whose ``TouchSensor`` shows and hides the
 inset. Its keys: ``i`` shows and hides the inset and its frame, ``p`` the
-panel. :doc:`tests/x3d_layering.py <tutorials/x3d_layering>` is the same
+panel. :doc:`tests/tutorials/world/x3d_layering.py <tutorials/world/x3d_layering>` is the same
 scene as a tutorial.
 
 Sensors
@@ -1291,7 +1291,7 @@ Sensors
   coordinate set there before any texture transform, both in the sensor's
   coordinates; geometry with no triangles sends its own +z and (0, 0).
   Picking (``ContextDefinition.pickEnabled``) has to be on. The
-  :doc:`cannon game <tutorials/using_physics>` has three thumb-wheels,
+  :doc:`cannon game <tutorials/physics/using_physics>` has three thumb-wheels,
   each a ``PlaneSensor`` beside a drum on a ``LayoutLayer``.
 - A ``KeySensor`` hears every key its window receives, including keys a
   program has bound itself: ``keyPress`` for a character, ``actionKeyPress``
@@ -1377,9 +1377,9 @@ Geospatial
 .. figure:: images/demos/x3d_geospatial.jpg
    :alt: A green alpine valley between grey rock slopes under a pale sky, a hamlet of red-roofed huts on its floor
 
-   ``tests/x3d_geospatial.py``: an X3D valley placed by latitude, longitude and height.
+   ``tests/tutorials/world/x3d_geospatial.py``: an X3D valley placed by latitude, longitude and height.
 
-:doc:`tests/x3d_geospatial.py <tutorials/x3d_geospatial>` writes and opens
+:doc:`tests/tutorials/world/x3d_geospatial.py <tutorials/world/x3d_geospatial>` writes and opens
 ``x3d_geospatial.x3d``: a valley near 46.55 N 7.98 E drawn as a ``GeoElevationGrid``,
 which a ``GeoLOD`` replaces with four finer tiles read from their own files
 within two and a half kilometres, a hamlet of huts each placed by a
@@ -1444,7 +1444,7 @@ Gaussian splats
    ``oglc-x3d-splats``: a vase and a hedge made of Gaussian splats, over meshes.
 
 ``oglc-x3d-splats`` writes and opens ``x3d_splats.x3d``, and
-:doc:`tests/x3d_splats.py <tutorials/x3d_splats>` is the same scene as a
+:doc:`tests/tutorials/world/x3d_splats.py <tutorials/world/x3d_splats>` is the same scene as a
 tutorial: a brass vase that is a ``GaussianSplats`` node in the document,
 its spherical harmonics fitted to how polished brass looks from every side,
 and a hedge read from a ``KHR_gaussian_splatting`` glTF the document
@@ -1531,7 +1531,7 @@ Volume rendering
    ``oglc-x3d-volume``: a generated CT scan of an ammonite, drawn by three volume data nodes.
 
 ``oglc-x3d-volume`` writes and opens ``x3d_volume.x3d``, and
-:doc:`tests/x3d_volume.py <tutorials/x3d_volume>` is the same scene as a
+:doc:`tests/tutorials/world/x3d_volume.py <tutorials/world/x3d_volume>` is the same scene as a
 tutorial. Its data is a CT scan of an ammonite made by
 ``OpenGLContext.bin.x3d_volume.ammonite``: a shell coiling three times
 wider each whorl, its septa, the siphuncle through them and sediment in the
@@ -1645,7 +1645,7 @@ Programmable shaders
    ``oglc-x3d-shaders``: shapes drawn by the GLSL their document carries.
 
 ``oglc-x3d-shaders`` opens ``OpenGLContext/bin/x3d_shaders.x3d``, and
-:doc:`tests/x3d_shaders.py <tutorials/x3d_shaders>` is the same scene as a
+:doc:`tests/tutorials/world/x3d_shaders.py <tutorials/world/x3d_shaders>` is the same scene as a
 tutorial: a ``ComposedShader`` drawing a copper sphere in bands of light, a
 ``ProgramShader`` written in GLSL 1.20 drawing a marble column, a gold sphere
 coming apart in a geometry stage, a ``PackagedShader`` striping a block, a

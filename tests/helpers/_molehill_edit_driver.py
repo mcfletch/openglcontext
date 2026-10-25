@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Drive ``tests/molehill_edit.py`` through a real pick, and report what moved.
+"""Drive ``tests/tutorials/scenegraph/molehill_edit.py`` through a real pick, and report what moved.
 
 Run as a subprocess by ``tests/unit/test_molehill_edit_drag.py``.  It selects a
 control point, grabs one arm of the gizmo, drags it a set distance along that
@@ -30,7 +30,7 @@ from OpenGLContext.events import synthetic
 from OpenGLContext.scenegraph.nodepath import NodePath
 from OpenGLContext.testing.paths import tests_root
 
-sys.path.insert(0, str(tests_root(__file__)))
+sys.path.insert(0, str(tests_root(__file__) / 'tutorials' / 'scenegraph'))
 from molehill_edit import TestContext as BaseContext
 
 NET, POINT, AXIS = (int(value) for value in sys.argv[1:4])

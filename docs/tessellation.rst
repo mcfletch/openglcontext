@@ -51,7 +51,7 @@ or an unknown winding rule raises ``ValueError``.
 .. figure:: images/extrusions/tessellation.png
    :alt: Six tessellated faces with their triangle edges drawn
 
-   From ``tests/extrusions_tessellation.py``; the white lines are the triangle
+   From ``tests/tutorials/extrusions/extrusions_tessellation.py``; the white lines are the triangle
    edges. Top: a letter O (two rings, one a hole), a pentagram by the odd rule
    (the doubly-wound middle comes out empty), the same by the nonzero rule.
    Bottom: a plain rounded square, the same refined to a maximum triangle area,
@@ -60,7 +60,7 @@ or an unknown winding rule raises ``ValueError``.
 .. figure:: images/extrusions/fig_preprocessing.png
    :alt: Six awkward outlines and what preprocessing makes of them
 
-   From ``tests/extrusions_preprocessing.py``: an outline crossing itself, two
+   From ``tests/tutorials/extrusions/extrusions_preprocessing.py``: an outline crossing itself, two
    rings crossing, a T-junction, two shapes sharing an edge, near-duplicate
    vertices, and a ring closed by a repeated point.
 
@@ -117,12 +117,12 @@ It uses no OpenGL, and no GLU library.
 Demonstrations
 --------------
 
-- ``tests/extrusions_tessellation.py`` -- tessellated faces with their
+- ``tests/tutorials/extrusions/extrusions_tessellation.py`` -- tessellated faces with their
   triangles drawn
 
-- ``tests/extrusions_preprocessing.py`` -- outlines that cross themselves,
+- ``tests/tutorials/extrusions/extrusions_preprocessing.py`` -- outlines that cross themselves,
   share edges or meet at a T-junction, and the result of preprocessing them
 
 .. code-block:: bash
 
-   python tests/extrusions_tessellation.py
+   python tests/tutorials/extrusions/extrusions_tessellation.py

@@ -15,7 +15,7 @@ test with no window.
 .. figure:: images/nurbs/surfaces.jpg
    :alt: Four coloured NURBS surfaces meeting in a mound
 
-   Four ``NurbsSurface`` patches meeting in a mound, from ``tests/molehill.py``.
+   Four ``NurbsSurface`` patches meeting in a mound, from ``tests/tutorials/scenegraph/molehill.py``.
    Each is a 4 by 4 control net; the shading is from the surfaces' own
    derivatives, so the seams between them are smooth.
 
@@ -430,7 +430,7 @@ own keeps nothing.
 .. figure:: images/nurbs/trimmed.jpg
    :alt: A curved surface shading from red to green with a cone-shaped hole cut out of it
 
-   A ``TrimmedSurface``, from ``tests/nurbsobject.py``: a counter-clockwise
+   A ``TrimmedSurface``, from ``tests/tutorials/scenegraph/nurbsobject.py``: a counter-clockwise
    square boundary and a clockwise loop inside it, whose top is a
    ``NurbsCurve2D`` and whose point is a ``Polyline2D``. The colours are per
    control point.
@@ -507,8 +507,8 @@ Demonstrations:
 - ``oglc-deformer`` - two ``CoordinateDeformer`` nodes read from an X3D
   document, each moving a NURBS surface's control points: an animated
   lattice, and a surface carried through a fixed one.
-- ``tests/molehill.py`` - four surfaces meeting.
-- ``tests/molehill_edit.py`` - dragging their control points; see
+- ``tests/tutorials/scenegraph/molehill.py`` - four surfaces meeting.
+- ``tests/tutorials/scenegraph/molehill_edit.py`` - dragging their control points; see
   :doc:`editing` for ``ControlNet``.
-- ``tests/nurbsobject.py`` - a trimmed surface, animated.
+- ``tests/tutorials/scenegraph/nurbsobject.py`` - a trimmed surface, animated.
 - ``tests/teapot_nurbs.py`` - the Utah Teapot.

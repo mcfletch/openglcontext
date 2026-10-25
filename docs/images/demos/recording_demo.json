@@ -3,7 +3,7 @@
   "git": "v3.0.0a4-66-ge405489-dirty",
   "id": "demos/recording_demo",
   "licence": "BSD-3-Clause",
-  "module": "recording_demo",
+  "module": "tutorials/world/recording_demo",
   "producer": "script",
   "size": [
     1100,

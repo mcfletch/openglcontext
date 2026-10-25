@@ -285,8 +285,8 @@ faces the screen.
 The solid provider draws in both profiles. In the compatibility profile it
 uses display lists. In the :doc:`core profile <renderpasses>` it draws from a
 vertex buffer of the glyph's positions and normals, with one draw call per
-character. ``tests/solid_font.py`` is the demo, and the ``n`` key steps it
-through the installed sans-serif faces; :doc:`tutorials/solid_font` walks
+character. ``tests/tutorials/extrusions/solid_font.py`` is the demo, and the ``n`` key steps it
+through the installed sans-serif faces; :doc:`tutorials/extrusions/solid_font` walks
 through it.
 
 .. rst-class:: technical
@@ -307,8 +307,8 @@ formats are as smooth as the window's multisampling makes them.
 Further reading
 ---------------
 
-- :doc:`tutorials/glprint` - bitmap text through WGL, after NeHe tutorial
-  #13 (``tests/glprint.py``)
+- :doc:`tutorials/nehe/glprint` - bitmap text through WGL, after NeHe tutorial
+  #13 (``tests/tutorials/nehe/glprint.py``)
 - ``tests/glutbitmapcharacter.py`` - GLUT bitmap characters
 - :doc:`tessellation` - how the polygonal glyphs are tessellated
 - the :py:mod:`OpenGLContext.scenegraph.text <OpenGLContext.scenegraph.text>`

@@ -43,7 +43,7 @@ position interpolator and assign it to the translation applied to
 the pyramid.
 '''
 HERE = os.path.dirname(os.path.abspath(__file__))
-MODEL = os.path.join(HERE, 'wrls', 'positioninterpolator.wrl')
+MODEL = os.path.join(HERE, 'positioninterpolator.wrl')
 
 class TestContext(BaseContext):
     initialPosition = (0, 1.1, 4.2)

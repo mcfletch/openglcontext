@@ -398,7 +398,7 @@ and samples the overlay's rows.
 Demos
 -----
 
-The :doc:`mirrors tutorial <tutorials/mirrors_room>` builds a small room with
+The :doc:`mirrors tutorial <tutorials/world/mirrors_room>` builds a small room with
 one of each: a mirror on the wall, a pair sharing a reflector with one of them
 ``varied()``, a polished floor and a pool, and the keys to change the budget
 and read what a frame's reflections cost.

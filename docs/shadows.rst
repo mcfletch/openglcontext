@@ -394,16 +394,16 @@ Three tutorials cover shadow mapping. The first two build a depth-map shadow
 renderer by hand on the fixed-function / ARB path. The third builds the same
 scene from scenegraph nodes and uses the shadow system on this page.
 
-- :doc:`Depth-map Shadows: ARB Shadow on the Back Buffer <tutorials/shadow_1>`
+- :doc:`Depth-map Shadows: ARB Shadow on the Back Buffer <tutorials/shadows/shadow_1>`
   -- render the scene's depth from the light into a depth texture and project
   it back onto the scene, with the depth comparison and the bias/acne
   trade-offs done by hand.
 
 - :doc:`Depth-map Shadows: Shadows in a Frame Buffer Object
-  <tutorials/shadow_2>` -- the same technique, rendering the depth map
+  <tutorials/shadows/shadow_2>` -- the same technique, rendering the depth map
   off-screen into an FBO so the shadow map can be larger than the window.
 
-- :doc:`Shadows from the Scenegraph <tutorials/shadow_3>` -- the same scene
+- :doc:`Shadows from the Scenegraph <tutorials/shadows/shadow_3>` -- the same scene
   built as scenegraph nodes and lit by the shadow pass. It imports no OpenGL
   module and contains no rendering code.
 

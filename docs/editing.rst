@@ -15,7 +15,7 @@ none of it.
 .. figure:: images/demos/editing_demo.jpg
    :alt: A plan view looking straight down on green ground, five grey-roofed blocks casting short shadows, and five coloured markers dropped on the ground, one of them standing on the roof of the tallest block
 
-   ``python tests/editing_demo.py``: markers placed on a world in the plan
+   ``python tests/tutorials/interface/editing_demo.py``: markers placed on a world in the plan
    view. :ref:`editing-demo` describes the demo.
 
 Tool modes
@@ -227,7 +227,7 @@ instanced batch.
 .. figure:: images/demos/molehill_edit.jpg
    :alt: Four coloured NURBS surfaces meeting in a molehill, white spheres marking their control points and thin lines joining the points into a grid, and two control points far above the surfaces with long lines running down to their neighbours
 
-   ``python tests/molehill_edit.py``: the :doc:`Molehill <tutorials/molehill>`
+   ``python tests/tutorials/scenegraph/molehill_edit.py``: the :doc:`Molehill <tutorials/scenegraph/molehill>`
    surfaces with a draggable control net. Click a marker to select it and
    place the three-axis handle on it. Drag an arm and the surface
    retessellates as the point moves. The two markers high above the rest are
@@ -423,7 +423,7 @@ pointer gestures that move each view's camera are part of
 Example: the editing demo
 -------------------------
 
-``python tests/editing_demo.py`` opens a world in the plan view. The demo
+``python tests/tutorials/interface/editing_demo.py`` opens a world in the plan view. The demo
 places five markers at the point under the pointer, then drags one of them
 66 m across the ground, using tool modes that receive the pointer before the
 camera. The demo scripts its own clicks and drag through the pick, so the

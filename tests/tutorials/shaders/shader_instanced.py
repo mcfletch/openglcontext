@@ -21,6 +21,10 @@ from OpenGL.GL.shaders import compileProgram, compileShader
 from OpenGLContext.arrays import *
 from OpenGL.arrays import vbo
 from numpy import random
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Shader constants for lighting
 LIGHT_COUNT = 3
@@ -279,7 +283,7 @@ class TestContext(BaseContext):
         # Load texture
         from OpenGLContext.scenegraph.imagetexture import ImageTexture
 
-        self.texture_node = ImageTexture(url="marbleface.jpeg")
+        self.texture_node = ImageTexture(url=os.path.join(HERE, 'marbleface.jpeg'))
 
         # Set up lights (simple setup with 3 lights)
         self.lights_data = zeros((LIGHT_COUNT * LIGHT_SIZE, 4), "f")

@@ -11,7 +11,7 @@ side orthographic views around a perspective one.
 .. figure:: images/demos/multiview_quad.jpg
    :alt: One window split into four views of a lantern hanging from a wooden post: top, front and left orthographic views and a perspective view, each with its name at the top left and an axis triad at the bottom left
 
-   ``python tests/multiview_quad.py``: top, front and left orthographic views
+   ``python tests/tutorials/interface/multiview_quad.py``: top, front and left orthographic views
    and a perspective view of the same model.
 
 There are three ways to use it, from the most packaged to the most direct:
@@ -306,7 +306,7 @@ set already built is given a changed copy:
        if not view.windowView:
            view.style = dataclasses.replace(view.style, layers=False)
 
-The :doc:`cannon game <tutorials/using_physics>` keeps its thumb-wheels in
+The :doc:`cannon game <tutorials/physics/using_physics>` keeps its thumb-wheels in
 the window's own view this way.
 
 .. _multiview-grid:
@@ -472,8 +472,8 @@ The left button is left for the application; see :ref:`view-navigation`.
   degrees above the horizontal. ``QuadView``'s perspective view can go below
   the model as well as above it.
 
-``python tests/multiview_quad.py model.glb`` shows any glTF model in the four
-views; :doc:`tutorials/multiview_quad` walks through it.
+``python tests/tutorials/interface/multiview_quad.py model.glb`` shows any glTF model in the four
+views; :doc:`tutorials/interface/multiview_quad` walks through it.
 
 The perspective view's opening camera
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

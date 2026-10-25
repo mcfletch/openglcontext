@@ -8,7 +8,8 @@ The set has three parts:
 
 ``docs/tutorials/``
     the code walkthroughs, written by ``docbuild/tutorials.py`` from the
-    commentary in ``tests/*.py``.
+    commentary in ``tests/tutorials/*/*.py``: a directory for each path, the
+    pages generated and the screenshots and hand-written pages committed.
 
 ``docs/api/``
     a page per Python module -- the engine, the packages it is built from and
@@ -184,21 +185,21 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
 
 
 def build_tutorials() -> None:
-    """Write the code walkthroughs from the commentary in ``tests/*.py``."""
+    """Write the code walkthroughs from the commentary in ``tests/tutorials``.
+
+    Every page in ``docs/tutorials`` is cleared first, except the ones the
+    paths name as written by hand.
+    """
     sys.path.insert(0, HERE)
     from docbuild import tutorials  # noqa: PLC0415 importable only once this script's directory is on sys.path
 
     log.info('Writing the tutorials into %s', TUTORIALS)
-    for stale in glob.glob(os.path.join(TUTORIALS, '*.rst')):
-        if os.path.basename(stale) not in HAND_WRITTEN_PAGES:
+    kept = {os.path.normpath(os.path.join(TUTORIALS, page)) for page in tutorials.hand_written()}
+    for stale in glob.glob(os.path.join(TUTORIALS, '**', '*.rst'), recursive=True):
+        if os.path.normpath(stale) not in kept:
             os.remove(stale)
-    written = tutorials.write(output=TUTORIALS, tests=os.path.join(HERE, 'tests'))
+    written = tutorials.write(output=TUTORIALS)
     log.info('%d tutorials written', len(written))
-
-
-#: Pages in ``docs/tutorials`` that are written by hand rather than from a
-#: script, and so are not cleared out before a run.
-HAND_WRITTEN_PAGES = {'physics_getting_started.rst'}
 
 
 #: The prose reviewer, if this checkout sits in the workspace that carries it.

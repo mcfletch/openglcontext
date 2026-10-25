@@ -228,7 +228,7 @@ and run faster or slower. Its event types are ``start``, ``stop``, ``pause``,
 
 ``duration`` is the length of one cycle in seconds, and a ``fraction`` event
 carries how far through the cycle the timer is, from 0 to 1.
-:doc:`tutorials/nehe6_timer` walks through a complete example.
+:doc:`tutorials/nehe/nehe6_timer` walks through a complete example.
 
 A simulation's time step
 ~~~~~~~~~~~~~~~~~~~~~~~~

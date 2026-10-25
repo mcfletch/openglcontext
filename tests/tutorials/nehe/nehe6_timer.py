@@ -21,6 +21,10 @@ explicitly request a compatibility profile OpenGL context.
 from OpenGL.GL import *
 from OpenGLContext.events.timer import Timer
 from OpenGLContext import texture
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 class TestContext( BaseContext ):
     """Timer-based control of animation (OpenGLContext timers)
@@ -98,7 +102,7 @@ NeHe tutorials.""")
             from PIL.Image import open
         except ImportError:
             from Image import open
-        im = texture.Texture( open(imageName) )
+        im = texture.Texture( open(os.path.join(HERE, imageName)) )
         return im
     def setupTexture( self ):
         # texture-mode setup, was global in original

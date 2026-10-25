@@ -23,6 +23,10 @@ so we'll import the whole set of VRML97 base nodes (and the
 OpenGLContext extended nodes as well, though we aren't going
 to use them here).'''
 from OpenGLContext.scenegraph.basenodes import *
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
@@ -97,7 +101,7 @@ class TestContext( BaseContext ):
             phong_preCalc = phong_preCalc.decode('ascii')
             phong_weightCalc = phong_weightCalc.decode('ascii')
 
-        light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
+        light_preCalc = open( os.path.join(HERE, '_shader_tut_lightprecalc.vert') ).read()
         '''Our light constants are now generated from the dictionary declared at
         the class level, with the count we just updated substituted into the
         code.  The only change to the content here is the addition of the
@@ -219,7 +223,7 @@ class TestContext( BaseContext ):
                 shininess = .2,
             ),
             texture = ImageTexture(
-                url = ['marbleface.jpeg'],
+                url = [os.path.join(HERE, 'marbleface.jpeg')],
             ),
         )
         '''Uniform setup looks much the same, though we've moved the material

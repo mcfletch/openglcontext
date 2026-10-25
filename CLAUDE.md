@@ -36,10 +36,11 @@ Key documentation files:
 - `docs/profiles.rst` - Core vs. compatibility contexts, and declaring the one a program needs
 - `docs/loading.rst` - Loading each format from Python, and the background load pool
 - `docs/capturing.rst` - Screenshots, settled still captures, and video recording
-- `docs/tutorials/` - The code walkthroughs, written from `tests/*.py`
+- `docs/tutorials/` - The code walkthroughs, a directory per path, written from
+  `tests/tutorials/<path>/*.py`
 
 Two directories beside them are **generated and not in version control**:
-`docs/tutorials/*.rst` from the `'''`-string commentary in `tests/*.py`, and
+`docs/tutorials/**/*.rst` from the `'''`-string commentary in `tests/tutorials`, and
 `docs/api/` -- a page per module of the engine, of the packages it is built
 from and of the ones built on it. `python build-docs.py` writes both and runs
 Sphinx; `--stage DIR` puts a copy somewhere to look at and `--publish` puts it
@@ -81,7 +82,7 @@ OpenGLContext/
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.rst
 │   ├── mirrorhall.py # The room oglc-mirrors hangs its mirrors in; scenery,
 │   │                 # not a command
-│   ├── x3d_geospatial_demo.py  # The valley tests/x3d_geospatial.py opens,
+│   ├── x3d_geospatial_demo.py  # The valley tests/tutorials/world/x3d_geospatial.py opens,
 │   │                 # as an X3D Geospatial document; scenery, not a command
 │   └── x3d_sound_stress.py  # oglc-x3d-sound-stress: a document of many
 │                     # sounds, and the frame and block time playing it costs
@@ -471,7 +472,8 @@ OpenGLContext/
 ```
 
 - Unit tests are in `tests/unit/`; the runnable demo scripts the visual
-  regression suite drives are in `tests/`
+  regression suite drives are in `tests/`, and the tutorials among them in
+  `tests/tutorials/<path>/`, one directory per path of `docbuild/tutorials.PATHS`
 - Shaders are in `OpenGLContext/shaders/` as `.vert` and `.frag` files
 - User documentation is `docs/*.rst`; plans are `plans/*.md`
 
@@ -873,7 +875,7 @@ how long the process took to start. This names a rate other than 60, or `0` for
 a capture that wants to watch real time pass.
 
 ```bash
-OPENGLCONTEXT_CAPTURE_FPS=30 /workspaces/OpenGL-dev/.venv/bin/python tests/nehe4.py
+OPENGLCONTEXT_CAPTURE_FPS=30 /workspaces/OpenGL-dev/.venv/bin/python tests/tutorials/nehe/nehe4.py
 ```
 
 Only what reads `OpenGLContext.events.systemtime` follows — every `Timer` and
@@ -1034,7 +1036,8 @@ The full map is under [Directory Structure](#directory-structure); this is the
 short answer for the places a change most often lands.
 
 - Unit tests are in `tests/unit/`; the runnable demo scripts the visual
-  regression suite drives are in `tests/`
+  regression suite drives are in `tests/`, and the tutorials among them in
+  `tests/tutorials/<path>/`, one directory per path of `docbuild/tutorials.PATHS`
 - Scenegraph nodes are in `OpenGLContext/scenegraph/`
 - Rendering passes are in `OpenGLContext/passes/`
 - Shaders are in `OpenGLContext/shaders/` as `.vert` and `.frag` files
@@ -1480,7 +1483,7 @@ no toolkit to ask.
 
 Key test files:
 
-- `tests/particles_simple.py` - Particle system (PointSet with colors/textures)
+- `tests/tutorials/scenegraph/particles_simple.py` - Particle system (PointSet with colors/textures)
 - `tests/nurbssurface.py` - NURBS with per-vertex colors
 - `tests/shader_*.py` - Shader-specific tests
 - `tests/lighting_*.py` - Lighting model tests

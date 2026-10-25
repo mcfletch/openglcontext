@@ -19,7 +19,7 @@ import time
 
 import numpy as np
 import pytest
-import tests.physics_navigate as nav
+import tests.tutorials.physics.physics_navigate as nav
 
 from OpenGLContext.events import synthetic
 from OpenGLContext.testing.glcontext import gl_available

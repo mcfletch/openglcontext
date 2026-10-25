@@ -14,7 +14,7 @@ by the same simulation and renderer (:ref:`x3d-particles`).
 .. figure:: images/demos/particles_effects.jpg
    :alt: Fire, smoke, sparks and an explosion burning side by side in the dark
 
-   Five of the presets side by side, from ``tests/particles_effects.py``:
+   Five of the presets side by side, from ``tests/tutorials/world/particles_effects.py``:
    fire, smoke, sparks, an explosion and a trail. None of them loads a
    texture; without one, a particle is a soft round dot computed in the
    fragment shader.
@@ -562,7 +562,7 @@ frame that makes and compiles nothing (``test_x3d_particles_gl.py``).
 Demos
 -----
 
-:doc:`tests/particles_effects.py <tutorials/particles_effects>` shows five
+:doc:`tests/tutorials/world/particles_effects.py <tutorials/world/particles_effects>` shows five
 presets, continuous and burst, side by side over a floor, so you can compare
 each effect's fields with how it looks. Press the space bar to fire the
 bursts again, and ``p`` to pause emission without freezing the particles
@@ -570,7 +570,7 @@ already in the air.
 
 .. code-block:: bash
 
-   python tests/particles_effects.py
+   python tests/tutorials/world/particles_effects.py
 
 ``oglc-x3d-particles`` opens an X3D document with one system for each emitter
 and physics model (:ref:`x3d-particles`); ``f`` sets the firework off again

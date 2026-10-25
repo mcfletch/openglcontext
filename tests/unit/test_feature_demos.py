@@ -26,23 +26,24 @@ HERE = str(tests_root(__file__))
 ROOT = os.path.dirname(HERE)
 DOCS = os.path.join(ROOT, 'docs')
 
-#: demo module (in tests/) -> the documentation page that must point at it.
+#: demo script (its path under tests/, without .py) -> the documentation
+#: page that must point at it.
 DEMOS = {
-    'instancing_batched': 'instancing.rst',
-    'water_demo': 'water.rst',
-    'roads_demo': 'roads.rst',
-    'hud_demo': 'hud.rst',
-    'crowd_demo': 'characters.rst',
-    'navmesh_demo': 'navmesh.rst',
-    'editing_demo': 'editing.rst',
-    'recording_demo': 'recording.rst',
-    'telemetry_demo': 'telemetry.rst',
-    'bake_demo': 'baking.rst',
-    'x3d_demo': 'x3d.rst',
-    'x3d_shaders': 'x3d.rst',
-    'x3d_geospatial': 'x3d.rst',
-    'x3d_splats': 'x3d.rst',
-    'x3d_materials': 'x3d.rst',
+    'tutorials/world/instancing_batched': 'instancing.rst',
+    'tutorials/world/water_demo': 'water.rst',
+    'tutorials/world/roads_demo': 'roads.rst',
+    'tutorials/interface/hud_demo': 'hud.rst',
+    'tutorials/core_context/crowd_demo': 'characters.rst',
+    'tutorials/core_context/navmesh_demo': 'navmesh.rst',
+    'tutorials/interface/editing_demo': 'editing.rst',
+    'tutorials/world/recording_demo': 'recording.rst',
+    'tutorials/world/telemetry_demo': 'telemetry.rst',
+    'tutorials/world/bake_demo': 'baking.rst',
+    'tutorials/world/x3d_demo': 'x3d.rst',
+    'tutorials/world/x3d_shaders': 'x3d.rst',
+    'tutorials/world/x3d_geospatial': 'x3d.rst',
+    'tutorials/world/x3d_splats': 'x3d.rst',
+    'tutorials/world/x3d_materials': 'x3d.rst',
 }
 
 #: Frames to run before the automatic exit captures.  Enough that a scene
@@ -54,7 +55,7 @@ FRAMES = '40'
 #: needs the network, so these are skipped rather than failed where the file is
 #: absent and cannot be fetched -- a machine with no network is not a machine
 #: where the demo is broken.
-NEEDS_MODEL = {'crowd_demo': 'Fox'}
+NEEDS_MODEL = {'tutorials/core_context/crowd_demo': 'Fox'}
 
 
 gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
@@ -69,6 +70,7 @@ class TestEachDemoRenders:
         reason = wanted and unreachable(sample_model_url(wanted))
         if reason:
             pytest.skip(reason)
+        name = os.path.basename(demo)
         env = dict(os.environ)
         env.update(
             OPENGLCONTEXT_BACKEND='glfw',
@@ -76,7 +78,7 @@ class TestEachDemoRenders:
             OPENGLCONTEXT_NO_VSYNC='1',
             OPENGLCONTEXT_AUTO_EXIT_FRAMES=FRAMES,
             OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR=str(tmp_path),
-            OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME=demo,
+            OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME=name,
         )
         proc = subprocess.run(
             [sys.executable, os.path.join(HERE, demo + '.py')],
@@ -84,7 +86,7 @@ class TestEachDemoRenders:
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         output = proc.stdout.decode('utf-8', 'replace')
         assert proc.returncode == 0, output[-3000:]
-        shot = tmp_path / (demo + '.png')
+        shot = tmp_path / (name + '.png')
         assert shot.exists(), 'no screenshot captured\n' + output[-2000:]
         # A rendered scene compresses to more than a flat frame does.
         assert shot.stat().st_size > 2000, 'blank frame\n' + output[-2000:]
@@ -108,7 +110,7 @@ class TestEachDemoIsDocumented:
         if not os.path.exists(path):
             pytest.skip('docs/ not in this checkout')
         text = open(path, encoding='utf-8', errors='replace').read()
-        image = 'images/demos/%s.jpg' % demo
+        image = 'images/demos/%s.jpg' % os.path.basename(demo)
         assert image in text, '%s has no screenshot of the demo' % page
         assert os.path.exists(os.path.join(DOCS, image)), 'missing ' + image
 

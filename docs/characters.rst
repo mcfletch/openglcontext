@@ -371,7 +371,7 @@ Seeing it work
 .. figure:: images/demos/crowd_demo.jpg
    :alt: A hundred and fifty copies of one rigged model spread across a plain, each at a different point in a walk, a run or a stop
 
-   :doc:`python tests/crowd_demo.py <tutorials/crowd_demo>` - 150 copies of
+   :doc:`python tests/tutorials/core_context/crowd_demo.py <tutorials/core_context/crowd_demo>` - 150 copies of
    one rigged glTF model, each crossing the field on its own, posed by a
    single ``Crowd`` and drawn as one instanced call. Press ``s`` to switch the
    distance scheduler off and on and see how many figures the frame poses;

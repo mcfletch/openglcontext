@@ -1066,16 +1066,13 @@ class TestScripts:
         """A tutorial's page says its script runs as it stands; this runs it."""
         from docbuild import tutorials  # noqa: PLC0415 the docs build's index of them, wanted by this test alone
 
-        collected = {
-            path.relative_to(TESTS_DIR).with_suffix('').as_posix()
-            for path in _ALL_TEST_SCRIPTS
-        }
+        collected = {path.resolve() for path in _ALL_TEST_SCRIPTS}
         missing = [
             script
             for path in tutorials.PATHS
-            for script in path.scripts
-            if script not in collected
-            and '%s.py' % (tutorials.page_name(script),) not in SKIP_SCRIPTS
+            for script in path.sources()
+            if Path(script).resolve() not in collected
+            and os.path.basename(script) not in SKIP_SCRIPTS
         ]
         assert missing == []
 

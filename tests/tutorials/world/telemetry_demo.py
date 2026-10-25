@@ -36,7 +36,7 @@ closes the journal, reads it back and prints what
 
 Point a second run at that file and the session runs again from it:
 
-    OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/orrery.jsonl python tests/telemetry_demo.py
+    OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/orrery.jsonl python tests/tutorials/world/telemetry_demo.py
 
 The bodies take their positions from the engine's clock, which a replay
 drives from the recorded frame times, so every lap falls on the frame it

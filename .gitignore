@@ -13,8 +13,9 @@ OpenGLContext.e4t
 dist
 .eric?project
 *.~?~
+# Core dumps, as the kernel names them: core, or core.<pid>.
 core
-core*
+core.[0-9]*
 pydoc/*.html
 test-results
 tests/test.jpg

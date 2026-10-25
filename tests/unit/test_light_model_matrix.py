@@ -12,7 +12,7 @@ direction and no location, a ``PointLight`` a location and no direction, and a
 including the cases where there is nothing to rotate or translate by and the
 answer is the identity.
 
-``tests/shadow_1.py`` is the tutorial that consumes it.
+``tests/tutorials/shadows/shadow_1.py`` is the tutorial that consumes it.
 """
 import numpy as np
 import pytest
@@ -112,7 +112,7 @@ class TestTheInverseUndoesIt:
 class TestTheDirectionCanBeOverridden:
     """A caller with a direction in hand passes it rather than setting a field.
 
-    ``renderLightTexture`` in ``tests/shadow_1.py`` does this for the animated
+    ``renderLightTexture`` in ``tests/tutorials/shadows/shadow_1.py`` does this for the animated
     light whose direction it is already tracking.
     """
 

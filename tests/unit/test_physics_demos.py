@@ -33,7 +33,7 @@ def test_demo_renders_a_nonblank_frame(demo, tmp_path):
         OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME=demo,
     )
     proc = subprocess.run(
-        [sys.executable, os.path.join(HERE, demo + '.py')],
+        [sys.executable, os.path.join(HERE, 'tutorials', 'physics', demo + '.py')],
         cwd=ROOT, env=env, timeout=90,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     assert proc.returncode == 0, proc.stdout.decode('utf-8', 'replace')[-2000:]

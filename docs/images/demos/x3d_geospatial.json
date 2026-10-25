@@ -3,7 +3,7 @@
   "git": "v3.0.0a4-752-g15148409-dirty",
   "id": "demos/x3d_geospatial",
   "licence": "BSD-3-Clause",
-  "module": "x3d_geospatial",
+  "module": "tutorials/world/x3d_geospatial",
   "producer": "script",
   "size": [
     1100,

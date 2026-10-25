@@ -24,7 +24,7 @@ from OpenGLContext.move import viewplatform
 from OpenGLContext.scenegraph import audio as audionodes
 
 DEMO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    'audio_spatial.py')
+                    'tutorials', 'world', 'audio_spatial.py')
 
 #: Floor for one source on its own: below this it is lost on ordinary hardware.
 AUDIBLE_DBFS = -30.0

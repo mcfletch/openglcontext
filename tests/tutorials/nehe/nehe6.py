@@ -1,5 +1,13 @@
 #! /usr/bin/env python
-'''=Compressed Texture Mapping (From NeHe 6)=
+'''=Texture Mapping (NeHe 6)=
+
+[nehe6.py-screen-0001.png Screenshot]
+
+
+This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=06 NeHe6 tutorial] by Jeff Molofee and assumes that you are reading along 
+with the tutorial, so that only changes from the tutorial are noted 
+here.
+
 
 NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
 a compatibility profile context.
@@ -7,7 +15,10 @@ a compatibility profile context.
 from OpenGLContext.events import systemtime
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
-from OpenGL.GL.EXT.texture_compression_s3tc import *
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 try:
     from PIL.Image import open
 except ImportError:
@@ -18,31 +29,44 @@ class TestContext( BaseContext ):
     # Force compatibility profile for legacy GL functions
     profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
+    '''OnInit is called by the Context class after initialization
+    of the context has completed, and before any rendering is
+    attempted.  Within this method, you'll generally perform
+    your global setup tasks.'''
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        from OpenGL import extensions                              
-        if not extensions.hasGLExtension("GL_EXT_texture_compression_s3tc"):
-            print("Extension GL_EXT_texture_compression_s3tc required for compressed texture mapping test!")
-            raise SystemExit(1)
         self.imageID = self.loadImage ()
+    
+    '''	We are going to use the Python Imaging Library (PIL) for
+    loading images, something which is obviously not seen
+    in the original tutorial.
+    
+    This method combines all of the functionality required to
+    load the image with PIL, convert it to a format compatible
+    with PyOpenGL, generate the texture ID, and store the image
+    data under that texture ID.
+    '''
     def loadImage( self, imageName = "nehe_wall.bmp" ):
         """Load an image file as a 2D texture using PIL"""
-        im = open(imageName)
+        '''PIL defines an "open" method which is Image specific!'''
+        im = open(os.path.join(HERE, imageName))
         try:
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBA", 0, -1)
         except (ValueError,SystemError):
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBX", 0, -1)
+        '''Generate a texture ID'''
         ID = glGenTextures(1)
+        '''Make our new texture ID the current 2D texture'''
         glBindTexture(GL_TEXTURE_2D, ID)
         glPixelStorei(GL_UNPACK_ALIGNMENT,1)
+        '''Copy the texture data into the current texture ID'''
         glTexImage2D(
-            GL_TEXTURE_2D, 0, 
-            GL_COMPRESSED_RGBA_S3TC_DXT5_EXT, # internal format...
-            ix, iy, 0, 
-            GL_RGBA, 
-            GL_UNSIGNED_BYTE, 
-            image
+            GL_TEXTURE_2D, 0, 3, ix, iy, 0, 
+            GL_RGBA, GL_UNSIGNED_BYTE, image
         )
+        '''Note that only the ID is returned, no reference to the image
+        object or the string data is stored in user space, the data is 
+        only present within the GL after this call exits.'''
         return ID
 
     def Render( self, mode):
@@ -53,6 +77,11 @@ class TestContext( BaseContext ):
         glRotated( systemtime.systemTime()%(8.0)/8 * -360, 1,0,0)
         self.setupTexture()
         self.drawCube()
+    '''This method encapsulates the functions required to set up
+    for textured rendering.  The original tutorial made these
+    calls once for the entire program.  This organization makes
+    more sense if you are likely to have multiple textures.
+    '''
     def setupTexture( self ):
         """Render-time texture environment setup"""
         '''Configure the texture rendering parameters'''
@@ -60,7 +89,12 @@ class TestContext( BaseContext ):
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
+        '''Re-select our texture, could use other generated textures
+        if we had generated them earlier...'''
         glBindTexture(GL_TEXTURE_2D, self.imageID)
+    '''Drawing the cube has changed slightly, because we now need 
+    to specify the texture coordinates for each vertex. This is all 
+    just taken from the original tutorial.'''
     def drawCube( self ):
         """Draw a cube with texture coordinates"""
         glBegin(GL_QUADS)

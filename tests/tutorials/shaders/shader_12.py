@@ -27,6 +27,10 @@ from OpenGL.GL import shaders
 '''OpenGLContext registers the shader nodes as "core" VRML97 nodes, so
 we can just import the base node-set.'''
 from OpenGLContext.scenegraph.basenodes import *
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 class TestContext( BaseContext ):
     """Shows conversion of tutorial code to use shader nodes."""
@@ -53,7 +57,7 @@ class TestContext( BaseContext ):
         The first import is our simple file of tutorial-specific light
         calculations.  The url field is actually a list-of-urls field, and
         can load from anything urllib can handle.'''
-        light_preCalc = GLSLImport( url='_shader_tut_lightprecalc.vert' )
+        light_preCalc = GLSLImport( url=os.path.join(HERE, '_shader_tut_lightprecalc.vert') )
         '''We made our two reusable blinn-phong functions into OpenGLContext
         resources precisely so that we could eventually use "resource" urls
         to reference them.'''
@@ -136,7 +140,7 @@ class TestContext( BaseContext ):
             ],
             textures = [
                 TextureUniform(name="diffuse_texture", value=ImageTexture(
-                    url="marbleface.jpeg",
+                    url=os.path.join(HERE, 'marbleface.jpeg'),
                 )),
             ],
             shaders = [

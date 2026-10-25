@@ -3,7 +3,7 @@
   "git": "v3.0.0a4-66-ge405489-dirty",
   "id": "demos/instancing_batched",
   "licence": "BSD-3-Clause",
-  "module": "instancing_batched",
+  "module": "tutorials/world/instancing_batched",
   "producer": "script",
   "size": [
     1100,

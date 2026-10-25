@@ -1,6 +1,6 @@
 """An alpine valley placed on the Earth, as an X3D Geospatial document
 
-The scene ``tests/x3d_geospatial.py`` opens; scenery, not a command.
+The scene ``tests/tutorials/world/x3d_geospatial.py`` opens; scenery, not a command.
 
 :func:`prepare` writes ``x3d_geospatial.x3d`` and the files it names: a
 valley four and a half kilometres across near 46.55 N 7.98 E, its heights

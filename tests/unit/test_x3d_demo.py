@@ -2,7 +2,7 @@
 
 The scene the demo and its tutorial draw is :class:`Gallery`, read from the
 shipped document; what the document builds and what the keys do are tested
-here, and ``tests/x3d_demo.py`` is the rendered form, in the visual suite.
+here, and ``tests/tutorials/world/x3d_demo.py`` is the rendered form, in the visual suite.
 """
 import os
 

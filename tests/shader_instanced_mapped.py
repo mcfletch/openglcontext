@@ -1,6 +1,11 @@
 #! /usr/bin/env python
 # import OpenGL
 # OpenGL.FULL_LOGGING=True
+import os
+import sys
+
+# shader_11 is the tutorial this builds on, in the shaders path's directory.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tutorials', 'shaders'))
 from shader_11 import TestContext as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import *

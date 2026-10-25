@@ -11,8 +11,8 @@ rather than having to try it. Each figure's panels are named in
 
 Run it with a figure name to see one::
 
-    python tests/extrusions_gallery.py lathe
-    python tests/extrusions_gallery.py --list
+    python tests/tutorials/extrusions/extrusions_gallery.py lathe
+    python tests/tutorials/extrusions/extrusions_gallery.py --list
 
 With no name it shows the whole set of shapes, which is the same scene as
 `extrusions_shapes.py`.

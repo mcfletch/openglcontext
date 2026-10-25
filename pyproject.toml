@@ -477,14 +477,15 @@ select = ["OGC101", "OGC102", "OGC111", "OGC121", "OGC131", "OGC141", "OGC161", 
 #
 # The programs OGC161 does not read: files run by path, whose module level is
 # their start-up and settles the renderer before anything imports OpenGL. They
-# are the demos and tutorials in tests/ (less the pytest modules, conftest.py
-# and the underscored modules the demos import), the subprocess drivers the
+# are the demos in tests/ and the tutorials in tests/tutorials (less the pytest
+# modules, conftest.py and the underscored modules the demos import), the subprocess drivers the
 # unit tests start (less _crowd_asset.py, which tests import), the scripts/
 # tools and Sphinx's conf.py.
 [tool.openglcontext-checks.scopes]
 test = ["tests/unit/**", "OpenGLContext/tests/**", "**/test_*.py", "**/conftest.py"]
 script = [
     "tests/[!_]*.py", "!tests/test_*.py", "!tests/conftest.py",
+    "tests/tutorials/**/[!_]*.py",
     "tests/_gltf_toggle_driver.py",
     "tests/helpers/*.py", "!tests/helpers/_crowd_asset.py",
     "scripts/*.py",
@@ -526,16 +527,16 @@ OGC151 = [
 ]
 
 [tool.openglcontext-checks.per-file-ignores]
-# A tutorial: its text is what docs/tutorials/hud_demo.rst shows, and its
+# A tutorial: its text is what docs/tutorials/interface/hud_demo.rst shows, and its
 # imports carry `# noqa: E402` for a rule the project's ruff selection already
 # ignores. Tutorials are not edited for tooling.
-"tests/hud_demo.py" = ["OGC201"]
+"tests/tutorials/interface/hud_demo.py" = ["OGC201"]
 
-# A tutorial (docs/tutorials/glprint.rst): the NeHe 13 port on WGL, whose
+# A tutorial (docs/tutorials/nehe/glprint.rst): the NeHe 13 port on WGL, whose
 # font deletes its display lists in __del__ as the original lesson does, and
 # which runs only on Windows under wxPython. Tutorials are not edited for
 # tooling.
-"tests/glprint.py" = ["OGC141"]
+"tests/tutorials/nehe/glprint.py" = ["OGC141"]
 
 # The modules that implement the sanctioned APIs do what the rules report:
 # the resolver decodes a data URI once check_size has passed it, and the GL

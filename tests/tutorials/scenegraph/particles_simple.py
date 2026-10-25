@@ -17,6 +17,10 @@ from OpenGLContext.arrays import *
 from OpenGLContext.events.timer import Timer
 import random
 from OpenGLContext.scenegraph.basenodes import *
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 # Check if any font provider is available for text display
 # Font providers auto-register when imported (glutfont via GLUT, shaderfont via atlas)
 _font_available = False
@@ -81,7 +85,7 @@ blue and turning white.""")
         rendering if the extension(s) are available.'''
         self.shape = Shape(
             appearance = Appearance(
-                texture = ImageTexture( url='_particle.png' ),
+                texture = ImageTexture( url=os.path.join(HERE, '_particle.png') ),
             ),
             geometry = self.points,
         )

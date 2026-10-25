@@ -19,7 +19,7 @@ gets a cap with the same holes. The caps are filled by :doc:`the tessellator
 .. figure:: images/extrusions/shapes.png
    :alt: A lathe, a spiral, a screw, a torus, a pipe elbow and a tapering elbow
 
-   Every swept node, from ``tests/extrusions_shapes.py``. Top: a ``Lathe`` and a
+   Every swept node, from ``tests/tutorials/extrusions/extrusions_shapes.py``. Top: a ``Lathe`` and a
    ``Spiral`` of the same parameters -- the lathe's section stays upright as it
    climbs, the spiral's tilts with the climb -- and a ``Screw``. Bottom: a
    toroid, a ``PolyCylinder`` and a ``PolyCone``.
@@ -74,7 +74,7 @@ x along the axis and its y outward, the reverse of the r-z reading, so a
 generated texture lands on different faces of the same section: on a square
 section ``vertex_cyl`` textures the walls and leaves the top plain.
 ``'arc_length'`` covers every face at a fixed size, and is what
-``tests/glelathe.py``, a scene ported from GLE, uses.
+``tests/tutorials/extrusions/glelathe.py``, a scene ported from GLE, uses.
 
 .. figure:: images/extrusions/fig_lathe.png
    :alt: A lathe under six sets of parameters
@@ -175,7 +175,7 @@ What ``normals`` does
 .. figure:: images/extrusions/normals.png
    :alt: A hexagonal tube and a bent tube, each shaded three ways
 
-   From ``tests/extrusions_normals.py``. Left to right in each row: ``facet``,
+   From ``tests/tutorials/extrusions/extrusions_normals.py``. Left to right in each row: ``facet``,
    ``edge``, ``path_edge``. The geometry is identical; only the normals differ.
 
 Top, a hexagonal tube: ``facet`` gives six flat faces and six hard edges,
@@ -196,7 +196,7 @@ Corners
 .. figure:: images/extrusions/joins.png
    :alt: Four join styles round the same corner
 
-   From ``tests/extrusions_joins.py``. Clockwise from top left: ``raw`` (the runs
+   From ``tests/tutorials/extrusions/extrusions_joins.py``. Clockwise from top left: ``raw`` (the runs
    come apart), ``angle`` (a mitre, with the seam where its two surfaces meet),
    ``round`` (an elbow) and ``cut`` (a bevel). The purple hairpin is a mitre at a
    corner sharp enough that ``miterLimit`` turns it into a bevel.
@@ -232,7 +232,7 @@ Following a curve
 .. figure:: images/extrusions/curves.png
    :alt: Splines, a vertical loop and a trefoil knot
 
-   From ``tests/extrusions_curves.py``. A Catmull-Rom sampled coarsely and
+   From ``tests/tutorials/extrusions/extrusions_curves.py``. A Catmull-Rom sampled coarsely and
    finely, a Bézier, a B-spline, a loop through the vertical, and a trefoil knot
    swept as a closed path.
 
@@ -270,7 +270,7 @@ VRML97's Extrusion
 .. figure:: images/extrusions/vrml97.png
    :alt: Six VRML97 extrusions
 
-   From ``tests/extrusions_vrml97.py``. Scale along the spine, a taper, an
+   From ``tests/tutorials/extrusions/extrusions_vrml97.py``. Scale along the spine, a taper, an
    orientation turning as it travels, a curved spine, a tube with no caps, and a
    closed spine.
 
@@ -295,7 +295,7 @@ Texture coordinates
 .. figure:: images/extrusions/fig_texture_parameter.png
    :alt: A checkerboard on six different sweeps
 
-   The same checkerboard on six sweeps, from ``tests/extrusions_gallery.py
+   The same checkerboard on six sweeps, from ``tests/tutorials/extrusions/extrusions_gallery.py
    texture_parameter``. Where the squares stretch is where the mapping stretches.
 
 The ``texture`` field takes two kinds of value. ``'normalized'`` and
@@ -352,16 +352,16 @@ your own script can supply one.
 Demonstrations
 --------------
 
-- ``tests/extrusions_shapes.py`` -- every swept node side by side
+- ``tests/tutorials/extrusions/extrusions_shapes.py`` -- every swept node side by side
 
-- ``tests/extrusions_joins.py`` -- the four join styles, and the miter limit
+- ``tests/tutorials/extrusions/extrusions_joins.py`` -- the four join styles, and the miter limit
 
-- ``tests/extrusions_curves.py`` -- splines, adaptive sampling, closed loops
+- ``tests/tutorials/extrusions/extrusions_curves.py`` -- splines, adaptive sampling, closed loops
 
-- ``tests/extrusions_vrml97.py`` -- the VRML97 node's fields
+- ``tests/tutorials/extrusions/extrusions_vrml97.py`` -- the VRML97 node's fields
 
-- ``tests/extrusions_normals.py`` -- the three shading modes on two subjects
+- ``tests/tutorials/extrusions/extrusions_normals.py`` -- the three shading modes on two subjects
 
-- ``tests/extrusions_gallery.py`` -- one figure per parameter; the figures on
-  this page are captured from it. Run ``python tests/extrusions_gallery.py
+- ``tests/tutorials/extrusions/extrusions_gallery.py`` -- one figure per parameter; the figures on
+  this page are captured from it. Run ``python tests/tutorials/extrusions/extrusions_gallery.py
   --list`` for the list, then run it with a name to show that figure.

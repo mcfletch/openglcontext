@@ -18,6 +18,10 @@ from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import Sphere
+import os
+
+#: The files this tutorial opens are beside it.
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
@@ -172,7 +176,7 @@ class TestContext( BaseContext ):
         from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         if bytes is not str:
             phong_preCalc = phong_preCalc.decode('ascii')
-        light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
+        light_preCalc = open( os.path.join(HERE, '_shader_tut_lightprecalc.vert') ).read()
         
         vertex = shaders.compileShader( 
             lightConst + lightVarying%{'dir':'out'} +
