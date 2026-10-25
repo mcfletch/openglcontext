@@ -70,6 +70,8 @@ class WorldRuntime:
         self.on_events: list[Callable[[list[PhysicsEvent]], Any]] = []
         self.applied_seq = 0
         self.version = 0
+        #: Events a ``settle`` command left to be set once the next snapshot is published.
+        self.markers: list[threading.Event] = []
         self._accumulator = 0.0
         self._entries: dict[int, _Entry] = {}
         self._shapes: dict[int, int] = {}
@@ -203,6 +205,12 @@ class WorldRuntime:
         if angular is not None:
             self.world.angular_damping[index] = float(angular)
 
+    def _op_noop(self, uid: int) -> None:
+        """Do nothing; a command whose arrival wakes a blocked worker."""
+
+    def _op_settle(self, uid: int, marker: threading.Event) -> None:
+        self.markers.append(marker)
+
     def _op_wake(self, uid: int) -> None:
         self.world.wake(self._entries[uid].index)
 
@@ -292,6 +300,19 @@ class WorldRuntime:
                 hook(argument)
             except Exception:
                 log.exception('physics hook %r failed', hook)
+
+    def busy(self) -> bool:
+        """Whether a step would change anything: a dynamic body is awake or a kinematic one moves."""
+        _uids, indices, _rows = self._mover_table()
+        if len(indices) == 0:
+            return False
+        world = self.world
+        kind = world.motion_type[indices]
+        if bool(np.any(world.awake[indices] & (kind == 2))):
+            return True
+        moving = np.abs(world.linear_velocity[indices]).sum(axis=1) + np.abs(
+            world.angular_velocity[indices]).sum(axis=1)
+        return bool(np.any((kind == 1) & (moving > 0.0)))
 
     # -- publishing -----------------------------------------------------
     def _mover_table(self) -> tuple[np.ndarray, np.ndarray, dict[int, int]]:
