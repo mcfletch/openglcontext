@@ -508,8 +508,8 @@ pushes it, as a body does in any other physics world.
      - Makes the field the ground of the physics world and each position a
        trunk: a vertical cylinder 24 m tall that stands on the ground under its
        ``x`` and ``z``, whatever its ``y``. Trunks whose radii fall in the same
-       0.05 m share a shape and are made together. The world no longer makes a
-       static body of each shape in the scene, which would give the terrain a
+       0.05 m share a shape and are made together. The world makes no
+       static body of the scene's own shapes, which would give the terrain a
        second surface; the walker's colliders are the ones it is given. Binding
        another field replaces the first.
    * - ``add_collider_source( source )``
