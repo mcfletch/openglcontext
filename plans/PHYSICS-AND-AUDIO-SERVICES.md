@@ -116,6 +116,8 @@ physics.body_for(node)                      # the Body of a node already in the 
 physics.gravity = (0, -9.81, 0)             # a command; may change every frame
 physics.step(dt)                            # inline and standalone: advance by hand
 physics.world                               # inline and standalone only: the live PhysicsWorld
+physics.slot_of(body)                       # inline: the row of the body in physics.world's arrays
+physics.body_at(slot)                       # inline: the Body in a row, or None
 physics.flush()                             # inline and standalone: apply the queued writes now
 physics.index_of(body)                      # inline and standalone: the body's slot in physics.world
 physics.drop_remainder()                    # inline and standalone: forget the time left over from a frame
@@ -765,6 +767,35 @@ Changes.
 - The reset becomes `set_transform` and `set_velocity`.
 - `DemoScene` is deleted. Its other callers (`CollisionYard`, `AudioYard`, the physics
   tutorials) move first, since they are the shortest.
+
+Landed in marble-demo, branch `physics-services`.
+
+- `BoardScene` (`scene.py`) is what a level builds into: each `add_*` makes the node and
+  the body and returns a `Part` (`body`, `transform`, `index`). `Part.index` is the row
+  in `physics.world`'s arrays, from `physics.slot_of`, for the mechanisms that read the
+  arrays of every body at once.
+- `MarbleGame` makes its own inline `Physics` (60 Hz, `maxCatchUp` 0.05,
+  `colliders='explicit'`) and `advance(dt)` calls `frame(dt)`; built with
+  `physics=context.physics` it leaves the stepping to the frame hook. The tilt, gravity
+  and the per-step mechanisms (`BuildResult.before_step`) run in one `before-step`
+  callback. The game's state setter calls `physics.enable(state == PLAYING)`, so a
+  finished run stops the world.
+- The controller registers `hit` and `touching` handlers with `above=-inf` on the
+  marble (a resting contact closes at nothing and is still a contact). Trigger watches
+  register `enter` and `stay` filtered to the marble. Effects are `effect(hit)`.
+- Lever paddles and door leaves are kinematic bodies moved with `set_transform`, since
+  the frame hook writes poses for movers only.
+- Exact reads of the marble stay on `physics.world`: `Body.position` and `velocity`
+  publish the interpolated pose, which is a step behind after whole steps.
+- The autopilot's run of 6 generated boards gives the positions it gave before the move
+  to six decimals on 4; on the other 2 a trigger's effect lands after the step that
+  reports it, not inside it, and the win comes a frame later.
+- Kinematic mechanisms are driven once per step. The old animators set a velocity once
+  per frame, so frames of 1/120 s against the 1/60 s step made a bar or press lunge on
+  alternate steps. `tests/fragments/test_turntable.py` and `test_crusher.py` were
+  measured with those lunges (`tests/chase.py` reproduces them); stepped by the drive
+  the turntable's plain variant leaves a marble on its hub for 35 s at 4 of 5 phases
+  and the pilot crosses the press at every one of 12 phases.
 
 ### glisteel
 
