@@ -41,11 +41,32 @@ class PhysicsViewPlatform:
             body=body)
         self.yaw = yaw
         self.pitch = 0.0
+        #: The service character this platform reads, where the physics service steps it.
+        self.managed: Any = None
+
+    @classmethod
+    def over(cls, character: Any, yaw: float = 0.0) -> 'PhysicsViewPlatform':
+        """A platform over ``character``, one the context's physics service steps.
+
+        It turns the keys' moves into the character's, and reads the camera from
+        its eye. The service steps the character each frame, so :meth:`update`
+        does nothing.
+        """
+        platform = cls.__new__(cls)
+        platform.character = character.controller
+        platform.yaw = yaw
+        platform.pitch = 0.0
+        platform.managed = character
+        return platform
 
     @property
-    def body(self) -> Optional[int]:
-        """The walker's body index, for a collision subscription; None without one."""
-        return self.character.body
+    def body(self) -> Any:
+        """The walker's body, for a collision subscription; None without one.
+
+        The index of the sensor body a platform made with ``body=True`` has, or
+        the stand-in :class:`~OpenGLContext.physics.body.Body` of a service character.
+        """
+        return self.managed.body if self.managed is not None else self.character.body
 
     # -- binding ---------------------------------------------------------
     def bind(self, position: Any) -> Any:
@@ -195,7 +216,8 @@ class PhysicsViewPlatform:
 
     # -- stepping / camera ----------------------------------------------
     def update(self, dt: float) -> None:
-        self.character.update(dt)
+        if self.managed is None:
+            self.character.update(dt)
 
     def camera_position(self) -> tuple[float, ...]:
         return tuple(self.character.eye())

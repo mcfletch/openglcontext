@@ -265,3 +265,45 @@ def test_a_walker_with_a_body_is_heard_entering_a_trigger():
 
 def test_a_walker_has_no_body_unless_asked():
     assert _platform().body is None
+
+
+class TestOverAServiceCharacter:
+    """A platform over a character the physics service steps reads its camera and does not step it."""
+
+    def _service(self):
+        from OpenGLContext.physics.service import Physics
+        from OpenGLContext.physics.settings import PhysicsDefinition
+        from OpenGLContext.scenegraph import surfaces
+        from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+
+        service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0))
+        floor = surfaces.shape(surfaces.block((40, 1, 40)), PhysicalMaterial(), translation=(0, -0.5, 0))
+        service.add_static(floor, proxy='box')
+        return service
+
+    def test_the_camera_is_at_the_characters_eye(self):
+        service = self._service()
+        me = service.add_character(position=(1, 0.05, 2))
+        service.frame(0.5)
+        platform = PhysicsViewPlatform.over(me)
+        assert platform.camera_position() == pytest.approx(tuple(me.eye))
+        assert platform.character is me.controller
+        service.close()
+
+    def test_update_does_not_step_the_character(self):
+        service = self._service()
+        me = service.add_character(position=(0, 0.05, 0))
+        platform = PhysicsViewPlatform.over(me)
+        platform.set_move(1.0, 0.0)
+        before = me.position.copy()
+        platform.update(1.0)
+        assert me.position == pytest.approx(before)
+        service.frame(1 / 60)
+        assert me.position[2] != pytest.approx(before[2]) or me.position[0] != pytest.approx(before[0])
+        service.close()
+
+    def test_body_is_the_characters_stand_in(self):
+        service = self._service()
+        me = service.add_character(position=(0, 0.05, 0))
+        assert PhysicsViewPlatform.over(me).body is me.body
+        service.close()
