@@ -734,6 +734,36 @@ class Physics:
         """Call ``function(*arguments)`` on the worker, once its thread next steps; returns None."""
         self._send_world('post', function, arguments)
 
+    def flush(self) -> None:
+        """Apply the commands waiting for the world now, without stepping it.
+
+        An inline or standalone service applies a write at the start of its next
+        step; code that reads :attr:`world` between steps calls this first to see
+        the writes it has just made. A service whose thread is running applies
+        them on that thread, and this leaves them there.
+        """
+        self.worker.flush()
+
+    def index_of(self, body: Body) -> int:
+        """The slot of ``body`` in the arrays of :attr:`world`, inline mode only.
+
+        Commands waiting for the world are applied first, so a body added a moment
+        ago has its slot. Raises KeyError for a body the world does not hold.
+        """
+        if not isinstance(self.worker, InlineWorker):
+            raise RuntimeError('physics.index_of is for inline mode; the world is on its own thread')
+        self.flush()
+        return int(self.worker.runtime.entry(body.uid).index)
+
+    def drop_remainder(self) -> None:
+        """Forget the time carried over toward the next step.
+
+        An inline or standalone service steps whole ticks and carries what is
+        left of a frame to the next; a game that starts something afresh calls
+        this so the leftover is not simulated into it.
+        """
+        self._send_world('drop_remainder')
+
     # -- the frame ----------------------------------------------------------
     def step(self, dt: float) -> None:
         """Advance the world by ``dt`` seconds by hand, for a service nothing else steps."""

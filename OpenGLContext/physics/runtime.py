@@ -231,6 +231,9 @@ class WorldRuntime:
         self.max_catch_up = float(max_catch_up)
         self.world.fixed_dt = self.step_dt
 
+    def _op_drop_remainder(self, uid: int) -> None:  # noqa: ARG002 world-wide
+        self._accumulator = 0.0
+
     def _op_logging(self, uid: int, on: bool) -> None:  # noqa: ARG002 world-wide
         self.set_logging(on)
 

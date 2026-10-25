@@ -116,6 +116,9 @@ physics.body_for(node)                      # the Body of a node already in the 
 physics.gravity = (0, -9.81, 0)             # a command; may change every frame
 physics.step(dt)                            # inline and standalone: advance by hand
 physics.world                               # inline and standalone only: the live PhysicsWorld
+physics.flush()                             # inline and standalone: apply the queued writes now
+physics.index_of(body)                      # inline and standalone: the body's slot in physics.world
+physics.drop_remainder()                    # inline and standalone: forget the time left over from a frame
 physics.add_character(...)                  # a walker; see Characters and view platforms
 physics.add_collider_source(source)         # colliders that come and go with a focus point
 physics.raycast(origin, direction, ...)     # synchronous queries; see Queries
