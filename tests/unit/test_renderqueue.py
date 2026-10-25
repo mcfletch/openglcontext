@@ -141,3 +141,12 @@ class TestBeforeEachRun:
         queue.call(lambda: None)
         queue.run()
         assert runs == [0, 1]
+
+
+def test_a_function_added_first_runs_before_those_already_added():
+    queue = RenderQueue()
+    order = []
+    queue.before_run(lambda: order.append('late'))
+    queue.before_run(lambda: order.append('early'), first=True)
+    queue.run()
+    assert order == ['early', 'late']

@@ -61,6 +61,7 @@ MovementMode( 'walk', 'OpenGLContext.move.modes.walkMode' )
 MovementMode( 'fly', 'OpenGLContext.move.modes.flyMode' )
 MovementMode( 'swim', 'OpenGLContext.move.modes.swimMode' )
 MovementMode( 'fps', 'OpenGLContext.move.modes.fpsMode' )
+MovementMode( 'follow', 'OpenGLContext.move.thirdperson.followMode' )
 ViewGestures( 'plan', 'OpenGLContext.multiview.navigation.plan_mode' )
 ViewGestures( 'examine', 'OpenGLContext.multiview.navigation.examine_mode' )
 

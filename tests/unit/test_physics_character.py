@@ -198,3 +198,44 @@ def test_a_character_hit_on_the_stand_in_is_a_body_event(inline):
     crate.set_velocity((-6, 0, 0))
     run_for(inline, 0.6)
     assert heard and heard[0].other is crate
+
+
+# -- running along a course ------------------------------------------------------
+
+def straight_course(length=200.0):
+    from OpenGLContext.scenegraph.roadcourse import RoadCourse
+    return RoadCourse(np.array([(0.0, 0.0, 0.0), (0.0, 0.0, -length / 2), (0.0, 0.0, -length)]))
+
+
+def test_a_character_runs_along_a_course_at_the_speed_asked(inline):
+    me = inline.add_character(position=(0, 0.05, 0))
+    run_for(inline, 0.5)
+    me.run_along(straight_course(), speed=8.0)
+    run_for(inline, 2.0)
+    assert me.position[2] == pytest.approx(-16.0, abs=2.0)
+    assert me.position[0] == pytest.approx(0.0, abs=0.1)
+
+
+def test_hop_to_moves_the_character_across_to_a_lane(inline):
+    me = inline.add_character(position=(0, 0.05, 0))
+    me.run_along(straight_course(), speed=6.0)
+    run_for(inline, 1.0)
+    me.hop_to(2.0, over=0.2)
+    run_for(inline, 1.0)
+    assert abs(me.position[0]) == pytest.approx(2.0, abs=0.15)
+
+
+def test_stop_running_along_gives_the_moves_back_to_the_caller(inline):
+    me = inline.add_character(position=(0, 0.05, 0))
+    me.run_along(straight_course(), speed=6.0)
+    run_for(inline, 0.5)
+    me.stop_running_along()
+    me.set_move((0, 0, 0))
+    run_for(inline, 1.0)
+    assert me.velocity[2] == pytest.approx(0.0, abs=0.05)
+
+
+def test_hop_to_without_a_course_is_refused(inline):
+    me = inline.add_character(position=(0, 0.05, 0))
+    with pytest.raises(RuntimeError, match='run_along'):
+        me.hop_to(1.0)

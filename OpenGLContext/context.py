@@ -1241,8 +1241,32 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if service is not None:
             service.frame()
 
+    def follow(self, character: Any, **options: Any) -> Any:
+        """Show ``character`` from behind, and have the movement keys move it.
+
+        The keys of a :class:`~OpenGLContext.move.thirdperson.FollowMode` move the
+        character relative to the camera, whose turn keys swing it round, and the
+        camera follows and keeps out of the scenery. ``distance`` and ``height``
+        place it, ``mode`` is a ``FollowMode`` of your own, and the other options
+        are the settings of :class:`~OpenGLContext.move.followcam.FollowCamera`.
+        Returns the :class:`~OpenGLContext.move.thirdperson.FollowController`.
+        """
+        from OpenGLContext.move.thirdperson import FollowController  # noqa: PLC0415 only a context that follows needs it
+
+        self.unfollow()
+        follower = self.__dict__['_follower'] = FollowController(self, character, **options)
+        follower.start()
+        return follower
+
+    def unfollow(self) -> None:
+        """Stop following a character; the movement keys go back to the navigation."""
+        follower = self.__dict__.pop('_follower', None)
+        if follower is not None:
+            follower.stop()
+
     def closeServices(self) -> None:
         """Stop the physics worker and close the audio, where a context made them."""
+        self.unfollow()
         service = self.__dict__.pop('_physics', None)
         if service is not None:
             service.close()

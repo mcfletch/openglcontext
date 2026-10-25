@@ -26,6 +26,7 @@ from OpenGLContext.physics.handlers import weak_reference
 from OpenGLContext.physics.proxy import Proxy
 
 if TYPE_CHECKING:
+    from OpenGLContext.move.pathmover import PathMover
     from OpenGLContext.physics.body import Body
     from OpenGLContext.physics.events import Collision
     from OpenGLContext.physics.service import Physics
@@ -77,6 +78,10 @@ class Character:
         self.capabilities = capabilities
         #: False once the character has been removed.
         self.alive = True
+        #: Whether :meth:`Physics.frame <OpenGLContext.physics.service.Physics.frame>` steps
+        #: the character. A game that orders the step with its other updates, or
+        #: steps with its own clock, sets this false and calls :meth:`update`.
+        self.framed = True
         centre = np.asarray(feet, dtype='d') + _UP * (capabilities.standHeight / 2.0)
         replica = physics._character_replica()
         #: The stand-in the world sees. Events about the character are events of this body.
@@ -89,6 +94,8 @@ class Character:
         self._knocks: list[np.ndarray] = []
         self._listeners: dict[str, list[Callable[[], Callable[[Any], Any] | None]]] = {}
         self._last_velocity = np.zeros(3)
+        self._path: PathMover | None = None
+        self._path_mode = 'run'
         if self.locomotion is not None:
             self.locomotion.on_footstep(self._footfall)
         self.body.addEventHandler('hit', function=self._struck)
@@ -164,6 +171,37 @@ class Character:
     def set_fly_move(self, direction: Any) -> None:
         """Fly toward ``direction``, vertical part included."""
         self.controller.set_fly_move(direction)
+
+    def run_along(self, course: Any, speed: float | None = None, mode: str = 'run',
+                  lane: float = 0.0) -> None:
+        """Run along ``course``, a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`.
+
+        The character runs at ``speed`` metres a second (its own ``mode`` speed
+        where that is left out) on a lane ``lane`` metres right of the line,
+        steering back to it each frame; height and jumps are still the
+        controller's. :meth:`hop_to` changes lane. The moves it makes replace
+        those of :meth:`set_move` until :meth:`stop_running_along`.
+        """
+        from OpenGLContext.move.pathmover import PathMover  # noqa: PLC0415 only a character on a course needs it
+
+        names = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
+                 'crouch': 'crouchSpeed'}
+        field = names.get(mode, 'runSpeed')
+        if speed is not None:
+            setattr(self.capabilities, field, float(speed))
+        self._path_mode = mode
+        self._path = PathMover(course, float(getattr(self.capabilities, field)), lane=lane)
+
+    def hop_to(self, offset: float, over: float = 0.16) -> None:
+        """Move to the lane ``offset`` metres right of the course, taking ``over`` seconds."""
+        if self._path is None:
+            raise RuntimeError('hop_to changes lane on a course; run_along(course) puts the '
+                               'character on one')
+        self._path.hop_to(offset, over)
+
+    def stop_running_along(self) -> None:
+        """Give the character's moves back to :meth:`set_move`."""
+        self._path = None
 
     def jump(self) -> bool:
         """Leave the ground; False where the character cannot."""
@@ -260,6 +298,8 @@ class Character:
         for knock in self._knocks:
             controller.knockback(knock)
         self._knocks.clear()
+        if self._path is not None:
+            controller.set_move(self._path.update(self.position, dt).direction, self._path_mode)
         controller.update(dt)
         pushing = controller.pushing
         self._place_stand_in(pushing[1] if pushing is not None else controller.velocity)

@@ -62,14 +62,20 @@ class RenderQueue:
         if self._wake is not None:
             self._wake()
 
-    def before_run(self, function: Callable[[], Any]) -> None:
+    def before_run(self, function: Callable[[], Any], first: bool = False) -> None:
         """Have ``function()`` called at the start of every :meth:`run`.
+
+        Functions run in the order they were added, or ahead of the others
+        where ``first`` is true: a frame's input comes before the world it moves.
 
         For work that has to happen on the render thread even when nothing has
         been queued: waiting for a load a recorded session had already finished,
         say.
         """
-        self._before.append(function)
+        if first:
+            self._before.insert(0, function)
+        else:
+            self._before.append(function)
 
     def run(self) -> int:
         """Make the calls queued so far, on this thread; how many were made.
