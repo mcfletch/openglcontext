@@ -11,7 +11,7 @@ default the world advances by exactly one frame's worth of time for each
 frame written. A recording is therefore smooth however long each frame took
 to draw, and the same run records the same way twice.
 
-.. _installing:
+.. _recording-installing:
 
 What it needs
 -------------
@@ -425,7 +425,7 @@ Limits
 
 - Supported encoders - NVIDIA and AMD on Linux, and Intel on Windows; Intel on
   Linux uses the AMD code path and is untested. NVIDIA and AMD on Windows are
-  not supported. See :ref:`installing`.
+  not supported. See :ref:`recording-installing`.
 
 - One GPU per recording - the encoder reads the frame where the renderer left
   it, so the two must be on the same adapter.

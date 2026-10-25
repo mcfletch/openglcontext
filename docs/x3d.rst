@@ -1515,7 +1515,7 @@ without sorting.
 A glTF primitive carrying ``KHR_gaussian_splatting`` is read as the same
 node, by ``Loader``, ``Inline`` and ``oglc-view`` alike, and
 ``OpenGLContext.loaders.gltf.writer`` writes the node back as one; see
-:ref:`gltf-gaussian-splats`. ``OpenGLContext.scenegraph.splatmath`` holds
+:ref:`the glTF page <gltf-gaussian-splats>`. ``OpenGLContext.scenegraph.splatmath`` holds
 the arithmetic with no GL, including ``fit_harmonics``, which fits
 coefficients to a colour that varies with the view, and ``facing``, which
 lays a splat across a surface's normal.

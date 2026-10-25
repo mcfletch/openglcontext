@@ -66,10 +66,10 @@ control them:
        adapts it to the frame rate
    * - ``OPENGLCONTEXT_SHADOW_DISTANCE=metres``
      - how far from the camera directional shadows are made (default 0:
-       as far as the farthest caster); see :ref:`shadows-distance`
+       as far as the farthest caster); see :ref:`the shadow distance <shadows-distance>`
    * - ``OPENGLCONTEXT_SHADOW_FAR_INTERVAL=n``
      - frames between draws of each cascade beyond the nearest (default 1: every
-       frame); see :ref:`shadows-far-interval`
+       frame); see :ref:`drawing the far cascades less often <shadows-far-interval>`
 
 Each variable sets the default of a ``ContextDefinition`` field
 (``shadows``, ``shadowsSoft``, ``shadowCascades``, ``shadowDistance``, ``shadowFarInterval``), which a settings screen
