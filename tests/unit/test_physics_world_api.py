@@ -410,7 +410,8 @@ def test_a_source_may_be_removed(physics):
 
 
 def test_a_source_with_no_focus_follows_the_first_character(physics):
-    me = physics.add_character(position=(30.0, 0.05, 0.0))
+    # Between the stones the source makes, so the character is not pushed out of one.
+    me = physics.add_character(position=(35.0, 0.05, 0.0))
     source = Stones()
     physics.add_collider_source(source)
     physics.frame(0.02)
