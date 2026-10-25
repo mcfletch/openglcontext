@@ -300,3 +300,72 @@ def test_show_proxies_mounts_an_overlay_and_removes_it():
     service.show_proxies(False)
     assert mounted[-1][1] is False and mounted[-1][0] is mounted[0][0]
     service.close()
+
+
+# -- collider sources ------------------------------------------------------------------
+
+class Stones:
+    """A source of stones on a line, made as the focus nears them."""
+
+    def __init__(self):
+        self.updates = []
+        self.have = set()
+        self.proxy = Proxy.box((2.0, 2.0, 2.0))
+
+    def update(self, focus):
+        from OpenGLContext.physics.sources import Changes
+
+        self.updates.append(tuple(focus))
+        x = round(focus[0] / 10.0) * 10.0
+        near = {x - 10.0, x, x + 10.0}
+        added = [pos for pos in sorted(near) if ('stone', pos) not in self.have]
+        gone = [key for key in sorted(self.have) if key[1] not in near]
+        self.have |= {('stone', pos) for pos in added}
+        self.have -= set(gone)
+        return Changes(add=[(('stone', pos), self.proxy, (pos, 1.0, 0.0), None) for pos in added],
+                       remove=gone)
+
+
+def test_a_collider_source_adds_bodies_near_the_focus_and_drops_those_left_behind(physics):
+    source = Stones()
+    where = [0.0, 0.0, 0.0]
+    physics.add_collider_source(source, focus=lambda: where)
+    physics.frame(0.02)
+    assert physics.raycast((0, 10, 0), (0, -1, 0)).distance == pytest.approx(8.0, abs=0.01)
+    assert physics.raycast((30, 10, 0), (0, -1, 0)) is None
+    where[0] = 30.0
+    physics.frame(0.02)
+    assert physics.raycast((30, 10, 0), (0, -1, 0)).distance == pytest.approx(8.0, abs=0.01)
+    assert physics.raycast((0, 10, 0), (0, -1, 0)) is None
+
+
+def test_a_source_is_asked_where_the_focus_is_each_frame(physics):
+    source = Stones()
+    physics.add_collider_source(source, focus=lambda: (1.0, 2.0, 3.0))
+    physics.frame(0.02)
+    physics.frame(0.02)
+    assert source.updates == [(1.0, 2.0, 3.0), (1.0, 2.0, 3.0)]
+
+
+def test_a_source_may_be_removed(physics):
+    source = Stones()
+    handle = physics.add_collider_source(source, focus=lambda: (0.0, 0.0, 0.0))
+    physics.frame(0.02)
+    handle.remove()
+    handle.remove()
+    assert physics.raycast((0, 10, 0), (0, -1, 0)) is None
+    physics.frame(0.02)
+    assert len(source.updates) == 1
+
+
+def test_a_source_with_no_focus_follows_the_first_character(physics):
+    me = physics.add_character(position=(30.0, 0.05, 0.0))
+    source = Stones()
+    physics.add_collider_source(source)
+    physics.frame(0.02)
+    assert source.updates[0][0] == pytest.approx(me.position[0])
+
+
+def test_a_source_with_no_focus_and_no_character_is_refused(physics):
+    with pytest.raises(ValueError, match='focus'):
+        physics.add_collider_source(Stones())

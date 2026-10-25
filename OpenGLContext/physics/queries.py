@@ -43,19 +43,23 @@ class Hit:
 
 
 def _candidates(world: PhysicsWorld, lo: np.ndarray, hi: np.ndarray,
-                skip: Collection[int]) -> list[int]:
-    """Indices of the solid bodies whose box meets ``lo`` to ``hi``, minus ``skip``."""
-    near = ((world.collider_shape >= 0) & np.all(world.aabb_max >= lo, axis=1)
+                skip: Collection[int], triggers: bool = False) -> list[int]:
+    """Indices of the solid bodies, or with ``triggers`` the trigger volumes, whose box meets ``lo`` to ``hi``, minus ``skip``."""
+    shapes = world.trigger_shape if triggers else world.collider_shape
+    near = ((shapes >= 0) & np.all(world.aabb_max >= lo, axis=1)
             & np.all(world.aabb_min <= hi, axis=1))
     return [j for j in np.flatnonzero(near).tolist()
-            if j not in skip and not world.is_sensor(j) and world.handle_of(world.ref(j)) is not None]
+            if j not in skip and (triggers or not world.is_sensor(j))
+            and world.handle_of(world.ref(j)) is not None]
 
 
-def _proxy(world: PhysicsWorld, index: int, cache: dict[int, Any]) -> Any:
+def _proxy(world: PhysicsWorld, index: int, cache: dict[int, Any],
+           triggers: bool = False) -> Any:
     found = cache.get(index)
     if found is None:
-        found = cache[index] = make_proxy(world.shapes[world.collider_shape[index]],
-                                          world.position[index], world.orientation[index])
+        shape = world.trigger_shape[index] if triggers else world.collider_shape[index]
+        found = cache[index] = make_proxy(world.shapes[shape], world.position[index],
+                                          world.orientation[index])
     return found
 
 
@@ -103,12 +107,15 @@ def sweep_sphere(world: PhysicsWorld, origin: Any, direction: Any, distance: flo
 
 
 def overlapping(world: PhysicsWorld, shape: model.Shape, position: Any, orientation: Any,
-                skip: Collection[int] = ()) -> list[int]:
-    """Indices of the solid bodies ``shape`` overlaps when placed at ``position`` and ``orientation``."""
+                skip: Collection[int] = (), triggers: bool = False) -> list[int]:
+    """Indices of the solid bodies, or with ``triggers`` the trigger volumes, ``shape`` overlaps.
+
+    ``shape`` is placed at ``position`` and ``orientation`` (a quaternion).
+    """
     quaternion = np.asarray(orientation, dtype='d')
     centre = np.asarray(position, dtype='d')
     lo, hi = world_aabb(shape, centre, quaternion)
     probe = make_proxy(shape, centre, quaternion)
     cache: dict[int, Any] = {}
-    return [j for j in _candidates(world, lo, hi, skip)
-            if collide(-1, j, probe, _proxy(world, j, cache))]
+    return [j for j in _candidates(world, lo, hi, skip, triggers)
+            if collide(-1, j, probe, _proxy(world, j, cache, triggers))]

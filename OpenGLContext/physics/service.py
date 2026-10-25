@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import collections
 import concurrent.futures
+import dataclasses
 import itertools
 import logging
 import os
@@ -45,6 +46,7 @@ from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
 from OpenGLContext.physics.queries import Hit, overlapping, sweep_sphere
 from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Step
+from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
 from OpenGLContext.scenegraph.physicsbody import quat_to_vrml_rotation, vrml_rotation_to_quat
@@ -119,6 +121,7 @@ class Physics:
         self._specs: dict[int, BodySpec] = {}
         self._replica: Replica | None = None
         self._characters: list[Character] = []
+        self._sources: list[SourceHandle] = []
         self._cooker: concurrent.futures.ThreadPoolExecutor | None = None
         self._cooked_results: queue.SimpleQueue[tuple[Body, BodySpec | None]] = queue.SimpleQueue()
         self._outstanding = 0
@@ -237,7 +240,13 @@ class Physics:
 
     # -- adding bodies --------------------------------------------------
     def add_static(self, node: Any, proxy: Any = None, **options: Any) -> Body:
-        """Make ``node`` a body that never moves and stops what meets it."""
+        """Make ``node`` a body that never moves and stops what meets it.
+
+        ``node`` is None for a body that is only a shape, such as a level cooked
+        elsewhere: ``physics.add_static(None, proxy=Proxy.trimesh(points, indices))``.
+        The other ``add_*`` calls take None the same way, and ``translation=`` and
+        ``rotation=`` place the body.
+        """
         return self._add('static', node, proxy, options)
 
     def add_dynamic(self, node: Any, proxy: Any = None, **options: Any) -> Body:
@@ -275,14 +284,24 @@ class Physics:
         unknown = set(options) - self._OPTIONS
         if unknown:
             raise TypeError('unknown option %s for add_%s' % (', '.join(sorted(unknown)), kind))
-        if options.get('translation') is not None:
-            node.translation = tuple(options['translation'])
-        if options.get('rotation') is not None:
-            node.rotation = tuple(options['rotation'])
-        self._claim(node)
-        shape = self._proxy(node, proxy, kind)
-        position = np.asarray(node.translation, dtype='d')[:3]
-        axis_angle = np.asarray(node.rotation, dtype='d')[:4]
+        if node is None:
+            if not isinstance(proxy, (Proxy, model.Shape)):
+                raise TypeError('a body with no node needs a shape: proxy=Proxy.box(...), '
+                                'Proxy.trimesh(...) or another Proxy constructor')
+            shape = proxy if isinstance(proxy, Proxy) else Proxy(proxy)
+            at, turned = options.get('translation'), options.get('rotation')
+            position = np.asarray(_ZERO3 if at is None else at, dtype='d')[:3]
+            axis_angle = np.asarray((0.0, 0.0, 1.0, 0.0) if turned is None else turned,
+                                    dtype='d')[:4]
+        else:
+            if options.get('translation') is not None:
+                node.translation = tuple(options['translation'])
+            if options.get('rotation') is not None:
+                node.rotation = tuple(options['rotation'])
+            self._claim(node)
+            shape = self._proxy(node, proxy, kind)
+            position = np.asarray(node.translation, dtype='d')[:3]
+            axis_angle = np.asarray(node.rotation, dtype='d')[:4]
         quaternion = tuple(vrml_rotation_to_quat(axis_angle))
         if pose is not None:
             position = np.asarray(pose[0], dtype='d')
@@ -316,7 +335,8 @@ class Physics:
         if sounding:
             self._send_world('logging', True)
         self._bodies[uid] = body
-        self._by_node[node] = body
+        if node is not None:
+            self._by_node[node] = body
         if kind in ('dynamic', 'kinematic'):
             self._movers.append(body)
         if self._enabled and not self._closed:
@@ -464,16 +484,46 @@ class Physics:
         unknown = set(options) - self._OPTIONS
         if unknown:
             raise TypeError('unknown option %s' % ', '.join(sorted(unknown)))
-        uid = next(self._uids)
-        material = self._material(options)
-        spec = BodySpec(uid, kind, proxy, model.Motion(type=model.STATIC), (0.0, 0.0, 0.0),
-                        (0.0, 0.0, 0.0, 1.0), material, int(options.get('collision_filter', -1)))
-        body = Body(self, uid, kind, None, proxy, _ZERO3, (0.0, 0.0, 1.0, 0.0), 0.0)
-        self._bodies[uid] = body
+        body = self._add_placed(kind, proxy, (0.0, 0.0, 0.0), None, self._material(options),
+                                int(options.get('collision_filter', -1)))
         self._by_node[key] = body
+        return body
+
+    def _add_placed(self, kind: str, proxy: Proxy, position: Any, orientation: Any = None,
+                    material: Any = None, collision_filter: int = -1) -> Body:
+        """A static body with no node, standing at ``position`` turned by the quaternion ``orientation``."""
+        uid = next(self._uids)
+        quaternion = (0.0, 0.0, 0.0, 1.0) if orientation is None else tuple(
+            float(v) for v in orientation)
+        place = tuple(float(v) for v in position)
+        spec = BodySpec(uid, kind, proxy, model.Motion(type=model.STATIC), place, quaternion,
+                        material, collision_filter)
+        body = Body(self, uid, kind, None, proxy, np.asarray(place), quat_to_vrml_rotation(quaternion),
+                    0.0)
+        self._bodies[uid] = body
         if self._enabled and not self._closed:
             self._send(Command('add', uid, (spec,), next(self._seq)))
         return body
+
+    def add_collider_source(self, source: Any, focus: Callable[[], Any] | None = None) -> SourceHandle:
+        """Have ``source`` make colliders as ``focus`` nears them and drop them as it leaves.
+
+        ``source.update(focus)`` returns a
+        :class:`~OpenGLContext.physics.sources.Changes`; it is called once a
+        frame with the position of the focus, which is what the callable
+        ``focus`` returns (the first character's feet where it is left out).
+        """
+        if focus is None:
+            if not self._characters:
+                raise ValueError('a collider source needs a focus: pass focus=, or add a character first')
+            watched = self._characters[0]
+
+            def focus() -> Any:
+                return watched.position
+
+        handle = SourceHandle(self, source, focus)
+        self._sources.append(handle)
+        return handle
 
     def add_static_instances(self, proxy: Proxy, positions: Any, **options: Any) -> StaticInstances:
         """Make a static body at each row of ``positions`` (an ``(n, 3)`` array), all of one shape.
@@ -606,6 +656,11 @@ class Physics:
         if bounds is not None:
             fit_to_height(bounds[0], bounds[1], float(capabilities.standHeight)).place(model.group)
 
+    @property
+    def characters(self) -> tuple[Character, ...]:
+        """The characters in the world, in the order they were added."""
+        return tuple(self._characters)
+
     def _character_replica(self) -> Replica:
         """The render thread's copy of the bodies, made on first use; characters step against it."""
         if self._replica is None:
@@ -708,11 +763,21 @@ class Physics:
             self._specs[command.args[0].first] = command.args[0]
         elif command.op == 'remove':
             self._specs.pop(command.uid, None)
+        elif command.op == 'place' and isinstance(self._specs.get(command.uid), BodySpec):
+            self._specs[command.uid] = self._respec_placed(self._specs[command.uid], *command.args)
         elif command.op == 'remove_many':
             self._specs.pop(command.args[0], None)
         if self._replica is not None:
             self._replica.apply(command)
         self.worker.submit(command)
+
+    @staticmethod
+    def _respec_placed(spec: BodySpec, translation: Any, axis_angle: Any) -> BodySpec:
+        """``spec`` with the pose a 'place' command gives, so a replica made later starts there."""
+        position = spec.position if translation is None else tuple(translation)
+        orientation = spec.orientation if axis_angle is None else tuple(
+            vrml_rotation_to_quat(np.asarray(axis_angle, dtype='d')))
+        return dataclasses.replace(spec, position=position, orientation=orientation)
 
     def _send_world(self, op: str, *args: Any) -> None:
         if not self._closed:
@@ -792,10 +857,13 @@ class Physics:
             moving = out.snapshot.awake & (out.snapshot.dynamic | (
                 np.abs(out.snapshot.linear_velocity).sum(axis=1) > 0.0))
             self._awake = bool(moving.any())
+        for handle in list(self._sources):
+            handle.update()
         walking = False
         for character in list(self._characters):
-            character.update(dt)
-            walking = walking or character.busy
+            if character.framed:
+                character.update(dt)
+                walking = walking or character.busy
         if out.events:
             self._dispatch(out.events)
         self._finish_removals()
@@ -921,6 +989,20 @@ class Physics:
                              self._skipped(skip, slot))
         return [None if one is None else self._hit(one, uid_at) for one in found]
 
+    def line_of_sight(self, start: Any, end: Any, skip: Any = None) -> bool:
+        """Whether no body lies between the points ``start`` and ``end``.
+
+        A body past ``end`` does not block the view. ``skip`` is a body, or a list
+        of them, the line passes through.
+        """
+        first = np.asarray(start, dtype='d')
+        second = np.asarray(end, dtype='d')
+        gap = second - first
+        distance = float(np.linalg.norm(gap))
+        if distance < 1e-12:
+            return True
+        return self.raycast(first, gap, distance, skip=skip) is None
+
     def _hit(self, found: Any, uid_at: Callable[[int], int | None]) -> Hit:
         uid = uid_at(int(found.body))
         return Hit(None if uid is None else self._body_of(uid), np.asarray(found.point),
@@ -937,17 +1019,19 @@ class Physics:
                             self._skipped(skip, slot))
 
     def overlap(self, proxy: Any, translation: Any, rotation: Any = None,
-                skip: Any = None) -> list[Body]:
+                skip: Any = None, triggers: bool = False) -> list[Body]:
         """The bodies a shape overlaps when placed at ``translation``, turned by ``rotation``.
 
         ``proxy`` is a :class:`Proxy` or a :class:`~omi_physics.model.Shape`;
-        ``rotation`` is an axis and an angle.
+        ``rotation`` is an axis and an angle. The answer lists solid bodies, or
+        with ``triggers=True`` the trigger volumes the shape is in.
         """
         world, slot, uid_at = self._queryable()
         shape = proxy.shape if isinstance(proxy, Proxy) else proxy
         quaternion = (np.array([0.0, 0.0, 0.0, 1.0]) if rotation is None
                       else vrml_rotation_to_quat(rotation))
-        found = overlapping(world, shape, translation, quaternion, self._skipped(skip, slot))
+        found = overlapping(world, shape, translation, quaternion, self._skipped(skip, slot),
+                            triggers)
         bodies = [self._body_of(uid) for uid in (uid_at(index) for index in found)
                   if uid is not None]
         return [body for body in bodies if body is not None]
