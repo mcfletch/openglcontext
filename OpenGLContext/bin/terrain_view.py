@@ -190,14 +190,20 @@ def make_avatar(physics: Any, surface: Surface | None, extent: float, capabiliti
     """The avatar the viewer walks, as a character in ``physics``, and the landscape it walks on.
 
     ``surface`` is the ground (None for a tileset that has none: nothing is made but the
-    avatar), ``extent`` its side in metres, about the origin. ``trunks(x, z, reach)`` and
+    avatar), ``extent`` its side in metres, about the origin. The physics service is
+    switched on, and stops making a body of each shape in the scene when there is a ground. ``trunks(x, z, reach)`` and
     ``rocks(x, z, reach)`` answer for the trunks and rocks near a point, as a collider source
     does. The avatar's feet are put at ``spawn``, six metres above the surface and falling.
     """
     landscape = None
+    changes: dict[str, Any] = {}
+    if not physics.definition.enabled:
+        changes['enabled'] = True
+    if surface is not None and physics.definition.colliders == 'scene':
+        changes['colliders'] = 'explicit'
+    if changes:
+        physics.set_config(physics.definition.replaced(**changes))
     if surface is not None:
-        if physics.definition.colliders == 'scene':
-            physics.set_config(physics.definition.replaced(colliders='explicit'))
         half = extent / 2.0
         landscape = Landscape(physics, surface, extent=((-half, -half), (half, half)))
     character = physics.add_character(capabilities=capabilities, position=spawn)

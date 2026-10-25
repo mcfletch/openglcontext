@@ -86,11 +86,12 @@ class Host(TerrainWalkMixin, context_module.Context):
 
     telemetry = None
 
-    def __init__(self, position=(0.0, 0.0, 0.0), *, platform=True):
+    def __init__(self, position=(0.0, 0.0, 0.0), *, platform=True, **physics):
         self.redrawRequest = threading.Event()
         self.renderQueue = RenderQueue(wake=self.redrawRequest.set)
-        self.contextDefinition = ContextDefinition(
-            physics=PhysicsDefinition(mode='inline', maxCatchUp=2.0, tickHz=120.0))
+        settings = dict(mode='inline', maxCatchUp=2.0, tickHz=120.0)
+        settings.update(physics)
+        self.contextDefinition = ContextDefinition(physics=PhysicsDefinition(**settings))
         self._captureClock = None
         self.windowsystem = SimpleNamespace(release=lambda: None)
         self.sceneLoader = None

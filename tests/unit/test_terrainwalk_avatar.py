@@ -86,6 +86,17 @@ class TestTheAvatarInTheWorld:
         assert host.physics.raycast((10.0, 50.0, 10.0), (0, -1, 0)).body is host._tw_landscape.body  # noqa: SLF001 the landscape the mix-in keeps, which it does not expose
         assert host.physics.raycast((0.0, 5.5, -3.0), (0, 0, -1)).point[2] == pytest.approx(-5.5, abs=0.02)
 
+    def test_a_context_whose_physics_is_switched_off_walks_all_the_same(self, clock):
+        """Walking is the physics service, so binding a landscape switches it on."""
+        host = clock.host(enabled=False)
+        host.init_walk(flat_field(height=5.0))
+        host.setupPhysics(enable=True)
+        press(host, 'w')
+        run(host, clock, 1.0)
+        assert host.physics.definition.enabled
+        assert eye(host)[1] == pytest.approx(5.0 + host.eye_height, abs=2e-3)
+        assert eye(host)[2] < -1.0
+
     def test_the_scenes_own_shapes_are_not_made_into_bodies(self, clock):
         host = walking(clock)
         assert host.physics.definition.colliders == 'explicit'

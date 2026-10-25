@@ -510,8 +510,9 @@ pushes it, as a body does in any other physics world.
        ``x`` and ``z``, whatever its ``y``. Trunks whose radii fall in the same
        0.05 m share a shape and are made together. The world makes no
        static body of the scene's own shapes, which would give the terrain a
-       second surface; the walker's colliders are the ones it is given. Binding
-       another field replaces the first.
+       second surface; the walker's colliders are the ones it is given. Walking is
+       the physics service's, so the service is switched on. Binding another field
+       replaces the first.
    * - ``add_collider_source( source )``
      - Adds colliders that come and go as the walker moves. ``source( x, z,
        reach )`` answers ``( positions, radii )``, an ``( N, 3 )`` and an

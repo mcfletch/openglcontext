@@ -136,8 +136,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
 
         The field becomes the ground of the context's physics world and each
         collider a cylinder standing on it. The world makes no static body of
-        the scene's own shapes from here on: the walker's colliders are the ones
-        it is given.
+        the scene's own shapes: the walker's colliders are the ones it is given.
+        Walking is the physics service's, so the service is switched on.
 
         :param height_field: a ground, such as a :class:`HeightField`, that
             answers ``sample(x, z)`` for arrays of metres.
@@ -149,8 +149,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         if self._tw_landscape is not None:
             self._tw_landscape.remove()
         physics = self.physics
-        if physics.definition.colliders == 'scene':
-            physics.set_config(physics.definition.replaced(colliders='explicit'))
+        if physics.definition.colliders == 'scene' or not physics.definition.enabled:
+            physics.set_config(physics.definition.replaced(colliders='explicit', enabled=True))
         self._tw_hf = height_field
         self._tw_streams: list[list[Any]] = []
         self._tw_pose: tuple[float, ...] | None = None

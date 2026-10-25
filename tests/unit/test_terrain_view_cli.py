@@ -552,6 +552,18 @@ class TestMakeAvatar:
         assert highest > 0.5
         assert avatar.feet_position()[2] < -8.0
 
+    def test_a_world_whose_physics_is_switched_off_is_switched_on(self):
+        from OpenGLContext.physics.service import Physics
+        from OpenGLContext.physics.settings import PhysicsDefinition
+
+        physics = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0, enabled=False))
+        avatar, _ = T.make_avatar(physics, self.hill(), 400.0, self.capabilities(),
+                                  (0.0, 5.0, 0.0), 0.6)
+        self.settle(physics)
+        assert physics.definition.enabled
+        assert avatar.feet_position()[1] == pytest.approx(5.0, abs=0.01)
+        physics.close()
+
     def test_a_tileset_with_no_ground_makes_the_avatar_alone(self):
         physics = self.physics()
         avatar, landscape = T.make_avatar(physics, None, 400.0, self.capabilities(),
