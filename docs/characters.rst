@@ -187,6 +187,251 @@ An item can declare several points, such as ``socket_grip`` for the hand and
 name it is given, so one file hangs correctly in both places. An item with no
 such point is mounted by its origin.
 
+.. _characters-locomotion:
+
+Clips from a character's state
+------------------------------
+
+A game that moves a character knows its speed, whether it is on the ground and
+what it is doing. ``OpenGLContext.character.locomotion`` turns that into clips
+on a ``CharacterModel``: idle, walk, run and sprint blended by speed, each
+looping clip played at the rate that keeps its feet on the ground, the jump,
+fall, landing, slide, swim and knock-down clips when the character is doing
+those, and a footstep when a foot lands.
+
+.. code-block:: python
+
+   from OpenGLContext.character.locomotion import ClipMap, Locomotion, LocomotionInput
+
+   model = CharacterModel.load('hero.glb')
+   locomotion = Locomotion(ClipMap.ual(), model)
+   locomotion.on_footstep(lambda foot, phase: play_step_sound(foot))
+   ...
+   locomotion.update(LocomotionInput(speed=3.1, vertical_speed=0.0,
+                                     grounded=True), dt)      # once a frame
+   model.update(dt)                                           # after it
+
+``LocomotionInput`` is the record a game fills each frame, from a physics
+character or from its own simulation:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 78
+
+   * - field
+     - meaning
+   * - ``speed``
+     - ground speed in metres a second
+   * - ``vertical_speed``
+     - metres a second, up positive
+   * - ``grounded``
+     - whether something is under the feet
+   * - ``state``
+     - ``'standing'``, ``'crouching'``, ``'sliding'``, ``'airborne'``,
+       ``'down'``, ``'swimming'`` or ``'flying'``
+   * - ``slide_progress``
+     - 0 to 1 through a slide
+   * - ``landing_speed``
+     - the speed it hit the ground at, in the frame it landed; otherwise None
+   * - ``crouching``
+     - whether the character is crouched
+   * - ``dead``
+     - plays the death clip over everything else
+
+``update`` returns a ``Settled``: the ``role`` showing most, the share of the
+pose each clip has (``clips``, summing to 1), the playback rate of each looping
+clip (``rates``), the ``progress`` of a held slide, and the ``footsteps`` of the
+frame. A ``Locomotion`` built with no model settles and raises footsteps and
+plays nothing, which is how a table of states and speeds is tested without a
+window.
+
+Clip maps
+~~~~~~~~~
+
+A ``ClipMap`` says which clip does each role. The roles are ``idle``,
+``walk``, ``run``, ``sprint``, ``crouch_idle``, ``crouch_walk``, ``jump_up``,
+``jump_down``, ``land``, ``slide``, ``fall``, ``swim``, ``down``, ``get_up``
+and ``death``. A role is a clip name, a ``(clip name, speed)`` pair or a
+``ClipSpec``, and a role left out is not played:
+
+.. code-block:: python
+
+   ClipMap(idle='Idle', walk=('Walk', 1.4), run=('Run', 3.8),
+           jump_up='Jump', jump_down='Fall', land='Land')
+   ClipMap(run=ClipSpec('Run', speed=3.8, cycle=0.7,
+                        contacts=(('left', 0.0), ('right', 0.35)), fade=0.1))
+   ClipMap.ual()                  # the Universal Animation Library's names
+   ClipMap.guess(model)           # roles found by the words in the clip names
+
+The speed is metres a second the clip was authored for. ``contacts`` are the
+seconds into the clip at which each foot lands, ``cycle`` the seconds one cycle
+lasts (the model's clip length when left out) and ``fade`` the seconds to fade
+into the role (the map's ``fade``, 0.15, when left out). ``rate_range``, by
+default 0.55 to 2.1, bounds the rate a looping clip plays at.
+
+``ClipMap.ual()`` fills every role the library has a clip for. Its speeds and
+foot contacts were measured with ``oglc-gait``: walk 1.0 m/s, run
+(``Jog_Fwd_Loop``) 5.7 m/s, sprint 8.3 m/s, crouch walk 0.76 m/s and swim
+2.8 m/s, in metres on the library's character. The library has no get-up clip,
+and its ``Roll`` plays for a knock-down.
+
+``ClipMap.guess`` splits each clip name into words at underscores, digits and
+capitals, and gives a role the clip with the words it names and the fewest
+others, so ``Walk_Loop`` fills ``walk`` ahead of ``Walk_Formal_Loop``. A clip
+may fill several roles. The roles nothing matched are in ``unmatched`` and the
+clips no role took are in ``leftover``:
+
+.. code-block:: python
+
+   clips = ClipMap.guess(model)
+   clips.unmatched        # ('down', 'get_up')
+   clips.leftover         # ('Dance_Loop', 'Interact', ...)
+
+``clips.missing(model)`` names the roles whose clip a model lacks. A
+``Locomotion`` leaves those roles out and lists them in ``locomotion.missing``.
+
+Blending by speed
+~~~~~~~~~~~~~~~~~
+
+The idle is underneath at full weight. The map's walk, run and sprint lie over
+it in that order, and a map without one of them uses the next. This is the
+blend ``Gait`` makes, and the share of the run in the mix is
+``wander.run_share(speed, walk_speed, run_speed)``: nothing below the walk's
+speed, everything above the run's, linear between. The same function sets the
+sprint's share between the run's speed and the sprint's.
+
+Below 0.05 m/s a character is standing. From there the walk's share of the idle
+rises with speed and reaches 1 where the rate reaches the bottom of
+``rate_range``, so a slow walk fades out into the idle and is not played in slow
+motion. Each looping clip's rate is the speed over its authored speed, held
+inside ``rate_range``. A clip with no speed in the map is measured with
+``measure_stride`` when the ``Locomotion`` is made, which costs a few
+milliseconds a clip, and takes a default (walk 1.4, run 3.8, sprint 6.0, crouch
+walk 0.9, swim 1.5 m/s) when it plants no foot or the model has no skeleton.
+``Locomotion(clips, model, measure_missing=False)`` skips the measuring.
+``locomotion.speeds`` holds the speeds in use.
+
+The locomotion clips share one phase. Every frame the tracks of the walk, run
+and sprint are set to the same point in their cycles, so the legs of two blended
+clips do not drift apart.
+
+Other roles
+~~~~~~~~~~~
+
+These play on an ``action`` layer over the movement, fading in and out over the
+role's ``fade``. The first that applies is used:
+
+1. ``death`` when ``dead`` is set, and ``down`` while ``state`` is ``'down'``.
+   Leaving ``'down'`` plays ``get_up`` for its length when the map has one.
+2. ``swim`` while swimming, at a rate from the speed. ``fall`` while flying.
+3. ``slide`` while sliding, held at ``slide_progress`` through the clip. The
+   game decides how progress maps to the pose, for instance holding the low
+   pose while the slide lasts and rising over its end.
+4. While airborne, ``jump_up`` when the vertical speed is positive, ``fall``
+   when it is below minus 6 m/s, and otherwise ``jump_down``.
+5. ``land`` for the clip's length (0.35 s if unknown) after a frame with a
+   ``landing_speed``. The clip shows in full at 6 m/s and above, and at a
+   quarter of its weight at 1.5 m/s and below, over the movement beneath.
+
+A crouch eases in and out over ``crouch_idle``'s fade. The ``crouch_walk`` and
+``crouch_idle`` clips replace the standing clips in proportion to how far into
+the crouch the character is.
+
+Footsteps
+~~~~~~~~~
+
+``on_footstep(function)`` registers ``function(foot, phase)``, called with
+``'left'`` or ``'right'`` and the fraction of the cycle at which the foot lands.
+The phase advances at the playback rate of the clip showing most, while the
+character is on the ground and moving, and each landing in the map's
+``contacts`` is raised as the phase passes it, so a long frame raises each one
+that fell in it. Without ``contacts`` the left foot lands at the start of the
+cycle and the right at its half. A clip whose cycle length is unknown raises no
+footsteps.
+
+Actions on a layer
+~~~~~~~~~~~~~~~~~~
+
+``play_action(name, layer='upper')`` plays a clip once over the movement, on a
+layer that moves the joints under the spine, fades the layer out when the clip
+ends, and returns the track. Other layers are made the same way, and ``bones``
+names which joints they move:
+
+.. code-block:: python
+
+   locomotion.play_action('fire')                       # the arms and spine
+   locomotion.play_action('wave', layer='taunt', bones=('rightShoulder',))
+
+It returns None when there is no model or the model has no such clip.
+
+.. _characters-gait-measure:
+
+Measuring a stride
+~~~~~~~~~~~~~~~~~~
+
+``gaitmeasure.measure_stride(model, 'Jog_Fwd_Loop')`` returns the ground speed
+of a clip at rate 1, in the model's units a second. It samples the clip and
+reads the speed of the lower foot relative to the hips while the foot is
+planted, which is the speed of the body. A clip whose hips travel more than
+0.05 m/s carries its own root motion, and the speed is that travel.
+``measure(model, clip)`` returns a ``Stride`` with the speed, the clip's
+length, whether it is root motion and the ``(foot, seconds)`` of each landing.
+The model needs a humanoid skeleton with its hips and feet, with +Y up. The
+measurement poses the model, and leaves it as its other layers pose it.
+
+``oglc-gait`` prints the same for a file:
+
+.. code-block:: bash
+
+   oglc-gait hero.glb
+   oglc-gait hero.glb --clips Walk_Loop,Jog_Fwd_Loop
+   oglc-gait hero.glb --all
+
+It measures the clips that ``ClipMap.guess`` gives to the walk, run, sprint,
+crouch-walk and swim roles, or those named, or every clip with ``--all``. It
+ends with a ``ClipMap(...)`` for the guessed roles carrying the measured
+numbers, then the roles with no clip and the clips with no role.
+
+.. _characters-facing:
+
+Facing, the ground and size
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.character.facing`` holds what a third-person character's node
+needs apart from clips:
+
+.. code-block:: python
+
+   from OpenGLContext.character.facing import Facing, fit_to_height, model_bounds
+
+   facing = Facing(turn_rate=math.radians(540), lean=0.02)
+   ...
+   pose = facing.update(dt, velocity=velocity, normal=ground_normal,
+                        acceleration=acceleration)
+   node.rotation = pose.rotation
+
+   low, high = model_bounds(model)
+   fit_to_height(low, high, 1.8, base=0.0).place(model_node)
+
+``heading`` is radians about +Y from +Z, as in :ref:`the crowd
+<characters-crowds>`. It turns toward ``aim`` (a direction as ``(x, z)`` or
+``(x, y, z)``) when one is given and toward the horizontal part of the velocity
+otherwise, at ``turn_rate`` radians a second (720 degrees a second by default)
+by the shorter way round. A velocity under 0.1 m/s does not turn it. With
+``align_to_ground`` (the default) the body is pitched and rolled so its up lies
+on the ground normal, easing at ``ground_rate`` (10 a second) and never beyond
+``max_tilt`` (50 degrees). ``lean`` is radians of roll per m/s squared of
+acceleration across the heading, limited to ``max_lean`` (25 degrees) and eased
+at ``lean_rate`` (8 a second); the default of 0 leans nothing. The pose is
+``FacingPose(heading, pitch, roll, rotation)``, where ``rotation`` is the
+``Transform`` axis-angle of the three together.
+
+``fit_to_height`` returns the scale that makes a model of the given bounds
+``height`` tall and the translation that puts its lowest point at ``base``: a
+model 3 units tall in a 1.8 m capsule is scaled by 0.6. A model whose bounds
+have no height is left as it is. ``model_bounds`` reads the bounds from the
+model's vertices in the rest pose and returns None when it has no triangles.
+
 .. _characters-crowds:
 
 Crowds
@@ -280,6 +525,9 @@ figure that reaches the edge of the area turns back inwards.
 
 Blending idle, walk and run
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A single character driven by its state uses the same blend through
+:ref:`Locomotion <characters-locomotion>`.
 
 ``Gait`` puts the model's clips in three layers: the idle at the bottom, and
 the walk and the run over it. Each figure has its own weights on the three. A

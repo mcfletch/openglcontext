@@ -509,6 +509,132 @@ the bound keys and anything watching ``navigation.current`` are unaffected. The
 speed sliders on the settings screen widen to match. Modes a host application
 declared itself are not scaled.
 
+.. _navigation-follow:
+
+A camera that follows a target
+------------------------------
+
+``OpenGLContext.move.followcam.FollowCamera`` keeps a ``ViewPlatform`` at an
+offset from a moving target, looking at it. It takes no user input; a game
+sets the target and steps the camera once a frame:
+
+.. code-block:: python
+
+   from OpenGLContext.move.followcam import FollowCamera
+
+   def sweep(origin, direction, distance, radius):
+       hit = level.cast_sphere(origin, direction, distance, radius)   # the game's query
+       return None if hit is None else hit.distance
+
+   camera = FollowCamera(context.platform, offset=(0.0, 3.0, 6.0),
+                         look_ahead=0.3, smooth_time=0.25, sweep=sweep)
+   ...
+   camera.target(character.position, velocity=character.velocity)
+   camera.advance(dt, speed=character.speed)
+   camera.apply()
+
+``advance`` takes the frame's time step and the target's speed. A camera with
+none of the options below follows the target at the offset and does not need
+``advance`` at all.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 78
+
+   * - option
+     - effect
+   * - ``pull_back``, ``pull_back_speed``, ``pull_back_rate``
+     - the offset grows by the fraction ``pull_back`` at ``pull_back_speed``
+       metres a second, easing at ``pull_back_rate`` a second
+   * - ``look_ahead``
+     - seconds of the target's velocity the look point is moved along; the
+       velocity is the one given to ``target``, or the target's movement since
+       the last ``advance``
+   * - ``smooth_time``
+     - seconds the look point takes to glide to the target; critically damped,
+       so it does not overshoot and takes the same time at any frame rate
+   * - ``sweep``, ``avoid_radius``, ``min_arm``, ``arm_ease``
+     - keeps the arm out of the scenery; see below
+   * - ``max_step``
+     - the furthest in metres the camera moves in one frame
+
+``hold()`` freezes the camera on the current target until ``release()``, and
+``snap()`` puts it on the target at once, with no glide and no step limit, for a
+teleport. ``camera.eye`` and ``camera.look`` are the pose of the current frame.
+
+Keeping out of the scenery
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``sweep(origin, direction, distance, radius)`` answers how far a sphere of
+``radius`` metres goes from ``origin`` along the unit ``direction`` before it
+meets something, or None if it goes the whole ``distance``. Each frame the
+camera calls it from the look point toward the place the offset gives. When it
+reports a hit, the arm from the look point to the camera shortens to that
+distance at once, no shorter than ``min_arm`` metres (0.5 by default); when the
+way is clear again the arm grows back at ``arm_ease`` (4 a second, exponential).
+A wall behind the target brings the camera in, and the camera stays
+``avoid_radius`` metres clear of it.
+
+``max_step`` does not hold back a camera the sweep pulls in, since a camera kept
+behind a wall for a few frames would show the inside of it. It limits every
+other movement, so a target that jumps is followed at that many metres a frame.
+
+A rule of the game's own is added with ``constrain``:
+
+.. code-block:: python
+
+   def step_aside(eye, look):
+       return eye + (1.1, 0.0, 0.0), look
+
+   rule = camera.constrain(step_aside)
+   camera.unconstrain(rule)
+
+Rules return the ``(eye, look)`` to use, run in the order added, and run before
+the sweep, so the sweep has the last word on where the camera is.
+
+.. _navigation-pathmover:
+
+Running along a course
+----------------------
+
+A game with a course rather than open land wants a character to follow a line
+and hop between parallel lanes of it. ``OpenGLContext.move.pathmover.PathMover``
+gives, each frame, the horizontal velocity for a character at a given position
+on a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`:
+
+.. code-block:: python
+
+   from OpenGLContext.move.pathmover import PathMover
+
+   mover = PathMover(course, speed=10.0)
+   ...
+   step = mover.update(character.position, dt)
+   character.set_move(step.direction)       # at step.speed metres a second
+   ...
+   mover.hop_to(2.0, over=0.16)             # one lane to the right
+
+``update`` returns a ``PathStep`` with the ``velocity``, its ``direction`` and
+``speed``, the character's ``station`` along the course and its
+``lateral_error``, the metres it is to the right of the centreline. The
+velocity is ``speed`` metres a second along the course's tangent at the
+character's station, plus a sideways velocity: the rate the lane itself is
+moving at during a hop, and a correction of the character's offset from the
+lane. A character pushed off its lane is steered back at ``steer_gain`` (12 a
+second, and never faster than one frame's worth). The velocity has no vertical
+part; the controller keeps the character on the land and does the jumping.
+
+A lane is a distance in metres to the right of the centreline, the right being
+``cross(tangent, up)`` (``+x`` on a course running toward ``-z``). A hop moves
+the lane to a new offset with a smoothstep over ``over`` seconds (0.16 by
+default); a hop begun during another starts from where the first had reached.
+``mover.lane`` is the offset steered toward now and ``mover.hopping`` says
+whether a hop is under way. On a bent course a character at 10 m/s stays within
+5 cm of its lane at 120 steps a second.
+
+An open course ends: past its last point ``mover.finished`` is true and the
+velocity is zero until ``mover.reset()``. A closed course goes round without
+end. ``speed`` may be changed at any time.
+
 Settings screens
 ----------------
 

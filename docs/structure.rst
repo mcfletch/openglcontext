@@ -215,12 +215,13 @@ simulation packages update.
        pulled taut through its portals.
      - :doc:`Navigation meshes <navmesh>`
    * - ``character``
-     - Rigged characters: the rig, the clips, the mixer, attachments and
-       crowds.
+     - Rigged characters: the rig, the clips, the mixer, attachments,
+       crowds, locomotion from a character's state, and stride measurement.
      - :doc:`Rigged characters <characters>`
    * - ``move``
      - The camera and the movement modes (examine, fly, walk, swim and
-       mouse-look), and the walking model under them.
+       mouse-look), the walking model under them, the follow camera and
+       running along a course.
      - :doc:`Movement <navigation>`
    * - ``audio``
      - The scenegraph's audio nodes and the per-context engine that plays

@@ -244,7 +244,7 @@ _define('slide', [('slide',)])
 _define('fall', [('fall',), ('jump', 'loop')], ('land', 'start'))
 _define('swim', [('swim', 'fwd'), ('swim', 'loop'), ('swim',)], ('idle',))
 _define('down', [('knocked',), ('knockdown',), ('down',), ('stumble',)],
-        ('jump',))
+        ('jump', 'aim', 'pistol', 'rifle'))
 _define('get_up', [('get', 'up'), ('getup',), ('stand', 'up'), ('rise',)])
 _define('death', [('death',), ('die',), ('dying',), ('dead',)])
 

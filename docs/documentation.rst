@@ -226,6 +226,10 @@ Installing the package puts these commands on your path:
    ``index.html`` for the set. Use it to spot a foot through the floor or an
    arm through the body without scrubbing through each clip. It renders
    through the ordinary PBR pass. See :doc:`Rigged characters <characters>`.
+``oglc-gait``
+   Measures how fast each locomotion clip of a rigged character carries it, the
+   length of its cycle and the times its feet land, and prints a ``ClipMap`` to
+   paste. See :ref:`Measuring a stride <characters-gait-measure>`.
 ``oglc-test``
    Runs a context's automated tests. The visual-regression suite runs through
    it.
@@ -364,7 +368,8 @@ Geometry and text
 
 - :doc:`Rigged characters <characters>` -- mapping joints to bones, playing
   several clips at once, attaching a weapon to a hand, and
-  ``oglc-character-sheet`` for viewing every clip at once.
+  ``oglc-character-sheet`` for viewing every clip at once, and the clips
+  a character plays chosen from its speed and state.
 
 Worlds and content
 ~~~~~~~~~~~~~~~~~~
@@ -443,7 +448,9 @@ The application around it
 
 - :doc:`Movement Modes & Navigation <navigation>` -- walking, flying,
   swimming and mouse-look as declared nodes: sampled input, key bindings a
-  settings screen can change, modes the world imposes, and pointer capture.
+  settings screen can change, modes the world imposes, and pointer capture,
+  a camera that follows a target and keeps out of walls, and running along a
+  course.
 
 - :doc:`Navigation Mesh <navmesh>` -- the walkable area of a level, generated
   from the collision mesh at load time: walkable cells by slope, an A\*
