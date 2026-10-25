@@ -45,7 +45,7 @@ from OpenGLContext.physics.manager import write_pose
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
 from OpenGLContext.physics.queries import Hit, overlapping, sweep_sphere
 from OpenGLContext.physics.replica import Replica, build
-from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Step
+from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
@@ -106,7 +106,13 @@ class Physics:
         self._by_node: dict[Any, Body] = {}
         self._movers: list[Body] = []
         self._retired: collections.OrderedDict[int, Body] = collections.OrderedDict()
-        self._snapshot: Any = None
+        self._snapshot: Snapshot | None = None
+        #: The body at each row of the snapshot row table ``_posed_rows``, the version
+        #: whose poses the nodes hold, and rows held back for a pending place.
+        self._pose_rows: list[Body | None] = []
+        self._posed_rows: dict[int, int] | None = None
+        self._posed_version: int | None = None
+        self._held: list[int] = []
         self._awake = False
         self._enabled = bool(definition.enabled)
         self._gravity = tuple(float(v) for v in definition.gravity)
@@ -748,6 +754,9 @@ class Physics:
             del self._by_node[body.node]
         if body in self._movers:
             self._movers.remove(body)
+            row = None if self._posed_rows is None else self._posed_rows.get(body.uid)
+            if row is not None:
+                self._pose_rows[row] = None
         self._retired[body.uid] = body
         while len(self._retired) > RETIRED_KEPT:
             self._retired.popitem(last=False)
@@ -923,25 +932,49 @@ class Physics:
                 waiting.append((seq, uid))
         self._gone = waiting
 
-    def _write_poses(self, snapshot: Any) -> bool:
+    def _write_poses(self, snapshot: Snapshot) -> bool:
+        """Write the pose of each body whose row ``snapshot`` lists as changed onto its node.
+
+        A body placed by a command the snapshot does not include yet keeps the
+        pose it was placed at, and is looked at again in the next frame.
+        """
+        table = self._pose_table(snapshot.rows)
+        changed = snapshot.changed_since(self._posed_version)
+        self._posed_version = snapshot.version
+        rows: Iterable[int] = range(len(table)) if changed is None else changed.tolist()
+        held, self._held = self._held, []
+        if held:
+            rows = sorted(set(rows).union(held))
         wrote = False
-        rows = snapshot.rows
-        for body in self._movers:
-            row = rows.get(body.uid)
-            if row is None:
+        position, axis_angle, applied = snapshot.position, snapshot.axis_angle, snapshot.applied_seq
+        for row in rows:
+            body = table[row]
+            if body is None:
                 continue
             placed = body._placed
             if placed is not None:
-                if snapshot.applied_seq < placed[0]:
+                if applied < placed[0]:
+                    self._held.append(row)
                     continue
                 body._placed = None
-            if body.kind == 'dynamic' and not snapshot.awake[row]:
-                continue
             if body.node is None:
                 continue
-            write_pose(body.node, snapshot.position[row], snapshot.axis_angle[row])
+            write_pose(body.node, position[row], axis_angle[row])
             wrote = True
         return wrote
+
+    def _pose_table(self, rows: dict[int, int]) -> list[Body | None]:
+        """The body at each row of a snapshot with row table ``rows``; None for a row of no body here."""
+        if self._posed_rows is not rows:
+            table: list[Body | None] = [None] * len(rows)
+            for body in self._movers:
+                row = rows.get(body.uid)
+                if row is not None:
+                    table[row] = body
+            self._pose_rows, self._posed_rows = table, rows
+            self._posed_version = None
+            self._held = []
+        return self._pose_rows
 
     # -- reading ----------------------------------------------------------
     def _state(self, body: Body) -> _State:

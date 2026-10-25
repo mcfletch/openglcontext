@@ -324,6 +324,9 @@ class ThreadWorker:
         snapshot = self.runtime.snapshot()
         events = self.runtime.take_events()
         with self._lock:
+            waiting = self._published
+            if waiting is not None and waiting.version != self._collected:
+                snapshot = snapshot.following(waiting)
             self._published = snapshot
             self._events.extend(events)
         markers, self.runtime.markers = self.runtime.markers, []

@@ -16,7 +16,7 @@ the same traffic can cross a thread today and a process boundary later.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -88,6 +88,17 @@ class Snapshot:
     do not move and are not listed. ``axis_angle`` is ``(x, y, z, angle)``;
     ``dynamic`` is false for a kinematic body. ``applied_seq`` is the highest
     command sequence the world had applied.
+
+    A body that is awake, or a kinematic body that moves, is published part of
+    the way through the next step (the frame's ``alpha``). Every other body is
+    published at the pose the world holds for it, so a body that has fallen
+    asleep is published exactly where it rests.
+
+    Every row is filled in every snapshot. ``changed`` lists the rows whose
+    values may differ from those of snapshot version ``base``; each other row
+    holds the same values as it did there. A reader that kept version ``base``
+    reads :meth:`changed_since` and visits those rows alone; ``changed`` is None
+    when every row is to be read, as after a body is added or removed.
     """
     version: int
     step: int
@@ -102,6 +113,24 @@ class Snapshot:
     angular_velocity: np.ndarray
     awake: np.ndarray
     dynamic: np.ndarray
+    #: Ascending row numbers that may differ from snapshot ``base``; None for every row.
+    changed: np.ndarray | None = None
+    #: The version ``changed`` is counted from.
+    base: int = -1
+
+    def changed_since(self, version: int | None) -> np.ndarray | None:
+        """The rows to read for a reader whose last snapshot was ``version``; None for every row."""
+        if self.changed is None or version is None or version != self.base:
+            return None
+        return self.changed
+
+    def following(self, earlier: Snapshot) -> Snapshot:
+        """This snapshot with its changes counted from ``earlier.base``, for a reader that skips ``earlier``."""
+        if (self.base != earlier.version or self.changed is None or earlier.changed is None
+                or self.rows is not earlier.rows):
+            return replace(self, changed=None, base=earlier.base)
+        return replace(self, changed=np.union1d(earlier.changed, self.changed),
+                       base=earlier.base)
 
 
 @dataclass(frozen=True, slots=True)

@@ -79,6 +79,9 @@ class WorldRuntime:
         self._retired: collections.OrderedDict[BodyRef, int] = collections.OrderedDict()
         self._events: list[PhysicsEvent] = []
         self._movers: tuple[np.ndarray, np.ndarray, dict[int, int]] | None = None
+        #: The last snapshot made, and which of its rows moved, that the next lists its changes from.
+        self._published: Snapshot | None = None
+        self._published_live = np.zeros(0, dtype=bool)
         self._asleep: dict[int, bool] = {}
         self._watch_state = False
         #: Stand-ins of characters, by id, with the heaviest body each pushes; see ``_filter``.
@@ -449,27 +452,63 @@ class WorldRuntime:
         return self._movers
 
     def snapshot(self, alpha: float = 1.0) -> Snapshot:
-        """The poses and velocities of the bodies that move, ``alpha`` of the way through a step."""
+        """The poses and velocities of the bodies that move, ``alpha`` of the way through a step.
+
+        Only the rows that can differ from the last snapshot are worked out
+        again: the bodies that move now or moved then, and any other whose
+        pose, velocity or sleep the world holds differently from what that
+        snapshot published (a body moved by hand). The rest are copied.
+        """
         uids, indices, rows = self._mover_table()
         world = self.world
         self.version += 1
-        if len(indices) == 0:
-            empty3, empty4 = np.zeros((0, 3)), np.zeros((0, 4))
-            flags = np.zeros(0, dtype=bool)
-            return Snapshot(self.version, world.step_count, world.time, self.applied_seq, rows,
-                            empty3, empty4, empty4, empty3, empty3, flags, flags)
-        position = world.prev_position[indices] * (1.0 - alpha) + world.position[indices] * alpha
-        if alpha >= 1.0:
-            orientation = world.orientation[indices]
+        last = self._published
+        awake = world.awake[indices]
+        dynamic = world.motion_type[indices] == 2
+        linear = world.linear_velocity[indices]
+        angular = world.angular_velocity[indices]
+        live = np.where(dynamic, awake, linear.any(axis=1) | angular.any(axis=1))
+        exact_position = world.position[indices]
+        exact_orientation = world.orientation[indices]
+        if last is None or last.rows is not rows:
+            position, orientation = exact_position, exact_orientation
+            axis_angle = np.zeros((len(indices), 4))
+            changed = None
+            redo = np.flatnonzero(np.ones(len(indices), dtype=bool))
         else:
-            orientation = mathutil.quat_normalize(
-                world.prev_orientation[indices] * (1.0 - alpha)
-                + world.orientation[indices] * alpha)
-        return Snapshot(
-            self.version, world.step_count, world.time, self.applied_seq, rows, position,
-            mathutil.quat_to_axis_angle(orientation), orientation.copy(),
-            world.linear_velocity[indices].copy(), world.angular_velocity[indices].copy(),
-            world.awake[indices].copy(), world.motion_type[indices] == 2)
+            differs = (live | self._published_live
+                       | (exact_position != last.position).any(axis=1)
+                       | (exact_orientation != last.orientation).any(axis=1)
+                       | (linear != last.linear_velocity).any(axis=1)
+                       | (angular != last.angular_velocity).any(axis=1)
+                       | (awake != last.awake))
+            redo = changed = np.flatnonzero(differs)
+            if not len(redo):
+                snapshot = Snapshot(self.version, world.step_count, world.time, self.applied_seq,
+                                    rows, last.position, last.axis_angle, last.orientation,
+                                    last.linear_velocity, last.angular_velocity, last.awake,
+                                    last.dynamic, changed, last.version)
+                self._published = snapshot
+                return snapshot
+            position, orientation = last.position.copy(), last.orientation.copy()
+            axis_angle = last.axis_angle.copy()
+            position[redo] = exact_position[redo]
+            orientation[redo] = exact_orientation[redo]
+        moving = redo[live[redo]]
+        if len(moving) and alpha < 1.0:
+            take = indices[moving]
+            position[moving] = (world.prev_position[take] * (1.0 - alpha)
+                                + world.position[take] * alpha)
+            orientation[moving] = mathutil.quat_normalize(
+                world.prev_orientation[take] * (1.0 - alpha) + world.orientation[take] * alpha)
+        if len(redo):
+            axis_angle[redo] = mathutil.quat_to_axis_angle(orientation[redo])
+        snapshot = Snapshot(self.version, world.step_count, world.time, self.applied_seq, rows,
+                            position, axis_angle, orientation, linear, angular, awake, dynamic,
+                            changed, -1 if last is None else last.version)
+        self._published = snapshot
+        self._published_live = live
+        return snapshot
 
     # -- events ---------------------------------------------------------
     def take_events(self) -> list[PhysicsEvent]:

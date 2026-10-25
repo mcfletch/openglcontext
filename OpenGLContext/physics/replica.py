@@ -41,6 +41,10 @@ class Replica:
         self._query = WorldQuery(self.world)
         self._rows_index: np.ndarray = np.zeros(0, dtype='i8')
         self._rows_take: np.ndarray = np.zeros(0, dtype='i8')
+        #: The replica slot of each snapshot row; -1 for a row of a body not here.
+        self._slot_of_row: np.ndarray = np.zeros(0, dtype='i8')
+        #: The version of the last snapshot synced from, under the row table ``_rows``.
+        self._synced: int | None = None
 
     @property
     def query(self) -> WorldQuery:
@@ -114,22 +118,40 @@ class Replica:
             self._rows = None
 
     def sync(self, snapshot: Snapshot) -> None:
-        """Copy the poses and velocities of the bodies that move from ``snapshot``."""
+        """Copy the poses and velocities of the bodies that move from ``snapshot``.
+
+        After a sync from the snapshot ``snapshot.base``, only the rows it lists
+        as changed are copied and only their boxes refitted.
+        """
         if snapshot.rows is not self._rows:
             ours = [(self._index[uid], row) for uid, row in snapshot.rows.items()
                     if uid in self._index]
             self._rows_index = np.array([index for index, _ in ours], dtype='i8')
             self._rows_take = np.array([row for _, row in ours], dtype='i8')
+            self._slot_of_row = np.full(len(snapshot.rows), -1, dtype='i8')
+            self._slot_of_row[self._rows_take] = self._rows_index
             self._rows = snapshot.rows
-        if len(self._rows_index) == 0:
+            self._synced = None
+        changed = snapshot.changed_since(self._synced)
+        self._synced = snapshot.version
+        if changed is None:
+            into, take = self._rows_index, self._rows_take
+        else:
+            slots = self._slot_of_row[changed]
+            mine = slots >= 0
+            into, take = slots[mine], changed[mine]
+        if len(into) == 0:
             return
-        world, into, take = self.world, self._rows_index, self._rows_take
+        world = self.world
         world.position[into] = snapshot.position[take]
         world.prev_position[into] = snapshot.position[take]
         world.orientation[into] = snapshot.orientation[take]
         world.prev_orientation[into] = snapshot.orientation[take]
         world.linear_velocity[into] = snapshot.linear_velocity[take]
-        world.refit_aabbs()
+        if changed is None:
+            world.refit_aabbs()
+        else:
+            world.refit_aabbs(rows=into)
 
 
 def build(specs: dict[int, Any], snapshot: Any = None) -> Replica:
