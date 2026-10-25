@@ -279,6 +279,9 @@ OpenGLContext/
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
+│   ├── landscape.py  # A landscape as bodies: the ground from a height field,
+│   │                 # trunks standing on it, rocks made near a focus
+│   │                 # -- no GL -- docs/physics.rst#physics-landscape
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
 │   ├── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics

@@ -96,6 +96,9 @@ class Character:
         self._last_velocity = np.zeros(3)
         #: Where the capsule was when the frame began, and the hardest landing since.
         self._marked = self.controller.position.copy()
+        #: The position and velocity the stand-in was last given, so that a character
+        #: that has not moved sends the world nothing.
+        self._stand_in_at: tuple[tuple[float, ...], tuple[float, ...]] | None = None
         self._landed: float | None = None
         self._path: PathMover | None = None
         self._path_mode = 'run'
@@ -375,10 +378,16 @@ class Character:
             physics._audio().play(sound, at=tuple(float(v) for v in feet), gain=0.5)
 
     def _place_stand_in(self, velocity: Any) -> None:
+        """Put the stand-in at the capsule with ``velocity``, unless it is already so."""
         physics, body = self.physics, self.body
-        physics._command('place', body, tuple(float(v) for v in self.controller.position), None)
-        physics._command('velocity', body, tuple(float(v) for v in velocity))
-        if np.any(np.asarray(velocity) != 0.0):
+        here = tuple(float(v) for v in self.controller.position)
+        moving = tuple(float(v) for v in velocity)
+        if (here, moving) == self._stand_in_at:
+            return
+        self._stand_in_at = (here, moving)
+        physics._command('place', body, here, None)
+        physics._command('velocity', body, moving)
+        if any(moving):
             physics._command('wake', body)
 
     def _place_node(self) -> None:

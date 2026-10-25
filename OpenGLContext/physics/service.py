@@ -484,7 +484,9 @@ class Physics:
 
         ``ground`` is any object with ``sample(x, z)``, as a
         :class:`~OpenGLContext.scenegraph.vegetation.grid.Ground` has, so the
-        surface a body meets is the one the terrain node draws. ``extent`` is
+        surface a body meets is the one the terrain node draws. A ground that also
+        has ``normal(x, z)``, an ``(..., 3)`` array of unit normals, is asked for
+        its normals where the height's slope would cost several samples. ``extent`` is
         ``((x_min, z_min), (x_max, z_max))`` or None for land without an edge;
         ``height_range`` is ``(lowest, highest)`` and is found by sampling a
         grid of the extent (or 1000 metres about the origin) when it is not given.
@@ -492,7 +494,8 @@ class Physics:
         appreciably. Options are the material options of :meth:`add_static`.
         """
         low, high = height_range if height_range is not None else _sampled_heights(ground, extent)
-        shape = model.Shape.heightfield(sample=ground.sample, vectorized=True, extent=extent,
+        shape = model.Shape.heightfield(sample=ground.sample, normal=getattr(ground, 'normal', None),
+                                        vectorized=True, extent=extent,
                                         height_range=(float(low), float(high)),
                                         feature=float(feature))
         return self._add_object('static', ground, Proxy(shape), options)

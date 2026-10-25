@@ -68,6 +68,23 @@ def test_a_ground_answers_a_ray(physics):
     assert hit.point[1] == pytest.approx(3.0, abs=0.02)
 
 
+def test_a_ground_that_answers_normals_is_asked_for_them(physics):
+    class Tilted(Slope):
+        asked = 0
+
+        def normal(self, x, z):
+            Tilted.asked += 1
+            shape = np.shape(x) + (3,)
+            out = np.zeros(shape)
+            out[..., 1] = 1.0
+            return out
+
+    physics.add_ground(Tilted(), extent=((-50, -50), (50, 50)))
+    hit = physics.raycast((10, 20, 0), (0, -1, 0))
+    assert hit.normal == pytest.approx((0.0, 1.0, 0.0))
+    assert Tilted.asked > 0
+
+
 def test_a_ground_is_a_static_body_found_by_the_object(physics):
     land = Slope()
     body = physics.add_ground(land, extent=((-50, -50), (50, 50)))
