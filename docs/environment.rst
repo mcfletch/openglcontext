@@ -156,7 +156,7 @@ Lighting and shadows
      - ``1``
      - Frames between draws of each cascade beyond the nearest. ``1`` draws every
        cascade every frame; above ``1`` they are drawn in turn and used again while the
-       slice each serves stays inside it. See :ref:`shadows-far-interval`.
+       slice each serves stays inside it. See :ref:`drawing the far cascades less often <shadows-far-interval>`.
    * - ``OPENGLCONTEXT_MAXIMUM_LIGHTS``
      - integer 0–8
      - ``8``

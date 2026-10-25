@@ -277,6 +277,7 @@ def sphinx_environment() -> dict[str, str]:
 
 def build_html(output: str, builder: str, warnings_are_errors: bool) -> None:
     log.info('Building %s into %s', builder, output)
+    clear_output(output)
     command = [
         sys.executable,
         '-m',
@@ -293,6 +294,26 @@ def build_html(output: str, builder: str, warnings_are_errors: bool) -> None:
     command.extend([DOCS, output])
     subprocess.check_call(command, cwd=HERE, env=sphinx_environment())
     nojekyll(output)
+
+
+def clear_output(output: str) -> None:
+    """Empty ``output`` of the site an earlier build wrote there.
+
+    Sphinx writes over the pages it builds and leaves every other file, so a
+    page whose source has gone would be staged and published from the last
+    build that had it.  The doctrees are kept elsewhere, so the build that
+    follows reads only the sources that changed.  A directory is cleared only
+    where Sphinx's ``.buildinfo`` says a build wrote it; one holding anything
+    else is refused rather than emptied.
+    """
+    if not os.path.isdir(output) or not os.listdir(output):
+        return
+    if not os.path.isfile(os.path.join(output, '.buildinfo')):
+        raise Failed(
+            '%s holds files no build of this site wrote; name an empty '
+            'directory, or one a previous build wrote' % (output,)
+        )
+    shutil.rmtree(output)
 
 
 def nojekyll(directory: str) -> None:

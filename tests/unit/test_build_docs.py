@@ -7,6 +7,7 @@ replaces it.
 """
 import importlib.util
 import locale
+from pathlib import Path
 
 import pytest
 
@@ -59,3 +60,45 @@ class TestTheLocaleSphinxRunsUnder:
         monkeypatch.setattr(build_docs.subprocess, 'check_call', check_call)
         build_docs.build_html(str(tmp_path), 'html', warnings_are_errors=False)
         assert started['env']['LC_ALL'] == build_docs.SPHINX_LOCALE
+
+
+class TestTheOutputOfAnEarlierBuild:
+    """Sphinx writes over the pages it builds and leaves every other file, so a
+    page whose source has gone would otherwise be published from the last build
+    that had it."""
+
+    @pytest.fixture
+    def sphinx(self, build_docs, monkeypatch):
+        """The files in the output directory as Sphinx starts."""
+        found = {}
+
+        def check_call(command, **_kwargs):
+            output = Path(command[-1])
+            found['files'] = sorted(
+                path.relative_to(output).as_posix()
+                for path in (output.rglob('*') if output.is_dir() else ())
+            )
+            output.mkdir(parents=True, exist_ok=True)
+
+        monkeypatch.setattr(build_docs.subprocess, 'check_call', check_call)
+        return found
+
+    def test_a_page_whose_source_has_gone_is_not_kept(self, build_docs, sphinx, tmp_path):
+        (tmp_path / 'tutorials').mkdir()
+        (tmp_path / 'tutorials' / 'shader_1.html').write_text('old', encoding='utf8')
+        (tmp_path / '.buildinfo').write_text('', encoding='utf8')
+        build_docs.build_html(str(tmp_path), 'html', warnings_are_errors=False)
+        assert sphinx['files'] == []
+
+    def test_a_directory_no_build_wrote_is_refused(self, build_docs, sphinx, tmp_path):
+        (tmp_path / 'notes.txt').write_text('mine', encoding='utf8')
+        with pytest.raises(build_docs.Failed, match='no build'):
+            build_docs.build_html(str(tmp_path), 'html', warnings_are_errors=False)
+        assert (tmp_path / 'notes.txt').read_text(encoding='utf8') == 'mine'
+        assert sphinx == {}
+
+    def test_an_empty_or_missing_directory_is_built_into(
+        self, build_docs, sphinx, tmp_path
+    ):
+        build_docs.build_html(str(tmp_path / 'html'), 'html', warnings_are_errors=False)
+        assert sphinx['files'] == []
