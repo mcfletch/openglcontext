@@ -360,9 +360,10 @@ the cell is drawn, and the last 64 cells are kept.
 climb: ``(positions, radii, rims, tops)``, each dome 1.15 rock radii wide, 0.2
 radii high at its edge and 0.75 high at its middle above the ground under the
 rock. Registered with ``add_collider_source`` in place of ``colliders_near``, it
-lets the walker step onto a rock whose surface rises no more than
-``step_height`` (0.5 m) above its feet, stand on it and walk off it, and stops
-the walker at one that rises more.
+lets the walker step onto a rock no taller than its ``step_height`` (0.5 m),
+stand on it and walk off it, and stops the walker at a taller one. The rocks
+within 24 m of the walker are bodies in the context's physics world, so a body
+thrown into the rocks meets them as well.
 ``RockScatter`` is the tile generator underneath, for use with
 ``GeneratedTiles`` or a ``GeneratedTileset`` directly (see
 :ref:`tiles3d-generated`).
