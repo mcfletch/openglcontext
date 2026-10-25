@@ -152,8 +152,12 @@ class Physics:
 
         A world stepped on a thread is reached with :meth:`run`.
         """
+        return self._inline().runtime.world
+
+    def _inline(self) -> InlineWorker:
+        """The worker, where it steps inline; RuntimeError where it has a thread."""
         if isinstance(self.worker, InlineWorker):
-            return self.worker.runtime.world
+            return self.worker
         raise RuntimeError('physics.world is for inline mode; use physics.run(fn) to reach '
                            'the world on its thread')
 
@@ -163,15 +167,13 @@ class Physics:
         Waiting commands are applied first, so a body added a moment ago has
         its row. Raises KeyError for a body the world does not hold.
         """
-        runtime = self.worker.runtime
-        if not isinstance(self.worker, InlineWorker):
-            self.world  # noqa: B018 raises the error that names the inline-only rule
-        self.worker.flush()
-        return int(runtime.entry(body.uid).index)
+        worker = self._inline()
+        worker.flush()
+        return int(worker.runtime.entry(body.uid).index)
 
     def body_at(self, slot: int) -> Body | None:
         """The body in row ``slot`` of the arrays of :attr:`world`, or None for a row no body has."""
-        world = self.world
+        world = self._inline().runtime.world
         if not 0 <= slot < len(world.bodies):
             return None
         uid = world.handle_of(world.ref(slot))

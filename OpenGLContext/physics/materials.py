@@ -87,8 +87,6 @@ class Materials:
         dynamic = dynamic_friction if dynamic_friction is not None else friction
         if static is None or dynamic is None:
             raise ValueError('pair needs friction, or both static_friction and dynamic_friction')
-        self._physics._send_world('material', one.name, one.material)
-        self._physics._send_world('material', other.name, other.material)
         self._physics._send_world('pair_friction', one.name, other.name, float(static), float(dynamic))
 
     def sound_of(self, name: str | None) -> str | None:

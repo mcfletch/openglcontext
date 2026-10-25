@@ -169,6 +169,41 @@ def test_a_material_pair_overrides_the_friction_between_the_two(physics):
     assert list(world.pair_friction.values())[0] == (1.2, 1.2)
 
 
+def test_every_pair_of_a_grid_of_materials_keeps_its_own_friction(physics):
+    grips = {('steel', 'stone'): 0.35, ('steel', 'ice'): 0.03,
+             ('rubber', 'stone'): 0.9, ('rubber', 'ice'): 0.15}
+    for name in ('steel', 'rubber', 'stone', 'ice'):
+        physics.materials.define(name, friction=0.5)
+    for (marble, surface), friction in grips.items():
+        physics.materials.pair(marble, surface, friction=friction)
+    bodies = {name: physics.add_dynamic(ball(at=(3 * n, 3, 0)), material=name)
+              for n, name in enumerate(('steel', 'rubber', 'stone', 'ice'))}
+    physics.worker.flush()
+    world = physics.worker.runtime.world
+
+    def material_of(name):
+        return int(world.collider_material[physics.slot_of(bodies[name])])
+
+    for (marble, surface), friction in grips.items():
+        found = world.pair_friction_for(material_of(marble), material_of(surface))
+        assert found == (friction, friction), (marble, surface)
+
+
+def test_a_body_and_its_slot_in_the_world_name_each_other(physics):
+    first = physics.add_dynamic(ball(), proxy='sphere')
+    second = physics.add_dynamic(ball(at=(3, 3, 0)), proxy='sphere')
+    world = physics.world
+    assert physics.slot_of(first) != physics.slot_of(second)
+    assert world.position[physics.slot_of(second)][0] == pytest.approx(3.0)
+    assert physics.body_at(physics.slot_of(first)) is first
+    assert physics.body_at(physics.slot_of(second)) is second
+
+
+def test_a_slot_with_no_body_names_none(physics):
+    assert physics.body_at(0) is None
+    assert physics.body_at(99) is None
+
+
 def test_materials_are_listed_and_can_be_read_back(physics):
     material = physics.materials.define('mud', friction=0.9, sound='squelch.ogg')
     assert 'mud' in physics.materials.names and 'rubber' in physics.materials.names
