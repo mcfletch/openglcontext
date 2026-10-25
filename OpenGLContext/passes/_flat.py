@@ -1581,6 +1581,7 @@ class FlatPass( _FlatEffectsMixin, VolumePassMixin, LayeringPassMixin, Multiview
             return
         try:
             service.scenery_changed( self.scene, self._pathGeneration )
+            service.zones_changed( self.zones )
         except Exception as err:
             log.warning( "Failure making the scene's colliders: %s", getTraceback( err ) )
 

@@ -28,6 +28,7 @@ from typing import Any
 
 import numpy as np
 from omi_physics import mathutil, model
+from omi_physics.gravity import GravityVolume
 from omi_physics.collisionquery import WorldQuery
 
 from OpenGLContext.events.handoff import Updates
@@ -37,11 +38,12 @@ from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
+from OpenGLContext.physics.materials import Materials
 from OpenGLContext.physics.manager import write_pose
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
 from OpenGLContext.physics.queries import Hit, overlapping, sweep_sphere
 from OpenGLContext.physics.replica import Replica, build
-from OpenGLContext.physics.records import BodySpec, Command, PhysicsEvent, Step
+from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Step
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
 from OpenGLContext.scenegraph.physicsbody import quat_to_vrml_rotation, vrml_rotation_to_quat
@@ -53,6 +55,10 @@ log = logging.getLogger(__name__)
 #: How many removed bodies are still named by events about their last contacts.
 RETIRED_KEPT = 4096
 _ZERO3 = np.zeros(3)
+#: The closing speed, in metres a second, a strike must exceed to make the sound of its material.
+SOUND_SPEED = 1.0
+#: The closing speed that plays a material's sound at full gain.
+SOUND_FULL = 6.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +77,9 @@ class Physics:
     def __init__(self, definition: PhysicsDefinition | None = None, *,
                  wake: Callable[[], Any] | None = None,
                  mark: Callable[..., Any] | None = None,
-                 recording: Callable[[], bool] | None = None) -> None:
+                 recording: Callable[[], bool] | None = None,
+                 audio: Callable[[], Any] | None = None,
+                 mount: Callable[[Any, bool], Any] | None = None) -> None:
         definition = definition if definition is not None else PhysicsDefinition()
         definition.validate()
         self.definition = definition
@@ -79,6 +87,13 @@ class Physics:
         #: ``mark(name, **fields)`` writes to the session journal, when ``recording()`` says one is kept.
         self._mark = mark
         self._recording = recording
+        #: Gives the context's audio, asked only when a material's sound is to be played.
+        self._audio = audio
+        #: ``mount(node, True)`` puts a node in the scene and ``mount(node, False)`` takes it out.
+        self._mount = mount
+        self._overlay: Any = None
+        self._zones_placed: tuple[Any, ...] = ()
+        self.materials = Materials(self)
         #: Scene changes the worker queues for the render thread (``render.set`` and ``render.call``).
         self.render = Updates(wake=wake)
         self.handlers = HandlerTable()
@@ -266,11 +281,17 @@ class Physics:
                 angularDamping=float(self.definition.angularDamping if angular is None else angular))
         mass = float(motion.mass) if dynamic else 0.0
         uid = next(self._uids)
-        spec = BodySpec(uid, kind, shape, motion, tuple(position), quaternion,
-                        self._material(options), int(options.get('collision_filter', -1)))
+        material = self._material(options)
+        named = options.get('material') if isinstance(options.get('material'), str) else None
+        sounding = self.materials.sound_of(named) is not None
+        spec = BodySpec(uid, kind, shape, motion, tuple(position), quaternion, material,
+                        int(options.get('collision_filter', -1)), report=sounding)
         body = Body(self, uid, kind, node, shape, position, axis_angle, mass,
                     motion.linearDamping, motion.angularDamping)
         body.derived = derived
+        body.material = named
+        if sounding:
+            self._send_world('logging', True)
         self._bodies[uid] = body
         self._by_node[node] = body
         if kind in ('dynamic', 'kinematic'):
@@ -291,12 +312,16 @@ class Physics:
                 self.remove(body)
             stack.extend(getattr(current, 'children', None) or ())
 
-    @staticmethod
-    def _material(options: dict[str, Any]) -> Any:
+    def _material(self, options: dict[str, Any]) -> Any:
+        given = options.get('material')
+        if isinstance(given, str):
+            self.materials.get(given)
         friction, restitution = options.get('friction'), options.get('restitution')
         if friction is None and restitution is None:
-            return options.get('material')
-        base = model.MATERIAL_PRESETS.get(options.get('material') or '', model.Material())
+            return given
+        known = self.materials._known.get(given) if isinstance(given, str) else None
+        base = known.material if known is not None else (
+            given if isinstance(given, model.Material) else model.Material())
         return model.Material(
             staticFriction=base.staticFriction if friction is None else float(friction),
             dynamicFriction=base.dynamicFriction if friction is None else float(friction),
@@ -391,6 +416,115 @@ class Physics:
                 self._send(Command('add', body.uid, (spec,), next(self._seq)))
                 for op, args in deferred:
                     self._send(Command(op, body.uid, args, next(self._seq)))
+
+    def add_ground(self, ground: Any, extent: Any = None, height_range: Any = None,
+                   feature: float = 1.0, **options: Any) -> Body:
+        """Make a static body of land that answers a height at each ``(x, z)``.
+
+        ``ground`` is any object with ``sample(x, z)``, as a
+        :class:`~OpenGLContext.scenegraph.vegetation.grid.Ground` has, so the
+        surface a body meets is the one the terrain node draws. ``extent`` is
+        ``((x_min, z_min), (x_max, z_max))`` or None for land without an edge;
+        ``height_range`` is ``(lowest, highest)`` and is found by sampling a
+        grid of the extent (or 1000 metres about the origin) when it is not given.
+        ``feature`` is the horizontal distance over which the land changes
+        appreciably. Options are the material options of :meth:`add_static`.
+        """
+        low, high = height_range if height_range is not None else _sampled_heights(ground, extent)
+        shape = model.Shape.heightfield(sample=ground.sample, vectorized=True, extent=extent,
+                                        height_range=(float(low), float(high)),
+                                        feature=float(feature))
+        return self._add_object('static', ground, Proxy(shape), options)
+
+    def _add_object(self, kind: str, key: Any, proxy: Proxy, options: dict[str, Any]) -> Body:
+        """A body for something that is not a scenegraph node, found by ``key``."""
+        unknown = set(options) - self._OPTIONS
+        if unknown:
+            raise TypeError('unknown option %s' % ', '.join(sorted(unknown)))
+        uid = next(self._uids)
+        material = self._material(options)
+        spec = BodySpec(uid, kind, proxy, model.Motion(type=model.STATIC), (0.0, 0.0, 0.0),
+                        (0.0, 0.0, 0.0, 1.0), material, int(options.get('collision_filter', -1)))
+        body = Body(self, uid, kind, None, proxy, _ZERO3, (0.0, 0.0, 1.0, 0.0), 0.0)
+        self._bodies[uid] = body
+        self._by_node[key] = body
+        if self._enabled and not self._closed:
+            self._send(Command('add', uid, (spec,), next(self._seq)))
+        return body
+
+    def add_static_instances(self, proxy: Proxy, positions: Any, **options: Any) -> StaticInstances:
+        """Make a static body at each row of ``positions`` (an ``(n, 3)`` array), all of one shape.
+
+        For trunks, posts and rocks: the world holds the shape once and the
+        bodies in bulk. The bodies have no handles; the returned set removes
+        them together.
+        """
+        points = np.asarray(positions, dtype='d')
+        if points.ndim != 2 or points.shape[1] != 3 or len(points) == 0:
+            raise ValueError('positions are an (n, 3) array with at least one row, not shape %r'
+                             % (points.shape,))
+        first = next(self._uids)
+        for _ in range(len(points) - 1):
+            next(self._uids)
+        batch = BodyBatch(first, proxy, points, self._material(options),
+                          int(options.get('collision_filter', -1)))
+        if self._enabled and not self._closed:
+            self._send(Command('add_many', 0, (batch,), next(self._seq)))
+        return StaticInstances(self, first, len(points))
+
+    def add_gravity_zone(self, region: Any, gravity: Any = 9.81, toward: Any = None,
+                         priority: int = 0, replace: bool = False, stop: bool = False) -> Any:
+        """Change gravity inside ``region``, a :class:`~OpenGLContext.physics.zones.Box` or ``Sphere``.
+
+        ``gravity`` is an acceleration vector, or a magnitude pointing down, or
+        toward ``toward``, a point, where that is given. A higher ``priority``
+        wins; ``replace`` drops the lower ones instead of adding to them, and
+        ``stop`` ends the counting at this zone. Returns the volume.
+        """
+        values = np.atleast_1d(np.asarray(gravity, dtype='d'))
+        if toward is not None:
+            field = model.Gravity(type=model.POINT, gravity=float(values[0]), center=tuple(toward),
+                                  priority=priority, replace=replace, stop=stop)
+        elif values.size == 3:
+            strength = float(np.linalg.norm(values))
+            direction = (0.0, -1.0, 0.0) if strength == 0.0 else tuple(values / strength)
+            field = model.Gravity(gravity=strength, direction=direction, priority=priority,
+                                  replace=replace, stop=stop)
+        else:
+            field = model.Gravity(gravity=float(values[0]), priority=priority, replace=replace,
+                                  stop=stop)
+        volume = GravityVolume(field, region)
+        self._send_world('gravity_zone', volume)
+        return volume
+
+    def zones_changed(self, placed: Any) -> bool:
+        """Bring the world's zone gravity to the scene's zones, as the render pass places them.
+
+        Returns whether they were other placements than last time.
+        """
+        from OpenGLContext.physics.zones import ZoneRegion, gravity_volumes  # noqa: PLC0415 imports the scenegraph
+        from OpenGLContext.scenegraph.zone import GRAVITY  # noqa: PLC0415 imports the scenegraph
+
+        carrying = tuple(zone for zone in placed if zone.setting(GRAVITY) is not None)
+        if len(carrying) == len(self._zones_placed) and all(
+                one is other for one, other in zip(carrying, self._zones_placed, strict=True)):
+            return False
+        self._zones_placed = carrying
+        self._send_world('gravity_zones', ZoneRegion, gravity_volumes(carrying))
+        return True
+
+    def show_proxies(self, on: bool = True) -> None:
+        """Draw the collision shapes, to see what the world collides with; False takes the drawing out."""
+        from OpenGLContext.physics.debugdraw import PROXIES, PhysicsDebugDraw  # noqa: PLC0415 imports the scenegraph
+
+        if on and self._overlay is None and self._mount is not None:
+            self._overlay = PhysicsDebugDraw(self._character_replica().world, flags=PROXIES)
+            self._overlay.update()
+            self._mount(self._overlay.root, True)
+        elif not on and self._overlay is not None:
+            if self._mount is not None:
+                self._mount(self._overlay.root, False)
+            self._overlay = None
 
     def add_character(self, node: Any = None, capabilities: Any = None,
                       position: Any = (0.0, 0.0, 0.0), gravity: float | None = None) -> Character:
@@ -506,8 +640,12 @@ class Physics:
         """Send ``command`` to the worker and keep the replica, where there is one, in step."""
         if command.op == 'add':
             self._specs[command.uid] = command.args[0]
+        elif command.op == 'add_many':
+            self._specs[command.args[0].first] = command.args[0]
         elif command.op == 'remove':
             self._specs.pop(command.uid, None)
+        elif command.op == 'remove_many':
+            self._specs.pop(command.args[0], None)
         if self._replica is not None:
             self._replica.apply(command)
         self.worker.submit(command)
@@ -554,6 +692,8 @@ class Physics:
             self._snapshot = out.snapshot
             if self._replica is not None:
                 self._replica.sync(out.snapshot)
+                if self._overlay is not None:
+                    self._overlay.update()
             self._write_poses(out.snapshot)
             moving = out.snapshot.awake & (out.snapshot.dynamic | (
                 np.abs(out.snapshot.linear_velocity).sum(axis=1) > 0.0))
@@ -787,6 +927,18 @@ class Physics:
         found = self._bodies.get(uid)
         return found if found is not None else self._retired.get(uid)
 
+    def _strike(self, event: PhysicsEvent) -> None:
+        """Play the sound of a material where a body of it is struck hard enough."""
+        if event.kind != 'contact' or event.phase != 'begin' or event.approach <= SOUND_SPEED:
+            return
+        for uid in (event.a, event.b):
+            body = self._body_of(uid)
+            sound = self.materials.sound_of(getattr(body, 'material', None))
+            if sound is not None and self._audio is not None:
+                self._audio().play(sound, at=tuple(float(v) for v in event.point),
+                                   gain=min(1.0, float(event.approach) / SOUND_FULL))
+                return
+
     def _journal(self, event: PhysicsEvent) -> None:
         """Write ``event`` to the session journal: what happened, to which bodies, and when."""
         name = NAME_OF.get((event.kind, event.phase))
@@ -809,7 +961,10 @@ class Physics:
 
     def _dispatch(self, events: Iterable[PhysicsEvent]) -> None:
         journal = self._mark is not None and self._recording is not None and self._recording()
+        sounds = self._audio is not None and self.materials.has_sounds
         for event in events:
+            if sounds:
+                self._strike(event)
             if journal and (self.handlers.audience(event, physics=False)
                             or self.handlers.audience(event, physics=True)):
                 self._journal(event)
@@ -875,3 +1030,30 @@ def _path_to(root: Any, target: Any) -> list[Any] | None:
             stack.append((child, [*path, child]))
     return None
 
+
+class StaticInstances:
+    """Static bodies made together by :meth:`Physics.add_static_instances`."""
+
+    def __init__(self, physics: Physics, first: int, count: int) -> None:
+        self.physics = physics
+        #: How many bodies there are.
+        self.count = count
+        self._first = first
+        self._alive = True
+
+    def remove(self) -> None:
+        """Take every body out of the world. Removing twice is harmless."""
+        if self._alive:
+            self._alive = False
+            self.physics._send_world('remove_many', self._first, self.count)
+            self.physics._specs.pop(self._first, None)
+
+
+def _sampled_heights(ground: Any, extent: Any, margin: float = 0.2) -> tuple[float, float]:
+    """The lowest and highest height of ``ground`` over ``extent``, from a grid of samples, widened by ``margin``."""
+    (x0, z0), (x1, z1) = extent if extent is not None else ((-500.0, -500.0), (500.0, 500.0))
+    xs, zs = np.meshgrid(np.linspace(x0, x1, 65), np.linspace(z0, z1, 65))
+    heights = np.asarray(ground.sample(xs, zs), dtype='d')
+    low, high = float(heights.min()), float(heights.max())
+    pad = max(high - low, 1.0) * margin
+    return low - pad, high + pad

@@ -24,7 +24,7 @@ from omi_physics import model
 
 from OpenGLContext.physics.proxy import Proxy
 
-__all__ = ['BodySpec', 'Command', 'PhysicsEvent', 'Snapshot', 'Step']
+__all__ = ['BodyBatch', 'BodySpec', 'Command', 'PhysicsEvent', 'Snapshot', 'Step']
 
 
 class Command(NamedTuple):
@@ -60,6 +60,16 @@ class BodySpec:
     collision_filter: int = -1
     report: bool = False
     sensor: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class BodyBatch:
+    """Static bodies ``first`` to ``first + len(positions) - 1``, all of one shape."""
+    first: int
+    proxy: Proxy
+    positions: np.ndarray
+    material: Any = None
+    collision_filter: int = -1
 
 
 @dataclass(frozen=True, slots=True)

@@ -24,7 +24,7 @@ from omi_physics import mathutil, model
 from omi_physics.contactevents import BodyRef, ContactEvent, TriggerEvent, Verdict
 from omi_physics.world import PhysicsWorld
 
-from OpenGLContext.physics.records import BodySpec, Command, PhysicsEvent, Snapshot, Step
+from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.settings import PhysicsDefinition
 
 __all__ = ['WorldRuntime']
@@ -81,6 +81,8 @@ class WorldRuntime:
         self._watch_state = False
         #: Stand-ins of characters, by id, with the heaviest body each pushes; see ``_filter``.
         self.standins: dict[int, float] = {}
+        #: Functions that give a kinematic body its pose at a time, by body id.
+        self.drivers: dict[int, Callable[[float], Any]] = {}
         self._thread = threading.get_ident()
         self.world.set_contact_filter(self._filter)
 
@@ -141,7 +143,25 @@ class WorldRuntime:
         self._entries[spec.uid] = _Entry(spec.uid, index, spec.kind, proxy)
         self._movers = None
 
+    def _op_add_many(self, uid: int, batch: BodyBatch) -> None:  # noqa: ARG002 named by the batch
+        world = self.world
+        shape = self._shapes.get(batch.proxy.uid)
+        if shape is None:
+            shape = self._shapes[batch.proxy.uid] = world.add_shape(batch.proxy.shape)
+        collider = model.Collider(shape=shape, physicsMaterial=self.material_index(batch.material),
+                                  collisionFilter=batch.collision_filter)
+        indices = world.add_bodies(shape, batch.positions, collider=collider)
+        for offset, index in enumerate(indices.tolist()):
+            self._entries[batch.first + offset] = _Entry(batch.first + offset, int(index),
+                                                         'static', batch.proxy)
+
+    def _op_remove_many(self, uid: int, first: int, count: int) -> None:  # noqa: ARG002 named by the range
+        for number in range(first, first + count):
+            if number in self._entries:
+                self._op_remove(number)
+
     def _op_remove(self, uid: int) -> None:
+        self.drivers.pop(uid, None)
         entry = self._entries.pop(uid)
         world = self.world
         ref = world.ref(entry.index)
@@ -255,6 +275,52 @@ class WorldRuntime:
     def _op_settle(self, uid: int, marker: threading.Event) -> None:
         self.markers.append(marker)
 
+    def _op_drive(self, uid: int, function: Callable[[float], Any] | None) -> None:
+        if function is None:
+            self.drivers.pop(uid, None)
+        else:
+            self.drivers[uid] = function
+
+    def _drive(self, step: Step) -> None:
+        """Give each driven kinematic body the velocity that takes it to its pose at the step's end."""
+        world = self.world
+        until = step.time + step.dt
+        for uid, function in list(self.drivers.items()):
+            entry = self._entries.get(uid)
+            if entry is None:
+                continue
+            try:
+                translation, rotation = function(until)
+            except Exception:
+                log.exception('the pose function of body %d failed', uid)
+                continue
+            index = entry.index
+            world.linear_velocity[index] = (np.asarray(translation, dtype='d')
+                                            - world.position[index]) / step.dt
+            if rotation is not None:
+                x, y, z, angle = (float(v) for v in rotation)
+                target = mathutil.quat_from_axis_angle((x, y, z), angle)
+                world.angular_velocity[index] = _turn_between(
+                    world.orientation[index], target) / step.dt
+            world.wake(index)
+
+    def _op_material(self, uid: int, name: str, material: model.Material) -> None:  # noqa: ARG002 world-wide
+        self.define_material(name, material)
+
+    def _op_pair_friction(self, uid: int, first: str, second: str,  # noqa: ARG002 world-wide
+                          static: float, dynamic: float) -> None:
+        self.world.set_pair_friction(self.material_index(first), self.material_index(second),
+                                     static, dynamic)
+
+    def _op_gravity_zone(self, uid: int, volume: Any) -> None:  # noqa: ARG002 world-wide
+        self.world.add_gravity_volume(volume)
+
+    def _op_gravity_zones(self, uid: int, kind: type, volumes: list[Any]) -> None:  # noqa: ARG002 world-wide
+        """Replace the world's volumes whose region is of ``kind`` with ``volumes``."""
+        kept = [volume for volume in self.world.gravity_volumes
+                if not isinstance(getattr(volume, 'region', None), kind)]
+        self.world.gravity_volumes[:] = kept + list(volumes)
+
     def _op_wake(self, uid: int) -> None:
         self.world.wake(self._entries[uid].index)
 
@@ -326,6 +392,8 @@ class WorldRuntime:
         """Run one fixed step, with its hooks, and collect the events it made."""
         world = self.world
         step = Step(self.step_dt, world.step_count, world.time)
+        if self.drivers:
+            self._drive(step)
         self._run_hooks(self.before_step, step)
         world.step(self.step_dt)
         made = self._collect_events()
@@ -443,3 +511,21 @@ class WorldRuntime:
                     self.world.position[index].copy(), _ZERO3, 0.0, 0.0, 0.0, 0.0, 0.0,
                     step.index, self.world.time))
         return made
+
+
+def _turn_between(current: np.ndarray, target: np.ndarray) -> np.ndarray:
+    """The spin, about the world axes, that turns the quaternion ``current`` into ``target``, in radians."""
+    x1, y1, z1, w1 = (float(v) for v in current)
+    x2, y2, z2, w2 = (float(v) for v in target)
+    # target * conjugate(current)
+    x = w2 * -x1 + x2 * w1 + y2 * -z1 - z2 * -y1
+    y = w2 * -y1 - x2 * -z1 + y2 * w1 + z2 * -x1
+    z = w2 * -z1 + x2 * -y1 - y2 * -x1 + z2 * w1
+    w = w2 * w1 - x2 * -x1 - y2 * -y1 - z2 * -z1
+    if w < 0.0:
+        x, y, z, w = -x, -y, -z, -w
+    sine = (x * x + y * y + z * z) ** 0.5
+    if sine < 1e-12:
+        return np.zeros(3)
+    angle = 2.0 * np.arctan2(sine, w)
+    return np.array([x, y, z]) / sine * angle

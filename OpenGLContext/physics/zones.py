@@ -17,14 +17,14 @@ from typing import Any
 
 import numpy as np
 from omi_physics import model
-from omi_physics.gravity import GravityVolume
+from omi_physics.gravity import BoxRegion, GravityVolume, SphereRegion
 
 from OpenGLContext.scenegraph.zone import (
     GRAVITY, PlacedZone, Zone, ZoneGravity, placed_zones,
 )
 from OpenGLContext.scenegraph.zones import PlacedShape
 
-__all__ = ['ZoneRegion', 'GravityZones', 'gravity_volumes', 'scene_zones']
+__all__ = ['Box', 'Sphere', 'ZoneRegion', 'GravityZones', 'gravity_volumes', 'scene_zones']
 
 
 class ZoneRegion:
@@ -114,3 +114,17 @@ class GravityZones:
                 if not isinstance(getattr(volume, 'region', None), ZoneRegion)]
         self.world.gravity_volumes[:] = kept + gravity_volumes(placed)
         return True
+
+
+class Box(BoxRegion):
+    """A box-shaped gravity region: every point within half of ``size`` of ``center``."""
+
+    def __init__(self, center: Any = (0.0, 0.0, 0.0), size: Any = (1.0, 1.0, 1.0)) -> None:
+        super().__init__(center, 0.5 * np.asarray(size, dtype='d'))
+
+
+class Sphere(SphereRegion):
+    """A ball-shaped gravity region: every point within ``radius`` of ``center``."""
+
+    def __init__(self, center: Any = (0.0, 0.0, 0.0), radius: float = 1.0) -> None:
+        super().__init__(center, radius)

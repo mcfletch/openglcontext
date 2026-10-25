@@ -42,6 +42,8 @@ class Body:
         #: Whether the service made this body from a shape of the scene, rather than
         #: the application adding it.
         self.derived = False
+        #: The name of the body's material, or None for the world's default.
+        self.material: str | None = None
         self._pending = False
         #: Writes made before the body was in the world, sent when it is.
         self._deferred: list[tuple[str, tuple[Any, ...]]] = []
@@ -149,6 +151,25 @@ class Body:
     def angular_damping(self, value: float) -> None:
         self._angular_damping = float(value)
         self._send('damping', None, float(value))
+
+    def drive(self, pose: Callable[[float], Any]) -> None:
+        """Move this kinematic body by ``pose(time)``, called at the end of each step.
+
+        ``pose`` returns ``(translation, rotation)``, the rotation an axis and an
+        angle or None to leave it as it is, for the time in seconds on the
+        world's clock. The body is given the velocity that takes it there, so a
+        body resting on it is carried and a strike against it has the right
+        closing speed. ``pose`` must be marked
+        :func:`~OpenGLContext.physics.callbacks.physics_callback`; it is held
+        for as long as the body lives.
+        """
+        from OpenGLContext.physics.callbacks import is_physics_callback  # noqa: PLC0415 only a driven body needs it
+
+        if self.kind != 'kinematic':
+            raise ValueError('only a kinematic body can be driven, not a %s one' % self.kind)
+        if not is_physics_callback(pose):
+            raise ValueError('a pose function runs inside the step; mark it with @physics_callback')
+        self._send('drive', pose)
 
     def wake(self) -> None:
         """Wake the body if the world has put it to sleep."""

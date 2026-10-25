@@ -1185,12 +1185,23 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             definition = definition.replaced(mode='inline')
         request = getattr(self, 'redrawRequest', None)
         service = Physics(definition, wake=None if request is None else request.set,
-                          mark=self.mark, recording=lambda: self.telemetry is not None)
+                          mark=self.mark, recording=lambda: self.telemetry is not None,
+                          audio=lambda: self.audio, mount=self._mountOverlay)
         self.__dict__['_physicsSteps'] = FrameStep(longest=float(definition.maxCatchUp))
         queue = getattr(self, 'renderQueue', None)
         if queue is not None:
             queue.before_run(self._framePhysics)
         return service
+
+    def _mountOverlay(self, node: Any, on: bool) -> None:
+        """Put ``node`` into the scene this context draws, or take it out."""
+        scene = self.getSceneGraph()
+        if scene is None:
+            return
+        if on:
+            scene.children.append(node)
+        elif node in scene.children:
+            scene.children.remove(node)
 
     def _framePhysics(self) -> None:
         """Give the physics service its share of the frame, before the frame is drawn."""

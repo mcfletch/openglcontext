@@ -69,6 +69,15 @@ class Proxy:
         """A static triangle mesh from vertices and ``(t, 3)`` triangle indices."""
         return cls(model.Shape.trimesh(points, indices))
 
+    @classmethod
+    def heightfield(cls, heights: Any = None, origin: Iterable[float] = (0.0, 0.0, 0.0),
+                    spacing: Any = 1.0, **named: Any) -> Proxy:
+        """Static ground that answers a height at each ``(x, z)``: a grid of ``heights``, or ``sample=`` a function.
+
+        The arguments are those of :meth:`omi_physics.model.Shape.heightfield`.
+        """
+        return cls(model.Shape.heightfield(heights, tuple(origin), spacing, **named))
+
     # -- from what is drawn ---------------------------------------------
     @classmethod
     def from_node(cls, node: Any, strategy: str = 'auto', dynamic: bool = True) -> Proxy:

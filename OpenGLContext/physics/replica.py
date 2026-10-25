@@ -20,7 +20,7 @@ from omi_physics import mathutil, model
 from omi_physics.collisionquery import WorldQuery
 from omi_physics.world import PhysicsWorld
 
-from OpenGLContext.physics.records import BodySpec, Command, Snapshot
+from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, Snapshot
 
 __all__ = ['KINEMATIC_MASS', 'Replica']
 
@@ -63,6 +63,11 @@ class Replica:
         """Mirror a command that changes which bodies there are or where they stand."""
         if command.op == 'add':
             self.add(command.args[0])
+        elif command.op == 'add_many':
+            self.add_many(command.args[0])
+        elif command.op == 'remove_many':
+            for number in range(command.args[0], command.args[0] + command.args[1]):
+                self.remove(number)
         elif command.op == 'remove':
             self.remove(command.uid)
         elif command.op == 'velocity' and command.uid in self._index:
@@ -91,6 +96,16 @@ class Replica:
             handle=spec.uid)
         self._rows = None
 
+    def add_many(self, batch: BodyBatch) -> None:
+        """Make the static bodies of ``batch``."""
+        world = self.world
+        shape = self._shapes.get(batch.proxy.uid)
+        if shape is None:
+            shape = self._shapes[batch.proxy.uid] = world.add_shape(batch.proxy.shape)
+        indices = world.add_bodies(shape, batch.positions, collider=model.Collider(shape=shape))
+        for offset, index in enumerate(indices.tolist()):
+            self._index[batch.first + offset] = int(index)
+
     def remove(self, uid: int) -> None:
         """Take body ``uid`` out."""
         index = self._index.pop(uid, None)
@@ -117,11 +132,15 @@ class Replica:
         world.refit_aabbs()
 
 
-def build(specs: dict[int, BodySpec], snapshot: Any = None) -> Replica:
+def build(specs: dict[int, Any], snapshot: Any = None) -> Replica:
     """A replica holding the bodies of ``specs``, placed from ``snapshot`` where it has them."""
     replica = Replica()
     for uid in sorted(specs):
-        replica.add(specs[uid])
+        spec = specs[uid]
+        if isinstance(spec, BodyBatch):
+            replica.add_many(spec)
+        else:
+            replica.add(spec)
     if snapshot is not None:
         replica.sync(snapshot)
     return replica
