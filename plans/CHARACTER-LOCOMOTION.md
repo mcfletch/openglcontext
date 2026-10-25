@@ -1,8 +1,30 @@
 # A character runs across a landscape
 
-Status: **Proposed**, 2026-10-25. Nothing is built. This plan builds on the characters of
-[PHYSICS-AND-AUDIO-SERVICES.md](PHYSICS-AND-AUDIO-SERVICES.md) and is the engine side of
-moving hill-runner onto the engine's physics.
+Status: **L0 to L6 built; L7 in progress**, branch `physics-services`. This plan builds on the
+characters of [PHYSICS-AND-AUDIO-SERVICES.md](PHYSICS-AND-AUDIO-SERVICES.md) and is the engine side
+of moving hill-runner onto the engine's physics.
+
+What landed:
+
+- L0, D2. The controller integrates gravity exactly (`omi_physics` `492478c`).
+- L1, D1. `add_ground(land)` over any `Ground`, with the optional `normal(x, z)`.
+- L2, D3. `slide`, `knock_down`, `get_up`, `state`, `landed`, a slide that steers and ends, and a
+  jump that follows the slope.
+- L3, D4 and D5. `ClipMap` (`ual()` and `guess`), `Locomotion`, `measure_stride`, `oglc-gait`.
+- L4, D6 and D7. `Facing`, `fit_to_height`, footsteps through `footstep` events and a material's
+  `footstep=`; tutorials 1, 3 and 4 are `tests/tutorials/character/character_run.py`,
+  `character_jump.py` and `character_footsteps.py`.
+- L5, D8 and D9. `FollowCamera` look-ahead, damping and the obstacle sweep; `FollowMode` and
+  `Context.follow`.
+- L6, D10. `Character.run_along`, `hop_to` and `PathMover`.
+- Docs: `docs/characters.rst`, `docs/navigation.rst`, `docs/physics.rst`.
+
+Not done:
+
+- D1's `ceiling=` and D11, surfaces overhead: the ground is a single-valued height.
+- Tutorials 2 (a different animation set), 5 (a camera that stays out of walls) and 6 (running along
+  a trail).
+- L7. hill-runner's steps 2 to 4 and twig-bb's switch to `ClipMap` are work in those projects.
 
 A developer who says "this character should run across this landscape with this
 animation" gets that from the engine in a few lines. Today each game that does it writes

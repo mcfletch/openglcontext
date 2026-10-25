@@ -1,7 +1,50 @@
 # Physics and audio as engine services
 
-Status: **Proposed**, 2026-10-25. Nothing is built. The API below is for the maintainer to
-accept, change or reject before phase 1.
+Status: **Phases 1 to 6 built; phase 7 in progress**, branch `physics-services`. The record is
+`git log` on that branch (`PHYSICS`, `AUDIO`, `EVENTS`, `CONTEXT`, `MOVE`, `CHARACTER`,
+`DEMOS`, `TUTORIALS` and `DOCS` commits) and the `omi_physics` branch of the same name.
+
+What landed:
+
+- Phase 1 and 2. `Physics`, `Body`, `Character`, the inline and thread workers, `PhysicsDefinition`,
+  `enable`, `set_config`, `run`, `post`, `gravity`, `drive`, `world`, `slot_of`, `flush`,
+  `drop_remainder`; events through `addEventHandler` and the context's event system, journalled and
+  compared on replay; `physics_callback`, `before-step`, `after-step`, `render.set`, `render.call`.
+- Phase 3. Scenery as static bodies, glTF OMI bodies on mount, `body_for` and `bodies_in`, collider
+  sources and `add_static_instances`, bodies made from a shape alone, `line_of_sight`.
+- Phase 4. Queries (`raycast`, `raycast_many`, `sweep_sphere`, `overlap`) on the render thread's copy
+  of the bodies, characters stepped by the frame, push and knockback between characters and bodies.
+  The copy is a `Replica` world kept in step with each published snapshot; the immutable versioned
+  collision view the design named is not built.
+- Phase 5. `Proxy`, `cook`, `show_proxies`, materials and pair friction, gravity zones, `add_ground`
+  over a sampled height field; tutorials 3 to 5.
+- Phase 6. `Audio`, `Voice`, thread-safe `play`, `RecordingAudio`, material sounds; tutorial 6.
+- Phase 7, so far. `CollisionYard`, `AudioYard`, the older physics tutorials and the cannon game
+  (`using_physics.py`) run on the service, and `AudioYard._collide` is gone. twig-bb moved
+  (`3a75d76d`); the terrain walker is a character in the context's world.
+- Tutorials. The stairs series is `tests/tutorials/physics/physics_stairs*.py`, each run by
+  `tests/unit/test_physics_tutorials.py` on the fixed clock; the pages in `docs/` are rewritten
+  around them.
+
+Found while moving the tutorials, in `omi_physics`: a crouched character could not stand on a
+slope (fixed, `STAND_CLEARANCE`); a static body moved each step left the bodies that move with stale
+boxes, so a ball fell through the floor (fixed, `refit_aabbs`). Open: a box resting on a static
+trimesh slope slides whatever its friction, because `box_triangle_batch` makes one contact point
+for each triangle at the centre of the box, which has no restoring torque; a ramp is given
+`proxy='box'` until the box and the triangles have a contact manifold.
+
+Not done:
+
+- Phase 0, the numbers for 1,000 and 5,000 bodies inline against thread.
+- The concurrency stress test of phase 4, and the same-scenario test between `inline` and `thread`.
+- `Proxy.heightfield` ceilings (`add_ground(ceiling=)`) and a collider for a bored tunnel.
+- `mode='process'` (phase 8) stays deferred.
+- `PhysicsDefinition` as an X3D extension node.
+- The migrations of marble-demo, glisteel, the forest and hill-runner's physics belong to the work
+  in those projects.
+- Deleting `DemoScene`, `PhysicsManager`, `CollisionEvents`, `ThreadedPhysicsManager` and
+  `PhysicsWalkMixin`, which waits for those migrations. `OpenGLContext/bin/terrain_view.py` imports
+  `disable_vsync` from `physics/demo.py`, and the function moves before that module goes.
 
 Every physics demo builds its own wrapper around the simulation (`CollisionYard`,
 `AudioYard`, `DemoScene`), steps it from `OnIdle`, drains its collisions and plays
