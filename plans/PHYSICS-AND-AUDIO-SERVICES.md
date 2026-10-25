@@ -44,8 +44,9 @@ plan generalises.
 2. Geometry in the scene is static scenery. One call makes an object dynamic.
 3. Changing the world is a method call from any thread. No lock appears in user code.
 4. Collisions, entries and sleeps are events. A handler chooses which thread runs it.
-5. The same program runs with the simulation inline, on a thread, or in another
-   process.
+5. The same program runs with the simulation inline or on a thread. Commands and events
+   are plain data, so a child process can be added later without changing application
+   code.
 6. A scene with nothing awake costs nothing: no thread ticking, no frame requested.
 7. `audio.play(...)` works from any thread and needs nothing pumped.
 
@@ -54,12 +55,12 @@ Not in this plan: changes to the solver or the OMI data model, networking, rollb
 ## Design
 
 A context hosts services. Each service has an inbox that any thread writes
-commands to, a worker that owns its state (a thread, a process, or the frame hook
+commands to, a worker that owns its state (a thread, or the frame hook
 itself), and an outbox the render thread drains once a frame, before `OnIdle` and
 before anything is drawn.
 
 ```text
-any thread                      worker (inline | thread | process)
+any thread                      worker (inline | thread)
 ----------                      ----------------------------------
 body.apply_impulse(...)  --->   inbox: plain-data commands
                                 applied at the start of the next tick
@@ -75,7 +76,7 @@ The frame hook is one function registered with `RenderQueue.before_run`
 (`events/renderqueue.py`), which the main loop already runs at that point. Nothing
 new is added to the loop.
 
-Four rules keep the three transports interchangeable:
+Four rules keep the transports interchangeable, the two built now and a process later:
 
 - Only the worker touches the world. `with_world()` stays inside the worker.
 - Everything that crosses is plain data: integer ids, floats, NumPy arrays. A body
@@ -125,7 +126,7 @@ same node at run time.
 | field | type | default | meaning |
 |---|---|---|---|
 | `enabled` | SFBool | true (`OPENGLCONTEXT_PHYSICS`) | false: no worker, no colliders, bodies are inert |
-| `mode` | SFString | `thread` | `thread`, `inline` or `process` |
+| `mode` | SFString | `thread` | `thread` or `inline` |
 | `tickHz` | SFFloat | 120 | simulation steps per second |
 | `gravity` | SFVec3f | 0 -9.81 0 | m/s squared, global |
 | `colliders` | SFString | `scene` | `scene`: shapes under `sg` are static bodies; `explicit`: only `add_static`; `none` |
@@ -347,8 +348,8 @@ physics.run(lambda world: world.add_joint(hinge))
 
 `run` calls the function with the raw `omi_physics.PhysicsWorld` on the worker, at
 the start of a tick, and returns a future. It covers joints, custom contact filters
-and anything the service has not named. With `mode='process'` the function must be
-an importable `'module:function'` string, because a closure cannot cross the boundary.
+and anything the service has not named. A later process mode would need an importable `'module:function'` string, because a
+closure cannot cross the boundary.
 
 ### Queries
 
@@ -505,9 +506,11 @@ ContextDefinition(physics=PhysicsDefinition(enabled=False))   # not at all
 | a world setting | a field on `PhysicsDefinition` |
 | something the service lacks | `physics.run(fn)` against the raw world |
 
-## Process mode
+## Process mode (deferred)
 
-`mode='process'` runs the worker in a child process that imports `omi_physics` and
+Not part of the phases below until a game needs it. The rules in Design (plain-data
+commands and events, ids with generations, no shared world) keep it possible without
+changing the API. `mode='process'` would run the worker in a child process that imports `omi_physics` and
 nothing else: no GL, no scenegraph. The protocol is the one the thread uses.
 
 - Commands and events travel on a pipe as tuples of numbers, ids and arrays.
@@ -526,7 +529,7 @@ The second does not excuse the crash. The core-dump rule in the workspace
 
 Phase 0 measures the first reason before any process code is written. If a thread
 holds 60 frames a second with 5,000 bodies on the GIL build, process mode waits for
-a game that needs it.
+a game that needs it, and the node does not accept `mode='process'` until then.
 
 ## Where the code goes
 
@@ -535,7 +538,7 @@ a game that needs it.
 | `events/handoff.py` | `Inbox` (any thread to a worker) and `Updates` (worker to render thread, coalesced); no GL, shared by physics and audio |
 | `physics/service.py` | `Physics`, the facade `context.physics` returns |
 | `physics/body.py` | `Body` and the command records it enqueues |
-| `physics/worker.py` | the `Worker` protocol and its `Inline`, `Thread` and `Process` forms, built on the existing `PhysicsManager` and `ThreadedSimulation` |
+| `physics/worker.py` | the `Worker` protocol and its `Inline` and `Thread` forms, built on the existing `PhysicsManager` and `ThreadedSimulation` |
 | `physics/colliders.py` | scenery to static bodies: the rules, the cooking queue |
 | `physics/settings.py` | `PhysicsDefinition`, beside `audio/settings.py` |
 | `audio/manager.py` | `Audio`, `Voice`, and the pending-call list the frame hook drains |
@@ -583,7 +586,7 @@ Changes below the engine, in `omi_physics`:
 | 4 | `Proxy`, `cook`, `show_proxies`, materials, pair rules, gravity zones; tutorials 3 to 5 | tutorials pass |
 | 5 | `Audio`, `Voice`, thread-safe `play`, material sounds; tutorial 6 | `AudioYard._collide` deleted |
 | 6 | Migrate `CollisionYard`, `AudioYard`, `DemoScene`, the marble, twig-bb and glisteel callers; delete `DemoScene` and the public `ThreadedPhysicsManager` | no caller of `manager.advance` outside the worker |
-| 7 | `mode='process'`, only if phase 0 shows the need | the same tests pass in all three modes |
+| 7 | Deferred: `mode='process'`, taken up if phase 0 or a game shows the need | the same tests pass in every mode |
 
 The walking character (`PhysicsViewPlatform`) takes `with_world()` today. It moves
 onto the service in phase 6 as `physics.add_character()`, and the walk movement
@@ -609,8 +612,8 @@ mode registers the camera body without a call.
 1. Handler thread. The request describes handlers running on the physics thread.
    This plan runs a handler on the render thread unless its function is marked
    `@Context.physics_callback`. Reason: a render handler can touch the scene, works
-   unchanged in all three modes, and matches how `CollisionEvents` delivers today. A
-   physics callback must be a module-level function in process mode. Recommendation: keep
+   unchanged in both modes, and matches how `CollisionEvents` delivers today. A
+   physics callback would have to be a module-level function in a process mode. Recommendation: keep
    the plan's default and teach the marked form in tutorial 2b. Reversing the default
    would make `render_callback` the marker and is a documentation change.
 2. One node or two. `PhysicsDefinition` carries the player's machine choices
