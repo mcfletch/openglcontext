@@ -237,7 +237,7 @@ class TestSampledGround:
         x, z = np.array([3.0, 4.0, 5.0]), np.array([1.0, 2.0, 3.0])
         reads = []
         original = cached._read  # noqa: SLF001 counting the reads the cache makes
-        cached._read = lambda *a: reads.append(a) or original(*a)  # noqa: SLF001
+        cached._read = lambda *a: reads.append(a) or original(*a)  # noqa: SLF001 the reads the cache makes are what is counted
         height = cached.sample(x, z)
         normal = cached.normal(x, z)
         assert len(reads) == 1
