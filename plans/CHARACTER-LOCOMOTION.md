@@ -365,6 +365,36 @@ twig-bb's `Locomotion`, `rate` and `CLIP_SPEED` become a `ClipMap` and the engin
 | L6 | D10: `run_along`, `hop_to`; tutorial 6 | L4 | the lane tests pass |
 | L7 | hill-runner steps 2 to 4; twig-bb's switch to `ClipMap` | L0 to L6 | the acceptance list above |
 
+## hill-runner on the engine: what landed
+
+Steps 1 to 4 are in hill-runner (its `plans/IMPLEMENTATION.md` and README say where). What
+differs from the steps above:
+
+- The land is the engine's height field of the footing on a half-metre lattice for each chunk
+  (`Proxy.heightfield` of a grid), and not `add_ground` of a `Ground`: the controller asks a grid
+  for height and slope in one lookup and a function for each of five, which was 7 ms a step
+  against 2 ms. `Landscape.sample` is the `Ground` interface all the same.
+- The runner moves by `set_move` toward the place the rules have it, each step, and not by
+  `run_along` and `hop_to`: the rules own the lane, the hop and the distance, and their tests pin
+  `x` to the path to a millionth of a metre.
+- Barriers and tunnel walls are static bodies with `blocks_characters=False`: rays, the camera's
+  sweep and the coins a hit throws meet them, and the runner walks through an obstacle it is
+  recovering from as the rules let it. The rules stay the authority on a hit: of 44 passes by the
+  pilot the capsule was within 0.11 m of the obstacle's body in 2, both forgiven toes over a log,
+  and in every one of 12 hits it was.
+- The camera's sweep leaves out the ground (a sphere stepped along an arm against a height field
+  cost 40 ms a frame), and the rule keeps the camera a metre over it.
+
+Added to the engine for it: `Character.step` and `animate` (the game steps in pieces and animates
+once a frame), `slide(steer=True)`, `extend_slide` and `end_slide`, `CharacterCapabilities.jumpFollowsSlope`
+(a jump off a falling slope rises `jumpHeight` above the ground: 2.6 m at 24 m/s without it),
+`ClipSpec.rate`, `Context.stepsPhysics`, `add_static(blocks_characters=False)`, a scalar path for
+spheres against a grid, and a fix to the cache of a fixed body's proxy, which a streamed ground
+that reused a slot read as the removed chunk's.
+
+Per frame at 60 frames a second the runner's character, the world's two steps and the rules cost
+2.4 ms on the hill and 1.4 ms on level ground; the closed-form runner cost 0.5 ms.
+
 ## Documentation to change
 
 - `docs/characters.rst`: `add_character`, `ClipMap`, `Locomotion`, `measure_stride` and the
