@@ -6,6 +6,7 @@ from vrml import node, field
 
 from OpenGLContext import renderoptions
 from OpenGLContext.audio import settings as audiosettings
+from OpenGLContext.physics import settings as physicssettings
 from OpenGLContext.passes import quality, shading as shadingmodes, tonemapping
 from OpenGLContext.passes.oit import default_enabled as _default_oit
 
@@ -384,6 +385,10 @@ class ContextDefinition( node.Node ):
     #: than one knob and they belong together -- the same reasoning as
     #: ``movementModes``.  See :mod:`OpenGLContext.audio.settings`.
     audio = field.newField( "audio", "SFNode", 1, audiosettings.AudioSettings )
+    #: The world a context simulates and how it steps it: whether it runs,
+    #: where, the step, gravity and which scenery collides. A sub-node for the
+    #: same reason as ``audio``. See :mod:`OpenGLContext.physics.settings`.
+    physics = field.newField( "physics", "SFNode", 1, physicssettings.PhysicsDefinition )
 
     #: How large the overlay interface is drawn, on top of the size the window's
     #: height already asks for: 1 leaves it alone, 2 doubles it.  A player with
