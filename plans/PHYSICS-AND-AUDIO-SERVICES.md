@@ -153,7 +153,6 @@ body.set_transform(translation=None, rotation=None)   # teleport
 body.move_to(translation, over=1.0)         # kinematic bodies: glide, pushing what is in the way
 body.wake(); body.freeze(); body.remove()
 body.addEventHandler(event, function=fn, **filters)      # one body
-body.on(event, **filters)                   # the same, as a decorator
 ```
 
 Every writer is a command. On the worker thread the same call is applied at once,
@@ -272,24 +271,20 @@ receives one `Collision` (`physics/events.py`): `body`, `other` (always a `Body`
 included), `point`, `normal`, `speed` (the closing speed), `impulse`, `time`.
 
 ```python
-ball.addEventHandler('hit', function=flash, above=1.0)   # only hits faster than 1 m/s
-ball.addEventHandler('hit', function=flash, other=crate) # only against that body
-physics.addEventHandler('hit', function=flash)           # every body
-
-@ball.on('hit', above=1.0)                  # decorator shorthand for the first line
-def flash(hit): ...
+ball.addEventHandler('hit', function=self.OnBallHit, above=1.0)    # faster than 1 m/s
+ball.addEventHandler('hit', function=self.OnBallHit, other=crate)  # only against that body
+physics.addEventHandler('hit', function=self.OnAnyHit)             # every body
 ```
 
 `addEventHandler(eventType, function=fn, **keys)` is the spelling the context, `Timer` and
-`TimeSensor` already use, and `function=None` removes a handler as it does there. `on` is
-sugar that calls it.
+`TimeSensor` already use, and `function=None` removes a handler as it does there.
 
-Filters are `above=` (closing speed), `other=` (a `Body` or a list) and
-`where=`. A subscription is held by the body it is on and ends when the body is
-removed; both spellings return it and `subscription.cancel()` ends it earlier. These
-are strong references. `Context.addEventHandler` holds callbacks weakly and drops a
-lambda the moment it is registered, which would silently kill the decorator form;
-a body's handlers live as long as the body does.
+Filters are `above=` (closing speed), `other=` (a `Body` or a list) and `where=`.
+Handlers are held weakly, as everywhere else in the engine: a bound method of a live
+object works, and a lambda or local function with no other reference is collected as
+it is registered. The tutorials use bound methods for that reason. Registering returns
+the subscription, and `subscription.cancel()` ends it. A subscription also ends when
+its body is removed, and when the handler's object is collected.
 
 `where='render'` is the default. The handler runs in the frame hook, on the render
 thread, after the poses are written, so it may change the scene directly.
@@ -395,25 +390,27 @@ The stairs are static because they are in `sg`. The tutorial teaches loading, a
 position, `add_dynamic` and `apply_impulse`. It does not mention a tick, a thread, a
 shape, a material index or a redraw.
 
-### 2. The ball changes colour when it hits something (+4 lines)
+### 2. The ball changes colour when it hits something (+5 lines)
 
 ```python
         loaded = self.sceneLoader.load_now('ball.glb').result
-        skin = loaded.materials['Ball']
         ...
-        @body.on('hit', above=1.0)                       # body.addEventHandler(...) is the same
-        def flash(hit):
-            skin.baseColor = (1, 0, 0)
+        self.skin = loaded.materials['Ball']
+        body.addEventHandler('hit', function=self.OnBallHit, above=1.0)
+
+    def OnBallHit(self, hit):
+        self.skin.baseColor = (1, 0, 0)
 ```
 
 The handler runs on the render thread and assigns the field.
 
-### 2b. The same, reacting on the physics thread (+0 lines, two words changed)
+### 2b. The same, reacting on the physics thread (+0 lines, one line changed)
 
 ```python
-        @body.on('hit', above=1.0, where='physics')
-        def flash(hit):
-            self.physics.render.set(skin, baseColor=(1, 0, 0))
+        body.addEventHandler('hit', function=self.OnBallHit, above=1.0, where='physics')
+
+    def OnBallHit(self, hit):
+        self.physics.render.set(self.skin, baseColor=(1, 0, 0))
 ```
 
 This is the tutorial for threads. It shows why the scene is not assigned from the
@@ -442,10 +439,12 @@ Then a second page: `proxy='convex'` for a chair, a simpler node as the proxy, a
         self.physics.add_gravity_zone(Box(center=(0, 3, 0), size=(3, 6, 3)), gravity=(0, 2, 0))
 ```
 
-### 6. A sound on every hit (+1 line, or 0 with a material sound)
+### 6. A sound on every hit (+1 line, or none with a material sound)
 
 ```python
-        body.on('hit', lambda hit: self.audio.play('thud.ogg', at=hit.point, gain=hit.speed / 6))
+    def OnBallHit(self, hit):
+        self.skin.baseColor = (1, 0, 0)
+        self.audio.play('thud.ogg', at=hit.point, gain=hit.speed / 6)
 ```
 
 With `sound='thud.ogg'` on the material, no handler is needed.
