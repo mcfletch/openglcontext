@@ -103,6 +103,7 @@ physics.add_kinematic(node, proxy=None)     # moved by code, pushes dynamic bodi
 physics.add_trigger(node, proxy=None)       # reports enter and exit, stops nothing
 physics.addEventHandler(event, function=fn, **filters)   # every body
 physics.body_for(node)                      # the Body of a node already in the scene
+physics.post(function, *args)               # call function on the worker; returns None
 physics.run(function)                       # escape hatch, below
 ```
 
@@ -279,26 +280,59 @@ physics.addEventHandler('hit', function=self.OnAnyHit)             # every body
 `addEventHandler(eventType, function=fn, **keys)` is the spelling the context, `Timer` and
 `TimeSensor` already use, and `function=None` removes a handler as it does there.
 
-Filters are `above=` (closing speed), `other=` (a `Body` or a list) and `where=`.
+Filters are `above=` (closing speed) and `other=` (a `Body` or a list).
 Handlers are held weakly, as everywhere else in the engine: a bound method of a live
 object works, and a lambda or local function with no other reference is collected as
 it is registered. The tutorials use bound methods for that reason. Registering returns
 the subscription, and `subscription.cancel()` ends it. A subscription also ends when
 its body is removed, and when the handler's object is collected.
 
-`where='render'` is the default. The handler runs in the frame hook, on the render
-thread, after the poses are written, so it may change the scene directly.
-`where='physics'` runs the handler on the worker right after the tick that produced
-the event, with the world in the state the event describes. It may call any `Body`
-method, which applies at once, and send scene changes with `physics.render`:
+A handler runs on the render thread unless the function is marked as a physics
+callback:
+
+```python
+class StairsContext(Context):
+    @Context.physics_callback
+    def OnBallHit(self, hit): ...
+```
+
+`physics_callback` only sets an attribute on the function. Registration reads it, and
+a direct call runs the function on the calling thread like any other. It lives in
+`OpenGLContext.physics` and is also a static method on `Context`, because the class
+body of a context subclass already has `Context` in scope and needs no further import.
+There is no `render_callback`; render is the default.
+
+What each thread means for a handler:
+
+- Render handler. The frame hook calls it and waits for it to return, after the poses
+  are written, so it may change the scene directly. The tick that caused the event ended
+  earlier, so the handler cannot change that tick. Its return value is ignored.
+- Physics handler. The worker calls it and waits, right after the tick that produced the
+  event, with the world in the state the event describes. A slow one slows the
+  simulation, and the service logs a handler that outruns a tick. It may call any `Body`
+  method, which applies at once, and it must not assign scene fields. Its return value is
+  used only where an event asks a question, as a pre-solve contact verdict does.
+
+No handler call is fire-and-forget. What is asynchronous is the event's journey from its
+cause to the handler, and calls that cross threads, which return None: a `Body` method
+from the render thread, `render.set` and `render.call` from the worker. A function is
+never made to forward its own calls to another thread. The operations are thread-agnostic
+(`Body` methods are commands) and the handlers are not. `physics.post(fn, *args)` is the
+explicit hand-off from the render thread to the worker.
+
+A physics handler sends scene changes with `physics.render`:
 
 ```python
 physics.render.set(node, baseColor=RED)     # coalesced; applied before the next draw
 physics.render.call(function, *args)        # RenderQueue.call; runs on the render thread
 ```
 
-Called on the render thread, `render.set` assigns at once, so a handler that moves
-between `where='render'` and `where='physics'` changes only the word `where`.
+Called on the render thread, `render.set` assigns at once, so moving a handler between
+threads changes the marker and the line that touches the scene.
+
+In a debug run the frame hook records which thread a physics handler runs on, and a
+scene field set from the worker thread while it does is logged once, with the field and
+the handler. The check is off in release runs.
 
 Events are data on the worker side: body ids, points, numbers. The frame hook turns
 the ids into `Body` handles before it calls a render handler.
@@ -404,11 +438,12 @@ shape, a material index or a redraw.
 
 The handler runs on the render thread and assigns the field.
 
-### 2b. The same, reacting on the physics thread (+0 lines, one line changed)
+### 2b. The same, reacting on the physics thread (+1 line)
 
 ```python
-        body.addEventHandler('hit', function=self.OnBallHit, above=1.0, where='physics')
+        body.addEventHandler('hit', function=self.OnBallHit, above=1.0)
 
+    @Context.physics_callback
     def OnBallHit(self, hit):
         self.physics.render.set(self.skin, baseColor=(1, 0, 0))
 ```
@@ -466,7 +501,7 @@ ContextDefinition(physics=PhysicsDefinition(enabled=False))   # not at all
 | a different shape, material, mass | a keyword on that call |
 | a handle on a node already in the scene | `physics.body_for(node)` |
 | a reaction to a hit | `body.addEventHandler('hit', function=fn)` |
-| a reaction inside the tick | the same, with `where='physics'` |
+| a reaction inside the tick | the same, with the handler marked `@Context.physics_callback` |
 | a world setting | a field on `PhysicsDefinition` |
 | something the service lacks | `physics.run(fn)` against the raw world |
 
@@ -479,9 +514,9 @@ nothing else: no GL, no scenegraph. The protocol is the one the thread uses.
 - Cooked shapes cross once, by content hash, through `multiprocessing.shared_memory`.
 - The pose snapshot is two shared-memory buffers with a sequence number: the worker
   fills one while the frame hook reads the other.
-- A `where='physics'` handler and a `run` function are given as `'module:function'`
-  strings that the child imports. A closure is refused at registration with a message
-  that says so.
+- A physics callback and a `run` function must be module-level functions, which the
+  child imports by the path `physics_callback` records. A method of the context or a
+  closure is refused at registration with a message that says so.
 - A child that dies is reported through `physics.error`; the window keeps drawing.
 
 Two reasons to want it: Python-level work in a tick holds the render thread's GIL on
@@ -572,12 +607,12 @@ mode registers the camera body without a call.
 ## Decisions for the maintainer
 
 1. Handler thread. The request describes handlers running on the physics thread.
-   This plan makes `where='render'` the default and `where='physics'` the option.
-   Reason: a render handler can touch the scene, works unchanged in all three modes,
-   and matches how `CollisionEvents` delivers today. A physics-thread handler cannot
-   be a closure in process mode. Recommendation: keep the plan's default and teach
-   the physics-thread form in tutorial 2b. Reversing the default is a one-word change
-   in the API and a documentation change.
+   This plan runs a handler on the render thread unless its function is marked
+   `@Context.physics_callback`. Reason: a render handler can touch the scene, works
+   unchanged in all three modes, and matches how `CollisionEvents` delivers today. A
+   physics callback must be a module-level function in process mode. Recommendation: keep
+   the plan's default and teach the marked form in tutorial 2b. Reversing the default
+   would make `render_callback` the marker and is a documentation change.
 2. One node or two. `PhysicsDefinition` carries the player's machine choices
    (`enabled`, `mode`, `tickHz`) and the author's world (`gravity`, `materials`).
    Audio splits the player's settings from the application's mix. Recommendation:
