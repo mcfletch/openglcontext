@@ -355,6 +355,24 @@ def test_a_step_handler_may_change_a_body_between_steps():
     physics.close()
 
 
+def test_a_query_inside_a_step_handler_leaves_the_step_in_charge():
+    physics = make(gravity=(0, 0, 0))
+    body = physics.add_dynamic(ball(at=(0, 0, 0)), linear_damping=0.0)
+    seen = []
+
+    @physics_callback
+    def look(step):
+        physics.slot_of(body)
+        seen.append(physics.worker.on_worker_thread())
+        body.set_velocity((1.0, 0.0, 0.0))
+        seen.append(float(physics.world.linear_velocity[physics.slot_of(body)][0]))
+
+    physics.addEventHandler('before-step', function=look)
+    physics.frame(0.01)
+    assert seen == [True, 1.0]
+    physics.close()
+
+
 # -- scene changes from the worker ------------------------------------------------
 
 def test_render_set_from_a_marked_handler_reaches_the_scene_before_the_frame_ends():

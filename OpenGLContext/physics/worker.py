@@ -119,14 +119,17 @@ class InlineWorker:
         return self._stepping
 
     def flush(self) -> None:
-        """Apply the waiting commands without stepping."""
-        self._stepping = True
+        """Apply the waiting commands without stepping.
+
+        A flush made from a hook inside a step leaves that step in charge.
+        """
+        was, self._stepping = self._stepping, True
         try:
             self.runtime.bind_thread()
             for command in self.inbox.drain():
                 self.runtime.apply(command)
         finally:
-            self._stepping = False
+            self._stepping = was
 
 
 class ThreadWorker:
