@@ -1,31 +1,38 @@
 #! /usr/bin/env python
 """VRML97 load-and-view demonstration/test"""
-import OpenGL
-
-# The package has been imported by now (OpenGLContext imports it), so its
-# environment variables have been read. The package attribute is still read:
-# PyOpenGL's flags module copies it when the first API namespace imports that
-# module, and the entry points are built with whatever it copied. Measuring
-# the engine rather than the per-call glGetError is what this harness is for.
-OpenGL.ERROR_CHECKING = False
-
-from typing import Any
-from OpenGLContext import testingcontext
-#: The backend is chosen at run time, so the class this subclasses is not
-#: one a checker can name -- which is what Any says here.
-BaseContext: Any = testingcontext.getInteractive()
 import sys
+from typing import Any
 
-class TestContext( BaseContext ):
-    """VRML97-loading Context testing class"""
-    def OnInit( self ) -> None:
-        """Load the image on initial load of the application"""
-        BaseContext.OnInit( self )
-        self.sceneLoader.load( sys.argv[1], on_loaded=self.OnLoaded )
 
-    def OnLoaded( self, request: Any ) -> None:
-        """Mount the scene once the loader has read it"""
-        self.sg = request.result
+def profiled_context() -> Any:
+    """The viewer's Context class, made with PyOpenGL's error checking off.
+
+    Measuring the engine rather than the per-call glGetError is what this
+    harness is for.  PyOpenGL's flags module copies ``OpenGL.ERROR_CHECKING``
+    when the first API namespace imports it, so the switch is thrown here,
+    before the backend is imported; importing this module sets nothing.
+    """
+    import OpenGL  # noqa: PLC0415 configured before anything imports an API namespace
+
+    OpenGL.ERROR_CHECKING = False
+    from OpenGLContext import testingcontext  # noqa: PLC0415 imports OpenGL.GL, so after the switch
+
+    #: The backend is chosen at run time, so the class this subclasses is not
+    #: one a checker can name -- which is what Any says here.
+    BaseContext: Any = testingcontext.getInteractive()
+
+    class TestContext( BaseContext ):
+        """VRML97-loading Context testing class"""
+        def OnInit( self ) -> None:
+            """Load the image on initial load of the application"""
+            BaseContext.OnInit( self )
+            self.sceneLoader.load( sys.argv[1], on_loaded=self.OnLoaded )
+
+        def OnLoaded( self, request: Any ) -> None:
+            """Mount the scene once the loader has read it"""
+            self.sg = request.result
+
+    return TestContext
 
 def main() -> None:
     usage = """python -m OpenGLContext.bin.profile_view myscene.wrl
@@ -35,13 +42,16 @@ def main() -> None:
     script: oglc-view is the viewer, and this is the profiling harness
     behind it.
     """
-    import sys
     import cProfile
     if not sys.argv[1:2]:
         print(usage)
         sys.exit(1)
-    cProfile.run(
-        "TestContext.ContextMainLoop()", 'OpenGLContext.profile'
+    TestContext = profiled_context()
+    cProfile.runctx(
+        "TestContext.ContextMainLoop()",
+        globals(),
+        {'TestContext': TestContext},
+        'OpenGLContext.profile',
     )
 
 if __name__ == "__main__":
