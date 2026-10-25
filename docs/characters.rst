@@ -266,7 +266,10 @@ and ``death``. A role is a clip name, a ``(clip name, speed)`` pair or a
 The speed is metres a second the clip was authored for. ``contacts`` are the
 seconds into the clip at which each foot lands, ``cycle`` the seconds one cycle
 lasts (the model's clip length when left out) and ``fade`` the seconds to fade
-into the role (the map's ``fade``, 0.15, when left out). ``rate_range``, by
+into the role (the map's ``fade``, 0.15, when left out). ``rate`` is how
+fast a one-shot or held role plays, 1.0 as authored: a roll shortened to fit a
+knock-down, a takeoff fitted to a short jump (the looping roles play at the rate
+their speed gives, and the slide is held at its progress). ``rate_range``, by
 default 0.55 to 2.1, bounds the rate a looping clip plays at.
 
 ``ClipMap.ual()`` fills every role the library has a clip for. Its speeds and
@@ -363,6 +366,22 @@ names which joints they move:
    locomotion.play_action('wave', layer='taunt', bones=('rightShoulder',))
 
 It returns None when there is no model or the model has no such clip.
+
+A character stepped by its game
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``Physics.frame`` steps a character with ``character.framed`` true once a frame.
+A game with rules that run every fixed step sets ``framed`` false and calls
+``character.step(dt)`` for each step and ``character.animate(dt)`` once for the
+frame, ``dt`` the time of the whole frame. ``step`` moves the capsule, places the
+node and the stand-in the world sees and tells ``landed``. ``animate`` plays the
+clips, turns the body and raises the footsteps: it hears the speed the character
+covered over the frame (the distance since the last animation over ``dt``) and
+the hardest landing in any step since it. ``update(dt)`` is ``step(dt)`` and
+``animate(dt)``.
+
+``slide(duration, rise, steer=True)``, ``extend_slide(duration)`` and
+``end_slide()`` pass to the controller (see :ref:`character`).
 
 .. _characters-gait-measure:
 

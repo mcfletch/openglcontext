@@ -363,6 +363,11 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: the choice to the definition, and thence to
     #: :func:`OpenGLContext.windowsystem.choose`.
     windowSystemName: ClassVar[str | None] = None
+    #: Whether the frame steps the physics service (:attr:`physics`) by the time
+    #: it took. A game that steps its world on a clock of its own, or only while
+    #: it is not paused, sets this false and calls
+    #: :meth:`~OpenGLContext.physics.service.Physics.frame` itself.
+    stepsPhysics: ClassVar[bool] = True
 
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration
@@ -1206,7 +1211,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     def _framePhysics(self) -> None:
         """Give the physics service its share of the frame, before the frame is drawn."""
         service = self.__dict__.get('_physics')
-        if service is None:
+        if service is None or not self.stepsPhysics:
             return
         from OpenGLContext.events import systemtime  # noqa: PLC0415 only a context with physics reads the clock
 

@@ -94,6 +94,9 @@ class Character:
         self._knocks: list[np.ndarray] = []
         self._listeners: dict[str, list[Callable[[], Callable[[Any], Any] | None]]] = {}
         self._last_velocity = np.zeros(3)
+        #: Where the capsule was when the frame began, and the hardest landing since.
+        self._marked = self.controller.position.copy()
+        self._landed: float | None = None
         self._path: PathMover | None = None
         self._path_mode = 'run'
         if self.locomotion is not None:
@@ -227,9 +230,21 @@ class Character:
         """Swim, pulled by what ``buoyancy`` leaves of gravity, or stop."""
         self.controller.set_swim(swimming, buoyancy)
 
-    def slide(self, duration: float, rise: float = 0.3) -> bool:
-        """Slide low with the speed the character has, rising over the last ``rise`` seconds."""
-        return bool(self.controller.slide(duration, rise))
+    def slide(self, duration: float, rise: float = 0.3, steer: bool = False) -> bool:
+        """Slide low with the speed the character has, rising over the last ``rise`` seconds.
+
+        With ``steer`` the slide takes no momentum and the moves of :meth:`set_move` still go,
+        at the speed of their mode.
+        """
+        return bool(self.controller.slide(duration, rise, steer))
+
+    def extend_slide(self, duration: float) -> bool:
+        """Slide for ``duration`` seconds more from now, low again; False if not sliding."""
+        return bool(self.controller.extend_slide(duration))
+
+    def end_slide(self) -> bool:
+        """End a slide at once and stand, or crouch where there is no room; False if not sliding."""
+        return bool(self.controller.end_slide())
 
     def knock_down(self) -> None:
         """Fall and stay down, ignoring input, until :meth:`get_up`."""
@@ -243,6 +258,7 @@ class Character:
         """Put the feet at ``feet``, or at the nearest place with room; False if none was found."""
         found = bool(self.controller.safe_bind(
             np.asarray(feet, dtype='d') + _UP * (self.controller.height / 2.0)))
+        self._marked = self.controller.position.copy()
         self._place_stand_in(np.zeros(3))
         self._place_node()
         return found
@@ -293,7 +309,16 @@ class Character:
 
     # -- the frame ------------------------------------------------------------
     def update(self, dt: float) -> None:
-        """Step the character by ``dt`` seconds and show the world where it is."""
+        """Step the character by ``dt`` seconds, show the world where it is and animate it."""
+        self.step(dt)
+        self.animate(dt)
+
+    def step(self, dt: float) -> None:
+        """Move the character by ``dt`` seconds and show the world where it is, without animating it.
+
+        A game that steps in pieces shorter than its frame calls this for each piece and
+        :meth:`animate` once for the frame. ``landed`` is told here.
+        """
         controller = self.controller
         for knock in self._knocks:
             controller.knockback(knock)
@@ -304,21 +329,28 @@ class Character:
         pushing = controller.pushing
         self._place_stand_in(pushing[1] if pushing is not None else controller.velocity)
         self._place_node()
-        self._animate(dt)
         landing = controller.landing
         if landing is not None:
+            self._landed = max(self._landed or 0.0, float(landing))
             self._tell('landed', Landing(self, float(landing)))
 
-    def _animate(self, dt: float) -> None:
-        """Play the clips for what the character did this frame and turn the body."""
+    def animate(self, dt: float) -> None:
+        """Play the clips for what the character did over the last ``dt`` seconds and turn the body.
+
+        The speed it moves at is the distance it covered since the last animation over ``dt``,
+        and a landing in any of the steps since is the landing the clips hear.
+        """
         controller = self.controller
-        velocity = np.asarray(controller.velocity)
+        here = np.asarray(controller.position)
+        velocity = (here - self._marked) / dt if dt > 0.0 else np.asarray(controller.velocity)
+        self._marked = here.copy()
+        landed, self._landed = self._landed, None
         if self.locomotion is not None:
             self.settled = self.locomotion.update(LocomotionInput(
                 speed=float(np.hypot(velocity[0], velocity[2])), vertical_speed=float(velocity[1]),
                 grounded=bool(controller.grounded), state=controller.state.value,
                 slide_progress=float(controller.slide_progress),
-                landing_speed=controller.landing, crouching=bool(controller.crouching),
+                landing_speed=landed, crouching=bool(controller.crouching),
                 dead=self.dead), dt)
             if self.model is not None and hasattr(self.model, 'update'):
                 self.model.update(dt)

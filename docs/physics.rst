@@ -137,6 +137,16 @@ broad phase, narrow phase and solver run on the CPU with either backend. In
 ``tests/tutorials/physics/physics_stress.py``, the ``b`` key switches backends while the demo
 runs.
 
+A game that steps its own world
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The frame steps ``context.physics`` by the time the frame took, up to
+``PhysicsDefinition.maxCatchUp``. A game that steps its world on a clock of its
+own, or only while it is not paused, sets the class attribute
+``stepsPhysics = False`` on its context and calls ``context.physics.frame(dt)``
+where it wants the step. The rest of the service (queries, handlers, characters)
+works as before.
+
 .. _physics-collisions:
 
 Responding to collisions
@@ -725,6 +735,25 @@ floor, snap the capsule back down and zero its velocity, and whether a jump
 worked would depend on the frame time. The capsule is also still touching the
 floor it is leaving. The controller ignores both tests while the capsule is
 moving upward.
+
+Slides and jumps on a slope
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``slide(duration, rise)`` keeps the momentum the character has and ignores
+the input. ``slide(duration, rise, steer=True)`` takes no momentum and no
+friction, and the input goes on moving the character at the speed of its mode
+(not the crouch speed), which is how a runner slides under a gate and goes on
+turning with its path. ``extend_slide(duration)`` makes the slide last
+``duration`` seconds more from now and puts the capsule low again;
+``end_slide()`` ends it at once and stands, or crouches where there is no room.
+Both return whether there was a slide.
+
+A jump from the ground launches at ``sqrt(2 g jumpHeight)`` whatever the
+ground does. On a slope that falls away under a runner, the ground has dropped
+by the time the jump peaks, so the jump rises higher above the ground than
+``jumpHeight``. ``CharacterCapabilities.jumpFollowsSlope`` (default false) adds
+the vertical speed of the run along the ground to the launch, and a jump rises
+``jumpHeight`` above the ground it left off a falling or a rising slope.
 
 .. rst-class:: technical
 

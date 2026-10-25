@@ -104,6 +104,10 @@ class ClipSpec:
     cycle: Optional[float] = None
     #: Seconds to fade into this role; None takes the map's.
     fade: Optional[float] = None
+    #: How fast a one-shot or held role (a jump, a roll, a death) plays, 1.0 as
+    #: authored; None leaves it at its own pace. The looping roles play at the
+    #: rate their speed gives.
+    rate: Optional[float] = None
 
 
 def _spec(value: Any) -> ClipSpec:
@@ -703,6 +707,9 @@ class Locomotion:
             self._action_role = action
         layer.weight = share
         track = layer.current
+        rate = self._specs[action].rate
+        if rate is not None and action != 'slide':
+            track.speed = rate
         if action == 'slide':
             track.speed = 0.0
             track.time = (progress or 0.0) * track.duration
