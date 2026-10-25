@@ -383,6 +383,11 @@ the hardest landing in any step since it. ``update(dt)`` is ``step(dt)`` and
 ``slide(duration, rise, steer=True)``, ``extend_slide(duration)`` and
 ``end_slide()`` pass to the controller (see :ref:`character`).
 
+A body added with ``blocks_characters=False`` (``physics.add_static(None, proxy,
+blocks_characters=False)``) is met by rays, sweeps and overlaps like any other
+and is walked through by every character: a hazard the game's rules judge, whose
+shape the world still holds for the camera and for a ball that rolls into it.
+
 .. _characters-gait-measure:
 
 Measuring a stride

@@ -2,6 +2,7 @@
 import pytest
 
 from OpenGLContext.character.locomotion import ClipMap, ClipSpec, Locomotion, LocomotionInput
+from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
@@ -178,3 +179,54 @@ def test_a_window_that_steps_its_physics_itself_has_no_step_made_for_it(gl_conte
         for _ in range(3):
             context.runRenderQueue()
         assert bool(frames) is steps
+
+
+# -- bodies a character walks through ---------------------------------------------------------
+
+def wall_across(physics, **options):
+    return physics.add_static(None, proxy=Proxy.box((6.0, 3.0, 0.4)),
+                              translation=(0.0, 1.5, -4.0), **options)
+
+
+def walk_into(me, seconds=2.5):
+    me.set_move((0, 0, -1), 'walk')
+    for _ in range(round(seconds / TICK)):
+        me.step(TICK)
+    return float(me.position[2])
+
+
+def test_a_wall_stops_a_character_that_walks_into_it(physics):
+    wall_across(physics)
+    me = physics.add_character(position=(0, 0.05, 0))
+    me.framed = False
+    assert walk_into(me) > -4.0
+
+
+def test_a_wall_that_does_not_block_characters_is_walked_through_and_still_met_by_a_ray(physics):
+    wall = wall_across(physics, blocks_characters=False)
+    me = physics.add_character(position=(0, 0.05, 0))
+    me.framed = False
+    assert physics.raycast((0, 1.0, -1.0), (0, 0, -1), 10.0).body is wall
+    assert walk_into(me) < -4.5
+
+
+def test_a_character_made_after_the_wall_walks_through_it_too(physics):
+    wall_across(physics, blocks_characters=False)
+    first = physics.add_character(position=(0, 0.05, 0))
+    first.framed = False
+    second = physics.add_character(position=(1, 0.05, 0))
+    second.framed = False
+    assert walk_into(first) < -4.5
+    assert walk_into(second) < -4.5
+
+
+def test_a_wall_taken_away_leaves_its_place_to_the_next_body(physics):
+    me = physics.add_character(position=(0, 0.05, 0))
+    me.framed = False
+    wall = wall_across(physics, blocks_characters=False)
+    physics.remove(wall)
+    physics.step(TICK)
+    solid = wall_across(physics)
+    physics.step(TICK)
+    assert solid.alive
+    assert walk_into(me) > -4.0

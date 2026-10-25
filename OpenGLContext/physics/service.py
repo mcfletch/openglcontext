@@ -121,6 +121,8 @@ class Physics:
         self._specs: dict[int, BodySpec] = {}
         self._replica: Replica | None = None
         self._characters: list[Character] = []
+        #: The bodies that characters walk through, by id.
+        self._passable: set[int] = set()
         self._sources: list[SourceHandle] = []
         self._cooker: concurrent.futures.ThreadPoolExecutor | None = None
         self._cooked_results: queue.SimpleQueue[tuple[Body, BodySpec | None]] = queue.SimpleQueue()
@@ -269,7 +271,8 @@ class Physics:
         return self._add('trigger', node, proxy, options)
 
     _OPTIONS = frozenset({'mass', 'density', 'translation', 'rotation', 'material', 'friction',
-                          'restitution', 'linear_damping', 'angular_damping', 'collision_filter'})
+                          'restitution', 'linear_damping', 'angular_damping', 'collision_filter',
+                          'blocks_characters'})
 
     def _add(self, kind: str, node: Any, proxy: Any, options: dict[str, Any], *,
              motion: model.Motion | None = None,
@@ -343,7 +346,22 @@ class Physics:
             self._send(Command('add', uid, (spec,), next(self._seq)))
             if kind in ('dynamic', 'kinematic'):
                 self._ensure_started()
+            if not options.get('blocks_characters', True):
+                self._passable.add(uid)
+                self._let_characters_through(uid)
         return body
+
+    def _let_characters_through(self, uid: int) -> None:
+        """Have the controllers of the characters walk through body ``uid``."""
+        replica = self._replica
+        if replica is not None and uid in replica:
+            for character in self._characters:
+                character.controller.ignore.add(replica.index_of(uid))
+
+    def passable_slots(self) -> list[int]:
+        """The slots, in the render thread's copy of the bodies, of the bodies characters walk through."""
+        replica = self._character_replica()
+        return [replica.index_of(uid) for uid in self._passable if uid in replica]
 
     def _claim(self, node: Any) -> None:
         """Remove the scenery bodies made for ``node`` and for the shapes under it."""
@@ -706,6 +724,12 @@ class Physics:
         """Take ``body`` out of the world. Removing twice is harmless."""
         if not body.alive:
             return
+        if body.uid in self._passable:
+            replica = self._replica
+            if replica is not None and body.uid in replica:
+                for character in self._characters:
+                    character.controller.ignore.discard(replica.index_of(body.uid))
+            self._passable.discard(body.uid)
         if self._enabled and not self._closed:
             seq = next(self._seq)
             self._send(Command('remove', body.uid, (), seq))

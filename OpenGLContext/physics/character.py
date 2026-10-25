@@ -89,7 +89,7 @@ class Character:
             centre, capabilities, CharacterController.PUSH_REACH)
         self.controller = CharacterController(
             replica.query, capabilities, centre, gravity=gravity,
-            ignore=[replica.index_of(self.body.uid)])
+            ignore=[replica.index_of(self.body.uid), *physics.passable_slots()])
         self._slot = replica.index_of(self.body.uid)
         self._knocks: list[np.ndarray] = []
         self._listeners: dict[str, list[Callable[[], Callable[[Any], Any] | None]]] = {}
