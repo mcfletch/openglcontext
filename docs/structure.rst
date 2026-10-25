@@ -207,8 +207,9 @@ simulation packages update.
        :doc:`Zones <zones>`, :doc:`Level of detail <lod>`,
        :doc:`Instancing <instancing>`
    * - ``physics``
-     - Rigid bodies, colliders, gravity zones, triggers and the character
-       controller, on ``omi_physics``.
+     - The physics service a context hosts (``Physics``, ``Body``,
+       ``Character``, events, queries, materials, colliders that stream), the
+       walking view platform and the debug overlay, on ``omi_physics``.
      - :doc:`Physics <physics>`
    * - ``nav``
      - The navigation mesh generated from the collision mesh, and routes
@@ -221,11 +222,13 @@ simulation packages update.
    * - ``move``
      - The camera and the movement modes (examine, fly, walk, swim and
        mouse-look), the walking model under them, the follow camera and
-       running along a course.
+       running along a course, and a character seen from behind
+       (``context.follow``).
      - :doc:`Movement <navigation>`
    * - ``audio``
-     - The scenegraph's audio nodes and the per-context engine that plays
-       them, on ``omi_audio``.
+     - The scenegraph's audio nodes, the per-context engine that plays them, and
+       the ``Audio`` a context hosts for sounds played with a call, on
+       ``omi_audio``.
      - :doc:`Spatial audio <audio>`
    * - ``video``
      - Video capture of what a context drew, and a ``MovieTexture``'s movie
@@ -265,8 +268,9 @@ simulation packages update.
      - :doc:`Window Systems <backends>`
    * - ``events``
      - One keyboard, mouse and window event model across the window systems,
-       and
-       the dispatch that carries a change through the scenegraph.
+       the dispatch that carries a change through the scenegraph, and the
+       ``Inbox`` and ``Updates`` that carry commands to a service's worker and
+       its changes back to the render thread.
      - :doc:`Event Model <eventmodel>`
    * - ``contextresources``
      - The caches that release a GL context's objects when the context is

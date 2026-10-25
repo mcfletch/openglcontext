@@ -3,7 +3,8 @@ Sound
 
 .. rst-class:: introduction
 
-OpenGLContext plays sound from places in the scene. A sound under a
+OpenGLContext plays a sound with one call, ``context.audio.play('thud.ogg',
+at=point)``, from any thread, and plays sound from places in the scene. A sound under a
 ``Transform`` is heard from that transform's position: it gets quieter with
 distance and pans between the ears as the listener, who is the camera, moves
 past it. Sounds come from files, from glTF documents that use the
@@ -55,6 +56,110 @@ the stereo field comes from its position in the scene. A stereo recording,
 music included, plays as mono.
 
 Every decoder in the chain is MIT- or BSD-licensed.
+
+.. _audio-play:
+
+Playing a sound with a call
+---------------------------
+
+``context.audio`` plays a sound from one call. It needs no node in the scene,
+and a sound can overlap itself:
+
+.. code-block:: python
+
+   def onFire(self, shooter, muzzle):
+       if shooter is self.player:
+           self.audio.play('sounds/rifle.wav', gain=0.6, priority=0.6)
+       else:
+           self.audio.play('sounds/rifle.wav', at=muzzle, gain=0.6, priority=0.6)
+
+   voice = self.audio.play('sounds/engine.ogg', at=car, loop=True)
+   voice.gain = 0.3
+   voice.rate = 1.4                 # pitch and speed together
+   voice.stop()
+
+   self.audio.load('thud', 'sounds/thud.ogg')   # decoded now, played later as 'thud'
+   self.audio.volume = 0.8                      # the player's volume
+
+``play`` takes these arguments and returns a ``Voice`` at once:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Argument
+     - Means
+   * - ``source``
+     - A file path, an http(s) URL, a name given to ``load``, or an
+       ``omi_audio.Clip`` such as one from ``omi_audio.synth``. Files and URLs
+       are decoded on the first play and kept by name. A URL is fetched on
+       that first play, so ``load`` it ahead.
+   * - ``at``
+     - ``None`` plays the sound centred, at full level. A world point
+       ``(x, y, z)`` places it there. An object with a ``position``
+       attribute, such as a physics body, is followed as it moves. Any other
+       object is a scene node, placed by the placement function the context
+       gives its audio (``Audio(follow=...)``); without one the sound plays
+       centred and one warning is logged.
+   * - ``gain``
+     - Level from 0 up, 1.0 as recorded. Multiplies the distance
+       attenuation.
+   * - ``rate``
+     - Playback speed, pitch included. 1.0 is the clip's own, 2.0 an octave
+       up at twice the speed.
+   * - ``priority``
+     - From 0 to 1, default 0.5. When every voice is busy, the lowest priority
+       goes first, the quietest among equals.
+   * - ``loop``
+     - Repeats until ``stop()``.
+   * - ``emitter``
+     - An ``omi_audio.model.AudioEmitter`` giving the distance curve and the
+       cone. A sound placed with ``at`` and no ``emitter`` gets the default
+       profile: inverse distance from 1 metre.
+
+A ``Voice`` has ``gain`` and ``rate`` to set, ``stop()`` and ``playing``. A
+voice is not playing once its clip has ended, it was stopped, or a more
+important sound took its slot. Setting a voice that has ended does nothing.
+
+The audio object has these properties:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Property
+     - Means
+   * - ``volume``
+     - The player's volume, 0 to 1. Reads and writes ``definition.audio.volume``
+       (:ref:`audio-settings`).
+   * - ``muffle``
+     - 0 clear to 1 underwater (:ref:`audio-muffle`).
+   * - ``listener``
+     - The view platform sounds are heard from. ``None`` is the context's
+       camera.
+   * - ``enabled``
+     - Whether the player's sound switch is on.
+   * - ``engine``
+     - The ``omi_audio`` engine, opened by the first ask, or ``None`` when
+       sound is off. Render thread only.
+
+The device opens on the first ``play``. A context that never plays a sound
+opens none.
+
+``play`` is safe from any thread. On the render thread the sound starts in the
+call. From another thread, such as a physics callback, ``play`` returns the
+voice at once and the context starts the sound at the next frame, so it is
+heard at most one frame late. ``voice.stop()`` before that frame cancels the
+start, and ``gain`` and ``rate`` set from a thread are applied at the same
+frame. The engine itself is single-threaded, and only the context's frame and
+render-thread calls touch it. A program that makes its own ``Audio`` calls
+``audio.frame()`` once a frame, after the scene's audio update, and
+``audio.close()`` when it ends.
+
+Sound switched off, a device that will not open and a clip that will not
+decode each give a voice that is not ``playing`` and one logged warning. No
+call raises. :ref:`audio-testing-calls` shows how a game's tests check the
+sounds it plays.
 
 .. _audio-quickstart:
 
@@ -342,119 +447,15 @@ so one source is one sound at a time, and it keeps following the node as the
 node moves.
 
 A sound that overlaps itself, such as rapid fire, or that has no node to
-belong to, is played with ``audio.play``, described next.
-
-.. _audio-play:
-
-Playing a sound with a call
----------------------------
-
-``context.audio`` plays a sound from one call. It needs no node in the scene,
-and a sound can overlap itself:
-
-.. code-block:: python
-
-   def onFire(self, shooter, muzzle):
-       if shooter is self.player:
-           self.audio.play('sounds/rifle.wav', gain=0.6, priority=0.6)
-       else:
-           self.audio.play('sounds/rifle.wav', at=muzzle, gain=0.6, priority=0.6)
-
-   voice = self.audio.play('sounds/engine.ogg', at=car, loop=True)
-   voice.gain = 0.3
-   voice.rate = 1.4                 # pitch and speed together
-   voice.stop()
-
-   self.audio.load('thud', 'sounds/thud.ogg')   # decoded now, played later as 'thud'
-   self.audio.volume = 0.8                      # the player's volume
-
-``play`` takes these arguments and returns a ``Voice`` at once:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Argument
-     - Means
-   * - ``source``
-     - A file path, an http(s) URL, a name given to ``load``, or an
-       ``omi_audio.Clip`` such as one from ``omi_audio.synth``. Files and URLs
-       are decoded on the first play and kept by name. A URL is fetched on
-       that first play, so ``load`` it ahead.
-   * - ``at``
-     - ``None`` plays the sound centred, at full level. A world point
-       ``(x, y, z)`` places it there. An object with a ``position``
-       attribute, such as a physics body, is followed as it moves. Any other
-       object is a scene node, placed by the placement function the context
-       gives its audio (``Audio(follow=...)``); without one the sound plays
-       centred and one warning is logged.
-   * - ``gain``
-     - Level from 0 up, 1.0 as recorded. Multiplies the distance
-       attenuation.
-   * - ``rate``
-     - Playback speed, pitch included. 1.0 is the clip's own, 2.0 an octave
-       up at twice the speed.
-   * - ``priority``
-     - From 0 to 1, default 0.5. When every voice is busy, the lowest priority
-       goes first, the quietest among equals.
-   * - ``loop``
-     - Repeats until ``stop()``.
-   * - ``emitter``
-     - An ``omi_audio.model.AudioEmitter`` giving the distance curve and the
-       cone. A sound placed with ``at`` and no ``emitter`` gets the default
-       profile: inverse distance from 1 metre.
-
-A ``Voice`` has ``gain`` and ``rate`` to set, ``stop()`` and ``playing``. A
-voice is not playing once its clip has ended, it was stopped, or a more
-important sound took its slot. Setting a voice that has ended does nothing.
-
-The audio object has these properties:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Property
-     - Means
-   * - ``volume``
-     - The player's volume, 0 to 1. Reads and writes ``definition.audio.volume``
-       (:ref:`audio-settings`).
-   * - ``muffle``
-     - 0 clear to 1 underwater (:ref:`audio-muffle`).
-   * - ``listener``
-     - The view platform sounds are heard from. ``None`` is the context's
-       camera.
-   * - ``enabled``
-     - Whether the player's sound switch is on.
-   * - ``engine``
-     - The ``omi_audio`` engine, opened by the first ask, or ``None`` when
-       sound is off. Render thread only.
-
-The device opens on the first ``play``. A context that never plays a sound
-opens none.
-
-``play`` is safe from any thread. On the render thread the sound starts in the
-call. From another thread, such as a physics callback, ``play`` returns the
-voice at once and the context starts the sound at the next frame, so it is
-heard at most one frame late. ``voice.stop()`` before that frame cancels the
-start, and ``gain`` and ``rate`` set from a thread are applied at the same
-frame. The engine itself is single-threaded, and only the context's frame and
-render-thread calls touch it. A program that makes its own ``Audio`` calls
-``audio.frame()`` once a frame, after the scene's audio update, and
-``audio.close()`` when it ends.
-
-Sound switched off, a device that will not open and a clip that will not
-decode each give a voice that is not ``playing`` and one logged warning. No
-call raises. :ref:`audio-testing-calls` shows how a game's tests check the
-sounds it plays.
+belong to, is played with ``audio.play``, described in :ref:`audio-play`.
 
 .. _audio-collisions:
 
 Playing a sound when two things collide
 ---------------------------------------
 
-Subscribe to the bodies that should make a sound, and play one for each blow
-the :doc:`physics manager <physics>` delivers. ``approach`` is how fast the two
+Register a handler on the bodies that should make a sound, and play one for each
+blow the :doc:`physics service <physics>` delivers. ``speed`` is how fast the two
 were closing, in metres per second, which sets how loud the sound is:
 
 .. code-block:: python
@@ -467,26 +468,36 @@ were closing, in metres per second, which sets how loud the sound is:
 
    def OnInit(self):
        ...
-       self.blows = []
-       self.scene.manager.events.subscribe(
-           self.blows.append, body=self.crates, above=0.5)
+       for crate in self.crates:
+           crate.addEventHandler('hit', function=self.OnCrateHit, above=0.5)
 
-   def OnIdle(self, *arguments):
-       self.scene.advance(dt)                    # delivers this frame's blows
-       for blow in self.blows:
-           self.audio.play(THUD, at=blow.point, emitter=PLACED,
-                           gain=min(1.0, blow.approach / 8.0), priority=0.3)
-       self.blows.clear()
+   def OnCrateHit(self, hit):
+       self.audio.play(THUD, at=hit.point, emitter=PLACED,
+                       gain=min(1.0, hit.speed / 8.0), priority=0.3)
 
-``above`` is the closing speed in metres per second below which a contact is
-not a blow. Leave it above about 0.1: a body resting on the floor closes on it
-slightly on every step. The world records every physics step, so a frame that
-ran four steps delivers the blows of all four, and a bounce is heard at any
-frame rate. Two watched bodies meeting are delivered once, not once for each.
-The subscription's callback runs inside ``advance()``; collecting the blows and
-playing them afterwards keeps the audio calls in one place.
-:ref:`physics-collisions` describes the subscription and every field of a
-blow.
+The handler needs no queue: ``play`` is safe from every thread, so the same
+handler works when it is marked ``@Context.physics_callback`` and runs on the
+physics thread, where its sound starts at the next frame
+(:ref:`physics-thread-rule`). ``above`` is the closing speed in metres per second
+below which a contact is not a blow. Leave it above about 0.1: a body resting on
+the floor closes on it slightly on every step. The world records every physics
+step, so a frame that ran four steps delivers the blows of all four, and a
+bounce is heard at any frame rate.
+
+A material can carry the sound instead, so no handler is written:
+
+.. code-block:: python
+
+   self.physics.materials.define('wet-stone', friction=0.1, restitution=0.05,
+                                 sound=THUD, footstep=STEP)
+   self.physics.add_static(stairs, material='wet-stone')
+
+A body of that material that is struck harder than 1 m/s plays ``sound`` at the
+contact point, at a gain that reaches 1.0 at 6 m/s; a character's foot that lands
+on it plays ``footstep``. Every body of the material sounds alike, which is what
+a surface does. :doc:`tutorials/physics/physics_stairs_sound` is the handler and
+:doc:`tutorials/physics/physics_stairs_surface_sound` the material.
+:ref:`physics-events` describes the handler and every field of a blow.
 
 .. _audio-areas:
 
@@ -865,7 +876,7 @@ each thing on this page in it:
      - ``AudioSource.play()``, :ref:`audio-events`
    * - :kbd:`space`
      - Fires the player's weapon
-     - ``engine.play()`` with no place, :ref:`audio-events`
+     - ``audio.play`` with no place, :ref:`audio-play`
    * - :kbd:`r`
      - Starts or stops a motor whose pitch and level follow its speed
      - :ref:`audio-synth`
@@ -886,9 +897,10 @@ each thing on this page in it:
    oglc-audio-demo
 
 Its source, ``OpenGLContext/bin/audio_demo.py``, is the working code for each
-recipe. The behaviour is in ``AudioYard``, which holds no GL: the window feeds
-it the time step and the keys, and the render pass sets the zones' gains and
-reverb from where the camera is. ``box_gain``, above, is the same thing for an
+recipe. The behaviour is in ``AudioYard``, which holds no GL: it is built over a
+``Physics`` and an ``Audio``, the window calls ``update(dt)`` to turn the motor
+and forwards the keys, the balls' handlers play the thuds, and the render pass
+sets the zones' gains and reverb from where the camera is. ``box_gain``, above, is the same thing for an
 application that keeps its areas in code rather than as zones.
 
 :doc:`tests/tutorials/world/audio_spatial.py <tutorials/world/audio_spatial>` is the tutorial for

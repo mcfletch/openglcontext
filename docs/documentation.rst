@@ -124,10 +124,9 @@ Installing the package puts these commands on your path:
    Demonstrates sound: collisions, events, fading areas and a pitch that
    follows the simulation. See :ref:`Sound <audio-demos>`.
 ``oglc-physics-events``
-   Demonstrates collision subscriptions: crates that thud at any frame rate,
-   two panes of glass broken after and before the solve, a hitscan gun and a
-   pressure plate that opens a door. See :ref:`Responding to collisions
-   <physics-collisions>`.
+   Demonstrates physics events: crates that thud at any frame rate, two panes
+   of glass broken after and before the solve, a hitscan gun and a pressure
+   plate that opens a door. See :ref:`Events <physics-events>`.
 ``oglc-zones``
    Two rooms off a courtyard, each a zone: one shaded and lit by its own warm
    lamp, one lit by a probe captured inside it and a cool lamp, and a statue
@@ -268,8 +267,12 @@ Getting started
   - Using the Engine: loading a glTF, VRML97 or OBJ model, animating it, clips,
     a crowd, and an NPC on a navigation mesh
 
-  - Physics: a world, materials, joints, triggers, and responding to a
-    collision
+  - Physics: a ball down a flight of stairs that changes colour, takes a
+    shape, a material and a sound, a gravity zone, joints, triggers, and
+    responding to a collision
+
+  - Characters on Land: a rigged character that runs across a landscape, jumps
+    and lands with a sound, and steps differently on grass and on stone
 
   - Interface and Tools: panels, the HUD, a settings page, a console, choosing
     a level, picking and dragging, and the editor's tool modes
@@ -458,10 +461,12 @@ The application around it
   portals.
 
 - :doc:`Physics & Collision <physics>` -- rigid-body physics on the OMI glTF
-  model: collision, :ref:`collision callbacks <physics-collisions>`, gravity
-  zones, triggers, joints, shape cooking, a character controller with
-  viewpoint binding, a motion debug overlay, and :ref:`walking <walking>` in
-  every interactive context. ``oglc-physics-events`` shows the callbacks.
+  model, hosted by every context as ``context.physics``: bodies added with one
+  call, :ref:`events <physics-events>` and which thread runs their handlers,
+  scenery and glTF bodies, shapes, materials, gravity zones, triggers, joints,
+  queries, characters that walk and run over land, colliders that stream in
+  and out, a motion debug overlay, and :ref:`walking <walking>` in every
+  interactive context. ``oglc-physics-events`` shows the events.
 
 - :doc:`Sound <audio>` -- sound placed in the scene on glTF's
   ``KHR_audio_emitter`` model: file formats, sound in glTF files, and how to

@@ -367,9 +367,20 @@ How much work per frame
        on them instead of failing. See :doc:`Rendering offscreen <offscreen>`.
    * - ``OPENGLCONTEXT_PHYSICS``
      - yes/no
-     - off
-     - Makes the viewer walk the scene with gravity and collision instead of
-       framing it. See :doc:`Physics <physics>`.
+     - the service on; the viewer not walking
+     - The default of ``PhysicsDefinition.enabled``: ``no`` starts no world,
+       makes no colliders and leaves every body where it was put. The
+       viewer reads the same variable to walk the scene with gravity and
+       collision instead of framing it, and ``yes`` turns that on. See
+       :doc:`Physics <physics>`.
+   * - ``OPENGLCONTEXT_PHYSICS_MODE``
+     - ``thread`` or ``inline``
+     - ``thread``
+     - The default of ``PhysicsDefinition.mode``: ``thread`` steps the world on
+       a thread of its own, ``inline`` steps it in the frame. A bounded capture
+       and a recorded or replayed session step inline whatever this says. A
+       value that is neither is reported and ``thread`` is used. See
+       :ref:`physics-service-modes`.
 
 The window, capture and the interface
 -------------------------------------

@@ -790,6 +790,24 @@ another in place of, stops. Code that steps a node outside a drawn scene
 calls its ``bind(context)`` and ``unbindContext(context)``, or ``advance(seconds)``
 and ``sense()`` itself.
 
+A collection is not the context's physics world, ``context.physics``
+(:doc:`physics`); the two are separate worlds that share no bodies:
+
+- Zone gravity (a ``Zone``'s gravity setting, ``OMI_physics_gravity``) and
+  ``physics.add_gravity_zone`` act on ``context.physics`` bodies and
+  characters. The bodies of a collection obey its own ``gravity``, whatever
+  zone they are in.
+- A collection's bodies do not collide with ``context.physics`` bodies, with
+  scenery or with characters. A document that wants a body to meet scenery lists
+  the scenery as a ``CollidableShape`` in the collection's ``collider``.
+- A character is stopped by ``Collision`` groups and by what ``context.physics``
+  holds, and not by the rigid bodies of a collection.
+- ``CollisionSpace`` groups collidables inside one collection. It plays no
+  part in zones or in ``context.physics``.
+- A ``CollisionSensor`` routes the touches of its collection.
+  ``physics.body_for`` and ``addEventHandler('hit', ...)`` do not apply to X3D
+  bodies.
+
 - A ``RigidBody`` moves under the collection's ``gravity`` (unless
   ``useGlobalGravity`` is false), its ``forces`` and ``torques`` (summed,
   applied every step), and its contacts and joints. A ``fixed`` body does not

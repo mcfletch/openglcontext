@@ -593,6 +593,58 @@ A rule of the game's own is added with ``constrain``:
 Rules return the ``(eye, look)`` to use, run in the order added, and run before
 the sweep, so the sweep has the last word on where the camera is.
 
+.. _navigation-follow-character:
+
+A character seen from behind
+----------------------------
+
+``context.follow(character)`` shows a physics character (:ref:`physics-characters`)
+from behind and gives it the keys that move it:
+
+.. code-block:: python
+
+   hero = self.physics.add_character(model='hero.glb', animations='ual')
+   self.follow(hero)
+
+The call makes a ``FollowMode`` (``OpenGLContext.move.thirdperson``) and binds
+the context's camera to a ``FollowCamera`` that stands behind the character. It
+returns the ``FollowController`` that holds the two; ``context.unfollow()``
+gives the keys back to the context's navigation. The options are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 78
+
+   * - option
+     - effect
+   * - ``distance``
+     - metres the camera stands behind the look point (4.5)
+   * - ``height``
+     - metres above the character's feet the camera looks at (1.7)
+   * - ``mode``
+     - a ``FollowMode`` of your own, in place of the default
+   * - ``slide_time``
+     - seconds a slide lasts (0.8)
+   * - the options of ``FollowCamera``
+     - ``look_ahead`` (0.1 s here), ``smooth_time`` (0.12 s), ``pull_back``,
+       ``avoid_radius`` (0.3 m), ``min_arm`` (0.5 m), ``arm_ease`` and
+       ``max_step``
+
+``FollowMode`` is a ``WalkMode`` whose moves are relative to the camera: forward
+(``w``, up) is the way the camera looks, flattened to the ground, and
+``a`` and ``d`` step to the sides of it. The turn keys (``q`` and ``e``, left and
+right) swing the camera round the character, and the character turns toward
+where it goes. ``shift`` runs at ``runSpeed``, ``ctrl`` sprints at
+``sprintSpeed`` (9 m/s), space jumps and ``c`` slides. ``autoForward``, from 0
+to 1, holds a forward move without a key, for a runner whose keys only steer. The
+mode's bindings are listed on the key-binding page with the other modes'.
+
+The camera sweeps a sphere from the look point to where it should stand, through
+``physics.sweep_sphere`` with the character skipped, so scenery and land
+between the character and the camera shorten the arm instead of hiding the
+character. The input is read before the world is stepped and the camera placed
+after, so the camera is never a frame behind the character.
+
 .. _navigation-pathmover:
 
 Running along a course

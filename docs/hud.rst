@@ -652,10 +652,10 @@ Two more providers are available but not registered by default, because not
 every context has what they report on:
 
 - ``physics_provider(lambda: world)`` reports body and contact counts.
-- ``simulation_provider(lambda: manager)`` reports on a background physics
-  thread (``OpenGLContext.physics.threaded.ThreadedPhysicsManager``): the
-  rate it achieves against its target rate, its total ticks, and any
-  ticks it dropped. A physics thread that falls behind makes the world move
+- ``simulation_provider(lambda: context.physics.worker)`` reports on a
+  background physics thread (the worker of a ``Physics`` whose ``mode`` is
+  ``thread``): the rate it achieves against its target rate, its total ticks,
+  and any ticks it dropped. A physics thread that falls behind makes the world move
   in slow motion, which looks like wrong gravity or a wrong timestep until
   the two rates are compared.
 

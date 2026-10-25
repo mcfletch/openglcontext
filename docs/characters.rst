@@ -189,6 +189,55 @@ such point is mounted by its origin.
 
 .. _characters-locomotion:
 
+A character on a landscape
+--------------------------
+
+A rigged model that runs across ground is four calls after the scene
+(:doc:`tutorials/character/character_run`):
+
+.. code-block:: python
+
+   self.sg = sceneGraph(children=[Background(), DirectionalLight(), land_node])
+   self.physics.add_ground(land)
+   hero = self.physics.add_character(model='hero.glb', animations=CLIPS,
+                                     position=(0, 0.2, 0), parent=self.sg)
+   self.follow(hero)
+
+``add_ground`` makes the land a static body (:ref:`physics-ground`).
+``add_character`` makes a capsule the world stops and steps it every frame
+(:ref:`physics-characters`). ``model`` is a ``CharacterModel``, a loaded glTF
+scene, the bytes of a ``.glb``, or a path or an http(s) URL, which is fetched
+once into the loader's cache. The character wears it in a node of its own, put
+at the capsule's feet each frame and added to ``parent`` where one is given. The
+model is scaled to the capsule's standing height and set on its base unless
+``fit=False``, and turned toward where the character goes unless
+``facing=False``. The world collides with the capsule alone: the model's shapes
+are not scenery.
+
+``animations`` is a ``ClipMap``, ``'ual'`` for the Universal Animation
+Library's names (``ClipMap.ual()``) or ``'guess'`` for the roles found by the
+words in the model's clip names (``ClipMap.guess(model)``); the character then
+plays its clips for what the capsule is doing, as :ref:`below
+<characters-clipmaps>` describes. A map is the way to say a model's own names
+and speeds. The fox of the tutorial has three clips:
+
+.. code-block:: python
+
+   FOX = ClipMap(idle='Survey', walk=('Walk', 1.5), run=('Run', 4.0))
+
+A role the map leaves out is not played: a model with no jump clip keeps the
+pose of the ground movement in the air. ``hero.addEventHandler('landed',
+function=f)`` calls ``f(landing)`` in the frame the character comes down, with
+``landing.speed`` in metres a second, and ``'footstep'`` calls ``f(step)`` for
+each foot that lands, with the ``foot``, its ``phase`` in the stride, the
+``point`` and the ``material`` of the body under it. A material with a
+``footstep`` clip plays it where a foot lands on a body of that material
+(:ref:`physics-materials`); :doc:`tutorials/character/character_footsteps` crosses
+grass and a stone slab. :doc:`tutorials/character/character_jump` makes a sound
+at each landing, as hard as the fall.
+
+.. _characters-clipmaps:
+
 Clips from a character's state
 ------------------------------
 

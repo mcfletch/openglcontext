@@ -73,6 +73,8 @@ package whose code ends up somewhere else.
 ```text
 OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
+│   ├── manager.py    # Audio and Voice: sounds played with a call from any
+│   │                 # thread, started on the render thread; context.audio -- no GL
 │   ├── acoustics.py  # X3D's AcousticProperties: surfaces between a sound and
 │   │                 # the listener, and the room's reverb -- no GL -- docs/x3d.rst
 │   ├── manager.py    # Audio: sounds played by call (play, load, volume,
@@ -93,6 +95,11 @@ OpenGLContext/
 │   └── gait.py       # oglc-gait: the ground speed and foot landings of a
 │                     # model's locomotion clips -- docs/characters.rst#characters-gait-measure
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
+│   ├── locomotion.py # ClipMap and Locomotion: a character's state as clips,
+│   │                 # footsteps -- no GL -- docs/characters.rst
+│   ├── facing.py     # Turning toward the move, easing to the ground, fitting a
+│   │                 # model to its capsule -- no GL
+│   ├── gaitmeasure.py  # measure_stride: how fast a clip carries a body -- no GL
 │   ├── locomotion.py # ClipMap (roles to clips), Locomotion: a character's
 │   │                 # speed and state as clips, rates and footsteps -- no GL
 │   │                 # -- docs/characters.rst#characters-locomotion
@@ -128,6 +135,9 @@ OpenGLContext/
 │   │                 # the longest step and a frame cap -- no GL
 │   ├── renderqueue.py  # Calls background threads queue to be made on the
 │   │                 # render thread before OnIdle -- docs/loading.rst#render-queue
+│   ├── handoff.py    # Inbox (commands from any thread to a service's worker)
+│   │                 # and Updates (the worker's scene changes, applied once a
+│   │                 # frame) -- no GL -- docs/eventmodel.rst
 │   └── wheel.py      # Rotation reports into whole notches, for the backends
 │                     # whose toolkit states a detent size
 ├── loaders/          # File formats into the scenegraph -- docs/loading.rst, gltf.rst, vrml97.rst
@@ -181,6 +191,9 @@ OpenGLContext/
 │                     # tileprocess.py: worker processes that make them --
 │                     # docs/tiles3d.rst#tiles3d-processes)
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
+│   ├── thirdperson.py  # context.follow: FollowMode (keys relative to the
+│   │                 # camera), the camera behind a character and out of walls
+│   │                 # -- docs/navigation.rst#navigation-follow
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
 │   │                 # modes and views a definition declares -- no GL
 │   ├── navigationinfo.py  # A scene's bound NavigationInfo: its headlight
@@ -278,17 +291,37 @@ OpenGLContext/
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
-├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
-│   ├── landscape.py  # A landscape as bodies: the ground from a height field,
-│   │                 # trunks standing on it, rocks made near a focus
-│   │                 # -- no GL -- docs/physics.rst#physics-landscape
+├── physics/          # The physics service every context hosts, and what it needs -- docs/physics.rst
+│   ├── service.py    # Physics: add_static/dynamic/kinematic/trigger, add_ground,
+│   │                 # add_character, queries, events, zones; context.physics -- no GL
+│   ├── body.py       # Body, the handle of one body: reads, commands, handlers
+│   ├── character.py  # Character: a walker stepped by the frame, its stand-in in the world
+│   ├── handlers.py   # Handler and HandlerTable: who hears which event, held weakly
+│   ├── callbacks.py  # physics_callback: marks a function that runs on the physics thread
+│   ├── records.py    # Command, BodySpec, PhysicsEvent, Step, Snapshot: the plain data
+│   │                 # that crosses between the render thread and the worker
+│   ├── runtime.py    # WorldRuntime: applies commands, steps the omi_physics world,
+│   │                 # collects events and snapshots -- the worker's core
+│   ├── worker.py     # InlineWorker and ThreadWorker: who steps a WorldRuntime
+│   ├── proxy.py      # Proxy: the collision shape of a node, cooked or by hand
+│   ├── replica.py    # The render thread's copy of the bodies, for queries and characters
+│   ├── queries.py    # sweep_sphere and overlap over a world; Hit
+│   ├── materials.py  # Materials: presets, defined materials, pair friction, sounds
+│   ├── sources.py    # Collider sources: bodies made as a focus nears them
+│   ├── colliders.py  # Scenery: the shapes of a scene as static bodies, cooked off the frame
+│   ├── settings.py   # PhysicsDefinition: the node ContextDefinition.physics holds
+│   ├── eventmanager.py  # 'physics-hit' and the other events as context event types
+│   ├── zones.py      # Gravity zones: Box and Sphere regions, a Zone node's gravity
+│   ├── landscape.py  # A HeightField as ground, trunks and rocks as bodies
+│   ├── heightfield.py, road.py, props.py  # Colliders for ground chunks, road
+│   │                 # sections and props near a focus
+│   ├── gltf_world.py # A scene's triangles and glTF OMI bodies as a world
+│   ├── debugdraw.py  # The proxy, contact and velocity overlay (show_proxies)
+│   ├── manager.py, threaded.py, events.py, demo.py  # PhysicsManager and what is built on it
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
-│   ├── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics
-│   │                 # world, a sensor's touches, the joints -- no GL
-│   └── events.py     # Collision subscriptions: a callback per body, delivered
-│                     # once a frame, and a trigger's occupancy
-│                     # -- docs/physics.rst#physics-collisions
+│   └── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics
+│                     # world, a sensor's touches, the joints -- no GL
 ├── resources/        # Generated Python modules holding icons and shader text
 ├── py.typed          # The engine's declarations are real -- docs/typing.rst
 ├── scenegraph/       # VRML97-style nodes

@@ -948,6 +948,57 @@ of the call, so a test of code that plays from a physics callback needs no
 extra step. The thread rule and the queue behind it are tested against the real
 engine on a silent device in ``tests/unit/test_audio_manager.py``.
 
+.. _testing-physics:
+
+Physics in a test
+-----------------
+
+A ``Physics`` holds no GL and needs no context, so a test makes one, adds
+bodies and steps it with no window. ``mode='inline'`` steps the world in the
+caller's thread, which makes every run the same:
+
+.. code-block:: python
+
+   from OpenGLContext.physics.service import Physics
+   from OpenGLContext.physics.settings import PhysicsDefinition
+   from OpenGLContext.testing import RecordingAudio
+
+   def test_a_dropped_crate_thuds_once():
+       audio = RecordingAudio()
+       physics = Physics(PhysicsDefinition(mode='inline', tickHz=120.0),
+                         audio=lambda: audio)
+       yard = Yard(physics, audio)               # the object under test
+       yard.drop_crate()
+       for _ in range(180):
+           physics.frame(1 / 60)                 # three seconds in frames of 1/60 s
+       assert len(audio.played('thud.ogg')) == 1
+       physics.close()
+
+``physics.frame(dt)`` is what the context's frame hook calls: it steps the
+whole fixed steps ``dt`` seconds hold (up to ``maxCatchUp``, 0.1 s by default
+and so a test of longer frames raises it), writes the poses onto the nodes and
+delivers the events to their handlers. ``physics.step(dt)`` steps without
+delivering anything. A test that checks a body reads ``body.position`` and
+``body.velocity``, which answer the last frame. A test that reads or sets the
+live world uses ``physics.world`` (inline only) and finds a body's row in its
+arrays with ``physics.slot_of(body)``, which applies the commands still
+waiting first; ``physics.flush()`` does that on its own. Read the row before the
+array: ``world.velocity[physics.slot_of(body)]`` evaluates the array first, and
+a body added since may have made a new one.
+
+Scenery becomes bodies as the render pass finds it, which a test with no
+window does not have: add what the test collides with by name
+(``add_static(node, proxy='box')``) or call ``physics.scenery_changed(root,
+generation)`` and ``physics.wait_cooked()``. A body that needs a window is
+tested through ``gl_context``; ``tests/unit/test_physics_tutorials.py`` runs a
+tutorial's ``TestContext`` that way, on a ``FixedStepClock`` and with
+``OPENGLCONTEXT_PHYSICS_MODE=inline``, so a run takes the time its frames take
+to draw and gives the same bodies on every machine.
+
+A world on a thread (``mode='thread'``) is tested with the same calls. The
+frame delivers what the worker has published, so a test of it waits for the
+condition it needs, with a time limit, rather than for a number of frames.
+
 .. _what-to-test:
 
 What to put in a test

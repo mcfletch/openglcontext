@@ -150,6 +150,26 @@ The engine marks the camera's moves between viewpoints itself:
      - ``viewpoint``, as above; ``position``, where the camera is as the
        transition ends.
 
+The physics service marks each event its handlers hear (:ref:`physics-events`),
+while a session is recorded:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 76
+
+   * - Mark
+     - Fields
+   * - ``physics-hit``, ``physics-touching``, ``physics-separate``,
+       ``physics-enter``, ``physics-stay``, ``physics-exit``,
+       ``physics-sleep``, ``physics-wake``
+     - ``step``, the world's step count; ``time``, the simulation time in
+       seconds; ``a``, the body the event is about and ``b`` the other, each
+       the ``DEF`` name of its node or ``#`` and the order it was added in; for
+       a contact, ``approach`` (m/s) and ``impulse`` (N*s).
+
+An event no handler hears is not marked, so a session that registers no physics
+handlers has none of these marks.
+
 A ``viewpoint-bound`` with no ``viewpoint-arrived`` after it is a transition
 that another bind replaced, or a ``TELEPORT`` or ``FIRST`` bind, which has
 none. Where a frame's camera position differs from the last arrival's
@@ -377,6 +397,19 @@ The same line appears in the :ref:`Session <overlay>` section of the
 developer overlay during the replay, so a divergence is visible as it
 happens. This needs no setup: any game that records marks has its replays
 checked.
+
+Physics in a replay
+~~~~~~~~~~~~~~~~~~~
+
+A context whose session is recorded or replayed steps its physics inline,
+whatever ``PhysicsDefinition.mode`` or ``OPENGLCONTEXT_PHYSICS_MODE`` say, so
+the world is a function of the recorded frame times and of what the game
+commanded. A session recorded with the world on its thread replays with it in
+the frame. The physics events of the replay are marks like any other and are
+compared in order: the name, the two bodies, the step and the simulation time.
+The line the replay logs counts them with the rest, so ``74 of 199 marks as
+recorded`` includes the hits, and the first difference names the first hit that
+came at another step or between other bodies.
 
 Limits of replay
 ~~~~~~~~~~~~~~~~
