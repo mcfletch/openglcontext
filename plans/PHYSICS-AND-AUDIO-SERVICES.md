@@ -101,7 +101,7 @@ physics.add_static(node, proxy=None, **material)
 physics.add_dynamic(node, proxy=None, mass=None, **material)
 physics.add_kinematic(node, proxy=None)     # moved by code, pushes dynamic bodies
 physics.add_trigger(node, proxy=None)       # reports enter and exit, stops nothing
-physics.on(event, handler, **filters)       # every body
+physics.addEventHandler(event, function=fn, **filters)   # every body
 physics.run(function)                       # escape hatch, below
 ```
 
@@ -151,7 +151,8 @@ body.set_velocity(velocity)
 body.set_transform(translation=None, rotation=None)   # teleport
 body.move_to(translation, over=1.0)         # kinematic bodies: glide, pushing what is in the way
 body.wake(); body.freeze(); body.remove()
-body.on(event, handler, **filters)          # decorator or call
+body.addEventHandler(event, function=fn, **filters)      # one body
+body.on(event, **filters)                   # the same, as a decorator
 ```
 
 Every writer is a command. On the worker thread the same call is applied at once,
@@ -237,18 +238,24 @@ receives one `Collision` (`physics/events.py`): `body`, `other` (always a `Body`
 included), `point`, `normal`, `speed` (the closing speed), `impulse`, `time`.
 
 ```python
-@ball.on('hit', above=1.0)                  # only hits faster than 1 m/s
-def flash(hit): ...
+ball.addEventHandler('hit', function=flash, above=1.0)   # only hits faster than 1 m/s
+ball.addEventHandler('hit', function=flash, other=crate) # only against that body
+physics.addEventHandler('hit', function=flash)           # every body
 
-ball.on('hit', handler, other=crate)        # only against that body
-physics.on('hit', handler)                  # every body
+@ball.on('hit', above=1.0)                  # decorator shorthand for the first line
+def flash(hit): ...
 ```
+
+`addEventHandler(eventType, function=fn, **keys)` is the spelling the context, `Timer` and
+`TimeSensor` already use, and `function=None` removes a handler as it does there. `on` is
+sugar that calls it.
 
 Filters are `above=` (closing speed), `other=` (a `Body` or a list) and
 `where=`. A subscription is held by the body it is on and ends when the body is
-removed; `.on()` returns it and `subscription.cancel()` ends it earlier. These are
-strong references, unlike `Context.addEventHandler`, which holds callbacks weakly
-and drops a lambda the moment it is registered.
+removed; both spellings return it and `subscription.cancel()` ends it earlier. These
+are strong references. `Context.addEventHandler` holds callbacks weakly and drops a
+lambda the moment it is registered, which would silently kill the decorator form;
+a body's handlers live as long as the body does.
 
 `where='render'` is the default. The handler runs in the frame hook, on the render
 thread, after the poses are written, so it may change the scene directly.
@@ -360,7 +367,7 @@ shape, a material index or a redraw.
         loaded = self.sceneLoader.load_now('ball.glb').result
         skin = loaded.materials['Ball']
         ...
-        @body.on('hit', above=1.0)
+        @body.on('hit', above=1.0)                       # body.addEventHandler(...) is the same
         def flash(hit):
             skin.baseColor = (1, 0, 0)
 ```
@@ -424,7 +431,7 @@ ContextDefinition(physics=PhysicsDefinition(enabled=False))   # not at all
 | a static world | nothing, or `add_static(node, proxy=...)` to change its shape |
 | a moving object | `add_dynamic(node)` |
 | a different shape, material, mass | a keyword on that call |
-| a reaction to a hit | `body.on('hit', fn)` |
+| a reaction to a hit | `body.addEventHandler('hit', function=fn)` |
 | a reaction inside the tick | the same, with `where='physics'` |
 | a world setting | a field on `PhysicsDefinition` |
 | something the service lacks | `physics.run(fn)` against the raw world |
@@ -545,8 +552,9 @@ mode registers the camera body without a call.
    the body. It costs a dispatcher receiver per dynamic body. Recommendation: build it
    in phase 3, measure with 1,000 bodies, and drop it if the frame hook's cost
    rises by more than 5 percent.
-4. "physics-hit" through `addEventHandler`. A context-level spelling,
-   `addEventHandler('physics-hit', body=ball, function=fn)`, would put physics
+4. Context-level events. Handlers on a `Body` or on `physics` use the context's
+   `addEventHandler` shape. A further context-level spelling,
+   `context.addEventHandler('physics-hit', body=ball, function=fn)`, would put physics
    events in the telemetry journal beside keys and clicks. Recommendation: add it in
    phase 2 as a second route to the same subscription, since the journal needs the
    events to replay a session.
