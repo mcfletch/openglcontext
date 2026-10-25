@@ -68,6 +68,9 @@ SAMPLED_MARGIN = 0.2
 #: Metres of ground a tile of :class:`SampledGround` holds along each side.
 TILE_METRES = 32.0
 
+#: The most points whose answer :class:`SampledGround` keeps for the next ask.
+MEMO_POINTS = 256
+
 #: Tiles :class:`SampledGround` keeps.
 TILES_KEPT = 64
 
@@ -146,9 +149,10 @@ class SampledGround:
         self._kept = int(kept)
         self._tiles: collections.OrderedDict[tuple[int, int], np.ndarray] = collections.OrderedDict()
         self._lock = threading.Lock()
+        self._last: tuple[np.ndarray, np.ndarray, tuple[np.ndarray, np.ndarray, np.ndarray]] | None = None
 
     def __getattr__(self, name: str) -> Any:
-        if name in ('ground', '_tiles', '_lock'):
+        if name in ('ground', '_tiles', '_lock', '_last'):
             raise AttributeError(name)
         return getattr(self.ground, name)
 
@@ -177,7 +181,7 @@ class SampledGround:
 
     def sample(self, x: Any, z: Any) -> np.ndarray:
         """The height at each ``(x, z)``, in the shape of ``x`` and ``z`` together."""
-        return self._read(x, z, False)[0]
+        return self._answer(x, z)[0]
 
     def normal(self, x: Any, z: Any) -> np.ndarray:
         """The unit normal of the ground at each ``(x, z)``, as ``(..., 3)`` with +y up.
@@ -185,10 +189,26 @@ class SampledGround:
         The slope of the cell the point is in, so it is the normal of the
         surface :meth:`sample` interpolates.
         """
-        slope_x, slope_z = self._read(x, z, True)[1:]
+        slope_x, slope_z = self._answer(x, z)[1:]
         out = np.stack((-slope_x, np.ones_like(slope_x), -slope_z), axis=-1)
         normals: np.ndarray = out / np.linalg.norm(out, axis=-1, keepdims=True)
         return normals
+
+    def _answer(self, x: Any, z: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Heights and slopes at the points, as the last few points asked were answered.
+
+        A height and a normal are asked at the same points one after the other,
+        so the last small set of points is kept with its answer.
+        """
+        x = np.asarray(x, dtype='d')
+        z = np.asarray(z, dtype='d')
+        kept = self._last
+        if kept is not None and np.array_equal(x, kept[0]) and np.array_equal(z, kept[1]):
+            return kept[2]
+        answer = self._read(x, z, True)
+        if x.size <= MEMO_POINTS and z.size <= MEMO_POINTS:
+            self._last = (x.copy(), z.copy(), answer)
+        return answer
 
     def _read(self, x: Any, z: Any, slopes: bool) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """The height at each point, and with ``slopes`` the rise per metre along x and along z."""

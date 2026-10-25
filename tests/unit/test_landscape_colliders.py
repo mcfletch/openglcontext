@@ -232,6 +232,24 @@ class TestSampledGround:
         slope_x = (cached.sample(x + 0.1, z) - cached.sample(x - 0.1, z)) / 0.2
         assert (-normals[:, 0] / normals[:, 1]) == pytest.approx(slope_x, abs=0.05)
 
+    def test_a_height_and_the_normal_at_the_same_points_are_read_once(self):
+        cached = SampledGround(CountingGround(), spacing=0.5)
+        x, z = np.array([3.0, 4.0, 5.0]), np.array([1.0, 2.0, 3.0])
+        reads = []
+        original = cached._read  # noqa: SLF001 counting the reads the cache makes
+        cached._read = lambda *a: reads.append(a) or original(*a)  # noqa: SLF001
+        height = cached.sample(x, z)
+        normal = cached.normal(x, z)
+        assert len(reads) == 1
+        assert height.shape == (3,) and normal.shape == (3, 3)
+
+    def test_changed_points_are_read_again(self):
+        cached = SampledGround(CountingGround(), spacing=0.5)
+        x, z = np.array([3.0, 4.0]), np.array([1.0, 2.0])
+        first = cached.sample(x, z)
+        x[0] = 30.0
+        assert cached.sample(x, z)[0] != first[0]
+
     def test_the_tiles_it_keeps_are_bounded(self):
         cached = SampledGround(CountingGround(), spacing=1.0, tile=16.0, kept=4)
         for k in range(20):
