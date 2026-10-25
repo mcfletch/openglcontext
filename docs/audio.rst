@@ -342,32 +342,111 @@ so one source is one sound at a time, and it keeps following the node as the
 node moves.
 
 A sound that overlaps itself, such as rapid fire, or that has no node to
-belong to, is played through the context's audio engine:
+belong to, is played with ``audio.play``, described next.
+
+.. _audio-play:
+
+Playing a sound with a call
+---------------------------
+
+``context.audio`` plays a sound from one call. It needs no node in the scene,
+and a sound can overlap itself:
 
 .. code-block:: python
 
-   from omi_audio import model
-   from OpenGLContext.audio import scene as audioscene
-
-   GUNSHOT = model.AudioEmitter(positional=model.PositionalProperties(
-       distanceModel='linear', refDistance=6.0, maxDistance=120.0))
-
    def onFire(self, shooter, muzzle):
-       engine = audioscene.engine_for(self)     # None when sound is switched off
-       if engine is None:
-           return
        if shooter is self.player:
-           engine.play('sounds/rifle.wav', gain=0.6, priority=0.6)
+           self.audio.play('sounds/rifle.wav', gain=0.6, priority=0.6)
        else:
-           engine.play('sounds/rifle.wav', emitter=GUNSHOT, position=muzzle,
-                       gain=0.6, priority=0.6)
+           self.audio.play('sounds/rifle.wav', at=muzzle, gain=0.6, priority=0.6)
 
-With no ``emitter``, a sound plays centred at full level: the player's own
-weapon has no direction to come from. With one, it is placed at ``position``,
-in world coordinates, at the moment it starts. The first ``play()`` of a name
-decodes the file and later ones reuse it. ``play()`` returns ``None`` when the
-file will not decode or every voice is busy with something more important;
-both are ordinary outcomes and need no check.
+   voice = self.audio.play('sounds/engine.ogg', at=car, loop=True)
+   voice.gain = 0.3
+   voice.rate = 1.4                 # pitch and speed together
+   voice.stop()
+
+   self.audio.load('thud', 'sounds/thud.ogg')   # decoded now, played later as 'thud'
+   self.audio.volume = 0.8                      # the player's volume
+
+``play`` takes these arguments and returns a ``Voice`` at once:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Argument
+     - Means
+   * - ``source``
+     - A file path, an http(s) URL, a name given to ``load``, or an
+       ``omi_audio.Clip`` such as one from ``omi_audio.synth``. Files and URLs
+       are decoded on the first play and kept by name. A URL is fetched on
+       that first play, so ``load`` it ahead.
+   * - ``at``
+     - ``None`` plays the sound centred, at full level. A world point
+       ``(x, y, z)`` places it there. An object with a ``position``
+       attribute, such as a physics body, is followed as it moves. Any other
+       object is a scene node, placed by the placement function the context
+       gives its audio (``Audio(follow=...)``); without one the sound plays
+       centred and one warning is logged.
+   * - ``gain``
+     - Level from 0 up, 1.0 as recorded. Multiplies the distance
+       attenuation.
+   * - ``rate``
+     - Playback speed, pitch included. 1.0 is the clip's own, 2.0 an octave
+       up at twice the speed.
+   * - ``priority``
+     - From 0 to 1, default 0.5. When every voice is busy, the lowest priority
+       goes first, the quietest among equals.
+   * - ``loop``
+     - Repeats until ``stop()``.
+   * - ``emitter``
+     - An ``omi_audio.model.AudioEmitter`` giving the distance curve and the
+       cone. A sound placed with ``at`` and no ``emitter`` gets the default
+       profile: inverse distance from 1 metre.
+
+A ``Voice`` has ``gain`` and ``rate`` to set, ``stop()`` and ``playing``. A
+voice is not playing once its clip has ended, it was stopped, or a more
+important sound took its slot. Setting a voice that has ended does nothing.
+
+The audio object has these properties:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Property
+     - Means
+   * - ``volume``
+     - The player's volume, 0 to 1. Reads and writes ``definition.audio.volume``
+       (:ref:`audio-settings`).
+   * - ``muffle``
+     - 0 clear to 1 underwater (:ref:`audio-muffle`).
+   * - ``listener``
+     - The view platform sounds are heard from. ``None`` is the context's
+       camera.
+   * - ``enabled``
+     - Whether the player's sound switch is on.
+   * - ``engine``
+     - The ``omi_audio`` engine, opened by the first ask, or ``None`` when
+       sound is off. Render thread only.
+
+The device opens on the first ``play``. A context that never plays a sound
+opens none.
+
+``play`` is safe from any thread. On the render thread the sound starts in the
+call. From another thread, such as a physics callback, ``play`` returns the
+voice at once and the context starts the sound at the next frame, so it is
+heard at most one frame late. ``voice.stop()`` before that frame cancels the
+start, and ``gain`` and ``rate`` set from a thread are applied at the same
+frame. The engine itself is single-threaded, and only the context's frame and
+render-thread calls touch it. A program that makes its own ``Audio`` calls
+``audio.frame()`` once a frame, after the scene's audio update, and
+``audio.close()`` when it ends.
+
+Sound switched off, a device that will not open and a clip that will not
+decode each give a voice that is not ``playing`` and one logged warning. No
+call raises. :ref:`audio-testing-calls` shows how a game's tests check the
+sounds it plays.
 
 .. _audio-collisions:
 
@@ -394,10 +473,8 @@ were closing, in metres per second, which sets how loud the sound is:
 
    def OnIdle(self, *arguments):
        self.scene.advance(dt)                    # delivers this frame's blows
-       engine = audioscene.engine_for(self)
        for blow in self.blows:
-           if engine is not None:
-               engine.play(THUD, emitter=PLACED, position=blow.point,
+           self.audio.play(THUD, at=blow.point, emitter=PLACED,
                            gain=min(1.0, blow.approach / 8.0), priority=0.3)
        self.blows.clear()
 
@@ -573,7 +650,8 @@ leave the same gap of quiet. Both fields are ignored while ``loop`` is set.
 The audio engine
 ----------------
 
-Each context has one engine, opened the first time it is asked for.
+``context.audio`` (:ref:`audio-play`) is the usual way to play a sound. Under
+it, each context has one engine, opened the first time it is asked for.
 ``audioscene.engine_for(context)`` returns it, or ``None`` when sound is
 switched off. ``audioscene.attach(context, engine)`` gives a context an engine
 made elsewhere, on a device of the caller's choosing (a silent
@@ -650,7 +728,8 @@ There are two volume controls, and the mixer uses their product. The settings
 screen and a volume key write ``context.contextDefinition.audio.volume``, the
 player's volume. The application sets ``engine.master_gain`` once, to how loud
 the scene is authored to be. Copying one into the other each frame undoes
-every change to the one being overwritten.
+every change to the one being overwritten. ``context.audio.volume`` reads
+and writes the player's volume.
 
 .. _audio-muffle:
 
@@ -758,8 +837,10 @@ When ``miniaudio`` is not installed, or no sound device opens (a container, a
 machine with no sound card, a device another program holds exclusively), the
 engine logs one warning and the application runs silently. Nothing raises and
 nothing refuses to start. Scene nodes are driven the same way, so a game
-behaves identically on a continuous-integration runner. Testing a game's sound
-without a device is covered in :ref:`audio-testing`.
+behaves identically on a continuous-integration runner. ``context.audio.play``
+returns a voice that is not ``playing`` and logs one warning. Testing a game's
+sound without a device is covered in :ref:`audio-testing` and
+:ref:`audio-testing-calls`.
 
 .. _audio-demos:
 

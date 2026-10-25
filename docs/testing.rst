@@ -913,6 +913,41 @@ unit suite the difference is inside the run-to-run spread. OpenGLContext's
 suite runs with ``fail``, and its ``pyproject.toml`` lists which modules open
 files and why.
 
+.. _audio-testing-calls:
+
+Sounds a game plays
+~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.testing.RecordingAudio`` has the interface of ``context.audio``
+(:ref:`audio-play`), plays nothing and records every call. Give it to the code
+under test in place of ``context.audio`` and ask what was played:
+
+.. code-block:: python
+
+   from OpenGLContext.testing import RecordingAudio
+
+   def test_a_broken_crate_cracks_where_it_was():
+       audio = RecordingAudio()
+       crate = Crate(audio, position=(1.0, 2.0, 3.0))
+       crate.break_open()
+       [call] = audio.played('crack.ogg')
+       assert call.at == (1.0, 2.0, 3.0)
+       assert call.gain == 0.8
+
+``audio.calls`` lists every call as a ``Call`` with a ``kind`` (``play``,
+``load``, ``update`` for a voice's gain or rate, ``stop``, ``volume``,
+``muffle``) and the arguments of the call. ``audio.played(source)`` returns the
+plays of one sound, or of every sound with no argument. A path matches the
+same path as ``str`` or ``Path``, a name given to ``load`` matches its path,
+and a clip matches that clip or one with its name. The voices it returns play
+until stopped, so ``call.voice.playing`` shows whether the code stopped a
+sound. ``audio.clear()`` forgets the calls.
+
+It opens no device, needs no frame and records from any thread at the moment
+of the call, so a test of code that plays from a physics callback needs no
+extra step. The thread rule and the queue behind it are tested against the real
+engine on a silent device in ``tests/unit/test_audio_manager.py``.
+
 .. _what-to-test:
 
 What to put in a test

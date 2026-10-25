@@ -26,7 +26,7 @@ import logging
 import os
 import threading
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 from omi_audio import model
@@ -58,6 +58,14 @@ Placement = Callable[[Any], Sequence[float] | None]
 _CENTRE = float(np.sqrt(0.5))
 
 _DEFAULT_EMITTER = model.AudioEmitter()
+
+
+class _Command(NamedTuple):
+    """A request queued for the render thread: ``start``, ``apply`` or ``stop``."""
+
+    kind: str
+    voice: Voice
+    handle: VoiceHandle | None = None
 
 
 class _State(enum.Enum):
@@ -100,6 +108,15 @@ class Voice:
         voice = cls(audio, source, gain=1.0, rate=1.0, priority=0.0, loop=False,
                     emitter=None, track=None)
         voice._state = _State.ENDED
+        return voice
+
+    @classmethod
+    def without_engine(cls, audio: Audio, source: SoundSource, *, gain: float, rate: float,
+                       priority: float, loop: bool, emitter: model.AudioEmitter | None) -> Voice:
+        """A voice that plays until stopped, with no engine behind it."""
+        voice = cls(audio, source, gain=gain, rate=rate, priority=priority, loop=loop,
+                    emitter=emitter, track=None)
+        voice._state = _State.LIVE
         return voice
 
     def __repr__(self) -> str:
@@ -247,6 +264,7 @@ class Audio:
     @volume.setter
     def volume(self, value: float) -> None:
         self._settings().volume = float(value)
+        self._setting_changed('volume', float(value))
         if self._engine is not None and self._on_render_thread():
             self._engine.volume = self.volume
 
@@ -260,6 +278,7 @@ class Audio:
     @muffle.setter
     def muffle(self, value: float) -> None:
         self._muffle = float(value)
+        self._setting_changed('muffle', self._muffle)
         if self._engine is not None and self._on_render_thread():
             self._engine.muffle = self._muffle
         else:
@@ -394,7 +413,7 @@ class Audio:
         if self._on_render_thread():
             self._start(voice)
         else:
-            self._inbox.post(('start', voice, None))
+            self._inbox.post(_Command('start', voice))
         return voice
 
     def _tracker(self, at: Any) -> Callable[[], Point | None] | None:
@@ -472,13 +491,16 @@ class Audio:
     # Voice callbacks
     # ------------------------------------------------------------------
 
+    def _setting_changed(self, name: str, value: float) -> None:
+        """Called when ``volume`` or ``muffle`` is set; for a subclass that records."""
+
     def _voice_changed(self, voice: Voice) -> None:
         if voice._state is not _State.LIVE:
             return
         if self._on_render_thread():
             self._apply(voice)
         else:
-            self._inbox.post(('apply', voice, None))
+            self._inbox.post(_Command('apply', voice))
 
     def _voice_stopped(self, voice: Voice, handle: VoiceHandle | None) -> None:
         if handle is None:
@@ -486,7 +508,7 @@ class Audio:
         if self._on_render_thread():
             handle.stop()
         else:
-            self._inbox.post(('stop', voice, handle))
+            self._inbox.post(_Command('stop', voice, handle))
 
     # ------------------------------------------------------------------
     # The frame
@@ -504,13 +526,13 @@ class Audio:
         commands = self._inbox.drain()
         if self._closed:
             return 0
-        for kind, voice, handle in commands:
-            if kind == 'start':
-                self._start(voice)
-            elif kind == 'apply':
-                self._apply(voice)
-            else:
-                handle.stop()
+        for command in commands:
+            if command.kind == 'start':
+                self._start(command.voice)
+            elif command.kind == 'apply':
+                self._apply(command.voice)
+            elif command.handle is not None:
+                command.handle.stop()
         engine = self._engine
         if engine is None:
             return len(commands)
@@ -539,8 +561,8 @@ class Audio:
         if self._closed:
             return
         self._closed = True
-        for kind, voice, handle in self._inbox.drain():
-            voice._end()
+        for command in self._inbox.drain():
+            command.voice._end()
         for voice in self._tracked:
             voice._end()
         self._tracked = []

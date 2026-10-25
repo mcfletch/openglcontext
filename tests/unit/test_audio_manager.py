@@ -740,9 +740,10 @@ class TestClose:
 
     def test_close_twice_is_safe(self, factory: Factory, tone: Any) -> None:
         audio = Audio(engine_factory=factory)
-        audio.play(tone)
+        voice = audio.play(tone)
         audio.close()
         audio.close()
+        assert not voice.playing
 
     def test_close_without_an_engine_is_safe(self, factory: Factory) -> None:
         Audio(engine_factory=factory).close()

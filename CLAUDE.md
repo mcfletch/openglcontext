@@ -75,6 +75,9 @@ OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
 │   ├── acoustics.py  # X3D's AcousticProperties: surfaces between a sound and
 │   │                 # the listener, and the room's reverb -- no GL -- docs/x3d.rst
+│   ├── manager.py    # Audio: sounds played by call (play, load, volume,
+│   │                 # muffle) from any thread, started on the render thread
+│   │                 # -- no GL -- docs/audio.rst#audio-play
 │   ├── x3dgraph.py   # A scene's X3D sound nodes as one engine's processing
 │   │                 # graph, kept in step once a frame -- no GL
 │   └── vehicle.py    # A road vehicle's motor, tyres, wind and impacts as
@@ -412,6 +415,8 @@ OpenGLContext/
 ├── shaders/          # GLSL sources (.vert/.frag plus shared _*.glsl includes)
 ├── telemetry/        # A whole session to one file, and back -- docs/telemetry.rst
 ├── testing/          # The shipped test machinery conftest.py imports
+│   └── audio.py      # RecordingAudio: an Audio that plays nothing and records
+│                     # its calls -- docs/testing.rst#audio-testing-calls
 ├── tests/            # A second test root -- being moved to tests/unit/ (C1)
 ├── ui/               # Overlay UI: panels, widgets, skin -- docs/overlayui.rst
 │   ├── overlay.py    # OverlayStack + OverlayStackMixin (a base of Context):
