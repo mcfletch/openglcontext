@@ -103,6 +103,10 @@ class Proxy:
             if strategy == 'sphere':
                 return cls.sphere(float((hi - lo).max()) / 2.0)
             return cls.box(tuple(hi - lo))
+        if strategy == 'auto' and dynamic:
+            exact = _exact_primitive(points)
+            if exact is not None:
+                return cls(exact)
         cooked = cookery.cook_shape(points, indices, 'convex' if strategy == 'convex' else 'auto',
                                     dynamic)
         if isinstance(cooked, list):
@@ -134,6 +138,29 @@ class Proxy:
     def mass(self, density: float = DEFAULT_DENSITY) -> float:
         """The mass of the shape at ``density`` kilograms a cubic metre, at least 0.001."""
         return max(self.volume() * float(density), 0.001)
+
+
+def _exact_primitive(points: np.ndarray) -> model.Shape | None:
+    """A box or a sphere the vertices are exactly, else None.
+
+    A box mesh has every vertex at a corner of its bounds. A sphere mesh has
+    every vertex the same distance from the middle of its bounds, and bounds as
+    wide as they are tall and deep.
+    """
+    lo, hi = points.min(axis=0), points.max(axis=0)
+    size = hi - lo
+    if not np.all(size > 1e-9):
+        return None
+    scale = float(size.max())
+    unit = (points - lo) / size
+    if np.all(np.minimum(unit, 1.0 - unit) < 1e-6):
+        return model.Shape.box(tuple(size))
+    middle = (lo + hi) / 2.0
+    radii = np.linalg.norm(points - middle, axis=1)
+    if (np.ptp(size) < 0.02 * scale and np.ptp(radii) < 0.02 * scale
+            and abs(radii.mean() - scale / 2.0) < 0.02 * scale):
+        return model.Shape.sphere(float(radii.mean()))
+    return None
 
 
 def _hull_volume(points: np.ndarray) -> float:

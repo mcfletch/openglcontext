@@ -59,9 +59,7 @@ class WorldRuntime:
         self.step_dt = 1.0 / float(definition.tickHz)
         self.max_catch_up = float(definition.maxCatchUp)
         self.world = PhysicsWorld(
-            gravity=definition.world_gravity(), fixed_dt=self.step_dt,
-            default_linear_damping=float(definition.linearDamping),
-            default_angular_damping=float(definition.angularDamping))
+            gravity=definition.world_gravity(), fixed_dt=self.step_dt)
         self.world.log_events = False
         #: Called with each :class:`Step` before and after the world steps.
         self.before_step: list[Callable[[Step], Any]] = []
@@ -204,6 +202,27 @@ class WorldRuntime:
             self.world.linear_damping[index] = float(linear)
         if angular is not None:
             self.world.angular_damping[index] = float(angular)
+
+    def _op_config(self, uid: int, tick_hz: float, max_catch_up: float) -> None:  # noqa: ARG002 world-wide
+        self.step_dt = 1.0 / float(tick_hz)
+        self.max_catch_up = float(max_catch_up)
+        self.world.fixed_dt = self.step_dt
+
+    def _op_logging(self, uid: int, on: bool) -> None:  # noqa: ARG002 world-wide
+        self.set_logging(on)
+
+    def _op_run(self, uid: int, function: Callable[[Any], Any],  # noqa: ARG002 world-wide
+                future: Any) -> None:
+        if not future.set_running_or_notify_cancel():
+            return
+        try:
+            future.set_result(function(self.world))
+        except BaseException as error:
+            future.set_exception(error)
+
+    def _op_post(self, uid: int, function: Callable[..., Any],  # noqa: ARG002 world-wide
+                 arguments: tuple[Any, ...]) -> None:
+        function(*arguments)
 
     def _op_noop(self, uid: int) -> None:
         """Do nothing; a command whose arrival wakes a blocked worker."""

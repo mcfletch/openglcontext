@@ -83,10 +83,23 @@ def test_the_node_scale_is_part_of_the_proxy():
     assert np.allclose(proxy.shape.size, (2, 2, 2), atol=1e-6)
 
 
-def test_auto_gives_a_static_node_its_triangles_and_a_dynamic_node_a_hull():
-    node = _block((1, 1, 1))
-    assert Proxy.from_node(node, 'auto', dynamic=False).shape.type == 'trimesh'
-    assert Proxy.from_node(node, 'auto', dynamic=True).shape.type in ('convex', 'compound')
+def test_auto_gives_a_static_node_its_triangles():
+    assert Proxy.from_node(_block((1, 1, 1)), 'auto', dynamic=False).shape.type == 'trimesh'
+
+
+def test_auto_fits_a_box_to_a_dynamic_node_that_is_one():
+    assert Proxy.from_node(_block((1, 2, 3)), 'auto', dynamic=True).shape.type == 'box'
+
+
+def test_auto_fits_a_sphere_to_a_dynamic_node_that_is_one():
+    proxy = Proxy.from_node(_ball(0.75), 'auto', dynamic=True)
+    assert proxy.shape.type == 'sphere'
+    assert proxy.shape.radius == pytest.approx(0.75, rel=0.02)
+
+
+def test_auto_gives_a_dynamic_node_that_is_neither_its_hull():
+    chamfered = surfaces.shape(surfaces.block((1, 1, 1), chamfer=0.2), LOOK)
+    assert Proxy.from_node(chamfered, 'auto', dynamic=True).shape.type in ('convex', 'compound')
 
 
 def test_convex_takes_the_hull_of_the_mesh():

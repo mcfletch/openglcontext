@@ -122,6 +122,14 @@ class Collision:
     #: :class:`~omi_physics.contactevents.ContactEvent`,
     #: :class:`~omi_physics.contactevents.TriggerEvent` or :class:`HitEvent`.
     event: Any = field(repr=False)
+    #: The world's step count when it happened, which orders events within
+    #: a frame and says which step of a frame made one.
+    step: int = 0
+
+    @property
+    def speed(self) -> float:
+        """The closing speed along the normal, m/s: :attr:`approach`."""
+        return self.approach
 
 
 @dataclass(eq=False)

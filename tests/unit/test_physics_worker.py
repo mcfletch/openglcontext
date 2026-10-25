@@ -146,6 +146,7 @@ def test_collect_returns_a_snapshot_only_when_a_new_one_was_published(threaded):
     threaded.wait_ticks(3)
     assert threaded.collect(0.016).snapshot is not None
     threaded.stop()
+    threaded.collect(0.016)                  # the last tick published before the thread ended
     assert threaded.collect(0.016).snapshot is None
 
 

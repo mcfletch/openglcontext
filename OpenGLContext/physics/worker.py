@@ -20,7 +20,8 @@ import collections
 import logging
 import threading
 import time
-from typing import NamedTuple, Protocol
+from collections.abc import Callable
+from typing import Any, NamedTuple, Protocol
 
 from omi_physics.threaded import pace
 
@@ -48,6 +49,13 @@ class Worker(Protocol):
     """What the physics service needs of a worker."""
 
     runtime: WorldRuntime
+    inbox: Inbox
+
+    def on_worker_thread(self) -> bool:
+        """Whether the calling thread is the one stepping the world right now."""
+
+    def flush(self) -> None:
+        """Apply waiting commands now on the calling thread, where no thread of the worker's runs."""
 
     def submit(self, command: Command) -> None:
         """Make ``command`` from any thread."""
@@ -68,8 +76,8 @@ class Worker(Protocol):
 class InlineWorker:
     """Steps the world in :meth:`collect`, on the calling thread."""
 
-    def __init__(self, definition: PhysicsDefinition) -> None:
-        self.runtime = WorldRuntime(definition)
+    def __init__(self, definition: PhysicsDefinition, runtime: WorldRuntime | None = None) -> None:
+        self.runtime = runtime if runtime is not None else WorldRuntime(definition)
         self.inbox = Inbox()
         self._stepping = False
 
@@ -106,18 +114,28 @@ class InlineWorker:
     def stop(self) -> None:
         """An inline worker has no thread to stop."""
 
-    @property
-    def stepping(self) -> bool:
-        """Whether a step is under way on some thread, so a command is applied at once."""
+    def on_worker_thread(self) -> bool:
+        """Whether a step is under way, so the caller is a hook inside it."""
         return self._stepping
+
+    def flush(self) -> None:
+        """Apply the waiting commands without stepping."""
+        self._stepping = True
+        try:
+            self.runtime.bind_thread()
+            for command in self.inbox.drain():
+                self.runtime.apply(command)
+        finally:
+            self._stepping = False
 
 
 class ThreadWorker:
     """Steps the world on a daemon thread, one fixed step per tick."""
 
-    def __init__(self, definition: PhysicsDefinition) -> None:
-        self.runtime = WorldRuntime(definition)
-        self.sim_hz = float(definition.tickHz)
+    def __init__(self, definition: PhysicsDefinition, wake: Callable[[], Any] | None = None,
+                 runtime: WorldRuntime | None = None) -> None:
+        self.runtime = runtime if runtime is not None else WorldRuntime(definition)
+        self._wake = wake
         self.inbox = Inbox()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -131,6 +149,29 @@ class ThreadWorker:
         self._dropped = 0
         #: Whether the thread is blocked with nothing to do.
         self.idle = False
+
+    @property
+    def sim_hz(self) -> float:
+        """The tick rate asked for, in steps a second."""
+        return 1.0 / self.runtime.step_dt
+
+    def on_worker_thread(self) -> bool:
+        """Whether the calling thread is the stepping thread."""
+        return self._thread is not None and threading.get_ident() == self._thread.ident
+
+    def flush(self) -> None:
+        """Apply the waiting commands on the calling thread, when no thread is running."""
+        self._flush()
+
+    def _flush(self) -> bool:
+        with self._lock:
+            if self._thread is not None:
+                return False
+        self.runtime.bind_thread()
+        commands = self.inbox.drain()
+        for command in commands:
+            self.runtime.apply(command)
+        return bool(commands)
 
     # -- lifecycle ------------------------------------------------------
     @property
@@ -160,13 +201,15 @@ class ThreadWorker:
     # -- the render thread's side ---------------------------------------
     def submit(self, command: Command) -> None:
         """Queue ``command``, or apply it at once from a callback on the stepping thread."""
-        if self.runtime.on_stepping_thread() and threading.get_ident() == self.thread_id:
+        if self.on_worker_thread():
             self.runtime.apply(command)
         else:
             self.inbox.post(command)
 
     def collect(self, dt: float) -> Outbox:  # noqa: ARG002 the thread steps by its own clock
         """The newest snapshot if it has not been collected, and the events since the last call."""
+        if self._thread is None:
+            self._publish_without_thread()
         with self._lock:
             snapshot = self._published
             if snapshot is not None and snapshot.version == self._collected:
@@ -175,6 +218,11 @@ class ThreadWorker:
                 self._collected = snapshot.version
             events, self._events = self._events, []
         return Outbox(snapshot, events)
+
+    def _publish_without_thread(self) -> None:
+        """Apply what is waiting and publish the world as it stands, with no thread running."""
+        if self._flush() or self._published is None:
+            self._publish()
 
     def step(self, dt: float) -> None:
         """Advance by ``dt`` seconds on the calling thread, for a worker that is not running."""
@@ -226,7 +274,6 @@ class ThreadWorker:
     def _loop(self) -> None:
         runtime = self.runtime
         runtime.bind_thread()
-        step_dt = runtime.step_dt
         next_due = time.perf_counter()
         while not self._stop.is_set():
             applied = self._apply_waiting()
@@ -240,7 +287,7 @@ class ThreadWorker:
             runtime.step_once()
             self._publish()
             self._tick(time.perf_counter())
-            delay, next_due, overran = pace(next_due, time.perf_counter(), step_dt)
+            delay, next_due, overran = pace(next_due, time.perf_counter(), runtime.step_dt)
             if overran:
                 self._dropped += 1
             if delay > 0.0:
@@ -261,6 +308,8 @@ class ThreadWorker:
         markers, self.runtime.markers = self.runtime.markers, []
         for marker in markers:
             marker.set()
+        if self._wake is not None and snapshot.version and self.runtime.busy():
+            self._wake()
 
     def _tick(self, now: float) -> None:
         self._ticks.append(now)
