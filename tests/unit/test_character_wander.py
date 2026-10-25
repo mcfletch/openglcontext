@@ -20,7 +20,7 @@ HERE = str(tests_root(__file__))
 from OpenGLContext import entropy
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.character.wander import (
-    Gait, STAND, TURN, WALK, Wander, WanderingCrowd,
+    Gait, STAND, TURN, WALK, Wander, WanderingCrowd, run_share,
 )
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf, sample_model_url
 from OpenGLContext.scenegraph.walk import reachable
@@ -688,3 +688,18 @@ def _pose_of(model):
         np.asarray([list(x.rotation) for x in model.mixer.rig.transforms]),
         np.asarray([list(x.scale) for x in model.mixer.rig.transforms]),
     ], axis=1)
+
+
+class TestRunShare:
+    """How much of the travel is a run rather than a walk, by speed alone."""
+
+    def test_nothing_below_the_walk_and_everything_above_the_run(self):
+        assert run_share(0.5, 1.0, 3.0) == 0.0
+        assert run_share(3.5, 1.0, 3.0) == 1.0
+
+    def test_midway_between_the_two_strides_is_half(self):
+        assert run_share(2.0, 1.0, 3.0) == pytest.approx(0.5)
+
+    def test_a_run_no_longer_than_the_walk_switches_at_the_walk(self):
+        assert run_share(0.9, 1.0, 1.0) == 0.0
+        assert run_share(1.1, 1.0, 1.0) == 1.0

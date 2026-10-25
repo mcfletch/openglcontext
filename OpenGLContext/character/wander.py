@@ -73,7 +73,8 @@ from OpenGLContext import entropy
 from OpenGLContext.character.crowd import Crowd
 from OpenGLContext.scenegraph.transform import Transform
 
-__all__ = ['Gait', 'STAND', 'TURN', 'WALK', 'Wander', 'WanderingCrowd']
+__all__ = ['Gait', 'STAND', 'TURN', 'WALK', 'Wander', 'WanderingCrowd',
+           'run_share']
 
 #: Standing still: the walk is fading out of the pose or already gone.
 STAND = 0
@@ -396,16 +397,22 @@ class Gait:
             self._running.speed = _rate(speed, self.run_stride)
 
     def _gallop(self, speed: float) -> float:
-        """How much of the travel is a run rather than a walk, from 0 to 1.
+        """How much of the travel is a run rather than a walk, from 0 to 1."""
+        return run_share(speed, self.walk_stride, self.run_stride)
 
-        Nothing below what the walk was authored to carry, everything above
-        what the run was; between them the two clips are mixed, which is what a
-        body picking up speed looks like.
-        """
-        span = self.run_stride - self.walk_stride
-        if span <= 0:
-            return 1.0 if speed > self.walk_stride else 0.0
-        return min(1.0, max(0.0, (speed - self.walk_stride) / span))
+
+def run_share(speed: float, walk_stride: float, run_stride: float) -> float:
+    """How much of travel at ``speed`` is a run rather than a walk, from 0 to 1.
+
+    Nothing below what the walk was authored to carry, everything above what
+    the run was; between them the two clips are mixed, which is what a body
+    picking up speed looks like. A run authored no faster than the walk
+    switches over at the walk's speed.
+    """
+    span = run_stride - walk_stride
+    if span <= 0:
+        return 1.0 if speed > walk_stride else 0.0
+    return min(1.0, max(0.0, (speed - walk_stride) / span))
 
 
 class WanderingCrowd:
