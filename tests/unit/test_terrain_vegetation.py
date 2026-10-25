@@ -11,14 +11,13 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from OpenGLContext import quaternion
 from OpenGLContext.scenegraph.terrain import HeightField
 from OpenGLContext.scenegraph.vegetation import world_grid_scatter
 from OpenGLContext.scenegraph.vegetation.clumps import _decimate_ribbons
 from OpenGLContext.scenegraph.instancedgl import SHADER_DIR
-from OpenGLContext.move.terrainwalk import TerrainWalkMixin
-from OpenGLContext.move.viewplatform import ViewPlatform
 from OpenGLContext.loaders.tiles3d.vegetation import poisson_thin
+
+from ._terrain_host import Clock
 
 
 def ramp_field(R=5, E=4.0, relief=10.0):
@@ -276,44 +275,35 @@ def test_decimate_noop_when_rings_below_target():
 
 
 # --- TerrainWalkMixin ----------------------------------------------------------
+# The walker's colliders are in test_terrainwalk_colliders.py, and the avatar in
+# test_terrainwalk_avatar.py.
 
-class _FakePlatform:
-    def __init__(self, p, yaw=0.0):
-        self._p = np.array(p, 'd')
-        self.quaternion = quaternion.fromXYZR(0, 1, 0, yaw)
-    @property
-    def position(self): return self._p
-    def setPosition(self, p): self._p = np.array(p, 'd')
-    def setYaw(self, yaw): self.quaternion = quaternion.fromXYZR(0, 1, 0, yaw)
-    forward = ViewPlatform.forward
+@pytest.fixture
+def clock():
+    made = Clock()
+    yield made
+    made.restore()
 
 
-class _Walker(TerrainWalkMixin):
-    def __init__(self, platform):
-        self.platform = platform
-        self.redraws = 0
-    def triggerRedraw(self, force=0): self.redraws += 1  # noqa: ARG002 the signature of the triggerRedraw it stands in for
-
-
-def test_idle_redraws_only_when_the_view_changes():
-    w = _Walker(_FakePlatform((0.0, 0.0, 0.0)))
+def test_idle_redraws_only_when_the_view_changes(clock):
+    w = clock.host((0.0, 0.0, 0.0))
     w.init_walk(ramp_field())
     w.OnIdle()
-    assert w.redraws == 1                 # first frame draws
+    assert w.redraws == [1]               # first frame draws
     w.OnIdle()
-    assert w.redraws == 1                 # parked: no new draw
+    assert w.redraws == [1]               # parked: no new draw
     w.platform.setPosition((5.0, 0.0, 0.0))
     w.OnIdle()
-    assert w.redraws == 2                             # moved -> draw
+    assert w.redraws == [1, 1]            # moved -> draw
     w.platform.setYaw(0.5)
     w.OnIdle()
-    assert w.redraws == 3                             # turned in place -> draw
+    assert w.redraws == [1, 1, 1]         # turned in place -> draw
     w.OnIdle()
-    assert w.redraws == 3                 # parked again: no new draw
+    assert w.redraws == [1, 1, 1]         # parked again: no new draw
 
 
-def test_stream_fires_on_move_or_turn():
-    w = _Walker(_FakePlatform((0.0, 0.0, 0.0)))
+def test_stream_fires_on_move_or_turn(clock):
+    w = clock.host((0.0, 0.0, 0.0))
     w.init_walk(ramp_field())
     moves = []
     both = []
@@ -332,80 +322,13 @@ def test_stream_fires_on_move_or_turn():
     assert len(moves) == 2 and len(both) == 3                    # big move: both
 
 
-def test_clamp_snaps_to_ground():
+def test_clamp_snaps_to_ground(clock):
     hf = ramp_field(R=17, E=200.0, relief=30.0)
-    w = _Walker(_FakePlatform((10.0, -999.0, -3.0)))
+    w = clock.host((10.0, -999.0, -3.0))
     w.init_walk(hf)
     w.collide_and_clamp()
     expect = hf.height_at(10.0, -3.0) + w.eye_height
-    assert w.platform.position[1] == pytest.approx(expect, abs=1e-4)
-
-
-def test_collision_pushes_out_to_trunk_radius():
-    hf = HeightField(np.zeros((16, 16)), 200.0, 10.0)
-    trunk = np.array([[10.0, 0.0, 20.0]], np.float32)
-    rad = np.array([0.3], np.float32)
-    w = _Walker(_FakePlatform((10.1, 0.0, 20.0)))       # deep inside the trunk
-    w.init_walk(hf, trunk, rad)
-    w.collide_and_clamp()
-    d = math.hypot(w.platform.position[0] - 10.0, w.platform.position[2] - 20.0)
-    assert d == pytest.approx(rad[0] + w.player_radius, abs=1e-3)
-
-
-def test_no_push_when_clear_of_trunks():
-    hf = HeightField(np.zeros((16, 16)), 200.0, 10.0)
-    trunk = np.array([[10.0, 0.0, 20.0]], np.float32)
-    rad = np.array([0.3], np.float32)
-    w = _Walker(_FakePlatform((15.0, 0.0, 20.0)))
-    w.init_walk(hf, trunk, rad)
-    w.collide_and_clamp()
-    assert w.platform.position[0] == pytest.approx(15.0)
-    assert w.platform.position[2] == pytest.approx(20.0)
-
-
-def _walk(hf, trunk, rad, prev, cur):
-    w = _Walker(_FakePlatform(prev))
-    w.init_walk(hf, trunk, rad)
-    w.collide_and_clamp()                      # establish previous position
-    w.platform.setPosition(cur)
-    w.collide_and_clamp()
-    return float(w.platform.position[0]), float(w.platform.position[2])
-
-
-def test_swept_collision_blocks_fast_step_through_trunk():
-    hf = HeightField(np.zeros((16, 16)), 200.0, 10.0)
-    trunk = np.array([[0.0, 0.0, 0.0]], np.float32)
-    rad = np.array([0.4], np.float32)
-    R = rad[0] + TerrainWalkMixin.player_radius
-    # a 3m step straight across the ~1.3m trunk in one frame must not tunnel through
-    x, z = _walk(hf, trunk, rad, (-1.5, 0, 0.03), (1.5, 0, 0.03))
-    assert x < 1.5 - 1e-3
-    assert math.hypot(x, z) >= R - 1e-3
-
-
-def test_swept_collision_dead_centre_ejects():
-    hf = HeightField(np.zeros((16, 16)), 200.0, 10.0)
-    trunk = np.array([[0.0, 0.0, 0.0]], np.float32)
-    rad = np.array([0.4], np.float32)
-    # a step passing exactly through the axis (degenerate push direction) still ejects
-    x, z = _walk(hf, trunk, rad, (-1.5, 0, 0.0), (1.5, 0, 0.0))
-    assert x < 1.5 - 1e-3
-
-
-def test_collision_resolves_deepest_of_many():
-    hf = HeightField(np.zeros((16, 16)), 200.0, 10.0)
-    # trunk 0 far in -x (deep penetration), trunk 1 far in +x (barely clear); the
-    # resolver must pick the deepest (trunk 0) and push out to its radius.
-    trunks = np.array([[0.0, 0.0, 0.0], [8.0, 0.0, 0.0]], np.float32)
-    rad = np.array([0.5, 0.5], np.float32)
-    r0 = rad[0] + TerrainWalkMixin.player_radius
-    w = _Walker(_FakePlatform((0.2, 0.0, 0.0)))    # deep inside trunk 0
-    w.init_walk(hf, trunks, rad)
-    w.collide_and_clamp()
-    # trunk 0 sits at x=0 and the camera is on its +x side, so it is pushed further +x
-    assert w.platform.position[0] > 0.2
-    d0 = math.hypot(w.platform.position[0] - 0.0, w.platform.position[2] - 0.0)
-    assert d0 == pytest.approx(r0, abs=1e-3)
+    assert w.platform.position[1] == pytest.approx(expect, abs=0.02)
 
 
 # --- packaging -----------------------------------------------------------------

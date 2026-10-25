@@ -472,8 +472,15 @@ Walking on a height field
 height field. It is the terrain form of :ref:`PhysicsWalkMixin
 <physics-heightfield>`. It uses the same avatar, the same :doc:`movement
 modes <navigation>` and the same keys as walking on a glTF model or an arena
-map. The ground comes from the height field. Obstacles such as tree trunks
-and rocks are a set of vertical cylinders, resolved analytically.
+map.
+
+The ground, the trunks and the rocks are bodies in the context's
+:doc:`physics world <physics>` (``context.physics``), and the avatar is a
+character in it that the physics service steps in the frame. The ground body
+answers its height from the height field itself, the surface the terrain node
+draws, so nothing is cooked into a mesh. A rigid body added to the context
+lands on the ground, rolls against the trunks and comes to rest, and the walker
+pushes it, as a body does in any other physics world.
 
 .. code-block:: python
 
@@ -483,8 +490,13 @@ and rocks are a set of vertical cylinders, resolved analytically.
            self.eye_height = 1.7                       # metres; sizes the avatar
            self.platform.setPosition( where_to_start )
            self.init_walk( height_field, trunk_positions, trunk_radii )
+           self.add_collider_source( rocks.mounds_near )
            self.setupPhysics( enable=True )            # binds 'g', starts walking
            self.add_stream( 10.0, refresh_grass )      # follow the walker
+
+       def throw( self, event ):
+           # a body dropped in the forest lands on the ground and hits the trees
+           self.physics.add_dynamic( ball_node, proxy='sphere' )
 
 .. list-table::
    :widths: auto
@@ -493,27 +505,30 @@ and rocks are a set of vertical cylinders, resolved analytically.
    * - Method or attribute
      - What it does
    * - ``init_walk( field, positions, radii )``
-     - Sets the ground and the obstacle cylinders. ``player_radius`` is added to
-       each radius. The cylinders are sorted into a hash grid, so a collision test
-       checks a few neighbours rather than the whole forest.
+     - Makes the field the ground of the physics world and each position a
+       trunk: a vertical cylinder 24 m tall that stands on the ground under its
+       ``x`` and ``z``, whatever its ``y``. Trunks whose radii fall in the same
+       0.05 m share a shape and are made together. The world no longer makes a
+       static body of each shape in the scene, which would give the terrain a
+       second surface; the walker's colliders are the ones it is given. Binding
+       another field replaces the first.
    * - ``add_collider_source( source )``
      - Adds colliders that come and go as the walker moves. ``source( x, z,
-       reach )`` answers ``( positions, radii )``, arrays of the same form as
-       ``init_walk``'s, for the colliders within ``reach`` metres of ``( x, z )``.
-       It is asked at every collision step, after the fixed cylinders.
-       ``RockField.colliders_near`` is one: streamed rocks stop a walker
-       without a table of every rock in the world (see :doc:`surfaces`).
-       A source may answer ``( positions, radii, rims, tops )`` instead, with two
-       more arrays for mounds: each a dome over a circle of its radius about its
-       position, ``rims`` high at the edge and ``tops`` at the middle, above the
-       position. The walker steps onto a mound where its surface rises no more
-       than ``step_height`` (0.5 m) above the walker's feet, stands on its
-       surface and is pushed out of it where it rises more.
-       ``RockField.mounds_near`` is one.
+       reach )`` answers ``( positions, radii )``, an ``( N, 3 )`` and an
+       ``( N, )`` array, for the colliders within ``reach`` metres of ``( x, z )``:
+       cylinders standing on their positions. A source may answer ``( positions,
+       radii, rims, tops )`` instead, with two more arrays for mounds: each a
+       dome over a circle of its radius about its position, ``rims`` high at the
+       edge and ``tops`` at the middle, above the position.
+       ``RockField.mounds_near`` is one: streamed rocks stop a walker without a
+       table of every rock in the world (see :doc:`surfaces`).
+       The colliders within ``collider_reach`` (24 m) of the walker are bodies in
+       the world, made as the walker nears them and dropped as it leaves. The
+       source is asked once the walker has moved two metres. It returns a handle
+       whose ``remove()`` takes the source and its bodies out.
    * - ``setupPhysics( enable=True )``
-     - Creates the avatar and gives it the camera. Inherited unchanged from
-       ``PhysicsWalkMixin``: :kbd:`g` returns the camera to the free-fly
-       navigator, and :kbd:`f` flies.
+     - Creates the avatar and gives it the camera. :kbd:`g` returns the camera to
+       the free-fly navigator, and :kbd:`f` flies.
    * - ``add_stream( step, fn, turn=None )``
      - Calls ``fn(x, z)`` each time the walker moves ``step`` world units, or turns
        ``turn`` radians. Use it to refresh the grass and near-mesh trees that
@@ -523,12 +538,43 @@ and rocks are a set of vertical cylinders, resolved analytically.
      - The camera height (default 1.7) and body radius (default 0.25) the scene
        was built for, in world units. They size the avatar in place of the
        physics defaults.
+   * - ``step_height``, ``max_slope``
+     - The tallest step the avatar climbs (0.5 m) and the steepest ground it
+       stands on (75 degrees). Ground steeper than ``max_slope`` is slid down.
+   * - ``collider_reach``
+     - How far from the walker, in metres, the rocks of a source are bodies in
+       the world (24).
 
-The surface is a **floor**, not a rail. The avatar is lifted onto it from
-below and is left alone above it, so a jump rises, a drop from the air falls,
-and flight over the canopy works. Trunks stop a walker but not a flier.
-Without ``setupPhysics``, the mix-in still holds a free-fly camera above the
-terrain. The offscreen capture and benchmark tools use that mode.
+A walker climbs a mound whose rim is within ``step_height`` of its feet and whose
+slope above the rim is within ``max_slope``, stands on it, and is stopped by one
+that rises further. A mound is a solid of the dome's outline with a vertical side
+down to 0.3 m below its position, so it is cast at by rays and met by thrown
+bodies like any other body.
+
+The avatar is stepped by the service once a frame, before the camera is read,
+and the context asks for a frame only while the avatar moves, falls or has a move
+held, or the view turns. A walker standing still, with nothing moving in the
+world, asks for none.
+
+The ground is a **floor** for a flier: flying is noclip, so the world's ground
+does not stop the avatar, and the mix-in lifts it above the surface (and the
+rocks on it) each frame. Trunks stop a walker but not a flier. Without
+``setupPhysics``, the mix-in still holds a free-fly camera on the ground and out
+of the trunks and rocks, in pieces of at most 0.35 m so that a fast move does not
+step over a trunk. The offscreen capture and benchmark tools use that mode.
+
+.. rst-class:: technical
+
+Bodies in the world cost the world a step. The world holds every trunk, 230,000 in
+the forest demo, in a grid over their footprints
+(``omi_physics.staticindex``), so a character's step asks for the few within
+reach. A trunk or a rock added later does not rebuild the grid. A world that
+steps with that many static bodies spends a few milliseconds in each step on
+checks that run over every body.
+
+Rocks beyond ``collider_reach`` of the walker are not bodies. A body thrown
+further from the walker than that meets the ground and the trunks and falls
+through the rocks.
 
 Demos and source
 ----------------
@@ -552,9 +598,10 @@ the trees and grass.
 The code is in ``scenegraph/terrain/`` (``heightfield.py``, ``splat.py``,
 ``control.py``, ``holes.py``, ``ground.py``, ``relief.py``),
 ``scenegraph/vegetation/`` (instanced clumps, billboards, near meshes and
-``field.py``), ``physics/heightfield.py`` and ``move/terrainwalk.py``. The
-tests are ``tests/unit/test_terrainwalk_avatar.py`` (where the walker ends
-up: on a slope, against a trunk, mid-jump and in the air),
-``test_terrainwalk_broadphase.py``, ``test_terrain_vegetation.py``,
+``field.py``), ``physics/heightfield.py``, ``physics/landscape.py`` (the ground, trunks and
+rocks as bodies) and ``move/terrainwalk.py``. The tests are
+``tests/unit/test_terrainwalk_avatar.py`` (where the walker ends up: on a slope,
+against a trunk, mid-jump and in the air), ``test_terrainwalk_colliders.py``,
+``test_landscape_colliders.py``, ``test_terrain_vegetation.py``,
 ``test_heightfield_datum.py``, ``test_terrain_control.py``,
 ``test_heightfield_colliders.py`` and ``test_vegetation_field.py``.

@@ -900,6 +900,27 @@ else uses them. The redraw each frame while walking becomes a redraw while the c
 moves, falls or has input. The walker stays on the render thread, so `mounds_near` and the
 `AsyncStreamer` threads share data as they do today.
 
+Landed (2026-10-26, in the `physics-services` branches of openglcontext, omi_physics and
+openglcontext-forest):
+- `physics/landscape.py`: `Landscape` (the ground from `add_ground`, trunks from
+  `add_static_instances` in 0.05 m radius classes, standing on the ground), `SampledGround`
+  (tiles of a slow ground's samples, with normals), `NearbyColliders` (a collider source
+  for `mounds_near`-style fields, with a reach and a hysteresis) and `dome_proxy`.
+- `TerrainWalkMixin` makes the walker a `Character` in `context.physics`, over a
+  `PhysicsViewPlatform`; the movement modes run in a render-queue hook ahead of the service's
+  frame and the camera is applied in one after it. `OnIdle` keeps the streamers and the redraw
+  for a view that turned. The substep path, the hash grid and the analytic pushes are gone;
+  the flier's floor stays. The free-fly clamp teleports the walker along the camera's move.
+- `terrain_view.make_avatar` does the same for `oglc-terrain`.
+- omi_physics gained `CollisionQuery.static_near` over a `StaticGrid` that reads recent
+  changes from the world, rays at convex hulls, and a `dynamic_near` that reads only the
+  dynamic bodies; the character asks for the bodies near its capsule.
+- A character that has not moved sends the world no commands.
+- The forest has `b`, a boulder thrown from the camera.
+- Open: a world of 230,000 static trunks costs 2 to 4 ms per world step in checks that run
+  over every body (`_InertIndex.current`, `refit_aabbs`), and a rock added to it rebuilds
+  the broad phase's index of static bodies (about 50 ms on the worker thread).
+
 ### hill-runner
 
 Today. No `omi_physics`. The runner's gravity is a constant integrated in closed form

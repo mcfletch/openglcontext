@@ -473,8 +473,9 @@ The shipped viewers
      - declared, so the overlay demo has modes to show
    * - ``oglc-forest`` (the forest demo)
      - first-person, walk, fly
-     - yes. The modes move an avatar standing on a height field; see
-       :ref:`Terrain <terrain-heightfield>`
+     - yes. The modes move a character standing on a height field in the
+       context's physics world, among the trunks and rocks that are bodies
+       there; see :ref:`Terrain <terrain-heightfield>`
 
 ``OpenGLContext.move.modes.walk_fly_modes(scale=1.0)`` returns the walk and
 fly modes. ``oglc-view`` and any application embedding the :ref:`viewing

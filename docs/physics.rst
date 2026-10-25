@@ -557,37 +557,41 @@ fly out, and :kbd:`g` again to walk from wherever you are.
 
 .. _physics-heightfield:
 
-Ground that is not in the collision world
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Walking a landscape
+~~~~~~~~~~~~~~~~~~~
 
 ``OpenGLContext.move.terrainwalk.TerrainWalkMixin`` is walking for a
 landscape. It uses the same avatar, movement modes and keys as any other
 walking context, but the ground is a :ref:`HeightField <terrain-heightfield>`
-and the obstacles are a field of cylinders (tree trunks). Both are tested
-analytically, not as meshes. A four-kilometre landscape would be millions of
-triangles as a collision mesh, while a height-field lookup costs the same
-anywhere on it.
+and the obstacles are a field of cylinders (tree trunks). They are bodies in
+the context's physics world (:ref:`physics-landscape`), and the avatar is a
+character in it that the service steps, so a body dropped on the landscape
+lands on the ground and strikes the trunks, and the walker pushes it.
 
-It overrides the three methods above that make and resolve the physics world:
+It overrides the methods above that make and resolve the avatar:
 
-- ``buildPhysicsWorld()`` gives the character an empty world.
+- ``ensurePhysicsWorld()`` makes the character in the context's physics world
+  and a platform over it, and takes the frame: the movement modes are given the
+  frame before the world is stepped, and the camera is put at the avatar's eye
+  after.
 - ``spawnAvatar()`` stands the avatar on the ground below the camera the scene
   placed. Every point of a height field can be stood on, so there is no
   search.
-- ``resolvePhysicsStep()`` lifts the avatar to the surface and pushes it out
-  of the trunks after each step.
+- ``resolvePhysicsStep()`` lifts a flying avatar to the surface after each
+  step.
 
 It also keeps the avatar at one metre to the unit (``physicsAvatarScale()``;
-a height field is already in metres), sizes it from its own ``eye_height``
-and ``player_radius`` (``characterCapabilities()``), declares mouse-look,
-walking and flying unless the host declared movement modes of its own
-(``applyMovementModes()``), and holds a free-flying camera on the ground and
-out of the trunks after each frame's events (``DoEventCascade()``).
+a height field is already in metres), sizes it from its own ``eye_height``,
+``player_radius``, ``step_height`` and ``max_slope``
+(``characterCapabilities()``), declares mouse-look, walking and flying unless
+the host declared movement modes of its own (``applyMovementModes()``), and
+holds a free-flying camera on the ground and out of the trunks after each
+frame's events (``DoEventCascade()``).
 
-The surface acts as a floor, not a rail: a jump rises, and an avatar arriving
-from the air falls onto it. Trunks stop a walker but not a flier, because
-flying has no collision. The ``oglc-forest`` demo uses this mixin, as does
-anything built on ``scenegraph.terrain`` (see :doc:`terrain`).
+A jump rises, and an avatar arriving from the air falls onto the ground. Trunks
+stop a walker but not a flier, because flying has no collision. The
+``oglc-forest`` demo uses this mixin, as does anything built on
+``scenegraph.terrain`` (see :doc:`terrain`).
 
 The avatar is sized to the world
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -778,6 +782,49 @@ middle of an open road.
 
 So colliders are built from what is in the world, not from its tiles: only
 drawn tiles get colliders, and roads and props get colliders of their own.
+
+.. _physics-landscape:
+
+Landscapes
+~~~~~~~~~~
+
+A landscape of kilometres is too large to hold as a mesh, and the renderer
+already answers its height at any point. ``OpenGLContext.physics.landscape``
+makes the world's bodies from the same height field the terrain node draws:
+
+.. code-block:: python
+
+   from OpenGLContext.physics.landscape import Landscape, NearbyColliders
+
+   Landscape( context.physics, ground, trunk_positions, trunk_radii )
+   context.physics.add_collider_source( NearbyColliders( rocks.mounds_near ),
+                                        focus=lambda: walker.position )
+
+``Landscape( physics, ground, trunks=None, radii=None )`` adds the ground as a
+static body that answers a height and a normal at each ``( x, z )``, and each
+trunk as a cylinder 24 m tall that stands on the ground under it.
+``ground`` is anything with ``sample( x, z )`` for arrays, such as a
+``HeightField`` or the ``RockyGround`` that stands for a rock-covered field;
+``extent`` says where it ends, and is taken from the ground's own ``extent``.
+Radii are rounded up to the next 0.05 m, and trunks of one radius share one shape
+and are added in one call. A ground that is not a ``HeightField`` is read through
+``SampledGround``, which keeps 32 m tiles of its samples on a grid as fine as
+its ``spacing``, because a character asks for dozens of heights in a step and
+rock displacement is slow to compute.
+
+``NearbyColliders( answer )`` is a collider source for things that come and go:
+rocks, posts, a scatter streamed round the focus. ``answer( x, z, reach )``
+returns ``( positions, radii )`` for cylinders or ``( positions, radii, rims,
+tops )`` for domes. Things within ``reach`` (24 m) of the focus are made, and stay
+until the focus is 1.25 times as far, so a focus pacing the edge of one does not
+make and drop it again. ``dome_proxy( radius, rim, top )`` is the dome: a
+convex solid with a vertical side, half an ellipse over it, and a floor 0.3 m
+below the position. Rays are cast at it, as at any hull.
+
+A body added to the world hits the ground and the trunks; the rocks beyond the
+focus's reach are not there to be hit. ``oglc-terrain`` builds its avatar this
+way (``terrain_view.make_avatar``), with the procedural or DEM height function
+as the ground.
 
 Tile colliders
 ~~~~~~~~~~~~~~
