@@ -57,6 +57,15 @@ class PhysicsDefinition(node.Node):
     linearDamping = field.newField('linearDamping', 'SFFloat', 1, 0.3)
     angularDamping = field.newField('angularDamping', 'SFFloat', 1, 1.5)
 
+    FIELDS = ('enabled', 'mode', 'tickHz', 'maxCatchUp', 'gravity', 'colliders',
+              'linearDamping', 'angularDamping')
+
+    def replaced(self, **changes: Any) -> PhysicsDefinition:
+        """A new definition with this one's fields and ``changes`` in place of some."""
+        values = {name: getattr(self, name) for name in self.FIELDS}
+        values.update(changes)
+        return type(self)(**values)
+
     def validate(self) -> None:
         """Raise ValueError naming the first field the service cannot run with."""
         if self.mode not in MODES:

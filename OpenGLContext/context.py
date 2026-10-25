@@ -58,7 +58,9 @@ if TYPE_CHECKING:
     from OpenGLContext.framecounter import FrameCounter
     from OpenGLContext.events.renderqueue import RenderQueue
     from OpenGLContext.loaders.sceneloader import SceneLoader
+    from OpenGLContext.audio.manager import Audio
     from OpenGLContext.looptrace import LoopTrace
+    from OpenGLContext.physics.service import Physics
     from OpenGLContext.multiview.views import View, ViewLayout
     from OpenGLContext.stalltrace import StallJournal
     from OpenGLContext.telemetry.record import ReplaySession, SessionRecording
@@ -116,6 +118,7 @@ from OpenGLContext.ui.screen import ScreenMixin
 from OpenGLContext.vrmlcontext import VRMLSceneMixin
 from OpenGLContext import windowsystem as _windowsystem
 from OpenGLContext.events.loadwait import DEFAULT_LIMIT, LoadWait
+from OpenGLContext.physics.callbacks import physics_callback as _physics_callback
 
 if TYPE_CHECKING:
     from OpenGLContext.windowsystem import WindowSystem
@@ -1152,6 +1155,87 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                 renderoptions.env_number_once('OPENGLCONTEXT_LOAD_WAIT', DEFAULT_LIMIT))
         return wait.pending(loading, time.monotonic())
 
+    @property
+    def physics(self) -> Physics:
+        """The rigid-body world of this context, made on first use.
+
+        It steps itself, on a thread of its own or in the frame, and is closed
+        with the window. A context that never mentions it makes none. See
+        :class:`~OpenGLContext.physics.service.Physics`.
+        """
+        found = self.__dict__.get('_physics')
+        if found is None:
+            found = self.__dict__['_physics'] = self._makePhysics()
+        return cast('Physics', found)
+
+    def _makePhysics(self) -> Physics:
+        """Make the physics service and have the render queue frame it.
+
+        A capture or a recorded session runs the world inline, so the world is
+        a function of the clock and of what the game commanded.
+        """
+        from OpenGLContext.events.framestep import FrameStep
+        from OpenGLContext.physics.service import Physics
+        from OpenGLContext.physics.settings import definition_for
+
+        definition = definition_for(self)
+        if self._captureClock is not None and definition.mode != 'inline':
+            definition = definition.replaced(mode='inline')
+        request = getattr(self, 'redrawRequest', None)
+        service = Physics(definition, wake=None if request is None else request.set)
+        self.__dict__['_physicsSteps'] = FrameStep(longest=float(definition.maxCatchUp))
+        queue = getattr(self, 'renderQueue', None)
+        if queue is not None:
+            queue.before_run(self._framePhysics)
+        return service
+
+    def _framePhysics(self) -> None:
+        """Give the physics service its share of the frame, before the frame is drawn."""
+        service = self.__dict__.get('_physics')
+        if service is None:
+            return
+        from OpenGLContext.events import systemtime  # noqa: PLC0415 only a context with physics reads the clock
+
+        steps = self.__dict__['_physicsSteps']
+        if service.frame(steps.step(systemtime.systemTime())):
+            self.triggerRedraw(1)
+
+    @property
+    def audio(self) -> Audio:
+        """The sounds of this context, made on first use.
+
+        ``context.audio.play('thud.ogg')`` plays a sound from any thread. The
+        player's switch, volume and voice budget are ``contextDefinition.audio``.
+        See :class:`~OpenGLContext.audio.manager.Audio`.
+        """
+        found = self.__dict__.get('_audio')
+        if found is None:
+            found = self.__dict__['_audio'] = self._makeAudio()
+        return cast('Audio', found)
+
+    def _makeAudio(self) -> Audio:
+        from OpenGLContext.audio.manager import Audio
+
+        service = Audio(self)
+        queue = getattr(self, 'renderQueue', None)
+        if queue is not None:
+            queue.before_run(self._frameAudio)
+        return service
+
+    def _frameAudio(self) -> None:
+        service = self.__dict__.get('_audio')
+        if service is not None:
+            service.frame()
+
+    def closeServices(self) -> None:
+        """Stop the physics worker and close the audio, where a context made them."""
+        service = self.__dict__.pop('_physics', None)
+        if service is not None:
+            service.close()
+        sounds = self.__dict__.pop('_audio', None)
+        if sounds is not None:
+            sounds.close()
+
     def runRenderQueue(self) -> int:
         """Make the calls other threads have queued on :attr:`renderQueue`
 
@@ -1711,6 +1795,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         loader = getattr(self, 'sceneLoader', None)
         if loader is not None:
             loader.close()
+        self.closeServices()
         self.windowsystem.release()
 
     def pumpWindowEvents(self) -> bool:
@@ -2171,6 +2256,11 @@ class Context(OverlayStackMixin, ViewPlatformMixin, EventHandlerMixin,
     ``navigation`` says which modes it has.  It draws the window's one view;
     :class:`MultiViewContext` adds the views a navigation declares.
     """
+
+    #: Marks a handler method as one that runs on the physics thread:
+    #: ``@Context.physics_callback`` above its ``def``. A class body that
+    #: subclasses Context already has the name in scope, so this needs no import.
+    physics_callback = staticmethod(_physics_callback)
 
     def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
         """Send one key transition the window system did not report

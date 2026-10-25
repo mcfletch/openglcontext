@@ -90,3 +90,11 @@ def test_gravity_as_a_world_gravity_record():
 def test_zero_gravity_gives_a_world_with_none():
     gravity = PhysicsDefinition(gravity=(0, 0, 0)).world_gravity()
     assert gravity.gravity == 0.0
+
+
+def test_replaced_gives_a_new_definition_with_some_fields_changed():
+    original = PhysicsDefinition(mode='thread', tickHz=90.0)
+    changed = original.replaced(mode='inline')
+    assert changed is not original
+    assert changed.mode == 'inline' and changed.tickHz == pytest.approx(90.0)
+    assert original.mode == 'thread'
