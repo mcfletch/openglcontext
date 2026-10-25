@@ -476,12 +476,14 @@ class WorldRuntime:
             changed = None
             redo = np.flatnonzero(np.ones(len(indices), dtype=bool))
         else:
-            differs = (live | self._published_live
-                       | (exact_position != last.position).any(axis=1)
-                       | (exact_orientation != last.orientation).any(axis=1)
-                       | (linear != last.linear_velocity).any(axis=1)
-                       | (angular != last.angular_velocity).any(axis=1)
-                       | (awake != last.awake))
+            differs = live | self._published_live
+            still = np.flatnonzero(~differs)
+            if len(still):
+                differs[still] = ((exact_position[still] != last.position[still]).any(axis=1)
+                                  | (exact_orientation[still] != last.orientation[still]).any(axis=1)
+                                  | (linear[still] != last.linear_velocity[still]).any(axis=1)
+                                  | (angular[still] != last.angular_velocity[still]).any(axis=1)
+                                  | (awake[still] != last.awake[still]))
             redo = changed = np.flatnonzero(differs)
             if not len(redo):
                 snapshot = Snapshot(self.version, world.step_count, world.time, self.applied_seq,
@@ -490,10 +492,15 @@ class WorldRuntime:
                                     last.dynamic, changed, last.version)
                 self._published = snapshot
                 return snapshot
-            position, orientation = last.position.copy(), last.orientation.copy()
-            axis_angle = last.axis_angle.copy()
-            position[redo] = exact_position[redo]
-            orientation[redo] = exact_orientation[redo]
+            if len(redo) == len(indices):
+                # Every row is worked out again, so none is copied from the last.
+                position, orientation = exact_position, exact_orientation
+                axis_angle = np.zeros((len(indices), 4))
+            else:
+                position, orientation = last.position.copy(), last.orientation.copy()
+                axis_angle = last.axis_angle.copy()
+                position[redo] = exact_position[redo]
+                orientation[redo] = exact_orientation[redo]
         moving = redo[live[redo]]
         if len(moving) and alpha < 1.0:
             take = indices[moving]
