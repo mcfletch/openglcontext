@@ -245,3 +245,297 @@ def test_a_zero_length_step_leaves_the_distance_alone():
     settled = cam.distance_scale
     cam.advance(0.0, speed=10.0)
     assert cam.distance_scale == settled
+
+
+# -- look-ahead, damped following and not standing inside the scenery -----------
+#
+# A third-person camera looks a little ahead of the target, follows it with a
+# damped glide, and keeps its arm out of the walls: the three things a chase
+# camera adds to a fixed offset. Each is off by default.
+
+def _frame(cam, dt=1 / 60.0, speed=0.0):
+    cam.advance(dt, speed)
+    cam.apply()
+    return np.array(cam.platform.position)
+
+
+def _wall_behind(z, radius_free=True):
+    """A sweep that meets a wall across the plane ``z`` and reports the hit."""
+    calls = []
+
+    def sweep(origin, direction, distance, radius):
+        calls.append((np.array(origin), np.array(direction), distance, radius))
+        if direction[2] <= 1e-9:
+            return None
+        hit = (z - radius - origin[2]) / direction[2]
+        return hit if 0.0 <= hit < distance else None
+
+    sweep.calls = calls
+    return sweep
+
+
+class TestLookAhead:
+    def test_the_view_is_centred_ahead_of_a_moving_target(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 4.0, 8.0), look_ahead=0.5)
+        cam.target((0.0, 0.0, 0.0), velocity=(0.0, 0.0, -10.0))
+        _frame(cam)
+        assert np.allclose(cam.look, (0.0, 0.0, -5.0))
+        assert np.allclose(cam.platform.position, (0.0, 4.0, 3.0))
+
+    def test_the_velocity_is_worked_out_from_where_the_target_has_been(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 4.0, 8.0), look_ahead=0.5)
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam, dt=0.1)
+        cam.target((0.0, 0.0, -1.0))
+        _frame(cam, dt=0.1)
+        assert np.allclose(cam.look, (0.0, 0.0, -1.0 - 5.0))
+
+    def test_a_held_camera_does_not_look_ahead(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 4.0, 8.0), look_ahead=0.5)
+        cam.target((0.0, 0.0, 0.0), velocity=(0.0, 0.0, -10.0))
+        cam.hold()
+        _frame(cam)
+        assert np.allclose(cam.look, (0.0, 0.0, 0.0))
+
+    def test_no_look_ahead_looks_at_the_target(self):
+        cam = FollowCamera(_FakePlatform())
+        cam.target((1.0, 2.0, 3.0), velocity=(0.0, 0.0, -10.0))
+        _frame(cam)
+        assert np.allclose(cam.look, (1.0, 2.0, 3.0))
+
+
+class TestSmoothFollowing:
+    def _step_response(self, dt, seconds, smooth_time=0.5):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0),
+                           smooth_time=smooth_time)
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam, dt)
+        cam.target((10.0, 0.0, 0.0))
+        trace = [_frame(cam, dt)[0] for _ in range(int(seconds / dt))]
+        return np.array(trace)
+
+    def test_the_camera_glides_to_a_target_that_jumps(self):
+        trace = self._step_response(1 / 60, 0.5)
+        assert 0.0 < trace[0] < 1.0
+        assert 5.0 < trace[-1] < 9.9
+
+    def test_it_settles_on_the_target(self):
+        assert self._step_response(1 / 60, 4.0)[-1] == pytest.approx(10.0, abs=0.01)
+
+    def test_it_never_overshoots(self):
+        trace = self._step_response(1 / 60, 4.0)
+        assert trace.max() <= 10.0 + 1e-9
+        assert np.all(np.diff(trace) >= -1e-9)
+
+    def test_the_glide_does_not_depend_on_the_frame_rate(self):
+        slow = self._step_response(1 / 30, 1.0)[-1]
+        fast = self._step_response(1 / 240, 1.0)[-1]
+        assert slow == pytest.approx(fast, abs=0.1)
+
+    def test_the_first_frame_is_where_the_target_is(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0), smooth_time=0.5)
+        cam.target((7.0, 0.0, 0.0))
+        assert _frame(cam)[0] == pytest.approx(7.0)
+
+    def test_snapping_puts_it_on_the_target_at_once(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0), smooth_time=0.5)
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        cam.target((100.0, 0.0, 0.0))
+        cam.snap()
+        assert _frame(cam)[0] == pytest.approx(100.0)
+
+    def test_a_stopped_clock_leaves_the_camera_where_it_is(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0), smooth_time=0.5)
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        cam.target((10.0, 0.0, 0.0))
+        assert _frame(cam, dt=0.0)[0] == pytest.approx(0.0)
+
+
+class TestAvoidingTheWorld:
+    """The arm shortens to the first hit and eases back out."""
+
+    OFFSET = (0.0, 0.0, 8.0)
+
+    def _camera(self, wall_z, **named):
+        named.setdefault('avoid_radius', 0.5)
+        named.setdefault('min_arm', 0.0)
+        return FollowCamera(_FakePlatform(), offset=self.OFFSET,
+                            sweep=_wall_behind(wall_z), **named)
+
+    def _walk_at_the_wall(self, cam, start, stop, speed=4.0, dt=1 / 60.0):
+        """The target backs toward +z, then away again, as the camera trails."""
+        z, arms, steps, previous = start, [], [], None
+        sign = 1.0
+        while True:
+            cam.target((0.0, 0.0, z))
+            eye = _frame(cam, dt)
+            arms.append(float(np.linalg.norm(eye - cam.look)))
+            if previous is not None:
+                steps.append(float(np.linalg.norm(eye - previous)))
+            previous = eye
+            z += sign * speed * dt
+            if sign > 0 and z >= stop:
+                sign = -1.0
+            if sign < 0 and z <= start:
+                return arms, steps
+
+    def test_the_arm_comes_in_to_the_hit_and_out_again(self):
+        cam = self._camera(wall_z=6.0)
+        arms, _ = self._walk_at_the_wall(cam, start=-4.0, stop=3.0)
+        assert arms[0] == pytest.approx(8.0)
+        assert min(arms) == pytest.approx(2.5, abs=0.1)
+        assert arms[-1] == pytest.approx(8.0, abs=0.3)
+
+    def test_the_camera_is_never_inside_the_wall(self):
+        cam = self._camera(wall_z=6.0)
+        z = 0.0
+        for _ in range(240):
+            cam.target((0.0, 0.0, z))
+            eye = _frame(cam, 1 / 60.0)
+            assert eye[2] <= 6.0 - 0.5 + 1e-6
+            z += 0.02
+
+    def test_the_arm_stops_at_the_hit(self):
+        cam = self._camera(wall_z=6.0)
+        cam.target((0.0, 0.0, 0.0))
+        eye = _frame(cam)
+        assert eye[2] == pytest.approx(5.5)
+
+    def test_the_sweep_is_asked_from_the_look_point_toward_the_camera(self):
+        cam = self._camera(wall_z=6.0)
+        cam.target((1.0, 2.0, 3.0))
+        _frame(cam)
+        origin, direction, distance, radius = cam.sweep.calls[-1]
+        assert np.allclose(origin, (1.0, 2.0, 3.0))
+        assert np.allclose(direction, (0.0, 0.0, 1.0))
+        assert (distance, radius) == (8.0, 0.5)
+
+    def test_it_eases_back_out_rather_than_snapping(self):
+        cam = self._camera(wall_z=6.0, arm_ease=4.0)
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        cam.target((0.0, 0.0, -20.0))
+        first = _frame(cam, 1 / 60.0)
+        assert float(np.linalg.norm(first - cam.look)) < 8.0
+        for _ in range(240):
+            last = _frame(cam, 1 / 60.0)
+        assert float(np.linalg.norm(last - cam.look)) == pytest.approx(8.0, abs=0.01)
+
+    def test_it_comes_no_nearer_than_the_minimum_arm(self):
+        cam = self._camera(wall_z=1.0, min_arm=1.5)
+        cam.target((0.0, 0.0, 0.0))
+        assert float(np.linalg.norm(_frame(cam) - cam.look)) == pytest.approx(1.5)
+
+    def test_a_clear_view_keeps_the_whole_arm(self):
+        cam = self._camera(wall_z=100.0)
+        cam.target((0.0, 0.0, 0.0))
+        assert _frame(cam)[2] == pytest.approx(8.0)
+
+    def test_pulling_back_is_not_slowed_by_the_easing(self):
+        cam = FollowCamera(_FakePlatform(), offset=self.OFFSET,
+                           sweep=_wall_behind(100.0), pull_back=0.5,
+                           pull_back_speed=10.0, pull_back_rate=1000.0)
+        cam.target((0.0, 0.0, 0.0))
+        for _ in range(5):
+            _frame(cam, 1 / 60.0, speed=10.0)
+        assert _frame(cam, 1 / 60.0, speed=10.0)[2] == pytest.approx(12.0, abs=0.01)
+
+    def test_no_frame_steps_further_than_max_step(self):
+        cam = self._camera(wall_z=6.0, max_step=0.1)
+        _, steps = self._walk_at_the_wall(cam, start=-4.0, stop=3.0)
+        assert max(steps) <= 0.1 + 1e-9
+
+    def test_the_camera_still_looks_at_the_look_point(self):
+        cam = FollowCamera(ViewPlatform(), offset=self.OFFSET,
+                           sweep=_wall_behind(6.0), min_arm=0.0)
+        cam.target((0.0, 1.0, 0.0))
+        cam.advance(1 / 60.0)
+        cam.apply()
+        homogeneous = np.array([0.0, 1.0, 0.0, 1.0])
+        view = (homogeneous @ cam.platform.modelMatrix(inverse=False))[:3]
+        assert abs(view[0]) < 1e-6 and abs(view[1]) < 1e-6
+        assert view[2] < 0
+
+
+class TestMaxStep:
+    def test_a_camera_that_is_told_to_jump_is_held_to_the_step(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0), max_step=0.25)
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        cam.target((10.0, 0.0, 0.0))
+        assert _frame(cam)[0] == pytest.approx(0.25)
+
+    def test_snapping_is_not_a_step(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0), max_step=0.25)
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        cam.target((10.0, 0.0, 0.0))
+        cam.snap()
+        assert _frame(cam)[0] == pytest.approx(10.0)
+
+
+class TestConstraints:
+    def test_a_constraint_may_move_the_camera(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 4.0, 8.0))
+        cam.constrain(lambda eye, look: (eye + np.array([2.0, 0.0, 0.0]), look))
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        assert np.allclose(cam.platform.position, (2.0, 4.0, 8.0))
+
+    def test_a_constraint_may_move_what_it_looks_at(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 4.0, 8.0))
+        cam.constrain(lambda eye, look: (eye, look + np.array([0.0, 1.0, 0.0])))
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        assert np.allclose(cam.look, (0.0, 1.0, 0.0))
+
+    def test_constraints_apply_in_the_order_given(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0))
+        cam.constrain(lambda eye, look: (eye + 1.0, look))
+        cam.constrain(lambda eye, look: (eye * 2.0, look))
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        assert np.allclose(cam.platform.position, (2.0, 2.0, 2.0))
+
+    def test_the_sweep_is_made_after_the_constraints(self):
+        sweep = _wall_behind(100.0)
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 8.0), sweep=sweep)
+        cam.constrain(lambda eye, look: (eye + np.array([0.0, 0.0, 4.0]), look))
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        assert sweep.calls[-1][2] == pytest.approx(12.0)
+
+    def test_a_constraint_can_be_taken_away(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0))
+        rule = cam.constrain(lambda eye, look: (eye + 1.0, look))
+        cam.unconstrain(rule)
+        cam.target((0.0, 0.0, 0.0))
+        _frame(cam)
+        assert np.allclose(cam.platform.position, (0.0, 0.0, 0.0))
+
+
+class TestThePoseBeforeAnyFrame:
+    def test_applying_without_advancing_solves_the_current_target(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 4.0, 8.0), look_ahead=0.5)
+        cam.target((0.0, 0.0, 0.0), velocity=(0.0, 0.0, -10.0))
+        cam.apply()
+        assert np.allclose(cam.platform.position, (0.0, 4.0, 3.0))
+
+    def test_with_no_features_the_newest_target_is_always_used(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 4.0, 8.0))
+        cam.target((0.0, 0.0, 0.0))
+        cam.advance(1 / 60.0)
+        cam.target((5.0, 0.0, 0.0))
+        cam.apply()
+        assert np.allclose(cam.platform.position, (5.0, 4.0, 8.0))
+
+    def test_the_eye_and_look_point_are_readable(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 4.0, 8.0))
+        cam.target((1.0, 0.0, 0.0))
+        assert np.allclose(cam.eye, (1.0, 4.0, 8.0))
+        assert np.allclose(cam.look, (1.0, 0.0, 0.0))
+        cam.look_ahead = 1.0
+        cam.target((1.0, 0.0, 0.0), velocity=(2.0, 0.0, 0.0))
+        assert np.allclose(cam.eye, (3.0, 4.0, 8.0))
