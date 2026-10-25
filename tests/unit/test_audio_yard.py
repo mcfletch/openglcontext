@@ -7,7 +7,6 @@ is tested here with a silent device and no window.
 
 import subprocess
 import sys
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -17,8 +16,12 @@ from omi_audio.engine import AudioEngine
 from vrml.vrml97 import nodepath, nodetypes
 
 from OpenGLContext.audio.areas import apply_zones
+from OpenGLContext.audio.manager import Audio
+from OpenGLContext.audio.settings import AudioSettings
 from OpenGLContext.bin import audio_demo
 from OpenGLContext.bin.audio_demo import AudioYard
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.zones import scene_zones
 from OpenGLContext.scenegraph.audio import update_scene_audio
 
@@ -31,6 +34,28 @@ def engine():
     made = AudioEngine(device=NullDevice(sample_rate=RATE), voices=32)
     yield made
     made.close()
+
+
+@pytest.fixture
+def audio(engine):
+    """The service that plays what the yard asks for, on the silent engine."""
+    made = Audio(engine_factory=lambda: engine)
+    made.engine  # opened here, so the scene's nodes and the calls share it
+    yield made
+    made.close()
+
+
+class Counted:
+    """What ``audio.play`` is asked to play, for a test to count the thuds."""
+
+    def __init__(self, audio):
+        self.sources = []
+        self._play = audio.play
+        audio.play = self.play
+
+    def play(self, source, *args, **named):
+        self.sources.append(source)
+        return self._play(source, *args, **named)
 
 
 def auditory_paths(root):
@@ -46,39 +71,49 @@ def auditory_paths(root):
     return found
 
 
-def driven(yard):
-    """``yard`` with what the render pass would collect from its scene."""
+def make(audio, rate=RATE):
+    """A yard in a standalone physics service, with what the render pass would collect from its scene."""
+    physics = Physics(audio_demo_definition())
+    yard = AudioYard(physics, audio, sample_rate=rate)
     scene = yard.scene()
     yard.paths = auditory_paths(scene)
     yard.zones = scene_zones(scene)
     yard.clock = 0.0
+    yard.counted = Counted(audio)
     return yard
 
 
+def audio_demo_definition():
+    return PhysicsDefinition(mode='inline', colliders='explicit', maxCatchUp=2.0)
+
+
 @pytest.fixture
-def yard(engine):  # noqa: ARG001 an AudioEngine is open while the yard plays
-    return driven(AudioYard(sample_rate=RATE))
+def yard(audio):
+    made = make(audio)
+    yield made
+    made.physics.close()
 
 
 OUTSIDE = (0.0, 1.6, 12.0)
 
 
 def run(yard, engine, seconds, where=OUTSIDE, frame=FRAME):
-    """Frames of the demo, each with its share of mixing; sounds started.
+    """Frames of the demo, each with its share of mixing; the thuds started.
 
-    Each frame steps the yard, then sets the zones' gains and reverb and
-    drives its sound nodes as the render pass would with the camera at
-    ``where``, then mixes a frame's worth of samples as a device would pull
-    them.
+    Each frame steps the physics, turns the motor, then sets the zones' gains
+    and reverb and drives its sound nodes as the render pass would with the
+    camera at ``where``, then mixes a frame's worth of samples as a device
+    would pull them.
     """
-    started = 0
+    before = len(yard.counted.sources)
     for _ in range(max(1, int(round(seconds / frame)))):
-        started += yard.step(frame, engine)
+        yard.physics.frame(frame)
+        yard.update(frame)
         yard.clock += frame
         apply_zones(engine, [path[-1] for path in yard.paths], yard.zones, where)
         update_scene_audio(engine, yard.paths, yard.clock)
         engine.mixer.mix(int(frame * RATE))
-    return started
+    return len([source for source in yard.counted.sources[before:] if source is yard.thud])
 
 
 class TestCollisions:
@@ -91,11 +126,13 @@ class TestCollisions:
         run(yard, engine, 10.0)
         assert run(yard, engine, 2.0) == 0
 
-    def test_a_slow_frame_rate_hears_every_bounce(self, engine):
+    def test_a_slow_frame_rate_hears_every_bounce(self, engine, audio):
         def thuds(frame):
-            yard = driven(AudioYard(sample_rate=RATE))
+            yard = make(audio)
             yard.drop()
-            return run(yard, engine, 4.0, frame=frame)
+            count = run(yard, engine, 4.0, frame=frame)
+            yard.physics.close()
+            return count
 
         at_120 = thuds(1.0 / 120.0)
         assert at_120 > len(audio_demo.BALL_SPOTS)
@@ -126,13 +163,16 @@ class TestEvents:
 
     def test_a_shot_is_centred(self, yard, engine):
         engine.stop_all()
-        assert yard.fire(engine) is not None
+        assert yard.fire().playing
         block = engine.mixer.mix(64)
         assert np.abs(block[:, 0]).max() == pytest.approx(
             float(np.abs(block[:, 1]).max()))
 
-    def test_firing_with_no_engine_is_harmless(self, yard):
-        assert yard.fire(None) is None
+    def test_firing_with_the_sound_switched_off_is_harmless(self):
+        silent = Audio(settings=AudioSettings(enabled=False))
+        yard = make(silent)
+        assert not yard.fire().playing
+        yard.physics.close()
 
 
 class TestAreas:
@@ -197,28 +237,30 @@ class TestTheMotor:
 
 class TestThePlayersControls:
     def test_muffle_toggles(self, yard, engine):
-        assert yard.toggle_muffle(engine) == 1.0
+        assert yard.toggle_muffle() == 1.0
         assert engine.muffle == 1.0
-        assert yard.toggle_muffle(engine) == 0.0
-
-    def test_muffle_without_an_engine_is_harmless(self, yard):
-        assert yard.toggle_muffle(None) == 0.0
+        assert yard.toggle_muffle() == 0.0
 
     def test_the_volume_moves_within_its_range(self, yard):
-        audio = SimpleNamespace(volume=0.95)
-        assert yard.change_volume(audio, 0.1) == 1.0
-        assert yard.change_volume(audio, -0.3) == pytest.approx(0.7)
-        audio.volume = 0.05
-        assert yard.change_volume(audio, -0.1) == 0.0
+        yard.audio.volume = 0.95
+        assert yard.change_volume(0.1) == 1.0
+        assert yard.change_volume(-0.3) == pytest.approx(0.7)
+        yard.audio.volume = 0.05
+        assert yard.change_volume(-0.1) == 0.0
 
 
 class TestWithoutSound:
-    def test_the_yard_runs_with_no_engine(self, yard):
+    def test_the_yard_runs_with_the_sound_switched_off(self):
+        silent = Audio(settings=AudioSettings(enabled=False))
+        yard = make(silent)
         yard.drop()
         yard.ring()
         yard.toggle_motor()
         for _ in range(60):
-            assert yard.step(FRAME, None) == 0
+            yard.physics.frame(FRAME)
+            yard.update(FRAME)
+        assert yard.balls[0].position[1] < audio_demo.DROP_HEIGHTS[0]
+        yard.physics.close()
 
     def test_the_scene_holds_every_sound(self, yard):
         assert len(yard.paths) == 4        # the bell, the motor, the two areas

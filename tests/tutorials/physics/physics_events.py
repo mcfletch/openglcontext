@@ -5,8 +5,8 @@
 
 The yard of ``oglc-physics-events``: crates that thud when they land, two panes
 of glass, a gun and a pressure plate that opens a door.  Nothing here asks the
-physics world what happened; each object subscribes a callback to its own
-collisions and the physics manager calls it once per collision.
+physics world what happened; each body registers a handler for its own
+collisions and the physics service calls it once per collision.
 
 The script opens on a scene that has already been played for a moment: the
 crates have been dropped, a ball has been thrown at each pane, a shot has
@@ -15,15 +15,11 @@ pane broke after the solve, so its ball bounced back; the right pane broke
 before it, so its ball carried on through.  The keys the demo prints play it
 again.
 '''
-import os
-
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
-
+from OpenGLContext.bin.physics_events_demo import (
+    CollisionYard, MASTER_GAIN, definition,
+)
 from OpenGLContext.context import Context as BaseContext
-from OpenGLContext.audio import scene as audioscene
-from OpenGLContext.events import systemtime
-from OpenGLContext.bin.physics_events_demo import CollisionYard
-from OpenGLContext.physics.demo import disable_vsync
+from OpenGLContext.contextdefinition import ContextDefinition
 
 #: How much of the scene is played before the first frame, in seconds, and in
 #: steps of what length.  Fixed steps make the opening the same on every run.
@@ -34,17 +30,25 @@ LANDED = 1.2
 
 
 class TestContext(BaseContext):
+    '''The physics world is declared by the yard: ``definition()`` steps it in
+    the frame, which is what lets the yard change a contact's verdict between
+    steps.'''
+    renderer = 'pbr'
     initialPosition = (2.5, 3.2, 12)
+    contextDefinition = ContextDefinition(physics=definition())
 
     def OnInit(self):
-        disable_vsync()
-        '''The yard builds the scene and makes every subscription.  Its
-        ``__init__`` is where to read them: ``subscribe(self._thud,
-        body=crates + balls, phases=('begin', 'persist'), above=IMPACT_FLOOR)``
-        for the landings, ``kinds=('hit',)`` for the gun, ``kinds=('trigger',)``
-        for the plate, and a subscription per pane.'''
-        self.yard = CollisionYard()
+        '''The yard builds the scene and makes every handler.  Its
+        ``__init__`` is where to read them: ``body.addEventHandler('hit',
+        function=self._thud, above=IMPACT_FLOOR)`` for each crate and ball,
+        a ``hit`` handler on each pane, ``enter`` and ``exit`` on the plate.
+        It is given the context's ``physics`` and ``audio``; nothing in the
+        script steps the world.'''
+        self.yard = CollisionYard(self.physics, self.audio)
         self.sg = self.yard.scene()
+        engine = self.audio.engine
+        if engine is not None:
+            engine.master_gain = MASTER_GAIN
         for key, handler in (('d', self.yard.drop), ('l', self.yard.launch),
                              ('m', self.yard.mend), ('w', self.yard.toggle_weight),
                              (' ', self.fire)):
@@ -52,14 +56,14 @@ class TestContext(BaseContext):
                                  function=lambda event, handler=handler: handler())
         self.opening()
         print(__doc__)
-        self._last = systemtime.systemTime()
 
     def opening(self):
         '''Drop the crates and the weight, then once they have landed fire at
-        the brick crate and throw a ball at each pane, playing it all in fixed
-        steps.  The shot is a raycast reported with ``report_hit``, which
-        pushes the crate and reaches its ``'hit'`` subscribers with the next
-        frame's collisions.'''
+        the brick crate and throw a ball at each pane.  ``physics.frame(dt)``
+        steps the world by ``dt`` seconds and delivers what happened, which is
+        what the frame hook does with each frame's time; calling it by hand
+        gives a scene already in progress before the first frame is drawn.
+        The shot is a ``raycast`` and an impulse where the round struck.'''
         yard = self.yard
         yard.drop()
         yard.toggle_weight()
@@ -70,21 +74,12 @@ class TestContext(BaseContext):
 
     def play(self, seconds):
         for _ in range(round(seconds / OPENING_STEP)):
-            self.yard.step(OPENING_STEP, None)
+            self.physics.frame(OPENING_STEP)
 
     def fire(self):
         '''The gun fires along the camera's view.'''
         platform = self.getViewPlatform()
         self.yard.fire(platform.position[:3], platform.forward())
-
-    def OnIdle(self, *arguments):
-        '''The engine's clock rather than the wall's, so a capture advances
-        by whole frames and lands on the same picture every time.'''
-        now = systemtime.systemTime()
-        dt, self._last = min(now - self._last, 0.05), now
-        self.yard.step(dt, audioscene.existing_engine(self))
-        self.triggerRedraw(1)
-        return 1
 
 
 if __name__ == '__main__':
