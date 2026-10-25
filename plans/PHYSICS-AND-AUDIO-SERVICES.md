@@ -102,6 +102,7 @@ physics.add_dynamic(node, proxy=None, mass=None, **material)
 physics.add_kinematic(node, proxy=None)     # moved by code, pushes dynamic bodies
 physics.add_trigger(node, proxy=None)       # reports enter and exit, stops nothing
 physics.addEventHandler(event, function=fn, **filters)   # every body
+physics.body_for(node)                      # the Body of a node already in the scene
 physics.run(function)                       # escape hatch, below
 ```
 
@@ -186,6 +187,39 @@ before its `add_dynamic` is static for no more than one frame.
 Two costs have acceptance tests. Loading 10,000 shapes adds no per-frame
 work after the first frame (`check_still_frame`), and the derivation grows with the
 number of new shapes, not with the scene (`check_scaling` at n and 4n).
+
+### Finding the body of a node
+
+Scenery and glTF-authored bodies are made without a call, so nothing returns their
+`Body`. The service looks them up:
+
+```python
+node = scene.sceneGraph.getDEF('Door')           # a node found in a loaded scene
+door = physics.body_for(node)                    # its Body, or None
+door.addEventHandler('hit', function=self.OnDoorHit)
+
+doors = physics.bodies_in(scene.group)           # every Body under a subtree
+```
+
+`body_for` returns the body of the node itself, else of the nearest ancestor that has
+one, so a `Shape` inside a body's `Transform` finds that body. It returns the same
+`Body` object on every call. It returns None for a node under `Collision(enabled=False)`,
+marked `collide=False`, or with no triangles, and with `colliders='explicit'` for any
+scenery nobody added.
+
+The derivation runs in the frame hook, so a node mounted this frame has no body until
+the next. `body_for` therefore creates the body on demand for a node in the scene, and
+the cooked shape arrives when the cooking queue reaches it. A handler added in that
+interval is kept on the handle and takes effect when the body is in the world.
+
+Static scenery reports no contacts until something subscribes: a handler on a static
+body switches reporting on for that body alone (`PhysicsWorld.report_contacts`), so an
+unwatched world pays nothing for events.
+
+This needs one static body per `Shape`, not one merged mesh per scene as
+`collision_world_from_scene` builds today. The static broadphase is a tree, so many
+bodies cost little per frame; phase 3 measures it at 10,000 shapes. If the count
+hurts, scenery is merged and `body_for` splits the asked-for node out of its merge.
 
 ### Proxies: what the engine collides with
 
@@ -431,6 +465,7 @@ ContextDefinition(physics=PhysicsDefinition(enabled=False))   # not at all
 | a static world | nothing, or `add_static(node, proxy=...)` to change its shape |
 | a moving object | `add_dynamic(node)` |
 | a different shape, material, mass | a keyword on that call |
+| a handle on a node already in the scene | `physics.body_for(node)` |
 | a reaction to a hit | `body.addEventHandler('hit', function=fn)` |
 | a reaction inside the tick | the same, with `where='physics'` |
 | a world setting | a field on `PhysicsDefinition` |
