@@ -1512,8 +1512,9 @@ reference image.
 - :doc:`physics_stress.py <tutorials/physics/physics_stress>` - performance as the
   number of bodies grows.
 
-- :doc:`using_physics.py <tutorials/physics/using_physics>` - a cannon game on a
-  standalone ``Physics``, with kinematic bodies, a trigger and a wind.
+- :doc:`using_physics.py <tutorials/physics/using_physics>` - a cannon game in its
+  context's world, with kinematic bodies, a trigger and a wind. Its rules also
+  run on a standalone ``Physics`` stepped by hand, which is how they are tested.
 
 - The :doc:`Characters on Land <tutorials/character/character_run>` tutorials
   run, jump and walk a rigged character over land.
