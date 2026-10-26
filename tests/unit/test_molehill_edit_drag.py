@@ -26,11 +26,11 @@ NET, POINT, DISTANCE = 0, 5, 4.0
 gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
 
 
-def _drive(axis):
+def _drive(axis: int, *options: str) -> dict[str, str]:
     """Run the driver for one axis and return its output as a dict of lines."""
     result = subprocess.run(
         [sys.executable, str(DRIVER), str(NET), str(POINT), str(axis),
-         str(DISTANCE)],
+         str(DISTANCE), *options],
         capture_output=True, text=True, timeout=180,
     )
     assert 'GAVE UP' not in result.stdout, (
@@ -46,7 +46,7 @@ def _drive(axis):
 
 @gl
 @pytest.mark.parametrize('axis', [0, 1, 2])
-def test_a_dragged_control_point_travels_along_the_grabbed_axis(axis):
+def test_a_dragged_control_point_travels_along_the_grabbed_axis(axis: int) -> None:
     """The point moves the distance the pointer did, on that axis alone."""
     reported = _drive(axis)
     assert reported['SELECTED'] == str(POINT)
@@ -59,7 +59,7 @@ def test_a_dragged_control_point_travels_along_the_grabbed_axis(axis):
 
 
 @gl
-def test_the_surface_is_rewritten_where_the_point_landed():
+def test_the_surface_is_rewritten_where_the_point_landed() -> None:
     """The drag is an edit to the geometry, not only to the marker over it."""
     reported = _drive(2)
     landed = [float(value) for value in reported['SURFACE'].split()]
@@ -67,6 +67,15 @@ def test_the_surface_is_rewritten_where_the_point_landed():
 
 
 @gl
-def test_the_release_lets_go_of_the_arm():
+def test_the_release_lets_go_of_the_arm() -> None:
     reported = _drive(0)
+    assert reported['RELEASED'] == 'True'
+
+
+@gl
+def test_a_drag_completes_on_a_gpu_frames_behind() -> None:
+    """Picks that land frames late still select, grab and move the point."""
+    reported = _drive(2, 'behind')
+    assert reported['SELECTED'] == str(POINT)
+    assert reported['GRABBED'] == '2'
     assert reported['RELEASED'] == 'True'
