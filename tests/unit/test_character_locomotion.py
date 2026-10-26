@@ -625,6 +625,11 @@ class TestBoundToAModel:
         locomotion = Locomotion(ClipMap(idle='idle', walk='walk'), walker)
         assert locomotion.speeds['walk'] == pytest.approx(1.0 / 0.6, rel=0.03)
 
+    def test_a_measured_speed_is_in_the_units_the_model_is_drawn_at(self, walker):
+        walker.group.scale = (2.0, 2.0, 2.0)                  # as add_character fits it
+        locomotion = Locomotion(ClipMap(idle='idle', walk='walk'), walker)
+        assert locomotion.speeds['walk'] == pytest.approx(2.0 / 0.6, rel=0.03)
+
     def test_a_declared_speed_wins_over_the_measurement(self, walker):
         locomotion = Locomotion(ClipMap(idle='idle', walk=('walk', 2.0)), walker)
         assert locomotion.speeds['walk'] == 2.0

@@ -351,6 +351,12 @@ class _Ground:
     crouch_walk: float
 
 
+def _drawn_scale(model: Any) -> float:
+    """How much larger ``model`` is drawn than it was authored: its group's scale, as fitted."""
+    scale = getattr(getattr(model, 'group', None), 'scale', None)
+    return 1.0 if scale is None else float(scale[1])
+
+
 class Locomotion:
     """One character's clips, kept in step with what it is doing.
 
@@ -359,9 +365,10 @@ class Locomotion:
     lacks are left out and named in :attr:`missing`. A looping role with no
     authored speed in the map is measured with
     :func:`~OpenGLContext.character.gaitmeasure.measure_stride` (a few
-    milliseconds a clip) unless ``measure_missing`` is false; a clip that
-    plants no foot, and a model with no skeleton, take
-    :data:`DEFAULT_SPEEDS`. :attr:`speeds` has the speeds in use.
+    milliseconds a clip) and multiplied by the scale the model's group is
+    drawn at, unless ``measure_missing`` is false; a clip that plants no
+    foot, and a model with no skeleton, take :data:`DEFAULT_SPEEDS`.
+    :attr:`speeds` has the speeds in use.
     """
 
     def __init__(self, clip_map: ClipMap, model: Any = None, *,
@@ -404,6 +411,7 @@ class Locomotion:
             except ValueError:
                 found = 0.0
             if found > 0.0:
+                found *= _drawn_scale(model)
                 log.info('%s: %s measured at %.2f m/s', role, spec.clip, found)
                 return found
         return DEFAULT_SPEEDS[role]
