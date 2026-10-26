@@ -24,6 +24,7 @@ from omi_physics import mathutil, model
 from omi_physics.contactevents import BodyRef, ContactEvent, TriggerEvent, Verdict
 from omi_physics.world import PhysicsWorld
 
+from OpenGLContext.events.framestep import FixedSteps
 from OpenGLContext.physics.joints import JointSpec, JointTable
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.settings import PhysicsDefinition
@@ -34,8 +35,6 @@ log = logging.getLogger(__name__)
 
 #: How many removed bodies the runtime still names in events about their last contacts.
 RETIRED_KEPT = 4096
-#: A fraction of a step that floating-point error may leave short of a whole one.
-_HAIR = 1e-9
 _ZERO3 = np.zeros(3)
 _STATE = ('sleep', 'wake')
 
@@ -84,7 +83,8 @@ class WorldRuntime:
         self.version = 0
         #: Events a ``settle`` command left to be set once the next snapshot is published.
         self.markers: list[threading.Event] = []
-        self._accumulator = 0.0
+        #: The whole steps each frame owes, and the part step carried to the next.
+        self.clock = FixedSteps(self.step_dt, self.max_catch_up)
         self._entries: dict[int, _Entry] = {}
         self._shapes: dict[int, int] = {}
         self._materials: dict[str, int] = {}
@@ -266,10 +266,11 @@ class WorldRuntime:
     def _op_config(self, uid: int, tick_hz: float, max_catch_up: float) -> None:  # noqa: ARG002 world-wide
         self.step_dt = 1.0 / float(tick_hz)
         self.max_catch_up = float(max_catch_up)
+        self.clock.step, self.clock.longest = self.step_dt, self.max_catch_up
         self.world.fixed_dt = self.step_dt
 
     def _op_drop_remainder(self, uid: int) -> None:  # noqa: ARG002 world-wide
-        self._accumulator = 0.0
+        self.clock.drop()
 
     def _op_logging(self, uid: int, on: bool) -> None:  # noqa: ARG002 world-wide
         self.set_logging(on)
@@ -448,18 +449,15 @@ class WorldRuntime:
 
         Returns how many steps ran. What is left of a step carries to the next call.
         """
-        self._accumulator = min(self._accumulator + float(dt), self.max_catch_up)
-        steps = 0
-        while self._accumulator >= self.step_dt * (1.0 - _HAIR):
+        steps = self.clock.owed(dt)
+        for _ in range(steps):
             self.step_once()
-            self._accumulator = max(self._accumulator - self.step_dt, 0.0)
-            steps += 1
         return steps
 
     @property
     def alpha(self) -> float:
         """How far through the next step the time left over from the last frame is, 0 to 1."""
-        return min(self._accumulator / self.step_dt, 1.0)
+        return self.clock.alpha
 
     def step_once(self) -> None:
         """Run one fixed step, with its hooks, and collect the events it made."""

@@ -252,7 +252,7 @@ def test_follow_has_the_character_obey_the_keys_and_the_camera_follow(ctx, clock
     press(ctx, 'w')
     for _ in range(90):
         clock.advance(1 / 60)
-        ctx.renderQueue.run()
+        ctx.renderQueue.frame()
     assert me.position[2] < -2.0                          # the default camera looks along -z
     eye = ctx.platform.position
     assert eye[2] == pytest.approx(me.position[2] + 5.0, abs=0.7)
@@ -264,7 +264,7 @@ def test_follow_asks_for_frames_while_the_character_moves(ctx, clock):
     ctx.follow(me)
     press(ctx, 'w')
     clock.advance(1 / 60)
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     assert ctx.redraws
 
 
@@ -274,13 +274,13 @@ def test_unfollow_stops_the_keys_and_the_camera(ctx, clock):
     press(ctx, 'w')
     for _ in range(30):
         clock.advance(1 / 60)
-        ctx.renderQueue.run()
+        ctx.renderQueue.frame()
     ctx.unfollow()
     here = me.position.copy()
     me.set_move((0, 0, 0))
     for _ in range(30):
         clock.advance(1 / 60)
-        ctx.renderQueue.run()
+        ctx.renderQueue.frame()
     assert follower.stopped
     assert me.position[2] == pytest.approx(here[2], abs=0.5)
 
@@ -306,9 +306,10 @@ def test_follow_from_the_eyes_puts_the_camera_at_them_and_the_keys_walk_the_char
     press(ctx, 'w')
     for _ in range(90):
         clock.advance(1 / 60)
-        ctx.renderQueue.run()
+        ctx.renderQueue.frame()
     assert me.position[2] < -2.0                          # yaw 0 looks along -z
-    assert np.allclose(ctx.platform.position, me.eye, atol=1e-6)
+    # The camera is at the eyes where the frame draws them, between the last two steps.
+    assert np.allclose(ctx.platform.position, me.drawn_eye, atol=1e-6)
 
 
 def test_follow_from_the_eyes_turns_with_the_turn_keys(ctx, clock):
@@ -319,7 +320,7 @@ def test_follow_from_the_eyes_turns_with_the_turn_keys(ctx, clock):
     press(ctx, 'e')
     for _ in range(30):
         clock.advance(1 / 60)
-        ctx.renderQueue.run()
+        ctx.renderQueue.frame()
     assert follower.platform.yaw > 0.55
 
 

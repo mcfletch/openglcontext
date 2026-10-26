@@ -415,12 +415,12 @@ def test_a_character_whose_update_raises_is_logged_once_and_the_frame_goes_on(ph
     def broken(dt):
         raise KeyError('the character lost its clip')
 
-    first.update = broken
-    real = second.update
-    second.update = lambda dt: stepped.append(dt) or real(dt)
+    first.step = broken
+    real = second.step
+    second.step = lambda dt: stepped.append(dt) or real(dt)
     physics.frame(0.02)
     physics.frame(0.02)
-    assert len(stepped) == 2
+    assert len(stepped) == 4                  # two 1/120 s steps in each 0.02 s frame
     assert logged(caplog, 'the character lost its clip') == 1
 
 

@@ -386,8 +386,8 @@ class TerrainViewer(_ContextBase):
         self._last = time.time()
         self._turning = False
         # Input before the world is stepped, the camera and the streaming after it.
-        self.renderQueue.before_run(self._drive_avatar, first=True)
-        self.renderQueue.before_run(self._follow_avatar)
+        self.renderQueue.on_frame(self._drive_avatar, first=True)
+        self.renderQueue.on_frame(self._follow_avatar)
 
     # -- input -----------------------------------------------------------
     def _on_key(self, event: Any) -> None:

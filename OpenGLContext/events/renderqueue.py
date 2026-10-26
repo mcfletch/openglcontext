@@ -21,6 +21,14 @@ re-queueing itself cannot hold up a frame.
 
 A call that is not ready returns :data:`DEFER` and is made again, ahead of
 anything queued since, on the next ``run``.
+
+The queue also holds the frame's own work, the functions :meth:`RenderQueue.on_frame`
+registers: the physics frame, the audio frame, animations and the cameras that
+follow a character. The main loop makes them with :meth:`RenderQueue.frame` once
+an iteration, after ``OnIdle`` and before the draw, so an input set in
+``OnIdle`` reaches the world in the same frame and the frame draws the poses
+that step wrote. A program driving its own loop calls :meth:`RenderQueue.run`,
+then its own idle work, then :meth:`RenderQueue.frame`.
 """
 from __future__ import annotations
 
@@ -49,6 +57,7 @@ class RenderQueue:
         self._calls: collections.deque[tuple[Callable[..., Any], tuple[Any, ...],
                                              dict[str, Any]]] = collections.deque()
         self._before: list[Callable[[], Any]] = []
+        self._frame: list[Callable[[], Any]] = []
 
     def __len__(self) -> int:
         with self._lock:
@@ -81,6 +90,31 @@ class RenderQueue:
         """Stop calling ``function()`` at the start of :meth:`run`; one never added is ignored."""
         if function in self._before:
             self._before.remove(function)
+
+    def on_frame(self, function: Callable[[], Any], first: bool = False) -> None:
+        """Have ``function()`` called by every :meth:`frame`, after ``OnIdle`` and before the draw.
+
+        Functions run in the order they were added, or ahead of the others
+        where ``first`` is true: a frame's input comes before the world it moves.
+        """
+        if first:
+            self._frame.insert(0, function)
+        else:
+            self._frame.append(function)
+
+    def remove_on_frame(self, function: Callable[[], Any]) -> None:
+        """Stop calling ``function()`` from :meth:`frame`; one never added is ignored."""
+        if function in self._frame:
+            self._frame.remove(function)
+
+    def frame(self) -> None:
+        """Call the functions :meth:`on_frame` registered, in order, on this thread.
+
+        A function that raises propagates to the caller and the ones after it
+        are not called this frame.
+        """
+        for function in list(self._frame):
+            function()
 
     def run(self) -> int:
         """Make the calls queued so far, on this thread; how many were made.

@@ -90,6 +90,8 @@ class InlineWorker:
         self._stepping = False
         #: How many commands the runtime had applied at the last published snapshot; -1 before the first.
         self._published_count = -1
+        #: How many fixed steps the last :meth:`collect` owed, whether the world took them or not.
+        self.owed = 0
 
     def submit(self, command: Command) -> None:
         """Apply ``command`` now if the world is mid-step, else at the next :meth:`collect`."""
@@ -104,13 +106,16 @@ class InlineWorker:
         A frame with no command applied since the last snapshot, in a world that
         is not :meth:`~OpenGLContext.physics.runtime.WorldRuntime.busy`, steps
         nothing and publishes nothing: the last snapshot still stands, as on a
-        :class:`ThreadWorker` that has gone idle, and the frame's time is not
-        carried toward the next step.
+        :class:`ThreadWorker` that has gone idle. The runtime's clock still
+        counts the steps such a frame owes (:attr:`owed`) and carries its part
+        step, so the steps the world takes once it wakes fall where the
+        characters' steps fall.
         """
         runtime = self.runtime
         commands = self.inbox.drain()
         if (not commands and self._published_count == runtime.applied_count
                 and self._published_count >= 0 and not runtime.busy()):
+            self.owed = runtime.clock.owed(dt)
             return Outbox(None, runtime.take_events())
         self._advance(dt, commands)
         self._published_count = runtime.applied_count
@@ -126,7 +131,7 @@ class InlineWorker:
             self.runtime.bind_thread()
             for command in commands:
                 self.runtime.apply(command)
-            self.runtime.step_frame(dt)
+            self.owed = self.runtime.step_frame(dt)
         finally:
             self._stepping = False
 

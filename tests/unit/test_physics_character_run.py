@@ -177,7 +177,7 @@ def test_a_window_that_steps_its_physics_itself_has_no_step_made_for_it(gl_conte
         original = service.frame
         service.frame = lambda dt: (frames.append(dt), original(dt))[1]
         for _ in range(3):
-            context.runRenderQueue()
+            context.runFrameHooks()
         assert bool(frames) is steps
 
 

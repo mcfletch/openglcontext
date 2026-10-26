@@ -228,6 +228,9 @@ class PhysicsViewPlatform:
             self.managed.update(dt)
 
     def camera_position(self) -> tuple[float, ...]:
+        """The eye; over a service character, the eye where the frame draws it (``drawn_eye``)."""
+        if self.managed is not None:
+            return tuple(float(v) for v in self.managed.drawn_eye)
         return tuple(self.character.eye())
 
     def feet_position(self) -> tuple[float, ...]:

@@ -5,6 +5,12 @@ the render thread, in the frame, against the render thread's copy of the bodies
 (:class:`~OpenGLContext.physics.replica.Replica`). Input reaches it with no tick
 between, and a ray cast or a step answers in the call.
 
+A character takes the same steps as the world: the frame steps it once for each
+fixed step the frame owes (``tickHz`` a second, 120 by default), each of the
+fixed length and each with the latest moves, so its path and its jump arc do not
+depend on the frame rate. Its node and the camera over it are drawn between its
+last two steps, by the part step the frame leaves over (:attr:`Character.drawn_position`).
+
 The world sees a **stand-in**: a kinematic body, a little wider than the
 capsule, placed at the capsule each frame with the velocity it moved at. The
 solver pushes a crate the stand-in runs into, and a crate that strikes the
@@ -86,8 +92,8 @@ class Character:
         #: False once the character has been removed.
         self.alive = True
         #: Whether :meth:`Physics.frame <OpenGLContext.physics.service.Physics.frame>` steps
-        #: the character. A game that orders the step with its other updates, or
-        #: steps with its own clock, sets this false and calls :meth:`update`.
+        #: the character, once for each fixed step the world owes. A game that steps
+        #: with its own clock sets this false and calls :meth:`update` or :meth:`step`.
         self.framed = True
         centre = np.asarray(feet, dtype='d') + _UP * (capabilities.standHeight / 2.0)
         replica = physics._character_replica()
@@ -98,6 +104,11 @@ class Character:
             replica.query, capabilities, centre, gravity=gravity,
             ignore=[replica.index_of(self.body.uid), *physics.passable_slots()])
         self._slot = replica.index_of(self.body.uid)
+        #: Where the capsule's centre was before and after its latest step, and how far
+        #: from the one toward the other the frame draws it.
+        self._previous = self.controller.position.copy()
+        self._stepped = self._previous.copy()
+        self._alpha = 1.0
         self._knocks: list[np.ndarray] = []
         self._listeners: dict[str, list[Callable[[], Callable[[Any], Any] | None]]] = {}
         self._last_velocity = np.zeros(3)
@@ -146,6 +157,32 @@ class Character:
     def eye(self) -> np.ndarray:
         """Where the eyes are."""
         return self.controller.eye()
+
+    @property
+    def drawn_position(self) -> np.ndarray:
+        """Where the frame draws the feet: between the last two steps, by the part step left over.
+
+        The same as :attr:`position` for a character its owner steps.
+        """
+        return self.position - self._lag()
+
+    @property
+    def drawn_eye(self) -> np.ndarray:
+        """Where the frame puts a camera at the eyes, between the last two steps as :attr:`drawn_position`."""
+        return self.eye - self._lag()
+
+    def _lag(self) -> np.ndarray:
+        """How far the drawn place is behind the capsule: the part of the latest step not yet shown.
+
+        A move made to the capsule since the step, such as a host lifting a flier
+        back onto its ground, moves the drawn place with it, and where on an axis
+        it takes the step back, that much of the step is not shown either.
+        """
+        step = self._stepped - self._previous
+        heading = np.sign(step)
+        undone = np.clip(-(np.asarray(self.controller.position) - self._stepped) * heading,
+                         0.0, np.abs(step))
+        return (1.0 - self._alpha) * (step - heading * undone)
 
     @property
     def velocity(self) -> np.ndarray:
@@ -294,6 +331,8 @@ class Character:
         found = bool(self.controller.safe_bind(
             np.asarray(feet, dtype='d') + _UP * (self.controller.height / 2.0)))
         self._marked = self.controller.position.copy()
+        self._previous, self._alpha = self.controller.position.copy(), 1.0
+        self._stepped = self._previous.copy()
         self._place_stand_in(np.zeros(3))
         self._place_node()
         return found
@@ -349,6 +388,16 @@ class Character:
         self.step(dt)
         self.animate(dt)
 
+    def _frame(self, steps: int, step: float, dt: float, alpha: float) -> None:
+        """The frame's share for a framed character: ``steps`` steps of ``step`` seconds, the
+        clips for the ``dt`` seconds of the frame, and the node drawn ``alpha`` of the way
+        from the last step's start to its end."""
+        for _ in range(steps):
+            self.step(step)
+        self.animate(dt)
+        self._alpha = float(alpha)
+        self._place_node()
+
     def step(self, dt: float) -> None:
         """Move the character by ``dt`` seconds and show the world where it is, without animating it.
 
@@ -356,6 +405,7 @@ class Character:
         :meth:`animate` once for the frame. ``landed`` is told here.
         """
         controller = self.controller
+        self._previous, self._alpha = controller.position.copy(), 1.0
         for knock in self._knocks:
             controller.knockback(knock)
         self._knocks.clear()
@@ -365,6 +415,7 @@ class Character:
                 self._arrived = True
                 self._tell('arrived', self)
         controller.update(dt)
+        self._stepped = controller.position.copy()
         pushing = controller.pushing
         self._place_stand_in(pushing[1] if pushing is not None else controller.velocity)
         self._place_node()
@@ -489,7 +540,7 @@ class Character:
 
     def _place_node(self) -> None:
         if self.node is not None:
-            self.node.translation = tuple(float(v) for v in self.position)
+            self.node.translation = tuple(float(v) for v in self.drawn_position)
 
     def _tell(self, event: str, argument: Any) -> None:
         kept = []

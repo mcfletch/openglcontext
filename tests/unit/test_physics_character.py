@@ -95,7 +95,9 @@ def test_the_node_stands_where_the_feet_are(inline):
     node = block((0.2, 1.8, 0.2))
     me = inline.add_character(node=node, position=(1, 0.05, 2))
     run_for(inline, 1.0, setup=lambda: me.set_move((0, 0, 1)))
-    assert tuple(node.translation) == pytest.approx(tuple(me.position), abs=1e-6)
+    # The frame draws the node between the last two steps, where the camera is drawn too.
+    assert tuple(node.translation) == pytest.approx(tuple(me.drawn_position), abs=1e-6)
+    assert tuple(node.translation) == pytest.approx(tuple(me.position), abs=0.05)
 
 
 def test_landing_is_an_event_with_the_speed_it_landed_at(inline):

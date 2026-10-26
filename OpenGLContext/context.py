@@ -1203,7 +1203,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         self.__dict__['_physicsSteps'] = FrameStep(longest=float(definition.maxCatchUp))
         queue = getattr(self, 'renderQueue', None)
         if queue is not None:
-            queue.before_run(self._framePhysics)
+            queue.on_frame(self._framePhysics)
         return service
 
     def _mountOverlay(self, node: Any, on: bool) -> None:
@@ -1217,7 +1217,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             scene.children.remove(node)
 
     def _framePhysics(self) -> None:
-        """Give the physics service its share of the frame, before the frame is drawn."""
+        """Give the physics service its share of the frame, after ``OnIdle`` and before the draw."""
         service = self.__dict__.get('_physics')
         if service is None or not self.stepsPhysics:
             return
@@ -1254,7 +1254,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         service = Audio(self, render_thread=self._renderThread)
         queue = getattr(self, 'renderQueue', None)
         if queue is not None:
-            queue.before_run(self._frameAudio)
+            queue.on_frame(self._frameAudio)
         return service
 
     def _frameAudio(self) -> None:
@@ -1290,11 +1290,11 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             found = self.__dict__['_animating'] = Animations()
             queue = getattr(self, 'renderQueue', None)
             if queue is not None:
-                queue.before_run(self._frameAnimations)
+                queue.on_frame(self._frameAnimations)
         return cast('Animations', found)
 
     def _frameAnimations(self) -> None:
-        """Step what :meth:`animate` was given, before the frame is drawn."""
+        """Step what :meth:`animate` was given, after ``OnIdle`` and before the draw."""
         from OpenGLContext.events import systemtime  # noqa: PLC0415 only an animated context reads the clock
 
         if self.__dict__['_animating'].frame(systemtime.systemTime()):
@@ -1350,12 +1350,12 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if service is not None:
             service.close()
             if queue is not None:
-                queue.remove_before_run(self._framePhysics)
+                queue.remove_on_frame(self._framePhysics)
         sounds = self.__dict__.pop('_audio', None)
         if sounds is not None:
             sounds.close()
             if queue is not None:
-                queue.remove_before_run(self._frameAudio)
+                queue.remove_on_frame(self._frameAudio)
 
     def runRenderQueue(self) -> int:
         """Make the calls other threads have queued on :attr:`renderQueue`
@@ -1366,6 +1366,18 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         queue = getattr(self, 'renderQueue', None)
         return queue.run() if queue is not None else 0
+
+    def runFrameHooks(self) -> None:
+        """Do the frame's own work: physics, audio, animations and following cameras.
+
+        Called by the main loop once an iteration, on the render thread, after
+        :meth:`OnIdle` and before the draw, so an input :meth:`OnIdle` sets
+        moves the world in the same frame and the draw shows the poses that
+        step wrote. See :meth:`~OpenGLContext.events.renderqueue.RenderQueue.frame`.
+        """
+        queue = getattr(self, 'renderQueue', None)
+        if queue is not None:
+            queue.frame()
 
     def mark(self, name: str, /, **fields: Any) -> None:
         """Note something this application knows and the engine cannot

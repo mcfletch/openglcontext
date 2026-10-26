@@ -464,10 +464,15 @@ It returns None when there is no model or the model has no such clip.
 A character stepped by its game
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``Physics.frame`` steps a character with ``character.framed`` true once a frame.
-A game with rules that run every fixed step sets ``framed`` false and calls
-``character.step(dt)`` for each step and ``character.animate(dt)`` once for the
-frame, ``dt`` the time of the whole frame. ``step`` moves the capsule, places the
+``Physics.frame`` steps a character with ``character.framed`` true once for each
+fixed step of the world the frame owes, ``1 / tickHz`` seconds each (1/120 s by
+default), and animates it once for the frame: a character takes the same steps
+as the world (:ref:`physics-characters`). Input given in ``OnIdle`` or in a
+``before-step`` handler reaches every one of those steps, so a game whose rules
+run at the world's rate needs no loop of its own. A game that steps a character
+on a clock of its own sets ``framed`` false and calls ``character.step(dt)`` for
+each step and ``character.animate(dt)`` once for the frame, ``dt`` the time of
+the whole frame. ``step`` moves the capsule, places the
 node and the stand-in the world sees and tells ``landed``. ``animate`` plays the
 clips, turns the body and raises the footsteps: it hears the speed the character
 covered over the frame (the distance since the last animation over ``dt``) and

@@ -633,8 +633,21 @@ write. ``physics.world``, ``physics.run``, ``slot_of``, ``index_of`` and
 where its character is. With a second character, a worker
 thread or the proxies shown, each write is made as it is asked for.
 
-A game with rules that run every fixed step sets the character's ``framed`` to
-False and steps it itself (:doc:`characters`).
+A character takes the same steps as the world. The frame steps each character
+once for each fixed step of ``1 / tickHz`` seconds the frame owes (120 a second
+by default), each step with the character's latest ``set_move``, ``jump`` and
+other input, so a walk or a jump traces the same path at 30, 60 or 144 frames a
+second. Inline, the count is the one the world's own clock gives, whether or not
+the world was busy enough to take its steps; with the world on a thread, the
+service counts steps at the same rate on the render thread. The node and a
+camera at the eyes are drawn between the character's last two steps, by the
+part of a step the frame leaves over: ``me.drawn_position`` and
+``me.drawn_eye``. ``me.position`` and ``me.eye`` are where the latest step put
+it. ``physics.drop_remainder()`` forgets the characters' part step with the
+world's.
+
+A game that steps a character on a clock of its own sets its ``framed`` to False
+and steps it itself (:doc:`characters`).
 
 .. _physics-ground:
 

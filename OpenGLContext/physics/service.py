@@ -35,6 +35,7 @@ from omi_physics.body import world_aabb
 from omi_physics.gravity import GravityVolume
 from omi_physics.collisionquery import WorldQuery
 
+from OpenGLContext.events.framestep import FixedSteps
 from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.character import Character, stand_in_proxy
@@ -140,6 +141,9 @@ class Physics:
         self._specs: dict[int, BodySpec] = {}
         self._replica: Replica | None = None
         self._characters: list[Character] = []
+        #: The fixed steps the characters owe each frame where the world steps on its own thread.
+        self._character_clock = FixedSteps(1.0 / float(definition.tickHz),
+                                           float(definition.maxCatchUp))
         #: For each character's stand-in, by id, the fixed triggers and sensors near it
         #: (:meth:`_fixed_seen`).
         self._seen_gathers: dict[int, tuple[Any, tuple[float, ...], tuple[float, ...],
@@ -1067,9 +1071,11 @@ class Physics:
 
         An inline or standalone service steps whole ticks and carries what is
         left of a frame to the next; a game that starts something afresh calls
-        this so the leftover is not simulated into it.
+        this so the leftover is not simulated into it. The characters' part
+        step is forgotten with it.
         """
         self._send_world('drop_remainder')
+        self._character_clock.drop()
 
     # -- the frame ----------------------------------------------------------
     def step(self, dt: float) -> None:
@@ -1083,6 +1089,12 @@ class Physics:
         bodies that move, delivers events to render-thread handlers and applies
         the scene changes handlers queued from the worker. An inline worker
         steps ``dt`` seconds first.
+
+        Each framed character takes one step of the world's fixed length for
+        each fixed step the frame owes, with its latest moves, so a character
+        takes the same steps as the world. Inline, that is the count the
+        world's clock gives; with the world on its own thread, the service
+        counts the steps at the same rate on the render thread.
         """
         if not self._enabled or self._closed:
             if not self._closed:
@@ -1109,15 +1121,26 @@ class Physics:
         for handle in list(self._sources):
             self._guarded(handle, handle.update)
         walking = False
+        steps, alpha = self._character_steps(dt)
+        step = self.worker.runtime.step_dt
         for character in list(self._characters):
             if character.framed:
-                self._guarded(character, character.update, dt)
+                self._guarded(character, character._frame, steps, step, dt, alpha)
                 walking = walking or character.busy
         if out.events:
             self._dispatch(out.events)
         self._finish_removals()
         applied = self.render.apply()
         return bool(self._awake or applied or walking)
+
+    def _character_steps(self, dt: float) -> tuple[int, float]:
+        """The fixed steps the characters owe this frame, and how far through the next one it ends."""
+        worker = self.worker
+        if isinstance(worker, InlineWorker):
+            return worker.owed, worker.runtime.clock.alpha
+        clock, runtime = self._character_clock, worker.runtime
+        clock.step, clock.longest = runtime.step_dt, runtime.max_catch_up
+        return clock.owed(dt), clock.alpha
 
     def _guarded(self, owner: Any, function: Callable[..., Any], *arguments: Any) -> None:
         """Call ``function(*arguments)`` for ``owner``, a source or a character, in the frame.

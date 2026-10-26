@@ -175,7 +175,7 @@ class ThirdPersonPlatform(PhysicsViewPlatform):
         forward = np.array([math.sin(self.yaw), 0.0, -math.cos(self.yaw)])
         camera = self.camera
         camera.offset = -forward * self.distance * cosine + _UP * self.distance * sine
-        camera.target(character.position + _UP * self.height, character.velocity)
+        camera.target(character.drawn_position + _UP * self.height, character.velocity)
         camera.advance(self._dt, float(np.hypot(character.velocity[0], character.velocity[2])))
         camera.apply()
 
@@ -234,8 +234,8 @@ class FollowController:
             context.movementManager = None
             self._freed = manager
         queue = context.renderQueue
-        queue.before_run(self._input, first=True)
-        queue.before_run(self._camera)
+        queue.on_frame(self._input, first=True)
+        queue.on_frame(self._camera)
 
     def stop(self) -> None:
         """Stop obeying the keys and following; the character keeps the last move it was given.

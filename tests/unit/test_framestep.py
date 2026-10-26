@@ -54,3 +54,49 @@ def test_the_cap_can_be_toggled():
 def test_the_longest_step_must_be_positive():
     with pytest.raises(ValueError, match='longest'):
         FrameStep(longest=0.0)
+
+
+# -- whole fixed steps ---------------------------------------------------------
+
+def test_fixed_steps_owes_the_whole_steps_a_frame_holds_and_carries_the_rest():
+    from OpenGLContext.events.framestep import FixedSteps
+    steps = FixedSteps(step=0.01, longest=1.0)
+    assert steps.owed(0.025) == 2
+    assert steps.remainder == pytest.approx(0.005)
+    assert steps.alpha == pytest.approx(0.5)
+    assert steps.owed(0.005) == 1
+    assert steps.remainder == pytest.approx(0.0)
+
+
+def test_frames_of_any_length_owe_one_step_per_step_of_time():
+    from OpenGLContext.events.framestep import FixedSteps
+    for rate in (30, 60, 144, 1000):
+        steps = FixedSteps(step=1 / 120, longest=0.1)
+        assert sum(steps.owed(1.0 / rate) for _ in range(rate * 3)) == 360, rate
+
+
+def test_fixed_steps_owes_at_most_the_longest_time():
+    from OpenGLContext.events.framestep import FixedSteps
+    steps = FixedSteps(step=0.01, longest=0.05)
+    assert steps.owed(3.0) == 5
+    assert steps.remainder == 0.0
+
+
+def test_drop_forgets_the_part_step():
+    from OpenGLContext.events.framestep import FixedSteps
+    steps = FixedSteps(step=0.01, longest=1.0)
+    steps.owed(0.008)
+    steps.drop()
+    assert steps.owed(0.004) == 0
+    assert steps.remainder == pytest.approx(0.004)
+
+
+def test_fixed_steps_refuses_a_step_or_longest_that_is_not_above_nought():
+    from OpenGLContext.events.framestep import FixedSteps
+    with pytest.raises(ValueError, match='step'):
+        FixedSteps(step=0.0, longest=1.0)
+    with pytest.raises(ValueError, match='longest'):
+        FixedSteps(step=0.01, longest=-1.0)
+    steps = FixedSteps(step=0.01, longest=1.0)
+    assert steps.owed(-0.5) == 0
+    assert steps.remainder == 0.0

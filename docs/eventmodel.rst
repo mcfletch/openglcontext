@@ -230,12 +230,38 @@ and run faster or slower. Its event types are ``start``, ``stop``, ``pause``,
 carries how far through the cycle the timer is, from 0 to 1.
 :doc:`tutorials/nehe/nehe6_timer` walks through a complete example.
 
+.. _eventmodel-frame-order:
+
+The order of a frame
+~~~~~~~~~~~~~~~~~~~~
+
+Every window system's main loop makes one iteration in this order:
+
+1. ``poll``: the toolkit delivers input, and the event handlers run.
+2. ``handoff``: the calls background threads queued on ``renderQueue`` are made
+   (:ref:`render-queue`).
+3. ``repeats``: held keys repeat.
+4. ``idle``: ``OnIdle``, where a game reads its input and sets moves.
+5. ``frame``: ``context.runFrameHooks()``, the frame's own work, in the order
+   it was added: a following camera's input, the physics frame (the world's
+   steps, the characters' steps, poses written onto the nodes, events
+   delivered), audio, ``context.animate`` and the following camera.
+6. ``wait`` and ``draw``: the frame is drawn with the poses step 5 wrote.
+
+A move a game sets in ``OnIdle`` therefore moves the world and the characters
+in the same frame, and the frame shows the result. A program that runs its own
+loop makes the same calls in the same order: ``runRenderQueue()``, its own idle
+work, ``runFrameHooks()``, then ``OnDraw()``. A function a program adds with
+``renderQueue.on_frame(function)`` runs in step 5, and with ``first=True`` ahead
+of the physics frame.
+
 A simulation's time step
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 The context's physics and audio services read the clock themselves, and so
 does ``context.animate``: ``self.animate(thing)`` calls ``thing.update(dt)``,
-or ``thing(dt)`` for a function, once a frame before the frame is drawn, and
+or ``thing(dt)`` for a function, once a frame after ``OnIdle`` and before the
+frame is drawn, and
 asks for frames while anything is animating. It returns an
 ``OpenGLContext.events.animations.Animated`` whose ``stop()`` ends it.
 ``self.after(seconds, function)`` makes one call once that many seconds of the
@@ -260,7 +286,12 @@ lands on the same picture every time; ``time.time()`` does not follow it.
        self.simulation.advance(self.frames.step(systemtime.systemTime()))
 
 ``step(now)`` is the seconds since the previous step, at most ``longest``, so a
-stall does not hand the simulation one step as long as the stall. ``cap`` is
+stall does not hand the simulation one step as long as the stall.
+``FixedSteps(step, longest)`` turns each frame's time into whole steps of
+``step`` seconds: ``owed(dt)`` answers how many are due and carries the part
+step to the next frame, ``alpha`` is how far through the next step that part
+is, from 0 to 1, and ``drop()`` forgets it. The physics service counts the
+world's steps and its characters' this way. ``cap`` is
 the shortest frame in seconds (None for none), ``wait(now)`` is how long to
 wait to keep to it, and ``toggle_cap(seconds)`` sets or lifts it.
 

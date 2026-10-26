@@ -148,6 +148,7 @@ def walking(clock, field=None, colliders=None, radii=None, position=(0.0, 0.0, 0
     host.init_walk(field if field is not None else flat_field(), colliders, radii)
     host.setupPhysics(enable=True)
     host.renderQueue.run()
+    host.renderQueue.frame()
     return host
 
 
@@ -156,6 +157,7 @@ def run(host, clock, seconds=1.0, step=FRAME):
     for _ in range(int(round(seconds / step))):
         clock.advance(step)
         host.renderQueue.run()
+        host.renderQueue.frame()
 
 
 def eye(host):

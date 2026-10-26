@@ -1,4 +1,4 @@
-"""A context hosts physics and audio: made on first use, framed with the render queue, closed with the window."""
+"""A context hosts physics and audio: made on first use, framed after OnIdle by the frame hooks, closed with the window."""
 import threading
 from types import SimpleNamespace
 
@@ -82,38 +82,38 @@ def test_physics_takes_its_definition_from_the_contexts(ctx):
     assert ctx.physics.definition is ctx.contextDefinition.physics
 
 
-def test_the_render_queue_steps_the_world_each_frame(ctx, clock):
+def test_the_frame_hooks_step_the_world_each_frame(ctx, clock):
     node = ball()
     ctx.physics.add_dynamic(node)
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     for _ in range(10):
         clock.now += 0.02
-        ctx.renderQueue.run()
+        ctx.renderQueue.frame()
     assert node.translation[1] < 5.0
 
 
 def test_a_frame_with_something_moving_asks_for_a_redraw(ctx, clock):
     ctx.physics.add_dynamic(ball())
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     clock.now += 0.02
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     assert ctx.redraws and ctx.redraws[-1] == 1
 
 
 def test_a_frame_with_nothing_moving_asks_for_none(ctx, clock):
     ctx.physics.add_static(surfaces.shape(surfaces.block((1, 1, 1)), LOOK))
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     clock.now += 0.02
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     assert ctx.redraws == []
 
 
 def test_a_stall_does_not_hand_the_world_one_huge_step(ctx, clock):
     node = ball(at=(0, 100, 0))
     ctx.physics.add_dynamic(node)
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     clock.now += 30.0
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     assert node.translation[1] > 99.0
 
 
@@ -131,9 +131,9 @@ def test_physics_off_in_the_definition_leaves_bodies_where_they_were_put(clock):
     made = _Context(physics=PhysicsDefinition(enabled=False, mode='inline'))
     node = ball()
     made.physics.add_dynamic(node)
-    made.renderQueue.run()
+    made.renderQueue.frame()
     clock.now += 0.5
-    made.renderQueue.run()
+    made.renderQueue.frame()
     assert node.translation[1] == pytest.approx(5.0)
     assert made.redraws == []
     made.releaseWindow()
@@ -163,12 +163,12 @@ def test_audio_is_made_on_first_use_and_is_the_same_each_time(ctx):
     assert ctx.audio is ctx.audio
 
 
-def test_audio_is_framed_by_the_render_queue_once_a_frame(ctx, monkeypatch):
+def test_audio_is_framed_by_the_frame_hooks_once_a_frame(ctx, monkeypatch):
     frames = []
     audio = ctx.audio
     monkeypatch.setattr(audio, 'frame', lambda: frames.append(1) or 0)
-    ctx.renderQueue.run()
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
+    ctx.renderQueue.frame()
     assert frames == [1, 1]
 
 
@@ -181,7 +181,7 @@ def test_releasing_the_window_closes_audio(ctx, monkeypatch):
 
 
 def test_the_services_cost_a_context_that_does_not_use_them_nothing(ctx):
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     ctx.releaseWindow()
     assert '_physics' not in ctx.__dict__ and '_audio' not in ctx.__dict__
 
@@ -204,10 +204,10 @@ def test_physics_events_are_added_to_a_context_by_their_physics_names(ctx, clock
     listener = _Listener()
     body = _land(ctx, clock)
     ctx.addEventHandler('physics-hit', body=body, function=listener.OnHit)
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     for _ in range(40):
         clock.now += 0.02
-        ctx.renderQueue.run()
+        ctx.renderQueue.frame()
     assert len(listener.heard) == 1 and listener.heard[0].body is body
 
 
@@ -215,10 +215,10 @@ def test_the_context_spelling_without_a_body_hears_every_body(ctx, clock):
     listener = _Listener()
     _land(ctx, clock)
     ctx.addEventHandler('physics-hit', function=listener.OnHit)
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     for _ in range(40):
         clock.now += 0.02
-        ctx.renderQueue.run()
+        ctx.renderQueue.frame()
     assert len(listener.heard) == 1
 
 
@@ -236,10 +236,10 @@ def test_a_recorded_session_runs_the_world_inline_and_writes_its_events_to_the_j
         body = _land(made, clock)
         body.addEventHandler('hit', function=listener.OnHit)
         assert made.physics.definition.mode == 'inline'
-        made.renderQueue.run()
+        made.renderQueue.frame()
         for _ in range(40):
             clock.now += 0.02
-            made.renderQueue.run()
+            made.renderQueue.frame()
         assert [name for name, _fields in marks] == ['physics-hit']
     finally:
         made.releaseWindow()
@@ -251,9 +251,9 @@ def test_a_frame_that_raises_is_logged_once_and_the_loop_goes_on(ctx, clock, cap
 
     ctx.physics.frame = broken
     clock.now += 0.02
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     clock.now += 0.02
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     assert sum(1 for record in caplog.records
                if record.exc_info and 'the world fell over' in str(record.exc_info[1])) == 1
 
@@ -278,7 +278,7 @@ def test_services_made_again_after_closing_are_framed_once(ctx, clock, monkeypat
     monkeypatch.setattr(ctx.physics, 'frame', lambda dt: framed.append(dt) or False)
     monkeypatch.setattr(ctx.audio, 'frame', lambda: framed.append('audio'))
     clock.now += 0.02
-    ctx.renderQueue.run()
+    ctx.renderQueue.frame()
     assert len(framed) == 2
 
 

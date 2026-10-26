@@ -324,7 +324,7 @@ class AudioDemoContext(BaseContext):
             self.addEventHandler('keypress', name=key,
                                  function=lambda event, handler=handler: handler())
         yard.frames.step(systemtime.systemTime())
-        self.renderQueue.before_run(self.OnFrame)
+        self.renderQueue.on_frame(self.OnFrame)
         print(__doc__, flush=True)
         print(self.audio.describe(), flush=True)
 

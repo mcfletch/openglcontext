@@ -709,7 +709,7 @@ iteration, divided among named phases. Every context has one as
    * - ``last stall``
      - The phase that took the most time in the latest stall, for example
        ``idle 812ms``.
-   * - ``poll``, ``repeats``, ``idle``, ``wait``, ``draw``, ``cascade``, ``render``
+   * - ``poll``, ``handoff``, ``repeats``, ``idle``, ``frame``, ``wait``, ``draw``, ``cascade``, ``render``
      - Mean milliseconds per iteration in each phase, largest first.
 
 Phases do not overlap. Time inside a nested phase is charged to the nested

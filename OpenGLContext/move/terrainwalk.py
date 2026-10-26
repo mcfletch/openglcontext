@@ -385,8 +385,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
             return
         self._tw_hooked = True
         self._tw_steps = FrameStep(longest=float(self.physicsMaxStep))
-        queue.before_run(self._tw_input, first=True)
-        queue.before_run(self._tw_camera)
+        queue.on_frame(self._tw_input, first=True)
+        queue.on_frame(self._tw_camera)
 
     def _tw_moving_to_a_viewpoint(self) -> bool:
         from OpenGLContext.passes import viewpointbinding  # noqa: PLC0415 cycle: passes import move

@@ -211,9 +211,11 @@ class TestObstacles:
         trunk = np.array([[0.0, 0.0, -6.0]], 'f')
         radius = np.array([0.5], 'f')
         host = walking(clock, colliders=trunk, radii=radius)
-        # Face the trunk: the camera's forward at yaw 0 is -z.
+        # Face the trunk: the camera's forward at yaw 0 is -z. The walker reaches it
+        # in under 2 s; held head-on against a round trunk it slides round it a
+        # second or two later, at 60 or 120 steps a second alike.
         press(host, 'w')
-        run(host, clock, 4.0)
+        run(host, clock, 2.5)
         x, _y, z = eye(host)
         assert math.hypot(x - 0.0, z + 6.0) >= 0.5 + host.player_radius - 0.02
         assert z > -6.0
@@ -263,7 +265,7 @@ class TestMounds:
 
     def test_the_walker_stands_on_top_of_the_rock_it_climbed(self, clock):
         host = self.host_walking_at(clock, self.mound(rim=0.1, top=0.4, radius=3.0))
-        run(host, clock, 3.0)
+        run(host, clock, 2.0)                   # about 6 m on, near the middle of the rock
         press(host, 'w', state=0)
         run(host, clock, 0.5)
         x, y, z = eye(host)

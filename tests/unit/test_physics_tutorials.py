@@ -56,6 +56,8 @@ class Run:
     def frame(self):
         self.clock.advance()
         self.context.runRenderQueue()
+        self.context.OnIdle()
+        self.context.runFrameHooks()
         self.context.OnDraw(force=1)
 
     def seconds(self, seconds):
@@ -521,4 +523,4 @@ def test_the_walker_climbs_the_stairs_and_stays_in_the_room(gl_context):
             assert -0.1 < hero.position[1] < 2.5
             assert abs(hero.position[0]) < 12 and abs(hero.position[2]) < 12
         assert top > 1.0                                                  # up the steps
-        assert np.allclose(run.context.getViewPlatform().position[:3], hero.eye, atol=1e-3)
+        assert np.allclose(run.context.getViewPlatform().position[:3], hero.drawn_eye, atol=1e-3)

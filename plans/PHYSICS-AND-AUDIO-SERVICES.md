@@ -77,6 +77,19 @@ gained `PhysicsWorld.use_backend`. The cannon game's sliding target pad is a tri
 service neither drives nor writes back to its node, so the game moves it from a `before-step`
 handler: a driven trigger is open.
 
+Frame order and character steps, 2026-10-26. The frame's own work (physics, audio, animations,
+following cameras) moved from the render queue's `before_run` to `renderQueue.on_frame`, which
+`Context.runFrameHooks()` runs after `OnIdle` and before the draw in every main loop
+(`windowsystem/base.py`, which glfw, glut, pygame, tk and Qt's backend all run, and wx's `onIdle`).
+A framed character takes one step of `1 / tickHz` for each fixed step the frame owes, the count
+the world's clock gives inline (`events/framestep.FixedSteps`, which the runtime now counts with,
+and which keeps counting while an inline world is idle), and is drawn between its last two steps
+(`drawn_position`, `drawn_eye`). An input set in `OnIdle` reaches the same frame's steps, and a
+walk traces the same path at 30, 60 and 144 frames a second. Stepping characters at 120 Hz in
+place of the frame rate found a defect in `omi_physics`: `_try_step_up` probed along a move turned
+up a tilted contact, so a walker could not mount a 0.1 m rock rim at 120 Hz; fixed on the
+`omi_physics` branch `step-up-probe` (`8e7c78a`), which this branch now needs.
+
 Deleted 2026-10-26, once marble-demo's `physics-services` branch stopped importing them:
 `physics/demo.py` (`DemoScene`, `disable_vsync`; `terrain_view.py` calls `setVSync(False)`),
 `physics/threaded.py` (`ThreadedPhysicsManager`), `physics/manager.py` (`PhysicsManager`),
@@ -627,9 +640,11 @@ twig-bb's death camera are the two users in this workspace.
 
 A character that is dead, hidden or between rounds is `remove()`d.
 
-A game that orders the step with its other updates, or steps with its own clock, sets
-`character.framed = False`. The frame then leaves the character alone, and the owner
-calls `character.update(dt)`, or `PhysicsViewPlatform.update(dt)` over it.
+The frame steps a character once for each fixed step the world owes, with the fixed step
+and the character's latest input: a character takes the same steps as the world, so a game
+whose rules run at the world's rate needs no loop of its own. A game that steps with its own
+clock sets `character.framed = False`. The frame then leaves the character alone, and the
+owner calls `character.update(dt)`, or `PhysicsViewPlatform.update(dt)` over it.
 `PhysicsViewPlatform.bind` and `bind_eye` over a character move the body the world sees
 with the capsule.
 

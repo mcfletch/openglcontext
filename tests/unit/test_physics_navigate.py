@@ -39,6 +39,7 @@ def _frames(context, count):
     for _ in range(count):
         context.clock.advance()
         context.runRenderQueue()
+        context.runFrameHooks()
         context.OnDraw(force=1)
 
 
@@ -50,7 +51,8 @@ def test_the_free_navigator_gives_up_the_camera(navigator):
 @gl
 def test_the_camera_is_at_the_walkers_eyes(navigator):
     _frames(navigator, 30)
-    assert np.allclose(navigator.platform.position[:3], navigator.hero.eye, atol=1e-3)
+    # The camera is at the eyes where the frame draws them, between the last two steps.
+    assert np.allclose(navigator.platform.position[:3], navigator.hero.drawn_eye, atol=1e-3)
 
 
 @gl
@@ -63,7 +65,8 @@ def test_holding_w_walks_the_character_forward_and_the_camera_goes_with_it(navig
     moved = np.array(navigator.hero.position) - start
     assert moved[2] < -2.0                                    # yaw 0 walks along -Z
     assert abs(moved[0]) < 0.3
-    assert np.allclose(navigator.platform.position[:3], navigator.hero.eye, atol=1e-3)
+    # The camera is at the eyes where the frame draws them, between the last two steps.
+    assert np.allclose(navigator.platform.position[:3], navigator.hero.drawn_eye, atol=1e-3)
 
 
 @gl
