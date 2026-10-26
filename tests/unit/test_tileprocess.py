@@ -84,6 +84,17 @@ def test_closing_stops_the_processes_and_refuses_more_work(processes):
 class TestAnInterruptReachingEveryProcess:
     """A terminal's Ctrl-C goes to the parent and to each child at once."""
 
+    @pytest.fixture(autouse=True)
+    def interrupts_are_not_ignored(self):
+        """A child inherits an ignored SIGINT, as a runner started in the background has.
+
+        The children these tests start take a terminal's disposition, so the test process
+        takes it too while they run.
+        """
+        before = signal.signal(signal.SIGINT, signal.default_int_handler)
+        yield
+        signal.signal(signal.SIGINT, before)
+
     def test_a_child_idle_when_interrupted_ends_without_a_traceback(self, processes, capfd):
         pool = processes(count=1)
         pool.make(1)
