@@ -18,6 +18,12 @@ the `OMI glTF physics extension family
 or Blender imports without conversion, and a scene exports back to glTF. The
 indented technical notes point at the code.
 
+A game imports what it needs from ``OpenGLContext.physics``: ``Physics``,
+``Body``, ``Character``, ``Joint``, ``Proxy``, ``PhysicsDefinition``,
+``CharacterCapabilities``, ``Material`` and ``CollisionFilter``. A program that
+imports ``omi_physics`` itself reaches the parts of the engine the service has
+no call for.
+
 .. _physics-authoring:
 
 Adding physics to a scene
@@ -129,7 +135,9 @@ The options are keywords:
      - per second; the world's ``linearDamping`` (0.3) and ``angularDamping``
        (1.5) where left out
    * - ``collision_filter``
-     - the index of an ``omi_physics`` ``CollisionFilter`` in the world, or -1
+     - a ``CollisionFilter``: the systems the body is a member of, and those it
+       collides with or not (:ref:`physics-presolve`); or an index in the
+       world's own filters
    * - ``blocks_characters``
      - False for a body every character walks through
        (:ref:`physics-characters`)
@@ -475,30 +483,45 @@ Breaking instead of bouncing
 A pane that shatters when ``hit.impulse`` passes its strength is removed by its
 handler and replaced by fragments; the ball has already bounced off it on that
 step. To let the ball carry on through, decide before the solve with a contact
-filter on the live world, which a program with ``mode='inline'`` reaches as
-``physics.world``:
+filter:
 
 .. code-block:: python
 
-   from omi_physics.contactevents import Verdict
+   def breaks(approach):
+       """False lets the ball through the pane the blow breaks."""
+       return not (pane in (approach.first, approach.second) and approach.impulse > 5.0)
 
-   def breaks(pair):                          # a PairPreview
-       world = physics.world
-       if pane.uid in (world.handle_of(pair.a), world.handle_of(pair.b)) and pair.impulse > 5.0:
-           return Verdict.IGNORE_PAIR
-       return Verdict.SOLVE
+   physics.set_contact_filter(breaks)
 
-   physics.world.set_contact_filter(breaks)
-
-The filter is asked once about each reported pair, on the step it would begin.
-``pair.impulse`` is the closing speed times the pair's reduced mass, in N*s.
-``IGNORE_PAIR`` lets the two pass through each other until they part;
-``IGNORE_STEP`` leaves the pair out of this step and asks again on the next. An
+The filter is asked once about each pair as it first touches, where one of the
+two bodies has a handler, on the thread that steps the world. ``approach`` is an
+``Approach``: ``first`` and ``second`` (bodies, or None for a body with no
+handle), ``approach`` (the closing speed in m/s), ``impulse`` (that speed times
+the pair's reduced mass, in N*s), ``point`` and ``normal``. True or None solves
+the pair; False lets the two pass through each other until they part. An
 ignored pair is still delivered, with ``solved`` False, so the handler that
-spawns the fragments hears it. One-way platforms use the same hook. The world
-holds one filter, and setting one replaces the service's own, which keeps a
-character from pushing a body heavier than it can move; a program with
-characters sets none.
+spawns the fragments hears it. A filter that raises is logged once and the pair
+is solved. ``physics.set_contact_filter(None)`` removes it. A character's
+stand-in passing a body heavier than it can push is decided before the filter
+is asked.
+
+The fragments should not deflect the ball either. A collision filter puts bodies
+in systems and says which systems meet:
+
+.. code-block:: python
+
+   from OpenGLContext.physics import CollisionFilter
+
+   balls = CollisionFilter(collisionSystems=('ball',))
+   shards = CollisionFilter(collisionSystems=('shard',), notCollideWithSystems=('ball',))
+   physics.add_dynamic(ball, collision_filter=balls)
+   physics.add_dynamic(shard, collision_filter=shards)
+
+Two bodies collide only where each one's filter admits the other.
+``collideWithSystems`` names the only systems a body meets; left as None it
+meets every system not in ``notCollideWithSystems``. Equal filters given to
+several bodies are one filter in the world. Queries and characters do not read
+collision filters.
 
 .. _physics-movers:
 
@@ -579,7 +602,8 @@ The capsule's size and speeds are an ``omi_physics`` ``CharacterCapabilities``
 (:ref:`character`). A character with a ``model`` is placed at the feet, turned
 toward where it goes and animated by what it does (:doc:`characters`).
 ``context.follow(hero)`` shows it from behind and moves it from the keys
-(:ref:`navigation-follow-character`); a first-person camera is ``PhysicsViewPlatform.over(me)``.
+(:ref:`navigation-follow-character`), and ``context.follow(me, view='eyes')``
+puts the camera at its eyes and walks it with the walk and fly modes' keys.
 A character that is dead, hidden or between rounds is removed.
 
 A character and a dynamic body act on each other. The stand-in carries the
@@ -710,8 +734,7 @@ caller's to read: ``physics.world`` is the live ``omi_physics`` world,
 the time left over from a frame so a game that starts something afresh does not
 simulate it. ``physics.run(function)`` calls ``function(world)`` on the thread
 that steps the world at the start of a step and returns a future; it is how a
-joint, a contact filter or a call the service has not named is made in either
-mode.
+call the service has not named is made in either mode.
 
 In ``thread`` mode the same steps run on a worker at ``tickHz``, which keeps the
 render thread free of a heavy world. Under CPython's global interpreter lock the
@@ -822,7 +845,11 @@ that count, the cost of transferring the data is larger than the per-body work
 it saves. The world switches back to numpy when the count falls below 80% of
 the threshold, and stays on numpy where GL 4.3 compute shaders are not
 available. Set ``OPENGLCONTEXT_PHYSICS_BACKEND`` to ``numpy``, ``gpu`` or
-``auto`` to override the policy. The GPU computes in float32, so its
+``auto`` to override the policy. ``physics.backend`` is the name of the backend
+in use (``'numpy'`` or ``'glcompute'``), and assigning ``'numpy'``, ``'gpu'`` or
+``'auto'`` chooses one from the next step. The GPU backend needs GL 4.3 compute
+on the thread that steps the world, so it is for an ``inline`` world; a backend
+that cannot be made logs a warning and the world keeps the one it has. The GPU computes in float32, so its
 trajectories match the numpy backend within a tolerance, not bit for bit. The
 broad phase, narrow phase and solver run on the CPU with either backend. In
 ``tests/tutorials/physics/physics_stress.py``, the ``b`` key switches backends while the demo
@@ -1370,36 +1397,66 @@ names is (:doc:`untrusted`).
 Joints, compound shapes and pair rules
 --------------------------------------
 
-``omi_physics`` holds bodies together with joints built from velocity
-constraint rows, solved together and warm started from the last step:
-``BallJoint``, ``HingeJoint``, ``SliderJoint``, ``UniversalJoint``,
-``TwoAxisHingeJoint`` (a steered, sprung wheel) and ``MotorJoint``, in
-``omi_physics.joints``. Each takes its anchor and axes in world coordinates
-as the bodies stand when ``world.add_joint_constraint`` adds it, stops an
-angle or a separation with a bounce, drives an axis with a motor of a given
-force or torque, and answers its angles, rates and anchors. Bodies a joint
-holds do not collide with each other.
-
-The service has no call of its own for joints. A service in ``inline`` mode
-gives the world as ``physics.world`` and a body's row in it as
-``physics.slot_of(body)``; ``physics.run(function)`` does the same on the
-world's thread in either mode:
+A joint holds a body to another body, or to the world, so that it moves only
+the way the joint lets it. Each kind is one call on the service, which returns a
+``Joint``:
 
 .. code-block:: python
 
-   from omi_physics.joints import HingeJoint
+   door = physics.add_hinge(leaf, frame, anchor=(0.0, 1.0, 0.5), axis=(0, 1, 0),
+                            limits=(0.0, 1.6))
+   rotor = physics.add_hinge(fan, anchor=(6, 4, 0), axis=(0, 1, 0), motor=(4.0, 30.0))
+   link = physics.add_ball(lower, upper, anchor=(1.0, 6.0, 0.0))
+   drawer = physics.add_slider(box, cabinet, axis=(1, 0, 0), limits=(0.0, 0.4),
+                               motor=(0.5, 40.0))
+   rod = physics.add_distance(bob, to_anchor=(0.0, 6.0, 0.0), length=2.0)
 
-   world = self.physics.world                       # mode='inline'
-   door = world.add_joint_constraint(HingeJoint(
-       self.physics.slot_of(frame), self.physics.slot_of(leaf),
-       anchor=(0.0, 1.0, 0.5), axis=(0, 1, 0), lower=0.0, upper=1.6))
-   door.angle(world)
+   rotor.drive(-4.0, 30.0)                     # a new speed and the most torque
+   rotor.motor                                 # (-4.0, 30.0)
+   door.remove()
 
-   self.physics.run(lambda world: world.add_joint_constraint(joint))   # either mode
+.. list-table::
+   :widths: auto
+   :header-rows: 1
 
-A joint is added after the bodies it holds and applies to them as they are
-then. :doc:`tutorials/physics/physics_joints` hangs a pendulum and a chain and
-turns a motor.
+   * - Call
+     - What it holds
+   * - ``add_hinge(body, to, anchor=, axis=, limits=, motor=)``
+     - ``body`` turns against ``to`` about ``axis`` through ``anchor``;
+       ``limits`` stop the angle, in radians from where it starts; ``motor`` is
+       a speed in radians a second and the most torque, in newton-metres
+   * - ``add_ball(body, to, anchor=)``
+     - ``body`` and ``to`` turn freely about the point ``anchor``
+   * - ``add_slider(body, to, axis=, limits=, motor=)``
+     - ``body`` slides against ``to`` along ``axis`` and does not turn;
+       ``limits`` in metres from where it starts; ``motor`` in metres a second
+       and newtons
+   * - ``add_distance(body, to, anchor=, to_anchor=, length=)``
+     - the point ``anchor`` on ``body`` stays ``length`` metres from
+       ``to_anchor`` on ``to``; the anchors default to the bodies' centres and
+       ``length`` to the distance between them
+
+``body`` and ``to`` are bodies or the nodes of bodies; ``to`` left out is the
+world. Anchors and axes are world coordinates as the bodies stand when the
+joint is made, and each body carries them from then on. Bodies a joint holds do
+not collide with each other unless ``collide=True``. Removing either body
+removes its joints, and ``joint.alive`` says whether it is still in the world.
+A joint travels to the world as a command, as a body's changes do, so it works
+in ``inline`` and ``thread`` mode alike. The world
+reports no events of its own for joints. :doc:`tutorials/physics/physics_joints`
+hangs a pendulum and a chain, turns a motor and slides a drawer.
+
+The service makes these from ``omi_physics.joints`` (``HingeJoint``,
+``BallJoint``, ``SliderJoint`` and ``DistanceConstraint``). The others there,
+``UniversalJoint``, ``TwoAxisHingeJoint`` (a steered, sprung wheel) and
+``MotorJoint``, and a joint's angle read back, are reached through
+``physics.run``:
+
+.. code-block:: python
+
+   from omi_physics.joints import TwoAxisHingeJoint
+
+   self.physics.run(lambda world: world.add_joint_constraint(TwoAxisHingeJoint(...)))
 
 A collider may be several shapes in one body: ``model.Shape.compound`` places
 each at an offset in the body's frame, and the body's mass is shared among
@@ -1518,17 +1575,18 @@ reference image.
 - :doc:`physics_events.py <tutorials/physics/physics_events>` - the
   ``oglc-physics-events`` yard, opening on a scene already struck.
 
-- :doc:`physics_joints.py <tutorials/physics/physics_joints>` - a pendulum, a chain
-  and a motor.
+- :doc:`physics_joints.py <tutorials/physics/physics_joints>` - a hinged pendulum,
+  a chain of ball joints, a hinge's motor and a slider.
 
 - :doc:`physics_cook_view.py <tutorials/physics/physics_cook_view>` - cooks a collider
   and draws it over the mesh.
 
 - :doc:`physics_navigate.py <tutorials/physics/physics_navigate>` - a first-person
-  walk past walls, through a doorway, and up stairs and a ramp.
+  walk past walls, through a doorway, and up stairs and a ramp, with
+  ``follow(view='eyes')``.
 
 - :doc:`physics_stress.py <tutorials/physics/physics_stress>` - performance as the
-  number of bodies grows.
+  number of bodies grows, and ``physics.backend``.
 
 - :doc:`using_physics.py <tutorials/physics/using_physics>` - a cannon game in its
   context's world, with kinematic bodies, a trigger and a wind. Its rules also

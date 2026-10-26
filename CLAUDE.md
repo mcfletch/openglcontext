@@ -73,8 +73,6 @@ package whose code ends up somewhere else.
 ```text
 OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
-│   ├── manager.py    # Audio and Voice: sounds played with a call from any
-│   │                 # thread, started on the render thread; context.audio -- no GL
 │   ├── acoustics.py  # X3D's AcousticProperties: surfaces between a sound and
 │   │                 # the listener, and the room's reverb -- no GL -- docs/x3d.rst
 │   ├── manager.py    # Audio: sounds played by call (play, load, volume,
@@ -198,6 +196,9 @@ OpenGLContext/
 │   ├── thirdperson.py  # context.follow: FollowMode (keys relative to the
 │   │                 # camera), the camera behind a character and out of walls
 │   │                 # -- docs/navigation.rst#navigation-follow
+│   ├── firstperson.py  # context.follow(view='eyes'): the camera at a
+│   │                 # character's eyes, walked by the walk and fly modes
+│   │                 # -- docs/navigation.rst#navigation-eyes
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
 │   │                 # modes and views a definition declares -- no GL
 │   ├── navigationinfo.py  # A scene's bound NavigationInfo: its headlight
@@ -323,6 +324,10 @@ OpenGLContext/
 │   ├── debugdraw.py  # The proxy, contact and velocity overlay (show_proxies)
 │   ├── events.py     # Collision: one collision as a body's handler is given it
 │   ├── poses.py      # Quaternions to axis-angle, and a pose written onto a Transform
+│   ├── joints.py     # Joint, JointSpec, JointTable: hinges, balls, sliders and
+│   │                 # distances made by the service -- docs/physics.rst#physics-joints
+│   ├── filters.py    # Collision filters by system, and the contact filter asked
+│   │                 # as two bodies meet -- docs/physics.rst#physics-presolve
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
 │   └── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics

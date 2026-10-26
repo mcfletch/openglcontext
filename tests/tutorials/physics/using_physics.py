@@ -304,7 +304,7 @@ class Sounds:
     off over a falling tone, which is what a detonation is, and
     `reverberated` puts the tail of an open field behind it.  `impact` is a
     burst of noise with a sharp decay, a crack, and a `sequence` of rising
-    `tone`s is the fanfare.  Each clip is made once.
+    tones (`tone`) is the fanfare.  Each clip is made once.
 
     `audio.play` places a clip where it happened, `at` a world point, so it
     pans with the camera, which the context's audio follows.  The emitter

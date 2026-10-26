@@ -62,6 +62,19 @@ Not done:
   `TerrainWalkMixin`, which the forest walks with; the viewer's walk and X3D navigation run on it
   over a raw world. Moving it onto the service is its own piece of work.
 
+Tutorials moved, 2026-10-26. No tutorial imports `omi_physics` or `omi_audio`, reads
+`physics.world` or `slot_of`, or steps physics or a character from `OnIdle`. What the engine gained
+for them: `add_hinge`, `add_ball`, `add_slider` and `add_distance` returning a `Joint`
+(`physics/joints.py`); `physics.backend`; `collision_filter=` taking a `CollisionFilter` and
+`set_contact_filter` (`physics/filters.py`); `Context.follow(view='eyes')` (`move/firstperson.py`),
+and a follower takes the camera from the free-fly navigator; the names a game needs exported from
+`OpenGLContext.physics`; `OpenGLContext.audio.sounds`, `Audio.mix`, `Audio.add`, `level` and
+`describe`; `Context.animate` and `after`, `run_along` over a list of points with an `arrived`
+event, `Gait.from_clips`, `WanderingCrowd(clips=)` and the follow camera's `swing`. omi_physics
+gained `PhysicsWorld.use_backend`. The cannon game's sliding target pad is a trigger, which the
+service neither drives nor writes back to its node, so the game moves it from a `before-step`
+handler: a driven trigger is open.
+
 Deleted 2026-10-26, once marble-demo's `physics-services` branch stopped importing them:
 `physics/demo.py` (`DemoScene`, `disable_vsync`; `terrain_view.py` calls `setVSync(False)`),
 `physics/threaded.py` (`ThreadedPhysicsManager`), `physics/manager.py` (`PhysicsManager`),

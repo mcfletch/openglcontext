@@ -208,8 +208,9 @@ simulation packages update.
        :doc:`Instancing <instancing>`
    * - ``physics``
      - The physics service a context hosts (``Physics``, ``Body``,
-       ``Character``, events, queries, materials, colliders that stream), the
-       walking view platform and the debug overlay, on ``omi_physics``.
+       ``Character``, ``Joint``, events, queries, materials, collision and
+       contact filters, colliders that stream), the walking view platform and
+       the debug overlay, on ``omi_physics``.
      - :doc:`Physics <physics>`
    * - ``nav``
      - The navigation mesh generated from the collision mesh, and routes
@@ -222,8 +223,8 @@ simulation packages update.
    * - ``move``
      - The camera and the movement modes (examine, fly, walk, swim and
        mouse-look), the walking model under them, the follow camera and
-       running along a course, and a character seen from behind
-       (``context.follow``).
+       running along a course, and a character seen from behind or through
+       its eyes (``context.follow``).
      - :doc:`Movement <navigation>`
    * - ``audio``
      - The scenegraph's audio nodes, the per-context engine that plays them, and

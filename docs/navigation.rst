@@ -657,6 +657,35 @@ the tops of the walls. The sweep meets bodies, so scenery made from the scene's
 shapes is met once its triangles are cooked, a frame or two after the scene is
 set.
 
+Following takes the camera from the context's free-fly navigator
+(``context.movementManager``), so the two never both move it, and
+``context.unfollow()`` gives it back.
+
+.. _navigation-eyes:
+
+A character seen through its eyes
+---------------------------------
+
+``context.follow(character, view='eyes')`` is the first-person view: the camera
+is at the character's eyes, and the keys of the walk and fly modes
+(``walk_fly_modes``) move it. It returns an ``EyesController``
+(``OpenGLContext.move.firstperson``), a ``FollowController`` over a
+``PhysicsViewPlatform``:
+
+.. code-block:: python
+
+   hero = self.physics.add_character(position=(-8, 0.3, 6))
+   walker = self.follow(hero, view='eyes', yaw=0.0)
+   walker.navigation.select('fly')               # off the ground; 'walk' drops it
+
+``yaw`` is the heading the camera starts at, in radians about +Y, 0 looking
+along -Z. ``modes`` is a list of movement modes in place of walk and fly, the
+first in force. Selecting a mode puts the character in that mode's state
+(``MovementMode.applyTo``): the fly mode switches the character's flying on, the
+walk mode off. ``w`` and ``s`` walk, ``a`` and ``d`` step to the sides, ``q``
+and ``e`` turn, ``shift`` runs and space jumps.
+:doc:`tutorials/physics/physics_navigate` walks a level with it.
+
 .. _navigation-pathmover:
 
 Running along a course
