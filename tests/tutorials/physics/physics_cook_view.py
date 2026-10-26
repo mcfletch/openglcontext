@@ -3,8 +3,8 @@
 
 [physics_cook_view.py-screen-0001.png Screenshot]
 
-An arbitrary triangle mesh (a lumpy blob) has no hand-made collider, so the
-world cooks one from the triangles the node draws.  The solid mesh is the render
+A boulder drawn as a triangle mesh has no hand-made collider, so the world
+cooks one from the triangles the node draws.  The solid mesh is the render
 geometry; the green wireframe is the *cooked* collision proxy that
 ``physics.show_proxies`` overlays on it, so you can see how well the proxy
 matches.  Press **c** to cycle the cooking strategy (convex hull, box, sphere)
@@ -16,33 +16,21 @@ Keys:
 '''
 import numpy as np
 
-from omi_physics import hull
-
 from OpenGLContext.context import Context as BaseContext
-from OpenGLContext.scenegraph import surfaces
-from OpenGLContext.scenegraph.basenodes import (
-    Appearance, Background, Coordinate, DirectionalLight, IndexedFaceSet, Material,
-    Shape, Transform, sceneGraph,
-)
+from OpenGLContext.scenegraph import natural, surfaces
+from OpenGLContext.scenegraph.basenodes import Background, DirectionalLight, sceneGraph
 
 STRATEGIES = ['convex', 'box', 'sphere']
 
 
 def blob_node(seed=2):
-    '''A lumpy convex blob as an ``IndexedFaceSet`` of triangles.'''
-    rng = np.random.RandomState(seed)
-    pts = rng.normal(size=(40, 3))
-    pts /= np.linalg.norm(pts, axis=1, keepdims=True)
-    pts *= (0.8 + 0.5 * rng.rand(40, 1)) * np.array([1.4, 1.0, 1.0])
-    verts, faces = hull.convex_hull(pts)
-    index = []
-    for f in faces:
-        index += [int(f[0]), int(f[1]), int(f[2]), -1]
-    geometry = IndexedFaceSet(
-        coord=Coordinate(point=[tuple(v) for v in verts]), coordIndex=index, solid=0)
-    return Transform(children=[Shape(
-        geometry=geometry,
-        appearance=Appearance(material=Material(diffuseColor=(0.75, 0.55, 0.4))))])
+    '''A boulder of grey sandstone, 2.8 m by 2 m by 2 m: a sphere with flat
+    faces scraped into it and its surface roughened, from the engine's
+    procedural rocks. It is a mesh with no collider of its own.'''
+    rock = natural.stone(np.random.default_rng(seed), (1.4, 1.0, 1.0), divisions=2)
+    grey = surfaces.pbr_material(surfaces.sandstone(256, colour=(0.52, 0.50, 0.47)),
+                                 roughness=0.9)
+    return surfaces.shape(rock, grey)
 
 
 class TestContext(BaseContext):

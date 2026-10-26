@@ -7,9 +7,11 @@ A large pile of boxes and spheres drops into a bowl to exercise the broad phase,
 islands, and sleeping under load.  The SoA world runs the per-body integration on
 numpy for small scenes and hands off to the GPU compute backend past ~10k awake
 bodies (``gpu_threshold``); press ``b`` to switch backends live and watch the step
-time change (the GPU win is largest for big collider-free swarms).  The backend
-belongs to the world, which a script reaches as ``physics.world`` when the service
-is declared ``mode='inline'``.
+time change (the GPU win is largest for big collider-free swarms).
+``physics.backend`` names the backend, and assigning ``'gpu'``, ``'numpy'`` or
+``'auto'`` chooses another from the next step.  The GPU backend needs GL compute
+on the thread that steps the world, so this script steps it in the frame with
+``mode='inline'``.
 
 Bodies render through the instanced mesh path (all boxes of a size share one GPU
 batch), so the render cost stays flat as the pile grows.  The collision-proxy
@@ -26,8 +28,6 @@ Keys:
     r      reset
 '''
 import numpy as np
-
-from omi_physics.backend import NumpyBackend, select_backend
 
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.contextdefinition import ContextDefinition
@@ -65,7 +65,7 @@ class TestContext(BaseContext):
         self.addEventHandler('keypress', name='r', function=self.on_reset)
         self.addEventHandler('keypress', name=' ', function=self.on_add_wave)
         self.addEventHandler('keypress', name='b', function=self.on_toggle_backend)
-        print('physics backend:', self.physics.world.backend.name, flush=True)
+        print('physics backend:', self.physics.backend, flush=True)
 
     def on_reset(self, event):
         for body in self.bodies:
@@ -77,16 +77,10 @@ class TestContext(BaseContext):
         self.add_wave()
 
     def on_toggle_backend(self, event):
-        world = self.physics.world
-        if world.backend.name == 'glcompute':
-            world.backend = NumpyBackend()
-        else:
-            try:
-                world.backend = select_backend('gpu')
-            except Exception as err:
-                print('GPU backend unavailable:', err)
-                return
-        print('physics backend:', world.backend.name, flush=True)
+        '''A backend that cannot be made logs why, and the world keeps the one it has.'''
+        self.physics.backend = 'numpy' if self.physics.backend == 'glcompute' else 'gpu'
+        self.physics.flush()
+        print('physics backend:', self.physics.backend, flush=True)
 
     def build(self):
         '''A shallow bowl: a floor and four walls, shapes of the scene and so

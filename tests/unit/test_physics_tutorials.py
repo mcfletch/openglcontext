@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -424,19 +425,26 @@ def test_the_bodies_dropped_into_the_room_come_to_rest_inside_it(gl_context):
         assert len(run.context.bodies) == 8
 
 
-def test_the_pendulum_holds_its_arm_and_the_spinner_turns(gl_context):
+def test_the_joints_hold_the_pendulum_the_chain_the_spinner_and_the_drawer(gl_context):
     with running('physics', 'physics_joints') as run:
         run.frame()
-        bob = run.context.homes[0][0]
-        spinner = run.context.homes[-1][0]
+        bodies = [body for body, _ in run.context.homes]
+        arm, links, spinner, drawer = bodies[0], bodies[1:6], bodies[6], bodies[7]
         pivot = np.array([-5.0, 6.0, 0.0])
         lowest = 6.0
         for _ in range(60 * 3):
             run.frame()
-            assert np.linalg.norm(np.array(bob.position) - pivot) == pytest.approx(2.0, abs=0.15)
-            lowest = min(lowest, float(bob.position[1]))
-        assert abs(float(spinner.angular_velocity[1])) > 2.0
-        assert lowest < 4.5                                              # it has swung down
+            assert np.linalg.norm(np.array(arm.position) - pivot) == pytest.approx(1.0, abs=0.1)
+            lowest = min(lowest, float(arm.position[1]))
+            for upper, lower in zip(links, links[1:]):
+                assert np.linalg.norm(np.array(upper.position) - lower.position) == pytest.approx(
+                    1.0, abs=0.15)
+        assert lowest < 5.2                                              # it has swung down
+        assert float(spinner.angular_velocity[1]) == pytest.approx(4.0, abs=0.3)
+        assert float(drawer.position[0]) == pytest.approx(5.5 + 1.5, abs=0.1)  # at its stop
+        run.context.on_reverse(None)
+        run.seconds(1.0)
+        assert float(spinner.angular_velocity[1]) == pytest.approx(-4.0, abs=0.3)
 
 
 def test_each_cooking_strategy_gives_the_proxy_it_names(gl_context):
@@ -463,7 +471,9 @@ def test_the_pile_falls_into_the_bowl_and_a_wave_adds_forty(gl_context):
                    for body in context.bodies)
         context.on_add_wave(None)
         assert len(context.bodies) == 2 * run.module.WAVE
-        assert run.physics.world.backend.name
+        assert run.physics.backend
+        run.context.on_toggle_backend(None)
+        assert run.physics.backend in ('numpy', 'glcompute')
 
 
 @pytest.mark.parametrize('mode', ['inline', 'thread'])
@@ -497,16 +507,18 @@ def test_a_ball_flashes_as_hard_as_it_landed_and_cools_again(gl_context):
                          seconds=20.0)
 
 
-def test_the_walker_crosses_the_level_on_its_own_and_stays_on_the_floor(gl_context):
+def test_the_walker_climbs_the_stairs_and_stays_in_the_room(gl_context):
     with running('physics', 'physics_navigate') as run:
         run.frame()
         hero = run.context.hero
-        start = np.array(hero.position)
+        run.context.walker.platform.yaw = np.pi                 # face +Z, up the stairs
+        hero.teleport((6.0, 0.05, -8.5))
+        run.context.getInputState().process(SimpleNamespace(name='w', state=1))
         top = 0.0
-        for _ in range(60 * 6):
-            run.context.OnIdle()                                # the keys' share of the frame
+        for _ in range(60 * 4):
             run.frame()
             top = max(top, float(hero.position[1]))
-        assert np.linalg.norm((np.array(hero.position) - start)[[0, 2]]) > 3.0
-        assert -0.1 < hero.position[1] < 2.5
-        assert np.allclose(run.context.getViewPlatform().position[:3], hero.eye, atol=0.5)
+            assert -0.1 < hero.position[1] < 2.5
+            assert abs(hero.position[0]) < 12 and abs(hero.position[2]) < 12
+        assert top > 1.0                                                  # up the steps
+        assert np.allclose(run.context.getViewPlatform().position[:3], hero.eye, atol=1e-3)
