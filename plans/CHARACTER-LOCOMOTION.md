@@ -18,12 +18,23 @@ What landed:
   `Context.follow`.
 - L6, D10. `Character.run_along`, `hop_to` and `PathMover`.
 - Docs: `docs/characters.rst`, `docs/navigation.rst`, `docs/physics.rst`.
+- Tutorials 2, 5 and 6 (2026-10-26): `character_animations.py` (`ClipMap.guess`, which now takes
+  roles by hand in place of a guess, and CesiumMan's one clip measured), `character_camera.py`
+  (the sweep, `swing` and a `constrain` rule in a brick room) and `character_trail.py`
+  (`run_along` and `hop_to` on a winding trail). Added for them: `Character.run_along` takes a
+  list of points, `Character.arrived` and the `'arrived'` event, the follow camera's `swing`, and
+  a measured clip speed scaled by the model's fitted size (it was in model units, so a fitted
+  CesiumMan's walk played 20% fast).
+- The core_context tutorials on the engine (2026-10-26): `using_npc.py` and `navmesh_demo.py`
+  walk a physics character along the navmesh route with `run_along`; `using_clips.py` and
+  `crowd_demo.py` are stepped by `Context.animate` (`events/animations.py`, with
+  `Context.after`); the crowd's gait comes from a `ClipMap` (`Gait.from_clips`,
+  `WanderingCrowd(clips=)`). In `omi_physics`, a ray parallel to a triangle's plane raised a
+  floating-point error under `numpy_errors = "raise"` (a footstep's ray beside a wall).
 
 Not done:
 
 - D1's `ceiling=` and D11, surfaces overhead: the ground is a single-valued height.
-- Tutorials 2 (a different animation set), 5 (a camera that stays out of walls) and 6 (running along
-  a trail).
 - L7. hill-runner's steps 2 to 4 and twig-bb's switch to `ClipMap` are work in those projects.
 
 A developer who says "this character should run across this landscape with this

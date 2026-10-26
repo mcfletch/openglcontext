@@ -271,7 +271,8 @@ simulation packages update.
      - One keyboard, mouse and window event model across the window systems,
        the dispatch that carries a change through the scenegraph, and the
        ``Inbox`` and ``Updates`` that carry commands to a service's worker and
-       its changes back to the render thread.
+       its changes back to the render thread, and ``Animations``, what
+       ``context.animate`` steps once a frame and ``context.after`` calls later.
      - :doc:`Event Model <eventmodel>`
    * - ``contextresources``
      - The caches that release a GL context's objects when the context is

@@ -233,8 +233,16 @@ carries how far through the cycle the timer is, from 0 to 1.
 A simulation's time step
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The context's physics and audio services read the clock themselves. An
-application that advances a simulation of its own from ``OnIdle`` reads the
+The context's physics and audio services read the clock themselves, and so
+does ``context.animate``: ``self.animate(thing)`` calls ``thing.update(dt)``,
+or ``thing(dt)`` for a function, once a frame before the frame is drawn, and
+asks for frames while anything is animating. It returns an
+``OpenGLContext.events.animations.Animated`` whose ``stop()`` ends it.
+``self.after(seconds, function)`` makes one call once that many seconds of the
+same steps have passed, and its ``stop()`` cancels it. A rigged model, a crowd
+or a simulation of the game's own is stepped this way with no ``OnIdle``.
+
+An application that advances a simulation of its own from ``OnIdle`` reads the
 engine's clock, ``OpenGLContext.events.systemtime.systemTime()``, once a frame.
 A bounded capture puts that clock on a fixed step per frame, so a captured run
 lands on the same picture every time; ``time.time()`` does not follow it.

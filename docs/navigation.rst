@@ -625,6 +625,11 @@ gives the keys back to the context's navigation. The options are:
      - a ``FollowMode`` of your own, in place of the default
    * - ``slide_time``
      - seconds a slide lasts (0.8)
+   * - ``yaw``
+     - the way the camera looks to begin with, in radians from -Z toward +X (0)
+   * - ``swing``
+     - seconds the camera takes to come round behind the way the character
+       moves, the short way round; 0 leaves the yaw to the turn keys (0)
    * - the options of ``FollowCamera``
      - ``look_ahead`` (0.1 s here), ``smooth_time`` (0.12 s), ``pull_back``,
        ``avoid_radius`` (0.3 m), ``min_arm`` (0.5 m), ``arm_ease`` and
@@ -644,6 +649,13 @@ The camera sweeps a sphere from the look point to where it should stand, through
 between the character and the camera shorten the arm instead of hiding the
 character. The input is read before the world is stepped and the camera placed
 after, so the camera is never a frame behind the character.
+``follower.platform.camera.constrain(rule)`` adds a rule of the game's own,
+``rule(eye, look)`` returning the eye and look point to use, applied before the
+sweep. :doc:`tutorials/character/character_camera` follows a fox round a brick
+room with ``swing``, the sweep's settings and a rule that keeps the eye under
+the tops of the walls. The sweep meets bodies, so scenery made from the scene's
+shapes is met once its triangles are cooked, a frame or two after the scene is
+set.
 
 .. _navigation-pathmover:
 
@@ -651,7 +663,10 @@ Running along a course
 ----------------------
 
 A game with a course rather than open land wants a character to follow a line
-and hop between parallel lanes of it. ``OpenGLContext.move.pathmover.PathMover``
+and hop between parallel lanes of it. A physics character does this with
+``hero.run_along(course)`` and ``hero.hop_to(offset)`` (:ref:`characters-locomotion`,
+:doc:`tutorials/character/character_trail`), which drive a ``PathMover`` each
+frame. ``OpenGLContext.move.pathmover.PathMover``
 gives, each frame, the horizontal velocity for a character at a given position
 on a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`:
 

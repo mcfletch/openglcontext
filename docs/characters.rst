@@ -17,12 +17,22 @@ items such as weapons, and crowds of many animated figures.
    model.play('run', fade=0.2)
    model.layer('upper', mask=model.mask('spine')).play('fire', loop=False)
    ...
-   model.update(dt)                  # once a frame
+   context.animate(model)            # model.update(dt) once a frame
    scene.children = [model.group]    # the renderable root
 
 The bone map, the animation mixer and the attachment points can each be used
 on their own. ``CharacterModel`` combines the three over one loaded document,
 which is what most programs use.
+
+The clips advance when ``model.update(dt)`` is called with the seconds since
+the last frame. ``context.animate(model)`` has the context make that call once
+a frame on the engine clock and draw while it runs; it returns a handle whose
+``stop()`` ends it, and it takes any object with ``update(dt)`` or a function
+of ``dt``. ``context.after(seconds, function)`` makes one call that many
+seconds of the same clock from now. A capture's fixed clock steps both the
+same way on every run (:doc:`tutorials/core_context/using_clips`). A character
+made by ``physics.add_character`` is animated by the physics service, and
+needs neither.
 
 .. _characters-bones:
 
@@ -236,6 +246,31 @@ each foot that lands, with the ``foot``, its ``phase`` in the stride, the
 grass and a stone slab. :doc:`tutorials/character/character_jump` makes a sound
 at each landing, as hard as the fall.
 
+Characters on a route
+~~~~~~~~~~~~~~~~~~~~~
+
+``hero.run_along(course, speed=, mode=, lane=)`` has the character follow a
+course: a ``RoadCourse`` (:ref:`roadcourse`), or a list of two or more points,
+such as a route from a navigation mesh (:doc:`navmesh`). Each frame it moves at
+``speed`` metres a second along the line, steering back onto its lane, and the
+ground, slopes and jumps stay the controller's. ``mode`` is ``'walk'``,
+``'run'``, ``'sprint'`` or ``'crouch'``, and the clip map shows that pace.
+``hero.hop_to(offset, over=)`` moves to the lane ``offset`` metres right of the
+line over ``over`` seconds. At the end of an open course the character stops,
+``hero.arrived`` is true and ``'arrived'`` handlers are called with the
+character; a closed course goes round for ever. ``hero.stop_running_along()``
+gives the moves back to ``set_move`` and the keys.
+
+.. code-block:: python
+
+   route = navmesh.path(hero.position, goal)
+   hero.run_along(route, speed=1.8, mode='walk')
+   hero.addEventHandler('arrived', self.OnArrived)
+
+:doc:`tutorials/core_context/using_npc` walks a fox round a wall from corner to
+corner; :doc:`tutorials/character/character_trail` runs one along a winding
+trail with three lanes.
+
 .. _characters-clipmaps:
 
 Clips from a character's state
@@ -331,13 +366,20 @@ and its ``Roll`` plays for a knock-down.
 capitals, and gives a role the clip with the words it names and the fewest
 others, so ``Walk_Loop`` fills ``walk`` ahead of ``Walk_Formal_Loop``. A clip
 may fill several roles. The roles nothing matched are in ``unmatched`` and the
-clips no role took are in ``leftover``:
+clips no role took are in ``leftover``. A role named in the call takes the
+clip given in place of a guess, which is how the gaps are filled:
 
 .. code-block:: python
 
    clips = ClipMap.guess(model)
    clips.unmatched        # ('down', 'get_up')
    clips.leftover         # ('Dance_Loop', 'Interact', ...)
+   clips = ClipMap.guess(model, down='Interact')
+
+A model with one clip and no name for it calls the clip ``animation0``;
+``ClipMap(walk='animation0')`` is its map.
+:doc:`tutorials/character/character_animations` maps the fox by guessing and the
+Khronos CesiumMan by hand.
 
 ``clips.missing(model)`` names the roles whose clip a model lacks. A
 ``Locomotion`` leaves those roles out and lists them in ``locomotion.missing``.
@@ -358,7 +400,9 @@ rises with speed and reaches 1 where the rate reaches the bottom of
 motion. Each looping clip's rate is the speed over its authored speed, held
 inside ``rate_range``. A clip with no speed in the map is measured with
 ``measure_stride`` when the ``Locomotion`` is made, which costs a few
-milliseconds a clip, and takes a default (walk 1.4, run 3.8, sprint 6.0, crouch
+milliseconds a clip, and multiplied by the scale the model's group is drawn
+at, so a model ``add_character`` fits to its capsule is measured in metres. A
+clip takes a default (walk 1.4, run 3.8, sprint 6.0, crouch
 walk 0.9, swim 1.5 m/s) when it plants no foot or the model has no skeleton.
 ``Locomotion(clips, model, measure_missing=False)`` skips the measuring.
 ``locomotion.speeds`` holds the speeds in use.
@@ -576,18 +620,25 @@ still draws them all in one call:
 
 .. code-block:: python
 
-   from functools import partial
-   from OpenGLContext.character.wander import Gait, WanderingCrowd
+   from OpenGLContext.character.locomotion import ClipMap
+   from OpenGLContext.character.wander import WanderingCrowd
 
    crowd = WanderingCrowd((-13.0, 13.0, -19.0, -0.5),      # the ground they keep to
                           speed=(0.55, 1.65), scale=0.008,
-                          gait=partial(Gait, walk='Walk', run='Run', idle='Survey',
-                                       walk_stride=0.82, run_stride=1.38))
+                          clips=ClipMap(idle='Survey', walk=('Walk', 0.82),
+                                        run=('Run', 1.38)))
    for _ in range(150):
        model = CharacterModel(load_gltf(document=document))
        scene.children.append(crowd.add(model))    # the Transform to mount it by
-   ...
-   crowd.update(dt, mode=context)                 # once a frame: move, then pose
+   context.animate(lambda dt: crowd.update(dt, mode=context))   # move, then pose
+
+``clips`` is the ``ClipMap`` a single character's locomotion reads: its idle,
+walk and run clips, and the speeds of the walk and the run as the strides
+(``Gait.from_clips``). Both speeds are required, since a crowd's strides are
+measured. ``gait=`` takes a function of the model that builds its ``Gait``
+instead, for a figure that needs several idles or other settings a map does
+not hold. :doc:`tutorials/core_context/crowd_demo` is a hundred and fifty of
+them.
 
 Each figure walks for a while, stops, does something while stopped, turns
 towards a new direction and sets off again. How long each of those lasts, how

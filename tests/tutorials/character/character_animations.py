@@ -26,7 +26,7 @@ for.
 
 CesiumMan's file has one animation and no name for it, so the model calls it
 ``animation0``. It is a walk, and naming it ``walk`` is the whole map. With no
-speed given, the character measures it: :func:`measure_stride` watches the
+speed given, the character measures it: ``measure_stride`` watches the
 feet of the model's skeleton as the clip plays, and the speed is how fast they
 travel backwards under the hips. With no idle the man stands in his rest pose,
 and with no run the walk plays faster for a faster pace, up to the map's

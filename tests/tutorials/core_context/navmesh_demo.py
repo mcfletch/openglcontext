@@ -324,7 +324,7 @@ class TestContext(BaseContext):
         The character's clip map fades from the walk to the idle as its speed
         falls, so nothing here plays a clip.  ``after`` makes one call
         ``REST`` seconds of the engine clock from now, and returns a handle
-        whose ``stop()`` cancels it, which :meth:`repath` does when a key sends
+        whose ``stop()`` cancels it, which ``repath`` does when a key sends
         the fox somewhere first.
         """
         self._resting = self.after(REST, self.OnRandomGoal)

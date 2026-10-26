@@ -135,6 +135,8 @@ OpenGLContext/
 │   │                 # counts frames -- no GL
 │   ├── framestep.py  # A simulation's time step each frame, from the clock:
 │   │                 # the longest step and a frame cap -- no GL
+│   ├── animations.py # What Context.animate steps once a frame and
+│   │                 # Context.after calls later -- no GL -- docs/eventmodel.rst
 │   ├── renderqueue.py  # Calls background threads queue to be made on the
 │   │                 # render thread before OnIdle -- docs/loading.rst#render-queue
 │   ├── handoff.py    # Inbox (commands from any thread to a service's worker)

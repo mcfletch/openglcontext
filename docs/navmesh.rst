@@ -206,6 +206,18 @@ An **empty list** means that either end is off the mesh, or that nothing
 connects them. This is a normal result, not an error: a bot on a ledge with
 no way down has nowhere to walk and should do something else.
 
+A physics character walks the points with ``run_along``, and its
+``'arrived'`` handlers are called at the end (:ref:`characters-locomotion`):
+
+.. code-block:: python
+
+   route = mesh.path(hero.position, goal)
+   if len(route) >= 2:
+       hero.run_along(route, speed=1.8, mode='walk')
+
+:doc:`tutorials/core_context/using_npc` and
+:doc:`tutorials/core_context/navmesh_demo` walk a fox that way.
+
 .. _corridor:
 
 ``corridor(start, goal)``
