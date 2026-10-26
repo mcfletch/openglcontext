@@ -24,6 +24,7 @@ from omi_physics import mathutil, model
 from omi_physics.contactevents import BodyRef, ContactEvent, TriggerEvent, Verdict
 from omi_physics.world import PhysicsWorld
 
+from OpenGLContext.physics.joints import JointSpec, JointTable
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.settings import PhysicsDefinition
 
@@ -88,6 +89,8 @@ class WorldRuntime:
         self.standins: dict[int, float] = {}
         #: Functions that give a kinematic body its pose at a time, by body id.
         self.drivers: dict[int, Callable[[float], Any]] = {}
+        #: The joints in the world, by joint id.
+        self.joints = JointTable()
         self._thread = threading.get_ident()
         self.world.set_contact_filter(self._filter)
 
@@ -167,6 +170,8 @@ class WorldRuntime:
 
     def _op_remove(self, uid: int) -> None:
         self.drivers.pop(uid, None)
+        if len(self.joints):
+            self.joints.forget_body(self.world, uid)
         entry = self._entries.pop(uid)
         world = self.world
         ref = world.ref(entry.index)
@@ -254,6 +259,24 @@ class WorldRuntime:
     def _op_post(self, uid: int, function: Callable[..., Any],  # noqa: ARG002 world-wide
                  arguments: tuple[Any, ...]) -> None:
         function(*arguments)
+
+    def _op_backend(self, uid: int, name: str) -> None:  # noqa: ARG002 the backend is the world's
+        try:
+            self.world.use_backend(name)
+        except Exception as error:  # noqa: BLE001 any failure to build one leaves the world as it was
+            log.warning('the %s physics backend could not be made (%s); the world keeps %s',
+                        name, error, self.world.backend.name)
+
+    def _op_joint(self, uid: int, joint: int, spec: JointSpec) -> None:
+        to = -1 if spec.to == 0 else getattr(self._entries.get(spec.to), 'index', None)
+        self.joints.add(self.world, joint, spec, self._entries[uid].index, to)
+
+    def _op_unjoint(self, uid: int, joint: int) -> None:  # noqa: ARG002 named by the joint
+        self.joints.remove(self.world, joint)
+
+    def _op_joint_motor(self, uid: int, joint: int, speed: float,  # noqa: ARG002 named by the joint
+                        force: float) -> None:
+        self.joints.motor(self.world, joint, speed, force)
 
     def _op_standin(self, uid: int, body: int, push_mass: float) -> None:  # noqa: ARG002 world-wide
         self.standins[body] = float(push_mass)

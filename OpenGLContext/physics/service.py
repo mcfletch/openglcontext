@@ -42,6 +42,7 @@ from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
+from OpenGLContext.physics.joints import Joint, make_joint
 from OpenGLContext.physics.materials import Materials
 from OpenGLContext.physics.manager import write_pose
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
@@ -173,6 +174,25 @@ class Physics:
         A world stepped on a thread is reached with :meth:`run`.
         """
         return self._inline().runtime.world
+
+    BACKENDS = ('auto', 'numpy', 'cpu', 'gpu', 'glcompute')
+
+    @property
+    def backend(self) -> str:
+        """The name of the compute backend the world steps with, such as ``'numpy'`` or ``'glcompute'``.
+
+        Assigning one of :attr:`BACKENDS` chooses another from the next step.
+        The GPU backend needs GL 4.3 compute on the thread that steps the
+        world, so it is for an inline world; a backend that cannot be made
+        logs a warning and the world keeps the one it has.
+        """
+        return str(self.worker.runtime.world.backend.name)
+
+    @backend.setter
+    def backend(self, name: str) -> None:
+        if name not in self.BACKENDS:
+            raise ValueError('backend must be one of %s, not %r' % (', '.join(self.BACKENDS), name))
+        self._send_world('backend', name)
 
     def _inline(self) -> InlineWorker:
         """The worker, where it steps inline; RuntimeError where it has a thread."""
@@ -743,8 +763,46 @@ class Physics:
         """A :class:`Proxy` cooked from what ``node`` draws, to share between bodies."""
         return Proxy.from_node(node, strategy, dynamic)
 
+    # -- joints (OpenGLContext.physics.joints) ----------------------------
+    def add_hinge(self, body: Any, to: Any = None, *, anchor: Any, axis: Any,
+                  limits: Any = None, motor: Any = None, collide: bool = False) -> Joint:
+        """Hold ``body`` to ``to`` (a body or node; None for the world) so it turns about ``axis`` through ``anchor``.
+
+        ``anchor`` and ``axis`` are world coordinates as the bodies stand now.
+        ``limits`` is ``(lower, upper)`` in radians from the angle it starts at;
+        ``motor`` is ``(speed, torque)`` in radians a second and newton-metres.
+        """
+        return make_joint(self, 'hinge', body, to, anchor=anchor, axis=axis, limits=limits,
+                          motor=motor, collide=collide)
+
+    def add_ball(self, body: Any, to: Any = None, *, anchor: Any,
+                 collide: bool = False) -> Joint:
+        """Hold ``body`` to ``to`` at the world point ``anchor``, about which both turn freely."""
+        return make_joint(self, 'ball', body, to, anchor=anchor, collide=collide)
+
+    def add_slider(self, body: Any, to: Any = None, *, axis: Any, limits: Any = None,
+                   motor: Any = None, collide: bool = False) -> Joint:
+        """Let ``body`` slide against ``to`` along ``axis`` only, neither turning against the other.
+
+        ``limits`` is ``(lower, upper)`` in metres from where it starts;
+        ``motor`` is ``(speed, force)`` in metres a second and newtons.
+        """
+        return make_joint(self, 'slider', body, to, axis=axis, limits=limits, motor=motor,
+                          collide=collide)
+
+    def add_distance(self, body: Any, to: Any = None, *, anchor: Any = None,
+                     to_anchor: Any = None, length: float | None = None,
+                     collide: bool = False) -> Joint:
+        """Keep the world point ``anchor`` on ``body`` at ``length`` metres from ``to_anchor`` on ``to``.
+
+        The anchors default to the bodies' centres; the world needs its
+        ``to_anchor``. ``length`` defaults to the distance between them now.
+        """
+        return make_joint(self, 'distance', body, to, anchor=anchor, to_anchor=to_anchor,
+                          length=length, collide=collide)
+
     def remove(self, body: Body) -> None:
-        """Take ``body`` out of the world. Removing twice is harmless."""
+        """Take ``body`` out of the world, with its joints. Removing twice is harmless."""
         if not body.alive:
             return
         if body.uid in self._passable:
