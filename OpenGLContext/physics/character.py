@@ -102,6 +102,7 @@ class Character:
         self._landed: float | None = None
         self._path: PathMover | None = None
         self._path_mode = 'run'
+        self._arrived = False
         if self.locomotion is not None:
             self.locomotion.on_footstep(self._footfall)
         self.body.addEventHandler('hit', function=self._struck)
@@ -161,6 +162,11 @@ class Character:
         return self.controller.landing
 
     @property
+    def arrived(self) -> bool:
+        """Whether the character has reached the end of the route :meth:`run_along` gave it."""
+        return self._arrived
+
+    @property
     def heading(self) -> float:
         """The way the body faces, in radians from +Z about +Y; 0 for a character with no facing."""
         return 0.0 if self.facing is None else float(self.facing.heading)
@@ -180,7 +186,12 @@ class Character:
 
     def run_along(self, course: Any, speed: float | None = None, mode: str = 'run',
                   lane: float = 0.0) -> None:
-        """Run along ``course``, a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`.
+        """Run along ``course``: a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`, or points.
+
+        A list of two or more points, such as a route from a navigation mesh,
+        is an open course through them. The character stops at the end of an
+        open course, :attr:`arrived` turns true and ``'arrived'`` handlers are
+        called with the character.
 
         The character runs at ``speed`` metres a second (its own ``mode`` speed
         where that is left out) on a lane ``lane`` metres right of the line,
@@ -189,6 +200,10 @@ class Character:
         those of :meth:`set_move` until :meth:`stop_running_along`.
         """
         from OpenGLContext.move.pathmover import PathMover  # noqa: PLC0415 only a character on a course needs it
+        from OpenGLContext.scenegraph.roadcourse import RoadCourse  # noqa: PLC0415 only a character on a course needs it
+
+        if not isinstance(course, RoadCourse):
+            course = RoadCourse(course)
 
         names = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
                  'crouch': 'crouchSpeed'}
@@ -197,6 +212,7 @@ class Character:
             setattr(self.capabilities, field, float(speed))
         self._path_mode = mode
         self._path = PathMover(course, float(getattr(self.capabilities, field)), lane=lane)
+        self._arrived = False
 
     def hop_to(self, offset: float, over: float = 0.16) -> None:
         """Move to the lane ``offset`` metres right of the course, taking ``over`` seconds."""
@@ -280,11 +296,12 @@ class Character:
         """Call ``function`` when ``event`` happens to the character.
 
         ``'landed'`` calls ``function(landing)`` with a :class:`Landing`, and
-        ``'footstep'`` calls it with a :class:`Footstep`; every other name is an
+        ``'footstep'`` calls it with a :class:`Footstep`, ``'arrived'`` calls it
+        with the character at the end of a route; every other name is an
         event of the character's body
         (:meth:`Body.addEventHandler <OpenGLContext.physics.body.Body.addEventHandler>`).
         """
-        if event not in ('landed', 'footstep'):
+        if event not in ('landed', 'footstep', 'arrived'):
             return self.body.addEventHandler(event, function, **filters)
         if function is None:
             self._listeners.pop(event, None)
@@ -328,6 +345,9 @@ class Character:
         self._knocks.clear()
         if self._path is not None:
             controller.set_move(self._path.update(self.position, dt).direction, self._path_mode)
+            if self._path.finished and not self._arrived:
+                self._arrived = True
+                self._tell('arrived', self)
         controller.update(dt)
         pushing = controller.pushing
         self._place_stand_in(pushing[1] if pushing is not None else controller.velocity)

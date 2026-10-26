@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from OpenGLContext.events.renderqueue import RenderQueue
     from OpenGLContext.loaders.sceneloader import SceneLoader
     from OpenGLContext.audio.manager import Audio
+    from OpenGLContext.events.animations import Animated, Animations
     from OpenGLContext.looptrace import LoopTrace
     from OpenGLContext.physics.service import Physics
     from OpenGLContext.multiview.views import View, ViewLayout
@@ -1245,6 +1246,44 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         service = self.__dict__.get('_audio')
         if service is not None:
             service.frame()
+
+    def animate(self, thing: Any) -> Animated:
+        """Step ``thing`` once a frame on the engine clock, and draw while it runs.
+
+        ``thing`` is an object with ``update(dt)``, such as a
+        :class:`~OpenGLContext.character.model.CharacterModel`, or a function of
+        the step in seconds. Returns the
+        :class:`~OpenGLContext.events.animations.Animated` whose ``stop()``
+        ends it. See :class:`~OpenGLContext.events.animations.Animations`.
+        """
+        return self._animations().animate(thing)
+
+    def after(self, seconds: float, function: Callable[[], Any]) -> Animated:
+        """Call ``function()`` once ``seconds`` of the engine clock have passed.
+
+        Returns the :class:`~OpenGLContext.events.animations.Animated` whose
+        ``stop()`` cancels the call.
+        """
+        return self._animations().after(seconds, function)
+
+    def _animations(self) -> Animations:
+        """The context's :class:`~OpenGLContext.events.animations.Animations`, made on first use."""
+        found = self.__dict__.get('_animating')
+        if found is None:
+            from OpenGLContext.events.animations import Animations  # noqa: PLC0415 only an animated context needs it
+
+            found = self.__dict__['_animating'] = Animations()
+            queue = getattr(self, 'renderQueue', None)
+            if queue is not None:
+                queue.before_run(self._frameAnimations)
+        return cast('Animations', found)
+
+    def _frameAnimations(self) -> None:
+        """Step what :meth:`animate` was given, before the frame is drawn."""
+        from OpenGLContext.events import systemtime  # noqa: PLC0415 only an animated context reads the clock
+
+        if self.__dict__['_animating'].frame(systemtime.systemTime()):
+            self.triggerRedraw(1)
 
     def follow(self, character: Any, **options: Any) -> Any:
         """Show ``character`` from behind, and have the movement keys move it.
