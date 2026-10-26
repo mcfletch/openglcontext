@@ -180,9 +180,13 @@ class Physics:
     def world(self) -> Any:
         """The live :class:`omi_physics.world.PhysicsWorld`, in inline mode only.
 
-        A world stepped on a thread is reached with :meth:`run`.
+        A world stepped on a thread is reached with :meth:`run`. Each
+        character's stand-in is written first, so the world holds it where the
+        character is.
         """
-        return self._inline().runtime.world
+        worker = self._inline()
+        self._bring_up_all()
+        return worker.runtime.world
 
     BACKENDS = ('auto', 'numpy', 'cpu', 'gpu', 'glcompute')
 
@@ -217,12 +221,15 @@ class Physics:
         its row. Raises KeyError for a body the world does not hold.
         """
         worker = self._inline()
+        self._bring_up_all()
         worker.flush()
         return int(worker.runtime.entry(body.uid).index)
 
     def body_at(self, slot: int) -> Body | None:
         """The body in row ``slot`` of the arrays of :attr:`world`, or None for a row no body has."""
-        world = self._inline().runtime.world
+        worker = self._inline()
+        self._bring_up_all()
+        world = worker.runtime.world
         if not 0 <= slot < len(world.bodies):
             return None
         uid = world.handle_of(world.ref(slot))
@@ -1003,8 +1010,9 @@ class Physics:
 
         This reaches what the service has no name for: joints, contact filters,
         reads of world arrays. A world with no thread running is reached on the
-        calling thread, at once.
+        calling thread, at once. Each character's stand-in is written first.
         """
+        self._bring_up_all()
         future: concurrent.futures.Future[Any] = concurrent.futures.Future()
         self._send_world('run', function, future)
         self.worker.flush()
@@ -1032,6 +1040,7 @@ class Physics:
         """
         if not isinstance(self.worker, InlineWorker):
             raise RuntimeError('physics.index_of is for inline mode; the world is on its own thread')
+        self._bring_up_all()
         self.flush()
         return int(self.worker.runtime.entry(body.uid).index)
 

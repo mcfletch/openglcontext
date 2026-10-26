@@ -114,7 +114,8 @@ def looks(service: Physics, walkers: list, rng: np.random.Generator) -> list:
 
 
 def state(service: Physics, walkers: list) -> list:
-    world = service.world
+    # The runtime's world as it stands: physics.world would write the stand-ins first.
+    world = service.worker.runtime.world
     return [walker.position.tolist() for walker in walkers] + [
         world.position[i].tolist() for i in range(len(world.position))
         if world.motion_type[i] == 2]
@@ -205,4 +206,32 @@ def test_a_crate_in_reach_writes_the_stand_in_and_is_pushed():
         service.frame(FRAME)
     assert crate.position[0] > 7.0
     assert 'place' in commands.sent
+    service.close()
+
+
+def runner() -> tuple[Physics, object]:
+    """A lone walker that has run 5 metres or so, its stand-in waiting where it stood."""
+    service = Physics(PhysicsDefinition(mode='inline', tickHz=120.0, maxCatchUp=1.0))
+    service.add_static(None, proxy=Proxy.box((200, 1, 200)), translation=(0, -0.5, 0))
+    walker = service.add_character(position=(0.0, 0.05, 0.0))
+    for _ in range(30):
+        service.frame(FRAME)
+    walker.set_move((1.0, 0.0, 0.0), 'run')
+    for _ in range(90):
+        service.frame(FRAME)
+    return service, walker
+
+
+def test_the_raw_world_holds_the_stand_in_where_the_walker_is():
+    service, walker = runner()
+    x = float(walker.controller.position[0])
+    assert float(service.world.position[service.slot_of(walker.body)][0]) == pytest.approx(x, abs=0.05)
+    service.close()
+
+
+def test_run_and_body_at_see_the_stand_in_where_the_walker_is():
+    service, walker = runner()
+    x = float(walker.controller.position[0])
+    found = service.run(lambda world: float(world.position[service.index_of(walker.body)][0]))
+    assert found.result(1.0) == pytest.approx(x, abs=0.05)
     service.close()

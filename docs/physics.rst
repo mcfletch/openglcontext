@@ -621,8 +621,10 @@ something can see it: a dynamic body, a trigger or a sensor within reach of it
 in a step, or a ray, sweep or overlap whose bounds reach it. Until then the
 stand-in waits, still, where it was last written, and the write puts it where it
 would have been had it been written at every step, so bodies, triggers and
-queries meet it as they would. Its pose read from its body or from
-``physics.world`` is that of the last write. With a second character, a worker
+queries meet it as they would. Its pose read from its body is that of the last
+write. ``physics.world``, ``physics.run``, ``slot_of``, ``index_of`` and
+``body_at`` write every waiting stand-in first, so the raw world holds each one
+where its character is. With a second character, a worker
 thread or the proxies shown, each write is made as it is asked for.
 
 A game with rules that run every fixed step sets the character's ``framed`` to
