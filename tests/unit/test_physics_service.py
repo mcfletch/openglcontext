@@ -671,3 +671,68 @@ def test_a_mode_switch_waits_for_the_thread_to_leave_the_world():
     finally:
         release.set()
         service.close()
+
+
+# -- physical inputs are checked ---------------------------------------------------
+
+NAN, INF = float('nan'), float('inf')
+
+
+@pytest.mark.parametrize(('options', 'named'), [
+    ({'mass': 0.0}, 'mass'),
+    ({'mass': -2.0}, 'mass'),
+    ({'mass': NAN}, 'mass'),
+    ({'mass': INF}, 'mass'),
+    ({'density': 0.0}, 'density'),
+    ({'translation': (NAN, 0.0, 0.0)}, 'translation'),
+    ({'translation': (0.0, INF, 0.0)}, 'translation'),
+    ({'rotation': (0.0, 1.0, 0.0, NAN)}, 'rotation'),
+    ({'linear_damping': -1.0}, 'linear_damping'),
+    ({'angular_damping': NAN}, 'angular_damping'),
+    ({'friction': NAN}, 'friction'),
+    ({'restitution': -0.5}, 'restitution'),
+])
+def test_a_dynamic_body_with_an_impossible_input_is_refused(physics, options, named):
+    with pytest.raises(ValueError, match=named):
+        physics.add_dynamic(ball(), **options)
+    assert not physics._bodies
+
+
+@pytest.mark.parametrize(('write', 'named'), [
+    (lambda body: body.apply_impulse((NAN, 0, 0)), 'impulse'),
+    (lambda body: body.apply_impulse((1, 0, 0), at=(0, INF, 0)), 'at'),
+    (lambda body: body.apply_torque_impulse((0, NAN, 0)), 'impulse'),
+    (lambda body: body.set_force((INF, 0, 0)), 'force'),
+    (lambda body: body.set_velocity((0, 0, NAN)), 'velocity'),
+    (lambda body: body.set_angular_velocity((0, INF, 0)), 'velocity'),
+    (lambda body: body.set_transform((NAN, 0, 0)), 'translation'),
+    (lambda body: body.set_transform(None, (0, 1, 0, INF)), 'rotation'),
+    (lambda body: setattr(body, 'linear_damping', -1.0), 'linear_damping'),
+    (lambda body: setattr(body, 'angular_damping', NAN), 'angular_damping'),
+])
+def test_a_write_of_an_impossible_value_is_refused(physics, write, named):
+    body = physics.add_dynamic(ball())
+    with pytest.raises(ValueError, match=named):
+        write(body)
+    physics.frame(0.02)
+    assert np.all(np.isfinite(body.position))
+
+
+@pytest.mark.parametrize(('fields', 'named'), [
+    ({'tickHz': INF}, 'tickHz'),
+    ({'tickHz': NAN}, 'tickHz'),
+    ({'maxCatchUp': INF}, 'maxCatchUp'),
+    ({'gravity': (0.0, NAN, 0.0)}, 'gravity'),
+    ({'linearDamping': -1.0}, 'linearDamping'),
+    ({'angularDamping': INF}, 'angularDamping'),
+])
+def test_a_definition_with_an_impossible_value_is_refused(fields, named):
+    with pytest.raises(ValueError, match=named):
+        PhysicsDefinition(**fields).validate()
+
+
+def test_an_infinite_tick_frequency_and_gravity_are_refused(physics):
+    with pytest.raises(ValueError, match='tick_frequency'):
+        physics.enable(True, tick_frequency=INF)
+    with pytest.raises(ValueError, match='gravity'):
+        physics.gravity = (0.0, INF, 0.0)

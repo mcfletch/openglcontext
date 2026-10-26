@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.proxy import Proxy
 
 if TYPE_CHECKING:
@@ -100,33 +101,33 @@ class Body:
         """Change the velocity by ``impulse / mass``; ``impulse`` is in newton-seconds.
 
         ``at`` is a world point to push at: off the body's centre the push also spins it.
+        Raises ValueError for a value that is not finite.
         """
-        self._send('impulse', tuple(float(v) for v in impulse),
-                   None if at is None else tuple(float(v) for v in at))
+        self._send('impulse', vector(impulse, 'impulse'), None if at is None else vector(at, 'at'))
 
     def apply_torque_impulse(self, impulse: Any) -> None:
         """Change the spin by an angular impulse about the world axes, in newton-metre-seconds."""
-        self._send('torque_impulse', tuple(float(v) for v in impulse))
+        self._send('torque_impulse', vector(impulse, 'impulse'))
 
     def set_force(self, force: Any) -> None:
         """Push the body through its centre with ``force`` newtons until it is set again."""
-        self._send('force', tuple(float(v) for v in force))
+        self._send('force', vector(force, 'force'))
 
     def set_velocity(self, velocity: Any) -> None:
         """Make the velocity ``velocity``, in metres a second."""
-        self._send('velocity', tuple(float(v) for v in velocity))
+        self._send('velocity', vector(velocity, 'velocity'))
 
     def set_angular_velocity(self, velocity: Any) -> None:
         """Make the spin ``velocity``, in radians a second about the world axes."""
-        self._send('angular_velocity', tuple(float(v) for v in velocity))
+        self._send('angular_velocity', vector(velocity, 'velocity'))
 
     def set_transform(self, translation: Any = None, rotation: Any = None) -> None:
         """Put the body at ``translation`` and turn it to ``rotation`` (an axis and an angle).
 
         Either may be left out. Reading the body answers the new place at once.
         """
-        position = None if translation is None else np.asarray(translation, dtype='d')
-        axis_angle = None if rotation is None else np.asarray(rotation, dtype='d')
+        position = None if translation is None else np.asarray(vector(translation, 'translation'))
+        axis_angle = None if rotation is None else np.asarray(vector(rotation, 'rotation', 4))
         seq = self._send('place', None if position is None else tuple(position),
                          None if axis_angle is None else tuple(axis_angle))
         if self.alive:
@@ -139,8 +140,8 @@ class Body:
 
     @linear_damping.setter
     def linear_damping(self, value: float) -> None:
-        self._linear_damping = float(value)
-        self._send('damping', float(value), None)
+        self._linear_damping = number(value, 'linear_damping', non_negative=True)
+        self._send('damping', self._linear_damping, None)
 
     @property
     def angular_damping(self) -> float:
@@ -149,8 +150,8 @@ class Body:
 
     @angular_damping.setter
     def angular_damping(self, value: float) -> None:
-        self._angular_damping = float(value)
-        self._send('damping', None, float(value))
+        self._angular_damping = number(value, 'angular_damping', non_negative=True)
+        self._send('damping', None, self._angular_damping)
 
     def drive(self, pose: Callable[[float], Any]) -> None:
         """Move this kinematic body by ``pose(time)``, called at the end of each step.

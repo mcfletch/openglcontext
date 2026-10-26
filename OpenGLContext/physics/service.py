@@ -38,6 +38,7 @@ from omi_physics.collisionquery import WorldQuery
 from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.character import Character, stand_in_proxy
+from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
@@ -302,9 +303,7 @@ class Physics:
         second, from now on.
         """
         if tick_frequency is not None:
-            if not tick_frequency > 0.0:
-                raise ValueError('tick_frequency must be above zero, not %r' % (tick_frequency,))
-            self.definition.tickHz = float(tick_frequency)
+            self.definition.tickHz = number(tick_frequency, 'tick_frequency', positive=True)
             self._send_world('config', float(tick_frequency), float(self.definition.maxCatchUp))
         self._bring_up_all()
         self._enabled = bool(on)
@@ -319,8 +318,8 @@ class Physics:
         return self._gravity
 
     @gravity.setter
-    def gravity(self, vector: Iterable[float]) -> None:
-        self._gravity = tuple(float(v) for v in vector)
+    def gravity(self, value: Iterable[float]) -> None:
+        self._gravity = vector(value, 'gravity')
         self._send_world('gravity', self._gravity)
 
     # -- adding bodies --------------------------------------------------
@@ -370,6 +369,7 @@ class Physics:
         unknown = set(options) - self._OPTIONS
         if unknown:
             raise TypeError('unknown option %s for add_%s' % (', '.join(sorted(unknown)), kind))
+        options = _checked(options)
         if node is None:
             if not isinstance(proxy, (Proxy, model.Shape)):
                 raise TypeError('a body with no node needs a shape: proxy=Proxy.box(...), '
@@ -399,8 +399,8 @@ class Physics:
         if motion is None:
             mass = 0.0
             if dynamic:
-                mass = float(options['mass']) if options.get('mass') is not None else shape.mass(
-                    float(options.get('density') or DEFAULT_DENSITY))
+                mass = options['mass'] if options.get('mass') is not None else shape.mass(
+                    options.get('density') or DEFAULT_DENSITY)
             motion = model.Motion(
                 type={'dynamic': model.DYNAMIC, 'kinematic': model.KINEMATIC}.get(
                     kind, model.STATIC),
@@ -1674,6 +1674,26 @@ class StaticInstances:
             self._alive = False
             self.physics._send_world('remove_many', self._first, self.count)
             self.physics._specs.pop(self._first, None)
+
+
+#: The ``add_*`` options that are numbers, with the bound each must keep.
+_NUMBERS = {'mass': 'positive', 'density': 'positive', 'linear_damping': 'non_negative',
+            'angular_damping': 'non_negative', 'friction': 'non_negative',
+            'restitution': 'non_negative'}
+
+
+def _checked(options: dict[str, Any]) -> dict[str, Any]:
+    """``options`` with each physical value made a finite float or tuple; ValueError naming the
+    first that cannot be one."""
+    found = dict(options)
+    for name, bound in _NUMBERS.items():
+        if found.get(name) is not None:
+            found[name] = number(found[name], name, **{bound: True})
+    if found.get('translation') is not None:
+        found['translation'] = vector(found['translation'], 'translation')
+    if found.get('rotation') is not None:
+        found['rotation'] = vector(found['rotation'], 'rotation', 4)
+    return found
 
 
 def _not_scenery(group: Any) -> None:

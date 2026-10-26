@@ -17,6 +17,7 @@ from omi_physics import model
 from vrml import field, node
 
 from OpenGLContext import renderoptions
+from OpenGLContext.physics.checks import number, vector
 
 __all__ = ['COLLIDERS', 'MODES', 'PhysicsDefinition', 'definition_for']
 
@@ -73,10 +74,11 @@ class PhysicsDefinition(node.Node):
         if self.colliders not in COLLIDERS:
             raise ValueError('colliders %r is not one of %s'
                              % (self.colliders, ', '.join(COLLIDERS)))
-        if not float(self.tickHz) > 0.0:
-            raise ValueError('tickHz must be above zero, not %r' % (self.tickHz,))
-        if not float(self.maxCatchUp) > 0.0:
-            raise ValueError('maxCatchUp must be above zero, not %r' % (self.maxCatchUp,))
+        number(self.tickHz, 'tickHz', positive=True)
+        number(self.maxCatchUp, 'maxCatchUp', positive=True)
+        vector(self.gravity, 'gravity')
+        number(self.linearDamping, 'linearDamping', non_negative=True)
+        number(self.angularDamping, 'angularDamping', non_negative=True)
 
     def world_gravity(self) -> model.Gravity:
         """:attr:`gravity` as the world's magnitude and direction."""

@@ -142,6 +142,12 @@ The options are keywords:
      - False for a body every character walks through
        (:ref:`physics-characters`)
 
+A value that is not finite, a ``mass`` or ``density`` at or below zero, and a
+damping, ``friction`` or ``restitution`` below zero raise ``ValueError`` naming
+the option, and no body is made. The commands below, ``physics.gravity``,
+``enable(tick_frequency=)`` and ``PhysicsDefinition.validate()`` check their
+values the same way.
+
 A body is changed by commands. Each is applied at the start of the next step,
 from whichever thread made it, and a command made on the thread that steps the
 world is applied at once, so one handler body works in either place:
