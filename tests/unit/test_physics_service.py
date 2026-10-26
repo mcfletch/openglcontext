@@ -266,6 +266,28 @@ def test_gravity_can_change_while_the_world_runs(physics):
     assert abs(body.velocity[1]) < 0.5
 
 
+def test_time_is_the_seconds_of_steps_the_world_has_taken(physics):
+    assert physics.time == 0.0
+    physics.add_dynamic(ball())
+    run_for(physics, 0.5, frame=0.05)
+    assert physics.time == pytest.approx(0.5)
+
+
+def test_time_inside_a_step_is_the_time_that_step_began(physics):
+    seen = []
+
+    @physics_callback
+    def before(step):
+        seen.append((step.time, physics.time))
+
+    handler = physics.addEventHandler('before-step', before)
+    physics.add_dynamic(ball())
+    run_for(physics, 0.05, frame=0.05)
+    handler.cancel()
+    assert len(seen) == 5
+    assert [clock for clock, _ in seen] == pytest.approx([read for _, read in seen])
+
+
 def test_damping_setters_slow_a_body(physics):
     physics.gravity = (0, 0, 0)
     body = physics.add_dynamic(ball(at=(0, 0, 0)), linear_damping=0.0)

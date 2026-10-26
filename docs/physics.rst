@@ -166,6 +166,7 @@ world is applied at once, so one handler body works in either place:
    body.set_friction(0.2); body.set_restitution(0.7)
    body.wake(); body.remove()
    physics.gravity = (0, -9.81, 0)           # may change every frame
+   physics.time                              # seconds of steps the world has taken
 
 Assigning to ``node.translation`` does not move a body: the world owns the
 pose and the next frame writes its own. ``set_transform`` is how a body is
@@ -569,6 +570,10 @@ speed. The function is a physics callback:
        return (x, y + lift, z), None
 
    door.drive(pose)
+
+``pose`` is given the world's clock, which ``physics.time`` reads outside a
+step: seconds of fixed steps since the world began. A piece that starts its
+motion when it is built reads ``physics.time`` then and measures from it.
 
 ``set_transform`` also places a kinematic body, as a teleport that gives it no
 velocity. The pressure

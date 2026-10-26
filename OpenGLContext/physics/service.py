@@ -328,6 +328,20 @@ class Physics:
         self._gravity = vector(value, 'gravity')
         self._send_world('gravity', self._gravity)
 
+    @property
+    def time(self) -> float:
+        """The world's clock: the seconds of fixed steps it has taken, as last published.
+
+        Inside a step's handlers it is the live clock, the time that step began,
+        which is the ``time`` of the :class:`~OpenGLContext.physics.records.Step`
+        they are given. A world that is not busy is not stepped, so its clock
+        stands while nothing moves.
+        """
+        if self.worker.on_worker_thread():
+            return float(self.worker.runtime.world.time)
+        snapshot = self._snapshot
+        return 0.0 if snapshot is None else float(snapshot.time)
+
     # -- adding bodies --------------------------------------------------
     def add_static(self, node: Any, proxy: Any = None, **options: Any) -> Body:
         """Make ``node`` a body that never moves and stops what meets it.
