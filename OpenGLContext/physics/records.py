@@ -87,7 +87,7 @@ class Snapshot:
     Row ``rows[uid]`` of each array is body ``uid``. Static bodies and triggers
     do not move and are not listed. ``axis_angle`` is ``(x, y, z, angle)``;
     ``dynamic`` is false for a kinematic body. ``applied_seq`` is the highest
-    command sequence the world had applied.
+    command sequence at and below which the world had applied every command.
 
     A body that is awake, or a kinematic body that moves, is published part of
     the way through the next step (the frame's ``alpha``). Every other body is

@@ -88,8 +88,8 @@ class InlineWorker:
         #: Always None: a step that raises here raises in :meth:`collect`, on the caller's thread.
         self.error: Exception | None = None
         self._stepping = False
-        #: The command sequence the last published snapshot included; -1 before the first.
-        self._published_seq = -1
+        #: How many commands the runtime had applied at the last published snapshot; -1 before the first.
+        self._published_count = -1
 
     def submit(self, command: Command) -> None:
         """Apply ``command`` now if the world is mid-step, else at the next :meth:`collect`."""
@@ -109,11 +109,11 @@ class InlineWorker:
         """
         runtime = self.runtime
         commands = self.inbox.drain()
-        if (not commands and self._published_seq == runtime.applied_seq
-                and self._published_seq >= 0 and not runtime.busy()):
+        if (not commands and self._published_count == runtime.applied_count
+                and self._published_count >= 0 and not runtime.busy()):
             return Outbox(None, runtime.take_events())
         self._advance(dt, commands)
-        self._published_seq = runtime.applied_seq
+        self._published_count = runtime.applied_count
         return Outbox(runtime.snapshot(runtime.alpha), runtime.take_events())
 
     def step(self, dt: float) -> None:

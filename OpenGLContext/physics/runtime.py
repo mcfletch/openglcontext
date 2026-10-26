@@ -69,7 +69,12 @@ class WorldRuntime:
         self.on_events: list[Callable[[list[PhysicsEvent]], Any]] = []
         #: Asked by :meth:`busy`; one that answers True keeps the world stepping while nothing moves.
         self.wants_steps: list[Callable[[], bool]] = []
+        #: The highest sequence number below which every command has been applied.
         self.applied_seq = 0
+        #: Sequence numbers applied ahead of one still on its way.
+        self._applied_ahead: set[int] = set()
+        #: How many commands have been applied, in all.
+        self.applied_count = 0
         self.version = 0
         #: Events a ``settle`` command left to be set once the next snapshot is published.
         self.markers: list[threading.Event] = []
@@ -114,9 +119,16 @@ class WorldRuntime:
 
     # -- commands -------------------------------------------------------
     def apply(self, command: Command) -> None:
-        """Make one change. A command for a body that has left the world is dropped."""
+        """Make one change. A command for a body that has left the world is dropped.
+
+        :attr:`applied_seq` reaches a command's sequence number once every
+        command numbered before it has been applied too: a physics callback's
+        write is applied in the step while a write the render thread made
+        before it can still be waiting in the inbox.
+        """
+        self.applied_count += 1
         if command.seq > self.applied_seq:
-            self.applied_seq = command.seq
+            self._count_applied(command.seq)
         operation = getattr(self, '_op_' + command.op, None)
         if operation is None:
             log.warning('unknown physics command %r', command.op)
@@ -127,6 +139,13 @@ class WorldRuntime:
             operation(command.uid, *command.args)
         except Exception:
             log.exception('physics command %s for body %s failed', command.op, command.uid)
+
+    def _count_applied(self, seq: int) -> None:
+        ahead = self._applied_ahead
+        ahead.add(seq)
+        while self.applied_seq + 1 in ahead:
+            self.applied_seq += 1
+            ahead.discard(self.applied_seq)
 
     def _op_add(self, uid: int, spec: BodySpec) -> None:
         world = self.world

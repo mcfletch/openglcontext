@@ -170,8 +170,20 @@ def test_commands_for_a_body_that_was_removed_are_dropped():
 def test_commands_carry_the_sequence_the_snapshot_reports_as_applied():
     rt = runtime()
     add(rt, 1, 'dynamic', Proxy.sphere(0.5))
-    rt.apply(Command('velocity', 1, ((1.0, 0.0, 0.0),), seq=7))
-    assert rt.snapshot().applied_seq == 7
+    rt.apply(Command('velocity', 1, ((1.0, 0.0, 0.0),), seq=1))
+    assert rt.snapshot().applied_seq == 1
+
+
+def test_the_applied_sequence_waits_for_an_earlier_command_still_on_its_way():
+    rt = runtime()
+    add(rt, 1, 'dynamic', Proxy.sphere(0.5))
+    rt.apply(Command('force', 1, ((1.0, 0.0, 0.0),), seq=2))
+    rt.apply(Command('force', 1, ((1.0, 0.0, 0.0),), seq=4))
+    assert rt.snapshot().applied_seq == 0
+    rt.apply(Command('place', 1, ((0.0, 3.0, 0.0), None), seq=1))
+    assert rt.snapshot().applied_seq == 2
+    rt.apply(Command('place', 1, ((0.0, 3.0, 0.0), None), seq=3))
+    assert rt.snapshot().applied_seq == 4
 
 
 def test_one_proxy_shared_by_many_bodies_is_added_to_the_world_once():

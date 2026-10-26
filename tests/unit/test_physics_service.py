@@ -4,10 +4,13 @@ These build scenegraph nodes from the engine's own surfaces and step a real
 world with no window. Most run the service inline, where the test sets the clock;
 the thread cases at the end run it on its worker.
 """
+import threading
+
 import numpy as np
 import pytest
 from omi_physics import model
 
+from OpenGLContext.physics.callbacks import physics_callback
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
@@ -568,4 +571,36 @@ def test_switching_mode_keeps_the_bodies():
         service.frame(0.016)
         assert body.alive and body.position[1] < before
     finally:
+        service.close()
+
+
+def test_a_place_waiting_behind_a_callback_write_is_not_read_as_applied():
+    """A physics callback's write is applied in the step; a render-thread write
+    still in the inbox is not, though the callback's write is numbered after it."""
+    service = make(mode='thread', gravity=(0.0, 0.0, 0.0))
+    in_step, posted = threading.Event(), threading.Event()
+    try:
+        node = ball(at=(0, 5, 0))
+        body = service.add_dynamic(node)
+        body.set_velocity((1.0, 0.0, 0.0))
+
+        @physics_callback
+        def push(step):
+            if not in_step.is_set():
+                in_step.set()
+                posted.wait(5.0)
+            body.set_force((0.0, 0.0, 0.0))
+
+        service.addEventHandler('before-step', push)
+        assert in_step.wait(5.0)
+        body.set_transform((9.0, 9.0, 9.0))
+        thread = service.worker._thread
+        service.worker._stop.set()      # the thread ends after this step, the place still queued
+        posted.set()
+        thread.join(5.0)
+        service.frame(0.02)
+        assert body.position == pytest.approx((9.0, 9.0, 9.0))
+        assert tuple(node.translation) == pytest.approx((0.0, 5.0, 0.0))   # no stale pose written
+    finally:
+        posted.set()
         service.close()

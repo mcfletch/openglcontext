@@ -277,18 +277,18 @@ def test_inline_does_not_step_a_world_where_nothing_moves():
 def test_inline_steps_again_once_a_command_arrives():
     worker = settled_inline()
     steps = worker.runtime.world.step_count
-    worker.submit(Command('impulse', 1, ((0.0, 2.0, 0.0), None), seq=99))
+    worker.submit(Command('impulse', 1, ((0.0, 2.0, 0.0), None), seq=1))
     out = worker.collect(0.01)
     assert worker.runtime.world.step_count == steps + 1
-    assert out.snapshot is not None and out.snapshot.applied_seq == 99
+    assert out.snapshot is not None and out.snapshot.applied_seq == 1
 
 
 def test_inline_publishes_a_command_applied_by_a_flush_between_frames():
     worker = settled_inline()
-    worker.submit(Command('damping', 1, (0.5, None), seq=77))
+    worker.submit(Command('damping', 1, (0.5, None), seq=1))
     worker.flush()
     out = worker.collect(0.01)
-    assert out.snapshot is not None and out.snapshot.applied_seq == 77
+    assert out.snapshot is not None and out.snapshot.applied_seq == 1
 
 
 def test_inline_publishes_its_first_frame_with_nothing_to_step():
