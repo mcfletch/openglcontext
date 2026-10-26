@@ -177,8 +177,7 @@ class TestTheFieldAndTheColliderCutTheSame:
         field = flat()
         vertices, indices = field.mesh(holes=circle)
         drawn = area_of(vertices, np.asarray(indices).reshape(-1, 3))
-        world = _NoWorld()
-        colliders = HeightFieldColliders(world, field, chunk=field.extent,
+        colliders = HeightFieldColliders(field, chunk=field.extent,
                                          holes=circle)
         total = 0.0
         for i in range(colliders._across):  # noqa: SLF001 the colliders' chunk grid, walked patch by patch
@@ -186,11 +185,3 @@ class TestTheFieldAndTheColliderCutTheSame:
                 points, indices = colliders._patch(i, j)  # noqa: SLF001 the colliders' chunk grid, walked patch by patch
                 total += area_of(points, indices)
         assert total == pytest.approx(drawn, rel=1e-6)
-
-
-class _NoWorld:
-    def add_body(self, *_args, **_named):
-        return object()
-
-    def remove_body(self, *args, **named):
-        pass

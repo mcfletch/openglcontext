@@ -935,6 +935,22 @@ Changes.
 Acceptance. `trace.drive` on each scenario returns the numbers it returned before the
 change.
 
+Status, 2026-10-26. `HeightFieldColliders` and `RoadColliders` are collider sources and
+take no world; `PropSource` is the props' source, and `PropColliders` stays as the
+plain-world form because the editor's stone test builds one on a bare `PhysicsWorld`. A
+source with `clear()` is cleared when its handle is removed. glisteel's `RaceWorld` takes
+the service it is given (the context's, defined by `glisteel.world.physics_definition`:
+inline, 120 Hz, no scenery colliders) or makes a standalone one; its road, ground, props
+and stone are sources focused on the point `stream` was given, and `stream` also asks
+them at once so `settled` finds the ground. The car's chassis is `add_dynamic`, with a
+`Body` handle; the `RaycastVehicle` and the `impact_on` reads use `physics.world`. In a
+context the context's frame steps the world and the game finishes the frame from a
+`renderQueue.on_frame` function added after it (`Session.finish_frame`);
+`Session.advance` is the service's frame then `finish_frame`, for a standalone
+service. Traffic still places its kinematic bodies each frame rather than driving
+them, and poses its own nodes. Scripted drives and autopilot runs with traffic give
+the same numbers, bit for bit, as before the change.
+
 ### twig-bb
 
 Today. Two worlds. The map world (`collision.py:82-86`) is one static trimesh cooked from

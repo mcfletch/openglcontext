@@ -492,6 +492,30 @@ def test_a_source_may_be_removed(physics):
     assert len(source.updates) == 1
 
 
+class Forgetful(Stones):
+    """Stones that forget what they made when told to clear."""
+
+    def __init__(self):
+        super().__init__()
+        self.cleared = 0
+
+    def clear(self):
+        self.cleared += 1
+        self.have.clear()
+
+
+def test_a_removed_source_with_a_clear_is_cleared_once(physics):
+    source = Forgetful()
+    handle = physics.add_collider_source(source, focus=lambda: (0.0, 0.0, 0.0))
+    physics.frame(0.02)
+    handle.remove()
+    handle.remove()
+    assert source.cleared == 1
+    physics.add_collider_source(source, focus=lambda: (0.0, 0.0, 0.0))
+    physics.frame(0.02)
+    assert physics.raycast((0, 10, 0), (0, -1, 0)).distance == pytest.approx(8.0, abs=0.01)
+
+
 def test_a_source_with_no_focus_follows_the_first_character(physics):
     # Between the stones the source makes, so the character is not pushed out of one.
     me = physics.add_character(position=(35.0, 0.05, 0.0))

@@ -15,7 +15,7 @@ import pytest
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.loaders.tiles3d.props import baked_props
-from OpenGLContext.physics.props import PropColliders
+from OpenGLContext.physics.props import PropColliders, PropSource
 from OpenGLContext.scenegraph.props import Prop, props_from_table, props_table
 
 STONES = [Prop('granite', (float(i), 0.5 * i, -2.0 * i), yaw=0.1 * i,
@@ -88,3 +88,10 @@ class TestStandingThemUp:
         assert len(colliders.props) == len(STONES)
         colliders.update((0.0, 0.0, 0.0))
         assert 0 < len(colliders.standing) < len(STONES)
+
+    def test_a_source_is_built_from_the_world_too(self, tmp_path):
+        (tmp_path / 'stones.npz').write_bytes(props_table(STONES))
+        extras = {'stones': {'table': 'stones.npz', 'count': len(STONES)}}
+        source = PropSource.baked(extras, 'stones', str(tmp_path), reach=5.0)
+        assert len(source.props) == len(STONES)
+        assert 0 < len(source.update((0.0, 0.0, 0.0)).add) < len(STONES)

@@ -15,8 +15,10 @@ import pytest
 from omi_physics.world import PhysicsWorld
 from omi_physics import model
 
-from OpenGLContext.physics.props import PropColliders
+from OpenGLContext.physics.body import Body
+from OpenGLContext.physics.props import PropColliders, PropSource
 from OpenGLContext.scenegraph.props import Prop
+from tests.unit._streamed import Streamed
 
 
 def _scattered(count=40, spacing=25.0):
@@ -41,6 +43,61 @@ def _held(world):
     number of *rows* is the high-water mark rather than what is live.
     """
     return int(world.live_body_count)
+
+
+class TestASource:
+    """:class:`PropSource` makes the bodies through a physics service."""
+
+    def test_each_prop_within_reach_is_a_body_of_the_service(self) -> None:
+        props = Streamed(PropSource(_scattered(), reach=60.0))
+        props.update((0.0, 0.0, 0.0))
+        hit = props.physics.raycast((0.0, 20.0, 0.0), (0.0, -1.0, 0.0), 40.0)
+        assert isinstance(hit.body, Body)
+        assert hit.point[1] == pytest.approx(1.4, abs=0.01)
+        assert props.world.live_body_count == len(props.standing)
+
+    def test_it_answers_what_changed(self) -> None:
+        source = PropSource(_scattered(), reach=60.0)
+        first = source.update((0.0, 0.0, 0.0))
+        assert [one[0] for one in first.add] == [0, 1, 2]
+        assert not source.update((1.0, 0.0, 1.0)).add
+        later = source.update((500.0, 0.0, 0.0))
+        assert sorted(later.remove) == [0, 1, 2]
+        assert all(abs(one.position[0] - 500.0) <= 60.0 for one in source.standing)
+
+    def test_moving_less_than_settled_asks_nothing(self) -> None:
+        source = PropSource(_scattered(), reach=60.0, settled=20.0)
+        source.update((0.0, 0.0, 0.0))
+        moved = source.update((19.0, 0.0, 0.0))
+        assert not moved.add and not moved.remove
+
+    def test_props_of_one_size_share_a_shape(self) -> None:
+        source = PropSource(_scattered(), reach=1000.0)
+        added = source.update((0.0, 0.0, 0.0)).add
+        assert len({id(one[1]) for one in added}) == 1
+
+    def test_clearing_lets_go_of_everything(self) -> None:
+        props = Streamed(PropSource(_scattered(), reach=60.0))
+        props.update((0.0, 0.0, 0.0))
+        props.clear()
+        assert props.standing == []
+        assert props.world.live_body_count == 0
+        assert props.source.update((0.0, 0.0, 0.0)).add
+
+    def test_a_body_stands_where_the_world_form_stands_it(self) -> None:
+        """The source and :class:`PropColliders` agree about every prop."""
+        stones = [Prop(kind='stone', position=(3.0, 1.0, 2.0), radius=0.3, height=1.0,
+                       shape='dome', yaw=0.7),
+                  Prop(kind='rock', position=(-4.0, 2.0, 1.0), radius=1.2, height=2.0, yaw=1.1)]
+        plain = _world()
+        PropColliders(plain, stones).update((0.0, 0.0, 0.0))
+        served = Streamed(PropSource(stones))
+        served.update((0.0, 0.0, 0.0))
+        world = served.world
+        for row in range(2):
+            assert np.allclose(world.position[row], plain.position[row])
+            assert np.allclose(world.orientation[row], plain.orientation[row])
+            assert _shape_of(world, row).type == _shape_of(plain, row).type
 
 
 class TestWhatIsHeld:

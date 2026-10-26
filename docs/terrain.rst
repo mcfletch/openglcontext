@@ -182,8 +182,8 @@ surface:
    * - ``field.mesh()``
      - ``SplatTerrain``, which draws the ground the player sees
    * - ``HeightFieldColliders``
-     - the physics world: trimesh chunks cut from the same grid, for a car to
-       drive on
+     - the physics service: trimesh chunks cut from the same grid, for a car
+       to drive on
    * - ``field.sample(x, z)``
      - everything computed directly: the walker's floor, the base of every
        scattered plant, the slope that thins a grass mask
@@ -224,22 +224,25 @@ Colliding with a height field
 
 A vehicle needs triangles to collide with.
 ``OpenGLContext.physics.heightfield.HeightFieldColliders`` cuts the field into
-square chunks and keeps only the chunks near a given position in the physics
-world:
+square chunks. It is a :ref:`collider source <physics-sources>`: the chunks
+near the focus are static bodies of the physics service, each with a ``Body``
+handle.
 
 .. code-block:: python
 
    from OpenGLContext.physics.heightfield import HeightFieldColliders
-   ground = HeightFieldColliders(physics_world, field, reach=320.0)
-   ground.update(car_position)                        # once a frame
+   ground = HeightFieldColliders(field, reach=320.0)
+   context.physics.add_collider_source(ground, focus=lambda: car.position)
 
-``reach`` is how far from the position ground is kept, in metres (default
+``reach`` is how far from the focus ground is kept, in metres (default
 320). ``chunk`` is the side of one chunk, in metres (default 128), rounded to
 whole grid cells. A four-kilometre field at four-metre spacing is two million
 triangles, and a car touches about four of them at a time. Chunks that move
 out of reach are removed, so the physics cost stays at what one view of the
 world needs, however long the drive. Chunks are cut on the field's own grid
 lines and share their edge rows, so neighbouring chunks meet exactly.
+``chunk_count()`` and ``triangle_count()`` say what is held. A chunk cut
+away entirely by ``holes`` (below) makes no body.
 
 .. _holes:
 
@@ -262,7 +265,7 @@ car hits and the surface objects stand on then stay the same:
 
    mouth = bore_opening(bore_centreline, field.sample, profile=road_profile)
    terrain.holes = mouth                              # what is drawn, and what grows
-   ground = HeightFieldColliders(physics_world, field, holes=mouth)
+   ground = HeightFieldColliders(field, holes=mouth)
 
 ``holes`` may be set at any time; a ``SplatTerrain`` cuts its mesh again at
 its next draw. ``oglc-cover`` (:ref:`the ground cover demo <cover-demo>`) cuts

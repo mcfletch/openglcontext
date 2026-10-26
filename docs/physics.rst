@@ -737,10 +737,19 @@ holds turns; ``sources.Addition(key, proxy, position, rotation=(x, y, z,
 angle))`` takes the axis and angle the ``add_*`` calls take instead. A
 source returns only what changed, and a key is anything hashable that names a
 collider to the source. The focus is the first character's feet where none is
-given. ``physics.add_static_instances(proxy, positions)`` makes one static body
-of one shape at each row of an ``(n, 3)`` array, for trunks and posts, and its
-``remove()`` takes them out together. The classes of :ref:`streamed worlds
-<streamed>` are sources.
+given. ``handle.remove()`` takes the source's bodies out and calls the
+source's ``clear()`` where it has one, so the source adds them afresh if it is
+added again. ``handle.update()`` asks the source at once rather than in the
+next frame, for a caller that needs the bodies near a new focus before it casts
+a ray there. ``physics.add_static_instances(proxy, positions)`` makes one
+static body of one shape at each row of an ``(n, 3)`` array, for trunks and
+posts, and its ``remove()`` takes them out together. The engine's sources are
+``HeightFieldColliders`` (:ref:`ground <fieldphysics>`), ``RoadColliders``
+(:ref:`roads <roadcolliders>`), ``PropSource`` (:ref:`props
+<physics-props>`) and ``NearbyColliders`` (rocks and posts). Each body a source
+makes is a static body of the service with a ``Body`` handle, so a ray's
+``Hit.body`` names it and its collisions reach handlers and the session
+journal.
 
 .. _physics-service-modes:
 
@@ -1378,18 +1387,19 @@ Road colliders
 A road is a centreline and a cross-section, and a baked world stores both in
 its :doc:`tileset extras <roads>`.
 ``OpenGLContext.physics.road.RoadColliders`` sweeps them into one surface at
-one resolution, cuts it into chunks, and keeps the chunks near the car in the
-physics world:
+one resolution and cuts it into chunks. It is a :ref:`collider source
+<physics-sources>`: the chunks near the focus are static bodies of the service.
 
 .. code-block:: python
 
    from OpenGLContext.physics.road import RoadColliders
-   road = RoadColliders(physics_world, course.centreline, course.road_profile(),
+   road = RoadColliders(course.centreline, course.road_profile(),
                         closed=True, bank=course.bank)
-   road.update(car_position)                # once a frame
+   context.physics.add_collider_source(road, focus=lambda: car.position)
 
 Chunks are 120 m long (``chunk``), and those within 260 m along the road on
-either side of the car are kept (``reach``).
+either side of the focus are kept (``reach``). ``chunk_count()`` and
+``triangle_count()`` say what is held.
 
 ``bank`` is the road's lean at each centreline point, as a fraction. A baked
 world writes it beside the centreline (:ref:`banked corners <banking>`). Pass
@@ -1415,7 +1425,7 @@ them in), and puts a wall along both edges of each:
 
 .. code-block:: python
 
-   road = RoadColliders(physics_world, course.centreline, course.road_profile(),
+   road = RoadColliders(course.centreline, course.road_profile(),
                         closed=True, bank=course.bank, barriers=course.edges())
 
 The drawn structure has a barrier at these edges. Without a matching collider,
@@ -1436,17 +1446,24 @@ Props
 
 A boulder beside the road is drawn from a tile, but its collider must not
 come from the tile, or the car drives through the rock when the tile behind
-it changes resolution. ``OpenGLContext.physics.props.PropColliders`` reads the
-:ref:`prop records <roads-props>` a baked world carries. It adds colliders for
-the props within reach (default 220 m) and removes the ones out of reach. A
-world has hundreds of boulders, and the broad phase pays for every body it
-holds.
+it changes resolution. ``OpenGLContext.physics.props.PropSource`` is a
+:ref:`collider source <physics-sources>` for the :ref:`prop records
+<roads-props>` a baked world carries. The props within reach of the focus
+(default 220 m) are static bodies of the service, and those out of reach are
+removed. The set is chosen again once the focus has moved ``settled`` metres
+(default 20). A world has hundreds of boulders, and the broad phase pays for
+every body it holds.
 
 .. code-block:: python
 
-   from OpenGLContext.physics.props import PropColliders
-   obstacles = PropColliders(physics_world, world.props)
-   obstacles.update(car_position)           # once a frame
+   from OpenGLContext.physics.props import PropSource
+   obstacles = PropSource(world.props)
+   context.physics.add_collider_source(obstacles, focus=lambda: car.position)
+
+``obstacles.standing`` lists the props with a body. Props of one shape and size
+share one proxy. ``PropColliders(physics_world, props)`` stands the same bodies
+up in a plain ``omi_physics`` world with ``update(position)`` and
+``release()``, for code with no service.
 
 A prop's collider is the simple shape its record names, at the size the
 record gives, not its render mesh; a triangle mesh per rock costs both the
@@ -1464,24 +1481,26 @@ broad phase and the narrow phase. ``Prop.shape`` is one of:
 
 A world typically has thousands of stones and hundreds of boulders, and they
 need different reaches: a boulder must stop a car from a long way off, while a
-stone only matters under the wheel. Use two ``PropColliders``, one for each
-table, each with its own ``reach``.
+stone only matters under the wheel. Use two sources, one for each table, each
+with its own ``reach``.
 
 A baked world names its props by channel in its tileset's ``extras``: a
 channel of hundreds as a list of prop records, and one of tens of thousands --
 the loose stone -- as ``{"table": "stones.npz", "count": n}``, a binary table
 beside the tileset (``scenegraph.props.props_table``), since the ``extras`` is
-parsed by every reader of the world. ``PropColliders.baked`` reads either form
-from the tileset's directory or URL and stands the colliders up:
+parsed by every reader of the world. ``PropSource.baked`` reads either form
+from the tileset's directory or URL:
 
 .. code-block:: python
 
    from OpenGLContext.loaders.tiles3d import fetch
-   from OpenGLContext.physics.props import PropColliders
+   from OpenGLContext.physics.props import PropSource
 
    base = fetch.dir_of(tileset_path)
-   boulders = PropColliders.baked(physics_world, extras, 'props', base)
-   stones = PropColliders.baked(physics_world, extras, 'stones', base, reach=40.0)
+   boulders = PropSource.baked(extras, 'props', base)
+   stones = PropSource.baked(extras, 'stones', base, reach=40.0)
+   for source in (boulders, stones):
+       context.physics.add_collider_source(source, focus=lambda: car.position)
 
 ``OpenGLContext.loaders.tiles3d.props.baked_props`` is the reader on its own.
 A table named outside the tileset's reach is refused, as every file a world

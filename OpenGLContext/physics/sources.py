@@ -12,7 +12,15 @@ leaves. A source is any object with ``update(focus)`` returning a :class:`Change
 ``key`` is anything hashable that names a collider to the source. The service
 calls ``update`` once a frame with the position of the focus, makes a static body
 for each addition and removes the body of each key in ``remove``. A source
-returns only what changed.
+returns only what changed. A source with a ``clear()`` method has it called when
+its handle is removed, so it forgets what it made and adds it afresh if it is
+added to a service again.
+
+The engine's own sources are the ground of a height field
+(:class:`~OpenGLContext.physics.heightfield.HeightFieldColliders`), a road
+(:class:`~OpenGLContext.physics.road.RoadColliders`), a world's props
+(:class:`~OpenGLContext.physics.props.PropSource`) and the rocks and posts of a
+landscape (:class:`~OpenGLContext.physics.landscape.NearbyColliders`).
 
 An addition as a plain tuple is turned by a quaternion ``(x, y, z, w)``, as the
 world holds turns. An :class:`Addition` takes either that, as ``orientation=``,
@@ -103,12 +111,16 @@ class SourceHandle:
                     'static', addition.proxy, addition.position, addition.quaternion())
 
     def remove(self) -> None:
-        """Stop asking, and remove every body the source made. Removing twice is harmless."""
+        """Stop asking, remove every body the source made and clear the source where it has
+        a ``clear()``. Removing twice is harmless."""
         if not self.active:
             return
         self.active = False
         for body in self.bodies.values():
             self.physics.remove(body)
         self.bodies.clear()
+        clear = getattr(self.source, 'clear', None)
+        if clear is not None:
+            clear()
         if self in self.physics._sources:
             self.physics._sources.remove(self)

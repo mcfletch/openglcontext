@@ -840,11 +840,11 @@ and a physics world collides with it, each from the same description.
 .. code-block:: python
 
    from OpenGLContext.scenegraph.props import Prop, rock_mesh
-   from OpenGLContext.physics.props import PropColliders
+   from OpenGLContext.physics.props import PropSource
 
    boulder = Prop.of(rock_mesh(radius=1.4, seed=3), kind='rock', position=here)
-   obstacles = PropColliders(physics_world, world.props)
-   obstacles.update(car_position)                   # once a frame
+   obstacles = PropSource(world.props)
+   context.physics.add_collider_source(obstacles, focus=lambda: car.position)
 
 The collision body does not come from the tiles. Tile geometry is
 level-of-detail geometry that loads and unloads as the camera moves, and a
