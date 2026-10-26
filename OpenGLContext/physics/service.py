@@ -559,7 +559,10 @@ class Physics:
             if not self._closed:
                 self._send(Command('add', body.uid, (spec,), next(self._seq)))
                 for op, args in deferred:
-                    self._send(Command(op, body.uid, args, next(self._seq)))
+                    seq = next(self._seq)
+                    self._send(Command(op, body.uid, args, seq))
+                    if op == 'place' and body._placed is not None:
+                        body._placed = (seq, *body._placed[1:])
 
     def add_ground(self, ground: Any, extent: Any = None, height_range: Any = None,
                    feature: float = 1.0, **options: Any) -> Body:
@@ -1174,7 +1177,7 @@ class Physics:
     def _state(self, body: Body) -> _State:
         state = self._live_state(body) if self.worker.on_worker_thread() else self._published_state(body)
         placed = body._placed
-        if placed is not None and (self._snapshot is None
+        if placed is not None and (placed[0] == 0 or self._snapshot is None
                                    or self._snapshot.applied_seq < placed[0]):
             position = state.position if placed[1] is None else placed[1]
             axis_angle = state.axis_angle if placed[2] is None else placed[2]

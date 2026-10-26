@@ -124,7 +124,9 @@ class Body:
     def set_transform(self, translation: Any = None, rotation: Any = None) -> None:
         """Put the body at ``translation`` and turn it to ``rotation`` (an axis and an angle).
 
-        Either may be left out. Reading the body answers the new place at once.
+        Either may be left out. Reading the body answers the new place at once,
+        and goes on answering it until the world has applied it, which for
+        scenery still being cooked is once it joins the world.
         """
         position = None if translation is None else np.asarray(vector(translation, 'translation'))
         axis_angle = None if rotation is None else np.asarray(vector(rotation, 'rotation', 4))
@@ -132,6 +134,11 @@ class Body:
                          None if axis_angle is None else tuple(axis_angle))
         if self.alive:
             self._placed = (seq, position, axis_angle)
+            # Where a body the snapshots do not list (static, trigger) is read from.
+            if position is not None:
+                self._position = position
+            if axis_angle is not None:
+                self._axis_angle = axis_angle
 
     @property
     def linear_damping(self) -> float:

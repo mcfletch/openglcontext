@@ -736,3 +736,11 @@ def test_an_infinite_tick_frequency_and_gravity_are_refused(physics):
         physics.enable(True, tick_frequency=INF)
     with pytest.raises(ValueError, match='gravity'):
         physics.gravity = (0.0, INF, 0.0)
+
+
+def test_a_static_body_placed_by_hand_reads_back_where_it_was_put(physics):
+    wall = physics.add_static(block((1, 1, 1), at=(0, 0, 0)))
+    wall.set_transform((4.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.5))
+    run_for(physics, 0.1)
+    assert wall.position == pytest.approx((4.0, 0.0, 0.0))
+    assert wall.rotation == pytest.approx((0.0, 1.0, 0.0, 0.5))

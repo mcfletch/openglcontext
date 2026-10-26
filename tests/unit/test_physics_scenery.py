@@ -220,3 +220,15 @@ def test_a_scene_of_many_shapes_costs_nothing_per_frame_once_it_is_made(physics)
         assert physics.scenery_changed(root, 1) == 0
     assert physics.cooked == cooked == 40
     assert np.all([physics.frame(0.02) is False for _ in range(3)])
+
+
+def test_a_place_made_while_the_body_cooks_is_read_back_and_reaches_the_world(physics):
+    floor = block((20, 1, 20))
+    physics.scenery_changed(scene_of(floor), 1)
+    body = physics.body_for(floor.children[0])
+    body.set_transform((0.0, -3.0, 0.0))
+    assert body.position == pytest.approx((0.0, -3.0, 0.0))
+    settle(physics)
+    assert body.position == pytest.approx((0.0, -3.0, 0.0))
+    hit = physics.raycast((0, 10, 0), (0, -1, 0), 20.0)
+    assert hit is not None and hit.point[1] == pytest.approx(-2.5, abs=0.01)
