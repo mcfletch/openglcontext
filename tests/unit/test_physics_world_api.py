@@ -424,6 +424,42 @@ def test_a_character_whose_update_raises_is_logged_once_and_the_frame_goes_on(ph
     assert logged(caplog, 'the character lost its clip') == 1
 
 
+class Beam:
+    """A source of one long beam along x, turned a quarter about y by the addition it returns."""
+
+    def __init__(self, turn):
+        self.turn = turn
+        self.given = False
+
+    def update(self, focus):
+        from OpenGLContext.physics.sources import Addition, Changes
+
+        if self.given:
+            return Changes()
+        self.given = True
+        return Changes(add=[Addition('beam', Proxy.box((10.0, 1.0, 1.0)), (0.0, 0.5, 0.0),
+                                     **self.turn)])
+
+
+@pytest.mark.parametrize('turn', [
+    {'rotation': (0.0, 1.0, 0.0, np.pi / 2)},
+    {'orientation': (0.0, np.sin(np.pi / 4), 0.0, np.cos(np.pi / 4))},
+], ids=['axis-angle', 'quaternion'])
+def test_a_source_turns_an_addition_by_an_axis_angle_or_a_quaternion(physics, turn):
+    physics.add_collider_source(Beam(turn), focus=lambda: (0.0, 0.0, 0.0))
+    physics.frame(0.02)
+    assert physics.raycast((0, 10, 4), (0, -1, 0), 20.0) is not None      # along z once turned
+    assert physics.raycast((4, 10, 0), (0, -1, 0), 20.0) is None
+
+
+def test_an_addition_with_both_turns_is_refused():
+    from OpenGLContext.physics.sources import Addition
+
+    with pytest.raises(ValueError, match='orientation or rotation'):
+        Addition('beam', Proxy.box((1.0, 1.0, 1.0)), (0.0, 0.0, 0.0),
+                 orientation=(0.0, 0.0, 0.0, 1.0), rotation=(0.0, 1.0, 0.0, 0.5)).quaternion()
+
+
 def test_a_collider_source_adds_bodies_near_the_focus_and_drops_those_left_behind(physics):
     source = Stones()
     where = [0.0, 0.0, 0.0]

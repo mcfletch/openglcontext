@@ -675,7 +675,10 @@ leaves: ground chunks near a car, road sections, props, rocks near a walker.
 
 ``source.update(focus)`` is called once a frame with the position of the focus
 and returns a ``Changes``: ``add`` lists ``(key, proxy, position,
-orientation)`` for each body to make, ``remove`` the keys of those to drop. A
+orientation)`` for each body to make, ``remove`` the keys of those to drop. The
+``orientation`` of a plain tuple is a quaternion ``(x, y, z, w)``, as the world
+holds turns; ``sources.Addition(key, proxy, position, rotation=(x, y, z,
+angle))`` takes the axis and angle the ``add_*`` calls take instead. A
 source returns only what changed, and a key is anything hashable that names a
 collider to the source. The focus is the first character's feet where none is
 given. ``physics.add_static_instances(proxy, positions)`` makes one static body
