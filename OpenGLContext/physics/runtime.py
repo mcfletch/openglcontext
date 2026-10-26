@@ -91,6 +91,8 @@ class WorldRuntime:
         self.drivers: dict[int, Callable[[float], Any]] = {}
         #: The joints in the world, by joint id.
         self.joints = JointTable()
+        #: The application's contact filter, asked after the stand-ins' rule; None for none.
+        self.contact_filter: Callable[[Any], Any] | None = None
         self._thread = threading.get_ident()
         self.world.set_contact_filter(self._filter)
 
@@ -286,9 +288,10 @@ class WorldRuntime:
 
         The stand-in is infinitely heavy to the solver; without this it would
         shove a truck. The character is blocked by such a body in its own step.
+        Any other pair is the application's :attr:`contact_filter` to judge.
         """
         if not self.standins:
-            return Verdict.SOLVE
+            return Verdict.SOLVE if self.contact_filter is None else self.contact_filter(pair)
         world = self.world
         first, second = world.handle_of(pair.a), world.handle_of(pair.b)
         for mine, other in ((first, second), (second, first)):
@@ -298,7 +301,21 @@ class WorldRuntime:
             index = self._entries[other].index
             if world.motion_type[index] == 2 and float(world.mass[index]) > limit:
                 return Verdict.IGNORE_PAIR
-        return Verdict.SOLVE
+        return Verdict.SOLVE if self.contact_filter is None else self.contact_filter(pair)
+
+    def _op_contact_filter(self, uid: int,  # noqa: ARG002 the filter is the world's
+                           function: Callable[[Any], Any] | None) -> None:
+        self.contact_filter = function
+
+    def _op_filter(self, uid: int, index: int,  # noqa: ARG002 filters are the world's
+                   collision_filter: model.CollisionFilter) -> None:
+        filters = self.world.filters
+        while len(filters) < index:
+            filters.append(model.CollisionFilter())
+        if index < len(filters):
+            filters[index] = collision_filter
+        else:
+            filters.append(collision_filter)
 
     def _op_noop(self, uid: int) -> None:
         """Do nothing; a command whose arrival wakes a blocked worker."""

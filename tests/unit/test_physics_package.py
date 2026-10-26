@@ -16,6 +16,7 @@ import OpenGLContext.physics as physics
     ('PhysicsDefinition', 'OpenGLContext.physics.settings'),
     ('CharacterCapabilities', 'omi_physics.character'),
     ('Material', 'omi_physics.model'),
+    ('CollisionFilter', 'omi_physics.model'),
 ])
 def test_each_name_is_the_class_of_its_home_module(name, home):
     module = __import__(home, fromlist=[name])

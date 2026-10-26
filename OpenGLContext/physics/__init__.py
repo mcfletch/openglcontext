@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from omi_physics.character import CharacterCapabilities
-    from omi_physics.model import Material
+    from omi_physics.model import CollisionFilter, Material
 
     from OpenGLContext.physics.body import Body
     from OpenGLContext.physics.character import Character
@@ -44,6 +44,7 @@ _HOMES = {
     'Body': 'OpenGLContext.physics.body',
     'Character': 'OpenGLContext.physics.character',
     'CharacterCapabilities': 'omi_physics.character',
+    'CollisionFilter': 'omi_physics.model',
     'Joint': 'OpenGLContext.physics.joints',
     'Material': 'omi_physics.model',
     'Physics': 'OpenGLContext.physics.service',
@@ -51,7 +52,7 @@ _HOMES = {
     'Proxy': 'OpenGLContext.physics.proxy',
 }
 
-__all__ = ['Body', 'Character', 'CharacterCapabilities', 'Joint', 'Material', 'Physics',
+__all__ = ['Body', 'Character', 'CharacterCapabilities', 'CollisionFilter', 'Joint', 'Material', 'Physics',
            'PhysicsDefinition', 'Proxy']
 
 

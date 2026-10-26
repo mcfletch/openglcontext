@@ -25,7 +25,7 @@ import os
 import queue
 import time
 import weakref
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,6 +41,7 @@ from OpenGLContext.physics.character import Character, stand_in_proxy
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
+from OpenGLContext.physics.filters import Approach, ContactFilter, Filters
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
 from OpenGLContext.physics.joints import Joint, make_joint
 from OpenGLContext.physics.materials import Materials
@@ -100,6 +101,8 @@ class Physics:
         self._overlay: Any = None
         self._zones_placed: tuple[Any, ...] = ()
         self.materials = Materials(self)
+        #: The collision filters sent to the world (``collision_filter=`` of the ``add_*`` calls).
+        self.filters = Filters(lambda index, given: self._send_world('filter', index, given))
         #: Scene changes the worker queues for the render thread (``render.set`` and ``render.call``).
         self.render = Updates(wake=wake)
         self.handlers = HandlerTable()
@@ -368,7 +371,7 @@ class Physics:
         named = options.get('material') if isinstance(options.get('material'), str) else None
         sounding = self.materials.sound_of(named) is not None
         spec = BodySpec(uid, kind, shape, motion, tuple(position), quaternion, material,
-                        int(options.get('collision_filter', -1)), report=sounding)
+                        self.filters.index(options.get('collision_filter')), report=sounding)
         body = Body(self, uid, kind, node, shape, position, axis_angle, mass,
                     motion.linearDamping, motion.angularDamping)
         body.derived = derived
@@ -545,7 +548,7 @@ class Physics:
             raise TypeError('unknown option %s' % ', '.join(sorted(unknown)))
         named = options.get('material')
         body = self._add_placed(kind, proxy, (0.0, 0.0, 0.0), None, self._material(options),
-                                int(options.get('collision_filter', -1)),
+                                self.filters.index(options.get('collision_filter')),
                                 named if isinstance(named, str) else None)
         self._by_node[key] = body
         return body
@@ -609,7 +612,7 @@ class Physics:
         for _ in range(len(points) - 1):
             next(self._uids)
         batch = BodyBatch(first, proxy, points, self._material(options),
-                          int(options.get('collision_filter', -1)))
+                          self.filters.index(options.get('collision_filter')))
         if self._enabled and not self._closed:
             self._send(Command('add_many', 0, (batch,), next(self._seq)))
         return StaticInstances(self, first, len(points))
@@ -762,6 +765,25 @@ class Physics:
     def cook(self, node: Any, strategy: str = 'auto', dynamic: bool = True) -> Proxy:
         """A :class:`Proxy` cooked from what ``node`` draws, to share between bodies."""
         return Proxy.from_node(node, strategy, dynamic)
+
+    def set_contact_filter(self, function: Callable[[Approach], Any] | None) -> None:
+        """Ask ``function(approach)`` about each pair as it first touches; None asks nothing.
+
+        ``approach`` is an :class:`~OpenGLContext.physics.filters.Approach`: the
+        two bodies, how fast and how hard they meet, where and along what
+        normal. True or None solves the pair; False lets the two pass through
+        each other until they part, as a pane that breaks under the blow lets
+        the ball through. Only pairs with a body that has a handler are asked.
+        It runs on the thread that steps the world, so it reads bodies and
+        does not change the scene.
+        """
+        made = None if function is None else ContactFilter(function, self._body_of_ref)
+        self._send_world('contact_filter', made)
+
+    def _body_of_ref(self, ref: Any) -> Body | None:
+        """The body a world reference names, on the stepping thread."""
+        uid = self.worker.runtime.world.handle_of(ref)
+        return None if uid is None else self._body_of(int(uid))
 
     # -- joints (OpenGLContext.physics.joints) ----------------------------
     def add_hinge(self, body: Any, to: Any = None, *, anchor: Any, axis: Any,
@@ -1159,7 +1181,7 @@ class Physics:
         return False
 
     def _fixed_seen(self, character: Character, world: Any, fixed: np.ndarray,
-                    boxes: list[tuple[float, ...]]) -> bool:
+                    boxes: Sequence[tuple[float, ...]]) -> bool:
         """Whether a fixed trigger or sensor's box meets one of ``boxes``, each
         ``(x0, y0, z0, x1, y1, z1)``.
 

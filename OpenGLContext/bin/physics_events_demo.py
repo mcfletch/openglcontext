@@ -32,15 +32,15 @@ from typing import Any, Optional
 import numpy as np
 
 from omi_audio.clip import DEFAULT_SAMPLE_RATE
-from omi_physics import model
-from omi_physics.contactevents import PairPreview, Verdict
 
 from OpenGLContext.audio import sounds
 from OpenGLContext.audio.manager import Audio
 from OpenGLContext.events.framestep import FrameStep
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.callbacks import physics_callback
+from OpenGLContext.physics import CollisionFilter
 from OpenGLContext.physics.events import Collision
+from OpenGLContext.physics.filters import Approach
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
@@ -97,10 +97,9 @@ MASTER_GAIN = 0.5
 def definition() -> PhysicsDefinition:
     """The world the yard runs in, for the context's ``ContextDefinition.physics``.
 
-    The yard changes the live world between steps (its collision filters and
-    its contact verdict), which ``mode='inline'`` allows, and every body it has
-    is added by name, so the shapes it draws as decoration are not bodies
-    too (``colliders='explicit'``).
+    Every body the yard has is added by name, so the shapes it draws as
+    decoration are not bodies too (``colliders='explicit'``). It steps in the
+    frame, so the opening the tutorial plays is the same on every run.
     """
     return PhysicsDefinition(mode='inline', tickHz=TICK_HZ, maxCatchUp=0.1,
                              colliders='explicit')
@@ -152,13 +151,11 @@ class CollisionYard:
         self.root = basenodes.Group(children=[])
         for name, restitution in (('stone', 0.1), ('glass', 0.3), ('steel', 0.5)):
             physics.materials.define(name, restitution=restitution)
-        world = physics.world
         # The shards of a pane do not deflect the ball that broke it: a ball let
         # through before the solve is still passing the place they appear.
         self._filters = {
-            'ball': world.add_filter(model.CollisionFilter(collisionSystems=('ball',))),
-            'shard': world.add_filter(model.CollisionFilter(
-                collisionSystems=('shard',), notCollideWithSystems=('ball',))),
+            'ball': CollisionFilter(collisionSystems=('ball',)),
+            'shard': CollisionFilter(collisionSystems=('shard',), notCollideWithSystems=('ball',)),
         }
         #: The frame rate the ``c`` key caps the demo at, held for the context's loop.
         self.frames = FrameStep(longest=0.1)
@@ -189,7 +186,7 @@ class CollisionYard:
         self.plate.addEventHandler('enter', function=self._stepped_on)
         self.plate.addEventHandler('exit', function=self._stepped_off)
         self._pane_handlers = {'after': self._after_struck, 'before': self._before_struck}
-        world.set_contact_filter(self._verdict)
+        physics.set_contact_filter(self._verdict)
         self.mend()
 
         self.clips = {
@@ -203,7 +200,7 @@ class CollisionYard:
     # -- building ------------------------------------------------------------
     def _box(self, size: Sequence[float], position: Sequence[float], finish: Any,
              kind: str, mass: float = 1.0, material: str = 'stone',
-             collision_filter: int = -1, solid: bool = True) -> Body:
+             collision_filter: CollisionFilter | None = None, solid: bool = True) -> Body:
         """A box of ``kind`` (``'static'``, ``'dynamic'`` or ``'kinematic'``), drawn and in the world."""
         node = basenodes.Transform(translation=tuple(position), children=[
             _shape(basenodes.Box(size=tuple(size), solid=solid), finish)])
@@ -283,14 +280,11 @@ class CollisionYard:
         if breaks and name not in self.broken:
             self._shatter(name, hit.point, hit.normal)
 
-    def _verdict(self, pair: PairPreview) -> Verdict:
+    def _verdict(self, approach: Approach) -> bool:
         """Let a ball through the ``before`` pane when the blow would break it."""
         pane = self.panes.get('before')
-        if pane is not None and pair.impulse > PANE_STRENGTH:
-            world = self.physics.world
-            if pane.uid in (world.handle_of(pair.a), world.handle_of(pair.b)):
-                return Verdict.IGNORE_PAIR
-        return Verdict.SOLVE
+        return not (pane is not None and approach.impulse > PANE_STRENGTH
+                    and pane in (approach.first, approach.second))
 
     def _stepped_on(self, hit: Collision) -> None:
         if hit.other is not None:

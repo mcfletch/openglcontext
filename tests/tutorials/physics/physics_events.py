@@ -31,8 +31,7 @@ LANDED = 1.2
 
 class TestContext(BaseContext):
     '''The physics world is declared by the yard: ``definition()`` steps it in
-    the frame, which is what lets the yard change a contact's verdict between
-    steps.'''
+    the frame, so the opening below plays the same on every run.'''
     renderer = 'pbr'
     initialPosition = (2.5, 3.2, 12)
     contextDefinition = ContextDefinition(physics=definition())
@@ -41,7 +40,10 @@ class TestContext(BaseContext):
         '''The yard builds the scene and makes every handler.  Its
         ``__init__`` is where to read them: ``body.addEventHandler('hit',
         function=self._thud, above=IMPACT_FLOOR)`` for each crate and ball,
-        a ``hit`` handler on each pane, ``enter`` and ``exit`` on the plate.
+        a ``hit`` handler on each pane, ``enter`` and ``exit`` on the plate,
+        ``collision_filter=`` so a pane's shards let its ball through, and
+        ``physics.set_contact_filter`` to let a ball through a pane that the
+        blow breaks.
         It is given the context's ``physics`` and ``audio``; nothing in the
         script steps the world.'''
         self.yard = CollisionYard(self.physics, self.audio)
