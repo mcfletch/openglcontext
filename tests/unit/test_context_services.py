@@ -243,3 +243,16 @@ def test_a_recorded_session_runs_the_world_inline_and_writes_its_events_to_the_j
         assert [name for name, _fields in marks] == ['physics-hit']
     finally:
         made.releaseWindow()
+
+
+def test_a_frame_that_raises_is_logged_once_and_the_loop_goes_on(ctx, clock, caplog):
+    def broken(dt):
+        raise ValueError('the world fell over')
+
+    ctx.physics.frame = broken
+    clock.now += 0.02
+    ctx.renderQueue.run()
+    clock.now += 0.02
+    ctx.renderQueue.run()
+    assert sum(1 for record in caplog.records
+               if record.exc_info and 'the world fell over' in str(record.exc_info[1])) == 1

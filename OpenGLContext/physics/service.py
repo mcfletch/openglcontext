@@ -122,6 +122,8 @@ class Physics:
         self._enabled = bool(definition.enabled)
         self._gravity = tuple(float(v) for v in definition.gravity)
         self._closed = False
+        #: The last failure logged for each source and character (:meth:`_guarded`).
+        self._failures: weakref.WeakKeyDictionary[Any, tuple[type, str]] = weakref.WeakKeyDictionary()
         #: The worker error :meth:`frame` has raised, so it is raised once.
         self._raised: Exception | None = None
         #: Removed bodies whose handlers end once the world has applied the removal
@@ -1009,17 +1011,31 @@ class Physics:
                 np.abs(out.snapshot.linear_velocity).sum(axis=1) > 0.0))
             self._awake = bool(moving.any())
         for handle in list(self._sources):
-            handle.update()
+            self._guarded(handle, handle.update)
         walking = False
         for character in list(self._characters):
             if character.framed:
-                character.update(dt)
+                self._guarded(character, character.update, dt)
                 walking = walking or character.busy
         if out.events:
             self._dispatch(out.events)
         self._finish_removals()
         applied = self.render.apply()
         return bool(self._awake or applied or walking)
+
+    def _guarded(self, owner: Any, function: Callable[..., Any], *arguments: Any) -> None:
+        """Call ``function(*arguments)`` for ``owner``, a source or a character, in the frame.
+
+        An exception is logged with its traceback, once for each distinct
+        failure of each owner, and the frame goes on to the next.
+        """
+        try:
+            function(*arguments)
+        except Exception as error:  # noqa: BLE001 one owner's failure leaves the others framed
+            signature = (type(error), str(error))
+            if self._failures.get(owner) != signature:
+                self._failures[owner] = signature
+                log.exception('%r failed in the physics frame', owner)
 
     def _finish_removals(self) -> None:
         """End the handlers of the bodies the world has now removed and told its last events of."""

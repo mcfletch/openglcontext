@@ -1217,7 +1217,15 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         from OpenGLContext.events import systemtime  # noqa: PLC0415 only a context with physics reads the clock
 
         steps = self.__dict__['_physicsSteps']
-        if service.frame(steps.step(systemtime.systemTime())):
+        try:
+            moving = service.frame(steps.step(systemtime.systemTime()))
+        except Exception as error:  # noqa: BLE001 the frame is drawn whatever physics did
+            signature = (type(error), str(error))
+            if self.__dict__.get('_physicsFailure') != signature:
+                self.__dict__['_physicsFailure'] = signature
+                log.exception('the physics frame failed')
+            return
+        if moving:
             self.triggerRedraw(1)
 
     @property

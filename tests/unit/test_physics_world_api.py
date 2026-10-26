@@ -377,6 +377,53 @@ class Stones:
                        remove=gone)
 
 
+def logged(caplog, message):
+    """How many records carry an exception whose text has ``message``."""
+    return sum(1 for record in caplog.records
+               if record.exc_info and message in str(record.exc_info[1]))
+
+
+class Broken:
+    """A source whose update raises."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def update(self, focus):
+        self.calls += 1
+        raise ZeroDivisionError('the source divided by zero')
+
+
+def test_a_source_that_raises_is_logged_once_and_the_frame_goes_on(physics, caplog):
+    broken = Broken()
+    stones = Stones()
+    physics.add_collider_source(broken, focus=lambda: (0.0, 0.0, 0.0))
+    physics.add_collider_source(stones, focus=lambda: (0.0, 0.0, 0.0))
+    physics.frame(0.02)
+    physics.frame(0.02)
+    assert broken.calls == 2
+    assert len(stones.updates) == 2
+    assert logged(caplog, 'the source divided by zero') == 1
+
+
+def test_a_character_whose_update_raises_is_logged_once_and_the_frame_goes_on(physics, caplog):
+    physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)))
+    first = physics.add_character(position=(0, 0.05, 0))
+    second = physics.add_character(position=(3, 0.05, 0))
+    stepped = []
+
+    def broken(dt):
+        raise KeyError('the character lost its clip')
+
+    first.update = broken
+    real = second.update
+    second.update = lambda dt: stepped.append(dt) or real(dt)
+    physics.frame(0.02)
+    physics.frame(0.02)
+    assert len(stepped) == 2
+    assert logged(caplog, 'the character lost its clip') == 1
+
+
 def test_a_collider_source_adds_bodies_near_the_focus_and_drops_those_left_behind(physics):
     source = Stones()
     where = [0.0, 0.0, 0.0]

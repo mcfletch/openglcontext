@@ -758,8 +758,10 @@ and kept as ``physics.error``. The world takes no more steps and bodies stay
 where they were. A ``physics.run(fn)`` future fails with that exception, and
 ``physics.worker.settle()`` answers False at once. The next
 ``physics.frame(dt)`` raises a ``RuntimeError`` whose cause is that exception,
-once. A context's frame hook logs what ``frame`` raises and draws the frame,
-so physics never raises into the draw.
+once. A collider source or a character whose ``update`` raises in the frame is
+logged once for each distinct failure, and the frame goes on with the others.
+A context's frame hook logs what ``frame`` raises, once for each distinct
+failure, and draws the frame, so physics never raises into the draw.
 
 .. _model:
 
