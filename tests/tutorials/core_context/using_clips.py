@@ -18,7 +18,6 @@ from OpenGLContext.context import Context as BaseContext
 '''``CharacterModel`` is a rigged model and what can be done with it: the
 clips it carries, the skeleton they move, and the points something can be
 hung on.'''
-from OpenGLContext.events.systemtime import systemTime
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.loaders.gltf import sample_model_url
 from OpenGLContext.scenegraph.basenodes import (
@@ -50,7 +49,6 @@ class TestContext(BaseContext):
         for key in ('1', '2', '3'):
             self.addEventHandler('keypress', name=key, function=self.OnChoose)
         self.addEventHandler('keypress', name=' ', function=self.OnNext)
-        self.last = systemTime()
         print(__doc__)
 
     def OnLoaded(self, request):
@@ -67,20 +65,12 @@ class TestContext(BaseContext):
         like any other node.'''
         self.sg.children = list(self.sg.children) + [
             Transform(rotation=(0, 1, 0, 0.7), children=[self.model.group])]
-        self.last = systemTime()
-
-    def OnIdle(self, *arguments):
-        '''The clips advance when they are told how much time has passed.
-        ``update`` steps every layer and poses the skeleton; nothing moves
-        without it, and a paused game is a game that stops calling it.'''
-        if self.model is None:
-            return
-        now = systemTime()
-        self.model.update(now - self.last)
-        self.last = now
-        '''A posed figure is a changed scene, so the frame has to be drawn
-        again.'''
-        self.triggerRedraw(1)
+        '''The clips advance when the model is told how much time has passed:
+        ``model.update(dt)`` steps every layer and poses the skeleton.
+        ``animate`` has the context call it once a frame on the engine clock,
+        and draw a frame each time. It returns a handle whose ``stop()`` pauses
+        the model where it is.'''
+        self.animating = self.animate(self.model)
 
     def OnChoose(self, event):
         self.index = int(event.name) - 1
