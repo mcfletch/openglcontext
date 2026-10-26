@@ -830,22 +830,45 @@ class Physics:
                           length=length, collide=collide)
 
     def remove(self, body: Body) -> None:
-        """Take ``body`` out of the world, with its joints. Removing twice is harmless."""
+        """Take ``body`` out of the world, with its joints. Removing twice is harmless.
+
+        From a physics callback the world drops the body at once and the
+        service's own tables let go of it in the next :meth:`frame`.
+        """
         if not body.alive:
             return
-        if body.uid in self._passable:
-            replica = self._replica
-            if replica is not None and body.uid in replica:
-                for character in self._characters:
-                    character.controller.ignore.discard(replica.index_of(body.uid))
-            self._passable.discard(body.uid)
+        body.alive = False
+        on_worker = self.worker.on_worker_thread()
+        if on_worker:
+            self.render.call(self._unpass, body.uid)
+        else:
+            self._unpass(body.uid)
+        seq = 0
         if not self._closed:
             seq = next(self._seq)
             self._send(Command('remove', body.uid, (), seq))
+        if on_worker:
+            self.render.call(self._forget, body, seq)
+        else:
+            self._forget(body, seq)
+
+    def _unpass(self, uid: int) -> None:
+        """Have the characters' controllers stop walking through body ``uid``'s slot,
+        before the slot is freed for another body."""
+        if uid in self._passable:
+            replica = self._replica
+            if replica is not None and uid in replica:
+                for character in self._characters:
+                    character.controller.ignore.discard(replica.index_of(uid))
+            self._passable.discard(uid)
+
+    def _forget(self, body: Body, seq: int) -> None:
+        """Let go of removed ``body`` in the render thread's tables; ``seq`` is its removal's
+        sequence, after which its handlers end, or 0 to end them now."""
+        if seq:
             self._gone.append((seq, body.uid))
         else:
             self.handlers.forget_body(body.uid)
-        body.alive = False
         if body.derived:
             self.scenery.release(body.node)
         self._bodies.pop(body.uid, None)
@@ -904,7 +927,23 @@ class Physics:
         return seq
 
     def _send(self, command: Command) -> None:
-        """Send ``command`` to the worker and keep the replica, where there is one, in step."""
+        """Send ``command`` to the worker and keep the specs and the replica in step.
+
+        The specs and the replica belong to the render thread: a command made
+        on the worker thread is applied to the world at once and to them in
+        the next :meth:`frame`.
+        """
+        if self.worker.on_worker_thread():
+            self.worker.submit(command)
+            self.render.call(self._record, command)
+            return
+        try:
+            self._record(command)
+        finally:
+            self.worker.submit(command)
+
+    def _record(self, command: Command) -> None:
+        """Bring the specs, and the replica where there is one, to what ``command`` makes of the world."""
         if command.op == 'add':
             self._specs[command.uid] = command.args[0]
         elif command.op == 'add_many':
@@ -917,7 +956,6 @@ class Physics:
             self._specs.pop(command.args[0], None)
         if self._replica is not None:
             self._replica.apply(command)
-        self.worker.submit(command)
 
     @staticmethod
     def _respec_placed(spec: BodySpec, translation: Any, axis_angle: Any) -> BodySpec:

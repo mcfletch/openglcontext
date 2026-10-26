@@ -425,9 +425,11 @@ provides it for other code.
   handler cannot change that step. Its return value is ignored.
 - A physics handler is called on the thread that steps the world, right after
   the step that made the event, with the world as that step left it. A slow
-  one slows the simulation. It may call any ``Body`` method, which applies at
-  once, and must not assign scene fields, since the render thread may be
-  drawing them.
+  one slows the simulation. It may call any ``Body`` method and
+  ``physics.remove``, which apply to the world at once, and must not assign
+  scene fields, since the render thread may be drawing them. The service's
+  render-thread tables (the bodies by node, the copy queries read on a
+  threaded world) follow such a change in the next frame.
 
 A physics handler sends scene changes with ``physics.render``:
 

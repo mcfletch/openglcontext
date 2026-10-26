@@ -604,3 +604,43 @@ def test_a_place_waiting_behind_a_callback_write_is_not_read_as_applied():
     finally:
         posted.set()
         service.close()
+
+
+def test_a_physics_callback_leaves_the_render_threads_tables_to_the_render_thread():
+    service = make(mode='thread')
+    removed = threading.Event()
+    touched = []
+    try:
+        service.add_static(block((20, 1, 20), at=(0, -0.5, 0)))
+        crate = service.add_dynamic(ball(at=(0, 3, 0)))
+        other = service.add_dynamic(ball(at=(4, 3, 0)))
+        service.raycast((0, 10, 0), (0, -1, 0))          # the render thread's replica now exists
+        replica = service._replica
+        real_apply = replica.apply
+
+        def recording(command):
+            touched.append(threading.get_ident())
+            return real_apply(command)
+
+        replica.apply = recording
+
+        @physics_callback
+        def remove_it(step):
+            if crate.alive:
+                other.set_velocity((1.0, 0.0, 0.0))
+                service.remove(crate)
+                removed.set()
+
+        service.addEventHandler('before-step', remove_it)
+        assert removed.wait(5.0)
+        assert service.worker.settle()
+        assert crate.uid not in service.worker.runtime
+        assert crate.uid in service._bodies and crate.uid in service._specs
+        assert touched == []
+        service.frame(0.02)
+        assert crate.uid not in service._bodies and crate.uid not in service._specs
+        assert crate not in service._movers
+        assert touched and set(touched) == {threading.get_ident()}
+        assert crate.uid not in replica
+    finally:
+        service.close()
