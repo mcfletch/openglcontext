@@ -830,3 +830,113 @@ class TestAfterTheEnd:
 
     def test_a_voice_has_a_readable_repr(self, audio: Audio, tone: Any) -> None:
         assert 'live playing' in repr(audio.play(tone))
+
+
+class TestMix:
+    def test_mix_before_the_engine_exists_is_applied_when_it_opens(self, tone: Any) -> None:
+        factory = Factory()
+        audio = Audio(engine_factory=factory)
+        assert audio.mix == 1.0
+        audio.mix = 0.2
+        assert audio.mix == pytest.approx(0.2)
+        assert factory.engines == []
+        audio.play(tone)
+        assert factory.engine.master_gain == pytest.approx(0.2)
+        audio.close()
+
+    def test_mix_scales_what_is_heard_and_leaves_the_players_volume(self, tone: Any) -> None:
+        factory = Factory()
+        audio = Audio(engine_factory=factory)
+        audio.play(tone, loop=True)
+        full = heard(factory.engine)[0]
+        audio.mix = 0.25
+        assert heard(factory.engine)[0] == pytest.approx(full * 0.25, rel=0.05)
+        assert audio.volume == pytest.approx(1.0)
+        audio.close()
+
+    def test_mix_set_from_another_thread_reaches_the_engine_at_the_frame(
+            self, tone: Any) -> None:
+        factory = Factory()
+        audio = Audio(engine_factory=factory)
+        audio.play(tone)
+        on_thread(lambda: setattr(audio, 'mix', 0.5))
+        assert factory.engine.master_gain == pytest.approx(1.0)
+        audio.frame()
+        assert factory.engine.master_gain == pytest.approx(0.5)
+        audio.close()
+
+    def test_a_negative_mix_is_refused(self, audio: Audio) -> None:
+        with pytest.raises(ValueError):
+            audio.mix = -0.1
+
+
+class TestNamedClips:
+    def test_an_added_clip_plays_by_its_name(
+            self, audio: Audio, factory: Factory, tone: Any) -> None:
+        audio.add('hum', tone)
+        assert audio.play('hum').playing
+        assert heard(factory.engine)[0] > 0.0
+
+    def test_an_added_clip_is_what_a_scene_source_of_that_name_finds(
+            self, factory: Factory, tone: Any) -> None:
+        audio = Audio(engine_factory=factory)
+        audio.add('hum', tone)
+        engine = audio.engine
+        assert engine is not None
+        assert engine.clips.get('hum') is tone
+        audio.add('later', tone)
+        assert engine.clips.get('later') is tone
+        audio.close()
+
+    def test_a_clip_added_on_another_thread_reaches_the_scene_at_the_frame(
+            self, factory: Factory, tone: Any) -> None:
+        audio = Audio(engine_factory=factory)
+        engine = audio.engine
+        assert engine is not None
+        on_thread(lambda: audio.add('hum', tone))
+        assert 'hum' not in engine.clips
+        audio.frame()
+        assert engine.clips.get('hum') is tone
+        audio.close()
+
+
+class TestWhatIsPlaying:
+    def test_level_is_nothing_with_no_engine_or_no_voice(self, audio: Audio, tone: Any) -> None:
+        assert audio.level == 0.0
+        voice = audio.play(tone)
+        voice.stop()
+        assert audio.level == 0.0
+
+    def test_level_follows_the_voice_gain_and_the_mix(
+            self, audio: Audio, factory: Factory, tone: Any) -> None:
+        audio.play(tone, loop=True)
+        heard(factory.engine)
+        loud = audio.level
+        assert 0.0 < loud <= 1.0
+        audio.mix = 0.5
+        assert audio.level == pytest.approx(loud * 0.5)
+
+    def test_a_distant_sound_has_a_lower_level(
+            self, audio: Audio, factory: Factory, tone: Any) -> None:
+        voice = audio.play(tone, at=(1.0, 0.0, 0.0), loop=True)
+        heard(factory.engine)
+        near = audio.level
+        voice.stop()
+        audio.play(tone, at=(40.0, 0.0, 0.0), loop=True)
+        heard(factory.engine)
+        assert audio.level < near
+
+    def test_describe_names_the_output_the_voices_and_the_settings(
+            self, audio: Audio, tone: Any) -> None:
+        assert audio.describe() == 'audio: not open'
+        audio.play(tone, loop=True)
+        audio.mix = 0.5
+        line = audio.describe()
+        assert line.startswith('audio: silent')
+        assert 'voices 1' in line and 'mix 0.50' in line and 'muffle 0.00' in line
+        assert audio.silent
+
+    def test_describe_says_when_sound_is_switched_off(self) -> None:
+        audio = Audio(settings=AudioSettings(enabled=0))
+        assert audio.describe() == 'audio: off'
+        assert audio.silent

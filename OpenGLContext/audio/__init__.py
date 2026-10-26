@@ -20,6 +20,10 @@ What is here is the two seams between that engine and a context:
 :mod:`~.manager`           :class:`~.manager.Audio`, sounds played by call from
                            any thread (``audio.play('thud.ogg', at=point)``),
                            started on the render thread, with no GL.
+:mod:`~.sounds`            Clips made in code (``sounds.impact(0.25)``) and
+                           how far a sound carries
+                           (``sounds.positional(near=3.0)``), so a game names
+                           no ``omi_audio`` module for ordinary sounds.
 :mod:`~.x3dgraph`          :class:`~.x3dgraph.SoundGraph`, a scene's X3D sound
                            nodes as one engine's processing graph, kept in
                            step once a frame.

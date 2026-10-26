@@ -145,13 +145,15 @@ class TestVoices:
 
 
 class TestSettings:
-    def test_volume_and_muffle_are_recorded_and_read_back(self, audio: RecordingAudio) -> None:
+    def test_volume_muffle_and_mix_are_recorded_and_read_back(self, audio: RecordingAudio) -> None:
         audio.volume = 0.4
         audio.muffle = 1.0
+        audio.mix = 0.3
         assert audio.volume == pytest.approx(0.4)
         assert audio.muffle == 1.0
+        assert audio.mix == pytest.approx(0.3)
         assert [(call.kind, call.value) for call in audio.calls] == [
-            ('volume', 0.4), ('muffle', 1.0)]
+            ('volume', 0.4), ('muffle', 1.0), ('mix', 0.3)]
 
     def test_given_settings_are_the_ones_written(self) -> None:
         settings = AudioSettings(volume=0.9)

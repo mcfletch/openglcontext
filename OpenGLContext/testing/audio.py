@@ -35,7 +35,7 @@ class Call:
     """One call made on a :class:`RecordingAudio`.
 
     ``kind`` is ``'play'``, ``'load'``, ``'update'`` (a voice's gain or rate set),
-    ``'stop'``, ``'volume'`` or ``'muffle'``. A play carries the arguments it was
+    ``'stop'``, ``'volume'``, ``'muffle'`` or ``'mix'``. A play carries the arguments it was
     made with and its ``voice``; a load carries the path as ``source`` and the
     name as ``value``; an update carries the voice with its ``gain`` and ``rate``
     after the change; a setting carries its new ``value``.

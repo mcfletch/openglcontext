@@ -80,6 +80,8 @@ OpenGLContext/
 │   ├── manager.py    # Audio: sounds played by call (play, load, volume,
 │   │                 # muffle) from any thread, started on the render thread
 │   │                 # -- no GL -- docs/audio.rst#audio-play
+│   ├── sounds.py     # Clips made in code (tones, impacts, rumbles) and how
+│   │                 # far a sound carries (positional) -- no GL -- docs/audio.rst#audio-synth
 │   ├── x3dgraph.py   # A scene's X3D sound nodes as one engine's processing
 │   │                 # graph, kept in step once a frame -- no GL
 │   └── vehicle.py    # A road vehicle's motor, tyres, wind and impacts as

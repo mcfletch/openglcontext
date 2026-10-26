@@ -79,7 +79,9 @@ and a sound can overlap itself:
    voice.stop()
 
    self.audio.load('thud', 'sounds/thud.ogg')   # decoded now, played later as 'thud'
+   self.audio.add('ping', sounds.impact(0.4))   # a clip made in code, played as 'ping'
    self.audio.volume = 0.8                      # the player's volume
+   self.audio.mix = 0.5                         # the application's level under it
 
 ``play`` takes these arguments and returns a ``Voice`` at once:
 
@@ -90,8 +92,9 @@ and a sound can overlap itself:
    * - Argument
      - Means
    * - ``source``
-     - A file path, an http(s) URL, a name given to ``load``, or an
-       ``omi_audio.Clip`` such as one from ``omi_audio.synth``. Files and URLs
+     - A file path, an http(s) URL, a name given to ``load`` or ``add``, or
+       a ``Clip`` such as one from :mod:`OpenGLContext.audio.sounds`
+       (:ref:`audio-synth`). Files and URLs
        are decoded on the first play and kept by name. A URL is fetched on
        that first play, so ``load`` it ahead.
    * - ``at``
@@ -113,8 +116,10 @@ and a sound can overlap itself:
    * - ``loop``
      - Repeats until ``stop()``.
    * - ``emitter``
-     - An ``omi_audio.model.AudioEmitter`` giving the distance curve and the
-       cone. A sound placed with ``at`` and no ``emitter`` gets the default
+     - How the sound fades with distance: ``sounds.positional(near=3.0,
+       rolloff=0.8)`` is at full level within 3 m and falls off beyond, more
+       slowly than the default. An ``omi_audio.model.AudioEmitter`` also gives
+       a cone. A sound placed with ``at`` and no ``emitter`` gets the default
        profile: inverse distance from 1 metre.
 
 A ``Voice`` has ``gain`` and ``rate`` to set, ``stop()`` and ``playing``. A
@@ -134,6 +139,19 @@ The audio object has these properties:
        (:ref:`audio-settings`).
    * - ``muffle``
      - 0 clear to 1 underwater (:ref:`audio-muffle`).
+   * - ``mix``
+     - The application's level for the whole mix, 1.0 as recorded. It
+       multiplies the player's ``volume`` (:ref:`audio-settings`).
+   * - ``level``
+     - The loudest voice as it reaches the output, 0 to 1: its gain after
+       distance and direction, times ``mix`` and ``volume``. A test or a meter
+       reads it; render thread only.
+   * - ``silent``
+     - Whether nothing can be heard: sound off, no engine open yet, or a
+       silent device.
+   * - ``describe()``
+     - One line naming the output device, the voices playing, the volume, the
+       mix and the muffle, for a start-up log.
    * - ``listener``
      - The view platform sounds are heard from. ``None`` is the context's
        camera.
@@ -460,11 +478,10 @@ were closing, in metres per second, which sets how loud the sound is:
 
 .. code-block:: python
 
-   from omi_audio import model, synth
+   from OpenGLContext.audio import sounds
 
-   THUD = synth.impact(0.15, seed=3)            # or a file name
-   PLACED = model.AudioEmitter(
-       positional=model.PositionalProperties(refDistance=2.0))
+   THUD = sounds.impact(0.15, seed=3)           # or a file name
+   PLACED = sounds.positional(near=2.0)
 
    def OnInit(self):
        ...
@@ -560,16 +577,27 @@ takes one again when one is free.
 Sounds the game computes
 ------------------------
 
-``omi_audio.synth`` makes clips from arithmetic: tones, chirps, noise, impacts
-and rumbles. They need no files, so they work as placeholders while a game is
-being built. ``useClip()`` gives one to an ``AudioSource``:
+:mod:`OpenGLContext.audio.sounds` makes clips from arithmetic: ``tone``,
+``chirp``, ``noise``, ``impact``, ``rumble``, ``silence``, the looping beds
+``surf`` and ``birdsong``, and ``reverberated`` and ``echoed`` to add a room or an
+echo to a clip. Durations are in seconds and frequencies in hertz. The clips need
+no files, so they work as placeholders while a game is being built.
+``sequence(*clips)`` joins clips end to end, and ``positional(near, rolloff, far,
+curve)`` is the emitter ``play`` takes for how a sound fades with distance.
 
 .. code-block:: python
 
-   from omi_audio import synth
+   from OpenGLContext.audio import sounds
+
+   notes = [sounds.tone(f, 0.16, harmonics=4) for f in (523.25, 659.25, 783.99)]
+   self.audio.play(sounds.sequence(*notes), at=target, emitter=sounds.positional(near=3.0))
+
+``useClip()`` gives a clip to an ``AudioSource``:
+
+.. code-block:: python
 
    motor = AudioSource(loop=True, gain=0.0)
-   motor.useClip(synth.tone(110.0, 1.0, harmonics=7, fade=0.0))
+   motor.useClip(sounds.tone(110.0, 1.0, harmonics=7, fade=0.0))
    car_body.children.append(AudioEmitter(sources=[motor]))
 
    def OnIdle(self, *arguments):
@@ -587,12 +615,14 @@ pulse. For a loop, pass ``fade=0.0`` and give ``tone()`` a whole number of
 cycles (110 Hz for 1 second is 110), or use ``rumble()`` with ``decay=0.0``
 and ``attack=0.0``.
 
-A generated clip can also be registered by name and played through the engine:
+A generated clip can also be given a name. ``play`` takes the name, and so does
+the ``url`` of a scene's ``AudioSource``:
 
 .. code-block:: python
 
-   engine.clips.put('ping', synth.impact(0.4, seed=1))
-   engine.play('ping', priority=1.0)
+   self.audio.add('ping', sounds.impact(0.4, seed=1))
+   self.audio.play('ping', priority=1.0)
+   AudioEmitter(sources=[AudioSource(url=['ping'])])
 
 .. _audio-vehicle:
 
@@ -737,7 +767,7 @@ The environment variables are listed with the others in :doc:`environment`.
 
 There are two volume controls, and the mixer uses their product. The settings
 screen and a volume key write ``context.contextDefinition.audio.volume``, the
-player's volume. The application sets ``engine.master_gain`` once, to how loud
+player's volume. The application sets ``context.audio.mix`` once, to how loud
 the scene is authored to be. Copying one into the other each frame undoes
 every change to the one being overwritten. ``context.audio.volume`` reads
 and writes the player's volume.
@@ -747,12 +777,12 @@ and writes the player's volume.
 Muffling
 --------
 
-``engine.muffle`` runs from 0 (clear) to 1 (underwater) and takes the treble
-off everything the player hears. It is a blend, so it can be faded in:
+``context.audio.muffle`` runs from 0 (clear) to 1 (underwater) and takes the
+treble off everything the player hears. It is a blend, so it can be faded in:
 
 .. code-block:: python
 
-   engine.muffle = min(1.0, depth_below_surface / 0.5)
+   self.audio.muffle = min(1.0, depth_below_surface / 0.5)
 
 :doc:`Water <water>` sets it when the camera goes under the surface. A pure
 tone has no treble to remove, so it only gets quieter; a sound with harmonics

@@ -31,6 +31,7 @@ from typing import Any, NamedTuple
 import numpy as np
 from omi_audio import model
 from omi_audio.clip import Clip, DecodeError, decode_bytes
+from omi_audio.device import describe as describe_device
 from omi_audio.device import open_device
 from omi_audio.engine import DEFAULT_FORWARD, AudioEngine
 from omi_audio.mixer import VoiceHandle
@@ -228,6 +229,10 @@ class Audio:
         self._tracked: list[Voice] = []
         self._muffle: float | None = None
         self._muffle_pending = False
+        self._mix: float | None = None
+        self._mix_pending = False
+        #: Names given to :meth:`add` that the engine's clip cache does not hold yet.
+        self._unpublished: set[str] = set()
 
     # ------------------------------------------------------------------
     # Threads
@@ -284,6 +289,64 @@ class Audio:
         else:
             self._muffle_pending = True
 
+    @property
+    def mix(self) -> float:
+        """The application's level for its whole mix, 1.0 as recorded.
+
+        It multiplies the player's :attr:`volume`, which stays the player's
+        own: a demo that plays quietly sets this, and the settings screen still
+        moves the volume over it.
+        """
+        if self._engine is not None:
+            return float(self._engine.master_gain)
+        return self._mix if self._mix is not None else 1.0
+
+    @mix.setter
+    def mix(self, value: float) -> None:
+        if not float(value) >= 0.0:
+            raise ValueError('mix is a gain of zero or more, not %r' % (value,))
+        self._mix = float(value)
+        self._setting_changed('mix', self._mix)
+        if self._engine is not None and self._on_render_thread():
+            self._engine.master_gain = self._mix
+        else:
+            self._mix_pending = True
+
+    # ------------------------------------------------------------------
+    # What is playing
+    # ------------------------------------------------------------------
+
+    @property
+    def silent(self) -> bool:
+        """Whether nothing can be heard: sound switched off, no engine open, or a silent device."""
+        engine = self._engine
+        return not self.enabled or engine is None or bool(engine.silent)
+
+    @property
+    def level(self) -> float:
+        """The loudest voice's level as it reaches the output, from 0 to 1.
+
+        The voice's gain after distance and direction, times the mix and the
+        volume; 0 with no engine or no voice playing. Render thread only.
+        """
+        engine = self._engine
+        if engine is None:
+            return 0.0
+        loudest = max((voice.audibility for voice in engine.mixer.voices if voice.active),
+                      default=0.0)
+        return float(engine.master_gain * engine.volume * loudest)
+
+    def describe(self) -> str:
+        """One line naming the output, the voices playing and the levels, for a log or an overlay."""
+        if not self.enabled:
+            return 'audio: off'
+        engine = self._engine
+        if engine is None:
+            return 'audio: not open'
+        return '%s | voices %d | volume %.2f | mix %.2f | muffle %.2f' % (
+            describe_device(engine.device), engine.active_voices, engine.volume,
+            engine.master_gain, engine.muffle)
+
     # ------------------------------------------------------------------
     # The engine
     # ------------------------------------------------------------------
@@ -321,7 +384,11 @@ class Audio:
         if self._muffle is not None:
             engine.muffle = self._muffle
         self._muffle_pending = False
+        if self._mix is not None:
+            engine.master_gain = self._mix
+        self._mix_pending = False
         self._engine = engine
+        self._publish(engine)
         return engine
 
     def _warn_once(self, key: str, message: str, *arguments: Any) -> None:
@@ -348,6 +415,28 @@ class Audio:
         clip = self._decode(os.fspath(path), name)
         if clip is not None:
             self._clips[name] = clip
+
+    def add(self, name: str, clip: Clip) -> None:
+        """Make ``clip`` playable as ``name``, by :meth:`play` and by the scene's sources.
+
+        An ``AudioSource`` node whose url is ``name`` plays it, so a scene can
+        name a sound made in code (:mod:`OpenGLContext.audio.sounds`). Safe from
+        any thread; the scene's nodes find it from the next :meth:`frame`.
+        """
+        self._clips[name] = clip
+        self._failed.discard(name)
+        self._unpublished.add(name)
+        engine = self._engine
+        if engine is not None and self._on_render_thread():
+            self._publish(engine)
+
+    def _publish(self, engine: AudioEngine) -> None:
+        """Put the clips given to :meth:`add` in ``engine``'s cache. Render thread only."""
+        while self._unpublished:
+            name = self._unpublished.pop()
+            clip = self._clips.get(name)
+            if clip is not None:
+                engine.clips.put(name, clip)
 
     def _decode(self, location: str, key: str) -> Clip | None:
         """The clip at a file or URL, or None with ``key`` remembered as failed.
@@ -543,6 +632,10 @@ class Audio:
         if self._muffle_pending and self._muffle is not None:
             engine.muffle = self._muffle
             self._muffle_pending = False
+        if self._mix_pending and self._mix is not None:
+            engine.master_gain = self._mix
+            self._mix_pending = False
+        self._publish(engine)
         platform = self.listener if self.listener is not None else _camera(self._owner)
         if platform is not None:
             engine.listen(platform)

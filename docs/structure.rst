@@ -228,7 +228,8 @@ simulation packages update.
    * - ``audio``
      - The scenegraph's audio nodes, the per-context engine that plays them, and
        the ``Audio`` a context hosts for sounds played with a call, on
-       ``omi_audio``.
+       ``omi_audio``; ``sounds`` makes clips in code and says how far a sound
+       carries.
      - :doc:`Spatial audio <audio>`
    * - ``video``
      - Video capture of what a context drew, and a ``MovieTexture``'s movie
