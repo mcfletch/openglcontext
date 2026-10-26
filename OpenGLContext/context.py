@@ -369,6 +369,10 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: it is not paused, sets this false and calls
     #: :meth:`~OpenGLContext.physics.service.Physics.frame` itself.
     stepsPhysics: ClassVar[bool] = True
+    #: The identity of the thread that draws this context, set when its window
+    #: opens; the physics and audio services belong to it whichever thread
+    #: first asks for them. None before then, which names the asking thread.
+    _renderThread: int | None = None
 
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration
@@ -1029,6 +1033,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if threading:
             contextThread = threading.current_thread()
             contextThread.name = "GUIThread"
+            self._renderThread = threading.get_ident()
         self.setupScenegraphLock()
         self.setupRedrawRequest()
 
@@ -1192,7 +1197,8 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         request = getattr(self, 'redrawRequest', None)
         service = Physics(definition, wake=None if request is None else request.set,
                           mark=self.mark, recording=lambda: self.telemetry is not None,
-                          audio=lambda: self.audio, mount=self._mountOverlay)
+                          audio=lambda: self.audio, mount=self._mountOverlay,
+                          render_thread=self._renderThread)
         self.__dict__['_physicsSteps'] = FrameStep(longest=float(definition.maxCatchUp))
         queue = getattr(self, 'renderQueue', None)
         if queue is not None:
@@ -1244,7 +1250,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     def _makeAudio(self) -> Audio:
         from OpenGLContext.audio.manager import Audio
 
-        service = Audio(self)
+        service = Audio(self, render_thread=self._renderThread)
         queue = getattr(self, 'renderQueue', None)
         if queue is not None:
             queue.before_run(self._frameAudio)

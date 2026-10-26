@@ -202,13 +202,16 @@ class Audio:
     engine the scene nodes already share. ``engine_factory`` makes the
     :class:`~omi_audio.engine.AudioEngine` on the first play; it may return None
     for no sound. ``settings`` overrides the owner's. ``follow`` turns a scene
-    node passed as ``at=`` into a world position each frame.
+    node passed as ``at=`` into a world position each frame. ``render_thread``
+    is the identity of the thread that frames the audio and starts the engine;
+    None names the thread that makes the object.
     """
 
     def __init__(self, owner: Any = None, *,
                  engine_factory: Callable[[], AudioEngine | None] | None = None,
                  settings: AudioSettings | None = None,
-                 follow: Placement | None = None) -> None:
+                 follow: Placement | None = None,
+                 render_thread: int | None = None) -> None:
         self._owner = owner
         self._factory = engine_factory
         self._explicit_settings = settings
@@ -217,7 +220,7 @@ class Audio:
         self.follow = follow
         #: The view platform the sounds are heard from; None for the owner's camera.
         self.listener: ViewPlatform | None = None
-        self._render_thread = threading.get_ident()
+        self._render_thread = threading.get_ident() if render_thread is None else render_thread
         self._inbox = Inbox()
         self._engine: AudioEngine | None = None
         self._engine_failed = False

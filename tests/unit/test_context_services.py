@@ -256,3 +256,16 @@ def test_a_frame_that_raises_is_logged_once_and_the_loop_goes_on(ctx, clock, cap
     ctx.renderQueue.run()
     assert sum(1 for record in caplog.records
                if record.exc_info and 'the world fell over' in str(record.exc_info[1])) == 1
+
+
+def test_services_first_touched_on_another_thread_belong_to_the_render_thread():
+    made = _Context()
+    made._renderThread = threading.get_ident()
+    touched = threading.Thread(target=lambda: (made.audio, made.physics))
+    touched.start()
+    touched.join(5.0)
+    try:
+        assert made.audio._on_render_thread()
+        assert made.physics.render._owner == threading.get_ident()
+    finally:
+        made.releaseWindow()

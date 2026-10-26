@@ -85,7 +85,8 @@ class Physics:
                  mark: Callable[..., Any] | None = None,
                  recording: Callable[[], bool] | None = None,
                  audio: Callable[[], Any] | None = None,
-                 mount: Callable[[Any, bool], Any] | None = None) -> None:
+                 mount: Callable[[Any, bool], Any] | None = None,
+                 render_thread: int | None = None) -> None:
         definition = definition if definition is not None else PhysicsDefinition()
         definition.validate()
         self.definition = definition
@@ -103,7 +104,7 @@ class Physics:
         #: The collision filters sent to the world (``collision_filter=`` of the ``add_*`` calls).
         self.filters = Filters(lambda index, given: self._send_world('filter', index, given))
         #: Scene changes the worker queues for the render thread (``render.set`` and ``render.call``).
-        self.render = Updates(wake=wake)
+        self.render = Updates(wake=wake, owner=render_thread)
         self.handlers = HandlerTable()
         self._uids = itertools.count(1)
         self._seq = itertools.count(1)

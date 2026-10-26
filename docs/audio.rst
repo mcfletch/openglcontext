@@ -170,7 +170,11 @@ voice at once and the context starts the sound at the next frame, so it is
 heard at most one frame late. ``voice.stop()`` before that frame cancels the
 start, and ``gain`` and ``rate`` set from a thread are applied at the same
 frame. The engine itself is single-threaded, and only the context's frame and
-render-thread calls touch it. A program that makes its own ``Audio`` calls
+render-thread calls touch it. The render thread is the one that opened the
+context's window, even where another thread asks for ``context.audio`` first.
+A program that makes its own ``Audio`` names its render thread with
+``render_thread=threading.get_ident()`` on that thread, or makes the object
+there; it calls
 ``audio.frame()`` once a frame, after the scene's audio update, and
 ``audio.close()`` when it ends.
 

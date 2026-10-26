@@ -74,14 +74,15 @@ class Inbox:
 class Updates:
     """Scene changes a worker queues for the render thread.
 
-    The thread that makes the object is the render thread; :meth:`bind` names
-    another. ``wake`` is called by a worker that queues something, to have the
-    loop draw a frame in which :meth:`apply` runs.
+    ``owner`` is the identity of the render thread; None names the thread that
+    makes the object, and :meth:`bind` names another. ``wake`` is called by a
+    worker that queues something, to have the loop draw a frame in which
+    :meth:`apply` runs.
     """
 
-    def __init__(self, wake: Callable[[], Any] | None = None) -> None:
+    def __init__(self, wake: Callable[[], Any] | None = None, owner: int | None = None) -> None:
         self._wake = wake
-        self._owner = threading.get_ident()
+        self._owner = threading.get_ident() if owner is None else owner
         self._lock = threading.Lock()
         self._sets: dict[tuple[Any, str], Any] = {}
         self._calls: collections.deque[tuple[Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = (
