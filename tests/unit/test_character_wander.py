@@ -607,15 +607,13 @@ class TestTheDemoDoesNotMoonwalk:
     # Each clip over the speeds the demo actually plays it at: a gallop dialled
     # down to a stroll has a suspension phase and nothing on the ground to
     # measure, and the demo never asks for one.
-    @pytest.mark.parametrize('clip,stride,speed', [
-        ('WALK', 'WALK_STRIDE', 0.55), ('WALK', 'WALK_STRIDE', 0.8),
-        ('WALK', 'WALK_STRIDE', 1.1),
-        ('RUN', 'RUN_STRIDE', 1.2), ('RUN', 'RUN_STRIDE', 1.4),
-        ('RUN', 'RUN_STRIDE', 1.65),
+    @pytest.mark.parametrize('role,speed', [
+        ('walk', 0.55), ('walk', 0.8), ('walk', 1.1),
+        ('run', 1.2), ('run', 1.4), ('run', 1.65),
     ])
-    def test_what_touches_the_ground_stays_on_it(self, demo, figure,
-                                                 clip, stride, speed):
-        name, carries = getattr(demo, clip), getattr(demo, stride)
+    def test_what_touches_the_ground_stays_on_it(self, demo, figure, role, speed):
+        spec = demo.CLIPS.spec(role)
+        name, carries = spec.clip, spec.speed
         model = _figure(figure)
         track = model.play(name)
         mesh = next(_skinned(model.group))
@@ -648,8 +646,8 @@ class TestTheDemoDoesNotMoonwalk:
         assert drift < speed * FOOT_DRIFT, (
             '%s: what is on the ground travels %.3f m/s over it at a body '
             'speed of %.2f -- the figure is going through its cycle backwards, '
-            'or %s is not what the clip carries it'
-            % (name, drift, speed, stride))
+            'or %.2f m/s is not what the clip carries it'
+            % (name, drift, speed, carries))
 
 
 def _skinned(node):
