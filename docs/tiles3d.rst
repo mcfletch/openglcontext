@@ -203,11 +203,11 @@ directly from the URL, with no download step. These samples load:
 
 .. code-block:: bash
 
-   # Cesium "dragon" — b3dm, an ECEF transform and a low/medium/high LOD chain
+   # Cesium "dragon": b3dm, an ECEF transform and a low/medium/high LOD chain
    oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.0/TilesetWithDiscreteLOD/tileset.json
    #   add --sse 0.02 to load the finest level of detail over the network
 
-   # 1.1 glTF-native scene — houses and trees, several glTF contents per tile
+   # 1.1 glTF-native scene: houses and trees, several glTF contents per tile
    oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MetadataGranularities/tileset.json
 
    # 1.1 multiple-contents plane

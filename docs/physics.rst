@@ -913,9 +913,11 @@ does.
 
 A step reads only the static bodies the world recorded as added, removed or
 placed since the step before (``PhysicsWorld.layout_epoch``); the others are not
-compared, refitted or copied. A pose written straight into a static body's
-``position`` or ``orientation`` is recorded with ``PhysicsWorld.moved(rows)``,
-and ``OMI_PHYSICS_CHECK_STATICS=1`` makes a step raise for one that was not. A
+compared, refitted or copied. The world's ``position`` and ``orientation`` are
+read-only: ``PhysicsWorld.place_body`` places a body and records it, and a pose
+written through ``PhysicsWorld.pose_arrays()`` into a static body is recorded
+with ``PhysicsWorld.moved(rows)``. ``OMI_PHYSICS_CHECK_STATICS=1`` makes a step
+raise for one that was not. A
 step with no awake dynamic body, trigger, sensor or touching pair skips the
 collision pass, as does a step in a world with no dynamic body where no
 kinematic body's box meets a trigger's, and a world with a few moving bodies is

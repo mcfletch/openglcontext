@@ -69,7 +69,7 @@ DEM reader, or terrain with a road's earthworks cut into it. The renderer and
 the physics use a grid. ``HeightField.from_function(fn, res, extent)`` samples
 the function over the square to make that grid. By default it sets ``base``
 and ``relief`` from the lowest and highest heights the function produces, so
-the whole 0–1 range of the grid covers the ground that is there.
+the whole 0 to 1 range of the grid covers the ground that is there.
 
 .. code-block:: python
 

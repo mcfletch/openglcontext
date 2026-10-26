@@ -191,7 +191,7 @@ simulation packages update.
      - :doc:`Session telemetry <telemetry>`
    * - ``debug``
      - Developer aids: buffer dumps, GL state, leak counts.
-     - —
+     - none
    * - ``packaging``, ``__pyinstaller``
      - Shipping an application: a PyInstaller bundle, or a Debian package
        carrying its own interpreter; ``__pyinstaller`` holds the hooks

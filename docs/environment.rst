@@ -139,7 +139,7 @@ Lighting and shadows
      - Percentage-closer filtering on the shadow lookup: softer edges, more
        samples per fragment.
    * - ``OPENGLCONTEXT_SHADOW_CASCADES``
-     - integer 0–4
+     - integer 0 to 4
      - ``0``
      - Number of cascades for a directional light; more cascades give sharper
        shadows at a distance. ``0`` lets the pass choose from available video
@@ -152,13 +152,13 @@ Lighting and shadows
        cascades are fitted to that distance and the shadows fade out over its
        last fifth. ``0`` fits them to the farthest caster.
    * - ``OPENGLCONTEXT_SHADOW_FAR_INTERVAL``
-     - integer 1–4
+     - integer 1 to 4
      - ``1``
      - Frames between draws of each cascade beyond the nearest. ``1`` draws every
        cascade every frame; above ``1`` they are drawn in turn and used again while the
        slice each serves stays inside it. See :ref:`drawing the far cascades less often <shadows-far-interval>`.
    * - ``OPENGLCONTEXT_MAXIMUM_LIGHTS``
-     - integer 0–8
+     - integer 0 to 8
      - ``8``
      - The number of lights the shader binds in one frame, the headlight
        among them. A lower value is faster in a scene with many lights. The shader's own maximum still

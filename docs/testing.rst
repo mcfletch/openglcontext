@@ -983,8 +983,10 @@ delivering anything. A test that checks a body reads ``body.position`` and
 live world uses ``physics.world`` (inline only) and finds a body's row in its
 arrays with ``physics.slot_of(body)``, which applies the commands still
 waiting first; ``physics.flush()`` does that on its own. Read the row before the
-array: ``world.velocity[physics.slot_of(body)]`` evaluates the array first, and
-a body added since may have made a new one.
+array: ``world.linear_velocity[physics.slot_of(body)]`` evaluates the array
+first, and a body added since may have made a new one. The world's
+``position`` and ``orientation`` are read-only; a test moves a body with
+``body.set_transform()`` or ``world.place_body(row, position, orientation)``.
 
 Scenery becomes bodies as the render pass finds it, which a test with no
 window does not have: add what the test collides with by name

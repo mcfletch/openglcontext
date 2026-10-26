@@ -95,11 +95,6 @@ OpenGLContext/
 │   └── gait.py       # oglc-gait: the ground speed and foot landings of a
 │                     # model's locomotion clips -- docs/characters.rst#characters-gait-measure
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
-│   ├── locomotion.py # ClipMap and Locomotion: a character's state as clips,
-│   │                 # footsteps -- no GL -- docs/characters.rst
-│   ├── facing.py     # Turning toward the move, easing to the ground, fitting a
-│   │                 # model to its capsule -- no GL
-│   ├── gaitmeasure.py  # measure_stride: how fast a clip carries a body -- no GL
 │   ├── locomotion.py # ClipMap (roles to clips), Locomotion: a character's
 │   │                 # speed and state as clips, rates and footsteps -- no GL
 │   │                 # -- docs/characters.rst#characters-locomotion
@@ -108,6 +103,8 @@ OpenGLContext/
 │   ├── facing.py     # Heading, ground tilt and lean of a character's node,
 │   │                 # and the fit of a model to its capsule -- no GL
 │   │                 # -- docs/characters.rst#characters-facing
+│   ├── wander.py     # Crowds that walk about on their own: headings, strides,
+│   │                 # run_share between the walk and the run -- no GL
 │   └── hanim.py      # X3D HAnim's arithmetic: names and levels, skin weights,
 │                     # BVH channels, poses, limits -- no GL -- docs/characters.rst#characters-hanim
 ├── contentpacks/     # Data an application fetches rather than ships: the
@@ -300,6 +297,8 @@ OpenGLContext/
 │   ├── service.py    # Physics: add_static/dynamic/kinematic/trigger, add_ground,
 │   │                 # add_character, queries, events, zones; context.physics -- no GL
 │   ├── body.py       # Body, the handle of one body: reads, commands, handlers
+│   ├── checks.py     # number and vector: physical inputs made finite floats, or
+│   │                 # a ValueError naming the argument
 │   ├── character.py  # Character: a walker stepped by the frame, its stand-in in the world
 │   ├── handlers.py   # Handler and HandlerTable: who hears which event, held weakly
 │   ├── callbacks.py  # physics_callback: marks a function that runs on the physics thread

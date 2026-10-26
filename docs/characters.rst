@@ -182,7 +182,7 @@ rather than wherever the item's origin is. ``mounted()`` lines the two up:
 
 .. code-block:: python
 
-   from OpenGLContext.character.attachment import mounted, sockets
+   from OpenGLContext.character.attachment import attach, mounted, sockets
 
    weapon = load_gltf('sniper-rifle.glb')
    attach(sockets(scene)['grip'], mounted(weapon, 'grip'))
@@ -390,7 +390,8 @@ Blending by speed
 The idle is underneath at full weight. The map's walk, run and sprint lie over
 it in that order, and a map without one of them uses the next. This is the
 blend ``Gait`` makes, and the share of the run in the mix is
-``wander.run_share(speed, walk_speed, run_speed)``: nothing below the walk's
+``wander.run_share(speed, walk_stride, run_stride)``, the strides being the
+speeds the walk and the run were authored to carry: nothing below the walk's
 speed, everything above the run's, linear between. The same function sets the
 sprint's share between the run's speed and the sprint's.
 

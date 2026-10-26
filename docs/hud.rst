@@ -323,7 +323,7 @@ the next rather than jumping between them.
      - 48
      - How far in from the edge the wash reaches at full strength.
    * - ``strength``
-     - 0–1
+     - 0 to 1
      - 0.34
      - How opaque the wash is at its strongest. The player can still see the
        scene through it.
@@ -337,7 +337,7 @@ the next rather than jumping between them.
      - 8
      - The most hits shown at once.
    * - ``level``
-     - 0–1
+     - 0 to 1
      - 0
      - A steady wash on all four edges that does not fade, for a lasting
        state such as being wounded. Hits show over it; a level of 0 draws
@@ -381,7 +381,7 @@ being dead, being under water, or a fade.
      - (1, 0, 0)
      - The colour of the tint.
    * - ``strength``
-     - 0–1
+     - 0 to 1
      - 0.0
      - How opaque the tint is. Keep it low enough to see the scene through,
        unless there is nothing left for the player to see.

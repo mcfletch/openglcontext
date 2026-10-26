@@ -710,7 +710,7 @@ the context had; ``audioscene.close(context)`` releases it.
 
    * - Call
      - Does
-   * - ``engine.play(source, emitter=None, position=None, gain=1.0, priority=0.0, loop=False, rate=1.0)``
+   * - ``engine.play(source, emitter=None, position=None, forward=(0, 0, -1), gain=1.0, priority=0.0, loop=False, rate=1.0)``
      - Starts a clip, or a file by name. Returns a ``VoiceHandle``, or
        ``None`` when the clip does not decode or the voice pool refuses it.
    * - ``handle.set_gain(left, right)``, ``handle.set_rate(rate)``, ``handle.stop()``
@@ -758,7 +758,7 @@ screen <overlayui-settings>`.
      - The player's volume. Read every frame, so a settings slider takes
        effect at once.
    * - ``audio.voices``
-     - —
+     - none
      - 32
      - How many sounds can play at once, as voices; and, apart from them, how
        many X3D ``Sound`` and ``SpatialSound`` nodes are heard at once.
