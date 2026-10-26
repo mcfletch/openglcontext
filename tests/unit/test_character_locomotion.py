@@ -155,6 +155,16 @@ class TestGuessing:
             {'Walk_Formal_Loop': waving(1.0), 'Walk_Loop': waving(1.0)}))
         assert ClipMap.guess(model).spec('walk').clip == 'Walk_Loop'
 
+    def test_roles_given_by_hand_fill_the_gaps_and_win_over_a_guess(self):
+        model = CharacterModel.load(walker_glb(
+            {'Walk': waving(1.0), 'Stroll': waving(1.0), 'Survey': waving(1.0)}))
+        found = ClipMap.guess(model, idle='Survey', walk=('Stroll', 1.1))
+        assert found.spec('idle').clip == 'Survey'
+        assert (found.spec('walk').clip, found.spec('walk').speed) == ('Stroll', 1.1)
+        assert 'idle' not in found.unmatched
+        assert 'walk' not in found.unmatched
+        assert found.leftover == ('Walk',)
+
     def test_a_model_with_no_clips_matches_nothing(self):
         model = CharacterModel.load(walker_glb({}))
         found = ClipMap.guess(model)

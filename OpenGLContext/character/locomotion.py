@@ -203,19 +203,22 @@ class ClipMap:
         fill more than one role. The roles nothing matched are in
         :attr:`unmatched` and the clips no role took in :attr:`leftover`, which
         is what to read before filling the gaps by hand. ``named`` is passed to
-        the map: ``fade`` and ``rate_range``.
+        the map: ``fade``, ``rate_range`` and any role, which then takes the
+        clip given in place of a guess::
+
+            clips = ClipMap.guess(model, idle='Survey')
         """
         names = list(model.clips)
         words = {name: _words(name) for name in names}
-        chosen: dict[str, str] = {}
+        chosen: dict[str, Any] = {}
         for role in ROLES:
             found = _best(role, names, words)
             if found is not None:
                 chosen[role] = found
-        roles: dict[str, Any] = {**named, **chosen}
-        found_map = cls(**roles)
+        chosen.update((role, value) for role, value in named.items() if role in ROLES)
+        found_map = cls(**{**named, **chosen})
         found_map.unmatched = tuple(role for role in ROLES if role not in chosen)
-        used = set(chosen.values())
+        used = set(found_map.clips())
         found_map.leftover = tuple(name for name in names if name not in used)
         return found_map
 
