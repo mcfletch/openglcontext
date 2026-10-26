@@ -1291,7 +1291,9 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         The keys of a :class:`~OpenGLContext.move.thirdperson.FollowMode` move the
         character relative to the camera, whose turn keys swing it round, and the
         camera follows and keeps out of the scenery. ``distance`` and ``height``
-        place it, ``mode`` is a ``FollowMode`` of your own, and the other options
+        place it, ``swing`` is the seconds it takes to come round behind the way
+        the character goes (0, the default, leaves that to the turn keys),
+        ``mode`` is a ``FollowMode`` of your own, and the other options
         are the settings of :class:`~OpenGLContext.move.followcam.FollowCamera`.
         Returns the :class:`~OpenGLContext.move.thirdperson.FollowController`.
         """

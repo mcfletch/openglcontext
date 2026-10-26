@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 __all__ = ['FollowController', 'FollowMode', 'ThirdPersonPlatform', 'followMode']
 
 _UP = np.array([0.0, 1.0, 0.0])
+#: Metres a second below which a character's way of going does not swing the camera.
+SWING_SPEED = 0.5
 
 
 def _(text: str) -> str:
@@ -106,18 +108,27 @@ class ThirdPersonPlatform(PhysicsViewPlatform):
     first-person platform: the moves are relative to the yaw, and the camera
     stands ``distance`` metres back along it and as far above as the pitch asks,
     looking at a point ``height`` metres above the character's feet.
+
+    With a ``swing`` of some seconds the yaw also eases round behind the way
+    the character is moving, taking about that long, the short way round; a
+    character going slower than :data:`SWING_SPEED` leaves it where it is.
     """
 
     camera: FollowCamera
     distance: float
     height: float
     slide_time: float
+    swing: float = 0.0
 
     @classmethod
     def over(cls, character: Any, yaw: float = 0.0, *, camera: Any = None,
              distance: float = 4.5, height: float = 1.7, sweep: Sweep | None = None,
-             slide_time: float = 0.8, **camera_options: Any) -> ThirdPersonPlatform:
+             slide_time: float = 0.8, swing: float = 0.0,
+             **camera_options: Any) -> ThirdPersonPlatform:
         """A platform over ``character`` that drives ``camera``, a view platform.
+
+        ``swing`` is the seconds the camera takes to come round behind the
+        way the character moves, or 0 to leave the yaw to the keys.
 
         ``sweep`` keeps the camera out of the scenery
         (:class:`~OpenGLContext.move.followcam.FollowCamera`); ``camera_options``
@@ -128,6 +139,7 @@ class ThirdPersonPlatform(PhysicsViewPlatform):
         platform.distance = float(distance)
         platform.height = float(height)
         platform.slide_time = float(slide_time)
+        platform.swing = float(swing)
         platform._dt = 0.0
         camera_options.setdefault('look_ahead', 0.1)
         camera_options.setdefault('smooth_time', 0.12)
@@ -146,9 +158,19 @@ class ThirdPersonPlatform(PhysicsViewPlatform):
         self._dt = dt
         super().update(dt)
 
+    def _swing_behind(self, velocity: Any) -> None:
+        """Ease the yaw toward the way ``velocity`` goes, by this frame's share of :attr:`swing`."""
+        if self.swing <= 0.0 or self._dt <= 0.0 or math.hypot(velocity[0], velocity[2]) < SWING_SPEED:
+            return
+        wanted = math.atan2(float(velocity[0]), -float(velocity[2]))
+        turn = math.remainder(wanted - self.yaw, 2.0 * math.pi)
+        self.yaw = math.remainder(self.yaw + turn * (1.0 - math.exp(-self._dt / self.swing)),
+                                  2.0 * math.pi)
+
     def apply(self, context: Any = None) -> None:
         """Put the camera behind the character, ``distance`` back along the yaw."""
         character = self.managed
+        self._swing_behind(character.velocity)
         sine, cosine = math.sin(self.pitch), math.cos(self.pitch)
         forward = np.array([math.sin(self.yaw), 0.0, -math.cos(self.yaw)])
         camera = self.camera
