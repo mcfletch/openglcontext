@@ -753,9 +753,13 @@ on every run. A game that steps its world on a clock of its own, or only while i
 is not paused, sets the class attribute ``stepsPhysics = False`` on its context
 and calls ``context.physics.frame(dt)`` where it wants the step.
 
-An exception on the worker is logged once with its traceback, the service
-disables itself, bodies stay where they were and ``physics.error`` holds the
-exception. Physics never raises into the draw.
+An exception that ends the worker's thread is logged once with its traceback
+and kept as ``physics.error``. The world takes no more steps and bodies stay
+where they were. A ``physics.run(fn)`` future fails with that exception, and
+``physics.worker.settle()`` answers False at once. The next
+``physics.frame(dt)`` raises a ``RuntimeError`` whose cause is that exception,
+once. A context's frame hook logs what ``frame`` raises and draws the frame,
+so physics never raises into the draw.
 
 .. _model:
 

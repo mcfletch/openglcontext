@@ -54,6 +54,8 @@ class Worker(Protocol):
 
     runtime: WorldRuntime
     inbox: Inbox
+    #: The exception that stopped the worker's thread, or None.
+    error: Exception | None
 
     def on_worker_thread(self) -> bool:
         """Whether the calling thread is the one stepping the world right now."""
@@ -83,6 +85,8 @@ class InlineWorker:
     def __init__(self, definition: PhysicsDefinition, runtime: WorldRuntime | None = None) -> None:
         self.runtime = runtime if runtime is not None else WorldRuntime(definition)
         self.inbox = Inbox()
+        #: Always None: a step that raises here raises in :meth:`collect`, on the caller's thread.
+        self.error: Exception | None = None
         self._stepping = False
         #: The command sequence the last published snapshot included; -1 before the first.
         self._published_seq = -1
@@ -170,6 +174,8 @@ class ThreadWorker:
         self._dropped = 0
         #: Whether the thread is blocked with nothing to do.
         self.idle = False
+        #: The exception that ended the thread, or None while it has not failed.
+        self.error: Exception | None = None
 
     @property
     def sim_hz(self) -> float:
@@ -201,9 +207,9 @@ class ThreadWorker:
         return None if self._thread is None else self._thread.ident
 
     def start(self) -> None:
-        """Begin stepping on a daemon thread; a second call finds it running."""
+        """Begin stepping on a daemon thread; a second call, or one after the thread failed, does nothing."""
         with self._lock:
-            if self._thread is not None:
+            if self._thread is not None or self.error is not None:
                 return
             self._stop.clear()
             self._thread = threading.Thread(target=self._loop, name='physics', daemon=True)
@@ -221,15 +227,23 @@ class ThreadWorker:
 
     # -- the render thread's side ---------------------------------------
     def submit(self, command: Command) -> None:
-        """Queue ``command``, or apply it at once from a callback on the stepping thread."""
-        if self.on_worker_thread():
+        """Queue ``command``, or apply it at once from a callback on the stepping thread.
+
+        A worker whose thread has failed answers ``run`` and ``settle`` at once
+        with its :attr:`error` and drops the rest.
+        """
+        if self.error is not None:
+            self._refuse(command)
+        elif self.on_worker_thread():
             self.runtime.apply(command)
         else:
             self.inbox.post(command)
+            if self.error is not None:      # the thread failed between the check and the post
+                self._fail_waiting()
 
     def collect(self, dt: float) -> Outbox:  # noqa: ARG002 the thread steps by its own clock
         """The newest snapshot if it has not been collected, and the events since the last call."""
-        if self._thread is None:
+        if self._thread is None and self.error is None:
             self._publish_without_thread()
         with self._lock:
             snapshot = self._published
@@ -258,8 +272,8 @@ class ThreadWorker:
     def settle(self, timeout: float = 5.0) -> bool:
         """Wait until every command posted so far has been applied and published."""
         marker = threading.Event()
-        self.inbox.post(Command('settle', 0, (marker,)))
-        return marker.wait(timeout)
+        self.submit(Command('settle', 0, (marker,)))
+        return marker.wait(timeout) and self.error is None
 
     def wait_ticks(self, count: int, timeout: float = 5.0) -> bool:
         """Wait for ``count`` more ticks; False if they do not come in ``timeout`` seconds."""
@@ -293,6 +307,33 @@ class ThreadWorker:
 
     # -- the thread -----------------------------------------------------
     def _loop(self) -> None:
+        try:
+            self._run()
+        except Exception as error:  # noqa: BLE001 kept as the worker's error and raised by Physics.frame
+            log.exception('the physics worker stopped')
+            self.error = error
+            self._fail_waiting()
+
+    def _fail_waiting(self) -> None:
+        """End every wait on this worker: fail each waiting ``run`` future with :attr:`error`
+        and set each ``settle`` marker, whose :meth:`settle` then answers False."""
+        markers, self.runtime.markers = self.runtime.markers, []
+        for command in self.inbox.drain():
+            self._refuse(command)
+        for marker in markers:
+            marker.set()
+
+    def _refuse(self, command: Command) -> None:
+        """Answer ``command`` as a worker that has failed does: a ``run`` future fails with
+        :attr:`error` and a ``settle`` marker is set; anything else is dropped."""
+        if command.op == 'run':
+            future = command.args[1]
+            if future.set_running_or_notify_cancel():
+                future.set_exception(self.error)
+        elif command.op == 'settle':
+            command.args[0].set()
+
+    def _run(self) -> None:
         runtime = self.runtime
         runtime.bind_thread()
         next_due = time.perf_counter()

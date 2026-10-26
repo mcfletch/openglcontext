@@ -333,3 +333,49 @@ def test_a_thread_worker_keeps_ticking_while_a_step_hook_wants(threaded):
     while not threaded.idle and time.monotonic() < deadline:
         time.sleep(0.02)
     assert threaded.idle
+
+
+# -- a failing step ---------------------------------------------------------
+
+class StepFault(Exception):
+    """The fault a broken world raises from its step."""
+
+
+def broken_step(dt):
+    raise StepFault('the world could not step')
+
+
+def test_a_step_that_raises_is_kept_as_the_worker_error(threaded, caplog):
+    threaded.submit(ball())
+    threaded.runtime.world.step = broken_step
+    threaded.start()
+    deadline = time.monotonic() + 5.0
+    while threaded.error is None and time.monotonic() < deadline:
+        time.sleep(0.005)
+    assert isinstance(threaded.error, StepFault)
+    assert 'the world could not step' in caplog.text
+
+
+def test_settle_and_run_end_when_the_thread_has_failed():
+    from OpenGLContext.physics.service import Physics  # noqa: PLC0415 the service owns run()
+    from OpenGLContext.scenegraph import surfaces  # noqa: PLC0415 imports the scenegraph
+
+    service = Physics(definition(mode='thread'))
+    try:
+        service.worker.runtime.world.step = broken_step
+        service.add_dynamic(surfaces.shape(surfaces.sphere(0.5), None, translation=(0, 5, 0)))
+        deadline = time.monotonic() + 5.0
+        while service.error is None and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert isinstance(service.error, StepFault)
+        started = time.monotonic()
+        assert service.worker.settle(timeout=2.0) is False
+        assert time.monotonic() - started < 1.0
+        future = service.run(lambda world: 1)
+        with pytest.raises(StepFault):
+            future.result(timeout=1.0)
+        with pytest.raises(RuntimeError, match='physics') as raised:
+            service.frame(0.02)
+        assert isinstance(raised.value.__cause__, StepFault)
+    finally:
+        service.close()

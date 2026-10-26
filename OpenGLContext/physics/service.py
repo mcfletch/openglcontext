@@ -122,6 +122,8 @@ class Physics:
         self._enabled = bool(definition.enabled)
         self._gravity = tuple(float(v) for v in definition.gravity)
         self._closed = False
+        #: The worker error :meth:`frame` has raised, so it is raised once.
+        self._raised: Exception | None = None
         #: Removed bodies whose handlers end once the world has applied the removal
         #: and their last events are delivered: (command sequence, id).
         self._gone: list[tuple[int, int]] = []
@@ -992,6 +994,7 @@ class Physics:
             self.render.apply()
             return False
         self._pump_cooked()
+        self._raise_worker_error()
         out = self.worker.collect(dt)
         for character in self._characters:
             character._fresh = False
@@ -1511,9 +1514,16 @@ class Physics:
 
     # -- accounting ---------------------------------------------------------
     @property
-    def error(self) -> BaseException | None:
-        """The exception that stopped the worker, or None."""
-        return getattr(self.worker, 'error', None)
+    def error(self) -> Exception | None:
+        """The exception that stopped the worker's thread, or None."""
+        return self.worker.error
+
+    def _raise_worker_error(self) -> None:
+        """Raise a RuntimeError from the exception that stopped the worker, in the first frame after it."""
+        error = self.worker.error
+        if error is not None and error is not self._raised:
+            self._raised = error
+            raise RuntimeError('the physics worker stopped: %s' % (error,)) from error
 
     def close(self) -> None:
         """Stop the worker and let go of the bodies. Safe to call twice."""
