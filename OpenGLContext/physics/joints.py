@@ -166,6 +166,8 @@ class Joint:
         #: The body ``body`` is held to; None for the world.
         self.to = to
         self.spec = spec
+        #: The motor's speed and force, as made or as :meth:`drive` last set them.
+        self.motor = (spec.speed, spec.force)
         self._removed = False
 
     def __repr__(self) -> str:
@@ -183,6 +185,7 @@ class Joint:
         newton-metres; a slider's is in metres a second and newtons. A speed of
         0 with a force holds the joint still; a force of 0 switches the motor off.
         """
+        self.motor = (float(speed), float(force))
         if self.alive:
             self.physics._command('joint_motor', self.body, self.uid, float(speed), float(force))
 

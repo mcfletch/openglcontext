@@ -82,8 +82,10 @@ def test_drive_changes_the_motor_of_a_joint_already_in_the_world(physics):
     physics.gravity = (0, 0, 0)
     rod = bar(physics, (0.0, 3.0, 0.0))
     hinge = physics.add_hinge(rod, anchor=(0.0, 3.0, 0.0), axis=(0, 1, 0), motor=(4.0, 50.0))
+    assert hinge.motor == (4.0, 50.0)
     run_for(physics, 0.5)
     hinge.drive(-2.0, 50.0)
+    assert hinge.motor == (-2.0, 50.0)
     run_for(physics, 0.5)
     assert float(rod.angular_velocity[1]) == pytest.approx(-2.0, abs=0.2)
 

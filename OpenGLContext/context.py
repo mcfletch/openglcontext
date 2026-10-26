@@ -1296,11 +1296,28 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         ``mode`` is a ``FollowMode`` of your own, and the other options
         are the settings of :class:`~OpenGLContext.move.followcam.FollowCamera`.
         Returns the :class:`~OpenGLContext.move.thirdperson.FollowController`.
-        """
-        from OpenGLContext.move.thirdperson import FollowController  # noqa: PLC0415 only a context that follows needs it
 
-        self.unfollow()
-        follower = self.__dict__['_follower'] = FollowController(self, character, **options)
+        ``view='eyes'`` puts the camera at the character's eyes instead, and
+        the keys of the walk and fly modes move it; ``yaw`` is the heading it
+        starts at and ``modes`` replaces those modes. That returns an
+        :class:`~OpenGLContext.move.firstperson.EyesController`. Either takes
+        the camera from the free-fly navigator, and :meth:`unfollow` gives it back.
+        """
+        view = options.pop('view', 'behind')
+        follower: Any
+        if view == 'behind':
+            from OpenGLContext.move.thirdperson import FollowController  # noqa: PLC0415 only a context that follows needs it
+
+            self.unfollow()
+            follower = FollowController(self, character, **options)
+        elif view == 'eyes':
+            from OpenGLContext.move.firstperson import EyesController  # noqa: PLC0415 only a context that follows needs it
+
+            self.unfollow()
+            follower = EyesController(self, character, **options)
+        else:
+            raise ValueError("view is 'behind' or 'eyes', not %r" % (view,))
+        self.__dict__['_follower'] = follower
         follower.start()
         return follower
 

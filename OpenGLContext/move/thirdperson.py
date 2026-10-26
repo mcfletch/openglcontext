@@ -183,42 +183,73 @@ class ThirdPersonPlatform(PhysicsViewPlatform):
 class FollowController:
     """Has a character obey the keys of a :class:`FollowMode` and a camera follow it."""
 
+    platform: PhysicsViewPlatform
+
     def __init__(self, context: Any, character: Character, mode: FollowMode | None = None,
                  distance: float = 4.5, height: float = 1.7, **camera_options: Any) -> None:
-        self.context = context
-        self.character = character
         physics = context.physics
-        self.platform = ThirdPersonPlatform.over(
+        platform = ThirdPersonPlatform.over(
             character, camera=context.getViewPlatform(), distance=distance, height=height,
             sweep=lambda origin, direction, length, radius: physics.sweep_sphere(
                 origin, direction, length, radius, skip=character.body),
             **camera_options)
-        self.mode = mode if mode is not None else FollowMode()
-        navigation = Navigation(modes=[self.mode], mode=self.mode.name)
-        self.navigation = NavigationManager(SimpleNamespace(navigation=navigation), self.platform)
+        self.drive(context, character, platform, [mode if mode is not None else FollowMode()])
+
+    def drive(self, context: Any, character: Character, platform: PhysicsViewPlatform,
+              modes: Sequence[Any]) -> None:
+        """Have ``modes`` (the first in force) move ``character`` through ``platform``."""
+        self.context = context
+        self.character = character
+        self.platform = platform
+        self.mode = modes[0]
+        navigation = Navigation(modes=list(modes), mode=self.mode.name)
+        self.navigation = NavigationManager(SimpleNamespace(navigation=navigation), platform)
+        self.navigation.listeners.append(self._entered)
         self.stopped = False
         self._steps = FrameStep(longest=0.1)
         self._dt = 0.0
+        #: The free-fly navigator this took the camera from, given it back by :meth:`stop`.
+        self._freed: Any = None
+
+    def _entered(self, mode: Any) -> None:
+        """Put the character in the state of ``mode``, the mode now in force."""
+        if mode is not None:
+            mode.applyTo(self.platform)
 
     def start(self) -> None:
-        """Take the keys and the frame: input before the world steps, the camera after."""
+        """Take the keys, the camera and the frame: input before the world steps, the camera after.
+
+        A free-fly navigator holding the camera is unbound, so that it and the
+        platform do not both move it.
+        """
         context = self.context
         for _name, binding in self.navigation.binding_table():
             for key in binding.keys:
                 for state in (1, 0):
                     context.addEventHandler('keyboard', name=key, state=state,
                                             function=self._wake)
+        manager = getattr(context, 'movementManager', None)
+        if manager is not None:
+            manager.unbind(context)
+            context.movementManager = None
+            self._freed = manager
         queue = context.renderQueue
         queue.before_run(self._input, first=True)
         queue.before_run(self._camera)
 
     def stop(self) -> None:
-        """Stop obeying the keys and following; the character keeps the last move it was given."""
+        """Stop obeying the keys and following; the character keeps the last move it was given.
+
+        The free-fly navigator :meth:`start` took the camera from is given it back.
+        """
         self.stopped = True
         for _name, binding in self.navigation.binding_table():
             for key in binding.keys:
                 for state in (1, 0):
                     self.context.addEventHandler('keyboard', name=key, state=state, function=None)
+        if self._freed is not None:
+            self._freed.bind(self.context)
+            self.context.movementManager, self._freed = self._freed, None
 
     def _wake(self, event: Any) -> None:
         self.context.triggerRedraw(1)

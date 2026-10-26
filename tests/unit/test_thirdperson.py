@@ -292,3 +292,73 @@ def test_follow_is_a_registered_movement_mode():
     assert isinstance(mode, FollowMode) and mode.name == 'follow'
     assert mode.walkSpeed == pytest.approx(6.0)
     assert [declared.name for declared in Navigation(modes=['follow']).modes] == ['follow']
+
+
+# -- Context.follow(view='eyes') -------------------------------------------------------------
+
+def test_follow_from_the_eyes_puts_the_camera_at_them_and_the_keys_walk_the_character(ctx, clock):
+    from OpenGLContext.move.firstperson import EyesController
+
+    ctx.platform = Camera()
+    me = ctx.physics.add_character(position=(0, 0.05, 0))
+    follower = ctx.follow(me, view='eyes')
+    assert isinstance(follower, EyesController)
+    press(ctx, 'w')
+    for _ in range(90):
+        clock.advance(1 / 60)
+        ctx.renderQueue.run()
+    assert me.position[2] < -2.0                          # yaw 0 looks along -z
+    assert np.allclose(ctx.platform.position, me.eye, atol=1e-6)
+
+
+def test_follow_from_the_eyes_turns_with_the_turn_keys(ctx, clock):
+    ctx.platform = Camera()
+    me = ctx.physics.add_character(position=(0, 0.05, 0))
+    follower = ctx.follow(me, view='eyes', yaw=0.5)
+    assert follower.platform.yaw == pytest.approx(0.5)
+    press(ctx, 'e')
+    for _ in range(30):
+        clock.advance(1 / 60)
+        ctx.renderQueue.run()
+    assert follower.platform.yaw > 0.55
+
+
+def test_follow_from_the_eyes_flies_in_the_fly_mode(ctx, clock):
+    ctx.platform = Camera()
+    me = ctx.physics.add_character(position=(0, 0.05, 0))
+    follower = ctx.follow(me, view='eyes')
+    assert follower.navigation.select('fly')
+    assert me.controller.flying
+    assert follower.navigation.select('walk')
+    assert not me.controller.flying
+
+
+def test_an_unknown_view_is_refused(ctx):
+    me = ctx.physics.add_character(position=(0, 0.05, 0))
+    with pytest.raises(ValueError, match='view'):
+        ctx.follow(me, view='overhead')
+
+
+class _Manager:
+    """A free-fly navigator that remembers whether it holds the camera."""
+
+    def __init__(self):
+        self.bound = True
+
+    def bind(self, context):
+        self.bound = True
+
+    def unbind(self, context):
+        self.bound = False
+
+
+@pytest.mark.parametrize('view', ['behind', 'eyes'])
+def test_following_takes_the_camera_from_the_free_navigator_and_unfollowing_gives_it_back(
+        ctx, view):
+    ctx.platform = Camera()
+    manager = ctx.movementManager = _Manager()
+    me = ctx.physics.add_character(position=(0, 0.05, 0))
+    ctx.follow(me, view=view)
+    assert ctx.movementManager is None and not manager.bound
+    ctx.unfollow()
+    assert ctx.movementManager is manager and manager.bound
