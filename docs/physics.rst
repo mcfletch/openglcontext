@@ -718,7 +718,10 @@ Modes and settings
 
 ``physics.set_config(definition)`` applies the same node between steps, and
 ``physics.enable(False)`` pauses the world with every body where it is;
-``physics.enable(True, tick_frequency=240)`` runs it again with a finer step. The
+``physics.enable(True, tick_frequency=240)`` runs it again with a finer step. A
+paused world takes no steps; bodies added and removed, writes and joints made
+while it is paused reach it, in the order they were made, when it runs again,
+and so do those of a service that starts with ``enabled`` false. The
 variables of :doc:`environment` set the defaults. The settings are the
 program's choices; a player's switch is ``OPENGLCONTEXT_PHYSICS`` alone.
 

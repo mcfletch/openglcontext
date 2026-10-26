@@ -352,6 +352,76 @@ def test_enable_false_pauses_and_true_resumes(physics):
     assert node.translation[1] < held
 
 
+def test_a_body_removed_while_paused_leaves_the_world_on_resume(physics):
+    crate = physics.add_dynamic(ball())
+    run_for(physics, 0.1)
+    physics.enable(False)
+    physics.remove(crate)
+    physics.enable(True)
+    run_for(physics, 0.1)
+    assert crate.uid not in settled(physics)
+
+
+def test_a_body_added_while_paused_falls_on_resume(physics):
+    physics.enable(False)
+    node = ball()
+    physics.add_dynamic(node)
+    run_for(physics, 0.1)
+    assert node.translation[1] == pytest.approx(5.0)
+    physics.enable(True)
+    run_for(physics, 0.3)
+    assert node.translation[1] < 5.0
+
+
+def test_a_transform_set_while_paused_is_applied_and_read_back(physics):
+    body = physics.add_dynamic(ball())
+    physics.enable(False)
+    body.set_transform((3.0, 7.0, 0.0))
+    assert body.position == pytest.approx((3.0, 7.0, 0.0))
+    physics.enable(True)
+    physics.frame(0.0)
+    runtime = settled(physics)
+    assert runtime.world.position[runtime.entry(body.uid).index] == pytest.approx((3.0, 7.0, 0.0))
+
+
+def test_a_joint_made_while_paused_holds_on_resume(physics):
+    body = physics.add_dynamic(ball(at=(1, 5, 0)))
+    physics.enable(False)
+    physics.add_ball(body, anchor=(0, 5, 0))
+    physics.enable(True)
+    run_for(physics, 0.5)
+    assert len(settled(physics).joints) == 1
+    assert np.linalg.norm(body.position - np.array((0.0, 5.0, 0.0))) == pytest.approx(1.0, abs=0.05)
+
+
+def test_a_service_disabled_at_start_runs_its_bodies_once_enabled():
+    service = make(enabled=False)
+    try:
+        node = ball()
+        body = service.add_dynamic(node)
+        body.apply_impulse((2, 0, 0))
+        service.enable(True)
+        run_for(service, 0.3)
+        assert node.translation[1] < 5.0
+        assert node.translation[0] > 0.0
+    finally:
+        service.close()
+
+
+def test_a_body_removed_while_paused_on_a_thread_leaves_the_world_on_resume():
+    service = make(mode='thread')
+    try:
+        crate = service.add_dynamic(ball())
+        service.add_dynamic(ball(at=(3, 5, 0)))
+        service.enable(False)
+        service.remove(crate)
+        service.enable(True)
+        assert service.worker.settle()
+        assert crate.uid not in service.worker.runtime
+    finally:
+        service.close()
+
+
 def test_enable_with_a_tick_frequency_changes_the_step(physics):
     physics.enable(True, tick_frequency=200.0)
     physics.frame(0.0)

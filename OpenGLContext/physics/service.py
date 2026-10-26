@@ -256,7 +256,10 @@ class Physics:
     def enable(self, on: bool = True, tick_frequency: float | None = None) -> None:
         """Run the world, or pause it with every body where it is.
 
-        ``tick_frequency`` sets the step, in steps a second, from now on.
+        A paused world takes no steps. Bodies added or removed, writes and
+        joints made while it is paused are kept in order and reach the world
+        when it runs again. ``tick_frequency`` sets the step, in steps a
+        second, from now on.
         """
         if tick_frequency is not None:
             if not tick_frequency > 0.0:
@@ -382,7 +385,7 @@ class Physics:
             self._by_node[node] = body
         if kind in ('dynamic', 'kinematic'):
             self._movers.append(body)
-        if self._enabled and not self._closed:
+        if not self._closed:
             self._send(Command('add', uid, (spec,), next(self._seq)))
             if kind in ('dynamic', 'kinematic'):
                 self._ensure_started()
@@ -513,7 +516,7 @@ class Physics:
                 self.remove(body)
                 continue
             body.proxy = spec.proxy
-            if self._enabled and not self._closed:
+            if not self._closed:
                 self._send(Command('add', body.uid, (spec,), next(self._seq)))
                 for op, args in deferred:
                     self._send(Command(op, body.uid, args, next(self._seq)))
@@ -572,7 +575,7 @@ class Physics:
         if sounding:
             self._send_world('logging', True)
         self._bodies[uid] = body
-        if self._enabled and not self._closed:
+        if not self._closed:
             self._send(Command('add', uid, (spec,), next(self._seq)))
         return body
 
@@ -612,7 +615,7 @@ class Physics:
             next(self._uids)
         batch = BodyBatch(first, proxy, points, self._material(options),
                           self.filters.index(options.get('collision_filter')))
-        if self._enabled and not self._closed:
+        if not self._closed:
             self._send(Command('add_many', 0, (batch,), next(self._seq)))
         return StaticInstances(self, first, len(points))
 
@@ -752,7 +755,7 @@ class Physics:
                     (0.0, 0.0, 1.0, 0.0), 0.0)
         self._bodies[uid] = body
         self._movers.append(body)
-        if self._enabled and not self._closed:
+        if not self._closed:
             self._send(Command('add', uid, (spec,), next(self._seq)))
             self._ensure_started()
         return body
@@ -832,7 +835,7 @@ class Physics:
                 for character in self._characters:
                     character.controller.ignore.discard(replica.index_of(body.uid))
             self._passable.discard(body.uid)
-        if self._enabled and not self._closed:
+        if not self._closed:
             seq = next(self._seq)
             self._send(Command('remove', body.uid, (), seq))
             self._gone.append((seq, body.uid))
@@ -887,7 +890,7 @@ class Physics:
 
     # -- commands ---------------------------------------------------------
     def _command(self, op: str, body: Body, *args: Any) -> int:
-        if not body.alive or not self._enabled or self._closed:
+        if not body.alive or self._closed:
             return 0
         if body._pending:
             body._deferred.append((op, args))
@@ -984,6 +987,8 @@ class Physics:
         steps ``dt`` seconds first.
         """
         if not self._enabled or self._closed:
+            if not self._closed:
+                self._pump_cooked()
             self.render.apply()
             return False
         self._pump_cooked()
