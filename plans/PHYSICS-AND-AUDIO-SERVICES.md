@@ -58,9 +58,16 @@ Not done:
 - `PhysicsDefinition` as an X3D extension node.
 - The migrations of marble-demo, glisteel, the forest and hill-runner's physics belong to the work
   in those projects.
-- Deleting `DemoScene`, `PhysicsManager`, `CollisionEvents`, `ThreadedPhysicsManager` and
-  `PhysicsWalkMixin`, which waits for those migrations. `OpenGLContext/bin/terrain_view.py` imports
-  `disable_vsync` from `physics/demo.py`, and the function moves before that module goes.
+- `PhysicsWalkMixin` stays. It is a base of `ViewPlatformMixin`, so of every `Context`, and of
+  `TerrainWalkMixin`, which the forest walks with; the viewer's walk and X3D navigation run on it
+  over a raw world. Moving it onto the service is its own piece of work.
+
+Deleted 2026-10-26, once marble-demo's `physics-services` branch stopped importing them:
+`physics/demo.py` (`DemoScene`, `disable_vsync`; `terrain_view.py` calls `setVSync(False)`),
+`physics/threaded.py` (`ThreadedPhysicsManager`), `physics/manager.py` (`PhysicsManager`),
+`CollisionEvents`, `Subscription`, `Occupancy` and `HitEvent` from `physics/events.py`, and the
+`PhysicsBody` node (`scenegraph/physicsbody.py`). `write_pose` and the rotation conversions are in
+`physics/poses.py`. marble-demo's `develop` still imports `DemoScene` until its branch merges.
 
 Every physics demo builds its own wrapper around the simulation (`CollisionYard`,
 `AudioYard`, `DemoScene`), steps it from `OnIdle`, drains its collisions and plays

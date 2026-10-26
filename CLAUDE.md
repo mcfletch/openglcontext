@@ -321,7 +321,8 @@ OpenGLContext/
 │   │                 # sections and props near a focus
 │   ├── gltf_world.py # A scene's triangles and glTF OMI bodies as a world
 │   ├── debugdraw.py  # The proxy, contact and velocity overlay (show_proxies)
-│   ├── manager.py, threaded.py, events.py, demo.py  # PhysicsManager and what is built on it
+│   ├── events.py     # Collision: one collision as a body's handler is given it
+│   ├── poses.py      # Quaternions to axis-angle, and a pose written onto a Transform
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
 │   └── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics
