@@ -590,6 +590,15 @@ character instead. A blow the stand-in takes becomes a change of velocity of
 walker knocks it back. A character stands on a dynamic body and is carried by
 it. A body added with ``blocks_characters=False`` is walked through.
 
+The lone character of an inline service writes its stand-in to the world when
+something can see it: a dynamic body, a trigger or a sensor within reach of it
+in a step, or a ray, sweep or overlap whose bounds reach it. Until then the
+stand-in waits, still, where it was last written, and the write puts it where it
+would have been had it been written at every step, so bodies, triggers and
+queries meet it as they would. Its pose read from its body or from
+``physics.world`` is that of the last write. With a second character, a worker
+thread or the proxies shown, each write is made as it is asked for.
+
 A game with rules that run every fixed step sets the character's ``framed`` to
 False and steps it itself (:doc:`characters`).
 
@@ -855,17 +864,26 @@ compared, refitted or copied. A pose written straight into a static body's
 ``position`` or ``orientation`` is recorded with ``PhysicsWorld.moved(rows)``,
 and ``OMI_PHYSICS_CHECK_STATICS=1`` makes a step raise for one that was not. A
 step with no awake dynamic body, trigger, sensor or touching pair skips the
-collision pass, and a world with a few moving bodies is swept from them outward.
+collision pass, as does a step in a world with no dynamic body where no
+kinematic body's box meets a trigger's, and a world with a few moving bodies is
+swept from them outward. A swept sphere is tested against a fixed body only at
+the distances where its box meets that body's.
 
 A character holds the static bodies it gathered across updates while the layout
 is unchanged, and depenetrates against them: the few boxes near it one at a time
 with numbers, the triangles of a mesh in one call, and a height field as the
 column of spheres down its axis, of which only those low enough to touch a
 slope that gentle are slid. Its poses agree with the contact solver's to 1e-9 m
-a step. On this machine one walker on a box floor costs about 175 us a frame,
-30 among box posts about 5.3 ms, the forest walker about 1.7 ms, and the
+a step. Where ``omi_physics``'s compiled accelerator is built, a grid answers
+the whole column in one call and a mesh its triangles near the capsule, with the
+same numbers as the Python. The lone character's stand-in is written only when
+something can see it (:ref:`physics-characters`). On this machine one walker on
+a box floor costs about 130 us a frame, 60 us of it the controller; 30 among box
+posts about 2.7 ms in a median frame and 5.5 ms on average;
+the forest walker about 1.7 ms; twig-bb with 8 bots about 1.8 ms; and the
 hill-runner's runner on its streamed height-field hill, stepped at 120 Hz with
-the rules and the camera, about 0.8 ms a frame.
+the rules and the camera, about 0.59 ms a frame, of which the controller is
+85 us a step and the world 63 us a step.
 
 .. _walking:
 
