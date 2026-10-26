@@ -135,20 +135,20 @@ def winning_power():
 
 def velocity_of(course, body):
     """The live velocity of ``body``: its row is found first, since finding it makes the world's arrays current."""
-    index = course.slot(body)
-    return course.world.linear_velocity[index]
+    index = course.physics.slot_of(body)
+    return course.physics.world.linear_velocity[index]
 
 
 def position_of(course, body):
     """The live position of ``body``."""
-    index = course.slot(body)
-    return course.world.position[index]
+    index = course.physics.slot_of(body)
+    return course.physics.world.position[index]
 
 
 def put(course, point):
     """Stand the ball at ``point`` with no velocity."""
-    index = course.slot(course.ball)
-    course.world.place_body(index, position=point)
+    index = course.physics.slot_of(course.ball)
+    course.physics.world.place_body(index, position=point)
     velocity_of(course, course.ball)[:] = 0.0
 
 
@@ -236,10 +236,10 @@ class TestTheKick:
         course = aimed_game()
         shoot(course, 12.0)
         course.physics.flush()
-        before = course.world.live_body_count
+        before = course.physics.world.live_body_count
         shoot(course, 12.0)
         course.physics.flush()
-        assert course.world.live_body_count == before
+        assert course.physics.world.live_body_count == before
 
 
 class TestTheBalls:
@@ -352,7 +352,7 @@ class TestWhatTheShotDoes:
     def test_a_ball_that_falls_out_of_the_world_is_a_miss(self):
         course = aimed_game()
         course.fire()
-        course.world.place_body(course.slot(course.ball), position=(0.0, game.FALLEN - 1.0, 0.0))
+        course.physics.world.place_body(course.physics.slot_of(course.ball), position=(0.0, game.FALLEN - 1.0, 0.0))
         course.tick(1 / 60)
         assert course.state == 'aiming'
 
@@ -452,7 +452,7 @@ class TestTheScore:
     def test_crates_knocked_off_their_place_are_paid_for(self):
         course = aimed_game(level=CRATES)
         for body in course.crates:
-            course.world.place_body(course.slot(body), position=(0.0, 3.0, 40.0))
+            course.physics.world.place_body(course.physics.slot_of(body), position=(0.0, 3.0, 40.0))
         course.physics.frame(0.0)
         assert course.toppled == len(course.crates) == 8
         self.land_on_mark(course)
@@ -715,14 +715,22 @@ class TestTheMovers:
         assert game.swing(home, 7.0)(0.0)[1] is None
 
 
+def silent_audio(rate, owner=None):
+    """An ``Audio`` over a real engine on a silent device, so what it mixes is the mix."""
+    from omi_audio.device import NullDevice
+    from omi_audio.engine import AudioEngine
+
+    from OpenGLContext.audio.manager import Audio
+    return Audio(owner, engine_factory=lambda: AudioEngine(
+        device=NullDevice(sample_rate=rate), voices=8))
+
+
 class TestTheSounds:
     RATE = 8000
 
     @pytest.fixture
-    def engine(self):
-        from omi_audio.device import NullDevice
-        from omi_audio.engine import AudioEngine
-        made = AudioEngine(device=NullDevice(sample_rate=self.RATE), voices=8)
+    def audio(self):
+        made = silent_audio(self.RATE)
         yield made
         made.close()
 
@@ -754,16 +762,19 @@ class TestTheSounds:
         assert game.report_gain(high + 100.0) == pytest.approx(game.REPORT_GAIN[1])
 
     @pytest.mark.parametrize('name', ['report', 'thud', 'crash', 'fanfare'])
-    def test_playing_a_sound_starts_a_voice_in_the_engine(self, engine, name):
+    def test_playing_a_sound_starts_a_voice_in_the_engine(self, audio, name):
         sounds = game.Sounds(self.RATE)
-        assert sounds.play(engine, name, (0.0, 3.0, 0.0)) is not None
-        engine.mixer.mix(self.RATE // 10)
-        assert engine.mixer.active_voices > 0
+        assert sounds.play(audio, name, (0.0, 3.0, 0.0)).playing
+        audio.engine.mixer.mix(self.RATE // 10)
+        assert audio.engine.mixer.active_voices > 0
 
-    def test_a_sound_with_no_engine_is_silence_and_no_error(self):
+    def test_a_sound_with_sound_switched_off_is_silence_and_no_error(self):
+        from OpenGLContext.audio.manager import Audio
+        from OpenGLContext.audio.settings import AudioSettings
         sounds = game.Sounds(self.RATE)
-        assert sounds.play(None, 'thud', (0.0, 0.0, 0.0)) is None
-        assert sounds.fire(None, (0.0, 0.0, 0.0), game.POWER_LIMIT[1]) is None
+        audio = Audio(settings=AudioSettings(enabled=0))
+        assert not sounds.play(audio, 'thud', (0.0, 0.0, 0.0)).playing
+        assert not sounds.fire(audio, (0.0, 0.0, 0.0), game.POWER_LIMIT[1]).playing
 
 
 class _NoWindowCannon(game.TestContext):
@@ -791,15 +802,13 @@ def heard_context(rate=8000):
     """
     from types import SimpleNamespace
 
-    from omi_audio.device import NullDevice
-    from omi_audio.engine import AudioEngine
-
     from OpenGLContext.move import viewplatform
 
     context = object.__new__(_NoWindowCannon)
     context.game = game.Game(random.Random(3), on_event=context.OnGame)
     context.platform = viewplatform.ViewPlatform()
-    context.engine = AudioEngine(device=NullDevice(sample_rate=rate), voices=8)
+    context.__dict__['_audio'] = silent_audio(rate, owner=context)
+    context.engine = context.audio.engine
     context.loaded = SimpleNamespace(translation=None, children=[])
     context.waiting = {ammo.name: object() for ammo in game.AMMO}
     context.trail = SimpleNamespace(point=[])
@@ -813,12 +822,13 @@ def heard_context(rate=8000):
     context.shot = SimpleNamespace(children=[])
     context.wash = SimpleNamespace(colour=None, strength=0.0)
     context.update()
+    context.audio.frame()
     return context
 
 
 def peak_dbfs(context, power, blocks=12, frames=1024):
     """The loudest sample one shot mixes, in dBFS."""
-    context.sounds.fire(context.engine, context.game.muzzle, power)
+    context.sounds.fire(context.audio, context.game.muzzle, power)
     peak = 0.0
     for _ in range(blocks):
         peak = max(peak, float(np.abs(context.engine.mixer.mix(frames)).max()))
@@ -830,10 +840,10 @@ AUDIBLE_DBFS = -30.0
 
 
 class TestTheSoundsReachTheCamera:
-    """The sounds are played straight into the engine, so the ears follow the camera.
+    """The sounds are played through the context's audio, whose ears follow the camera.
 
     Nothing else moves the listener here, so a sound is only audible if the
-    context puts the listener where the camera is each frame.
+    audio's frame puts the listener where the camera is.
     """
 
     RATE = 8000

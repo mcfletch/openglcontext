@@ -466,6 +466,23 @@ def test_the_pile_falls_into_the_bowl_and_a_wave_adds_forty(gl_context):
         assert run.physics.world.backend.name
 
 
+@pytest.mark.parametrize('mode', ['inline', 'thread'])
+def test_the_cannon_game_plays_in_the_contexts_own_world(gl_context, mode):
+    with running('physics', 'using_physics', mode=mode) as run:
+        run.frame()
+        game = run.context.game
+        assert game.physics is run.physics
+        game.aim.elevation, game.aim.power = 30.0, 6.0
+        game.point()
+        run.context.OnFire(None)
+        assert game.state == 'flying'
+        muzzle = np.array(game.muzzle)
+        assert run.until(lambda: np.linalg.norm(np.array(game.position) - muzzle) > 1.0,
+                         seconds=5.0)
+        assert run.until(lambda: game.state != 'flying', seconds=30.0)
+        assert len(run.context.trail.point) > 3
+
+
 def test_a_ball_flashes_as_hard_as_it_landed_and_cools_again(gl_context):
     with running('physics', 'using_collisions') as run:
         run.frame()
