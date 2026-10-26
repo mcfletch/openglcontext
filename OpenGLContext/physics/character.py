@@ -35,6 +35,7 @@ from omi_physics.character import CharacterCapabilities, CharacterController, Ch
 from OpenGLContext.character.facing import Facing
 from OpenGLContext.character.locomotion import Locomotion, LocomotionInput
 
+from OpenGLContext.physics.checks import number
 from OpenGLContext.physics.handlers import weak_reference
 from OpenGLContext.physics.proxy import Proxy
 
@@ -47,6 +48,9 @@ if TYPE_CHECKING:
 __all__ = ['Character', 'Footstep', 'Landing']
 
 _UP = np.array([0.0, 1.0, 0.0])
+#: The field of the capabilities that names each mode's speed.
+_MODE_SPEEDS = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
+                'crouch': 'crouchSpeed'}
 
 
 class Landing(NamedTuple):
@@ -129,6 +133,10 @@ class Character:
         self._landed: float | None = None
         self._path: PathMover | None = None
         self._path_mode = 'run'
+        #: The speed of the run along a course: metres a second, a function of the seconds
+        #: since the run began, or None for the mode's speed from the capabilities.
+        self._path_speed: float | Callable[[float], float] | None = None
+        self._path_time = 0.0
         self._arrived = False
         if self.locomotion is not None:
             self.locomotion.on_footstep(self._footfall)
@@ -220,24 +228,57 @@ class Character:
         return self._arrived
 
     @property
+    def speed(self) -> float:
+        """The speed the character's moves go at, in metres a second.
+
+        On a course it is the run's speed along the course. Otherwise it is the
+        speed :meth:`set_move` was given, else that of the move's mode from the
+        capabilities. Setting a number changes it until the next
+        :meth:`set_move` or :meth:`run_along`; setting None gives the mode's back.
+        Raises ValueError for a value that is not a finite number at or above zero.
+        """
+        if self._path is not None:
+            return float(self._path.speed)
+        return float(self.controller.speed())
+
+    @speed.setter
+    def speed(self, value: float | None) -> None:
+        given = None if value is None else number(value, 'speed', non_negative=True)
+        if self._path is not None:
+            self._path_speed = given
+        else:
+            self.controller.move_speed = given
+
+    @property
+    def lane(self) -> float | None:
+        """The lateral offset from the course the character runs on, in metres right of it; None off a course."""
+        return None if self._path is None else float(self._path.lane)
+
+    @property
     def heading(self) -> float:
         """The way the body faces, in radians from +Z about +Y; 0 for a character with no facing."""
         return 0.0 if self.facing is None else float(self.facing.heading)
 
     # -- doing --------------------------------------------------------------
-    def set_move(self, direction: Any, mode: str = 'walk') -> None:
-        """Walk toward ``direction`` (flattened to the ground) at the speed of ``mode``.
+    def set_move(self, direction: Any, mode: str = 'walk', speed: float | None = None) -> None:
+        """Walk toward ``direction`` (flattened to the ground) at ``speed`` metres a second.
 
-        ``mode`` is ``'walk'``, ``'run'``, ``'sprint'`` or ``'crouch'``. A zero
-        direction stops. The move holds until the next call.
+        ``speed`` None, the default, goes at the speed of ``mode`` from the
+        capabilities; ``mode`` is ``'walk'``, ``'run'``, ``'sprint'`` or
+        ``'crouch'``. A crouched character goes no faster than ``crouchSpeed``.
+        A zero direction stops. The move holds until the next call, for every
+        step the frame takes. Raises ValueError for a speed that is not a finite
+        number at or above zero.
         """
-        self.controller.set_move(direction, mode)
+        given = None if speed is None else number(speed, 'speed', non_negative=True)
+        self.controller.set_move(direction, mode, speed=given)
 
     def set_fly_move(self, direction: Any) -> None:
         """Fly toward ``direction``, vertical part included."""
         self.controller.set_fly_move(direction)
 
-    def run_along(self, course: Any, speed: float | None = None, mode: str = 'run',
+    def run_along(self, course: Any,
+                  speed: float | Callable[[float], float] | None = None, mode: str = 'run',
                   lane: float = 0.0) -> None:
         """Run along ``course``: a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`, or points.
 
@@ -246,25 +287,27 @@ class Character:
         open course, :attr:`arrived` turns true and ``'arrived'`` handlers are
         called with the character.
 
-        The character runs at ``speed`` metres a second (its own ``mode`` speed
-        where that is left out) on a lane ``lane`` metres right of the line,
-        steering back to it each frame; height and jumps are still the
-        controller's. :meth:`hop_to` changes lane. The moves it makes replace
-        those of :meth:`set_move` until :meth:`stop_running_along`.
+        ``speed`` is the metres a second along the course: a number, or a
+        function called at each step with the seconds since the run began; left
+        out, it is the speed of ``mode`` from the capabilities. The character
+        runs on a lane ``lane`` metres right of the line, steering back to it at
+        each step; height and jumps are still the controller's. :meth:`hop_to`
+        changes lane and :attr:`speed` changes the speed. The moves it makes
+        replace those of :meth:`set_move` until :meth:`stop_running_along`.
+        Raises ValueError for a speed that is not a finite number at or above
+        zero, here or from the function at a step.
         """
         from OpenGLContext.move.pathmover import PathMover  # noqa: PLC0415 only a character on a course needs it
         from OpenGLContext.scenegraph.roadcourse import RoadCourse  # noqa: PLC0415 only a character on a course needs it
 
         if not isinstance(course, RoadCourse):
             course = RoadCourse(course)
-
-        names = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
-                 'crouch': 'crouchSpeed'}
-        field = names.get(mode, 'runSpeed')
-        if speed is not None:
-            setattr(self.capabilities, field, float(speed))
+        given = speed if speed is None or callable(speed) else number(
+            speed, 'speed', non_negative=True)
         self._path_mode = mode
-        self._path = PathMover(course, float(getattr(self.capabilities, field)), lane=lane)
+        self._path_speed = given
+        self._path_time = 0.0
+        self._path = PathMover(course, self._run_speed(), lane=float(lane))
         self._arrived = False
 
     def hop_to(self, offset: float, over: float = 0.16) -> None:
@@ -277,6 +320,15 @@ class Character:
     def stop_running_along(self) -> None:
         """Give the character's moves back to :meth:`set_move`."""
         self._path = None
+
+    def _run_speed(self) -> float:
+        """The speed along the course at this step, in metres a second."""
+        given = self._path_speed
+        if given is None:
+            return float(getattr(self.capabilities, _MODE_SPEEDS.get(self._path_mode, 'runSpeed')))
+        if callable(given):
+            return number(given(self._path_time), 'speed', non_negative=True)
+        return given
 
     def jump(self) -> bool:
         """Leave the ground; False where the character cannot."""
@@ -410,7 +462,10 @@ class Character:
             controller.knockback(knock)
         self._knocks.clear()
         if self._path is not None:
-            controller.set_move(self._path.update(self.position, dt).direction, self._path_mode)
+            self._path.speed = self._run_speed()
+            move = self._path.update(self.position, dt)
+            controller.set_move(move.direction, self._path_mode, speed=move.speed)
+            self._path_time += dt
             if self._path.finished and not self._arrived:
                 self._arrived = True
                 self._tell('arrived', self)

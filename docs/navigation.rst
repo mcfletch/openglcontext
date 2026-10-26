@@ -693,9 +693,11 @@ Running along a course
 
 A game with a course rather than open land wants a character to follow a line
 and hop between parallel lanes of it. A physics character does this with
-``hero.run_along(course)`` and ``hero.hop_to(offset)`` (:ref:`characters-locomotion`,
-:doc:`tutorials/character/character_trail`), which drive a ``PathMover`` each
-frame. ``OpenGLContext.move.pathmover.PathMover``
+``hero.run_along(course, speed=, lane=)`` and ``hero.hop_to(offset)``
+(:ref:`characters-locomotion`, :doc:`tutorials/character/character_trail`),
+which drive a ``PathMover`` at each step; ``speed`` may be a function of the
+seconds since the run began, and ``hero.speed`` and ``hero.lane`` read and set
+the run. ``OpenGLContext.move.pathmover.PathMover``
 gives, each frame, the horizontal velocity for a character at a given position
 on a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`:
 
@@ -706,7 +708,7 @@ on a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`:
    mover = PathMover(course, speed=10.0)
    ...
    step = mover.update(character.position, dt)
-   character.set_move(step.direction)       # at step.speed metres a second
+   character.set_move(step.direction, speed=step.speed)
    ...
    mover.hop_to(2.0, over=0.16)             # one lane to the right
 

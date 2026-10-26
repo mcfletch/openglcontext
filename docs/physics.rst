@@ -601,13 +601,19 @@ capsule that is placed at it each frame with the velocity it moved at:
                                 position=(0, 0, 0), parent=self.sg)
 
    me.set_move(direction, mode='walk')       # 'walk', 'run', 'sprint' or 'crouch'
+   me.set_move(direction, speed=4.5)         # metres a second, whatever the mode
+   me.speed = 2.0; me.speed = None           # set it; None gives the mode's speed back
    me.jump(); me.set_crouch(True); me.slide(0.8)
    me.position, me.eye, me.velocity, me.grounded, me.state, me.heading
    me.addEventHandler('hit', function=fn)    # a body's events; 'landed' and 'footstep' too
    me.remove()
 
 The capsule's size and speeds are an ``omi_physics`` ``CharacterCapabilities``
-(:ref:`character`). A character with a ``model`` is placed at the feet, turned
+(:ref:`character`). ``set_move(direction, mode='walk', speed=None)`` moves at
+``speed`` metres a second where one is given and at the mode's speed from the
+capabilities where it is None; a crouched character goes no faster than
+``crouchSpeed``. ``me.speed`` is the speed the moves go at, and setting it
+changes it until the next ``set_move``. Neither changes the capabilities. A character with a ``model`` is placed at the feet, turned
 toward where it goes and animated by what it does (:doc:`characters`).
 ``context.follow(hero)`` shows it from behind and moves it from the keys
 (:ref:`navigation-follow-character`), and ``context.follow(me, view='eyes')``

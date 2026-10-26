@@ -251,12 +251,17 @@ Characters on a route
 
 ``hero.run_along(course, speed=, mode=, lane=)`` has the character follow a
 course: a ``RoadCourse`` (:ref:`roadcourse`), or a list of two or more points,
-such as a route from a navigation mesh (:doc:`navmesh`). Each frame it moves at
+such as a route from a navigation mesh (:doc:`navmesh`). At each step it moves at
 ``speed`` metres a second along the line, steering back onto its lane, and the
-ground, slopes and jumps stay the controller's. ``mode`` is ``'walk'``,
-``'run'``, ``'sprint'`` or ``'crouch'``, and the clip map shows that pace.
-``hero.hop_to(offset, over=)`` moves to the lane ``offset`` metres right of the
-line over ``over`` seconds. At the end of an open course the character stops,
+ground, slopes and jumps stay the controller's. ``speed`` is a number, or a
+function called at each step with the seconds since the run began, such as a
+pace that rises with the distance run; left out, it is the speed of ``mode``
+from the capabilities, which are not changed. ``mode`` is ``'walk'``, ``'run'``,
+``'sprint'`` or ``'crouch'``, and the clip map shows that pace. ``lane`` is the
+starting lateral offset in metres right of the line (0). ``hero.hop_to(offset,
+over=)`` moves to the lane ``offset`` metres right of the line over ``over``
+seconds (0.16), ``hero.lane`` is the offset steered toward now, and setting
+``hero.speed`` changes the run's speed. At the end of an open course the character stops,
 ``hero.arrived`` is true and ``'arrived'`` handlers are called with the
 character; a closed course goes round for ever. ``hero.stop_running_along()``
 gives the moves back to ``set_move`` and the keys.
@@ -266,6 +271,9 @@ gives the moves back to ``set_move`` and the keys.
    route = navmesh.path(hero.position, goal)
    hero.run_along(route, speed=1.8, mode='walk')
    hero.addEventHandler('arrived', self.OnArrived)
+
+   runner.run_along(course, speed=lambda seconds: 6.0 + 0.1 * seconds, lane=-2.0)
+   runner.hop_to(0.0, over=0.16)             # one lane to the right
 
 :doc:`tutorials/core_context/using_npc` walks a fox round a wall from corner to
 corner; :doc:`tutorials/character/character_trail` runs one along a winding

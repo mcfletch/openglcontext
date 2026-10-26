@@ -90,6 +90,13 @@ place of the frame rate found a defect in `omi_physics`: `_try_step_up` probed a
 up a tilted contact, so a walker could not mount a 0.1 m rock rim at 120 Hz; fixed on the
 `omi_physics` branch `step-up-probe` (`8e7c78a`), which this branch now needs.
 
+Speed, 2026-10-26. `Character.set_move(direction, mode, speed=None)` and a settable
+`Character.speed` (metres a second; None goes at the mode's speed); `run_along(course, speed=,
+lane=)` with `speed` a number or a function of the seconds since the run began, and
+`Character.lane`. Neither changes the capabilities, which `run_along` used to overwrite. The
+controller's half is `CharacterController.set_move(speed=)` on the same `omi_physics` branch
+(`eaf8c58`).
+
 Deleted 2026-10-26, once marble-demo's `physics-services` branch stopped importing them:
 `physics/demo.py` (`DemoScene`, `disable_vsync`; `terrain_view.py` calls `setVSync(False)`),
 `physics/threaded.py` (`ThreadedPhysicsManager`), `physics/manager.py` (`PhysicsManager`),

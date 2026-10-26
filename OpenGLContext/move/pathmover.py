@@ -8,7 +8,7 @@ position:
     mover = PathMover(course, speed=10.0)
     ...
     step = mover.update(character.position, dt)
-    character.set_move(step.direction)          # at step.speed metres a second
+    character.set_move(step.direction, speed=step.speed)
     ...
     mover.hop_to(2.0, over=0.16)                # one lane to the right
 
