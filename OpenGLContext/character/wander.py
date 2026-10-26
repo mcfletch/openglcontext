@@ -370,6 +370,29 @@ class Gait:
         self.run = mixer.layer(self.RUN, weight=0.0)
         self._running = self.run.play(run) if run else None
 
+    @classmethod
+    def from_clips(cls, model: Any, clips: Any) -> Gait:
+        """The gait a :class:`~OpenGLContext.character.locomotion.ClipMap` describes.
+
+        The map's ``idle``, ``walk`` and ``run`` roles are the clips, the
+        authored speeds of the walk and the run are the strides, and the map's
+        ``fade`` is the cross-fade between idles. A map with no run walks at
+        every speed. Raises ValueError for a map with no walk, or a walk or run
+        with no speed: a crowd's strides are measured, never guessed.
+        """
+        walk, run, idle = (clips.spec(role) for role in ('walk', 'run', 'idle'))
+        if walk is None:
+            raise ValueError('a crowd figure needs a walk clip in its map: %r' % (clips,))
+        for role, spec in (('walk', walk), ('run', run)):
+            if spec is not None and spec.speed is None:
+                raise ValueError('the %s clip %r needs the speed it was authored for, in '
+                                 'metres a second' % (role, spec.clip))
+        return cls(model, walk.clip, run=None if run is None else run.clip,
+                   idle=None if idle is None else idle.clip,
+                   walk_stride=walk.speed,
+                   run_stride=None if run is None else run.speed,
+                   fade=clips.fade)
+
     def apply(self, moving: float, speed: Optional[float] = None,
               action: int = 0) -> None:
         """Show ``moving`` of the locomotion over idle ``action``.
@@ -424,13 +447,14 @@ class WanderingCrowd:
     Each figure gets a ``Transform`` of its own to stand in; mount that in the
     scenegraph and the rest follows from :meth:`update`.
 
-    ``gait`` is what builds a figure's :class:`Gait`, for a model that needs
-    telling where its standing frame is or how long its stride is::
+    ``clips`` is a :class:`~OpenGLContext.character.locomotion.ClipMap` each
+    figure's :class:`Gait` is built from (:meth:`Gait.from_clips`)::
 
-        from functools import partial
+        crowd = WanderingCrowd(bounds=(-9.0, 9.0, -14.0, 2.0), clips=ClipMap(
+            idle='Survey', walk=('Walk', 0.82), run=('Run', 1.38)))
 
-        crowd = WanderingCrowd(bounds=(-9.0, 9.0, -14.0, 2.0),
-                               gait=partial(Gait, still_at=0.5, stride=1.6))
+    ``gait`` is a function of the model that builds its :class:`Gait` instead,
+    for a figure that needs more than a map says.
 
     ``facing`` is radians added to the heading when a figure's node is turned,
     for a model whose forward is not +Z: ``math.pi`` for one authored facing
@@ -443,6 +467,7 @@ class WanderingCrowd:
                  (-10.0, 10.0, -10.0, 10.0), *,
                  crowd: Optional[Crowd] = None,
                  gait: Optional[Callable[[Any], Gait]] = None,
+                 clips: Any = None,
                  elevation: float = 0.0,
                  facing: float = 0.0,
                  scale: float = 1.0,
@@ -461,7 +486,12 @@ class WanderingCrowd:
         #: :class:`Gait` is given must be in the same units as the field, so
         #: scale a stride measured off the model by this too.
         self.scale = float(scale)
-        self._gait = gait if gait is not None else _one_clip_gait
+        if clips is not None and gait is not None:
+            raise TypeError('a crowd takes clips= or gait=, not both')
+        if clips is not None:
+            self._gait: Callable[[Any], Gait] = lambda model: Gait.from_clips(model, clips)
+        else:
+            self._gait = gait if gait is not None else _one_clip_gait
         self.gaits: list[Gait] = []
         self.transforms: list[Transform] = []
 
