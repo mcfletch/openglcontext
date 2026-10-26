@@ -54,6 +54,8 @@ Not done:
 - Phase 0, the numbers for 1,000 and 5,000 bodies inline against thread.
 - The concurrency stress test of phase 4, and the same-scenario test between `inline` and `thread`.
 - `Proxy.heightfield` ceilings (`add_ground(ceiling=)`) and a collider for a bored tunnel.
+- `body.move_to(translation, over=)`, the glide of a kinematic body that pushes what is in its way.
+- `body.freeze()`.
 - `mode='process'` (phase 8) stays deferred.
 - `PhysicsDefinition` as an X3D extension node.
 - The migrations of marble-demo, glisteel, the forest and hill-runner's physics belong to the work
