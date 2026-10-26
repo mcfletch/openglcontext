@@ -761,7 +761,8 @@ class Physics:
     def add_character(self, node: Any = None, capabilities: Any = None,
                       position: Any = (0.0, 0.0, 0.0), gravity: float | None = None, *,
                       model: Any = None, animations: Any = None, parent: Any = None,
-                      fit: bool = True, facing: bool = True) -> Character:
+                      fit: bool = True, facing: bool = True,
+                      pass_group: str | None = None) -> Character:
         """Make a walker standing with its feet at ``position``.
 
         ``capabilities`` is a :class:`~omi_physics.character.CharacterCapabilities`
@@ -778,7 +779,8 @@ class Physics:
         :class:`~OpenGLContext.character.locomotion.ClipMap`, ``'ual'`` for the
         Universal Animation Library's names or ``'guess'`` to match the model's
         clip names to the roles; the model then plays them for what the
-        character is doing.
+        character is doing. Characters given the same ``pass_group`` name walk
+        through one another (:attr:`Character.pass_group`).
         """
         from omi_physics.character import CharacterCapabilities  # noqa: PLC0415 only a service with walkers needs it
 
@@ -807,6 +809,7 @@ class Physics:
                          facing=Facing() if facing and wearing is not None else None,
                          turn_node=turn)
         self._characters.append(made)
+        made.pass_group = pass_group
         return made
 
     @staticmethod

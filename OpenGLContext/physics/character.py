@@ -116,6 +116,7 @@ class Character:
             replica.query, capabilities, centre, gravity=gravity,
             ignore=[replica.index_of(self.body.uid), *physics.passable_slots()])
         self._slot = replica.index_of(self.body.uid)
+        self._pass_group: str | None = None
         #: Where the capsule's centre was before and after its latest step, and how far
         #: from the one toward the other the frame draws it.
         self._previous = self.controller.position.copy()
@@ -401,9 +402,39 @@ class Character:
         """Take the character out of the world. Removing twice is harmless."""
         if not self.alive:
             return
+        self.pass_group = None
         self.alive = False
         self.physics._characters.remove(self)
         self.body.remove()
+
+    @property
+    def pass_group(self) -> str | None:
+        """The name of the characters this one walks through, and that walk through it, or None.
+
+        Characters with the same name do not block one another's moves; each still
+        blocks every character outside the group, and its stand-in is still a body
+        that rays, shots and the solver meet. None, the default, blocks everybody.
+        """
+        return self._pass_group
+
+    @pass_group.setter
+    def pass_group(self, name: str | None) -> None:
+        if name == self._pass_group:
+            return
+        if self._pass_group is not None:
+            for other in self._fellows():
+                other.controller.ignore.discard(self._slot)
+                self.controller.ignore.discard(other._slot)
+        self._pass_group = name
+        if name is not None:
+            for other in self._fellows():
+                other.controller.ignore.add(self._slot)
+                self.controller.ignore.add(other._slot)
+
+    def _fellows(self) -> list[Character]:
+        """The other characters in the world with this one's pass group."""
+        return [other for other in self.physics._characters
+                if other is not self and other._pass_group == self._pass_group]
 
     # -- events -------------------------------------------------------------
     def addEventHandler(self, event: str, function: Callable[..., Any] | None = None,

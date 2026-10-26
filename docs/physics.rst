@@ -651,6 +651,20 @@ character instead. A blow the stand-in takes becomes a change of velocity of
 walker knocks it back. A character stands on a dynamic body and is carried by
 it. A body added with ``blocks_characters=False`` is walked through.
 
+Characters block one another: each one's moves slide against the others'
+stand-ins, so two walkers meeting in a corridor one capsule wide stop face to
+face. Characters made with the same ``pass_group`` name walk through one
+another, and each still blocks, and is blocked by, every character outside the
+group:
+
+.. code-block:: python
+
+   bot = physics.add_character(capabilities=caps, position=spawn, pass_group='bots')
+   bot.pass_group = None                    # blocks everybody again
+
+The group changes only who walks through whom. A member's stand-in is still a
+body that rays, shots, triggers and the solver meet.
+
 The lone character of an inline service writes its stand-in to the world when
 something can see it: a dynamic body, a trigger or a sensor within reach of it
 in a step, or a ray, sweep or overlap whose bounds reach it. Until then the

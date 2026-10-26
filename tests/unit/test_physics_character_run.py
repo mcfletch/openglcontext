@@ -230,3 +230,83 @@ def test_a_wall_taken_away_leaves_its_place_to_the_next_body(physics):
     physics.step(TICK)
     assert solid.alive
     assert walk_into(me) > -4.0
+
+
+# -- characters that walk through one another -------------------------------------------------
+
+def corridor(physics, width=1.0):
+    """Walls along x either side of a corridor ``width`` metres wide, one capsule across."""
+    for side in (-1, 1):
+        physics.add_static(None, proxy=Proxy.box((40.0, 3.0, 0.4)),
+                           translation=(0.0, 1.5, side * (width / 2 + 0.2)))
+
+
+def towards_each_other(physics, seconds=6.0, **options):
+    """Two characters in the corridor walking at each other; their x when the time is up."""
+    west = physics.add_character(position=(-3, 0.05, 0.01), **options)
+    east = physics.add_character(position=(3, 0.05, -0.01), **options)
+    for each, heading in ((west, 1.0), (east, -1.0)):
+        each.framed = False
+        each.set_move((heading, 0, 0), 'walk')
+    for _ in range(round(seconds / TICK)):
+        west.step(TICK)
+        east.step(TICK)
+    return float(west.position[0]), float(east.position[0])
+
+
+def test_two_characters_meeting_in_a_corridor_one_wide_block_each_other(physics):
+    corridor(physics)
+    west, east = towards_each_other(physics)
+    assert west < east
+
+
+def test_characters_of_one_pass_group_walk_through_each_other(physics):
+    corridor(physics)
+    west, east = towards_each_other(physics, pass_group='bots')
+    assert west > 2.0 and east < -2.0
+
+
+def test_a_character_outside_the_pass_group_still_blocks_it(physics):
+    corridor(physics)
+    me = physics.add_character(position=(0, 0.05, 0))
+    bot = physics.add_character(position=(-3, 0.05, 0), pass_group='bots')
+    other = physics.add_character(position=(3, 0.05, 0), pass_group='bots')
+    assert (me.pass_group, bot.pass_group) == (None, 'bots')
+    for each in (me, bot, other):
+        each.framed = False
+    bot.set_move((1, 0, 0), 'walk')
+    for _ in range(round(3.0 / TICK)):
+        bot.step(TICK)
+    assert float(bot.position[0]) < -0.5
+    assert physics.raycast((-6, 1.0, 0), (1, 0, 0), 20.0).body is bot.body
+
+
+def test_a_pass_group_can_be_joined_and_left(physics):
+    corridor(physics)
+    west = physics.add_character(position=(-3, 0.05, 0.01))
+    east = physics.add_character(position=(3, 0.05, -0.01), pass_group='bots')
+    west.pass_group = 'bots'
+    assert west.pass_group == 'bots'
+    west.pass_group = None
+    for each, heading in ((west, 1.0), (east, -1.0)):
+        each.framed = False
+        each.set_move((heading, 0, 0), 'walk')
+    for _ in range(round(6.0 / TICK)):
+        west.step(TICK)
+        east.step(TICK)
+    assert float(west.position[0]) < float(east.position[0])
+
+
+def test_a_removed_member_leaves_its_slot_to_the_next_body(physics):
+    corridor(physics)
+    me = physics.add_character(position=(-3, 0.05, 0), pass_group='bots')
+    gone = physics.add_character(position=(3, 0.05, 0), pass_group='bots')
+    me.framed = False
+    gone.remove()
+    physics.step(TICK)
+    physics.add_static(None, proxy=Proxy.box((0.4, 3.0, 2.0)), translation=(0.0, 1.5, 0.0))
+    physics.step(TICK)
+    me.set_move((1, 0, 0), 'walk')
+    for _ in range(round(3.0 / TICK)):
+        me.step(TICK)
+    assert float(me.position[0]) < 0.0
