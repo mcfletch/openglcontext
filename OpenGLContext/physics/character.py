@@ -10,11 +10,18 @@ capsule, placed at the capsule each frame with the velocity it moved at. The
 solver pushes a crate the stand-in runs into, and a crate that strikes the
 stand-in knocks the character back by the impulse it delivered. A body heavier
 than ``pushMass`` is ignored by the stand-in, so it blocks the character instead.
+
+The lone character of an inline service writes its stand-in to the world when
+something can see it: a dynamic body, a trigger or a sensor within reach of it
+in a step, or a ray, sweep or overlap that reaches it. Until then the stand-in
+waits, still, where it was last written, and a step finds it where it would have
+been had it been written at every step. Read from its body, a waiting stand-in's
+pose is that of the last step it was written in.
 """
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 import numpy as np
 from omi_physics.character import CharacterCapabilities, CharacterController, CharacterState
@@ -99,6 +106,15 @@ class Character:
         #: The position and velocity the stand-in was last given, so that a character
         #: that has not moved sends the world nothing.
         self._stand_in_at: tuple[tuple[float, ...], tuple[float, ...]] | None = None
+        #: Whether the world's stand-in is where :attr:`_stand_in_at` and the steps
+        #: since put it; while it is not, the write waits (:meth:`_settle`).
+        self._written = True
+        #: The steps the world has taken since the waiting write was asked for.
+        self._behind = 0
+        #: The velocity the world's stand-in has.
+        self._given_velocity: tuple[float, ...] = (0.0, 0.0, 0.0)
+        #: Whether a write was asked for since the service last collected a frame.
+        self._fresh = False
         self._landed: float | None = None
         self._path: PathMover | None = None
         self._path_mode = 'run'
@@ -400,16 +416,76 @@ class Character:
     def _place_stand_in(self, velocity: Any) -> None:
         """Put the stand-in at the capsule with ``velocity``, unless it is already so.
 
-        Placing a body and setting its velocity each wake it.
+        Placing a body and setting its velocity each wake it. Where the service
+        defers stand-ins (:meth:`Physics._defers_stand_ins
+        <OpenGLContext.physics.service.Physics._defers_stand_ins>`) the write
+        waits for something that can see it.
         """
-        physics, body = self.physics, self.body
         here = tuple(float(v) for v in self.controller.position)
         moving = tuple(float(v) for v in velocity)
         if (here, moving) == self._stand_in_at:
             return
         self._stand_in_at = (here, moving)
+        if self.physics._defers_stand_ins():
+            self._written, self._behind, self._fresh = False, 0, True
+        else:
+            self._write(here, moving)
+
+    def _write(self, here: tuple[float, ...], moving: tuple[float, ...]) -> None:
+        """Place the stand-in at ``here`` with velocity ``moving``."""
+        physics, body = self.physics, self.body
         physics._command('place', body, here, None)
         physics._command('velocity', body, moving)
+        self._given_velocity = moving
+        self._written = True
+
+    def _due(self) -> tuple[float, ...]:
+        """Where the world's stand-in would be had the waiting write been made: the place
+        asked for, moved on by its velocity for each step since, as a step moves it."""
+        here, moving = cast(tuple[tuple[float, ...], tuple[float, ...]], self._stand_in_at)
+        if not self._behind:
+            return here
+        dt = self.physics.worker.runtime.step_dt
+        x, y, z = here
+        vx, vy, vz = moving
+        for _ in range(self._behind):
+            x, y, z = x + vx * dt, y + vy * dt, z + vz * dt
+        return x, y, z
+
+    def _bring_up(self) -> None:
+        """Make the waiting write now."""
+        if not self._written:
+            self._write(self._due(), cast(tuple[tuple[float, ...], tuple[float, ...]],
+                                          self._stand_in_at)[1])
+
+    def _settle(self, seen: Callable[[Character, tuple[float, ...]], bool]) -> None:
+        """Before a step: make the waiting write where ``seen(self, due)`` says something can see
+        the stand-in, else keep it waiting, still, and count the step."""
+        if self._written:
+            return
+        due = self._due()
+        if seen(self, due):
+            self._write(due, cast(tuple[tuple[float, ...], tuple[float, ...]],
+                                  self._stand_in_at)[1])
+            return
+        if any(self._given_velocity):
+            self.physics._command('velocity', self.body, (0.0, 0.0, 0.0))
+            self._given_velocity = (0.0, 0.0, 0.0)
+        self._behind += 1
+
+    def _stand_in_reach(self, grow: float) -> tuple[float, float]:
+        """How far the stand-in's box, grown by ``grow`` metres, reaches from its centre: across,
+        and up and down."""
+        caps = self.capabilities
+        across = caps.radius + CharacterController.PUSH_REACH + grow
+        return across, 0.5 * max(caps.standHeight - 2.0 * caps.radius, 1e-3) + across
+
+    def _stand_in_box(self, centre: Any, grow: float) -> tuple[np.ndarray, np.ndarray]:
+        """The box of the stand-in centred at ``centre``, grown by ``grow`` metres."""
+        across, up = self._stand_in_reach(grow)
+        half = np.array([across, up, across])
+        middle = np.asarray(centre, dtype='d')
+        return middle - half, middle + half
 
     def _place_node(self) -> None:
         if self.node is not None:

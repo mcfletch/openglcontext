@@ -1,6 +1,6 @@
 """A character that has not moved sends the world nothing.
 
-The stand-in is placed by command each time its character is stepped. A walker
+The stand-in is placed by command when its character moves and something can see it. A walker
 standing in a forest is stepped every frame, and a command per frame keeps the
 world's thread stepping 230,000 trunks to find out that nothing moved.
 """
@@ -44,7 +44,8 @@ def test_a_standing_character_sends_no_commands(service):
     assert me.grounded
 
 
-def test_a_character_that_moves_places_its_stand_in_each_frame(service):
+def test_a_character_that_moves_in_a_trigger_places_its_stand_in_each_frame(service):
+    service.add_trigger(None, proxy=Proxy.box((6, 3, 6)), translation=(0, 1.5, 0))
     me = service.add_character(position=(0, 0.05, 0))
     for _ in range(60):
         service.frame(1 / 60)
@@ -52,8 +53,9 @@ def test_a_character_that_moves_places_its_stand_in_each_frame(service):
     me.set_move((1, 0, 0))
     for _ in range(10):
         service.frame(1 / 60)
-    assert sent.commands.count('place') == 10
-    assert sent.commands.count('velocity') == 10
+    # Each frame's write is made before the step that follows it, so the tenth waits.
+    assert sent.commands.count('place') == 9
+    assert sent.commands.count('velocity') == 9
 
 
 def test_a_character_that_stops_sends_nothing_once_it_has_rested(service):

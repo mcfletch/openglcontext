@@ -24,12 +24,14 @@ import logging
 import os
 import queue
 import time
+import weakref
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 from omi_physics import mathutil, model
+from omi_physics.body import world_aabb
 from omi_physics.gravity import GravityVolume
 from omi_physics.collisionquery import WorldQuery
 
@@ -127,6 +129,10 @@ class Physics:
         self._specs: dict[int, BodySpec] = {}
         self._replica: Replica | None = None
         self._characters: list[Character] = []
+        #: For each character's stand-in, by id, the fixed triggers and sensors near it
+        #: (:meth:`_fixed_seen`).
+        self._seen_gathers: dict[int, tuple[Any, tuple[float, ...], tuple[float, ...],
+                                            list[tuple[float, ...]]]] = {}
         #: The bodies that characters walk through, by id.
         self._passable: set[int] = set()
         self._sources: list[SourceHandle] = []
@@ -148,6 +154,8 @@ class Physics:
         runtime.before_step.append(self._run_step_handlers('before-step'))
         runtime.after_step.append(self._run_step_handlers('after-step'))
         runtime.wants_steps.append(self.handlers.has_step_handlers)
+        runtime.before_step.append(self._settle_stand_ins)
+        runtime.wants_steps.append(self._stand_ins_want_steps)
 
     def _ensure_started(self) -> None:
         if self._enabled and not self._closed:
@@ -199,6 +207,7 @@ class Physics:
         definition the service cannot run.
         """
         definition.validate()
+        self._bring_up_all()
         previous, self.definition = self.definition, definition
         self._send_world('config', float(definition.tickHz), float(definition.maxCatchUp))
         self.gravity = tuple(definition.gravity)
@@ -211,6 +220,7 @@ class Physics:
             self._ensure_started()
 
     def _switch(self, mode: str) -> None:
+        self._bring_up_all()
         old = self.worker
         old.stop()
         pending = old.inbox.drain()
@@ -231,6 +241,7 @@ class Physics:
                 raise ValueError('tick_frequency must be above zero, not %r' % (tick_frequency,))
             self.definition.tickHz = float(tick_frequency)
             self._send_world('config', float(tick_frequency), float(self.definition.maxCatchUp))
+        self._bring_up_all()
         self._enabled = bool(on)
         if not self._enabled:
             self.worker.stop()
@@ -629,6 +640,7 @@ class Physics:
         from OpenGLContext.physics.debugdraw import PROXIES, PhysicsDebugDraw  # noqa: PLC0415 imports the scenegraph
 
         if on and self._overlay is None and self._mount is not None:
+            self._bring_up_all()
             self._overlay = PhysicsDebugDraw(self._character_replica().world, flags=PROXIES)
             self._overlay.update()
             self._mount(self._overlay.root, True)
@@ -681,6 +693,7 @@ class Physics:
                 parent.children.append(node)
         from OpenGLContext.character.facing import Facing  # noqa: PLC0415 only a character with a body needs it
 
+        self._bring_up_all()
         made = Character(self, node, caps, position, pull, model=wearing, clip_map=clip_map,
                          facing=Facing() if facing and wearing is not None else None,
                          turn_node=turn)
@@ -896,6 +909,8 @@ class Physics:
             return False
         self._pump_cooked()
         out = self.worker.collect(dt)
+        for character in self._characters:
+            character._fresh = False
         if out.snapshot is not None:
             self._snapshot = out.snapshot
             if self._replica is not None:
@@ -1009,6 +1024,151 @@ class Physics:
                       not bool(snapshot.awake[row]) and bool(snapshot.dynamic[row]))
 
     # -- queries ---------------------------------------------------------
+    # -- stand-ins that wait ------------------------------------------------
+    def _defers_stand_ins(self) -> bool:
+        """Whether a character's stand-in is written to the world only when something can see it.
+
+        So for the lone character of an inline service showing no proxies:
+        another character's controller reads the stand-ins from the replica,
+        which follows each write as it is asked for.
+        """
+        return (len(self._characters) == 1 and isinstance(self.worker, InlineWorker)
+                and self._enabled and not self._closed and self._overlay is None)
+
+    def _bring_up_all(self) -> None:
+        """Make every waiting stand-in write now."""
+        for character in self._characters:
+            character._bring_up()
+
+    def _settle_stand_ins(self, step: Step) -> None:  # noqa: ARG002 the step is the hook's argument
+        """Before a step: write each waiting stand-in that a body in the world can see."""
+        for character in self._characters:
+            if not character._written:
+                character._settle(self._seen_in_step)
+
+    def _stand_ins_want_steps(self) -> bool:
+        """Whether a waiting stand-in keeps the world stepping as its write would have: a write
+        asked for since the last frame was collected, or a velocity it would have."""
+        for character in self._characters:
+            if not character._written:
+                moving = character._stand_in_at[1] if character._stand_in_at else ()
+                if character._fresh or any(moving):
+                    return True
+        return False
+
+    #: Metres past the box of a body that moves, and past the stand-in's, within which a step
+    #: is taken to see the stand-in, beyond what the body can travel in the step.
+    SEEN_MARGIN = 0.1
+    #: How far past the stand-in, in metres, the fixed triggers and sensors near it are gathered
+    #: for the steps that follow, while the layout of the world holds.
+    SEEN_GATHER = 4.0
+
+    def _seen_in_step(self, character: Character, due: tuple[float, ...]) -> bool:
+        """Whether a dynamic body, a trigger or a sensor of the world can meet ``character``'s
+        stand-in in the coming step, at ``due`` or where the world holds it now.
+
+        A fixed trigger or sensor is tested by its box. The box of a body that
+        moves is grown by :attr:`SEEN_MARGIN` and by twice what its speed, its
+        spin about the far corner of its box and gravity can carry it in a step.
+        """
+        runtime = self.worker.runtime
+        world = runtime.world
+        uid = character.body.uid
+        if uid not in runtime:
+            return True
+        index = runtime.entry(uid).index
+        fixed, moving = _observers(world)
+        across, up = character._stand_in_reach(self.SEEN_MARGIN)
+        boxes = [(x - across, y - up, z - across, x + across, y + up, z + across)
+                 for x, y, z in (due, world.position[index].tolist())]
+        if len(fixed) and self._fixed_seen(character, world, fixed, boxes):
+            return True
+        moving = moving[moving != index]
+        if not len(moving):
+            return False
+        low, high = world.aabb_min[moving], world.aabb_max[moving]
+        dt = runtime.step_dt
+        spin = np.linalg.norm(world.angular_velocity[moving], axis=1)
+        reach = (np.linalg.norm(world.linear_velocity[moving], axis=1)
+                 + spin * np.linalg.norm(high - low, axis=1))
+        pull = float(np.linalg.norm(np.asarray(self._gravity, dtype='d')))
+        grow = (self.SEEN_MARGIN + 2.0 * dt * reach + pull * dt * dt)[:, None]
+        low, high = low - grow, high + grow
+        for x0, y0, z0, x1, y1, z1 in boxes:
+            if bool(np.any((high[:, 0] >= x0) & (high[:, 1] >= y0) & (high[:, 2] >= z0)
+                           & (low[:, 0] <= x1) & (low[:, 1] <= y1) & (low[:, 2] <= z1))):
+                return True
+        return False
+
+    def _fixed_seen(self, character: Character, world: Any, fixed: np.ndarray,
+                    boxes: list[tuple[float, ...]]) -> bool:
+        """Whether a fixed trigger or sensor's box meets one of ``boxes``, each
+        ``(x0, y0, z0, x1, y1, z1)``.
+
+        The fixed ones within :attr:`SEEN_GATHER` of the boxes are gathered once
+        and kept while the boxes stay inside the gathered region and the
+        world's layout holds.
+        """
+        (a, b, c, d, e, f), (g, h, i, j, k, m) = boxes
+        lo = (min(a, g), min(b, h), min(c, i))
+        hi = (max(d, j), max(e, k), max(f, m))
+        key = (world.population_epoch, world.layout_epoch)
+        held = self._seen_gathers.get(character.body.uid)
+        if (held is None or held[0] != key
+                or not (held[1][0] <= lo[0] and held[1][1] <= lo[1] and held[1][2] <= lo[2]
+                        and hi[0] <= held[2][0] and hi[1] <= held[2][1] and hi[2] <= held[2][2])):
+            gather = self.SEEN_GATHER
+            region_lo = tuple(value - gather for value in lo)
+            region_hi = tuple(value + gather for value in hi)
+            low, high = world.aabb_min[fixed], world.aabb_max[fixed]
+            near = (np.all(high >= np.array(region_lo), axis=1)
+                    & np.all(low <= np.array(region_hi), axis=1))
+            held = (key, region_lo, region_hi,
+                    [(*one, *two) for one, two in zip(low[near].tolist(), high[near].tolist(),
+                                                      strict=True)])
+            self._seen_gathers[character.body.uid] = held
+        for x0, y0, z0, x1, y1, z1 in boxes:
+            for a0, b0, c0, a1, b1, c1 in held[3]:
+                if a1 >= x0 and b1 >= y0 and c1 >= z0 and a0 <= x1 and b0 <= y1 and c0 <= z1:
+                    return True
+        return False
+
+    def _bring_up_along(self, origins: np.ndarray, directions: np.ndarray, distance: float,
+                        radius: float, skip: Any) -> None:
+        """Write each waiting stand-in that rays or swept spheres from ``origins`` along
+        ``directions`` for ``distance`` can reach."""
+        if all(character._written for character in self._characters):
+            return
+        lengths = np.linalg.norm(directions, axis=1)
+        heading = np.divide(directions, lengths[:, None], out=np.zeros_like(directions),
+                            where=lengths[:, None] > 0.0)
+        ends = origins + heading * max(distance, 0.0)
+        self._bring_up_within(np.minimum(origins, ends).min(axis=0) - radius,
+                              np.maximum(origins, ends).max(axis=0) + radius, skip)
+
+    def _bring_up_within(self, lo: np.ndarray, hi: np.ndarray, skip: Any) -> None:
+        """Write each waiting stand-in, not in ``skip``, whose box meets ``lo`` to ``hi``, at the
+        place it is due or where the world holds it."""
+        waiting = [character for character in self._characters if not character._written]
+        if not waiting:
+            return
+        skipped = (set() if skip is None else {skip.uid} if isinstance(skip, Body)
+                   else {body.uid for body in skip})
+        runtime = self.worker.runtime
+        for character in waiting:
+            uid = character.body.uid
+            if uid in skipped:
+                continue
+            if uid not in runtime:
+                character._bring_up()       # added by a command the world has not taken yet
+                continue
+            held = runtime.world.position[runtime.entry(uid).index]
+            for centre in (character._due(), held):
+                low, high = character._stand_in_box(centre, self.SEEN_MARGIN)
+                if bool(np.all(high >= lo) and np.all(low <= hi)):
+                    character._bring_up()
+                    break
+
     def _queryable(self) -> tuple[Any, Callable[[int], int | None], Callable[[int], int | None]]:
         """The world this thread may read, and how to turn body ids into its slots and back.
 
@@ -1047,6 +1207,9 @@ class Physics:
         Answers in the call, from the world as the last tick left it. ``skip``
         is a body, or a list of them, the ray passes through.
         """
+        start = np.asarray(origin, dtype='d')
+        self._bring_up_along(start[None], np.asarray(direction, dtype='d')[None],
+                             float(max_distance), 0.0, skip)
         world, slot, uid_at = self._queryable()
         found = WorldQuery(world).raycast(origin, direction, float(max_distance),
                                           self._skipped(skip, slot))
@@ -1057,6 +1220,9 @@ class Physics:
         """Several rays at once, each answered as :meth:`raycast` would answer it."""
         from omi_physics.raycast import raycast_many  # noqa: PLC0415 only a service that casts needs it
 
+        self._bring_up_along(np.asarray(origins, dtype='d').reshape(-1, 3),
+                             np.asarray(directions, dtype='d').reshape(-1, 3),
+                             float(max_distance), 0.0, skip)
         world, slot, uid_at = self._queryable()
         found = raycast_many(world, origins, directions, float(max_distance),
                              self._skipped(skip, slot))
@@ -1087,6 +1253,9 @@ class Physics:
 
         None where it travels ``distance`` clear; 0 where it starts inside a body.
         """
+        self._bring_up_along(np.asarray(origin, dtype='d')[None],
+                             np.asarray(direction, dtype='d')[None], float(distance),
+                             float(radius), skip)
         world, slot, _uid_at = self._queryable()
         return sweep_sphere(world, origin, direction, float(distance), float(radius),
                             self._skipped(skip, slot))
@@ -1099,10 +1268,12 @@ class Physics:
         ``rotation`` is an axis and an angle. The answer lists solid bodies, or
         with ``triggers=True`` the trigger volumes the shape is in.
         """
-        world, slot, uid_at = self._queryable()
         shape = proxy.shape if isinstance(proxy, Proxy) else proxy
         quaternion = (np.array([0.0, 0.0, 0.0, 1.0]) if rotation is None
                       else vrml_rotation_to_quat(rotation))
+        self._bring_up_within(*world_aabb(shape, np.asarray(translation, dtype='d'), quaternion),
+                              skip)
+        world, slot, uid_at = self._queryable()
         found = overlapping(world, shape, translation, quaternion, self._skipped(skip, slot),
                             triggers)
         bodies = [self._body_of(uid) for uid in (uid_at(index) for index in found)
@@ -1268,6 +1439,25 @@ class Physics:
         if self._cooker is not None:
             self._cooker.shutdown(wait=False, cancel_futures=True)
         self.worker.stop()
+
+
+#: The rows of each world's fixed triggers and sensors, and of its dynamic bodies and moving
+#: triggers and sensors, by population epoch.
+_OBSERVERS: weakref.WeakKeyDictionary[Any, tuple[int, np.ndarray, np.ndarray]] = (
+    weakref.WeakKeyDictionary())
+
+
+def _observers(world: Any) -> tuple[np.ndarray, np.ndarray]:
+    """The rows of what can meet a stand-in in ``world``: its fixed triggers and sensors, and its
+    dynamic bodies and the triggers and sensors that move."""
+    epoch = world.population_epoch
+    found = _OBSERVERS.get(world)
+    if found is None or found[0] != epoch:
+        kind = world.motion_type
+        sensing = (world.trigger_shape >= 0) | world.sensor
+        found = _OBSERVERS[world] = (epoch, np.flatnonzero(sensing & (kind == 0)),
+                                     np.flatnonzero((kind == 2) | (sensing & (kind != 0))))
+    return found[1], found[2]
 
 
 def _path_to(root: Any, target: Any) -> list[Any] | None:

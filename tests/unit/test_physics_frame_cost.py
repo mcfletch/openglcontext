@@ -277,9 +277,11 @@ def test_nodes_and_replica_agree_with_the_world_once_it_rests(mode):
 
 # -- characters ----------------------------------------------------------------------
 
-def test_a_running_character_sends_its_stand_in_a_place_and_a_velocity_a_frame(monkeypatch):
+def test_a_running_character_in_a_trigger_sends_its_stand_in_a_place_and_a_velocity_a_frame(
+        monkeypatch):
     physics = Physics(definition(mode='inline'))
     physics.add_static(None, Proxy.box((60, 1, 60)), translation=(0, -0.5, 0))
+    physics.add_trigger(None, Proxy.box((20, 4, 20)), translation=(0, 2.0, 0))
     character = physics.add_character(position=(0, 0.1, 0))
     for _ in range(30):
         physics.frame(FRAME)
