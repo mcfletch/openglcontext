@@ -64,7 +64,8 @@ class Approach:
     """Two bodies about to meet for the first time, as a contact filter is told of them.
 
     ``first`` and ``second`` are the bodies, None for one with no handle (a
-    character's stand-in, a body of an instance set). ``approach`` is the
+    body of an instance set); a character's stand-in is its character's
+    ``body``. ``approach`` is the
     closing speed in metres a second, ``impulse`` the momentum the blow carries
     in newton-seconds, ``point`` where they meet and ``normal`` the unit vector
     from ``first`` toward ``second``.

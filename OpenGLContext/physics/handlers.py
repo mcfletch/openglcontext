@@ -143,6 +143,10 @@ class HandlerTable:
         wanted = None if bodies is None else frozenset(bodies)
         return [h for h in self._handlers if h.event == event and h.bodies == wanted]
 
+    def any_for(self, event: str) -> bool:
+        """Whether an active handler for ``event`` is registered, for any body or every body."""
+        return any(h.active and h.event == event for h in self._handlers)
+
     def audience(self, event: PhysicsEvent, physics: bool) -> list[tuple[Handler, int]]:
         """The handlers that hear ``event`` and from which side, running on the thread named.
 

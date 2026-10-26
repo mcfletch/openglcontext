@@ -312,3 +312,12 @@ def test_a_mode_change_while_capturing_keeps_the_world_inline():
         assert isinstance(made.physics.worker, InlineWorker)
     finally:
         made.releaseWindow()
+
+
+def test_a_handler_for_one_body_counts_as_a_receiver(ctx, clock):
+    listener = _Listener()
+    body = _land(ctx, clock)
+    manager = ctx.getEventManager('physics-hit')
+    assert not manager.hasReceivers()
+    ctx.addEventHandler('physics-hit', body=body, function=listener.OnHit)
+    assert manager.hasReceivers()

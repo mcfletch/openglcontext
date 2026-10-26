@@ -54,7 +54,7 @@ class PhysicsEventManager:
         """Whether any handler is registered for this event with the context's physics service."""
         context = self._context()
         service = None if context is None else context.__dict__.get('_physics')
-        return bool(service is not None and service.handlers.named(self.event))
+        return bool(service is not None and service.handlers.any_for(self.event))
 
 
 def install(context: Any) -> None:
