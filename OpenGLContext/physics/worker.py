@@ -75,8 +75,8 @@ class Worker(Protocol):
     def start(self) -> None:
         """Begin stepping, where the worker has a thread."""
 
-    def stop(self) -> None:
-        """Stop stepping and release the thread."""
+    def stop(self) -> bool:
+        """Stop stepping and release the thread; whether it ended."""
 
 
 class InlineWorker:
@@ -133,8 +133,9 @@ class InlineWorker:
     def start(self) -> None:
         """An inline worker has no thread to start."""
 
-    def stop(self) -> None:
+    def stop(self) -> bool:
         """An inline worker has no thread to stop."""
+        return True
 
     def on_worker_thread(self) -> bool:
         """Whether a step is under way, so the caller is a hook inside it."""
@@ -174,6 +175,8 @@ class ThreadWorker:
         self._dropped = 0
         #: Whether the thread is blocked with nothing to do.
         self.idle = False
+        #: Seconds :meth:`stop` waits for the thread to end its step.
+        self.stop_timeout = 5.0
         #: The exception that ended the thread, or None while it has not failed.
         self.error: Exception | None = None
 
@@ -184,7 +187,13 @@ class ThreadWorker:
 
     def on_worker_thread(self) -> bool:
         """Whether the calling thread is the stepping thread."""
-        return self._thread is not None and threading.get_ident() == self._thread.ident
+        thread = self._thread
+        return thread is not None and threading.get_ident() == thread.ident and thread.is_alive()
+
+    def _running(self) -> bool:
+        """Whether a thread of this worker is alive, stepping or finishing a step after a stop."""
+        thread = self._thread
+        return thread is not None and thread.is_alive()
 
     def flush(self) -> None:
         """Apply the waiting commands on the calling thread, when no thread is running."""
@@ -192,7 +201,7 @@ class ThreadWorker:
 
     def _flush(self) -> bool:
         with self._lock:
-            if self._thread is not None:
+            if self._running():
                 return False
         self.runtime.bind_thread()
         commands = self.inbox.drain()
@@ -203,27 +212,56 @@ class ThreadWorker:
     # -- lifecycle ------------------------------------------------------
     @property
     def thread_id(self) -> int | None:
-        """The identity of the stepping thread; None while it is not running."""
-        return None if self._thread is None else self._thread.ident
+        """The identity of the stepping thread; None while no thread is alive."""
+        return self._thread.ident if self._running() and self._thread is not None else None
 
     def start(self) -> None:
-        """Begin stepping on a daemon thread; a second call, or one after the thread failed, does nothing."""
+        """Begin stepping on a daemon thread.
+
+        A second call finds it running, and a call after the thread failed
+        does nothing. A thread still finishing its step after :meth:`stop` is
+        waited for first, so one thread at a time steps the world.
+        """
         with self._lock:
-            if self._thread is not None or self.error is not None:
+            old = self._thread
+            if self.error is not None or (old is not None and not self._stop.is_set()):
+                return
+        if old is not None:
+            old.join()
+        with self._lock:
+            if self._thread is not old:
                 return
             self._stop.clear()
             self._thread = threading.Thread(target=self._loop, name='physics', daemon=True)
             self._thread.start()
 
-    def stop(self) -> None:
-        """Stop the thread and wait for it to end."""
+    def stop(self, timeout: float | None = None) -> bool:
+        """Stop the thread and wait up to ``timeout`` seconds (:attr:`stop_timeout` where None)
+        for it to end; whether it ended.
+
+        A thread still in its step when the time is up keeps the world until it
+        ends: nothing is applied on another thread meanwhile. Called from the
+        stepping thread itself, it asks the thread to end after this step and
+        answers False.
+        """
         with self._lock:
-            thread, self._thread = self._thread, None
+            thread = self._thread
         if thread is None:
-            return
+            return True
         self._stop.set()
         self.inbox.post(_NOTHING)
-        thread.join(timeout=5.0)
+        if thread.ident == threading.get_ident():
+            return False
+        timeout = self.stop_timeout if timeout is None else timeout
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            log.warning('the physics thread did not stop within %.1f s; it keeps the world '
+                        'until its step ends', timeout)
+            return False
+        with self._lock:
+            if self._thread is thread:
+                self._thread = None
+        return True
 
     # -- the render thread's side ---------------------------------------
     def submit(self, command: Command) -> None:
@@ -243,7 +281,7 @@ class ThreadWorker:
 
     def collect(self, dt: float) -> Outbox:  # noqa: ARG002 the thread steps by its own clock
         """The newest snapshot if it has not been collected, and the events since the last call."""
-        if self._thread is None and self.error is None:
+        if not self._running() and self.error is None:
             self._publish_without_thread()
         with self._lock:
             snapshot = self._published
@@ -261,7 +299,7 @@ class ThreadWorker:
 
     def step(self, dt: float) -> None:
         """Advance by ``dt`` seconds on the calling thread, for a worker that is not running."""
-        if self._thread is not None:
+        if self._running():
             raise RuntimeError('step() is for a worker whose thread is stopped')
         self.runtime.bind_thread()
         for command in self.inbox.drain():

@@ -5,6 +5,7 @@ world with no window. Most run the service inline, where the test sets the clock
 the thread cases at the end run it on its worker.
 """
 import threading
+import time
 
 import numpy as np
 import pytest
@@ -577,7 +578,9 @@ def test_switching_mode_keeps_the_bodies():
 def test_a_place_waiting_behind_a_callback_write_is_not_read_as_applied():
     """A physics callback's write is applied in the step; a render-thread write
     still in the inbox is not, though the callback's write is numbered after it."""
-    service = make(mode='thread', gravity=(0.0, 0.0, 0.0))
+    # Two ticks a second: after publishing a step the thread waits half a
+    # second before it takes the next commands, the frame's window to read it.
+    service = make(mode='thread', gravity=(0.0, 0.0, 0.0), tickHz=2.0)
     in_step, posted = threading.Event(), threading.Event()
     try:
         node = ball(at=(0, 5, 0))
@@ -594,10 +597,11 @@ def test_a_place_waiting_behind_a_callback_write_is_not_read_as_applied():
         service.addEventHandler('before-step', push)
         assert in_step.wait(5.0)
         body.set_transform((9.0, 9.0, 9.0))
-        thread = service.worker._thread
-        service.worker._stop.set()      # the thread ends after this step, the place still queued
+        steps = service.worker.steps
         posted.set()
-        thread.join(5.0)
+        deadline = time.monotonic() + 5.0
+        while service.worker.steps == steps and time.monotonic() < deadline:
+            time.sleep(0.001)
         service.frame(0.02)
         assert body.position == pytest.approx((9.0, 9.0, 9.0))
         assert tuple(node.translation) == pytest.approx((0.0, 5.0, 0.0))   # no stale pose written
@@ -643,4 +647,27 @@ def test_a_physics_callback_leaves_the_render_threads_tables_to_the_render_threa
         assert touched and set(touched) == {threading.get_ident()}
         assert crate.uid not in replica
     finally:
+        service.close()
+
+
+def test_a_mode_switch_waits_for_the_thread_to_leave_the_world():
+    service = make(mode='thread')
+    stepping, release = threading.Event(), threading.Event()
+
+    @physics_callback
+    def slow(step):
+        stepping.set()
+        release.wait(5.0)
+
+    try:
+        service.add_dynamic(ball())
+        service.addEventHandler('before-step', slow)
+        assert stepping.wait(5.0)
+        service.worker.stop_timeout = 0.05
+        with pytest.raises(RuntimeError, match='still in its step'):
+            service.set_config(PhysicsDefinition(mode='inline', tickHz=100.0, maxCatchUp=2.0))
+        assert service.worker.runtime is not None
+        assert type(service.worker).__name__ == 'ThreadWorker'
+    finally:
+        release.set()
         service.close()

@@ -379,3 +379,55 @@ def test_settle_and_run_end_when_the_thread_has_failed():
         assert isinstance(raised.value.__cause__, StepFault)
     finally:
         service.close()
+
+
+# -- a stop that times out ----------------------------------------------------
+
+def test_a_stop_that_times_out_leaves_the_world_to_its_thread(threaded):
+    stepping, release = threading.Event(), threading.Event()
+
+    def slow(step):
+        stepping.set()
+        release.wait(5.0)
+
+    threaded.runtime.before_step.append(slow)
+    threaded.submit(ball())
+    threaded.start()
+    assert stepping.wait(5.0)
+    try:
+        assert threaded.stop(timeout=0.05) is False
+        assert threaded.thread_id is not None
+        threaded.submit(Command('velocity', 1, ((3.0, 0.0, 0.0),)))
+        threaded.collect(0.02)
+        assert speed_of(threaded) == 0.0          # not applied on this thread
+    finally:
+        release.set()
+    assert threaded.stop() is True
+    assert threaded.thread_id is None
+    threaded.collect(0.02)
+    assert speed_of(threaded) == 3.0              # applied here once the thread is gone
+
+
+def speed_of(worker) -> float:
+    return float(worker.runtime.world.linear_velocity[worker.runtime.entry(1).index][0])
+
+
+def test_start_after_a_stop_that_timed_out_runs_a_new_thread(threaded):
+    stepping, release = threading.Event(), threading.Event()
+
+    def slow(step):
+        stepping.set()
+        release.wait(5.0)
+
+    threaded.runtime.before_step.append(slow)
+    threaded.submit(ball())
+    threaded.start()
+    assert stepping.wait(5.0)
+    first = threaded._thread
+    assert threaded.stop(timeout=0.05) is False
+    release.set()
+    threaded.runtime.before_step.remove(slow)
+    threaded.start()
+    assert not first.is_alive()
+    assert threaded._thread is not first and threaded.thread_id is not None
+    assert threaded.wait_ticks(2)

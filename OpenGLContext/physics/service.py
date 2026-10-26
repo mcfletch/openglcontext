@@ -268,9 +268,16 @@ class Physics:
         return 'inline' if isinstance(self.worker, InlineWorker) else 'thread'
 
     def _switch(self, mode: str) -> None:
+        """Step the world in ``mode`` from now on, carrying the waiting commands over in order.
+
+        Raises RuntimeError, leaving the worker as it is, where its thread is
+        still in a step once the worker's stop has waited for it.
+        """
         self._bring_up_all()
         old = self.worker
-        old.stop()
+        if not old.stop():
+            raise RuntimeError('the physics thread is still in its step; the world stays '
+                               'on it in %s mode' % self._worker_mode())
         pending = old.inbox.drain()
         new = self._make_worker(mode, old.runtime)
         for command in pending:
