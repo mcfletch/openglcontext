@@ -469,15 +469,24 @@ names which joints they move:
 
 It returns None when there is no model or the model has no such clip.
 
+.. _characters-steps:
+
 A character stepped by its game
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``Physics.frame`` steps a character with ``character.framed`` true once for each
 fixed step of the world the frame owes, ``1 / tickHz`` seconds each (1/120 s by
 default), and animates it once for the frame: a character takes the same steps
-as the world (:ref:`physics-characters`). Input given in ``OnIdle`` or in a
-``before-step`` handler reaches every one of those steps, so a game whose rules
-run at the world's rate needs no loop of its own. A game that steps a character
+as the world (:ref:`physics-characters`). Input given in ``OnIdle`` reaches every
+one of those steps. The world takes its steps of a frame first and the
+characters theirs after, so a rule that sets a character's move at each step
+goes in the character's own handlers rather than the world's:
+``character.addEventHandler('before-step', f)`` calls ``f(step)`` with a
+``CharacterStep`` of the character and ``step.dt`` at the start of each of its
+steps, and ``'after-step'`` at the end, where the handler reads where the step
+left it. A move set before a step drives that step, so a game whose rules run
+at the world's rate needs no loop of its own. The handlers run for a step taken
+by ``character.step(dt)`` as well. A game that steps a character
 on a clock of its own sets ``framed`` false and calls ``character.step(dt)`` for
 each step and ``character.animate(dt)`` once for the frame, ``dt`` the time of
 the whole frame. ``step`` moves the capsule, places the

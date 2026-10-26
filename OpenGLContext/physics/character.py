@@ -45,9 +45,11 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.events import Collision
     from OpenGLContext.physics.service import Physics
 
-__all__ = ['Character', 'Footstep', 'Landing']
+__all__ = ['Character', 'CharacterStep', 'Footstep', 'Landing']
 
 _UP = np.array([0.0, 1.0, 0.0])
+#: The events a character tells itself; every other name is an event of its stand-in.
+_OWN_EVENTS = frozenset(('landed', 'footstep', 'arrived', 'before-step', 'after-step'))
 #: The field of the capabilities that names each mode's speed.
 _MODE_SPEEDS = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
                 'crouch': 'crouchSpeed'}
@@ -57,6 +59,12 @@ class Landing(NamedTuple):
     """A character coming down onto the ground: who, and how fast, in metres a second."""
     character: Character
     speed: float
+
+
+class CharacterStep(NamedTuple):
+    """One step of a character: who, and its length in seconds."""
+    character: Character
+    dt: float
 
 
 class Footstep(NamedTuple):
@@ -404,11 +412,15 @@ class Character:
 
         ``'landed'`` calls ``function(landing)`` with a :class:`Landing`, and
         ``'footstep'`` calls it with a :class:`Footstep`, ``'arrived'`` calls it
-        with the character at the end of a route; every other name is an
+        with the character at the end of a route, and ``'before-step'`` and
+        ``'after-step'`` call it with a :class:`CharacterStep` at the start and
+        the end of each of the character's steps, framed or taken by
+        :meth:`step`: a move set before a step drives that step, and a handler
+        after it reads where the step left the character. Every other name is an
         event of the character's body
         (:meth:`Body.addEventHandler <OpenGLContext.physics.body.Body.addEventHandler>`).
         """
-        if event not in ('landed', 'footstep', 'arrived'):
+        if event not in _OWN_EVENTS:
             return self.body.addEventHandler(event, function, **filters)
         if function is None:
             self._listeners.pop(event, None)
@@ -454,8 +466,12 @@ class Character:
         """Move the character by ``dt`` seconds and show the world where it is, without animating it.
 
         A game that steps in pieces shorter than its frame calls this for each piece and
-        :meth:`animate` once for the frame. ``landed`` is told here.
+        :meth:`animate` once for the frame. ``before-step``, ``after-step`` and
+        ``landed`` are told here.
         """
+        listeners = self._listeners
+        if 'before-step' in listeners:
+            self._tell('before-step', CharacterStep(self, dt))
         controller = self.controller
         self._previous, self._alpha = controller.position.copy(), 1.0
         for knock in self._knocks:
@@ -478,6 +494,8 @@ class Character:
         if landing is not None:
             self._landed = max(self._landed or 0.0, float(landing))
             self._tell('landed', Landing(self, float(landing)))
+        if 'after-step' in listeners:
+            self._tell('after-step', CharacterStep(self, dt))
 
     def animate(self, dt: float) -> None:
         """Play the clips for what the character did over the last ``dt`` seconds and turn the body.

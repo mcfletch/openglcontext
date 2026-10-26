@@ -469,8 +469,11 @@ The world has two events of its own. ``physics.addEventHandler('before-step',
 function=fn)`` calls ``fn(step)`` before each fixed step, with a ``Step`` of
 ``dt``, ``index`` and ``time``, and ``'after-step'`` calls it after. A game that
 applies forces, reads contacts or moves bodies between steps does it there. Both
-are physics callbacks. In inline mode a physics callback for a body event runs
-after the step that made the event, so a frame of three steps calls it three
+are physics callbacks. A character's steps come after the world's steps of the
+frame, so a rule that moves a character at each step uses the character's own
+``before-step`` and ``after-step`` handlers (:ref:`characters-steps`). In
+inline mode a physics callback for a body event runs after the step that made
+the event, so a frame of three steps calls it three
 times in step order with the contacts of each; a render handler runs once after
 the last step and receives every event the frame made, in order, each carrying
 its step. A controller that needs every contact of every step (``hit.step``,

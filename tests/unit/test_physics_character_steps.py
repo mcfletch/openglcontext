@@ -164,3 +164,40 @@ def test_a_correction_that_takes_a_step_back_is_drawn_without_the_step():
         assert me.drawn_position[0] == pytest.approx(me.position[0])
     finally:
         physics.close()
+
+
+def test_a_characters_step_handlers_run_around_each_of_its_steps():
+    """A rule that sets the move before each step drives that step, and one after it sees where
+    the step left the character: the order holds for every step of a frame."""
+    physics = make()
+    try:
+        me = physics.add_character(position=(0, 0.05, 0))
+        for _ in range(60):
+            physics.frame(1 / 60)
+        order = []
+
+        def before(step):
+            assert step.character is me
+            order.append(('before', step.dt, float(me.position[0])))
+            me.set_move((1, 0, 0), mode='run', speed=6.0 * (1 + len(order) // 2))
+
+        def after(step):
+            order.append(('after', step.dt, float(me.position[0])))
+
+        me.addEventHandler('before-step', before)
+        me.addEventHandler('after-step', after)
+        physics.frame(1 / 30)                                     # four steps of 1/120 s
+        assert [name for name, _dt, _x in order] == ['before', 'after'] * 4
+        assert all(dt == pytest.approx(1 / 120) for _name, dt, _x in order)
+        moved = [after_x - before_x for (_b, _d, before_x), (_a, _e, after_x)
+                 in zip(order[::2], order[1::2], strict=True)]
+        assert moved == sorted(moved) and moved[0] > 0.0          # each step's own speed
+        assert all(order[2 * n + 2][2] == order[2 * n + 1][2] for n in range(3))
+        me.step(0.01)                                             # a step taken by hand too
+        assert [name for name, _dt, _x in order[-2:]] == ['before', 'after']
+        assert order[-1][1] == pytest.approx(0.01)
+        me.addEventHandler('before-step', None)
+        me.step(0.01)
+        assert order[-1][0] == 'after'
+    finally:
+        physics.close()
