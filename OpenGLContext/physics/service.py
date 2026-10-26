@@ -52,7 +52,7 @@ from OpenGLContext.physics.queries import Hit, overlapping, sweep_sphere
 from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.sources import SourceHandle
-from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.physics.settings import BACKENDS, PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
 
 __all__ = ['Physics']
@@ -189,7 +189,7 @@ class Physics:
         self._bring_up_all()
         return worker.runtime.world
 
-    BACKENDS = ('auto', 'numpy', 'cpu', 'gpu', 'glcompute')
+    BACKENDS = BACKENDS
 
     @property
     def backend(self) -> str:

@@ -59,8 +59,14 @@ class WorldRuntime:
         definition.validate()
         self.step_dt = 1.0 / float(definition.tickHz)
         self.max_catch_up = float(definition.maxCatchUp)
-        self.world = PhysicsWorld(
-            gravity=definition.world_gravity(), fixed_dt=self.step_dt)
+        try:
+            self.world = PhysicsWorld(gravity=definition.world_gravity(), fixed_dt=self.step_dt,
+                                      backend=definition.backend)
+        except Exception as error:  # noqa: BLE001 a backend that cannot be made leaves the default
+            log.warning('the %s physics backend could not be made (%s); the world steps on auto',
+                        definition.backend, error)
+            self.world = PhysicsWorld(gravity=definition.world_gravity(), fixed_dt=self.step_dt,
+                                      backend='auto')
         self.world.log_events = False
         #: Called with each :class:`Step` before and after the world steps.
         self.before_step: list[Callable[[Step], Any]] = []

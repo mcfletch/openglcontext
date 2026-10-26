@@ -381,6 +381,15 @@ How much work per frame
        and a recorded or replayed session step inline whatever this says. A
        value that is neither is reported and ``thread`` is used. See
        :ref:`physics-service-modes`.
+   * - ``OPENGLCONTEXT_PHYSICS_BACKEND``
+     - ``auto``, ``numpy``, ``cpu``, ``gpu`` or ``glcompute``
+     - ``auto``
+     - The default of ``PhysicsDefinition.backend``: ``auto`` steps on NumPy
+       and moves to GL compute past ``gpu_threshold`` awake bodies; ``numpy``
+       (``cpu``) stays on NumPy; ``gpu`` (``glcompute``) asks for GL 4.3
+       compute on the stepping thread. A value that is none of these is
+       reported and ``auto`` is used. Read when a definition is made. See
+       :ref:`physics-backends`.
 
 The window, capture and the interface
 -------------------------------------

@@ -33,7 +33,9 @@ class Replica:
     """A world that is stepped by nobody, kept like the real one."""
 
     def __init__(self) -> None:
-        self.world = PhysicsWorld(gravity=model.Gravity(gravity=0.0), sleep_enabled=False)
+        # Queries and characters read it and nothing steps it, so it holds NumPy columns.
+        self.world = PhysicsWorld(gravity=model.Gravity(gravity=0.0), sleep_enabled=False,
+                                  backend='numpy')
         self.world.log_events = False
         self._index: dict[int, int] = {}
         self._shapes: dict[int, int] = {}

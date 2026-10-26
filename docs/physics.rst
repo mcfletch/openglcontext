@@ -712,6 +712,10 @@ Modes and settings
    * - ``mode``
      - ``thread`` (``OPENGLCONTEXT_PHYSICS_MODE``)
      - ``thread`` steps the world on a thread of its own, ``inline`` in the frame
+   * - ``backend``
+     - ``auto`` (``OPENGLCONTEXT_PHYSICS_BACKEND``)
+     - the compute backend (:ref:`below <physics-backends>`); one that cannot
+       be made is logged and the world steps on ``auto``
    * - ``tickHz``
      - 120
      - the fixed step, in steps a second, in both modes
@@ -866,6 +870,8 @@ collisions and no joints, both stages run in one dispatch and the intermediate
 velocity stays on the GPU. At 10\ :sup:`5` moving bodies it is about 2.4×
 faster than numpy.
 
+.. _physics-backends:
+
 .. rst-class:: technical
 
 The default policy, ``auto``, runs on numpy until the number of awake bodies
@@ -873,10 +879,12 @@ reaches ``gpu_threshold`` (default 10 000), and then switches to the GPU. Below
 that count, the cost of transferring the data is larger than the per-body work
 it saves. The world switches back to numpy when the count falls below 80% of
 the threshold, and stays on numpy where GL 4.3 compute shaders are not
-available. Set ``OPENGLCONTEXT_PHYSICS_BACKEND`` to ``numpy``, ``gpu`` or
-``auto`` to override the policy. ``physics.backend`` is the name of the backend
-in use (``'numpy'`` or ``'glcompute'``), and assigning ``'numpy'``, ``'gpu'`` or
-``'auto'`` chooses one from the next step. The GPU backend needs GL 4.3 compute
+available. ``PhysicsDefinition.backend``, whose default is
+``OPENGLCONTEXT_PHYSICS_BACKEND``, overrides the policy with one of
+``Physics.BACKENDS``: ``auto``, ``numpy`` or its synonym ``cpu``, and ``gpu``
+or its synonym ``glcompute``. ``physics.backend`` is the name of the backend in
+use (``'numpy'`` or ``'glcompute'``), and assigning one of ``Physics.BACKENDS``
+chooses one from the next step. The GPU backend needs GL 4.3 compute
 on the thread that steps the world, so it is for an ``inline`` world; a backend
 that cannot be made logs a warning and the world keeps the one it has. The GPU computes in float32, so its
 trajectories match the numpy backend within a tolerance, not bit for bit. The

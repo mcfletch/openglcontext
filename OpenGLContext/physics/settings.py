@@ -19,13 +19,23 @@ from vrml import field, node
 from OpenGLContext import renderoptions
 from OpenGLContext.physics.checks import number, vector
 
-__all__ = ['COLLIDERS', 'MODES', 'PhysicsDefinition', 'definition_for']
+__all__ = ['BACKENDS', 'COLLIDERS', 'MODES', 'PhysicsDefinition', 'default_backend',
+           'definition_for']
 
 #: Where a context steps its world: on its own thread, or in the frame hook.
 MODES = ('thread', 'inline')
 #: Which scenery becomes static bodies: every shape of the scene, only the
 #: ones the application adds, or none.
 COLLIDERS = ('scene', 'explicit', 'none')
+#: The compute backends a world steps with: ``auto`` hands off from NumPy to GL
+#: compute past a count of awake bodies; ``numpy`` and ``cpu`` stay on NumPy;
+#: ``gpu`` and ``glcompute`` use GL 4.3 compute on the stepping thread.
+BACKENDS = ('auto', 'numpy', 'cpu', 'gpu', 'glcompute')
+
+
+def default_backend() -> str:
+    """``OPENGLCONTEXT_PHYSICS_BACKEND``, one of :data:`BACKENDS`, else ``auto``."""
+    return renderoptions.env_choice('OPENGLCONTEXT_PHYSICS_BACKEND', BACKENDS, {}, 'auto')
 
 
 class PhysicsDefinition(node.Node):
@@ -44,6 +54,9 @@ class PhysicsDefinition(node.Node):
     mode = field.newField(
         'mode', 'SFString', 1,
         lambda: renderoptions.env_choice('OPENGLCONTEXT_PHYSICS_MODE', MODES, {}, 'thread'))
+    #: The compute backend the world steps with, one of :data:`BACKENDS`
+    #: (env: OPENGLCONTEXT_PHYSICS_BACKEND).
+    backend = field.newField('backend', 'SFString', 1, default_backend)
     #: The fixed step, in steps a second, in both modes.
     tickHz = field.newField('tickHz', 'SFFloat', 1, 120.0)
     #: The longest span of time one frame steps, in seconds. A frame that took
@@ -58,7 +71,7 @@ class PhysicsDefinition(node.Node):
     linearDamping = field.newField('linearDamping', 'SFFloat', 1, 0.3)
     angularDamping = field.newField('angularDamping', 'SFFloat', 1, 1.5)
 
-    FIELDS = ('enabled', 'mode', 'tickHz', 'maxCatchUp', 'gravity', 'colliders',
+    FIELDS = ('enabled', 'mode', 'backend', 'tickHz', 'maxCatchUp', 'gravity', 'colliders',
               'linearDamping', 'angularDamping')
 
     def replaced(self, **changes: Any) -> PhysicsDefinition:
@@ -71,6 +84,8 @@ class PhysicsDefinition(node.Node):
         """Raise ValueError naming the first field the service cannot run with."""
         if self.mode not in MODES:
             raise ValueError('mode %r is not one of %s' % (self.mode, ', '.join(MODES)))
+        if self.backend not in BACKENDS:
+            raise ValueError('backend %r is not one of %s' % (self.backend, ', '.join(BACKENDS)))
         if self.colliders not in COLLIDERS:
             raise ValueError('colliders %r is not one of %s'
                              % (self.colliders, ', '.join(COLLIDERS)))

@@ -56,6 +56,8 @@ from vrml import cache, protofunctions
 from vrml import node as vrml_node
 from vrml.x3d import interpolation
 
+from OpenGLContext.physics.settings import default_backend
+
 __all__ = ['ACCURATE_STEP', 'MAX_FRAME', 'MIN_SURFACE_THICKNESS', 'NOMINAL_STEP', 'STEP', 'RigidSystem', 'Touch',
            'collidable_parts', 'contact_parameters', 'detect', 'geometry_shape', 'members',
            'shape_of_geometry']
@@ -595,7 +597,7 @@ class RigidSystem:
             for collidable in entry.collidables:
                 if carrier(collidable) is entry.node:
                     del _CARRIED[collidable]
-        self.world = world = PhysicsWorld(sleep_enabled=True)
+        self.world = world = PhysicsWorld(sleep_enabled=True, backend=default_backend())
         self.bodies, self.joints, self.held, self.free = [], [], {}, {}
         self._surfaces, self._surfaces_used = [], 0
         for node in self._bodies():

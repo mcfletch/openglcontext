@@ -15,6 +15,7 @@ from vrml.x3d import nodes as x3d
 from omi_physics import model
 from omi_physics.world import PhysicsWorld
 
+from OpenGLContext.physics.settings import default_backend
 from OpenGLContext.scenegraph import coordinates
 
 
@@ -352,7 +353,8 @@ def collision_world_from_scene(
     :func:`extract_trimesh`) to speed up loading of large multi-part scenes.
     """
     world = PhysicsWorld(gravity=model.Gravity(gravity=gravity, direction=(0, -1, 0)),
-                         default_linear_damping=0.2, default_angular_damping=1.0)
+                         default_linear_damping=0.2, default_angular_damping=1.0,
+                         backend=default_backend())
     from OpenGLContext.physics.zones import gravity_volumes, scene_zones
     for volume in gravity_volumes(scene_zones(group)):
         world.add_gravity_volume(volume)
