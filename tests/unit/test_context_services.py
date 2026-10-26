@@ -261,7 +261,7 @@ def test_a_frame_that_raises_is_logged_once_and_the_loop_goes_on(ctx, clock, cap
 def test_services_first_touched_on_another_thread_belong_to_the_render_thread():
     made = _Context()
     made._renderThread = threading.get_ident()
-    touched = threading.Thread(target=lambda: (made.audio, made.physics))
+    touched = threading.Thread(target=lambda: (made.audio, made.physics))  # made off the render thread
     touched.start()
     touched.join(5.0)
     try:
@@ -269,3 +269,14 @@ def test_services_first_touched_on_another_thread_belong_to_the_render_thread():
         assert made.physics.render._owner == threading.get_ident()
     finally:
         made.releaseWindow()
+
+
+def test_services_made_again_after_closing_are_framed_once(ctx, clock, monkeypatch):
+    assert ctx.physics is not None and ctx.audio is not None
+    ctx.closeServices()
+    framed = []
+    monkeypatch.setattr(ctx.physics, 'frame', lambda dt: framed.append(dt) or False)
+    monkeypatch.setattr(ctx.audio, 'frame', lambda: framed.append('audio'))
+    clock.now += 0.02
+    ctx.renderQueue.run()
+    assert len(framed) == 2

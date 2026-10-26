@@ -77,6 +77,11 @@ class RenderQueue:
         else:
             self._before.append(function)
 
+    def remove_before_run(self, function: Callable[[], Any]) -> None:
+        """Stop calling ``function()`` at the start of :meth:`run`; one never added is ignored."""
+        if function in self._before:
+            self._before.remove(function)
+
     def run(self) -> int:
         """Make the calls queued so far, on this thread; how many were made.
 

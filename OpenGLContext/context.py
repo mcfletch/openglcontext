@@ -1344,12 +1344,17 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     def closeServices(self) -> None:
         """Stop the physics worker and close the audio, where a context made them."""
         self.unfollow()
+        queue = getattr(self, 'renderQueue', None)
         service = self.__dict__.pop('_physics', None)
         if service is not None:
             service.close()
+            if queue is not None:
+                queue.remove_before_run(self._framePhysics)
         sounds = self.__dict__.pop('_audio', None)
         if sounds is not None:
             sounds.close()
+            if queue is not None:
+                queue.remove_before_run(self._frameAudio)
 
     def runRenderQueue(self) -> int:
         """Make the calls other threads have queued on :attr:`renderQueue`

@@ -150,3 +150,18 @@ def test_a_function_added_first_runs_before_those_already_added():
     queue.before_run(lambda: order.append('early'), first=True)
     queue.run()
     assert order == ['early', 'late']
+
+
+def test_a_function_removed_from_before_run_is_no_longer_called():
+    queue = RenderQueue()
+    called = []
+
+    def hook():
+        called.append(1)
+
+    queue.before_run(hook)
+    queue.run()
+    queue.remove_before_run(hook)
+    queue.remove_before_run(hook)
+    queue.run()
+    assert called == [1]
