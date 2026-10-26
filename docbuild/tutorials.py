@@ -173,13 +173,18 @@ PATHS = [
     TutorialPath(
         'Characters on Land',
         """A rigged character that runs across a landscape: ground it collides
-        with, clips that play for what the body is doing, a camera that follows
-        it, the sounds of its landings, and footsteps that follow the surface.""",
+        with, clips that play for what the body is doing, another model's
+        clips, a camera that follows it and stays out of walls, the sounds of
+        its landings, footsteps that follow the surface, and running along a
+        trail.""",
         'character',
         [
             'character_run',
+            'character_animations',
             'character_jump',
             'character_footsteps',
+            'character_camera',
+            'character_trail',
         ],
     ),
     TutorialPath(

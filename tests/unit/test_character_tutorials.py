@@ -102,3 +102,73 @@ def test_the_crowd_wanders_and_is_posed_on_the_engine_clock(gl_context):
         assert run.context._posed                          # poses counted each frame
         assert not {'OnIdle', 'OnDraw'} & set(vars(run.module.TestContext))
         assert crowd.gaits[0].walk_stride == pytest.approx(run.module.WALK_STRIDE)
+
+
+# -- character_animations: a different model and a different animation set --------------
+
+
+def test_the_guess_fills_the_fox_and_the_man_walks_at_his_measured_pace(gl_context):
+    with running('character', 'character_animations') as run:
+        fox, man = run.context.fox, run.context.man
+        clips = run.context.fox_clips
+        assert [clips.spec(role).clip for role in ('idle', 'walk', 'run')] == [
+            'Survey', 'Walk', 'Run']
+        assert 'idle' not in clips.unmatched and clips.leftover == ()
+        measured = man.locomotion.speeds['walk']
+        assert measured == pytest.approx(0.9 * 1.8 / 1.5, rel=0.05)    # fitted to the capsule
+        run.seconds(3.0)
+        for walker, radius in ((fox, 4.0), (man, 7.0)):
+            assert np.hypot(walker.position[0], walker.position[2]) == pytest.approx(radius, abs=0.6)
+        rate = man.settled.rates['animation0']
+        assert rate == pytest.approx(run.module.MAN_SPEED / measured, rel=0.15)
+
+
+# -- character_camera: a camera that stays out of walls -----------------------------------
+
+
+def test_the_camera_stays_in_the_room_and_closes_in_at_the_corners(gl_context):
+    with running('character', 'character_camera') as run:
+        module, context = run.module, run.context
+        camera = context.follower.platform.camera
+        inside = module.HALF - module.THICK / 2
+        arms = []
+        run.frame()
+        assert run.physics.wait_cooked()                   # the walls are bodies
+        for _ in range(60 * 24):
+            run.frame()
+            eye, look = np.asarray(camera.eye), np.asarray(camera.look)
+            assert abs(eye[0]) < inside and abs(eye[2]) < inside
+            assert max(abs(eye[0]), abs(eye[2])) > module.PILLAR / 2
+            assert eye[1] <= module.HEIGHT - 0.4 + 1e-6
+            assert context.physics.line_of_sight(look, eye, skip=context.hero.body)
+            arms.append(float(np.linalg.norm(eye - look)))
+        assert min(arms) < 0.6 * module.DISTANCE
+        assert max(arms) > 0.85 * module.DISTANCE
+
+
+# -- character_trail: running along a trail ---------------------------------------------------
+
+
+def test_the_fox_runs_the_trail_and_hops_to_the_lane_asked_for(gl_context):
+    with running('character', 'character_trail') as run:
+        hero = run.context.hero
+        run.seconds(2.0)
+        first = hero._path.update(hero.position, 0.0)
+        run.seconds(2.0)
+        second = hero._path.update(hero.position, 0.0)
+        assert second.station - first.station == pytest.approx(2.0 * run.module.SPEED, rel=0.1)
+        assert abs(second.lateral_error) < 0.15
+        run.context.OnLane(type('Key', (), {'name': '3'})())
+        run.seconds(1.0)
+        assert hero._path.update(hero.position, 0.0).lateral_error == pytest.approx(1.5, abs=0.2)
+        heading = np.arctan2(hero.velocity[0], -hero.velocity[2])
+        yaw = run.context._follower.platform.yaw
+        assert abs(np.remainder(yaw - heading + np.pi, 2 * np.pi) - np.pi) < 0.35
+
+
+def test_at_the_end_of_the_trail_the_fox_turns_and_runs_it_back(gl_context):
+    with running('character', 'character_trail') as run:
+        hero = run.context.hero
+        end = run.context.points[-1]
+        run.context.OnArrived(hero)
+        assert np.allclose(hero._path.course.centreline[0], end)
