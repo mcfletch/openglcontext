@@ -21,6 +21,7 @@ from omi_physics.collisionquery import WorldQuery
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, Snapshot
+from OpenGLContext.physics.runtime import give_mass
 
 __all__ = ['KINEMATIC_MASS', 'Replica']
 
@@ -66,7 +67,7 @@ class Replica:
         return None if handle is None else int(handle)
 
     def apply(self, command: Command) -> None:
-        """Mirror a command that changes which bodies there are or where they stand."""
+        """Mirror a command that changes which bodies there are, where they stand or what they weigh."""
         if command.op == 'add':
             self.add(command.args[0])
         elif command.op == 'add_many':
@@ -76,6 +77,9 @@ class Replica:
                 self.remove(number)
         elif command.op == 'remove':
             self.remove(command.uid)
+        elif command.op == 'mass' and command.uid in self._index:
+            world, index = self.world, self._index[command.uid]
+            give_mass(world, index, world.shapes[int(world.collider_shape[index])], command.args[0])
         elif command.op == 'velocity' and command.uid in self._index:
             self.world.linear_velocity[self._index[command.uid]] = command.args[0]
         elif command.op == 'place' and command.uid in self._index:

@@ -161,6 +161,9 @@ world is applied at once, so one handler body works in either place:
    body.set_angular_velocity(velocity)       # radians a second about the world axes
    body.set_transform(translation=None, rotation=None)   # a teleport
    body.linear_damping = 0.5                 # per second
+   body.set_mass(4.0)                        # kilograms, a dynamic body only
+   body.set_material('rubber')               # a preset or defined name, or a defined material
+   body.set_friction(0.2); body.set_restitution(0.7)
    body.wake(); body.remove()
    physics.gravity = (0, -9.81, 0)           # may change every frame
 
@@ -170,6 +173,18 @@ moved. Reading answers the last state the world published, which is at most one
 step old: ``body.position``, ``rotation`` (an axis and an angle), ``velocity``,
 ``angular_velocity``, ``speed`` and ``asleep``. A write made but not yet
 applied is what ``position`` reads back after ``set_transform``.
+
+``set_mass(kg)`` gives a dynamic body a new mass and the inertia its shape has
+at that mass; ``body.mass`` answers it at once. ``set_material`` gives any body
+but a trigger a new surface: ``body.material``, ``body.friction`` (the sliding
+coefficient) and ``body.restitution`` answer the new material's at once, and a
+strike on it plays the new material's sound. ``set_friction`` sets both friction
+coefficients and ``set_restitution`` the bounce, leaving the material's name and
+sound as they were; bodies given the same coefficients share one material in the
+world. The world uses each from its next step. Each raises ``ValueError`` for a
+value that is not finite (a mass must be above zero, a coefficient at or above
+zero), for ``set_mass`` on a body that is not dynamic, and for a name no
+material has.
 
 A scene with nothing awake costs nothing: the worker blocks until something
 moves, the frame asks for no redraw, and the window draws only what else
@@ -292,7 +307,7 @@ the start:
 1. Where two bodies meet, each coefficient is the average of the two materials'
 (the OMI combine modes); ``pair`` replaces that for one pair. A material is
 defined before the bodies that take it: a body is told whether to report its
-strikes when it is made.
+strikes when it is made or given the material with ``body.set_material``.
 
 ``sound`` is played where a body of the material is struck harder than 1 m/s, at
 the contact point, at a gain that reaches 1.0 at 6 m/s, through

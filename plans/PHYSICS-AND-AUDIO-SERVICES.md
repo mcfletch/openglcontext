@@ -97,6 +97,13 @@ lane=)` with `speed` a number or a function of the seconds since the run began, 
 controller's half is `CharacterController.set_move(speed=)` on the same `omi_physics` branch
 (`eaf8c58`).
 
+Bodies changed after they are made, 2026-10-26. `Body.set_mass(kg)` (the shape's inertia at
+that mass, mirrored into the characters' replica), `Body.set_material(name or material)`,
+`set_friction` and `set_restitution`, with `friction` and `restitution` to read; commands
+`mass` and `body_material`, so thread mode takes them as inline does. The runtime keeps one
+world material for each set of unnamed coefficients. marble-demo's raw writes to
+`collider_material`, `mass` and `inv_mass` through `physics.run` can become these calls.
+
 Deleted 2026-10-26, once marble-demo's `physics-services` branch stopped importing them:
 `physics/demo.py` (`DemoScene`, `disable_vsync`; `terrain_view.py` calls `setVSync(False)`),
 `physics/threaded.py` (`ThreadedPhysicsManager`), `physics/manager.py` (`PhysicsManager`),

@@ -8,16 +8,19 @@ worker thread it takes effect at once, so the same handler runs in either place.
 """
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from omi_physics import model
 
 from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.proxy import Proxy
 
 if TYPE_CHECKING:
     from OpenGLContext.physics.handlers import Handler
+    from OpenGLContext.physics.materials import PhysicsMaterial
     from OpenGLContext.physics.service import Physics
 
 __all__ = ['Body']
@@ -45,6 +48,9 @@ class Body:
         self.derived = False
         #: The name of the body's material, or None for the world's default.
         self.material: str | None = None
+        #: The coefficients the body's surface has: its material's, with any
+        #: :meth:`set_friction` or :meth:`set_restitution` since.
+        self._surface = model.Material()
         self._pending = False
         #: Writes made before the body was in the world, sent when it is.
         self._deferred: list[tuple[str, tuple[Any, ...]]] = []
@@ -87,6 +93,16 @@ class Body:
     def speed(self) -> float:
         """The length of :attr:`velocity`."""
         return float(np.linalg.norm(self.velocity))
+
+    @property
+    def friction(self) -> float:
+        """The friction coefficient of the body's surface while it slides."""
+        return float(self._surface.dynamicFriction)
+
+    @property
+    def restitution(self) -> float:
+        """The fraction of the closing speed a bounce off the body's surface keeps."""
+        return float(self._surface.restitution)
 
     @property
     def asleep(self) -> bool:
@@ -139,6 +155,66 @@ class Body:
                 self._position = position
             if axis_angle is not None:
                 self._axis_angle = axis_angle
+
+    def set_mass(self, mass: float) -> None:
+        """Make the body weigh ``mass`` kilograms, with the inertia its shape has at that mass.
+
+        :attr:`mass` answers the new mass at once; the world uses it from its
+        next step. Raises ValueError for a mass that is not finite and above
+        zero, and for a body that is not dynamic.
+        """
+        kilograms = number(mass, 'mass', positive=True)
+        if self.kind != 'dynamic':
+            raise ValueError('only a dynamic body has a mass to set, not a %s one' % self.kind)
+        self.mass = kilograms
+        self._send('mass', kilograms)
+
+    def set_material(self, material: str | PhysicsMaterial) -> None:
+        """Give the body's surface ``material``: a preset or defined name, or a defined material.
+
+        :attr:`material`, :attr:`friction` and :attr:`restitution` answer the new
+        material's at once, and a strike on the body plays its sound; the world
+        uses it from its next step. Raises ValueError for a name no material has
+        and for a trigger, which has no surface.
+        """
+        name = material if isinstance(material, str) else material.name
+        found = self.physics.materials.get(name)
+        self._surfaced()
+        self.material = name
+        self._surface = found.material
+        self.physics._take_sound(self)
+        self._send('body_material', name)
+
+    def set_friction(self, friction: float) -> None:
+        """Make the friction coefficient of the body's surface ``friction``, sliding and at rest.
+
+        The rest of the surface, and :attr:`material` with its sound, stay as
+        they are. Raises ValueError for a value that is not finite and at or
+        above zero, and for a trigger.
+        """
+        value = number(friction, 'friction', non_negative=True)
+        self._resurface(dataclasses.replace(self._surface, staticFriction=value,
+                                            dynamicFriction=value))
+
+    def set_restitution(self, restitution: float) -> None:
+        """Make the fraction of the closing speed a bounce off the body keeps ``restitution``.
+
+        The rest of the surface, and :attr:`material` with its sound, stay as
+        they are. Raises ValueError for a value that is not finite and at or
+        above zero, and for a trigger.
+        """
+        value = number(restitution, 'restitution', non_negative=True)
+        self._resurface(dataclasses.replace(self._surface, restitution=value))
+
+    def _surfaced(self) -> None:
+        """Raise ValueError for a body with no surface to change."""
+        if self.kind == 'trigger':
+            raise ValueError('a trigger has no surface to give a material, friction or restitution')
+
+    def _resurface(self, surface: model.Material) -> None:
+        self._surfaced()
+        self._surface = surface
+        self._send('body_material', surface)
 
     @property
     def linear_damping(self) -> float:

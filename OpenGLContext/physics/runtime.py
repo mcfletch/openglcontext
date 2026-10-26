@@ -14,6 +14,7 @@ decide which that is.
 from __future__ import annotations
 
 import collections
+import dataclasses
 import logging
 import threading
 from collections.abc import Callable
@@ -22,6 +23,7 @@ from typing import Any
 import numpy as np
 from omi_physics import mathutil, model
 from omi_physics.contactevents import BodyRef, ContactEvent, TriggerEvent, Verdict
+from omi_physics.massprops import inertia_diagonal
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.events.framestep import FixedSteps
@@ -29,7 +31,7 @@ from OpenGLContext.physics.joints import JointSpec, JointTable
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.settings import PhysicsDefinition
 
-__all__ = ['WorldRuntime']
+__all__ = ['WorldRuntime', 'give_mass']
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +39,17 @@ log = logging.getLogger(__name__)
 RETIRED_KEPT = 4096
 _ZERO3 = np.zeros(3)
 _STATE = ('sleep', 'wake')
+
+
+def give_mass(world: PhysicsWorld, index: int, shape: model.Shape, mass: float) -> None:
+    """Make the dynamic body at row ``index`` of ``world`` weigh ``mass`` kilograms.
+
+    The inertia is the shape's for that mass, about the body's own axes.
+    """
+    world.mass[index] = mass
+    world.inv_mass[index] = 1.0 / mass
+    diagonal = inertia_diagonal(shape, mass)
+    world.inv_inertia[index] = np.where(diagonal > 0.0, 1.0 / np.maximum(diagonal, 1e-12), 0.0)
 
 
 class _Entry:
@@ -88,6 +101,9 @@ class WorldRuntime:
         self._entries: dict[int, _Entry] = {}
         self._shapes: dict[int, int] = {}
         self._materials: dict[str, int] = {}
+        #: The index of each unnamed material by its values, so a body given the same
+        #: coefficients again shares the one made for them.
+        self._unnamed: dict[tuple[Any, ...], int] = {}
         self._retired: collections.OrderedDict[BodyRef, int] = collections.OrderedDict()
         self._events: list[PhysicsEvent] = []
         self._movers: tuple[np.ndarray, np.ndarray, dict[int, int]] | None = None
@@ -395,6 +411,16 @@ class WorldRuntime:
                 if not isinstance(getattr(volume, 'region', None), kind)]
         self.world.gravity_volumes[:] = kept + list(volumes)
 
+    def _op_mass(self, uid: int, mass: float) -> None:
+        entry = self._entries[uid]
+        give_mass(self.world, entry.index, entry.proxy.shape, mass)
+        self.world.wake(entry.index)
+
+    def _op_body_material(self, uid: int, material: Any) -> None:
+        entry = self._entries[uid]
+        self.world.collider_material[entry.index] = self.material_index(material)
+        self.world.wake(entry.index)
+
     def _op_wake(self, uid: int) -> None:
         self.world.wake(self._entries[uid].index)
 
@@ -436,7 +462,11 @@ class WorldRuntime:
                 found = self._materials[material] = self.world.add_material(
                     model.MATERIAL_PRESETS[material])
             return found
-        return int(self.world.add_material(material))
+        values = dataclasses.astuple(material)
+        found = self._unnamed.get(values)
+        if found is None:
+            found = self._unnamed[values] = int(self.world.add_material(material))
+        return found
 
     def define_material(self, name: str, material: model.Material) -> int:
         """Make ``material`` the one called ``name``; the index it has in the world."""

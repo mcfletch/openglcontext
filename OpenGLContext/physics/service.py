@@ -424,6 +424,7 @@ class Physics:
                     motion.linearDamping, motion.angularDamping)
         body.derived = derived
         body.material = named
+        body._surface = self._coefficients(material)
         if sounding:
             self._send_world('logging', True)
         self._bodies[uid] = body
@@ -477,6 +478,12 @@ class Physics:
             dynamicFriction=base.dynamicFriction if friction is None else float(friction),
             restitution=base.restitution if restitution is None else float(restitution),
             frictionCombine=base.frictionCombine, restitutionCombine=base.restitutionCombine)
+
+    def _coefficients(self, material: Any) -> model.Material:
+        """The coefficients of ``material``: a defined or preset name, a Material, or None for the default."""
+        if isinstance(material, str):
+            return self.materials.get(material).material
+        return material if isinstance(material, model.Material) else model.Material()
 
     def _proxy(self, node: Any, proxy: Any, kind: str) -> Proxy:
         dynamic = kind in ('dynamic', 'kinematic')
@@ -634,6 +641,7 @@ class Physics:
         body = Body(self, uid, kind, None, proxy, np.asarray(place), quat_to_vrml_rotation(quaternion),
                     0.0)
         body.material = named
+        body._surface = self._coefficients(material)
         if sounding:
             self._send_world('logging', True)
         self._bodies[uid] = body
@@ -1012,6 +1020,13 @@ class Physics:
             self._specs[command.uid] = self._respec_placed(self._specs[command.uid], *command.args)
         elif command.op == 'remove_many':
             self._specs.pop(command.args[0], None)
+        elif command.op in ('mass', 'body_material') and isinstance(
+                self._specs.get(command.uid), BodySpec):
+            spec = self._specs[command.uid]
+            self._specs[command.uid] = (
+                dataclasses.replace(spec, motion=dataclasses.replace(spec.motion,
+                                                                     mass=command.args[0]))
+                if command.op == 'mass' else dataclasses.replace(spec, material=command.args[0]))
         if self._replica is not None:
             self._replica.apply(command)
 
@@ -1535,6 +1550,12 @@ class Physics:
         self.handlers.add(handler)
         self._report_for(handler)
         return handler
+
+    def _take_sound(self, body: Body) -> None:
+        """Have the world report strikes on ``body`` where its material now has a sound."""
+        if self.materials.sound_of(body.material) is not None:
+            self._send_world('logging', True)
+            self._command('report', body, True)
 
     def _report_for(self, handler: Handler) -> None:
         if handler.event in STEP_EVENTS:
