@@ -763,7 +763,10 @@ on every run. A recording started with ``context.startTelemetry()`` after the
 world exists moves it inline, the commands waiting for its thread carried over
 in order; a mode given to ``set_config`` meanwhile takes effect once
 ``stopTelemetry()`` ends the recording. ``physics.pin_inline(True)`` holds a
-world inline in the same way for a program of its own. A game that steps its world on a clock of its own, or only while it
+world inline in the same way for a program of its own. A world held inline
+waits for the cooking of its scenery before each step, so scenery the render
+pass finds while drawing one frame takes part from the next frame's step on
+every run. A game that steps its world on a clock of its own, or only while it
 is not paused, sets the class attribute ``stepsPhysics = False`` on its context
 and calls ``context.physics.frame(dt)`` where it wants the step.
 

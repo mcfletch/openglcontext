@@ -262,7 +262,9 @@ class Physics:
 
         A recorded session and a capture hold it inline, so the world is a
         function of the clock and of the commands. Commands waiting for a
-        thread's world are carried over, in order.
+        thread's world are carried over, in order. A world held inline waits
+        for its scenery's cooking before each step: scenery the render pass
+        finds while drawing one frame is in the world for the next frame's step.
         """
         self._pinned = bool(on)
         if self._mode() != self._worker_mode():
@@ -539,6 +541,19 @@ class Physics:
             if time.monotonic() >= deadline:
                 return False
             time.sleep(0.002)
+
+    #: The seconds a world held inline waits for its scenery's cooking before a step.
+    COOK_WAIT = 60.0
+
+    def _wait_for_scenery(self) -> None:
+        """Wait for the scenery being cooked, so it joins a world held inline before the next step.
+
+        The step a collider first takes part in is then the same on every run,
+        however fast the cooking thread is.
+        """
+        if not self.wait_cooked(self.COOK_WAIT):
+            log.warning('scenery still cooking after %.0f s; the world steps without it',
+                        self.COOK_WAIT)
 
     def _pump_cooked(self) -> None:
         while True:
@@ -1074,6 +1089,8 @@ class Physics:
                 self._pump_cooked()
             self.render.apply()
             return False
+        if self._pinned and self._outstanding:
+            self._wait_for_scenery()
         self._pump_cooked()
         self._raise_worker_error()
         out = self.worker.collect(dt)

@@ -232,3 +232,23 @@ def test_a_place_made_while_the_body_cooks_is_read_back_and_reaches_the_world(ph
     assert body.position == pytest.approx((0.0, -3.0, 0.0))
     hit = physics.raycast((0, 10, 0), (0, -1, 0), 20.0)
     assert hit is not None and hit.point[1] == pytest.approx(-2.5, abs=0.01)
+
+
+def test_a_world_held_inline_waits_for_its_scenery_before_it_steps(physics, monkeypatch):
+    import time  # noqa: PLC0415 only this case sleeps
+
+    from OpenGLContext.physics.colliders import SceneryTracker  # noqa: PLC0415 only this case slows the cooking
+
+    cook = SceneryTracker._spec
+
+    def slow(body, site, mesh):
+        time.sleep(0.3)
+        return cook(body, site, mesh)
+
+    monkeypatch.setattr(SceneryTracker, '_spec', staticmethod(slow))
+    physics.pin_inline(True)
+    floor = block((20, 1, 20), at=(0, -0.5, 0))
+    physics.scenery_changed(scene_of(floor), 1)
+    physics.frame(0.02)
+    assert physics.cooking == 0
+    assert physics.body_for(floor.children[0]).uid in physics.worker.runtime
