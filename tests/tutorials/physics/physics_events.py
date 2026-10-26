@@ -46,8 +46,8 @@ class TestContext(BaseContext):
         script steps the world.'''
         self.yard = CollisionYard(self.physics, self.audio)
         self.sg = self.yard.scene()
-        '''``audio.mix`` is the application's level for its whole mix; the
-        player's volume is applied over it.'''
+        '''``audio.mix`` sets the level of the whole mix, and the player's
+        volume is applied over it.'''
         self.audio.mix = MASTER_GAIN
         for key, handler in (('d', self.yard.drop), ('l', self.yard.launch),
                              ('m', self.yard.mend), ('w', self.yard.toggle_weight),

@@ -192,8 +192,8 @@ class TestContext(BaseContext):
         """Move the player's volume.
 
         `audio.volume` is the setting the F10 settings screen shows, saved with
-        the rest.  `audio.mix`, set once in `registerClips`, is the
-        application's level under it.
+        the rest.  `audio.mix`, set once in `registerClips`, scales the
+        whole mix under it.
         """
         self.audio.volume = min(1.0, max(0.0, self.audio.volume + delta))
         print('volume %.2f' % (self.audio.volume,), flush=True)
