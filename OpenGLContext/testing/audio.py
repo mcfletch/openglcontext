@@ -34,11 +34,12 @@ __all__ = ['Call', 'RecordingAudio']
 class Call:
     """One call made on a :class:`RecordingAudio`.
 
-    ``kind`` is ``'play'``, ``'load'``, ``'update'`` (a voice's gain or rate set),
-    ``'stop'``, ``'volume'``, ``'muffle'`` or ``'mix'``. A play carries the arguments it was
-    made with and its ``voice``; a load carries the path as ``source`` and the
-    name as ``value``; an update carries the voice with its ``gain`` and ``rate``
-    after the change; a setting carries its new ``value``.
+    ``kind`` is ``'play'``, ``'load'``, ``'add'``, ``'update'`` (a voice's gain
+    or rate set), ``'stop'``, ``'volume'``, ``'muffle'`` or ``'mix'``. A play
+    carries the arguments it was made with and its ``voice``; a load carries
+    the path as ``source`` and the name as ``value``; an add carries the clip as
+    ``source`` and the name as ``value``; an update carries the voice with its
+    ``gain`` and ``rate`` after the change; a setting carries its new ``value``.
     """
 
     kind: str
@@ -66,6 +67,7 @@ class RecordingAudio(Audio):
         self._calls: list[Call] = []
         self._record_lock = threading.Lock()
         self._loaded_from: dict[str, str] = {}
+        self._added: dict[str, Clip] = {}
 
     # ------------------------------------------------------------------
     # What was done
@@ -108,7 +110,8 @@ class RecordingAudio(Audio):
     def _names(self, source: SoundSource) -> set[str]:
         """The names ``source`` goes by; a clip's own name, a path with where it was loaded."""
         if isinstance(source, Clip):
-            return {source.name} - {''}
+            return ({source.name} - {''}) | {
+                name for name, clip in self._added.items() if clip is source}
         name = os.fspath(source)
         return {name, self._loaded_from.get(name, name)}
 
@@ -140,6 +143,14 @@ class RecordingAudio(Audio):
         """Record the load; nothing is decoded."""
         self._loaded_from[name] = os.fspath(path)
         self._record(Call('load', os.fspath(path), value=name))
+
+    def add(self, name: str, clip: Clip) -> None:
+        """Record the clip and the name it is played by; no engine is opened."""
+        self._added[name] = clip
+        self._record(Call('add', clip, value=name))
+
+    def _open_engine(self) -> AudioEngine | None:
+        return None
 
     def frame(self) -> int:
         """Nothing is queued, so nothing is applied."""

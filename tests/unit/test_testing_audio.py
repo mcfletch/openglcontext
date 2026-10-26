@@ -166,6 +166,18 @@ class TestSettings:
         [call] = audio.calls
         assert (call.kind, call.source, call.value) == ('load', 'sounds/thud.ogg', 'thud')
 
+    def test_add_is_recorded_and_opens_no_engine(
+            self, audio: RecordingAudio, monkeypatch: pytest.MonkeyPatch) -> None:
+        beep = synth.tone(440.0, 0.1, sample_rate=8000)
+        monkeypatch.setattr('OpenGLContext.audio.manager.open_device', None)
+        audio.add('beep', beep)
+        [call] = audio.calls
+        assert (call.kind, call.source, call.value) == ('add', beep, 'beep')
+        audio.play('beep')
+        assert len(audio.played('beep')) == 1
+        assert len(audio.played(beep)) == 1
+        assert audio.engine is None
+
     def test_frame_has_nothing_queued(self, audio: RecordingAudio) -> None:
         audio.play('a.ogg')
         assert audio.frame() == 0

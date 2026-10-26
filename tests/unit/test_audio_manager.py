@@ -888,6 +888,22 @@ class TestNamedClips:
         assert engine.clips.get('later') is tone
         audio.close()
 
+    def test_adding_a_clip_opens_the_engine_so_the_scene_finds_it_on_its_first_frame(
+            self, factory: Factory, tone: Any) -> None:
+        audio = Audio(engine_factory=factory)
+        audio.add('hum', tone)
+        assert factory.engine.clips.get('hum') is tone
+        audio.close()
+
+    def test_a_clip_added_on_another_thread_before_any_engine_is_published_by_the_frame(
+            self, factory: Factory, tone: Any) -> None:
+        audio = Audio(engine_factory=factory)
+        on_thread(lambda: audio.add('hum', tone))
+        assert factory.engines == []
+        audio.frame()
+        assert factory.engine.clips.get('hum') is tone
+        audio.close()
+
     def test_a_clip_added_on_another_thread_reaches_the_scene_at_the_frame(
             self, factory: Factory, tone: Any) -> None:
         audio = Audio(engine_factory=factory)

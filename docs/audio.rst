@@ -616,7 +616,8 @@ cycles (110 Hz for 1 second is 110), or use ``rumble()`` with ``decay=0.0``
 and ``attack=0.0``.
 
 A generated clip can also be given a name. ``play`` takes the name, and so does
-the ``url`` of a scene's ``AudioSource``:
+the ``url`` of a scene's ``AudioSource``. ``add`` opens the engine, so the clip
+is there before the scene's first frame asks for it:
 
 .. code-block:: python
 

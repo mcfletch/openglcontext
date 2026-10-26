@@ -420,15 +420,18 @@ class Audio:
         """Make ``clip`` playable as ``name``, by :meth:`play` and by the scene's sources.
 
         An ``AudioSource`` node whose url is ``name`` plays it, so a scene can
-        name a sound made in code (:mod:`OpenGLContext.audio.sounds`). Safe from
-        any thread; the scene's nodes find it from the next :meth:`frame`.
+        name a sound made in code (:mod:`OpenGLContext.audio.sounds`). The
+        engine opens here, so the clip is in its cache before the scene first
+        asks. Safe from any thread; from another thread the engine opens and the
+        clip reaches it at the next :meth:`frame`.
         """
         self._clips[name] = clip
         self._failed.discard(name)
         self._unpublished.add(name)
-        engine = self._engine
-        if engine is not None and self._on_render_thread():
-            self._publish(engine)
+        if self._on_render_thread():
+            engine = self._open_engine()
+            if engine is not None:
+                self._publish(engine)
 
     def _publish(self, engine: AudioEngine) -> None:
         """Put the clips given to :meth:`add` in ``engine``'s cache. Render thread only."""
@@ -623,6 +626,8 @@ class Audio:
             elif command.handle is not None:
                 command.handle.stop()
         engine = self._engine
+        if engine is None and self._unpublished:
+            engine = self._open_engine()
         if engine is None:
             return len(commands)
         if not self.enabled:
