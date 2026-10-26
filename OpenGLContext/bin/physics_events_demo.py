@@ -31,12 +31,11 @@ from typing import Any, Optional
 
 import numpy as np
 
-from omi_audio import model as audiomodel
-from omi_audio import synth
 from omi_audio.clip import DEFAULT_SAMPLE_RATE
 from omi_physics import model
 from omi_physics.contactevents import PairPreview, Verdict
 
+from OpenGLContext.audio import sounds
 from OpenGLContext.audio.manager import Audio
 from OpenGLContext.events.framestep import FrameStep
 from OpenGLContext.physics.body import Body
@@ -194,13 +193,12 @@ class CollisionYard:
         self.mend()
 
         self.clips = {
-            'thud': synth.rumble(0.3, sample_rate=sample_rate, decay=16.0, cutoff=320.0,
-                                 pitch=95.0, pitch_end=50.0, tone=0.5, drive=2.0, seed=3),
-            'ping': synth.impact(0.12, sample_rate=sample_rate, seed=9),
-            'shatter': synth.noise(0.5, sample_rate=sample_rate, amplitude=0.5, seed=13),
+            'thud': sounds.rumble(0.3, sample_rate=sample_rate, decay=16.0, cutoff=320.0,
+                                  pitch=95.0, pitch_end=50.0, tone=0.5, drive=2.0, seed=3),
+            'ping': sounds.impact(0.12, sample_rate=sample_rate, seed=9),
+            'shatter': sounds.noise(0.5, sample_rate=sample_rate, amplitude=0.5, seed=13),
         }
-        self.placed = audiomodel.AudioEmitter(positional=audiomodel.PositionalProperties(
-            refDistance=3.0, rolloffFactor=0.8))
+        self.placed = sounds.positional(near=3.0, rolloff=0.8)
 
     # -- building ------------------------------------------------------------
     def _box(self, size: Sequence[float], position: Sequence[float], finish: Any,
@@ -424,9 +422,7 @@ def main() -> int:                              # pragma: no cover - needs a win
         def OnInit(self) -> None:
             self.yard = CollisionYard(self.physics, self.audio)
             self.sg = self.yard.scene()
-            engine = self.audio.engine
-            if engine is not None:
-                engine.master_gain = MASTER_GAIN
+            self.audio.mix = MASTER_GAIN
             for key, handler in (('d', self.OnDrop), ('l', self.OnLaunch),
                                  ('L', self.OnLaunchSlow),
                                  ('m', self.OnMend), (' ', self.OnFire),

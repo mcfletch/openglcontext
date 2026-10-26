@@ -8,14 +8,15 @@
 thread, so a handler may call it wherever it runs. The ball of
 :doc:`physics_stairs_colour` thuds where it strikes, louder the harder it hits.
 '''
-from omi_audio import synth
+from OpenGLContext.audio import sounds
 
 from physics_stairs_colour import TestContext as Colouring
 
-'''A sound is a file, a URL, a name given to ``audio.load`` or a decoded clip.
-This one is made on the spot so that the script needs no file: a 0.25 s burst of
-noise that dies away quickly. A game plays ``'thud.ogg'``.'''
-THUD = synth.impact(0.25, decay=18.0, seed=7)
+'''A sound is a file, a URL, a name given to ``audio.load`` or a clip.
+``OpenGLContext.audio.sounds`` makes clips in code, so that the script needs no
+file: this one is a 0.25 s burst of noise that dies away quickly. A game plays
+``'thud.ogg'``.'''
+THUD = sounds.impact(0.25, decay=18.0, seed=7)
 
 
 class TestContext(Colouring):

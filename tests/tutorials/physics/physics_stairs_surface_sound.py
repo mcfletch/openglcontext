@@ -8,11 +8,11 @@ than 1 m/s, at the contact point, with a gain that reaches 1.0 at 6 m/s. The
 script has no handler. Every body that is made of the material sounds alike,
 which is what a surface does.
 '''
-from omi_audio import synth
+from OpenGLContext.audio import sounds
 
 from physics_stairs import START, StairsContext
 
-THUD = synth.impact(0.25, decay=18.0, seed=7)
+THUD = sounds.impact(0.25, decay=18.0, seed=7)
 
 
 class TestContext(StairsContext):

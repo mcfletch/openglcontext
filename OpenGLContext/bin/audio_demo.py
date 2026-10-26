@@ -30,10 +30,9 @@ from typing import Any
 
 import numpy as np
 
-from omi_audio import model, synth
-from omi_audio.clip import DEFAULT_SAMPLE_RATE, Clip
+from omi_audio.clip import DEFAULT_SAMPLE_RATE
 
-from OpenGLContext.audio import scene as audioscene
+from OpenGLContext.audio import sounds
 from OpenGLContext.audio.manager import Audio
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.contextdefinition import ContextDefinition
@@ -122,13 +121,13 @@ def definition() -> PhysicsDefinition:
     return PhysicsDefinition(colliders='explicit')
 
 
-def _bell_clip(sample_rate: int) -> Clip:
+def _bell_clip(sample_rate: int) -> sounds.Clip:
     """A struck bell: a bright tone that dies away over two seconds."""
-    ringing = synth.tone(520.0, 2.0, sample_rate=sample_rate, amplitude=0.7,
-                         harmonics=5)
+    ringing = sounds.tone(520.0, 2.0, sample_rate=sample_rate, amplitude=0.7,
+                          harmonics=5)
     samples = np.asarray(ringing.samples, dtype=np.float32)
     decay = np.exp(-2.5 * np.arange(samples.size) / sample_rate).astype(np.float32)
-    return Clip(samples * decay, sample_rate, name='bell')
+    return sounds.Clip(samples * decay, sample_rate, name='bell')
 
 
 class AudioYard:
@@ -168,22 +167,21 @@ class AudioYard:
         #: One handler for every ball: a pair of balls meeting is one thud, not two.
         physics.addEventHandler('hit', function=self._blow, above=IMPACT_FLOOR)
 
-        self.thud = synth.rumble(0.3, sample_rate=sample_rate, decay=16.0,
-                                 cutoff=320.0, pitch=95.0, pitch_end=50.0,
-                                 tone=0.5, drive=2.0, seed=3)
-        self.shot = synth.rumble(0.45, sample_rate=sample_rate, decay=12.0,
-                                 cutoff=1100.0, pitch=78.0, pitch_end=44.0,
-                                 tone=0.26, drive=3.0, seed=11)
+        self.thud = sounds.rumble(0.3, sample_rate=sample_rate, decay=16.0,
+                                  cutoff=320.0, pitch=95.0, pitch_end=50.0,
+                                  tone=0.5, drive=2.0, seed=3)
+        self.shot = sounds.rumble(0.45, sample_rate=sample_rate, decay=12.0,
+                                  cutoff=1100.0, pitch=78.0, pitch_end=44.0,
+                                  tone=0.26, drive=3.0, seed=11)
         #: Where a thud comes from: placed, and heard across the yard.
-        self.placed = model.AudioEmitter(positional=model.PositionalProperties(
-            refDistance=3.0, rolloffFactor=0.8))
+        self.placed = sounds.positional(near=3.0, rolloff=0.8)
 
         self.bell = AudioSource(autoplay=False, priority=0.6)
         self.bell.useClip(_bell_clip(sample_rate))
 
         self.motor = AudioSource(loop=True, gain=0.0)
-        self.motor.useClip(synth.tone(110.0, 1.0, sample_rate=sample_rate,
-                                      amplitude=0.5, fade=0.0, harmonics=7))
+        self.motor.useClip(sounds.tone(110.0, 1.0, sample_rate=sample_rate,
+                                       amplitude=0.5, fade=0.0, harmonics=7))
         self.rotor = Transform(rotation=(0.0, 1.0, 0.0, 0.0), children=[
             _marker(self.finish.rotor, Box(size=(2.4, 0.15, 0.3))),
         ])
@@ -192,12 +190,12 @@ class AudioYard:
         self._angle = 0.0
 
         self.cave = AudioSource(loop=True, gain=AREA_LEVEL)
-        self.cave.useClip(synth.rumble(2.0, sample_rate=sample_rate, decay=0.0,
-                                       attack=0.0, cutoff=250.0, pitch=55.0,
-                                       pitch_end=55.0, tone=0.4, seed=5))
+        self.cave.useClip(sounds.rumble(2.0, sample_rate=sample_rate, decay=0.0,
+                                        attack=0.0, cutoff=250.0, pitch=55.0,
+                                        pitch_end=55.0, tone=0.4, seed=5))
         self.stream = AudioSource(loop=True, gain=AREA_LEVEL)
-        self.stream.useClip(synth.noise(2.0, sample_rate=sample_rate,
-                                        amplitude=0.3, seed=7, fade=0.0))
+        self.stream.useClip(sounds.noise(2.0, sample_rate=sample_rate,
+                                         amplitude=0.3, seed=7, fade=0.0))
         #: The areas' sounds, one global emitter each, heard only inside
         #: their zones.
         self.cave_sound = AudioEmitter(type='global', sources=[self.cave])
@@ -316,9 +314,7 @@ class AudioDemoContext(BaseContext):
         super().OnInit()
         self.yard = AudioYard(self.physics, self.audio)
         self.sg = self.yard.scene()
-        engine = self.audio.engine
-        if engine is not None:
-            engine.master_gain = MASTER_GAIN
+        self.audio.mix = MASTER_GAIN
         yard = self.yard
         for key, handler in (
                 ('b', yard.drop), ('g', yard.ring), (' ', yard.fire),
@@ -330,7 +326,7 @@ class AudioDemoContext(BaseContext):
         yard.frames.step(systemtime.systemTime())
         self.renderQueue.before_run(self.OnFrame)
         print(__doc__, flush=True)
-        print(audioscene.describe(self), flush=True)
+        print(self.audio.describe(), flush=True)
 
     def OnFrame(self) -> None:
         """Turn the motor before each frame, and have the frame drawn while it moves."""

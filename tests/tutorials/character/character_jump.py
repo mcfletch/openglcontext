@@ -11,11 +11,11 @@ Keys:
     space   jump
     c       slide
 '''
-from omi_audio import synth
+from OpenGLContext.audio import sounds
 
 from character_run import TestContext as Running
 
-THUD = synth.impact(0.25, decay=18.0, seed=7)
+THUD = sounds.impact(0.25, decay=18.0, seed=7)
 
 
 class TestContext(Running):

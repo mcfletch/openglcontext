@@ -7,16 +7,15 @@ A foot that lands plays the footstep of the material under it. The land of
 :doc:`character_run` is grass, and a slab of stone lies across the way: the
 fox's steps change as it crosses the slab and change back as it leaves it.
 '''
-from omi_audio import synth
-
 from character_run import FOX, LAND, LandContext
+from OpenGLContext.audio import sounds
 from OpenGLContext.loaders.gltf import sample_model_url
 from OpenGLContext.scenegraph import surfaces
 
 '''Two sounds made on the spot: a soft rustle for grass and a short hard click
 for stone. A game names the files of its footsteps.'''
-RUSTLE = synth.noise(0.12, amplitude=0.25, seed=3)
-CLICK = synth.impact(0.08, decay=60.0, seed=5)
+RUSTLE = sounds.noise(0.12, amplitude=0.25, seed=3)
+CLICK = sounds.impact(0.08, decay=60.0, seed=5)
 #: Where the slab lies: centre in x and z, and its size in metres.
 SLAB_AT = (0.5, -9.0)
 SLAB_SIZE = (4.0, 0.2, 5.0)
