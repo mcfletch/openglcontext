@@ -229,8 +229,7 @@ class TerrainViewer(_ContextBase):
     movementManager: Any
 
     def OnInit(self) -> None:  # pragma: no cover - live GL context, streaming + upload
-        from OpenGLContext.physics.demo import disable_vsync
-        disable_vsync()
+        self.setVSync(False)
         cfg = self.config
         sys.stdout.write(__doc__[__doc__.index("Controls:"):])
         sys.stdout.flush()

@@ -45,7 +45,7 @@ from OpenGLContext.physics.filters import Approach, ContactFilter, Filters
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
 from OpenGLContext.physics.joints import Joint, make_joint
 from OpenGLContext.physics.materials import Materials
-from OpenGLContext.physics.manager import write_pose
+from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_pose
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
 from OpenGLContext.physics.queries import Hit, overlapping, sweep_sphere
 from OpenGLContext.physics.replica import Replica, build
@@ -53,7 +53,6 @@ from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsE
 from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
-from OpenGLContext.scenegraph.physicsbody import quat_to_vrml_rotation, vrml_rotation_to_quat
 
 __all__ = ['Physics']
 

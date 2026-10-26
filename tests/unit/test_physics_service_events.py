@@ -493,3 +493,21 @@ def test_a_step_handler_is_called_every_step_of_a_world_at_rest():
     run_for(physics, 0.1, frame=0.01)
     assert len(seen) == 10
     physics.close()
+
+
+def test_no_bounce_is_lost_at_a_low_frame_rate():
+    def bounces(frame):
+        physics = make(tickHz=120.0)
+        try:
+            physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)), restitution=0.6)
+            listener = Listener()
+            body = physics.add_dynamic(ball(0.2), restitution=0.6)
+            body.addEventHandler('hit', function=listener.OnHit)
+            run_for(physics, 3.0, frame)
+            return [round(hit.time, 6) for hit in listener.heard]
+        finally:
+            physics.close()
+
+    at_120 = bounces(1.0 / 120.0)
+    assert len(at_120) >= 3
+    assert bounces(1.0 / 20.0) == at_120

@@ -134,7 +134,7 @@ class PhysicsDebugDraw:
         single line draw; per frame only the (cheap) Transform poses are written.
         """
         from omi_physics import mathutil
-        from .manager import write_pose
+        from .poses import write_pose
         w = self.world
         n = w.body_count
         if n == 0:

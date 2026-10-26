@@ -8,7 +8,7 @@ import pytest
 from vrml import field, node
 
 from OpenGLContext import context, renderoptions
-from OpenGLContext.physics import manager
+from OpenGLContext.physics import poses
 from OpenGLContext.viewer import sceneviewer
 
 
@@ -36,4 +36,4 @@ def test_an_event_is_not_a_set_viewer_field():
 
 def test_a_rotation_that_is_an_event_takes_no_pose():
     with pytest.raises(TypeError, match='Rung.rotation'):
-        manager.write_pose(Rung(), (1.0, 2.0, 3.0), (0.0, 1.0, 0.0, 0.5))
+        poses.write_pose(Rung(), (1.0, 2.0, 3.0), (0.0, 1.0, 0.0, 0.5))

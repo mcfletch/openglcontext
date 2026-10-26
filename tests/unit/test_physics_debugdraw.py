@@ -15,7 +15,8 @@ from omi_physics import body as _body
 from omi_physics import model
 from omi_physics.joints import PointConstraint, DistanceConstraint
 
-from OpenGLContext.physics.demo import DemoScene
+from omi_physics.world import PhysicsWorld
+
 from OpenGLContext.physics import debugdraw
 from OpenGLContext.physics.debugdraw import (
     PhysicsDebugDraw, PROXIES, AABBS, CONTACTS, VELOCITY, ACCELERATION,
@@ -24,14 +25,48 @@ from OpenGLContext.physics.debugdraw import (
 )
 
 
+
+class Placed:
+    """The slot a body was given in the world."""
+
+    def __init__(self, index):
+        self.index = index
+
+
+class Scene:
+    """A plain world with boxes, spheres and cooked shapes added by one call each."""
+
+    def __init__(self, gravity=None):
+        self.world = PhysicsWorld(gravity=gravity if gravity is not None else model.Gravity(
+            gravity=9.81, direction=(0, -1, 0)))
+
+    def _add(self, shape, position, dynamic=True, velocity=(0, 0, 0)):
+        motion = model.Motion(type=model.DYNAMIC if dynamic else model.STATIC, mass=1.0,
+                              linearVelocity=tuple(velocity))
+        index = self.world.add_body(motion, model.Collider(shape=self.world.add_shape(shape)),
+                                    position=tuple(position))
+        return Placed(index)
+
+    def add_box(self, size=(1, 1, 1), position=(0, 0, 0), dynamic=True, velocity=(0, 0, 0)):
+        return self._add(model.Shape.box(size), position, dynamic, velocity)
+
+    def add_sphere(self, radius=0.5, position=(0, 0, 0)):
+        return self._add(model.Shape.sphere(radius), position)
+
+    def add_shape(self, shape, position=(0, 0, 0)):
+        return self._add(shape, position)
+
+    def advance(self, dt):
+        self.world.step(dt)
+
+
 def _stacked_scene():
     """A box dropped onto a static floor box, stepped until they touch (contacts).
 
     Stops the moment contacts appear so the dynamic box has not yet slept (a
     sleeping body clears its contacts), keeping the overlay's contact path live.
     """
-    scene = DemoScene(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)),
-                      debug_flags=0)
+    scene = Scene(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
     scene.add_box(size=(20, 1, 20), position=(0, -0.5, 0), dynamic=False)
     scene.add_box(size=(1, 1, 1), position=(0, 0.55, 0), dynamic=True)
     for _ in range(300):
@@ -43,7 +78,7 @@ def _stacked_scene():
 
 def test_proxies_build_one_transform_per_box_and_sphere():
     """Enabling PROXIES creates a per-body Transform under the proxy group."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.add_box(size=(1, 1, 1), position=(0, 3, 0))
     scene.add_sphere(radius=0.5, position=(2, 3, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=PROXIES)
@@ -56,7 +91,7 @@ def test_proxies_build_one_transform_per_box_and_sphere():
 
 def test_proxy_transforms_track_moving_bodies():
     """A second update writes the fallen body's new pose onto its proxy Transform."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.add_box(size=(1, 1, 1), position=(0, 10, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=PROXIES)
     dbg.update()
@@ -70,7 +105,7 @@ def test_proxy_transforms_track_moving_bodies():
 
 def test_disabling_proxies_clears_the_group():
     """Turning PROXIES off after it built nodes empties the proxy group."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.add_box(size=(1, 1, 1), position=(0, 3, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=PROXIES)
     dbg.update()
@@ -83,7 +118,7 @@ def test_disabling_proxies_clears_the_group():
 
 def test_proxy_update_on_empty_world_is_a_noop():
     """PROXIES on a world with no bodies adds nothing."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     dbg = PhysicsDebugDraw(scene.world, flags=PROXIES)
     dbg.update()
     assert dbg._proxy_group.children == []
@@ -91,7 +126,7 @@ def test_proxy_update_on_empty_world_is_a_noop():
 
 def test_proxy_skips_body_without_collider_or_trigger_shape():
     """A body carrying neither a collider nor a trigger shape gets no proxy."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.add_box(size=(1, 1, 1), position=(0, 3, 0))
     scene.world.add_body(model.Motion(type=model.DYNAMIC), position=(2, 3, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=PROXIES)
@@ -101,7 +136,7 @@ def test_proxy_skips_body_without_collider_or_trigger_shape():
 
 def test_sleeping_body_proxy_pose_is_not_rewritten():
     """A sleeping dynamic body's proxy Transform is left untouched on later updates."""
-    scene = DemoScene(gravity=model.Gravity(gravity=0.0), debug_flags=0)
+    scene = Scene(gravity=model.Gravity(gravity=0.0))
     scene.add_box(size=(1, 1, 1), position=(0, 0, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=PROXIES)
     dbg.update()
@@ -119,9 +154,8 @@ def test_sleeping_body_proxy_pose_is_not_rewritten():
 
 def test_capsule_proxy_is_skipped_by_instanced_path():
     """A capsule has no shared unit wireframe, so it yields no proxy Transform."""
-    scene = DemoScene(debug_flags=0)
-    scene.add_mesh_body(geometry=None, shape=model.Shape.capsule(0.3, 2.0),
-                        position=(0, 3, 0))
+    scene = Scene()
+    scene.add_shape(model.Shape.capsule(0.3, 2.0), position=(0, 3, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=PROXIES)
     dbg.update()
     assert dbg._proxy_group.children == []
@@ -129,7 +163,7 @@ def test_capsule_proxy_is_skipped_by_instanced_path():
 
 def test_no_features_collapses_to_empty_overlay():
     """With nothing enabled the dynamic ILS collapses to a single dummy point."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.add_box(position=(0, 3, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=0)
     dbg.update()
@@ -151,7 +185,7 @@ def test_contacts_draw_a_red_normal_per_contact():
 
 def test_aabb_overlay_has_twelve_edges_per_body():
     """The AABB overlay draws the 12 box edges (24 endpoints) for each body."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.add_box(size=(1, 1, 1), position=(0, 3, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=AABBS)
     dbg.update()
@@ -161,7 +195,7 @@ def test_aabb_overlay_has_twelve_edges_per_body():
 
 def test_velocity_vector_points_along_motion():
     """The velocity line runs from the body position toward its linear velocity."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.add_box(size=(1, 1, 1), position=(0, 3, 0), velocity=(2, 0, 0))
     dbg = PhysicsDebugDraw(scene.world, flags=VELOCITY, vector_scale=0.5)
     dbg.update()
@@ -174,8 +208,7 @@ def test_velocity_vector_points_along_motion():
 
 def test_acceleration_vector_drawn_only_for_dynamic_bodies():
     """A dynamic body gets a gravity acceleration line; a static one does not."""
-    scene = DemoScene(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)),
-                      debug_flags=0)
+    scene = Scene(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
     scene.add_box(size=(1, 1, 1), position=(0, 5, 0), dynamic=True)
     scene.add_box(size=(1, 1, 1), position=(0, -1, 0), dynamic=False)
     dbg = PhysicsDebugDraw(scene.world, flags=ACCELERATION)
@@ -187,7 +220,7 @@ def test_acceleration_vector_drawn_only_for_dynamic_bodies():
 
 def test_angular_vectors_appear_only_when_spinning():
     """Spin lines are drawn at each corner when angular velocity is non-zero."""
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.add_box(size=(1, 1, 1), position=(0, 3, 0))
     scene.world.angular_velocity[0] = (0, 5.0, 0)
     dbg = PhysicsDebugDraw(scene.world, flags=ANGULAR)
@@ -202,7 +235,7 @@ def test_angular_vectors_appear_only_when_spinning():
 
 def test_joint_line_between_two_body_anchors():
     """A point constraint between two bodies draws one yellow line between them."""
-    scene = DemoScene(gravity=model.Gravity(gravity=9.81), debug_flags=0)
+    scene = Scene(gravity=model.Gravity(gravity=9.81))
     a = scene.add_box(size=(1, 1, 1), position=(0, 5, 0), dynamic=False)
     b = scene.add_box(size=(1, 1, 1), position=(0, 2, 0), dynamic=True)
     scene.world.add_joint_constraint(
@@ -217,7 +250,7 @@ def test_joint_line_between_two_body_anchors():
 
 def test_joint_line_uses_world_anchor_when_pinned_to_world():
     """When a constraint pins body a to the world (a<0) the line starts at its anchor."""
-    scene = DemoScene(gravity=model.Gravity(gravity=9.81), debug_flags=0)
+    scene = Scene(gravity=model.Gravity(gravity=9.81))
     b = scene.add_box(size=(1, 1, 1), position=(0, 2, 0), dynamic=True)
     dbg = PhysicsDebugDraw(scene.world, flags=JOINTS)
     scene.world.add_joint_constraint(
@@ -236,7 +269,7 @@ def test_joint_line_skips_constraints_without_endpoints():
     """A constraint object exposing no a/b indices contributes no line."""
     class _Bare:
         pass
-    scene = DemoScene(debug_flags=0)
+    scene = Scene()
     scene.world.joint_constraints.append(_Bare())
     dbg = PhysicsDebugDraw(scene.world, flags=JOINTS)
     dbg.update()
@@ -331,7 +364,7 @@ def test_proxy_edges_for_cylinders_cones_and_compounds():
 def test_joint_line_of_a_row_joint_reaches_its_anchor():
     """A hinge to the world draws from its anchor to the body it holds."""
     from omi_physics.joints import HingeJoint, SliderJoint  # noqa: PLC0415 kept with its use
-    scene = DemoScene(gravity=model.Gravity(gravity=9.81), debug_flags=0)
+    scene = Scene(gravity=model.Gravity(gravity=9.81))
     b = scene.add_box(size=(1, 1, 1), position=(0, 2, 0), dynamic=True)
     scene.world.add_joint_constraint(
         HingeJoint(-1, b.index, anchor=(1, 2, 0), axis=(0, 0, 1)))

@@ -13,7 +13,6 @@ from omi_physics import model
 from omi_physics.world import PhysicsWorld
 from omi_physics.character import CharacterCapabilities
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
-from OpenGLContext.physics.manager import PhysicsManager
 
 
 def _ground_world():
@@ -245,9 +244,8 @@ def test_apply_impulse_launches_the_capsule_and_lifts_the_camera():
 
 
 def test_a_walker_with_a_body_is_heard_entering_a_trigger():
-    """The platform's body enters triggers, so a subscription on it hears a pad."""
-    manager = PhysicsManager(world=_ground_world())
-    world = manager.world
+    """The platform's body enters triggers, so the world's trigger listeners hear it at a pad."""
+    world = _ground_world()
     world.fixed_dt = 1.0 / 60.0
     shape = world.add_shape(model.Shape.box((1.0, 2.0, 1.0)))
     pad = world.add_body(model.Motion(type=model.STATIC),
@@ -255,12 +253,12 @@ def test_a_walker_with_a_body_is_heard_entering_a_trigger():
     plat = PhysicsViewPlatform(world, CharacterCapabilities(), body=True)
     plat.bind((0.0, 2.0, 0.0))
     heard = []
-    manager.events.subscribe(heard.append, body=plat.body, kinds=('trigger',))
+    world.add_trigger_listener(lambda kind, trigger, other: heard.append((kind, trigger, other)))
     for _ in range(120):
         plat.character.set_move((1.0, 0.0, 0.0))
         plat.update(1.0 / 60.0)
-        manager.advance(1.0 / 60.0)
-    assert [(hit.phase, hit.other) for hit in heard] == [('enter', world.ref(pad))]
+        world.step(1.0 / 60.0)
+    assert [event for event in heard if event[0] == 'enter'] == [('enter', pad, plat.body)]
 
 
 def test_a_walker_has_no_body_unless_asked():
