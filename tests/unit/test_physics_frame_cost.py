@@ -155,7 +155,7 @@ def test_a_snapshot_converts_only_the_rows_it_lists(monkeypatch):
 def test_a_snapshot_lists_a_sleeping_body_moved_by_hand():
     worker = boxes_at_rest()
     world = worker.runtime.world
-    world.position[worker.runtime.entry(3).index] += (0.0, 0.0, 1.0)
+    world.pose_arrays()[0][worker.runtime.entry(3).index] += (0.0, 0.0, 1.0)   # asleep, not woken
     worker.submit(Command('damping', 1, (0.1, None), seq=10))
     snapshot = worker.collect(FRAME).snapshot
     assert snapshot.changed.tolist() == [snapshot.rows[3]]
@@ -197,7 +197,7 @@ def test_a_thread_worker_lists_rows_changed_in_snapshots_nobody_collected():
             break
     seen = worker.collect(0.0).snapshot
     runtime = worker.runtime
-    runtime.world.position[runtime.entry(2).index] += (0.0, 0.0, 0.5)
+    runtime.world.pose_arrays()[0][runtime.entry(2).index] += (0.0, 0.0, 0.5)
     worker.step(0.01)                 # published with row 2 changed
     worker.step(0.01)                 # published with nothing changed
     latest = worker.collect(0.0).snapshot

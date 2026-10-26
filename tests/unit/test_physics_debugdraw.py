@@ -147,7 +147,7 @@ def test_sleeping_body_proxy_pose_is_not_rewritten():
     assert not scene.world.awake[0]                  # asleep
     dbg.update()
     tr = dbg._proxy_nodes[0][0]
-    scene.world.position[0] = (5, 5, 5)              # move it in the world
+    scene.world.pose_arrays()[0][0] = (5, 5, 5)      # move it in the world, asleep
     dbg.update()                                     # sleeping -> pose skipped
     assert not np.allclose(tr.translation, (5, 5, 5))
 

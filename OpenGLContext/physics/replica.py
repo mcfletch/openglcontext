@@ -143,9 +143,10 @@ class Replica:
         if len(into) == 0:
             return
         world = self.world
-        world.position[into] = snapshot.position[take]
+        position, orientation = world.pose_arrays()
+        position[into] = snapshot.position[take]
         world.prev_position[into] = snapshot.position[take]
-        world.orientation[into] = snapshot.orientation[take]
+        orientation[into] = snapshot.orientation[take]
         world.prev_orientation[into] = snapshot.orientation[take]
         world.linear_velocity[into] = snapshot.linear_velocity[take]
         if changed is None:
