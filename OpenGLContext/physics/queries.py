@@ -7,6 +7,7 @@ world's bounding boxes, so a query costs the bodies near it and not the scene.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Collection
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -78,7 +79,9 @@ def sweep_sphere(world: PhysicsWorld, origin: Any, direction: Any, distance: flo
 
     Returns the distance at which it first touches a solid body, 0 where it
     starts in one, or None where it travels ``distance`` clear. The sphere is
-    stepped by half its radius, so a wall thinner than that can be passed.
+    stepped by half its radius, so a wall thinner than that can be passed. A
+    fixed body is tested only at the distances where the sphere's box meets
+    the body's (:func:`_reach_along`); a body that moves is tested at every one.
     """
     start = np.asarray(origin, dtype='d')
     heading = np.asarray(direction, dtype='d')
@@ -90,10 +93,12 @@ def sweep_sphere(world: PhysicsWorld, origin: Any, direction: Any, distance: flo
     near = _candidates(world, np.minimum(start, end) - radius, np.maximum(start, end) + radius, skip)
     if not near:
         return None
+    reaches = [_reach_along(world, j, start, heading, radius) for j in near]
 
     def touching(travelled: float) -> bool:
         probe = SphereProxy(start + heading * travelled, radius)
-        return any(collide(-1, j, probe, _proxy(world, j)) for j in near)
+        return any(collide(-1, j, probe, _proxy(world, j)) for j, (first, last) in
+                   zip(near, reaches, strict=True) if first <= travelled <= last)
 
     if touching(0.0):
         return 0.0
@@ -112,6 +117,39 @@ def sweep_sphere(world: PhysicsWorld, origin: Any, direction: Any, distance: flo
             return high
         clear, travelled = travelled, travelled + step
     return None
+
+
+#: How far, in metres, past the box of a fixed body a swept sphere's box is still tested against it.
+_REACH_SLACK = 1e-6
+
+
+def _reach_along(world: PhysicsWorld, index: int, start: np.ndarray, heading: np.ndarray,
+                 radius: float) -> tuple[float, float]:
+    """The distances along ``heading`` from ``start`` between which a sphere of ``radius`` there
+    has a box that meets body ``index``'s, grown by :data:`_REACH_SLACK`.
+
+    Everywhere, ``(-inf, inf)``, for a body that moves: its box was fitted
+    before its last move. A fixed body lies inside its box, so a sphere whose
+    box misses it touches nothing of it.
+    """
+    if world.motion_type[index] != 0:
+        return -math.inf, math.inf
+    first, last = -math.inf, math.inf
+    low, high = world.aabb_min[index].tolist(), world.aabb_max[index].tolist()
+    for axis in range(3):
+        bottom = low[axis] - radius - _REACH_SLACK
+        top = high[axis] + radius + _REACH_SLACK
+        origin, rate = float(start[axis]), float(heading[axis])
+        if rate == 0.0:
+            if not bottom <= origin <= top:
+                return math.inf, -math.inf
+            continue
+        enter, leave = (bottom - origin) / rate, (top - origin) / rate
+        if enter > leave:
+            enter, leave = leave, enter
+        first, last = max(first, enter), min(last, leave)
+    slack = _REACH_SLACK * (1.0 + abs(first) + abs(last)) if math.isfinite(first + last) else 0.0
+    return first - slack, last + slack
 
 
 def overlapping(world: PhysicsWorld, shape: model.Shape, position: Any, orientation: Any,
