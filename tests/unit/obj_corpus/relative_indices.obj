@@ -1,0 +1,11 @@
+# every face counts back from the last vertex read
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+f -4 -3 -2 -1
+v 2 0 0
+v 3 0 0
+v 3 1 0
+v 2 1 0
+f -4 -3 -2 -1

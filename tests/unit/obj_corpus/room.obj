@@ -1,0 +1,24 @@
+mtllib room.mtl
+v 0 0 0
+v 4 0 0
+v 4 0 4
+v 0 0 4
+v 0 3 0
+v 4 3 0
+v 4 3 4
+v 0 3 4
+g floor
+usemtl white
+f 1 2 3 4
+g ceiling
+usemtl white
+f 8 7 6 5
+g back
+usemtl white
+f 5 6 2 1
+g left
+usemtl red
+f 4 8 5 1
+g right
+usemtl green
+f 2 6 7 3

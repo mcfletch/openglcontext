@@ -1,316 +1,117 @@
-"""Implements OBJ loading into OpenGLContext scenegraph nodes
+"""Wavefront OBJ models read into the scenegraph.
 
-Based on the Pyglet OBJ loader in the contrib files section which is
-licensed under the following license:
+``Loader.load('house.obj')`` returns a scene graph holding one ``Transform`` per
+object or group (``o`` and ``g``), named by the name the file gives, and in each
+a ``Shape`` per material and primitive kind: a ``PBRMesh`` of triangles, line
+segments or points, drawn with the ``PhysicalMaterial`` its ``usemtl`` names.
+:mod:`~OpenGLContext.loaders.objfile` reads the geometry,
+:mod:`~OpenGLContext.loaders.mtlfile` and
+:mod:`~OpenGLContext.loaders.objmaterials` the materials; this puts them in a
+scene::
 
-    Copyright (c) 2006-2008 Alex Holkner
-    All rights reserved.
+    from OpenGLContext.loaders.loader import Loader
+    scene = Loader.load('house.obj')            # or .obj.gz
+    chimney = scene.getDEF('Chimney')
 
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-      * Redistributions of source code must retain the above copyright
-        notice, this list of conditions and the following disclaimer.
-      * Redistributions in binary form must reproduce the above copyright
-        notice, this list of conditions and the following disclaimer in
-        the documentation and/or other materials provided with the
-        distribution.
-      * Neither the name of pyglet nor the names of its
-        contributors may be used to endorse or promote products
-        derived from this software without specific prior written
-        permission.
-
-    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-    FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-    INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-    BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-    CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-    ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-
-        From the pyglet svn:
-        http://pyglet.googlecode.com/svn/trunk/contrib/model/model/obj.py
-        Last revised on March 7, 2008 by Alex Holkner (revision 1884)
-
-        Additions/changes by Jim Getzen on June 2, 2008:
-        Fixed a bug in the OBJ.load_material_library method:
-        'emissive' changed to 'emission'
-
-        Added a color argument to the OBJ.draw method.
-        Added a color argument to the Mesh.draw method.
-        Added code the Mesh.draw method to enable glColorMaterial
-        capability (allowing objects to be temporarily recolored).
-
-        Added OBJ.compile convenience method to compile all of an
-        OBJ's meshes.
-
-        Commented out the glDisable(GL_TEXTURE_2D) in the 'apply'
-        method of Material. It interfered with the shadow mapping
-        OpenGL state settings.
-
-Note:
-
-    This is only a tiny fraction of the OBJ file format, for an idea of how much
-    is left out, see:
-
-        http://people.scs.fsu.edu/~burkardt/txt/obj_format.txt
-
+Faces are drawn from both sides: an OBJ does not say which way its triangles
+face. A file with no geometry reads as an empty scene.
 """
+from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any, Union
+
+import numpy as np
+from OpenGL.GL import GL_LINES, GL_POINTS, GL_TRIANGLES
+
+from OpenGLContext.loaders import base
+from OpenGLContext.loaders.gltf.meshes import estimate_tangents, reads_tangents
+from OpenGLContext.loaders.objfile import FREEFORM, ObjMesh, parse_obj
+from OpenGLContext.loaders.objmaterials import LibraryMaterial, MaterialBuilder, load_libraries
+from OpenGLContext.loaders.resolver import DEFAULT_MAX_RESOURCE_BYTES, gunzipped
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+__all__ = ['OBJHandler', 'defaultHandler']
 
 log = logging.getLogger(__name__)
-from OpenGL._bytes import as_str
-from OpenGLContext.loaders import base, loader
-from OpenGLContext.scenegraph import basenodes
-import urllib.parse
 
-from OpenGLContext.loaders.loader import join_reference
-from hashlib import md5
+DRAW_MODES = {'triangles': GL_TRIANGLES, 'lines': GL_LINES, 'points': GL_POINTS}
 
 
-def _as_text(data: bytes | str) -> str:
-    """Decode loader bytes to text (mtl/obj content is UTF-8 text)."""
-    if isinstance(data, bytes):
-        return data.decode("utf-8", "replace")
-    return data
+def tangents_of(mesh: ObjMesh, material: Any) -> Any:
+    """The tangents a mesh needs for its material's normal map, or None
+
+    The shader leaves a normal map out where a mesh has no tangents. OBJ
+    texture coordinates run up the picture, and the tangent estimate takes
+    glTF's, which run down it, so v is turned over for the estimate.
+    """
+    if (mesh.kind != 'triangles' or mesh.texcoords is None or mesh.normals is None
+            or not reads_tangents(material)):
+        return None
+    turned = mesh.texcoords * np.array([1.0, -1.0], np.float32) + np.array([0.0, 1.0], np.float32)
+    return estimate_tangents(mesh.positions, mesh.normals, turned, mesh.indices)
 
 
 class OBJHandler(base.BaseHandler):
-    """Scenegraph loader which loads individual OBJ files as scenegraphs"""
+    """The loader handler for ``.obj`` and ``.obj.gz``"""
 
-    filename_extensions = (".obj", ".obj.gz")
+    filename_extensions = ('.obj', '.obj.gz')
 
-    def defaultMaterial(self) -> Any:
-        return basenodes.Appearance(
-            material=basenodes.Material(diffuseColor=[0.9, 0.9, 0.9]),
-        )
-
-    def parse(self, data: bytes | str, baseURL: str, *args: Any,
+    def parse(self, data: Union[bytes, str], baseURL: str, *args: Any,
               **named: Any) -> tuple[bool, Any]:
-        """Parse the loaded data (with the provided meta-information)
+        """The scene graph an OBJ document describes
 
-        This implementation simply creates VRML97 scenegraph nodes out
-        of the .obj format data.
-
-        ``data`` arrives as the bytes the loader read; OBJ is a line-oriented
-        text format, so it is decoded once here rather than every keyword
-        being spelled twice.
+        ``baseURL`` is where the document was read from: the material
+        libraries and textures it names are looked for beside it. Raises
+        ``ValueError`` naming the file and line for a statement that cannot
+        be read.
         """
-        text = as_str(data)
-        sg = basenodes.sceneGraph()
+        source = baseURL or 'document.obj'
+        if isinstance(data, (bytes, bytearray, memoryview)):
+            data = gunzipped(bytes(data), DEFAULT_MAX_RESOURCE_BYTES, source)
+        model = parse_obj(data, source)
+        libraries = load_libraries(model.libraries, source) if model.libraries else {}
+        builder = MaterialBuilder(source)
+        appearances: dict[str, Any] = {}
+        unknown: set[str] = set()
 
-        # these three are shared among all shapes
-        hash = md5(baseURL.encode("utf-8") if isinstance(baseURL, str) else baseURL).hexdigest()
-        coord = basenodes.Coordinate(DEF="Coord-%s" % (hash,))
-        normal = basenodes.Normal(DEF="Norm-%s" % (hash,))
-        texCoord = basenodes.TextureCoordinate(DEF="TexCoord-%s" % (hash,))
+        def appearance_of(material: str, coloured: bool) -> Any:
+            entry: Union[LibraryMaterial, None] = libraries.get(material)
+            if entry is not None:
+                if material not in appearances:
+                    appearances[material] = builder.appearance(entry)
+                return appearances[material]
+            if material and material not in unknown:
+                unknown.add(material)
+                log.warning('%s: material %r is not in any library it names', source, material)
+            return builder.default(coloured)
 
-        mesh = None  # transforms
-        group = None  # shape
-        material = None  # appearance, material, texture
-
-        materials: dict[str, Any] = {}
-
-        # indices are 1-based, the first values are never used...
-        vertices = [[0.0, 0.0, 0.0]]
-        normals = [[0.0, 0.0, 0.0]]
-        tex_coords = [[0.0, 0.0]]
-
-        current_vertex_indices = []
-        current_normal_indices = []
-        current_texcoord_indices = []
-
-        for line in text.splitlines():
-            if line.startswith("#"):
-                continue
-            values = line.split()
-            if not values:
-                continue
-
-            if values[0] == "v":
-                vertices.append([float(x) for x in values[1:4]])
-            elif values[0] == "vn":
-                normals.append([float(x) for x in values[1:4]])
-            elif values[0] == "vt":
-                tex_coords.append([float(x) for x in values[1:3]])
-            elif values[0] == "mtllib":
-                self.load_material_library(values[1], materials, baseURL)
-            elif values[0] in ("usemtl", "usemat"):
-                material = materials.get(values[1], None)
-                if material is None:
-                    log.warning("Unknown material: %s", values[1])
-                    material = self.defaultMaterial()
-                if mesh is not None:
-                    if group and current_vertex_indices:
-                        group.geometry.coordIndex = current_vertex_indices
-                        group.geometry.texCoordIndex = current_texcoord_indices
-                        group.geometry.normalIndex = current_normal_indices
-                        current_vertex_indices = []
-                        current_texcoord_indices = []
-                        current_normal_indices = []
-                    group = basenodes.Shape(
-                        geometry=basenodes.IndexedFaceSet(
-                            coord=coord,
-                            normal=normal,
-                            texCoord=texCoord,
-                            solid=False,
-                        ),
-                        appearance=material,
-                    )
-                    mesh.children.append(group)
-            elif values[0] == "o":
-                mesh = basenodes.Transform(DEF=values[1])
-                sg.children.append(mesh)
-                sg.regDefName(values[1], mesh)
-                # previous shape is no longer current...
-                group = None
-            elif values[0] == "s":
-                # a smoothing-group definition...
-                # not currently supported...
-                pass
-            elif values[0] == "f":
-                # adds a single face
-                if mesh is None:
-                    # anonymous transform
-                    mesh = basenodes.Transform()
-                    sg.children.append(mesh)
-                if material is None:
-                    material = self.defaultMaterial()
-                if group is None:
-                    group = basenodes.Shape(
-                        geometry=basenodes.IndexedFaceSet(
-                            coord=coord,
-                            normal=normal,
-                            texCoord=texCoord,
-                            solid=False,
-                        ),
-                        appearance=material,
-                    )
-                    mesh.children.append(group)
-
-                for _i, v in enumerate(values[1:]):
-                    v_index, t_index, n_index = self._cleanIndex(v)
-                    current_vertex_indices.append(v_index)
-                    current_texcoord_indices.append(t_index)
-                    current_normal_indices.append(n_index)
-                current_vertex_indices.append(-1)
-                current_texcoord_indices.append(-1)
-                current_normal_indices.append(-1)
-            else:
-                log.warning("""Unrecognized operation: %r""", values)
-        if group and current_vertex_indices:
-            group.geometry.coordIndex = current_vertex_indices
-            group.geometry.texCoordIndex = current_texcoord_indices
-            group.geometry.normalIndex = current_normal_indices
-        coord.point = vertices
-        normal.vector = normals
-        texCoord.point = tex_coords
-        return True, sg
-
-        # this creates a pointset-only version of the geometry...
-
-    # sg.children = [
-    # basenodes.Transform(
-    # children = [
-    # basenodes.Shape(
-    # geometry = basenodes.PointSet(
-    # coord=coord,
-    # color = [1,1,1]*len(coord.point)
-    # ),
-    # appearance = basenodes.Appearance(
-    # material = basenodes.Material(
-    # diffuseColor = [1,0,0],
-    # ),
-    # )
-    # ),
-    # ],
-    # ),
-    # basenodes.PointLight( location = [0,0,10 ] ),
-    # basenodes.Background( skyColor=[1,1,1] ),
-    # ]
-
-    def _cleanIndex(self, v: str) -> list[int]:
-        """Indices are in the format:
-
-        ci/ti/ni where ti and ni can be null
-        """
-        return ([int(x) for x in [j or 0 for j in v.split("/")]] + [0, 0])[:3]
-
-    def load_material_library(self, url: str, materials: dict[str, Any],
-                              baseURL: Optional[str] = None) -> bool:
-        """Load the materials in ``url`` into the ``materials`` mapping.
-
-        Answers whether the library was read. A library that cannot be reached
-        is a warning rather than an error: the model still loads, with the
-        default material wherever it named one of these.
-        """
-        # ( resolvedURL, os.path.abspath(filename), file, headers )
-        try:
-            finalURL, filename, file, headers = loader.Loader(url, baseURL)
-        except IOError:
-            possible = url.split("/")[-1] if "/" in url else None
-            try:
-                if possible is None:
-                    raise IOError(url)
-                finalURL, filename, file, headers = loader.Loader(possible, baseURL)
-            except IOError:
-                log.warning("""Unable to load material library: %s""", url)
-                return False
-
-        material = None
-        for line in _as_text(file.read()).splitlines():
-            if line.startswith("#"):
-                continue
-            values = line.split()
-            if not values:
-                continue
-
-            if values[0] == "newmtl":
-                material = self.defaultMaterial()
-                materials[values[1]] = material
-            elif material is None:
-                log.warning('Expected "newmtl" in %s', url)
-                continue
-
-            try:
-                if values[0] == "Kd":
-                    material.material.diffuseColor = [float(x) for x in values[1:]]
-                elif values[0] == "Ka":
-                    material.material.ambientColor = [float(x) for x in values[1:]]
-                elif values[0] == "Ks":
-                    material.material.specularColor = [float(x) for x in values[1:]]
-                elif values[0] == "Ke":
-                    material.material.emissiveColor = [float(x) for x in values[1:]]
-                elif values[0] == "Ns":
-                    material.material.shininess = float(values[1])
-                elif values[0] == "d":
-                    # "dissolve" is the opacity; VRML97 stores its complement
-                    material.material.transparency = 1.0 - float(values[1])
-                elif values[0] == "Tr":
-                    material.material.transparency = float(values[1])
-                elif values[0] == "map_Kd":
-                    if "/" in values[1]:
-                        img_url = [values[1], values[1].split("/")[-1]]
-                    else:
-                        img_url = [values[1]]
-                    # A library reached without a document base resolves its
-                    # images against where the library itself came from.
-                    img_base = baseURL if baseURL is not None else finalURL
-                    img_url = [join_reference(img_base, u) for u in img_url]
-                    texture = basenodes.ImageTexture(url=img_url)
-                    material.texture = texture
-            except Exception as err:
-                log.warning("Parse error in %s (%s): %s", url, values[0], err)
-        return True
+        scene = basenodes.sceneGraph()
+        for part in model.parts:
+            transform = basenodes.Transform(DEF=part.name) if part.name else basenodes.Transform()
+            for mesh in part.meshes:
+                appearance = appearance_of(mesh.material, mesh.colors is not None)
+                geometry = PBRMesh(
+                    positions=mesh.positions, normals=mesh.normals, texcoords=mesh.texcoords,
+                    tangents=tangents_of(mesh, appearance.material), colors=mesh.colors,
+                    indices=mesh.indices, solid=False, draw_mode=DRAW_MODES[mesh.kind],
+                    appearance=appearance)
+                transform.children.append(basenodes.Shape(geometry=geometry, appearance=appearance))
+            scene.children.append(transform)
+            if part.name:
+                scene.regDefName(part.name, transform)
+        freeform = sum(model.ignored[word] for word in FREEFORM)
+        if freeform:
+            log.warning('%s: %d free-form geometry statements (curves and surfaces) are not read',
+                        source, freeform)
+        if model.ignored:
+            log.debug('%s: statements read past: %s', source, dict(model.ignored))
+        if builder.unused:
+            log.debug('%s: map channels not used: %s', source, sorted(builder.unused))
+        return True, scene
 
 
 def defaultHandler() -> OBJHandler:
-    """Default handler instance used for loading standard obj files"""
+    """The handler instance ``plugins.Loader`` registers for OBJ"""
     return OBJHandler()

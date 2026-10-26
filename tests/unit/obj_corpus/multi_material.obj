@@ -1,0 +1,14 @@
+mtllib multi_material.mtl
+o Wall
+v 0 0 0
+v 1 0 0
+v 2 0 0
+v 0 1 0
+v 1 1 0
+v 2 1 0
+usemtl plaster
+f 1 2 5 4
+usemtl glass
+f 2 3 6 5
+usemtl plaster
+f 4 5 1

@@ -1,0 +1,12 @@
+# a NURBS curve and surface this reader does not tessellate
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+vp 0.5
+cstype bspline
+deg 2
+curv 0 1 1 2 3
+parm u 0 0 1 1
+end
+f 1 2 3 4

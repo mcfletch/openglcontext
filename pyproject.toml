@@ -102,7 +102,7 @@ docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid", "pyyaml"]
 # The development environment builds the documentation too: the workspace
 # syncs each project's dev extra, and a docs extra it skipped would leave
 # `build-docs.py` without sphinxcontrib-mermaid.
-dev = ["OpenGLContext[all,docs]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
+dev = ["OpenGLContext[all,docs]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy", "trimesh"]
 
 [project.scripts]
 oglc-test = "OpenGLContext.bin.gltest:main"

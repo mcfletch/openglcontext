@@ -1,0 +1,477 @@
+{
+ "blender_cube.obj": {
+  "area": 24.0,
+  "bounds": [
+   [
+    -1,
+    -1,
+    -1
+   ],
+   [
+    1,
+    1,
+    1
+   ]
+  ],
+  "materials": {
+   "Cube": [
+    "Material"
+   ]
+  },
+  "parts": [
+   "Cube"
+  ],
+  "texcoords": true,
+  "triangles": 12,
+  "trimesh": true,
+  "vertices": 24
+ },
+ "comb.obj": {
+  "area": 14.0,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    6,
+    3,
+    0
+   ]
+  ],
+  "materials": {
+   "": [
+    ""
+   ]
+  },
+  "note": "trimesh cuts a concave polygon as a fan from its first corner: area 28 against the comb's 14",
+  "parts": [
+   ""
+  ],
+  "triangles": 10,
+  "trimesh": false
+ },
+ "comments_only.obj": {
+  "area": 0.0,
+  "bounds": null,
+  "materials": {},
+  "parts": [],
+  "triangles": 0,
+  "trimesh": true
+ },
+ "crlf_bom_tabs.obj": {
+  "area": 1.0,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    1,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "": [
+    ""
+   ]
+  },
+  "note": "trimesh raises IndexError on tab-separated fields after a byte order mark",
+  "parts": [
+   ""
+  ],
+  "triangles": 2,
+  "trimesh": false
+ },
+ "degenerate.obj": {
+  "area": 0.5,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    2,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "": [
+    ""
+   ]
+  },
+  "parts": [
+   ""
+  ],
+  "triangles": 5,
+  "trimesh": true
+ },
+ "dodecagon.obj": {
+  "area": 3.0,
+  "bounds": [
+   [
+    -1,
+    -1,
+    0
+   ],
+   [
+    1,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "": [
+    ""
+   ]
+  },
+  "parts": [
+   ""
+  ],
+  "triangles": 10,
+  "trimesh": true
+ },
+ "freeform_ignored.obj": {
+  "area": 1.0,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    1,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "": [
+    ""
+   ]
+  },
+  "parts": [
+   ""
+  ],
+  "triangles": 2,
+  "trimesh": true
+ },
+ "latin1_names.obj": {
+  "area": 0.5,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    1,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "café": [
+    ""
+   ]
+  },
+  "parts": [
+   "café"
+  ],
+  "triangles": 1,
+  "trimesh": true
+ },
+ "lines_points.obj": {
+  "area": 0.0,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    1,
+    1,
+    0.5
+   ]
+  ],
+  "kinds": {
+   "lines": 4,
+   "points": 1
+  },
+  "materials": {
+   "": [
+    ""
+   ]
+  },
+  "parts": [
+   ""
+  ],
+  "triangles": 0,
+  "trimesh": true
+ },
+ "maya_two_groups.obj": {
+  "area": 12.0,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    4,
+    1,
+    1
+   ]
+  ],
+  "materials": {
+   "box1": [
+    "brick"
+   ],
+   "box2": [
+    "stone"
+   ]
+  },
+  "parts": [
+   "box1",
+   "box2"
+  ],
+  "triangles": 24,
+  "trimesh": true,
+  "vertices": 16
+ },
+ "meshlab_colours.obj": {
+  "area": 2.3660254037844384,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    1,
+    1,
+    1
+   ]
+  ],
+  "colors": true,
+  "materials": {
+   "": [
+    ""
+   ]
+  },
+  "parts": [
+   ""
+  ],
+  "triangles": 4,
+  "trimesh": true
+ },
+ "multi_material.obj": {
+  "area": 2.5,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    2,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "Wall": [
+    "plaster",
+    "glass"
+   ]
+  },
+  "parts": [
+   "Wall"
+  ],
+  "triangles": 5,
+  "trimesh": true
+ },
+ "ngons.obj": {
+  "area": 10.5,
+  "bounds": [
+   [
+    -1,
+    0,
+    0
+   ],
+   [
+    3,
+    3,
+    1
+   ]
+  ],
+  "materials": {
+   "L": [
+    ""
+   ],
+   "Pentagon": [
+    ""
+   ]
+  },
+  "parts": [
+   "L",
+   "Pentagon"
+  ],
+  "triangles": 7,
+  "trimesh": true
+ },
+ "octahedron.obj": {
+  "area": 6.928203230275509,
+  "bounds": [
+   [
+    -1,
+    -1,
+    -1
+   ],
+   [
+    1,
+    1,
+    1
+   ]
+  ],
+  "materials": {
+   "Sphere01": [
+    "wire"
+   ]
+  },
+  "parts": [
+   "Sphere01"
+  ],
+  "texcoords": true,
+  "triangles": 8,
+  "trimesh": true,
+  "vertices": 24
+ },
+ "pbr_quad.obj": {
+  "area": 4.0,
+  "bounds": [
+   [
+    -1,
+    -1,
+    0
+   ],
+   [
+    1,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "Panel": [
+    "panel"
+   ]
+  },
+  "parts": [
+   "Panel"
+  ],
+  "texcoords": true,
+  "triangles": 2,
+  "trimesh": true,
+  "vertices": 4
+ },
+ "relative_indices.obj": {
+  "area": 2.0,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    3,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "": [
+    ""
+   ]
+  },
+  "note": "trimesh counts a relative index back from the end of the file rather than from the last vertex read before the face",
+  "parts": [
+   ""
+  ],
+  "triangles": 4,
+  "trimesh": false,
+  "vertices": 8
+ },
+ "room.obj": {
+  "area": 68,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    4,
+    3,
+    4
+   ]
+  ],
+  "materials": {
+   "back": [
+    "white"
+   ],
+   "ceiling": [
+    "white"
+   ],
+   "floor": [
+    "white"
+   ],
+   "left": [
+    "red"
+   ],
+   "right": [
+    "green"
+   ]
+  },
+  "parts": [
+   "floor",
+   "ceiling",
+   "back",
+   "left",
+   "right"
+  ],
+  "triangles": 10,
+  "trimesh": true
+ },
+ "windows_paths.obj": {
+  "area": 0.5,
+  "bounds": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    1,
+    1,
+    0
+   ]
+  ],
+  "materials": {
+   "crate": [
+    "crate_wood"
+   ]
+  },
+  "parts": [
+   "crate"
+  ],
+  "texcoords": true,
+  "triangles": 1,
+  "trimesh": true
+ }
+}

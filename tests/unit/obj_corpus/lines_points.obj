@@ -1,0 +1,9 @@
+# a polyline, a segment and some points
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+v 0.5 0.5 0.5
+l 1 2 3 4
+l 4 1
+p 5

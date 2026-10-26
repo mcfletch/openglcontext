@@ -299,6 +299,8 @@ every attribute of the scene and how to load one model many times from a
 single parse; :doc:`Loading glTF <gltf>` covers the extensions the loader
 reads. :doc:`tutorials/core_context/loading_gltf_model` is a complete program.
 
+.. _loading-obj:
+
 Wavefront OBJ models
 --------------------
 
@@ -308,31 +310,154 @@ An OBJ file loads through the same ``Loader`` as VRML97:
 
    from OpenGLContext.loaders.loader import Loader
 
-   model = Loader.load( 'house.obj' )
+   model = Loader.load( 'house.obj' )              # or house.obj.gz
    self.sg.children.append( Transform( scale=(0.01, 0.01, 0.01),
                                        children=list( model.children ) ) )
 
-Each ``o`` line becomes a ``Transform`` registered under that name, so
-``model.getDEF( 'Chimney' )`` finds it; faces before any ``o`` go in an
-unnamed one. Each run of faces after a ``usemtl`` is a ``Shape`` holding an
-``IndexedFaceSet``, drawn two-sided. The loader reads:
+The scene holds one ``Transform`` for each object or group, in file order. Each
+holds a ``Shape`` for every material and kind of primitive the part uses, with a
+``PBRMesh`` as its geometry and a ``PhysicalMaterial`` in its appearance, so the
+:doc:`PBR renderer <pbr>` draws an OBJ as it draws a glTF model. Faces are
+drawn from both sides, since an OBJ does not say which way its triangles face.
+``model.getDEF( 'Chimney' )`` finds the part named ``Chimney``. A file with no
+geometry loads as an empty scene.
 
-- ``v``, ``vn``, ``vt`` and ``f`` -- positions, normals, texture coordinates
-  and faces;
-- ``o`` -- named objects;
-- ``mtllib`` -- the material library, found beside the ``.obj`` by the name the
-  line gives;
-- ``usemtl`` -- the material for the faces that follow. A name the library
-  does not define is logged and drawn light grey;
-- in the library, ``Kd``, ``Ka``, ``Ks``, ``Ke`` and ``Ns`` (diffuse, ambient,
-  specular and emissive colour, and shininess), ``d`` (opacity) or ``Tr``
-  (transparency), and ``map_Kd`` (a diffuse texture).
+``OpenGLContext.loaders.objfile`` reads the geometry, ``mtlfile`` the material
+libraries and ``objmaterials`` turns materials into nodes. The first two
+import neither the scenegraph nor GL, and return NumPy arrays and plain
+records:
 
-Smoothing groups (``s``) and groups (``g``) are ignored. OBJ records no unit,
-lights, cameras or animation, so the scale of the result is whatever the
-author modelled in, and a scene built around it supplies its own lights. A
-model moved without its ``.mtl`` file loads with every material light grey.
-:doc:`tutorials/core_context/using_obj` is a complete program.
+.. code-block:: python
+
+   from OpenGLContext.loaders.objfile import parse_obj
+
+   model = parse_obj( open( 'house.obj', 'rb' ).read(), 'house.obj' )
+   for part in model.parts:
+       for mesh in part.meshes:
+           print( part.name, mesh.material, mesh.kind, len( mesh.indices ) )
+
+Geometry
+~~~~~~~~
+
+The reader takes:
+
+- ``v`` with three numbers. A fourth (the weight) is ignored; three more
+  (``v x y z r g b``, as scanners write them) are the vertex colour, scaled by
+  255 where any of them exceeds 1. ``vt`` takes its first two numbers and
+  ``vn`` three.
+- ``f`` with each corner form (``1``, ``1/2``, ``1//3``, ``1/2/3``). Indices are
+  counted from 1, or from the end with a negative number (``-1`` is the last
+  vertex read before the face), and may name an element defined later in the
+  file. Corners that name the same position, texture coordinate and normal
+  share a vertex.
+- ``l`` and ``p``, as line segments and points.
+- ``o`` and ``g``, which begin a part. A part is named by its ``o`` name, its
+  ``g`` name, or both joined by ``_`` (``House_Wall``); words of a name are
+  joined by ``_`` as well. Returning to a name continues its part, and ``g
+  default`` is the unnamed group.
+- ``usemtl`` and ``mtllib``, the materials. Runs of faces of one material in
+  one part are one mesh.
+- ``s``, the smoothing groups.
+
+A face of more than three corners is cut into triangles that cover the polygon
+exactly: convex polygons as fans, a quad with a reflex corner along its inner
+diagonal, and any other concave polygon by ear clipping in the plane of its
+outline.
+
+A face with no ``vn`` is flat shaded, as the format says, unless a smoothing
+group (``s 1``) names the faces that share vertex normals; ``s off`` and
+``s 0`` end the group. Each face adds its normal to its corners weighted by the
+angle it makes there, so a polygon cut into many triangles weighs as one face.
+Faces of one plane share their vertices.
+
+The reader does not read free-form curves and surfaces (``curv``, ``surf`` and
+the statements that describe them) or ``vp``. A load logs one warning counting
+the free-form statements, and the other statements it read past at debug level.
+A statement that cannot be read, a coordinate that is not finite, or an index
+outside what the file defines raises ``ValueError`` naming the file and the
+line.
+
+Materials
+~~~~~~~~~
+
+Each ``usemtl`` name is looked up in the libraries the file's ``mtllib`` lines
+name; a later library wins a name. A library is found beside the model, then by
+its file name alone where the name is a path from another machine. A library
+that cannot be found is logged, and its faces draw in a light grey
+``PhysicalMaterial`` (base colour 0.8, roughness 0.6), or white under vertex
+colours. A library that is malformed raises ``ValueError``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - MTL
+     - ``PhysicalMaterial``
+   * - ``Kd``, ``map_Kd``
+     - The base colour. A diffuse map replaces ``Kd`` (the colour is white
+       under it), as Blender reads it.
+   * - ``Pr``; else ``Ns``
+     - Roughness. ``Ns`` gives ``1 - sqrt(Ns / 1000)``, to 0 at 1000; a
+       material that states neither is half rough.
+   * - ``Pm``
+     - Metalness, 0 where absent.
+   * - ``map_Pr``, ``map_Pm``, ``map_Ns``
+     - One metallic-roughness texture, roughness in green and metalness in
+       blue. ``map_Ns`` is read as gloss, so roughness is ``1 - sqrt(value)``.
+       A factor (``Pr``, ``Pm``) multiplies its map.
+   * - ``Ks``, ``illum``
+     - The strength of the specular highlight: twice the mean of ``Ks`` to a
+       limit of 1, so the usual ``Ks 0.5`` is the full dielectric highlight.
+       ``illum 0`` and ``illum 1`` have none.
+   * - ``d``, ``Tr``, ``map_d``
+     - Opacity. A ``d`` below 1 blends. A ``map_d`` is merged into the
+       alpha of the diffuse map (its alpha channel where ``-imfchan`` names
+       none and the picture has one, otherwise its luminance). A mask whose
+       texels are clear or opaque with only an antialiased edge between is a
+       cutout and draws masked at 0.5; any other mask blends. A material
+       with no opacity map that is wholly transparent (``d 0`` or ``Tr 1``)
+       is drawn opaque and logged.
+   * - ``norm``, ``map_Bump``, ``bump``
+     - The normal map. A picture that averages to the violet of a tangent-space
+       normal map (blue above 0.7, red and green within 0.12 of 0.5) is used as
+       one, whichever statement named it. Any other picture under ``map_Bump``
+       or ``bump`` is a height map and is converted, tiling at its edges, with
+       a slope of 4 per unit height step per texel. ``-bm`` is the strength of
+       either.
+   * - ``Ke``, ``map_Ke``
+     - Emission. An emission map replaces ``Ke``.
+   * - ``Ni``
+     - Index of refraction, where above 1. An ``Ni`` of 1 is what exporters
+       write for "unset" and is left at the default 1.5.
+   * - ``Pc``, ``Pcr``, ``map_Pc``, ``map_Pcr``
+     - Clearcoat and its roughness.
+   * - ``Ps``, ``aniso``, ``anisor``
+     - Sheen, anisotropy strength, and anisotropy rotation (a turn is 1).
+   * - ``-s``, ``-o``
+     - A texture transform: scale, then offset, in the texture's own
+       coordinates. Maps with equal values share one transform.
+   * - ``-clamp on``
+     - The texture does not repeat.
+
+``Ka``, ``map_Ka``, ``refl``, ``disp`` and ``decal`` are read and not used: the
+scene's lights and environment light the surface. A texture is looked for
+beside its library, then beside the model, by the name written, with ``\`` read
+as ``/``, with each part of the name matched to the directory's own spelling of
+its case, and by its file name alone. Nothing outside the model's directory is
+read. A texture that cannot be found or decoded is logged and its property keeps
+the colour or factor the material gives it.
+
+OBJ records no unit, lights, cameras or animation, so the scale of the result is
+whatever the author modelled in, and a scene built around it supplies its own
+lights. :doc:`tutorials/core_context/using_obj` is a complete program.
+
+The tests are ``tests/unit/test_obj_parse.py``, ``test_mtl_parse.py``,
+``test_obj_images.py``, ``test_obj_materials.py``, ``test_obj_scene.py`` and
+``test_obj_render.py``. ``test_obj_corpus.py`` reads the files in
+``tests/unit/obj_corpus/`` (dialects of Blender, Maya, 3ds Max, MeshLab and
+ZBrush) against the triangle counts, areas and bounds stated in the corpus
+manifest, and reads damaged copies of each file. ``test_obj_trimesh.py``
+compares the corpus and random polygon meshes with trimesh's reader.
 
 .. _loading-meshfiles:
 

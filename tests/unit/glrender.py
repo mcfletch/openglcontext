@@ -34,6 +34,7 @@ from OpenGLContext.passes import (
     flatcore, flateffects, instancing, pbrpass, renderpass, selection, shadowmixin,
 )
 from OpenGLContext.scenegraph import basenodes, pbrmesh
+from OpenGLContext.scenegraph.geometryarrays import forget_checked_programs
 from OpenGLContext.testing.glcontext import profile_unavailable
 
 
@@ -214,6 +215,9 @@ def render_scene_factory(monkeypatch):
     # memory is next touched.
     for inst in contexts:
         inst.releaseWindow()
+    # The next context is given the program names this one freed, and the
+    # missing-input check remembers the programs it has looked at by name.
+    forget_checked_programs()
     # `renderpass.FLAT` is a module global holding the pass that last rendered,
     # and it outlives the window it belongs to.  Left set, it hands the next
     # test a shader program whose GL context is gone -- which reads as "there

@@ -1,0 +1,4 @@
+newmtl crate_wood
+Kd 0.6 0.4 0.2
+map_Kd C:\Users\artist\textures\crate_wood.png
+map_Bump textures\crate_bump.png

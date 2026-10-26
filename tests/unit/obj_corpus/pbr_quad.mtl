@@ -1,0 +1,12 @@
+newmtl panel
+Kd 1 1 1
+Pr 0.35
+Pm 1.0
+Pc 0.5
+Pcr 0.1
+Ke 0 0 0
+map_Kd -s 2 2 1 panel_albedo.png
+map_Bump -bm 0.8 panel_normal.png
+map_Pr panel_rough.png
+map_Pm panel_metal.png
+map_Ke panel_glow.png

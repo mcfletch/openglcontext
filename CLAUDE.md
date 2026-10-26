@@ -147,6 +147,17 @@ OpenGLContext/
 │   │                 # engine's nodes (prototypes()) -- docs/loading.rst
 │   ├── meshfiles.py  # STL, PLY (and splat PLY) and OFF, one mesh each
 │   │                 # -- docs/loading.rst#loading-meshfiles
+│   ├── obj.py        # Wavefront OBJ into the scenegraph: a Transform per part,
+│   │                 # a Shape per material -- docs/loading.rst#loading-obj
+│   ├── objfile.py    # OBJ text into triangle, line and point arrays: relative
+│   │                 # indices, polygon triangulation, smoothing groups,
+│   │                 # vertex colours -- no scenegraph, no GL
+│   ├── mtlfile.py    # MTL libraries into MtlMaterial records, the PBR
+│   │                 # extensions and map options included -- no GL
+│   ├── objmaterials.py  # MtlMaterial as a PhysicalMaterial, and where the
+│   │                 # libraries and textures are found beside the model
+│   ├── objimages.py  # The picture arithmetic a material's maps need:
+│   │                 # channel packing, bump to normal map, alpha merge
 │   ├── gltf/         # glTF 2.0 / GLB
 │   │   ├── lod.py    # MSFT_lod: a node's coarser levels, and when each is
 │   │   │             # worth drawing -- docs/gltf.rst#lod. Making them is

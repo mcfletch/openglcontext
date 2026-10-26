@@ -216,7 +216,11 @@ Rules for each loader
        logged and the next one tried.
    * - Wavefront OBJ (``loaders/obj.py``)
      - ``mtllib`` and texture references go through the same ``Loader``, so they
-       are restricted to the model's directory.
+       are restricted to the model's directory. A path from another machine
+       (``C:\\textures\\brick.png``, ``../../brick.png``) is tried by its file
+       name inside that directory and refused otherwise. A picture is checked
+       against the pixel limit before it is decoded, and a gzip document is
+       decompressed no further than the size limit.
    * - :doc:`3D Tiles <tiles3d>` (``loaders/tiles3d/``)
      - Tile content and nested tilesets resolve through the ``Resolver``, with a
        separate cap for each tile. The files a world names in its extras

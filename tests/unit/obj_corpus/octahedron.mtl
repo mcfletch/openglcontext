@@ -1,0 +1,4 @@
+newmtl wire
+Kd 0.2 0.4 0.9
+Ks 0.0 0.0 0.0
+illum 1

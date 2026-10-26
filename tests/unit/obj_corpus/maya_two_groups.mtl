@@ -1,0 +1,6 @@
+newmtl brick
+Kd 0.7 0.3 0.2
+Ns 20
+newmtl stone
+Kd 0.5 0.5 0.5
+Ns 80
