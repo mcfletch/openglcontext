@@ -280,3 +280,35 @@ def test_services_made_again_after_closing_are_framed_once(ctx, clock, monkeypat
     clock.now += 0.02
     ctx.renderQueue.run()
     assert len(framed) == 2
+
+
+def test_a_recording_started_after_physics_exists_runs_the_world_inline(tmp_path):
+    from OpenGLContext.physics.worker import InlineWorker, ThreadWorker  # noqa: PLC0415 only these cases name the workers
+
+    made = _Context(physics=PhysicsDefinition(mode='thread'))
+    try:
+        body = made.physics.add_dynamic(ball())
+        assert isinstance(made.physics.worker, ThreadWorker)
+        made.startTelemetry(str(tmp_path / 'session.jsonl'))
+        assert isinstance(made.physics.worker, InlineWorker)
+        made.physics.flush()
+        assert body.uid in made.physics.worker.runtime
+        made.physics.set_config(PhysicsDefinition(mode='thread'))
+        assert isinstance(made.physics.worker, InlineWorker)
+        made.stopTelemetry()
+        assert isinstance(made.physics.worker, ThreadWorker)
+    finally:
+        made.stopTelemetry()
+        made.releaseWindow()
+
+
+def test_a_mode_change_while_capturing_keeps_the_world_inline():
+    from OpenGLContext.physics.worker import InlineWorker  # noqa: PLC0415 only these cases name the workers
+
+    made = _Context(physics=PhysicsDefinition(mode='thread'))
+    made._captureClock = object()
+    try:
+        made.physics.set_config(PhysicsDefinition(mode='thread'))
+        assert isinstance(made.physics.worker, InlineWorker)
+    finally:
+        made.releaseWindow()

@@ -1199,6 +1199,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                           mark=self.mark, recording=lambda: self.telemetry is not None,
                           audio=lambda: self.audio, mount=self._mountOverlay,
                           render_thread=self._renderThread)
+        service.pin_inline(self._captureClock is not None or self.telemetry is not None)
         self.__dict__['_physicsSteps'] = FrameStep(longest=float(definition.maxCatchUp))
         queue = getattr(self, 'renderQueue', None)
         if queue is not None:
@@ -1449,7 +1450,9 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         from OpenGLContext import telemetry
 
         self.stopTelemetry()
-        return telemetry.start(self, path, **named)
+        session = telemetry.start(self, path, **named)
+        self._pinPhysics()
+        return session
 
     def stopTelemetry(self, reason: str = 'stopped') -> None:
         """Finish any recording or replay in progress"""
@@ -1460,6 +1463,13 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             except Exception:
                 log.debug('could not close the session recording', exc_info=True)
             self.telemetry = None
+            self._pinPhysics()
+
+    def _pinPhysics(self) -> None:
+        """Hold an existing physics world inline while a capture or a session record runs."""
+        service = self.__dict__.get('_physics')
+        if service is not None:
+            service.pin_inline(self._captureClock is not None or self.telemetry is not None)
 
     def tracePhase(self, name: str) -> AbstractContextManager[None]:
         """Charge the wrapped block to a named phase of the loop iteration

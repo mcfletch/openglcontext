@@ -123,6 +123,8 @@ class Physics:
         self._enabled = bool(definition.enabled)
         self._gravity = tuple(float(v) for v in definition.gravity)
         self._closed = False
+        #: Whether the world is held inline whatever the definition's mode (:meth:`pin_inline`).
+        self._pinned = False
         #: The last failure logged for each source and character (:meth:`_guarded`).
         self._failures: weakref.WeakKeyDictionary[Any, tuple[type, str]] = weakref.WeakKeyDictionary()
         #: The worker error :meth:`frame` has raised, so it is raised once.
@@ -230,21 +232,40 @@ class Physics:
     def set_config(self, definition: PhysicsDefinition) -> None:
         """Apply ``definition`` between ticks: gravity, the step, damping and the mode.
 
-        Bodies stay as they are. Raises ValueError, changing nothing, for a
-        definition the service cannot run.
+        Bodies stay as they are. A world held inline by :meth:`pin_inline` keeps
+        stepping inline and takes the new mode when it is let go. Raises
+        ValueError, changing nothing, for a definition the service cannot run.
         """
         definition.validate()
         self._bring_up_all()
-        previous, self.definition = self.definition, definition
+        self.definition = definition
         self._send_world('config', float(definition.tickHz), float(definition.maxCatchUp))
         self.gravity = tuple(definition.gravity)
         self._enabled = bool(definition.enabled)
-        if definition.mode != previous.mode:
-            self._switch(definition.mode)
+        if self._mode() != self._worker_mode():
+            self._switch(self._mode())
         elif not self._enabled:
             self.worker.stop()
         elif self._movers:
             self._ensure_started()
+
+    def pin_inline(self, on: bool = True) -> None:
+        """Hold the world inline whatever the definition's mode, or let it go back to that mode.
+
+        A recorded session and a capture hold it inline, so the world is a
+        function of the clock and of the commands. Commands waiting for a
+        thread's world are carried over, in order.
+        """
+        self._pinned = bool(on)
+        if self._mode() != self._worker_mode():
+            self._switch(self._mode())
+
+    def _mode(self) -> str:
+        """The mode the world steps in: inline while pinned, else the definition's."""
+        return 'inline' if self._pinned else self.definition.mode
+
+    def _worker_mode(self) -> str:
+        return 'inline' if isinstance(self.worker, InlineWorker) else 'thread'
 
     def _switch(self, mode: str) -> None:
         self._bring_up_all()
