@@ -1271,7 +1271,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         :class:`~OpenGLContext.events.animations.Animated` whose ``stop()``
         ends it. See :class:`~OpenGLContext.events.animations.Animations`.
         """
-        return self._animations().animate(thing)
+        return self._scheduler().animate(thing)
 
     def after(self, seconds: float, function: Callable[[], Any]) -> Animated:
         """Call ``function()`` once ``seconds`` of the engine clock have passed.
@@ -1279,9 +1279,9 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         Returns the :class:`~OpenGLContext.events.animations.Animated` whose
         ``stop()`` cancels the call.
         """
-        return self._animations().after(seconds, function)
+        return self._scheduler().after(seconds, function)
 
-    def _animations(self) -> Animations:
+    def _scheduler(self) -> Animations:
         """The context's :class:`~OpenGLContext.events.animations.Animations`, made on first use."""
         found = self.__dict__.get('_animating')
         if found is None:
