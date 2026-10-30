@@ -573,7 +573,7 @@ of C++ and ran correctly in both builds.
 | Phase | Delivered | Tested by | Done when | Weeks |
 |---|---|---|---|---|
 | P0 | Repository, vendored Jolt, CMake, empty module exposing the version and build options, CI and wheels on every platform and tag above, stub check, workspace registration | CI on all runners; a wheel installs and imports from outside the checkout | every wheel builds, installs and passes an import test; preflight runs ruff, mypy, OGC rules and the suite | 1 to 1.5 |
-| P1 | World thread, settings, command batches, snapshot pool, event ring with pair aggregation, sleep events, shapes (primitives, hull, mesh, heightfield grid, compound), bodies in bulk, materials without pair grid, CCD, lockstep, applied log, `at_tick`, fork and atexit hooks, double precision | unit suite; the differential scenarios for bodies, shapes, sleep, triggers and CCD against omi; ASan run; the free-threaded wheel through the same suite | differential tolerances met; determinism and fork tests green on both builds; 5,000 active boxes within 10% of the spike's times | 3 to 4 |
+| P1 | World thread, settings, command batches, snapshot pool, event ring with pair aggregation, sleep events, shapes (primitives, hull, mesh, heightfield grid, compound), bodies in bulk, materials without pair grid, CCD, lockstep, applied log, `at_tick`, fork and atexit hooks, double precision | unit suite; the differential scenarios for bodies, shapes, sleep, triggers and CCD against omi; ASan run; the free-threaded wheel through the same suite | differential tolerances met; determinism and fork tests green on both builds; 5,000 active boxes within 10% of the spike's times | 3 to 4; done 2026-10-30 (P1a and P1b below) |
 | P2 | Queries (synchronous and batched), the character controller port over `CharacterVirtual`, character against character, heightfield tiles from a sample function | differential character and query scenarios; the omi character tests (the behaviour-level ones) ported as conformance | every character scenario within tolerance; a 300-character heightfield world steps under 4 ms on 8 threads | 4 to 5 |
 | P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3 |
 | P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4 |
@@ -641,6 +641,87 @@ measured by the caller of `run_ticks(2)`, machine otherwise idle, best and worst
 
 The P1 criterion (within 10% of the spike) holds on the GIL build; the free-threaded 8-thread run
 is 10 to 30% over the spike's GIL figure. P1b re-runs the scene with the mesh ground.
+
+### P1b as built (2026-10-30)
+
+P1b is commits b6a7cab to fd2ab92 on `pyjoltphysics` `develop`.
+
+- Shapes: `Shape.convex` (Jolt `ConvexHullShape`; fewer than 4 points or points enclosing no volume
+  raise `ValueError` before Jolt sees them), `Shape.mesh` (`MeshShape`, sanitised, active edges on),
+  `Shape.heightfield` (`HeightFieldShape`; any rectangular grid is padded on +x and +z to Jolt's
+  square block grid with no-collision samples; NaN or a mask makes holes; block size, bits per
+  sample and height range exposed), `Shape.compound` (static or mutable; no height field child).
+  `World.add_shape` builds on the calling thread with the GIL released and returns an id; bodies
+  share the one Jolt shape. Scale, shape offset and rotation, and centre-of-mass offset are body
+  fields (`ScaledShape`, `RotatedTranslatedShape`, `OffsetCenterOfMassShape`), cached per shape and
+  decoration. Shapes are resolved when a batch is submitted, so the world thread only creates
+  bodies.
+- Jolt limits met: meshes, height fields, planes and compounds holding them refuse dynamic bodies
+  (Jolt computes no mass for them); a kinematic one takes a unit box's mass and inertia. Mesh
+  triangles collide on their front face only. A sphere landing beside an inner diagonal edge of a
+  flat mesh is pushed sideways (0.48 m in one case); Jolt's enhanced internal edge removal
+  (`BodyFlag.SMOOTH_EDGES`) removes it and is off by default, a choice the service may revisit.
+  A ball rolling at 6 m/s rides up to 5 mm off a flat mesh or height field at cell edges.
+- `heightfield_tiles`: one static body a tile, tiles sharing edge samples, each body at its tile's
+  corner. A ball crossing seams rides no higher than on one field. Enhanced edge removal works
+  within a body, so it does not reach across tile seams.
+- Bulk adds already used `AddBodiesPrepare`/`AddBodiesFinalize`; the world thread now caches the
+  collision layer across rows and optimises the broad phase once after a tick adding 256 or more
+  statics, when it next has no tick due.
+- Events: one begin and end per body pair for compounds (tested with a four-legged table). A sensor
+  added or moved wakes the moving bodies its bounds meet, so it reports sleeping bodies; a
+  kinematic sensor sets `mCollideKinematicVsNonDynamic` and reports static bodies; two statics
+  never meet. CCD tested against a 5 cm box and a mesh quad at 300 to 400 m/s.
+- Open problems: (i) the event point is float64; the record grew to 64 bytes (a point relative to
+  body `a` would be relative to a ground body far from the contact whenever the ground has the
+  lower uid). (ii) Jolt's listeners run before the solver, so `impulse` is begin-only (the
+  estimate) and 0 in persist records, documented. (iii) a future `at_tick` leaves a free-running
+  world idle; it runs when work or `run_ticks` reaches its tick. (iv) `stats()['bodies']` is
+  applied bodies, `queued_bodies` the rest.
+
+Differential suite (`tests/differential/`, marker `differential`, 38 tests, all within tolerance):
+
+| Scenario | Jolt | omi | Tolerance |
+|---|---|---|---|
+| Rest height, 5 shapes on box, mesh and height field | 4.8 mm below the geometry (sphere on mesh 2.7 mm) | 4.8 to 5.4 mm below | 1 cm of geometry and of each other |
+| Box down a 20 degree slope in 1 s, mu 0, 0.3, 0.8 (mesh and height field) | 2.028, 0.356, 0.000 m | 2.027, 0.356, 0.000 m | 10% or 3 cm of the analytic slide |
+| First rebound over drop, e = 0.6, three grounds | 0.365 | 0.373 to 0.376 | 0.05 of e2 and of each other |
+| Stack of 5: top, drift, asleep | 4.4997 m, 0.2 mm, yes | 4.4939 m, 2.8 mm, yes | 2 cm |
+| Pyramid 4-3-2-1: worst box from its place, asleep | 3.0 mm, yes | 6.9 mm | 1 cm Jolt, 5 cm omi |
+| Ball down 5 stairs, end x | 5.32 m | 5.00 m | both in 3 to 12 m, within 1.5 m |
+| Sensor fall-through enter/exit ticks | 83, 105 | 83, 105 | 1 tick |
+| Body asleep in a sensor | one enter, no exit | same | exact |
+| Kinematic sensor over a static box | enter and exit | none | Jolt right: omi's triggers report moving bodies only |
+| 5 cm ball at 300 m/s, 5 cm wall | stops at -0.06 m | passes to 13 m | Jolt right: omi has no CCD |
+| 1,000 boxes in a 10 m bin, rest height mean and spread | 1.266 m, 0.717 m | 1.296 m, 0.740 m | 3% and 10% |
+| Dumbbell compound rest | 0.5 m, level | same | 1 cm, 1 degree |
+
+Benchmarks (this machine, best of 3, the machine carrying other load during the 5,000-box runs):
+
+| | Spike | P1b GIL build |
+|---|---|---|
+| 5,000 active boxes, 20,000-triangle mesh ground, ms per frame, 1 job thread | 2.71 | 3.04 (3.04 to 4.13) |
+| same, 8 job threads | 1.20 | 1.27 (1.27 to 2.37) |
+| same scene on a box ground, for the machine's state then | | 2.45 and 1.16 (P1a measured 2.34 and 1.00 idle) |
+| 10,000 static posts added among 1,000 falling boxes: `add_bodies` call; create and add in the tick; the whole tick | | 3.7 to 4.5 ms; 3.5 to 4.6 ms; 4.2 to 5.8 ms (8.5 to 12 ms in 2 of 5 suite runs on the loaded machine) |
+| frames after the add, 1 / 8 threads | | 0.63 / 0.39 ms |
+| 300 spheres on a 257 x 257 height field, 1 / 8 threads | | 1.03 / 0.28 ms; field built in 2.2 ms |
+| Snapshot publish a tick | 0.18 to 0.31 | 0.06 to 0.10 (5,000 boxes), 0.01 (posts) |
+
+The 8-thread mesh-ground figure is within 10% of the spike; the 1-thread one is 12% over, measured
+while the machine was loaded (load average 2.8); a quiet-machine rerun is left for the preflight
+pass.
+
+Tests: 194 on the GIL build (3.14, plus 2 skipped for NEON and the free-threaded check), written
+first and seen failing against P1a's module (shape API absent, `queued_bodies` missing, a future
+`at_tick` keeping the world busy). Free-threaded 3.14t: 151 passed, 3 skipped (no omi_physics in
+that environment). ASan and UBSan (`tools/asan.sh`): 150 passed, 3 skipped, no sanitizer report;
+the one failure was the 10,000-post tick bound (26.7 ms under the sanitizers), which now scales by
+10 under `tools/asan.sh` and bounds the add's own time, and passes there.
+
+P2 starts from: shape ids for character and query shapes, `heightfield_tiles` for the sample-function
+ground (tiles sampled around the foci, added and removed as batches), the world lock's shared side
+for queries, and `SMOOTH_EDGES` to decide on for characters' inner bodies.
 
 ## 7. Decisions
 
