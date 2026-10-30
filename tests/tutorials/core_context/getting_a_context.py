@@ -6,7 +6,7 @@ you can use to control your 3D world. We're going to start with the smallest
 setup we can use to get a working 3D renderer.
 '''
 '''
-OpenGLContext's core Context class provides the basic machinery needed for
+OpenGLContext's core OpenGLContext.context.Context class provides the basic machinery needed for
 most 3D worlds, including navigation, and geometry renderering. It defaults
 to a modern Physically Based Renderer that requires a modern OpenGL 3.3+ 
 driver. Most machines produced after about 2014 should be able to provide
@@ -36,18 +36,18 @@ class TestContext(BaseContext):
     def OnInit(self):
         super(TestContext,self).OnInit()
         '''OpenGLContext is what is called a "retained mode" rendering
-        engine. That is, you setup a graph of node that will be processed
+        engine. That is, you setup a graph of nodes that will be processed
         by the engine to update the scene on each rendering pass. The
-        root node is always a sceneGraph and has a "children" field.
-
-        The scenegraph rendered by the engine is 
-
-        The Shape node is a VRML97 node that binds together a piece of
+        root node is *always* a OpenGLContext.scenegraph.scenegraph.sceneGraph 
+        and has a "children" field which hold all the nodes in the scene.'''
+        '''The scenegraph rendered by the engine is modelled on the X3D (VRML)
+        scenegraph nodes as provided by the PyVRML97 project. X3D is a large
+        standard with a lot of functionality included.'''
+        '''The Shape node is an X3D node that binds together a piece of
         geometry and an appearance to apply to it. Here we're using a
         physically-based-rendering (pbr) rendering pass which gives us
-        metallic and clearcoat features.
-
-        The Teapot geometry is a NURBS version of the famous 
+        metallic and clearcoat features.'''
+        '''The Teapot geometry is a NURBS version of the famous 
         `Utah Teapot<https://graphics.cs.utah.edu/teapot/>`.
         '''
         self.sg = sceneGraph(
@@ -64,7 +64,6 @@ class TestContext(BaseContext):
                 DirectionalLight(
                     direction=(-1,-1,-1),
                 ),
-
             ]
         )
 

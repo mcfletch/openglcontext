@@ -8,11 +8,14 @@ objects or calculate the positions of vertices in meshes with a calculator.
 Tools such as `Blender<https://www.blender.org/>`_ are freely available,
 provide extensive tutorials and pre-made worlds, and can export into the
 glTF format that OpenGLContext supports.
+
+There are also lots of sites which provide free glTF compatible content
+which you can load into your world.
 '''
 import math
 from OpenGLContext.context import Context as BaseContext
 '''OpenGLContext includes a small index of glTF files that are maintained
-on GitHub by Khronos as demonstrations and test vectors. These are what
+on GitHub by Khronos (stewards of glTF) as demonstrations and test vectors. These are what
 configures the `oglc-gltf-demo` command. The :func:`sample_model_url` function
 looks up the URL in that index by name.
 '''
