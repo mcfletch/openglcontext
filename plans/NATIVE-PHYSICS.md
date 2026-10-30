@@ -558,7 +558,10 @@ of C++ and ran correctly in both builds.
 P0 to P5: 14 to 19.5 weeks. The games stay on omi until P5: P4 runs them on both engines in CI,
 and a program selects Jolt with one definition field.
 
-## 7. Open decisions
+## 7. Decisions
+
+Decided 2026-10-30: each recommendation below was accepted as written. On 5 the answer was to
+turn the deterministic build on, and on 10 to ship both free-threaded and ordinary wheels.
 
 1. Binding. Recommended: nanobind (14 ns a call, free-threaded wheels, mypy-clean stubs, CMake).
    SIP costs 39 ns a call, re-enables the GIL on 3.13t and 3.14t, and its stub fails mypy strict.
