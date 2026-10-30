@@ -40,7 +40,7 @@ def engine():
 def audio(engine):
     """The service that plays what the yard asks for, on the silent engine."""
     made = Audio(engine_factory=lambda: engine)
-    made.engine  # opened here, so the scene's nodes and the calls share it
+    assert made.engine is engine  # opened here, so the scene's nodes and the calls share it
     yield made
     made.close()
 
