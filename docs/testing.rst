@@ -979,12 +979,27 @@ whole fixed steps ``dt`` seconds hold (up to ``maxCatchUp``, 0.1 s by default
 and so a test of longer frames raises it), writes the poses onto the nodes and
 delivers the events to their handlers. ``physics.step(dt)`` steps without
 delivering anything. A test that checks a body reads ``body.position`` and
-``body.velocity``, which answer the last frame. A test that reads or sets the
-live world uses ``physics.world`` (inline only) and finds a body's row in its
-arrays with ``physics.slot_of(body)``, which applies the commands still
-waiting first; ``physics.flush()`` does that on its own. Read the row before the
-array: ``world.linear_velocity[physics.slot_of(body)]`` evaluates the array
-first, and a body added since may have made a new one. The world's
+``body.velocity``, which answer the last frame, or ``physics.poses(bodies)``
+for many at once; those reads are the same on every engine.
+
+A test of what ``omi_physics`` itself holds (its arrays, its materials, its
+step count) reads the engine's world through ``OpenGLContext.testing.physics``,
+which exists only for the omi backend and is not exported by
+``OpenGLContext.physics``:
+
+.. code-block:: python
+
+   from OpenGLContext.testing import physics as physics_testing
+
+   world = physics_testing.inspect(physics)          # inline only
+   row = physics_testing.slot_of(physics, body)      # waiting commands applied first
+   assert physics_testing.body_at(physics, row) is body
+   physics_testing.run(physics, lambda world: world.step_count).result()
+
+``slot_of`` applies the commands still waiting first; ``physics.flush()`` does
+that on its own. Read the row before the array:
+``world.linear_velocity[physics_testing.slot_of(physics, body)]`` evaluates the
+array first, and a body added since may have made a new one. The world's
 ``position`` and ``orientation`` are read-only; a test moves a body with
 ``body.set_transform()`` or ``world.place_body(row, position, orientation)``.
 

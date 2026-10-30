@@ -125,13 +125,13 @@ def test_slide_can_be_steered_and_gone_on_with_and_ended(me):
     me.set_move((0, 0, 1), 'run')
     for _ in range(36):
         me.step(TICK)
-    assert me.state is CharacterState.SLIDING
+    assert me.state == CharacterState.SLIDING
     assert me.velocity[2] == pytest.approx(6.0, abs=0.1)
     assert me.extend_slide(0.8)
     me.step(TICK)
     assert me._controller.height == pytest.approx(me.capabilities.crouchHeight, abs=1e-9)
     assert me.end_slide()
-    assert me.state is CharacterState.STANDING
+    assert me.state == CharacterState.STANDING
     assert not me.end_slide()
     assert not me.extend_slide(0.8)
 

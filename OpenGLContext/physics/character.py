@@ -228,8 +228,20 @@ class Character:
         return bool(self._controller.crouching)
 
     @property
-    def state(self) -> CharacterState:
-        """What the character is doing: standing, crouching, sliding, airborne, down, swimming, flying."""
+    def state(self) -> Any:
+        """What the character is doing: standing, crouching, sliding, airborne, down, swimming, flying.
+
+        Compare it with ``==`` to a :class:`~OpenGLContext.physics.types.CharacterState`
+        member. The value is the engine's own member, equal to the
+        ``CharacterState`` member of the same name, while games still compare
+        it by identity with the engine's enumeration; :attr:`motion_state` is
+        the ``CharacterState`` member itself.
+        """
+        return self._controller.state
+
+    @property
+    def motion_state(self) -> CharacterState:
+        """What the character is doing, as a :class:`~OpenGLContext.physics.types.CharacterState` member."""
         return character_state(self._controller.state)
 
     @property

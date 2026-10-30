@@ -12,7 +12,7 @@ from __future__ import annotations
 import enum
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 
@@ -26,11 +26,14 @@ __all__ = ['COMBINES', 'CharacterCapabilities', 'CharacterState', 'CollisionFilt
 COMBINES = ('average', 'minimum', 'maximum', 'multiply')
 
 
+_Coercible = TypeVar('_Coercible', bound='_Coerced')
+
+
 class _Coerced:
     """A dataclass that copies itself from any object with the same field names."""
 
     @classmethod
-    def coerce(cls, value: Any) -> Self:
+    def coerce(cls: type[_Coercible], value: Any) -> _Coercible:
         """``value`` as this class: itself, the defaults for None, else a copy of the same-named attributes.
 
         Raises TypeError for an object that has none of the fields.
@@ -102,6 +105,15 @@ class CharacterState(enum.Enum):
     DOWN = 'down'
     SWIMMING = 'swimming'
     FLYING = 'flying'
+
+    def __eq__(self, other: object) -> bool:
+        """Equal to a member of another ``CharacterState`` enumeration (an engine's) with the same value."""
+        if isinstance(other, enum.Enum) and type(other).__name__ == 'CharacterState':
+            return bool(self.value == other.value)
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self._name_)
 
 
 @dataclass(slots=True)

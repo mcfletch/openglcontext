@@ -85,6 +85,16 @@ def test_capabilities_convert_to_the_engine():
     assert (made.radius, made.standHeight, made.jumpHeight) == (0.4, 1.6, 2.0)
 
 
+def test_a_state_equals_the_engine_member_of_the_same_name():
+    from omi_physics import character
+
+    for member in character.CharacterState:
+        assert CharacterState[member.name] == member and member == CharacterState[member.name]
+        assert hash(CharacterState[member.name]) == hash(member)
+    assert CharacterState.STANDING != character.CharacterState.SLIDING
+    assert CharacterState.STANDING != 'standing'
+
+
 def test_the_engine_state_converts_to_the_neutral_state():
     from omi_physics import character
 
@@ -221,7 +231,7 @@ def _service_attributes(service):
 
 #: The deprecated aliases kept for one step, by the class that has them.
 DEPRECATED = {'Physics': ('world', 'backend', 'slot_of', 'body_at', 'index_of', 'run', 'BACKENDS'),
-              'Character': ('controller',), 'Proxy': ('shape',)}
+              'Character': ('controller', 'state'), 'Proxy': ('shape',)}
 
 
 @pytest.mark.parametrize('mode', ['inline', 'thread'])

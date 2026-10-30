@@ -197,13 +197,15 @@ def test_a_character_reads_its_capsule_without_the_controller(physics):
     assert walker.height == pytest.approx(1.7)
     assert walker.grounded
     assert walker.vertical_speed == pytest.approx(0.0, abs=1e-6)
-    assert walker.state is CharacterState.STANDING
+    assert walker.motion_state is CharacterState.STANDING
+    assert walker.state == CharacterState.STANDING
     assert isinstance(walker.capabilities, CharacterCapabilities)
     assert walker.capabilities.radius == pytest.approx(0.4)
     assert walker.jump()
     run(physics, 0.04)
     assert walker.vertical_speed > 0.0
-    assert walker.state is CharacterState.AIRBORNE
+    assert walker.motion_state is CharacterState.AIRBORNE
+    assert walker.state == CharacterState.AIRBORNE
     assert walker.stuck is False
 
 

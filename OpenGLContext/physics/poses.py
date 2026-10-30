@@ -8,7 +8,6 @@ each frame's poses onto the nodes with :func:`write_pose`, as does the debug ove
 from typing import Any
 
 import numpy as np
-from omi_physics import mathutil
 
 __all__ = ['quat_to_vrml_rotation', 'vrml_rotation_to_quat', 'write_pose']
 
@@ -17,8 +16,10 @@ _ROT_FIELD_CACHE: dict[type, Any] = {}
 
 def vrml_rotation_to_quat(rotation: Any) -> np.ndarray:
     """VRML axis-angle ``(x, y, z, angle)`` as a glTF quaternion ``(x, y, z, w)``."""
-    x, y, z, a = rotation
-    return mathutil.quat_from_axis_angle((x, y, z), a)
+    x, y, z, a = (float(v) for v in rotation)
+    length = max((x * x + y * y + z * z) ** 0.5, 1e-12)
+    s = np.sin(0.5 * a) / length
+    return np.array([x * s, y * s, z * s, np.cos(0.5 * a)])
 
 
 def quat_to_vrml_rotation(quat: Any) -> np.ndarray:
@@ -26,7 +27,8 @@ def quat_to_vrml_rotation(quat: Any) -> np.ndarray:
 
     A rotation of nothing has no axis of its own and answers ``(0, 1, 0, 0)``.
     """
-    q = mathutil.quat_normalize(np.asarray(quat, dtype='d'))
+    q = np.asarray(quat, dtype='d')
+    q = q / max(float(np.linalg.norm(q)), 1e-12)
     w = np.clip(q[3], -1.0, 1.0)
     angle = 2.0 * np.arccos(w)
     s = np.sqrt(max(1.0 - w * w, 0.0))
