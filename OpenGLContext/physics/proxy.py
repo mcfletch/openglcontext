@@ -48,6 +48,8 @@ STRATEGIES = ('auto', 'sphere', 'box', 'convex', 'trimesh')
 KINDS = ('box', 'sphere', 'capsule', 'cylinder', 'convex', 'trimesh', 'compound', 'heightfield')
 
 _ids = itertools.count(1)
+#: Holds an entry once Proxy.shape has warned, so it warns once a process.
+_WARNED: list[bool] = []
 
 
 class Proxy:
@@ -71,8 +73,10 @@ class Proxy:
     @property
     def shape(self) -> Any:
         """The engine's shape for this proxy; deprecated, read :attr:`kind` and :attr:`params`."""
-        warnings.warn('Proxy.shape is the engine\'s shape and is going away; read Proxy.kind '
-                      'and Proxy.params', DeprecationWarning, stacklevel=2)
+        if not _WARNED:
+            _WARNED.append(True)
+            warnings.warn('Proxy.shape is the engine\'s shape and is going away; read Proxy.kind '
+                          'and Proxy.params', DeprecationWarning, stacklevel=2)
         from OpenGLContext.physics.omi_adapter import omi_shape  # noqa: PLC0415 the engine loads on use
 
         return omi_shape(self)

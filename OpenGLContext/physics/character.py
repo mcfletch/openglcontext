@@ -51,6 +51,8 @@ if TYPE_CHECKING:
 __all__ = ['Character', 'CharacterStep', 'Footstep', 'Landing']
 
 _UP = np.array([0.0, 1.0, 0.0])
+#: Holds an entry once Character.controller has warned, so it warns once a process.
+_WARNED: list[bool] = []
 #: The events a character tells itself; every other name is an event of its stand-in.
 _OWN_EVENTS = frozenset(('landed', 'footstep', 'arrived', 'before-step', 'after-step'))
 #: The field of the capabilities that names each mode's speed.
@@ -267,9 +269,11 @@ class Character:
     @property
     def controller(self) -> Any:
         """The engine's controller; deprecated, read the character's own properties."""
-        warnings.warn('Character.controller is the engine\'s controller and is going away; read '
-                      'the Character\'s properties (vertical_speed, height, radius, state, '
-                      'grounded, capabilities)', DeprecationWarning, stacklevel=2)
+        if not _WARNED:
+            _WARNED.append(True)
+            warnings.warn('Character.controller is the engine\'s controller and is going away; read '
+                          'the Character\'s properties (vertical_speed, height, radius, '
+                          'motion_state, grounded, capabilities)', DeprecationWarning, stacklevel=2)
         return self._controller
 
     @property

@@ -4,10 +4,9 @@ import time
 
 import numpy as np
 import pytest
-from omi_physics import model
 
 from OpenGLContext.physics.proxy import Proxy
-from OpenGLContext.physics.records import BodySpec, Command
+from OpenGLContext.physics.records import Motion, BodySpec, Command
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker
 from OpenGLContext.testing import physics as physics_testing
@@ -20,12 +19,12 @@ def definition(**named) -> PhysicsDefinition:
 
 
 def ball(uid=1, position=(0, 5, 0), report=False) -> Command:
-    return Command('add', uid, (BodySpec(uid, 'dynamic', Proxy.sphere(0.5), model.Motion(mass=1.0),
+    return Command('add', uid, (BodySpec(uid, 'dynamic', Proxy.sphere(0.5), Motion(mass=1.0),
                                          position=position, report=report),))
 
 
 def floor(uid=9) -> Command:
-    return Command('add', uid, (BodySpec(uid, 'static', Proxy.box((20, 1, 20)), model.Motion(),
+    return Command('add', uid, (BodySpec(uid, 'static', Proxy.box((20, 1, 20)), Motion(),
                                          position=(0, -0.5, 0)),))
 
 
@@ -311,7 +310,7 @@ def test_inline_keeps_stepping_a_still_world_that_a_step_hook_wants():
 def test_inline_keeps_stepping_a_still_world_with_a_driven_body():
     worker = settled_inline()
     worker.submit(Command('add', 5, (BodySpec(5, 'kinematic', Proxy.box((1, 1, 1)),
-                                              model.Motion(type=model.KINEMATIC),
+                                              Motion(),
                                               position=(5, 0.5, 0)),)))
     worker.submit(Command('drive', 5, (lambda t: ((5.0, 0.5, 0.0), None),)))
     worker.collect(0.01)

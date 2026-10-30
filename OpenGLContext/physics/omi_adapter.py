@@ -26,6 +26,7 @@ from omi_physics.contactevents import PairPreview, Verdict
 from omi_physics.gravity import GravityVolume
 
 from OpenGLContext.physics.filters import Approach
+from OpenGLContext.physics.records import Motion
 from OpenGLContext.physics.types import (
     CharacterCapabilities, CharacterState, CollisionFilter, EngineInfo, GravityZone, Material,
 )
@@ -36,7 +37,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-__all__ = ['NAME', 'ContactFilter', 'character_state', 'cook', 'engine_info', 'gravity', 'gravity_volume',
+__all__ = ['NAME', 'ContactFilter', 'motion_from_omi', 'character_state', 'cook', 'engine_info', 'gravity', 'gravity_volume',
            'hull_volume', 'material_from_omi', 'motion', 'omi_capabilities', 'omi_filter',
            'omi_material', 'omi_shape', 'presets', 'proxy_from_shape']
 
@@ -214,11 +215,23 @@ _MOTION_TYPES = {'dynamic': model.DYNAMIC, 'kinematic': model.KINEMATIC}
 
 def motion(kind: str, mass: float = 1.0, linear_damping: float = 0.0,
            angular_damping: float = 0.0, gravity_factor: float = 1.0) -> model.Motion:
-    """omi's motion for a body of ``kind`` (``'static'``, ``'dynamic'``, ``'kinematic'``, ``'trigger'``)."""
+    """omi's motion for a body of ``kind`` (``'static'``, ``'dynamic'``, ``'kinematic'``, ``'trigger'``).
+
+    A static body or a trigger is omi's static motion, whatever the rest says.
+    """
+    if kind not in _MOTION_TYPES:
+        return model.Motion(type=model.STATIC)
     return model.Motion(type=_MOTION_TYPES.get(kind, model.STATIC), mass=float(mass),
                         linearDamping=float(linear_damping),
                         angularDamping=float(angular_damping),
                         gravityFactor=float(gravity_factor))
+
+
+def motion_from_omi(given: model.Motion) -> tuple[str, Motion]:
+    """omi's ``given`` motion as the kind of body it makes and a :class:`~OpenGLContext.physics.records.Motion`."""
+    kind = {model.DYNAMIC: 'dynamic', model.KINEMATIC: 'kinematic'}.get(given.type, 'static')
+    return kind, Motion(float(given.mass), float(given.linearDamping),
+                        float(given.angularDamping), float(given.gravityFactor))
 
 
 # -- the contact filter ------------------------------------------------------------

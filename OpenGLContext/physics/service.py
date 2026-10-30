@@ -49,7 +49,9 @@ from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
 from OpenGLContext.physics.queries import Hit
 from OpenGLContext.physics.replica import Replica, build
-from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
+from OpenGLContext.physics.records import (
+    BodyBatch, BodySpec, Command, Motion, PhysicsEvent, Snapshot, Step,
+)
 from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import BACKENDS, PhysicsDefinition
 from OpenGLContext.physics.stepview import StepHook, StepView
@@ -71,9 +73,15 @@ SOUND_SPEED = 1.0
 SOUND_FULL = 6.0
 
 
+#: The deprecated names that have warned, so each warns once a process and a game loop pays nothing more.
+_WARNED: set[str] = set()
+
+
 def _deprecated(name: str, instead: str) -> None:
-    warnings.warn('Physics.%s hands over the engine and is going away; %s' % (name, instead),
-                  DeprecationWarning, stacklevel=3)
+    if name not in _WARNED:
+        _WARNED.add(name)
+        warnings.warn('Physics.%s hands over the engine and is going away; %s' % (name, instead),
+                      DeprecationWarning, stacklevel=3)
 
 
 @dataclass(frozen=True, slots=True)
@@ -410,12 +418,12 @@ class Physics:
                           'blocks_characters', 'gravity_factor'})
 
     def _add(self, kind: str, node: Any, proxy: Any, options: dict[str, Any], *,
-             motion: Any = None,
+             motion: Motion | None = None,
              pose: tuple[tuple[float, ...], tuple[float, ...]] | None = None,
              derived: bool = False) -> Body:
         """Make a body of ``kind`` for ``node``.
 
-        ``motion``, the engine's, replaces the motion the options describe, ``pose`` is a world
+        ``motion`` replaces the motion the options describe, ``pose`` is a world
         position and quaternion in place of the node's own, and ``derived`` marks
         a body the service made from the scene rather than one the application added.
         """
@@ -456,8 +464,8 @@ class Physics:
             if dynamic:
                 mass = options['mass'] if options.get('mass') is not None else shape.mass(
                     options.get('density') or DEFAULT_DENSITY)
-            motion = omi_adapter.motion(
-                kind, mass if dynamic else 1.0,
+            motion = Motion(
+                mass if dynamic else 1.0,
                 float(self.definition.linearDamping if linear is None else linear),
                 float(self.definition.angularDamping if angular is None else angular), factor)
         mass = float(motion.mass) if dynamic else 0.0
@@ -468,7 +476,7 @@ class Physics:
         spec = BodySpec(uid, kind, shape, motion, tuple(position), quaternion, material,
                         self.filters.index(options.get('collision_filter')), report=sounding)
         body = Body(self, uid, kind, node, shape, position, axis_angle, mass,
-                    motion.linearDamping, motion.angularDamping, float(motion.gravityFactor))
+                    motion.linear_damping, motion.angular_damping, motion.gravity_factor)
         body.derived = derived
         body.material = named
         body._surface = self._coefficients(material)
@@ -680,7 +688,7 @@ class Physics:
             float(v) for v in orientation)
         place = tuple(float(v) for v in position)
         sounding = self.materials.sound_of(named) is not None
-        spec = BodySpec(uid, kind, proxy, omi_adapter.motion('static'), place, quaternion,
+        spec = BodySpec(uid, kind, proxy, Motion(), place, quaternion,
                         material, collision_filter, report=sounding)
         body = Body(self, uid, kind, None, proxy, np.asarray(place), quat_to_vrml_rotation(quaternion),
                     0.0)
@@ -861,7 +869,7 @@ class Physics:
         """The kinematic body the world sees for a character, with no node."""
         proxy = stand_in_proxy(capabilities, reach)
         uid = next(self._uids)
-        spec = BodySpec(uid, 'kinematic', proxy, omi_adapter.motion('kinematic'),
+        spec = BodySpec(uid, 'kinematic', proxy, Motion(),
                         tuple(float(v) for v in centre), (0.0, 0.0, 0.0, 1.0), report=True)
         body = Body(self, uid, 'kinematic', None, proxy, np.asarray(centre, dtype='d'),
                     (0.0, 0.0, 1.0, 0.0), 0.0)

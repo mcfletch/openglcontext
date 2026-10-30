@@ -9,13 +9,13 @@ import time
 
 import numpy as np
 import pytest
-from omi_physics import mathutil, model
+from omi_physics import mathutil
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.physics import runtime as runtime_module
 from OpenGLContext.physics import service as service_module
 from OpenGLContext.physics.proxy import Proxy
-from OpenGLContext.physics.records import BodySpec, Command
+from OpenGLContext.physics.records import Motion, BodySpec, Command
 from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
@@ -34,13 +34,13 @@ def definition(**named) -> PhysicsDefinition:
 
 
 def floor(uid: int = 1000) -> Command:
-    return Command('add', uid, (BodySpec(uid, 'static', Proxy.box((60, 1, 60)), model.Motion(),
+    return Command('add', uid, (BodySpec(uid, 'static', Proxy.box((60, 1, 60)), Motion(),
                                          position=(0, -0.5, 0)),))
 
 
 def box(uid: int, position) -> Command:
     return Command('add', uid, (BodySpec(uid, 'dynamic', Proxy.box((0.5, 0.5, 0.5)),
-                                         model.Motion(mass=1.0), position=position),))
+                                         Motion(mass=1.0), position=position),))
 
 
 def boxes_at_rest(count: int = 20) -> InlineWorker:
@@ -246,7 +246,7 @@ def _specs(worker: InlineWorker) -> dict:
     runtime = worker.runtime
     for uid in range(1, 21):
         index = runtime.entry(uid).index
-        specs[uid] = BodySpec(uid, 'dynamic', Proxy.box((0.5, 0.5, 0.5)), model.Motion(mass=1.0),
+        specs[uid] = BodySpec(uid, 'dynamic', Proxy.box((0.5, 0.5, 0.5)), Motion(mass=1.0),
                               position=tuple(runtime.world.position[index]),
                               orientation=tuple(runtime.world.orientation[index]))
     return specs

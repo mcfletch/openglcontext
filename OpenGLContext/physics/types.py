@@ -32,6 +32,16 @@ _Coercible = TypeVar('_Coercible', bound='_Coerced')
 class _Coerced:
     """A dataclass that copies itself from any object with the same field names."""
 
+    def _values(self) -> tuple[Any, ...]:
+        return tuple(getattr(self, name) for name in getattr(self, '__dataclass_fields__', {}))
+
+    def _same(self, other: object) -> bool | None:
+        """Whether ``other``, of this class or another with every one of its fields, has its values."""
+        names: Iterable[str] = getattr(self, '__dataclass_fields__', {})
+        if not all(hasattr(other, name) for name in names):
+            return None
+        return all(getattr(self, name) == getattr(other, name) for name in names)
+
     @classmethod
     def coerce(cls: type[_Coercible], value: Any) -> _Coercible:
         """``value`` as this class: itself, the defaults for None, else a copy of the same-named attributes.
@@ -49,7 +59,7 @@ class _Coerced:
         return cls(**found)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class Material(_Coerced):
     """How a surface grips and bounces.
 
@@ -64,8 +74,16 @@ class Material(_Coerced):
     frictionCombine: str = 'average'
     restitutionCombine: str = 'average'
 
+    def __eq__(self, other: object) -> bool:
+        """Equal to a material, this package's or an engine's, with the same values."""
+        same = self._same(other)
+        return NotImplemented if same is None else same
 
-@dataclass(frozen=True, slots=True)
+    def __hash__(self) -> int:
+        return hash(self._values())
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class CollisionFilter(_Coerced):
     """Which bodies a body collides with, by named systems.
 
@@ -78,6 +96,14 @@ class CollisionFilter(_Coerced):
     collisionSystems: tuple[str, ...] = ()
     collideWithSystems: tuple[str, ...] | None = None
     notCollideWithSystems: tuple[str, ...] = ()
+
+    def __eq__(self, other: object) -> bool:
+        """Equal to a filter, this package's or an engine's, with the same systems."""
+        same = self._same(other)
+        return NotImplemented if same is None else same
+
+    def __hash__(self) -> int:
+        return hash(self._values())
 
     def collides_with(self, other: CollisionFilter) -> bool:
         """Whether bodies with this filter and ``other`` collide; each must allow the other."""

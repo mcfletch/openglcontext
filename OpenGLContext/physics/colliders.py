@@ -22,9 +22,9 @@ from omi_physics import model
 
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.gltf_world import MeshSite, _mesh_positions_indices, iter_meshes, site_mesh
-from OpenGLContext.physics.omi_adapter import proxy_from_shape
+from OpenGLContext.physics.omi_adapter import motion_from_omi, proxy_from_shape
 from OpenGLContext.physics.proxy import Proxy
-from OpenGLContext.physics.records import BodySpec
+from OpenGLContext.physics.records import BodySpec, Motion
 
 if TYPE_CHECKING:
     from OpenGLContext.physics.service import Physics
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 __all__ = ['SceneryTracker']
 
 log = logging.getLogger(__name__)
-_STATIC = model.Motion(type=model.STATIC)
+_STATIC = Motion()
 
 
 class SceneryTracker:
@@ -98,12 +98,12 @@ class SceneryTracker:
         proxy = proxies.get(shape_index)
         if proxy is None:
             proxy = proxies[shape_index] = proxy_from_shape(document.shapes[shape_index])
-        motion = body.motion or model.Motion(type=model.STATIC)
+        kind, motion = motion_from_omi(body.motion or model.Motion(type=model.STATIC))
         material = None
         if body.collider is not None and 0 <= body.collider.physicsMaterial < len(document.materials):
             material = document.materials[body.collider.physicsMaterial]
-        kind = 'trigger' if body.trigger is not None and body.collider is None else {
-            model.DYNAMIC: 'dynamic', model.KINEMATIC: 'kinematic'}.get(motion.type, 'static')
+        if body.trigger is not None and body.collider is None:
+            kind = 'trigger'
         pose = None
         if kind in ('static', 'trigger'):
             pose = (tuple(float(v) for v in site.world[3, :3]), _quaternion_of(site.world))

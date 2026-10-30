@@ -22,6 +22,43 @@ def physics(request):
     service.close()
 
 
+@pytest.fixture(autouse=True)
+def warn_again(monkeypatch):
+    """Let each deprecated name warn in each test: each warns once a process."""
+    from OpenGLContext.physics import character, proxy, service
+
+    monkeypatch.setattr(service, '_WARNED', set())
+    monkeypatch.setattr(character, '_WARNED', [])
+    monkeypatch.setattr(proxy, '_WARNED', [])
+
+
+def test_a_deprecated_name_warns_once(monkeypatch):
+    physics = make('inline')
+    try:
+        with pytest.warns(DeprecationWarning):
+            physics.world  # noqa: B018 the read is what warns
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            physics.world  # noqa: B018 a second read is silent
+    finally:
+        physics.close()
+
+
+def test_materials_equal_engine_materials_with_the_same_values():
+    from omi_physics import model
+
+    from OpenGLContext.physics import CollisionFilter, Material
+
+    assert Material(restitution=0.5) == model.Material(restitution=0.5)
+    assert model.Material(restitution=0.5) == Material(restitution=0.5)
+    assert Material(restitution=0.5) != model.Material(restitution=0.4)
+    assert CollisionFilter(('a',)) == model.CollisionFilter(('a',))
+    assert Material() != 'average'
+    assert len({Material(), Material()}) == 1
+
+
 def run(physics, seconds, frame=0.02):
     for _ in range(int(round(seconds / frame))):
         physics.frame(frame)

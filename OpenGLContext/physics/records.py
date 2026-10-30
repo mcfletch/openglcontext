@@ -6,7 +6,7 @@ the same traffic can cross a thread today and a process boundary later.
 :class:`Command`
     One change to the world, from any thread to the worker.
 :class:`BodySpec`
-    What the worker needs to make one body.
+    What the worker needs to make one body, with its :class:`Motion`.
 :class:`Snapshot`
     The poses and velocities of the bodies that move, published after a tick.
 :class:`PhysicsEvent`
@@ -20,11 +20,10 @@ from dataclasses import dataclass, field, replace
 from typing import Any, NamedTuple
 
 import numpy as np
-from omi_physics import model
 
 from OpenGLContext.physics.proxy import Proxy
 
-__all__ = ['BodyBatch', 'BodySpec', 'Command', 'PhysicsEvent', 'Snapshot', 'Step']
+__all__ = ['BodyBatch', 'BodySpec', 'Command', 'Motion', 'PhysicsEvent', 'Snapshot', 'Step']
 
 
 class Command(NamedTuple):
@@ -42,18 +41,28 @@ class Command(NamedTuple):
 
 
 @dataclass(frozen=True, slots=True)
+class Motion:
+    """How a body moves: ``mass`` in kilograms, damping per second, and the share of gravity it feels."""
+    mass: float = 1.0
+    linear_damping: float = 0.0
+    angular_damping: float = 0.0
+    gravity_factor: float = 1.0
+
+
+@dataclass(frozen=True, slots=True)
 class BodySpec:
     """The body ``uid`` to make.
 
     ``kind`` is ``'static'``, ``'dynamic'``, ``'kinematic'`` or ``'trigger'``.
     ``orientation`` is a unit quaternion ``(x, y, z, w)``. ``material`` is a
-    preset or defined name, a :class:`~omi_physics.model.Material`, or None for
-    the world's default.
+    preset or defined name, a :class:`~OpenGLContext.physics.types.Material`,
+    or None for the world's default. A static body or a trigger does not move,
+    whatever its ``motion``.
     """
     uid: int
     kind: str
     proxy: Proxy
-    motion: model.Motion
+    motion: Motion
     position: tuple[float, ...] = (0.0, 0.0, 0.0)
     orientation: tuple[float, ...] = (0.0, 0.0, 0.0, 1.0)
     material: Any = None

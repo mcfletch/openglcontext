@@ -302,9 +302,9 @@ class WorldRuntime:
         index_of_shape = self._shapes.get(proxy.uid)
         if index_of_shape is None:
             index_of_shape = self._shapes[proxy.uid] = world.add_shape(omi_shape(proxy))
-        motion = spec.motion
-        if spec.kind in ('static', 'trigger'):
-            motion = model.Motion(type=model.STATIC)
+        given = spec.motion
+        motion = omi_adapter.motion(spec.kind, given.mass, given.linear_damping,
+                                    given.angular_damping, given.gravity_factor)
         collider = trigger = None
         if spec.kind == 'trigger':
             trigger = model.Trigger(shape=index_of_shape, collisionFilter=spec.collision_filter)
