@@ -1,8 +1,10 @@
 # Native physics: pyjoltphysics
 
-Status: **P0 landed 2026-10-30.** Decision taken 2026-10-26; design spiked the same day. The
-`pyjoltphysics` repository exists locally (commit 8d671b7 on `develop`) with no GitHub remote
-yet; its workspace registration waits for the remote (see "P0 as built" below).
+Status: **P0 landed 2026-10-30; P1a (the world thread, commands, snapshots, events, callbacks,
+lockstep, primitive shapes) landed the same day.** Decision taken 2026-10-26; design spiked the
+same day. The `pyjoltphysics` repository exists locally (`develop`) with no GitHub remote yet; its
+workspace registration waits for the remote (see "P0 as built" below). P1b (hull, mesh,
+heightfield and compound shapes, the fuller differential suite) is next.
 
 The decision (maintainer): the engine steps its rigid bodies with Jolt Physics through a wrapper
 of our own. Jolt always runs on a background thread owned by the wrapper, never inline and never
@@ -580,6 +582,65 @@ of C++ and ran correctly in both builds.
 
 P0 to P5: 14 to 19.5 weeks. The games stay on omi until P5: P4 runs them on both engines in CI,
 and a program selects Jolt with one definition field.
+
+### P1a as built (2026-10-30)
+
+P1 is split: P1a is the engine core with primitive shapes, P1b the other shapes and the fuller
+differential suite. P1a is commits 4f9a0ac to 6b62d0c on `pyjoltphysics` `develop`.
+
+- C++ in `src/native/`, a file per concern: `world` (thread, tick, free-run, lockstep, idle wait,
+  registry, fork and atexit hooks), `commands` and `apply` (one `std::variant` alternative and one
+  `apply` overload per command), `snapshot` (pool and 16-tick changed-row history), `events`
+  (listeners, per-pair folding, ring), `callbacks` (kept thread state, callable set), `layers`
+  (group and mask over 16-bit object layers), `shapes` (`ShapeLibrary`, one case per kind: P1b adds
+  hull, mesh, heightfield and compound there), `bind_world` (nanobind `World`, `Snapshot`,
+  `tp_traverse`/`tp_clear`). No warnings under `-Wall -Wextra` (gcc 13.3).
+- Python: `World`, `WorldSettings`, `BodyBatch`, `Snapshot`, `EVENT_DTYPE`, the enums, `WorldError`,
+  and `pyjoltphysics.testing` (floor, grid, pose digest). mypy strict, ruff, `oglc-check` clean;
+  `_native.pyi` regenerated. numpy became a runtime dependency.
+- Uids are assigned at submission, from 1, never reused; snapshot rows are dense (removal moves
+  the last row into the gap, both rows in `changed`), with `uid` per row and `rows` as a dict.
+- `applied_seq` is the highest contiguous sequence applied: a batch held by `at_tick` holds it
+  back until its tick.
+- Event record (48 bytes): kind, phase, reason (end: parted or removed), tick, a, b, point,
+  normal, approach, impulse. There is no time field: 48 bytes do not hold one beside the rest,
+  and time is exactly `tick / tick_hz` (`event_times`).
+- Sleep: a pair whose contacts go while neither body is awake is held as touching (no end, and no
+  begin when it wakes touching); if a woken body has parted, its end comes in the tick after the
+  wake. A body asleep inside a sensor stays inside. Removing a body ends its pairs at once with
+  reason `REMOVED`; Jolt's later removal reports are ignored by body-and-sequence key.
+- Ring back-pressure: past capacity, persist records go first, oldest first, then sleep and wake;
+  begin and end are never dropped and the ring grows past capacity for them.
+- A callback exception is stored (`world.error`), logged once to the `pyjoltphysics` logger, and
+  stops the world; waits and later `run_ticks`/`start` raise `WorldError` from it. This departs
+  from the spike, which counted errors and kept stepping.
+- A world dropped or collected on its own thread detaches its thread, which owns a reference to the
+  world core and ends after the tick. The stable ABI of 3.12 has no `Py_IsFinalizing`; the atexit
+  hook sets a flag that stops every attach.
+
+Tests (112, plus 4 doctests), written against the module and seen failing against P0's (the
+package fails to import its world): GIL build (3.14, and tox on 3.10, 3.11, 3.13, 3.14) all
+green; free-threaded 3.14t 108 passed, 3 skipped (no omi_physics in that environment, NEON, the
+GIL-wait case); ASan and UBSan build (`tox -e asan`, `tools/asan.sh`; a CI job) 108 passed, no
+sanitizer report. Lockstep replay of a free-running run with 40 impulse batches: per-tick pose
+hashes over 1,000 ticks identical to the free run with 1 and 8 job threads, 16 repeats, both
+builds. Differential smoke against omi: sphere rest height within 1 cm (Jolt 0.500, omi 0.495),
+stack of 10 drift under 5 cm and top within 5 cm (9.497, 9.470), rebound ratios within 0.05 at
+restitution 0.5 and 0.8.
+
+`benchmarks/boxes5000.py`, the spike's 5,000-active-box scene with a static box for the ground
+(the spike's ground was a 20,000-triangle mesh, which is P1b), ms per 60 Hz frame of two ticks,
+measured by the caller of `run_ticks(2)`, machine otherwise idle, best and worst of 3:
+
+| | Spike | GIL build | Free-threaded |
+|---|---|---|---|
+| 1 job thread | 2.71 | 2.34 to 2.36 (one cold run 3.40) | 2.26 to 2.34 |
+| 8 job threads | 1.20 | 1.00 to 1.17 | 1.32 to 1.57 |
+| Snapshot publish, 5,000 boxes | 0.18 to 0.31 a tick | 0.05 to 0.06 a tick | 0.06 to 0.07 a tick |
+| Event folding | 0.003 a tick | 0.002 a tick | 0.002 a tick |
+
+The P1 criterion (within 10% of the spike) holds on the GIL build; the free-threaded 8-thread run
+is 10 to 30% over the spike's GIL figure. P1b re-runs the scene with the mesh ground.
 
 ## 7. Decisions
 
