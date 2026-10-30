@@ -23,7 +23,8 @@ indented technical notes point at the code.
 A game imports what it needs from ``OpenGLContext.physics``: ``Physics``,
 ``Body``, ``Character``, ``Joint``, ``Proxy``, ``PhysicsDefinition``,
 ``CharacterCapabilities``, ``CharacterState``, ``Material``,
-``CollisionFilter``, ``Poses``, ``EngineInfo`` and ``GravityZone``. Each is
+``CollisionFilter``, ``Poses``, ``EngineInfo``, ``WorldCounts`` and
+``GravityZone``. Each is
 OpenGLContext's own class (``OpenGLContext.physics.types``); the service
 converts them to the engine's at its boundary. ``CharacterCapabilities``,
 ``Material`` and ``CollisionFilter`` keep the OMI field names, and an object
@@ -933,6 +934,12 @@ second), ``precision`` (``'double'``) and ``compute``, the compute backend in
 use where the engine offers a choice. ``str(physics.engine)`` is a line such as
 ``omi_physics 0.4.0 double``. It is read-only.
 
+``physics.counts`` is a ``WorldCounts`` of ``bodies``, every body in the world
+with characters' bodies included, and ``contacts``, the pairs of bodies the
+step found touching. Both are as the last published step left them, and 0
+before the first. ``physics_provider(lambda: context.physics)`` puts them on
+the developer overlay.
+
 No call of the service hands a program an engine object. Code written against
 ``Physics``, ``Body``, ``Character``, ``Joint``, ``Proxy``, ``poses`` and
 ``on_step`` runs on whichever engine steps the world. The conversions to and
@@ -948,7 +955,8 @@ These calls hand over the ``omi_physics`` world and warn with a
    * - Deprecated
      - Use
    * - ``physics.world``
-     - ``physics.poses(bodies)``, ``Body`` properties, ``physics.on_step``
+     - ``physics.poses(bodies)``, ``Body`` properties, ``physics.on_step``,
+       ``physics.counts``
    * - ``physics.slot_of(body)``, ``index_of``, ``body_at(slot)``
      - ``Body`` handles and ``uid`` numbers, which ``poses`` takes
    * - ``physics.run(function)``

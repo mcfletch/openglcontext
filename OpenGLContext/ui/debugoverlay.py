@@ -461,16 +461,22 @@ def platform_provider(context: Any) -> Provider:
 
 
 def physics_provider(world: Callable[[], Any]) -> Provider:
-    """Body and contact counts from a physics world, fetched when asked for.
+    """Body and contact counts from a physics service or world, fetched when asked for.
 
-    Takes a callable rather than the world itself because a world is built when
-    a level loads and replaced when the next one does; a provider holding the
-    first would report on it forever.
+    ``world`` returns a :class:`~OpenGLContext.physics.service.Physics`, whose
+    :attr:`~OpenGLContext.physics.service.Physics.counts` are reported; any
+    other object is read for ``bodies`` and ``contacts`` collections, and
+    None reports nothing. It is a callable rather than the service itself
+    because a service is built when a level loads and replaced when the next
+    one does; a provider holding the first would report on it forever.
     """
     def rows() -> Rows:
         found_world = world()
         if found_world is None:
             return []
+        counts = getattr(found_world, 'counts', None)
+        if counts is not None:
+            return [('bodies', counts.bodies), ('contacts', counts.contacts)]
         found: list[tuple[str, Any]] = []
         for name, label in (('bodies', 'bodies'), ('contacts', 'contacts')):
             collection = getattr(found_world, name, None)

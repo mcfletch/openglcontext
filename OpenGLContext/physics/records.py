@@ -132,6 +132,10 @@ class Snapshot:
     step_orientation: np.ndarray | None = None
     #: The readings of the joints asked for: angles in radians, slides in metres, by joint id.
     joints: dict[int, tuple[float, ...]] = field(default_factory=dict)
+    #: How many bodies the world holds, every kind included.
+    bodies: int = 0
+    #: How many pairs of bodies the step found touching.
+    contacts: int = 0
 
     def changed_since(self, version: int | None) -> np.ndarray | None:
         """The rows to read for a reader whose last snapshot was ``version``; None for every row."""

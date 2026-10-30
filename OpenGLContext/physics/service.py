@@ -56,7 +56,7 @@ from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import BACKENDS, PhysicsDefinition
 from OpenGLContext.physics.stepview import StepHook, StepView
 from OpenGLContext.physics.types import (
-    CharacterCapabilities, EngineInfo, GravityZone, Material, Poses,
+    CharacterCapabilities, EngineInfo, GravityZone, Material, Poses, WorldCounts,
 )
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
 
@@ -206,6 +206,17 @@ class Physics:
         """The engine that steps the world: its name, version, step rate and precision."""
         return omi_adapter.engine_info(float(self.definition.tickHz),
                                        str(self.worker.runtime.world.backend.name))
+
+    @property
+    def counts(self) -> WorldCounts:
+        """How many bodies the world holds and how many pairs touch, as its last published step left them.
+
+        Both are 0 before the world has published a step.
+        """
+        snapshot = self._snapshot
+        if snapshot is None:
+            return WorldCounts(0, 0)
+        return WorldCounts(snapshot.bodies, snapshot.contacts)
 
     @property
     def world(self) -> Any:

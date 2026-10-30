@@ -719,7 +719,8 @@ class WorldRuntime:
                                     rows, last.position, last.axis_angle, last.orientation,
                                     last.linear_velocity, last.angular_velocity, last.awake,
                                     last.dynamic, changed, last.version, last.step_position,
-                                    last.step_orientation, self._joint_readings())
+                                    last.step_orientation, self._joint_readings(),
+                                    world.live_body_count, len(world.contacts))
                 self._published = snapshot
                 return snapshot
             if len(redo) == len(indices):
@@ -747,7 +748,8 @@ class WorldRuntime:
         snapshot = Snapshot(self.version, world.step_count, world.time, self.applied_seq, rows,
                             position, axis_angle, orientation, linear, angular, awake, dynamic,
                             changed, -1 if last is None else last.version, step_position,
-                            step_orientation, self._joint_readings())
+                            step_orientation, self._joint_readings(),
+                            world.live_body_count, len(world.contacts))
         self._published = snapshot
         self._published_live = live
         return snapshot

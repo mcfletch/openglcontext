@@ -19,7 +19,8 @@ service converts its own values to the engine's in
   and :mod:`~OpenGLContext.physics.joints` -- the handles it returns.
 * :mod:`~OpenGLContext.physics.proxy` -- collision shapes, cooked from nodes.
 * :mod:`~OpenGLContext.physics.types` -- materials, collision filters,
-  characters' capabilities and state, poses and the engine's description.
+  characters' capabilities and state, poses, the world's counts and the
+  engine's description.
 * :mod:`~OpenGLContext.physics.worker` and :mod:`~OpenGLContext.physics.runtime`
   -- where and how the world is stepped.
 * :mod:`~OpenGLContext.physics.debugdraw` -- an instanced wireframe overlay of the
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.settings import PhysicsDefinition
     from OpenGLContext.physics.types import (
         CharacterCapabilities, CharacterState, CollisionFilter, EngineInfo, GravityZone, Material,
-        Poses,
+        Poses, WorldCounts,
     )
 
 #: Each exported name and the module it is defined in.
@@ -59,11 +60,12 @@ _HOMES = {
     'PhysicsDefinition': 'OpenGLContext.physics.settings',
     'Poses': 'OpenGLContext.physics.types',
     'Proxy': 'OpenGLContext.physics.proxy',
+    'WorldCounts': 'OpenGLContext.physics.types',
 }
 
 __all__ = ['Body', 'Character', 'CharacterCapabilities', 'CharacterState', 'CollisionFilter',
            'EngineInfo', 'GravityZone', 'Joint', 'Material', 'Physics', 'PhysicsDefinition', 'Poses',
-           'Proxy']
+           'Proxy', 'WorldCounts']
 
 
 def __getattr__(name: str) -> Any:

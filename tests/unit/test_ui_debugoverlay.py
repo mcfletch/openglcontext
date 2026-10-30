@@ -344,6 +344,18 @@ class TestBuiltInProviders:
         assert rows['bodies'] == 2
         assert rows['contacts'] == 1
 
+    def test_the_physics_provider_reads_the_counts_of_a_physics_service(self):
+        from OpenGLContext.physics import Physics, Proxy
+
+        physics = Physics()
+        try:
+            physics.add_static(None, proxy=Proxy.box((1, 1, 1)))
+            physics.frame(0.02)
+            rows = dict(physics_provider(lambda: physics)())
+        finally:
+            physics.close()
+        assert rows == {'bodies': 1, 'contacts': 0}
+
     def test_the_physics_provider_says_nothing_with_no_world(self):
         assert physics_provider(lambda: None)() == []
 

@@ -651,7 +651,8 @@ The shipped sections
 Two more providers are available but not registered by default, because not
 every context has what they report on:
 
-- ``physics_provider(lambda: world)`` reports body and contact counts.
+- ``physics_provider(lambda: context.physics)`` reports the body and contact
+  counts of a ``Physics`` service's last step (``Physics.counts``).
 - ``simulation_provider(lambda: context.physics.worker)`` reports on a
   background physics thread (the worker of a ``Physics`` whose ``mode`` is
   ``thread``): the rate it achieves against its target rate, its total ticks,

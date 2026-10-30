@@ -5,7 +5,9 @@ import time
 import numpy as np
 import pytest
 
-from OpenGLContext.physics import CharacterCapabilities, CharacterState, Physics, PhysicsDefinition, Proxy
+from OpenGLContext.physics import (
+    CharacterCapabilities, CharacterState, Physics, PhysicsDefinition, Proxy, WorldCounts,
+)
 from OpenGLContext.testing import physics as physics_testing
 
 MODES = ['inline', 'thread']
@@ -159,6 +161,25 @@ def test_the_engine_is_described_and_read_only(physics):
     assert str(engine).startswith('omi_physics ')
     with pytest.raises(AttributeError):
         physics.engine = None
+
+
+def test_the_counts_are_the_bodies_and_contacts_of_the_last_step(physics):
+    assert physics.counts == WorldCounts(bodies=0, contacts=0)
+    physics.add_static(None, proxy=Proxy.box((20, 1, 20)), translation=(0, -0.5, 0))
+    physics.add_dynamic(None, proxy=Proxy.sphere(0.5), translation=(0, 0.45, 0))
+    run(physics, 0.1)
+    settle(physics)
+    assert physics.counts == WorldCounts(bodies=2, contacts=1)
+
+
+def test_a_removed_body_is_not_counted(physics):
+    floor = physics.add_static(None, proxy=Proxy.box((20, 1, 20)), translation=(0, -0.5, 0))
+    physics.add_static(None, proxy=Proxy.box((1, 1, 1)), translation=(5, 0, 0))
+    run(physics, 0.1)
+    physics.remove(floor)
+    run(physics, 0.1)
+    settle(physics)
+    assert physics.counts.bodies == 1
 
 
 # -- on_step ---------------------------------------------------------------

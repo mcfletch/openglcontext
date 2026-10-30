@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.body import Body
 
 __all__ = ['COMBINES', 'CharacterCapabilities', 'CharacterState', 'CollisionFilter', 'EngineInfo',
-           'GravityZone', 'Hit', 'Material', 'Poses']
+           'GravityZone', 'Hit', 'Material', 'Poses', 'WorldCounts']
 
 #: How the coefficients of two touching surfaces are combined into one.
 COMBINES = ('average', 'minimum', 'maximum', 'multiply')
@@ -204,6 +204,17 @@ class EngineInfo:
 
     def __str__(self) -> str:
         return '%s %s %s' % (self.name, self.version, self.precision)
+
+
+@dataclass(frozen=True, slots=True)
+class WorldCounts:
+    """How many bodies the world holds and how many pairs of them touch, as of its last step.
+
+    ``bodies`` counts every body in the world, characters' bodies included;
+    ``contacts`` counts the touching pairs the step found.
+    """
+    bodies: int
+    contacts: int
 
 
 @dataclass(frozen=True, slots=True)
