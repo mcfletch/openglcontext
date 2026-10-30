@@ -14,6 +14,7 @@ import numpy as np
 
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.testing import physics as physics_testing
 
 
 class Streamed:
@@ -40,7 +41,7 @@ class Streamed:
     def world(self) -> Any:
         """The service's world, with every waiting command applied."""
         self.physics.flush()
-        return self.physics.world
+        return physics_testing.inspect(self.physics)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self.source, name)

@@ -13,6 +13,7 @@ import pytest
 
 from OpenGLContext.physics.gltf_world import node_mesh
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.testing import physics as physics_testing
 
 
 def _load():
@@ -135,20 +136,20 @@ def winning_power():
 
 def velocity_of(course, body):
     """The live velocity of ``body``: its row is found first, since finding it makes the world's arrays current."""
-    index = course.physics.slot_of(body)
-    return course.physics.world.linear_velocity[index]
+    index = physics_testing.slot_of(course.physics, body)
+    return physics_testing.inspect(course.physics).linear_velocity[index]
 
 
 def position_of(course, body):
     """The live position of ``body``."""
-    index = course.physics.slot_of(body)
-    return course.physics.world.position[index]
+    index = physics_testing.slot_of(course.physics, body)
+    return physics_testing.inspect(course.physics).position[index]
 
 
 def put(course, point):
     """Stand the ball at ``point`` with no velocity."""
-    index = course.physics.slot_of(course.ball)
-    course.physics.world.place_body(index, position=point)
+    index = physics_testing.slot_of(course.physics, course.ball)
+    physics_testing.inspect(course.physics).place_body(index, position=point)
     velocity_of(course, course.ball)[:] = 0.0
 
 
@@ -236,10 +237,10 @@ class TestTheKick:
         course = aimed_game()
         shoot(course, 12.0)
         course.physics.flush()
-        before = course.physics.world.live_body_count
+        before = physics_testing.inspect(course.physics).live_body_count
         shoot(course, 12.0)
         course.physics.flush()
-        assert course.physics.world.live_body_count == before
+        assert physics_testing.inspect(course.physics).live_body_count == before
 
 
 class TestTheBalls:
@@ -352,7 +353,7 @@ class TestWhatTheShotDoes:
     def test_a_ball_that_falls_out_of_the_world_is_a_miss(self):
         course = aimed_game()
         course.fire()
-        course.physics.world.place_body(course.physics.slot_of(course.ball), position=(0.0, game.FALLEN - 1.0, 0.0))
+        physics_testing.inspect(course.physics).place_body(physics_testing.slot_of(course.physics, course.ball), position=(0.0, game.FALLEN - 1.0, 0.0))
         course.tick(1 / 60)
         assert course.state == 'aiming'
 
@@ -452,7 +453,7 @@ class TestTheScore:
     def test_crates_knocked_off_their_place_are_paid_for(self):
         course = aimed_game(level=CRATES)
         for body in course.crates:
-            course.physics.world.place_body(course.physics.slot_of(body), position=(0.0, 3.0, 40.0))
+            physics_testing.inspect(course.physics).place_body(physics_testing.slot_of(course.physics, body), position=(0.0, 3.0, 40.0))
         course.physics.frame(0.0)
         assert course.toppled == len(course.crates) == 8
         self.land_on_mark(course)

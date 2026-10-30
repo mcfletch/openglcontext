@@ -24,16 +24,13 @@ import logging
 import os
 import queue
 import time
+import warnings
 import weakref
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from omi_physics import mathutil, model
-from omi_physics.body import world_aabb
-from omi_physics.gravity import GravityVolume
-from omi_physics.collisionquery import WorldQuery
 
 from OpenGLContext.events.framestep import FixedSteps
 from OpenGLContext.events.handoff import Updates
@@ -43,17 +40,22 @@ from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
-from OpenGLContext.physics.filters import Approach, ContactFilter, Filters
+from OpenGLContext.physics import omi_adapter, queries
+from OpenGLContext.physics.filters import Approach, Filters
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
-from OpenGLContext.physics.joints import Joint, make_joint
+from OpenGLContext.physics.joints import READINGS, Joint, make_joint
 from OpenGLContext.physics.materials import Materials
 from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_pose
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
-from OpenGLContext.physics.queries import Hit, overlapping, sweep_sphere
+from OpenGLContext.physics.queries import Hit
 from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import BACKENDS, PhysicsDefinition
+from OpenGLContext.physics.stepview import StepHook, StepView
+from OpenGLContext.physics.types import (
+    CharacterCapabilities, EngineInfo, GravityZone, Material, Poses,
+)
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
 
 __all__ = ['Physics']
@@ -67,6 +69,11 @@ _ZERO3 = np.zeros(3)
 SOUND_SPEED = 1.0
 #: The closing speed that plays a material's sound at full gain.
 SOUND_FULL = 6.0
+
+
+def _deprecated(name: str, instead: str) -> None:
+    warnings.warn('Physics.%s hands over the engine and is going away; %s' % (name, instead),
+                  DeprecationWarning, stacklevel=3)
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +163,9 @@ class Physics:
         self._outstanding = 0
         #: How many scenery shapes have been cooked.
         self.cooked = 0
+        #: The functions :meth:`on_step` registered, called after each step.
+        self._step_hooks: list[StepHook] = []
+        self._zone_ids = itertools.count(1)
 
     # -- the worker -----------------------------------------------------
     def _make_worker(self, mode: str, runtime: Any) -> Worker:
@@ -171,6 +181,8 @@ class Physics:
         runtime.wants_steps.append(self.handlers.has_step_handlers)
         runtime.before_step.append(self._settle_stand_ins)
         runtime.wants_steps.append(self._stand_ins_want_steps)
+        runtime.after_step.append(self._run_step_hooks)
+        runtime.wants_steps.append(self._step_hooks_want_steps)
 
     def _ensure_started(self) -> None:
         if self._enabled and not self._closed:
@@ -182,32 +194,42 @@ class Physics:
         return self._closed
 
     @property
-    def world(self) -> Any:
-        """The live :class:`omi_physics.world.PhysicsWorld`, in inline mode only.
+    def engine(self) -> EngineInfo:
+        """The engine that steps the world: its name, version, step rate and precision."""
+        return omi_adapter.engine_info(float(self.definition.tickHz),
+                                       str(self.worker.runtime.world.backend.name))
 
-        A world stepped on a thread is reached with :meth:`run`. Each
-        character's stand-in is written first, so the world holds it where the
-        character is.
+    @property
+    def world(self) -> Any:
+        """The engine's world, in inline mode only; deprecated.
+
+        Read bodies through their handles and :meth:`poses`, and run tick-exact
+        code with :meth:`on_step`.
         """
+        _deprecated('world', 'read bodies with physics.poses(bodies) and Body properties')
+        return self._engine_world()
+
+    def _engine_world(self) -> Any:
+        """The engine's world of an inline service, with each waiting stand-in written."""
         worker = self._inline()
         self._bring_up_all()
         return worker.runtime.world
 
+    #: The compute backends the world can step with, from the definition's ``backend``.
     BACKENDS = BACKENDS
 
     @property
     def backend(self) -> str:
-        """The name of the compute backend the world steps with, such as ``'numpy'`` or ``'glcompute'``.
+        """The name of the compute backend the world steps with; deprecated, read :attr:`engine`.
 
         Assigning one of :attr:`BACKENDS` chooses another from the next step.
-        The GPU backend needs GL 4.3 compute on the thread that steps the
-        world, so it is for an inline world; a backend that cannot be made
-        logs a warning and the world keeps the one it has.
         """
+        _deprecated('backend', 'read physics.engine, or set PhysicsDefinition.backend')
         return str(self.worker.runtime.world.backend.name)
 
     @backend.setter
     def backend(self, name: str) -> None:
+        _deprecated('backend', 'set PhysicsDefinition.backend through set_config')
         if name not in self.BACKENDS:
             raise ValueError('backend must be one of %s, not %r' % (', '.join(self.BACKENDS), name))
         self._send_world('backend', name)
@@ -216,22 +238,28 @@ class Physics:
         """The worker, where it steps inline; RuntimeError where it has a thread."""
         if isinstance(self.worker, InlineWorker):
             return self.worker
-        raise RuntimeError('physics.world is for inline mode; use physics.run(fn) to reach '
-                           'the world on its thread')
+        raise RuntimeError('the engine\'s world is read inline only; a world on its own thread '
+                           'is read with physics.poses and physics.on_step')
 
     def slot_of(self, body: Body) -> int:
-        """The row ``body`` has in the arrays of :attr:`world`, inline mode only.
+        """The row ``body`` has in the arrays of :attr:`world`, inline mode only; deprecated."""
+        _deprecated('slot_of', 'pass Body handles or uids to physics.poses')
+        return self._slot_of(body)
 
-        Waiting commands are applied first, so a body added a moment ago has
-        its row. Raises KeyError for a body the world does not hold.
-        """
+    def _slot_of(self, body: Body) -> int:
+        """The row ``body`` has in the engine's arrays; KeyError for a body the world does not hold."""
         worker = self._inline()
         self._bring_up_all()
         worker.flush()
         return int(worker.runtime.entry(body.uid).index)
 
     def body_at(self, slot: int) -> Body | None:
-        """The body in row ``slot`` of the arrays of :attr:`world`, or None for a row no body has."""
+        """The body in row ``slot`` of the arrays of :attr:`world`, or None; deprecated."""
+        _deprecated('body_at', 'keep the Body handles add_* returns')
+        return self._body_at(slot)
+
+    def _body_at(self, slot: int) -> Body | None:
+        """The body in row ``slot`` of the engine's arrays, or None for a row no body has."""
         worker = self._inline()
         self._bring_up_all()
         world = worker.runtime.world
@@ -244,12 +272,16 @@ class Physics:
     def set_config(self, definition: PhysicsDefinition) -> None:
         """Apply ``definition`` between ticks: gravity, the step, damping and the mode.
 
-        Bodies stay as they are. A world held inline by :meth:`pin_inline` keeps
+        Bodies stay as they are. A new ``backend`` is used from the next step;
+        one that cannot be made logs a warning and the world keeps the one it
+        has (:attr:`engine` names it). A world held inline by :meth:`pin_inline` keeps
         stepping inline and takes the new mode when it is let go. Raises
         ValueError, changing nothing, for a definition the service cannot run.
         """
         definition.validate()
         self._bring_up_all()
+        if definition.backend != self.definition.backend:
+            self._send_world('backend', str(definition.backend))
         self.definition = definition
         self._send_world('config', float(definition.tickHz), float(definition.maxCatchUp))
         self.gravity = tuple(definition.gravity)
@@ -359,8 +391,9 @@ class Physics:
         Options: ``mass`` in kilograms (default from the shape's volume and
         ``density``), ``density``, ``translation`` and ``rotation`` to place the
         node first, ``material`` (a preset or defined name or a
-        :class:`~omi_physics.model.Material`), ``friction``, ``restitution``,
-        ``linear_damping``, ``angular_damping`` and ``collision_filter``.
+        :class:`~OpenGLContext.physics.types.Material`), ``friction``, ``restitution``,
+        ``linear_damping``, ``angular_damping``, ``gravity_factor`` (1 by default;
+        see :meth:`Body.set_gravity_factor`) and ``collision_filter``.
         """
         return self._add('dynamic', node, proxy, options)
 
@@ -374,15 +407,15 @@ class Physics:
 
     _OPTIONS = frozenset({'mass', 'density', 'translation', 'rotation', 'material', 'friction',
                           'restitution', 'linear_damping', 'angular_damping', 'collision_filter',
-                          'blocks_characters'})
+                          'blocks_characters', 'gravity_factor'})
 
     def _add(self, kind: str, node: Any, proxy: Any, options: dict[str, Any], *,
-             motion: model.Motion | None = None,
+             motion: Any = None,
              pose: tuple[tuple[float, ...], tuple[float, ...]] | None = None,
              derived: bool = False) -> Body:
         """Make a body of ``kind`` for ``node``.
 
-        ``motion`` replaces the motion the options describe, ``pose`` is a world
+        ``motion``, the engine's, replaces the motion the options describe, ``pose`` is a world
         position and quaternion in place of the node's own, and ``derived`` marks
         a body the service made from the scene rather than one the application added.
         """
@@ -391,10 +424,10 @@ class Physics:
             raise TypeError('unknown option %s for add_%s' % (', '.join(sorted(unknown)), kind))
         options = _checked(options)
         if node is None:
-            if not isinstance(proxy, (Proxy, model.Shape)):
+            if not isinstance(proxy, Proxy):
                 raise TypeError('a body with no node needs a shape: proxy=Proxy.box(...), '
                                 'Proxy.trimesh(...) or another Proxy constructor')
-            shape = proxy if isinstance(proxy, Proxy) else Proxy(proxy)
+            shape = proxy
             at, turned = options.get('translation'), options.get('rotation')
             position = np.asarray(_ZERO3 if at is None else at, dtype='d')[:3]
             axis_angle = np.asarray((0.0, 0.0, 1.0, 0.0) if turned is None else turned,
@@ -416,17 +449,17 @@ class Physics:
         dynamic = kind == 'dynamic'
         linear = options.get('linear_damping')
         angular = options.get('angular_damping')
+        factor = options.get('gravity_factor')
+        factor = 1.0 if factor is None else factor
         if motion is None:
             mass = 0.0
             if dynamic:
                 mass = options['mass'] if options.get('mass') is not None else shape.mass(
                     options.get('density') or DEFAULT_DENSITY)
-            motion = model.Motion(
-                type={'dynamic': model.DYNAMIC, 'kinematic': model.KINEMATIC}.get(
-                    kind, model.STATIC),
-                mass=mass if dynamic else 1.0,
-                linearDamping=float(self.definition.linearDamping if linear is None else linear),
-                angularDamping=float(self.definition.angularDamping if angular is None else angular))
+            motion = omi_adapter.motion(
+                kind, mass if dynamic else 1.0,
+                float(self.definition.linearDamping if linear is None else linear),
+                float(self.definition.angularDamping if angular is None else angular), factor)
         mass = float(motion.mass) if dynamic else 0.0
         uid = next(self._uids)
         material = self._material(options)
@@ -435,7 +468,7 @@ class Physics:
         spec = BodySpec(uid, kind, shape, motion, tuple(position), quaternion, material,
                         self.filters.index(options.get('collision_filter')), report=sounding)
         body = Body(self, uid, kind, node, shape, position, axis_angle, mass,
-                    motion.linearDamping, motion.angularDamping)
+                    motion.linearDamping, motion.angularDamping, float(motion.gravityFactor))
         body.derived = derived
         body.material = named
         body._surface = self._coefficients(material)
@@ -460,7 +493,7 @@ class Physics:
         replica = self._replica
         if replica is not None and uid in replica:
             for character in self._characters:
-                character.controller.ignore.add(replica.index_of(uid))
+                character._controller.ignore.add(replica.index_of(uid))
 
     def passable_slots(self) -> list[int]:
         """The slots, in the render thread's copy of the bodies, of the bodies characters walk through."""
@@ -486,18 +519,18 @@ class Physics:
             return given
         known = self.materials._known.get(given) if isinstance(given, str) else None
         base = known.material if known is not None else (
-            given if isinstance(given, model.Material) else model.Material())
-        return model.Material(
+            Material() if given is None else Material.coerce(given))
+        return Material(
             staticFriction=base.staticFriction if friction is None else float(friction),
             dynamicFriction=base.dynamicFriction if friction is None else float(friction),
             restitution=base.restitution if restitution is None else float(restitution),
             frictionCombine=base.frictionCombine, restitutionCombine=base.restitutionCombine)
 
-    def _coefficients(self, material: Any) -> model.Material:
+    def _coefficients(self, material: Any) -> Material:
         """The coefficients of ``material``: a defined or preset name, a Material, or None for the default."""
         if isinstance(material, str):
             return self.materials.get(material).material
-        return material if isinstance(material, model.Material) else model.Material()
+        return Material.coerce(material)
 
     def _proxy(self, node: Any, proxy: Any, kind: str) -> Proxy:
         dynamic = kind in ('dynamic', 'kinematic')
@@ -507,8 +540,6 @@ class Physics:
             return Proxy.from_node(node, 'auto', dynamic)
         if isinstance(proxy, str):
             return Proxy.from_node(node, proxy, dynamic)
-        if isinstance(proxy, model.Shape):
-            return Proxy(proxy)
         return Proxy.from_node(proxy, 'auto', dynamic)
 
     def scenery_changed(self, root: Any, generation: Any) -> int:
@@ -620,11 +651,10 @@ class Physics:
         appreciably. Options are the material options of :meth:`add_static`.
         """
         low, high = height_range if height_range is not None else _sampled_heights(ground, extent)
-        shape = model.Shape.heightfield(sample=ground.sample, normal=getattr(ground, 'normal', None),
-                                        vectorized=True, extent=extent,
-                                        height_range=(float(low), float(high)),
-                                        feature=float(feature))
-        return self._add_object('static', ground, Proxy(shape), options)
+        proxy = Proxy.heightfield(sample=ground.sample, normal=getattr(ground, 'normal', None),
+                                  vectorized=True, extent=extent,
+                                  height_range=(float(low), float(high)), feature=float(feature))
+        return self._add_object('static', ground, proxy, options)
 
     def _add_object(self, kind: str, key: Any, proxy: Proxy, options: dict[str, Any]) -> Body:
         """A body for something that is not a scenegraph node, found by ``key``."""
@@ -650,7 +680,7 @@ class Physics:
             float(v) for v in orientation)
         place = tuple(float(v) for v in position)
         sounding = self.materials.sound_of(named) is not None
-        spec = BodySpec(uid, kind, proxy, model.Motion(type=model.STATIC), place, quaternion,
+        spec = BodySpec(uid, kind, proxy, omi_adapter.motion('static'), place, quaternion,
                         material, collision_filter, report=sounding)
         body = Body(self, uid, kind, None, proxy, np.asarray(place), quat_to_vrml_rotation(quaternion),
                     0.0)
@@ -704,36 +734,33 @@ class Physics:
         return StaticInstances(self, first, len(points))
 
     def add_gravity_zone(self, region: Any, gravity: Any = 9.81, toward: Any = None,
-                         priority: int = 0, replace: bool = False, stop: bool = False) -> Any:
+                         priority: int = 0, replace: bool = False, stop: bool = False) -> GravityZone:
         """Change gravity inside ``region``, a :class:`~OpenGLContext.physics.zones.Box` or ``Sphere``.
 
-        ``gravity`` is an acceleration vector, or a magnitude pointing down, or
-        toward ``toward``, a point, where that is given. A higher ``priority``
-        wins; ``replace`` drops the lower ones instead of adding to them, and
-        ``stop`` ends the counting at this zone. Returns the volume.
+        ``gravity`` is an acceleration vector in metres a second squared, or a
+        magnitude pointing down, or toward ``toward``, a point, where that is
+        given. A higher ``priority`` wins; ``replace`` drops the lower ones
+        instead of adding to them, and ``stop`` ends the counting at this zone.
         """
         values = np.atleast_1d(np.asarray(gravity, dtype='d'))
-        if toward is not None:
-            field = model.Gravity(type=model.POINT, gravity=float(values[0]), center=tuple(toward),
-                                  priority=priority, replace=replace, stop=stop)
-        elif values.size == 3:
+        strength, direction = float(values[0]), (0.0, -1.0, 0.0)
+        if toward is None and values.size == 3:
             strength = float(np.linalg.norm(values))
-            direction = (0.0, -1.0, 0.0) if strength == 0.0 else tuple(values / strength)
-            field = model.Gravity(gravity=strength, direction=direction, priority=priority,
-                                  replace=replace, stop=stop)
-        else:
-            field = model.Gravity(gravity=float(values[0]), priority=priority, replace=replace,
-                                  stop=stop)
-        volume = GravityVolume(field, region)
-        self._send_world('gravity_zone', volume)
-        return volume
+            if strength > 0.0:
+                direction = (float(values[0] / strength), float(values[1] / strength),
+                             float(values[2] / strength))
+        point = None if toward is None else vector(toward, 'toward')
+        zone = GravityZone(region, strength, direction, point, int(priority),
+                           bool(replace), bool(stop), uid=next(self._zone_ids))
+        self._send_world('gravity_zone', zone)
+        return zone
 
     def zones_changed(self, placed: Any) -> bool:
         """Bring the world's zone gravity to the scene's zones, as the render pass places them.
 
         Returns whether they were other placements than last time.
         """
-        from OpenGLContext.physics.zones import ZoneRegion, gravity_volumes  # noqa: PLC0415 imports the scenegraph
+        from OpenGLContext.physics.zones import ZoneRegion, gravity_zones  # noqa: PLC0415 imports the scenegraph
         from OpenGLContext.scenegraph.zone import GRAVITY  # noqa: PLC0415 imports the scenegraph
 
         carrying = tuple(zone for zone in placed if zone.setting(GRAVITY) is not None)
@@ -741,7 +768,7 @@ class Physics:
                 one is other for one, other in zip(carrying, self._zones_placed, strict=True)):
             return False
         self._zones_placed = carrying
-        self._send_world('gravity_zones', ZoneRegion, gravity_volumes(carrying))
+        self._send_world('gravity_zones', ZoneRegion, gravity_zones(carrying))
         return True
 
     def show_proxies(self, on: bool = True) -> None:
@@ -765,7 +792,7 @@ class Physics:
                       pass_group: str | None = None) -> Character:
         """Make a walker standing with its feet at ``position``.
 
-        ``capabilities`` is a :class:`~omi_physics.character.CharacterCapabilities`
+        ``capabilities`` is a :class:`~OpenGLContext.physics.types.CharacterCapabilities`
         (speeds, jump height, capsule size, mass). The character is stepped in
         :meth:`frame`.
 
@@ -782,9 +809,7 @@ class Physics:
         character is doing. Characters given the same ``pass_group`` name walk
         through one another (:attr:`Character.pass_group`).
         """
-        from omi_physics.character import CharacterCapabilities  # noqa: PLC0415 only a service with walkers needs it
-
-        caps = capabilities if capabilities is not None else CharacterCapabilities()
+        caps = CharacterCapabilities.coerce(capabilities)
         pull = float(np.linalg.norm(self._gravity)) if gravity is None else float(gravity)
         wearing = _model_of(model)
         clip_map = _clip_map_of(animations, wearing)
@@ -836,7 +861,7 @@ class Physics:
         """The kinematic body the world sees for a character, with no node."""
         proxy = stand_in_proxy(capabilities, reach)
         uid = next(self._uids)
-        spec = BodySpec(uid, 'kinematic', proxy, model.Motion(type=model.KINEMATIC),
+        spec = BodySpec(uid, 'kinematic', proxy, omi_adapter.motion('kinematic'),
                         tuple(float(v) for v in centre), (0.0, 0.0, 0.0, 1.0), report=True)
         body = Body(self, uid, 'kinematic', None, proxy, np.asarray(centre, dtype='d'),
                     (0.0, 0.0, 1.0, 0.0), 0.0)
@@ -866,7 +891,7 @@ class Physics:
         It runs on the thread that steps the world, so it reads bodies and
         does not change the scene.
         """
-        made = None if function is None else ContactFilter(function, self._body_of_ref)
+        made = None if function is None else omi_adapter.ContactFilter(function, self._body_of_ref)
         self._send_world('contact_filter', made)
 
     def _body_of_ref(self, ref: Any) -> Body | None:
@@ -912,6 +937,49 @@ class Physics:
         return make_joint(self, 'distance', body, to, anchor=anchor, to_anchor=to_anchor,
                           length=length, collide=collide)
 
+    def add_universal(self, body: Any, to: Any = None, *, anchor: Any, axis: Any, to_axis: Any,
+                      collide: bool = False) -> Joint:
+        """Hold ``body`` to ``to`` at ``anchor`` so a spin about ``axis`` on ``body`` turns ``to_axis`` on ``to``.
+
+        A universal (cardan) joint: ``axis`` turns with ``body`` and
+        ``to_axis`` with ``to`` (the world where ``to`` is None), and the two
+        keep the angle between them they start at. Each body turns freely
+        about its own axis. The axes are world directions as the bodies stand
+        now and must not lie along one line.
+        """
+        return make_joint(self, 'universal', body, to, anchor=anchor, axis=axis, to_axis=to_axis,
+                          collide=collide)
+
+    def add_wheel(self, body: Any, to: Any = None, *, anchor: Any, steering_axis: Any, axle: Any,
+                  steering_limits: Any = None, motor: Any = None, steering_motor: Any = None,
+                  suspension: Any = None, collide: bool = False) -> Joint:
+        """Hold wheel ``body`` to ``to`` so it spins about ``axle`` and steers about ``steering_axis``.
+
+        ``steering_axis`` is carried by ``to`` and ``axle`` by the wheel; both
+        are world directions as the bodies stand now. ``steering_limits`` is
+        ``(lower, upper)`` in radians; equal limits lock the steering.
+        ``motor`` is ``(speed, torque)`` for the axle and ``steering_motor``
+        for the steering, in radians a second and newton-metres.
+        ``suspension`` is ``(stiffness, damping)`` in newtons a metre and
+        newton-seconds a metre, a spring along the steering axis; without it
+        the anchor is held. :attr:`Joint.angles` reads the steering and the spin.
+        """
+        return make_joint(self, 'wheel', body, to, anchor=anchor, axis=steering_axis,
+                          to_axis=axle, limits=steering_limits, motor=motor,
+                          steering_motor=steering_motor, suspension=suspension, collide=collide)
+
+    def add_motor(self, body: Any, to: Any = None, *, axes: Any, torques: Any,
+                  collide: bool = True) -> Joint:
+        """Turn ``body`` against ``to`` about up to three ``axes`` with ``torques``, every step.
+
+        ``axes`` are world directions as the bodies stand now, carried by ``to``
+        (the world where ``to`` is None); ``torques`` are newton-metres, one for
+        each axis, turning ``body`` forward and ``to`` back. The joint holds
+        nothing else, so the two collide unless ``collide`` is false.
+        :meth:`Joint.drive` with ``torques=`` changes them.
+        """
+        return make_joint(self, 'motor', body, to, axes=axes, torques=torques, collide=collide)
+
     def remove(self, body: Body) -> None:
         """Take ``body`` out of the world, with its joints. Removing twice is harmless.
 
@@ -942,7 +1010,7 @@ class Physics:
             replica = self._replica
             if replica is not None and uid in replica:
                 for character in self._characters:
-                    character.controller.ignore.discard(replica.index_of(uid))
+                    character._controller.ignore.discard(replica.index_of(uid))
             self._passable.discard(uid)
 
     def _forget(self, body: Body, seq: int) -> None:
@@ -1060,11 +1128,19 @@ class Physics:
             self._send(Command(op, 0, args, next(self._seq)))
 
     def run(self, function: Callable[[Any], Any]) -> concurrent.futures.Future[Any]:
-        """Call ``function(world)`` on the worker with the raw world; the future holds its answer.
+        """Call ``function(world)`` on the worker with the engine's world; deprecated.
 
-        This reaches what the service has no name for: joints, contact filters,
-        reads of world arrays. A world with no thread running is reached on the
-        calling thread, at once. Each character's stand-in is written first.
+        The future holds its answer. Use :meth:`on_step` for tick-exact code,
+        :meth:`poses` for reads and the joint calls for joints.
+        """
+        _deprecated('run', 'use physics.on_step, physics.poses and the add_* joint calls')
+        return self._run(function)
+
+    def _run(self, function: Callable[[Any], Any]) -> concurrent.futures.Future[Any]:
+        """Call ``function(world)`` on the worker; the future holds its answer.
+
+        A world with no thread running is reached on the calling thread, at
+        once. Each character's stand-in is written first.
         """
         self._bring_up_all()
         future: concurrent.futures.Future[Any] = concurrent.futures.Future()
@@ -1073,25 +1149,26 @@ class Physics:
         return future
 
     def post(self, function: Callable[..., Any], *arguments: Any) -> None:
-        """Call ``function(*arguments)`` on the worker, once its thread next steps; returns None."""
+        """Call ``function(*arguments)`` on the stepping thread before the next step; returns None.
+
+        What it does to bodies through their handles takes effect at once, as
+        in an :meth:`on_step` function.
+        """
         self._send_world('post', function, arguments)
 
     def flush(self) -> None:
         """Apply the commands waiting for the world now, without stepping it.
 
         An inline or standalone service applies a write at the start of its next
-        step; code that reads :attr:`world` between steps calls this first to see
+        step; code that reads the world between steps calls this first to see
         the writes it has just made. A service whose thread is running applies
         them on that thread, and this leaves them there.
         """
         self.worker.flush()
 
     def index_of(self, body: Body) -> int:
-        """The slot of ``body`` in the arrays of :attr:`world`, inline mode only.
-
-        Commands waiting for the world are applied first, so a body added a moment
-        ago has its slot. Raises KeyError for a body the world does not hold.
-        """
+        """The slot of ``body`` in the arrays of :attr:`world`, inline mode only; deprecated."""
+        _deprecated('index_of', 'pass Body handles or uids to physics.poses')
         if not isinstance(self.worker, InlineWorker):
             raise RuntimeError('physics.index_of is for inline mode; the world is on its own thread')
         self._bring_up_all()
@@ -1246,8 +1323,91 @@ class Physics:
         return self._pose_rows
 
     # -- reading ----------------------------------------------------------
-    def _state(self, body: Body) -> _State:
-        state = self._live_state(body) if self.worker.on_worker_thread() else self._published_state(body)
+    def poses(self, bodies: Iterable[Body | int], interpolated: bool = True) -> Poses:
+        """The poses, velocities and masses of ``bodies`` (handles or uids), a row each in that order.
+
+        Read on the render thread, a body that moves is where the frame draws
+        it, part of the way into the next step; ``interpolated=False`` gives
+        where the last step left it. Read on the stepping thread, in an
+        :meth:`on_step` function, the world answers as it stands. Raises
+        KeyError for a uid the service does not hold.
+        """
+        found = [self._held_body(one) for one in bodies]
+        if not found:
+            return Poses.empty()
+        count = len(found)
+        position, orientation = np.empty((count, 3)), np.empty((count, 4))
+        velocity, spin = np.empty((count, 3)), np.empty((count, 3))
+        asleep = np.zeros(count, dtype=bool)
+        rest = self._gather(found, interpolated, position, orientation, velocity, spin, asleep)
+        for row in rest:
+            state = self._state(found[row], interpolated)
+            position[row] = state.position
+            orientation[row] = vrml_rotation_to_quat(np.asarray(state.axis_angle, dtype='d'))
+            velocity[row], spin[row] = state.velocity, state.angular_velocity
+            asleep[row] = state.asleep
+        return Poses(np.array([body.uid for body in found], dtype='i8'), position, orientation,
+                     velocity, spin, np.array([body.mass for body in found], dtype='d'), asleep)
+
+    def _held_body(self, given: Body | int) -> Body:
+        if isinstance(given, Body):
+            return given
+        found = self._body_of(int(given))
+        if found is None:
+            raise KeyError('no body has uid %r in this service' % (given,))
+        return found
+
+    def _gather(self, bodies: Sequence[Body], interpolated: bool, position: np.ndarray,
+                orientation: np.ndarray, velocity: np.ndarray, spin: np.ndarray,
+                asleep: np.ndarray) -> list[int]:
+        """Fill the rows of ``bodies`` the world or the snapshot lists, in bulk; the rows left to fill.
+
+        A body placed by a write the world has not applied yet is left, so its
+        row is read as :attr:`Body.position` reads it.
+        """
+        snapshot = self._snapshot
+        live = self.worker.on_worker_thread()
+        table: dict[int, int]
+        if live:
+            runtime = self.worker.runtime
+            table = {body.uid: runtime.entry(body.uid).index for body in bodies
+                     if body.uid in runtime}
+        else:
+            table = {} if snapshot is None else snapshot.rows
+        rows, wanted = [], []
+        rest = []
+        for row, body in enumerate(bodies):
+            at = table.get(body.uid)
+            if at is None or (body._placed is not None and not live):
+                rest.append(row)
+            else:
+                rows.append(row)
+                wanted.append(at)
+        if rows:
+            take = np.asarray(wanted, dtype='i8')
+            if live:
+                world = self.worker.runtime.world
+                position[rows] = world.position[take]
+                orientation[rows] = world.orientation[take]
+                velocity[rows] = world.linear_velocity[take]
+                spin[rows] = world.angular_velocity[take]
+                asleep[rows] = ~world.awake[take] & (world.motion_type[take] == 2)
+            else:
+                assert snapshot is not None
+                places = (snapshot.step_position if not interpolated
+                          and snapshot.step_position is not None else snapshot.position)
+                turns = (snapshot.step_orientation if not interpolated
+                         and snapshot.step_orientation is not None else snapshot.orientation)
+                position[rows] = places[take]
+                orientation[rows] = turns[take]
+                velocity[rows] = snapshot.linear_velocity[take]
+                spin[rows] = snapshot.angular_velocity[take]
+                asleep[rows] = ~snapshot.awake[take] & snapshot.dynamic[take]
+        return rest
+
+    def _state(self, body: Body, interpolated: bool = True) -> _State:
+        state = (self._live_state(body) if self.worker.on_worker_thread()
+                 else self._published_state(body, interpolated))
         placed = body._placed
         if placed is not None and (placed[0] == 0 or self._snapshot is None
                                    or self._snapshot.applied_seq < placed[0]):
@@ -1263,19 +1423,85 @@ class Physics:
             return self._published_state(body)
         world = runtime.world
         index = runtime.entry(body.uid).index
-        axis_angle = mathutil.quat_to_axis_angle(world.orientation[index][None])[0]
-        return _State(world.position[index].copy(), axis_angle,
+        axis_angle = quat_to_vrml_rotation(world.orientation[index])
+        return _State(world.position[index].copy(), np.asarray(axis_angle, dtype='d'),
                       world.linear_velocity[index].copy(), world.angular_velocity[index].copy(),
                       not bool(world.awake[index]))
 
-    def _published_state(self, body: Body) -> _State:
+    def _published_state(self, body: Body, interpolated: bool = True) -> _State:
         snapshot = self._snapshot
         row = None if snapshot is None else snapshot.rows.get(body.uid)
         if snapshot is None or row is None:
             return _State(body._position, body._axis_angle, _ZERO3, _ZERO3, False)
-        return _State(snapshot.position[row], snapshot.axis_angle[row],
+        position, axis_angle = snapshot.position[row], snapshot.axis_angle[row]
+        if not interpolated and snapshot.step_position is not None:
+            position = snapshot.step_position[row]
+            assert snapshot.step_orientation is not None
+            axis_angle = np.asarray(quat_to_vrml_rotation(snapshot.step_orientation[row]),
+                                    dtype='d')
+        return _State(position, axis_angle,
                       snapshot.linear_velocity[row], snapshot.angular_velocity[row],
                       not bool(snapshot.awake[row]) and bool(snapshot.dynamic[row]))
+
+    def _joint_reading(self, joint: Joint) -> tuple[float, ...]:
+        """``joint``'s readings: live inline and on the stepping thread, else the last published."""
+        worker = self.worker
+        none = (0.0,) * (len(joint.spec.axes) if joint.kind == 'motor'
+                         else len(READINGS.get(joint.kind, ())))
+        if worker.on_worker_thread() or isinstance(worker, InlineWorker):
+            if not worker.on_worker_thread():
+                worker.flush()
+            runtime = worker.runtime
+            return runtime.joints.reading(runtime.world, joint.uid) if joint.uid in runtime.joints else none
+        if not joint._watched:
+            joint._watched = True
+            self._command('joint_watch', joint.body, joint.uid)
+            runtime = worker.runtime
+            first = self._run(lambda _world: runtime.joints.reading(runtime.world, joint.uid)
+                              if joint.uid in runtime.joints else none)
+            try:
+                return tuple(first.result(timeout=self.JOINT_WAIT))
+            except concurrent.futures.TimeoutError:
+                return none
+        snapshot = self._snapshot
+        found = None if snapshot is None else snapshot.joints.get(joint.uid)
+        return none if found is None else found
+
+    #: The seconds the first read of a joint on a world with its own thread waits for the thread.
+    JOINT_WAIT = 0.5
+
+    # -- tick-exact code ----------------------------------------------------
+    def on_step(self, function: Callable[[StepView], Any]) -> StepHook:
+        """Call ``function(view)`` on the stepping thread after every fixed step; returns its hook.
+
+        ``view`` is a :class:`~OpenGLContext.physics.stepview.StepView`: the
+        step, :meth:`poses` and the queries as the world stands. Writes made
+        through body handles in ``function`` take effect at once. The world
+        keeps stepping while a hook is registered; ``hook.cancel()`` removes it.
+        A function that raises is logged once and called again at the next step.
+        """
+        hook = StepHook(function)
+        self._step_hooks.append(hook)
+        self._ensure_started()
+        return hook
+
+    def _run_step_hooks(self, step: Step) -> None:
+        if not self._step_hooks:
+            return
+        view = StepView(self, step)
+        for hook in list(self._step_hooks):
+            if hook.cancelled:
+                self._step_hooks.remove(hook)
+                continue
+            try:
+                hook.function(view)
+            except Exception:
+                if not hook.failed:
+                    hook.failed = True
+                    log.exception('physics step hook %r failed', hook.function)
+
+    def _step_hooks_want_steps(self) -> bool:
+        return any(not hook.cancelled for hook in self._step_hooks)
 
     # -- queries ---------------------------------------------------------
     # -- stand-ins that wait ------------------------------------------------
@@ -1429,8 +1655,10 @@ class Physics:
         An inline service is read live. A service on a thread is read through
         the replica, made on first use.
         """
-        if isinstance(self.worker, InlineWorker):
-            self.worker.flush()
+        live = self.worker.on_worker_thread()
+        if live or isinstance(self.worker, InlineWorker):
+            if not live:
+                self.worker.flush()
             runtime = self.worker.runtime
             world = runtime.world
 
@@ -1465,20 +1693,18 @@ class Physics:
         self._bring_up_along(start[None], np.asarray(direction, dtype='d')[None],
                              float(max_distance), 0.0, skip)
         world, slot, uid_at = self._queryable()
-        found = WorldQuery(world).raycast(origin, direction, float(max_distance),
-                                          self._skipped(skip, slot))
+        found = queries.raycast(world, origin, direction, float(max_distance),
+                                self._skipped(skip, slot))
         return None if found is None else self._hit(found, uid_at)
 
     def raycast_many(self, origins: Any, directions: Any, max_distance: float = 100.0,
                      skip: Any = None) -> list[Hit | None]:
         """Several rays at once, each answered as :meth:`raycast` would answer it."""
-        from omi_physics.raycast import raycast_many  # noqa: PLC0415 only a service that casts needs it
-
         self._bring_up_along(np.asarray(origins, dtype='d').reshape(-1, 3),
                              np.asarray(directions, dtype='d').reshape(-1, 3),
                              float(max_distance), 0.0, skip)
         world, slot, uid_at = self._queryable()
-        found = raycast_many(world, origins, directions, float(max_distance),
+        found = queries.raycast_many(world, origins, directions, float(max_distance),
                              self._skipped(skip, slot))
         return [None if one is None else self._hit(one, uid_at) for one in found]
 
@@ -1511,24 +1737,23 @@ class Physics:
                              np.asarray(direction, dtype='d')[None], float(distance),
                              float(radius), skip)
         world, slot, _uid_at = self._queryable()
-        return sweep_sphere(world, origin, direction, float(distance), float(radius),
+        return queries.sweep_sphere(world, origin, direction, float(distance), float(radius),
                             self._skipped(skip, slot))
 
     def overlap(self, proxy: Any, translation: Any, rotation: Any = None,
                 skip: Any = None, triggers: bool = False) -> list[Body]:
         """The bodies a shape overlaps when placed at ``translation``, turned by ``rotation``.
 
-        ``proxy`` is a :class:`Proxy` or a :class:`~omi_physics.model.Shape`;
-        ``rotation`` is an axis and an angle. The answer lists solid bodies, or
+        ``proxy`` is a :class:`Proxy`; ``rotation`` is an axis and an angle. The answer lists solid bodies, or
         with ``triggers=True`` the trigger volumes the shape is in.
         """
-        shape = proxy.shape if isinstance(proxy, Proxy) else proxy
+        if not isinstance(proxy, Proxy):
+            raise TypeError('overlap takes a Proxy, not %r' % (proxy,))
         quaternion = (np.array([0.0, 0.0, 0.0, 1.0]) if rotation is None
                       else vrml_rotation_to_quat(rotation))
-        self._bring_up_within(*world_aabb(shape, np.asarray(translation, dtype='d'), quaternion),
-                              skip)
+        self._bring_up_within(*queries.proxy_bounds(proxy, translation, quaternion), skip)
         world, slot, uid_at = self._queryable()
-        found = overlapping(world, shape, translation, quaternion, self._skipped(skip, slot),
+        found = queries.overlapping(world, proxy, translation, quaternion, self._skipped(skip, slot),
                             triggers)
         bodies = [self._body_of(uid) for uid in (uid_at(index) for index in found)
                   if uid is not None]
@@ -1770,6 +1995,8 @@ def _checked(options: dict[str, Any]) -> dict[str, Any]:
     for name, bound in _NUMBERS.items():
         if found.get(name) is not None:
             found[name] = number(found[name], name, **{bound: True})
+    if found.get('gravity_factor') is not None:
+        found['gravity_factor'] = number(found['gravity_factor'], 'gravity_factor')
     if found.get('translation') is not None:
         found['translation'] = vector(found['translation'], 'translation')
     if found.get('rotation') is not None:

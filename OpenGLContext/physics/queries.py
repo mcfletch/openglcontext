@@ -1,4 +1,4 @@
-"""Questions asked of a world on the calling thread: sweeps and overlaps.
+"""Questions asked of an omi_physics world on the calling thread: rays, sweeps and overlaps.
 
 These work over a :class:`~omi_physics.world.PhysicsWorld` that the calling
 thread may read: the live world of an inline service, or the render thread's
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import math
 from collections.abc import Collection
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from weakref import WeakKeyDictionary
 
@@ -18,30 +17,19 @@ from omi_physics import model
 from omi_physics.body import SphereProxy, make_proxy, pose_key, world_aabb
 from omi_physics.collide import collide
 
+from OpenGLContext.physics.omi_adapter import omi_shape
+from OpenGLContext.physics.types import Hit
+
 if TYPE_CHECKING:
     from omi_physics.world import PhysicsWorld
 
-    from OpenGLContext.physics.body import Body
+    from OpenGLContext.physics.proxy import Proxy
 
-__all__ = ['Hit', 'overlapping', 'sweep_sphere']
+__all__ = ['Hit', 'overlapping', 'proxy_bounds', 'raycast', 'raycast_many', 'sweep_sphere']
 
 _IDENTITY = np.array([0.0, 0.0, 0.0, 1.0])
 #: How many halvings find where a swept sphere first touches.
 _BISECTIONS = 14
-
-
-@dataclass(frozen=True, slots=True)
-class Hit:
-    """What a ray met: the body, the point, the surface normal there and how far along it was.
-
-    ``triangle`` is the number of the triangle struck, or -1 for a shape that
-    has none. ``body`` is None for a body the service has no handle for.
-    """
-    body: Body | None
-    point: np.ndarray
-    normal: np.ndarray
-    distance: float
-    triangle: int
 
 
 def _candidates(world: PhysicsWorld, lo: np.ndarray, hi: np.ndarray,
@@ -152,15 +140,38 @@ def _reach_along(world: PhysicsWorld, index: int, start: np.ndarray, heading: np
     return first - slack, last + slack
 
 
-def overlapping(world: PhysicsWorld, shape: model.Shape, position: Any, orientation: Any,
+def overlapping(world: PhysicsWorld, proxy: Proxy, position: Any, orientation: Any,
                 skip: Collection[int] = (), triggers: bool = False) -> list[int]:
-    """Indices of the solid bodies, or with ``triggers`` the trigger volumes, ``shape`` overlaps.
+    """Indices of the solid bodies, or with ``triggers`` the trigger volumes, ``proxy`` overlaps.
 
-    ``shape`` is placed at ``position`` and ``orientation`` (a quaternion).
+    ``proxy`` is placed at ``position`` and ``orientation`` (a quaternion).
     """
+    shape = omi_shape(proxy)
     quaternion = np.asarray(orientation, dtype='d')
     centre = np.asarray(position, dtype='d')
     lo, hi = world_aabb(shape, centre, quaternion)
     probe = make_proxy(shape, centre, quaternion)
     return [j for j in _candidates(world, lo, hi, skip, triggers)
             if collide(-1, j, probe, _proxy(world, j, triggers))]
+
+
+def raycast(world: PhysicsWorld, origin: Any, direction: Any, distance: float,
+            skip: Collection[int]) -> Any:
+    """omi's first hit of a ray, or None, passing through the bodies in slots ``skip``."""
+    from omi_physics.collisionquery import WorldQuery  # noqa: PLC0415 only a service that casts needs it
+
+    return WorldQuery(world).raycast(origin, direction, float(distance), skip)
+
+
+def raycast_many(world: PhysicsWorld, origins: Any, directions: Any, distance: float,
+                 skip: Collection[int]) -> list[Any]:
+    """omi's first hit of each ray, or None for each that meets nothing."""
+    from omi_physics.raycast import raycast_many as cast  # noqa: PLC0415 only a service that casts needs it
+
+    return list(cast(world, origins, directions, float(distance), skip))
+
+
+def proxy_bounds(proxy: Proxy, position: Any, orientation: Any) -> tuple[np.ndarray, np.ndarray]:
+    """The world box of ``proxy`` at ``position`` turned by the quaternion ``orientation``."""
+    low, high = world_aabb(omi_shape(proxy), np.asarray(position, dtype='d'), orientation)
+    return np.asarray(low), np.asarray(high)

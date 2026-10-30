@@ -7,7 +7,7 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
-from omi_physics.character import CharacterState
+from OpenGLContext.physics import CharacterState
 
 from ._locomotion_assets import marching, striding, walker_glb, waving
 
@@ -129,7 +129,7 @@ def test_slide_can_be_steered_and_gone_on_with_and_ended(me):
     assert me.velocity[2] == pytest.approx(6.0, abs=0.1)
     assert me.extend_slide(0.8)
     me.step(TICK)
-    assert me.controller.height == pytest.approx(me.capabilities.crouchHeight, abs=1e-9)
+    assert me._controller.height == pytest.approx(me.capabilities.crouchHeight, abs=1e-9)
     assert me.end_slide()
     assert me.state is CharacterState.STANDING
     assert not me.end_slide()

@@ -1,28 +1,51 @@
 """Proxy: the shape that stands for a node in the physics world.
 
-A :class:`Proxy` wraps an :class:`omi_physics.model.Shape` and gives it an
-identity, so many bodies can share one cooked shape and the world holds it once.
+A :class:`Proxy` is a kind of shape and its parameters, with an identity, so
+many bodies can share one cooked shape and the world holds it once.
 :meth:`Proxy.from_node` cooks one from the triangles a node draws, by a strategy
 name: ``'sphere'`` and ``'box'`` fit a primitive to the bounds, ``'convex'``
 takes the hull, ``'trimesh'`` keeps the triangles (static bodies only), and
 ``'auto'`` is the triangles for a static body and the hull for a dynamic one.
+
+The kinds, and the parameters each has (lengths in metres):
+
+``box``
+    ``size``, the full extents ``(x, y, z)``.
+``sphere``
+    ``radius``.
+``capsule``
+    ``height``, the length of the straight middle, and ``radius``.
+``cylinder``
+    ``height``, end to end, ``radius`` at the bottom and ``radius_top``.
+``convex``
+    ``points``, an ``(n, 3)`` array whose hull is the shape.
+``trimesh``
+    ``points`` and ``indices``, ``(t, 3)`` triangles; static bodies only.
+``compound``
+    ``parts``, each ``(proxy, position, orientation)`` in the body's frame,
+    the orientation a quaternion ``(x, y, z, w)``.
+``heightfield``
+    The arguments of :meth:`Proxy.heightfield`.
 """
 from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Iterable
+import types
+import warnings
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 import numpy as np
-from omi_physics import cookery, hull, model
 
-__all__ = ['DEFAULT_DENSITY', 'STRATEGIES', 'Proxy']
+__all__ = ['DEFAULT_DENSITY', 'KINDS', 'STRATEGIES', 'Proxy']
 
 #: Kilograms a cubic metre of a body weighs when the application names no mass.
 DEFAULT_DENSITY = 500.0
 #: The strategy names :meth:`Proxy.from_node` accepts.
 STRATEGIES = ('auto', 'sphere', 'box', 'convex', 'trimesh')
+#: The kinds of shape a proxy is.
+KINDS = ('box', 'sphere', 'capsule', 'cylinder', 'convex', 'trimesh', 'compound', 'heightfield')
 
 _ids = itertools.count(1)
 
@@ -30,53 +53,100 @@ _ids = itertools.count(1)
 class Proxy:
     """A collision shape, shared by every body made with it."""
 
-    def __init__(self, shape: model.Shape) -> None:
+    def __init__(self, kind: str, params: Mapping[str, Any] | None = None) -> None:
+        if kind not in KINDS:
+            raise ValueError('unknown proxy kind %r; choose from %s' % (kind, ', '.join(KINDS)))
         #: Distinguishes this proxy from every other for as long as the process runs.
         self.uid = next(_ids)
-        self.shape = shape
+        #: One of :data:`KINDS`.
+        self.kind = kind
+        #: The shape's parameters by name, as the module's table gives them; read-only.
+        self.params: Mapping[str, Any] = types.MappingProxyType(dict(params or {}))
+        #: The engine's own shape, made by the engine adapter on first use.
+        self._engine_shape: Any = None
 
     def __repr__(self) -> str:
-        return 'Proxy(%s, uid=%d)' % (self.shape.type, self.uid)
+        return 'Proxy(%s, uid=%d)' % (self.kind, self.uid)
+
+    @property
+    def shape(self) -> Any:
+        """The engine's shape for this proxy; deprecated, read :attr:`kind` and :attr:`params`."""
+        warnings.warn('Proxy.shape is the engine\'s shape and is going away; read Proxy.kind '
+                      'and Proxy.params', DeprecationWarning, stacklevel=2)
+        from OpenGLContext.physics.omi_adapter import omi_shape  # noqa: PLC0415 the engine loads on use
+
+        return omi_shape(self)
 
     # -- by hand --------------------------------------------------------
     @classmethod
     def box(cls, size: Iterable[float] = (1.0, 1.0, 1.0)) -> Proxy:
         """A box of full extents ``size``."""
-        return cls(model.Shape.box(tuple(float(v) for v in size)))
+        return cls('box', {'size': tuple(float(v) for v in size)})
 
     @classmethod
     def sphere(cls, radius: float = 0.5) -> Proxy:
         """A sphere of ``radius``."""
-        return cls(model.Shape.sphere(radius))
+        return cls('sphere', {'radius': float(radius)})
 
     @classmethod
     def capsule(cls, height: float = 1.0, radius: float = 0.5) -> Proxy:
         """A capsule whose straight middle is ``height`` long."""
-        return cls(model.Shape.capsule(height, radius))
+        return cls('capsule', {'height': float(height), 'radius': float(radius)})
 
     @classmethod
-    def cylinder(cls, height: float = 2.0, radius: float = 0.5) -> Proxy:
-        """A cylinder ``height`` long end to end."""
-        return cls(model.Shape.cylinder(height, radius))
+    def cylinder(cls, height: float = 2.0, radius: float = 0.5,
+                 radius_top: float | None = None) -> Proxy:
+        """A cylinder ``height`` long end to end; ``radius_top`` narrows its top (0 is a cone)."""
+        return cls('cylinder', {'height': float(height), 'radius': float(radius),
+                                'radius_top': float(radius if radius_top is None else radius_top)})
 
     @classmethod
     def convex(cls, points: Any) -> Proxy:
         """The convex hull of ``points``, an ``(n, 3)`` array."""
-        return cls(model.Shape.convex(points))
+        return cls('convex', {'points': np.asarray(points, dtype='d')})
 
     @classmethod
     def trimesh(cls, points: Any, indices: Any) -> Proxy:
         """A static triangle mesh from vertices and ``(t, 3)`` triangle indices."""
-        return cls(model.Shape.trimesh(points, indices))
+        return cls('trimesh', {'points': np.asarray(points, dtype='d'),
+                               'indices': np.asarray(indices, dtype='i')})
+
+    @classmethod
+    def compound(cls, parts: Iterable[tuple[Proxy, Iterable[float], Iterable[float]]]) -> Proxy:
+        """Several proxies held in one body, each ``(proxy, position, orientation)`` in its frame."""
+        return cls('compound', {'parts': tuple(
+            (part, tuple(float(v) for v in position), tuple(float(v) for v in orientation))
+            for part, position, orientation in parts)})
 
     @classmethod
     def heightfield(cls, heights: Any = None, origin: Iterable[float] = (0.0, 0.0, 0.0),
-                    spacing: Any = 1.0, **named: Any) -> Proxy:
-        """Static ground that answers a height at each ``(x, z)``: a grid of ``heights``, or ``sample=`` a function.
+                    spacing: Any = 1.0, *, sample: Callable[..., Any] | None = None,
+                    normal: Callable[..., Any] | None = None, extent: Any = None,
+                    vectorized: bool = False, height_range: Any = None,
+                    feature: float = 1.0) -> Proxy:
+        """Static ground that answers a height at each ``(x, z)``: a grid of ``heights``, or ``sample`` a function.
 
-        The arguments are those of :meth:`omi_physics.model.Shape.heightfield`.
+        ``heights[j, i]`` is the height at ``x = origin[0] + i * spacing``,
+        ``z = origin[2] + j * spacing``, added to ``origin[1]``; ``spacing``
+        is one number or ``(along x, along z)``. ``sample(x, z)`` answers the
+        height, given arrays where ``vectorized``; ``normal(x, z)`` the unit
+        normal, else the slope of ``sample``. ``extent`` is ``((x_min, z_min),
+        (x_max, z_max))`` or None for land without an edge, ``height_range``
+        ``(lowest, highest)``, and ``feature`` the horizontal distance over
+        which the land changes appreciably. Everything below the surface is solid.
         """
-        return cls(model.Shape.heightfield(heights, tuple(origin), spacing, **named))
+        if (heights is None) == (sample is None):
+            raise ValueError('a heightfield is given heights or a sample function, not both '
+                             'and not neither')
+        params: dict[str, Any]
+        if heights is not None:
+            params = {'heights': np.asarray(heights, dtype='d'), 'origin': tuple(origin),
+                      'spacing': spacing}
+        else:
+            params = {'sample': sample, 'normal': normal, 'extent': extent,
+                      'vectorized': bool(vectorized), 'height_range': height_range,
+                      'feature': float(feature)}
+        return cls('heightfield', params)
 
     # -- from what is drawn ---------------------------------------------
     @classmethod
@@ -115,33 +185,34 @@ class Proxy:
         if strategy == 'auto' and dynamic:
             exact = _exact_primitive(points)
             if exact is not None:
-                return cls(exact)
-        cooked = cookery.cook_shape(points, indices, 'convex' if strategy == 'convex' else 'auto',
-                                    dynamic)
-        if isinstance(cooked, list):
-            return cls(model.Shape.compound([(piece, (0.0, 0.0, 0.0)) for piece in cooked]))
-        return cls(cooked)
+                return exact
+        from OpenGLContext.physics.omi_adapter import cook  # noqa: PLC0415 the engine loads on use
+
+        return cook(points, indices, strategy, dynamic)
 
     # -- measures -------------------------------------------------------
     def volume(self) -> float:
         """The volume of the shape in cubic metres; a mesh is measured by its bounds."""
-        shape = self.shape
-        if shape.type == 'box':
-            return float(np.prod(shape.size))
-        if shape.type == 'sphere':
-            return 4.0 / 3.0 * math.pi * shape.radius ** 3
-        if shape.type == 'capsule':
-            radius = shape.radiusBottom
-            return math.pi * radius ** 2 * shape.height + 4.0 / 3.0 * math.pi * radius ** 3
-        if shape.type == 'cylinder':
-            return math.pi * (shape.radiusBottom + shape.radiusTop) ** 2 / 4.0 * shape.height
-        if shape.type == 'compound' and shape.parts:
-            return sum(Proxy(part.shape).volume() for part in shape.parts)
-        points = shape.points
+        params = self.params
+        if self.kind == 'box':
+            return float(np.prod(params['size']))
+        if self.kind == 'sphere':
+            return 4.0 / 3.0 * math.pi * params['radius'] ** 3
+        if self.kind == 'capsule':
+            radius = params['radius']
+            return math.pi * radius ** 2 * params['height'] + 4.0 / 3.0 * math.pi * radius ** 3
+        if self.kind == 'cylinder':
+            return (math.pi * (params['radius'] + params['radius_top']) ** 2 / 4.0
+                    * params['height'])
+        if self.kind == 'compound':
+            return sum(part.volume() for part, _position, _orientation in params['parts'])
+        points = params.get('points')
         if points is None or len(points) == 0:
             return 0.0
-        if shape.type == 'convex':
-            return _hull_volume(points)
+        if self.kind == 'convex':
+            from OpenGLContext.physics.omi_adapter import hull_volume  # noqa: PLC0415 the engine loads on use
+
+            return hull_volume(points)
         return float(np.prod(points.max(axis=0) - points.min(axis=0)))
 
     def mass(self, density: float = DEFAULT_DENSITY) -> float:
@@ -149,7 +220,7 @@ class Proxy:
         return max(self.volume() * float(density), 0.001)
 
 
-def _exact_primitive(points: np.ndarray) -> model.Shape | None:
+def _exact_primitive(points: np.ndarray) -> Proxy | None:
     """A box or a sphere the vertices are exactly, else None.
 
     A box mesh has every vertex at a corner of its bounds. A sphere mesh has
@@ -163,22 +234,10 @@ def _exact_primitive(points: np.ndarray) -> model.Shape | None:
     scale = float(size.max())
     unit = (points - lo) / size
     if np.all(np.minimum(unit, 1.0 - unit) < 1e-6):
-        return model.Shape.box(tuple(size))
+        return Proxy.box(tuple(size))
     middle = (lo + hi) / 2.0
     radii = np.linalg.norm(points - middle, axis=1)
     if (np.ptp(size) < 0.02 * scale and np.ptp(radii) < 0.02 * scale
             and abs(radii.mean() - scale / 2.0) < 0.02 * scale):
-        return model.Shape.sphere(float(radii.mean()))
+        return Proxy.sphere(float(radii.mean()))
     return None
-
-
-def _hull_volume(points: np.ndarray) -> float:
-    """The volume of the convex hull of ``points``, from tetrahedra to its centroid."""
-    vertices, faces = hull.convex_hull(points)
-    if len(faces) == 0:
-        return float(np.prod(np.maximum(points.max(axis=0) - points.min(axis=0), 1e-6)))
-    centre = vertices.mean(axis=0)
-    a = vertices[faces[:, 0]] - centre
-    b = vertices[faces[:, 1]] - centre
-    c = vertices[faces[:, 2]] - centre
-    return float(abs(np.einsum('ij,ij->i', a, np.cross(b, c)).sum()) / 6.0)

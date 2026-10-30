@@ -11,6 +11,7 @@ from OpenGLContext.scenegraph import basenodes, surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.zone import Zone, ZoneGravity
 from OpenGLContext.testing.audio import RecordingAudio
+from OpenGLContext.testing import physics as physics_testing
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -93,7 +94,7 @@ def test_a_ground_is_a_static_body_found_by_the_object(physics):
 
 def test_the_grounds_bounds_are_found_by_sampling_when_none_are_given(physics):
     body = physics.add_ground(Slope(), extent=((-10, -10), (10, 10)))
-    assert body.proxy.shape.type == 'heightfield'
+    assert body.proxy.kind == 'heightfield'
 
 
 def test_a_ground_takes_the_material_it_is_given(physics):
@@ -117,7 +118,7 @@ def test_a_ball_struck_on_a_ground_of_a_material_with_a_sound_plays_it():
 
 def test_proxy_heightfield_wraps_a_grid_of_heights():
     proxy = Proxy.heightfield(heights=np.zeros((4, 4)), spacing=2.0)
-    assert proxy.shape.type == 'heightfield'
+    assert proxy.kind == 'heightfield'
 
 
 # -- instances --------------------------------------------------------------
@@ -219,7 +220,7 @@ def test_every_pair_of_a_grid_of_materials_keeps_its_own_friction(physics):
     world = physics.worker.runtime.world
 
     def material_of(name):
-        return int(world.collider_material[physics.slot_of(bodies[name])])
+        return int(world.collider_material[physics_testing.slot_of(physics, bodies[name])])
 
     for (marble, surface), friction in grips.items():
         found = world.pair_friction_for(material_of(marble), material_of(surface))
@@ -229,16 +230,16 @@ def test_every_pair_of_a_grid_of_materials_keeps_its_own_friction(physics):
 def test_a_body_and_its_slot_in_the_world_name_each_other(physics):
     first = physics.add_dynamic(ball(), proxy='sphere')
     second = physics.add_dynamic(ball(at=(3, 3, 0)), proxy='sphere')
-    world = physics.world
-    assert physics.slot_of(first) != physics.slot_of(second)
-    assert world.position[physics.slot_of(second)][0] == pytest.approx(3.0)
-    assert physics.body_at(physics.slot_of(first)) is first
-    assert physics.body_at(physics.slot_of(second)) is second
+    world = physics_testing.inspect(physics)
+    assert physics_testing.slot_of(physics, first) != physics_testing.slot_of(physics, second)
+    assert world.position[physics_testing.slot_of(physics, second)][0] == pytest.approx(3.0)
+    assert physics_testing.body_at(physics, physics_testing.slot_of(physics, first)) is first
+    assert physics_testing.body_at(physics, physics_testing.slot_of(physics, second)) is second
 
 
 def test_a_slot_with_no_body_names_none(physics):
-    assert physics.body_at(0) is None
-    assert physics.body_at(99) is None
+    assert physics_testing.body_at(physics, 0) is None
+    assert physics_testing.body_at(physics, 99) is None
 
 
 def test_materials_are_listed_and_can_be_read_back(physics):

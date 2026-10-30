@@ -8,7 +8,7 @@ import time
 
 import numpy as np
 import pytest
-from omi_physics.character import CharacterCapabilities, CharacterState
+from OpenGLContext.physics import CharacterCapabilities, CharacterState
 
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition

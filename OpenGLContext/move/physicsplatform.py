@@ -52,7 +52,7 @@ class PhysicsViewPlatform:
         steps it, and :meth:`update` does.
         """
         platform = cls.__new__(cls)
-        platform.character = character.controller
+        platform.character = character._controller
         platform.yaw = yaw
         platform.pitch = 0.0
         platform.managed = character

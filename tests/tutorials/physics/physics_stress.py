@@ -8,8 +8,9 @@ islands, and sleeping under load.  The SoA world runs the per-body integration o
 numpy for small scenes and hands off to the GPU compute backend past ~10k awake
 bodies (``gpu_threshold``); press ``b`` to switch backends live and watch the step
 time change (the GPU win is largest for big collider-free swarms).
-``physics.backend`` names the backend, and assigning ``'gpu'``, ``'numpy'`` or
-``'auto'`` chooses another from the next step.  The GPU backend needs GL compute
+``physics.engine.compute`` names the backend, and a definition whose ``backend``
+is ``'gpu'``, ``'numpy'`` or ``'auto'``, given to ``physics.set_config``, chooses
+another from the next step.  The GPU backend needs GL compute
 on the thread that steps the world, so this script steps it in the frame with
 ``mode='inline'``.
 
@@ -65,7 +66,7 @@ class TestContext(BaseContext):
         self.addEventHandler('keypress', name='r', function=self.on_reset)
         self.addEventHandler('keypress', name=' ', function=self.on_add_wave)
         self.addEventHandler('keypress', name='b', function=self.on_toggle_backend)
-        print('physics backend:', self.physics.backend, flush=True)
+        print('physics:', self.physics.engine, self.physics.engine.compute, flush=True)
 
     def on_reset(self, event):
         for body in self.bodies:
@@ -78,9 +79,10 @@ class TestContext(BaseContext):
 
     def on_toggle_backend(self, event):
         '''A backend that cannot be made logs why, and the world keeps the one it has.'''
-        self.physics.backend = 'numpy' if self.physics.backend == 'glcompute' else 'gpu'
+        wanted = 'numpy' if self.physics.engine.compute == 'glcompute' else 'gpu'
+        self.physics.set_config(self.physics.definition.replaced(backend=wanted))
         self.physics.flush()
-        print('physics backend:', self.physics.backend, flush=True)
+        print('physics:', self.physics.engine, self.physics.engine.compute, flush=True)
 
     def build(self):
         '''A shallow bowl: a floor and four walls, shapes of the scene and so

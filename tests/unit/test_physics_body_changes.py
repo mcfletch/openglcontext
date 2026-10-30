@@ -11,6 +11,7 @@ import pytest
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.testing import physics as physics_testing
 
 
 def make(mode):
@@ -33,7 +34,7 @@ def settle(physics, frames=3):
         if physics.definition.mode == 'thread':
             physics.flush()
             time.sleep(1 / 60)
-    physics.run(lambda world: None).result(5.0)
+    physics_testing.run(physics, lambda world: None).result(5.0)
 
 
 def column(physics, body, name):
@@ -42,7 +43,7 @@ def column(physics, body, name):
     def read(world):
         slot['value'] = np.array(getattr(world, name)[physics.worker.runtime.entry(body.uid).index])
 
-    physics.run(read).result(5.0)
+    physics_testing.run(physics, read).result(5.0)
     return slot['value']
 
 
@@ -80,7 +81,7 @@ def test_set_material_gives_the_body_the_material_and_its_coefficients(physics):
     settle(physics)
     index = int(column(physics, body, 'collider_material'))
     found = {}
-    physics.run(lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
+    physics_testing.run(physics, lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
     assert (found['m'].dynamicFriction, found['m'].restitution) == (0.9, 0.8)
 
 
@@ -93,7 +94,7 @@ def test_set_material_takes_a_material_the_application_defined(physics):
     settle(physics)
     index = int(column(physics, body, 'collider_material'))
     found = {}
-    physics.run(lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
+    physics_testing.run(physics, lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
     assert found['m'].staticFriction == 0.95
 
 
@@ -107,7 +108,7 @@ def test_set_friction_and_set_restitution_change_one_coefficient_each(physics):
     settle(physics)
     index = int(column(physics, body, 'collider_material'))
     found = {}
-    physics.run(lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
+    physics_testing.run(physics, lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
     material = found['m']
     assert (material.staticFriction, material.dynamicFriction, material.restitution) == (0.1, 0.1, 0.7)
 
@@ -119,7 +120,7 @@ def test_the_same_coefficients_share_one_material_in_the_world(physics):
         second.set_friction(0.3)
     settle(physics)
     count = {}
-    physics.run(lambda world: count.setdefault('n', len(world.materials))).result(5.0)
+    physics_testing.run(physics, lambda world: count.setdefault('n', len(world.materials))).result(5.0)
     assert int(column(physics, first, 'collider_material')) == int(
         column(physics, second, 'collider_material'))
     assert count['n'] <= 2
@@ -207,6 +208,6 @@ def test_a_crate_made_heavy_after_it_was_added_blocks_a_walker(mode):
                 time.sleep(1 / 60)
         assert crate.position[0] == pytest.approx(2.0, abs=0.15)
         assert me.position[0] < 1.4
-        assert me.controller.pushing is None      # the character's copy weighs it too
+        assert me._controller.pushing is None      # the character's copy weighs it too
     finally:
         physics.close()

@@ -117,6 +117,12 @@ class Snapshot:
     changed: np.ndarray | None = None
     #: The version ``changed`` is counted from.
     base: int = -1
+    #: The positions and orientations the last step left, before ``alpha`` carried them on;
+    #: None where they are ``position`` and ``orientation``.
+    step_position: np.ndarray | None = None
+    step_orientation: np.ndarray | None = None
+    #: The readings of the joints asked for: angles in radians, slides in metres, by joint id.
+    joints: dict[int, tuple[float, ...]] = field(default_factory=dict)
 
     def changed_since(self, version: int | None) -> np.ndarray | None:
         """The rows to read for a reader whose last snapshot was ``version``; None for every row."""

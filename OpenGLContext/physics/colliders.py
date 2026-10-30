@@ -22,6 +22,7 @@ from omi_physics import model
 
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.gltf_world import MeshSite, _mesh_positions_indices, iter_meshes, site_mesh
+from OpenGLContext.physics.omi_adapter import proxy_from_shape
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.records import BodySpec
 
@@ -96,7 +97,7 @@ class SceneryTracker:
             return 0
         proxy = proxies.get(shape_index)
         if proxy is None:
-            proxy = proxies[shape_index] = Proxy(document.shapes[shape_index])
+            proxy = proxies[shape_index] = proxy_from_shape(document.shapes[shape_index])
         motion = body.motion or model.Motion(type=model.STATIC)
         material = None
         if body.collider is not None and 0 <= body.collider.physicsMaterial < len(document.materials):

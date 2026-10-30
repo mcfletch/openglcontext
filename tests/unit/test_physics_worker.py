@@ -10,6 +10,7 @@ from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.records import BodySpec, Command
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker
+from OpenGLContext.testing import physics as physics_testing
 
 
 def definition(**named) -> PhysicsDefinition:
@@ -371,7 +372,7 @@ def test_settle_and_run_end_when_the_thread_has_failed():
         started = time.monotonic()
         assert service.worker.settle(timeout=2.0) is False
         assert time.monotonic() - started < 1.0
-        future = service.run(lambda world: 1)
+        future = physics_testing.run(service, lambda world: 1)
         with pytest.raises(StepFault):
             future.result(timeout=1.0)
         with pytest.raises(RuntimeError, match='physics') as raised:

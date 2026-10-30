@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from omi_physics import model
 
+from OpenGLContext.physics.omi_adapter import omi_shape
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.sources import Addition, Changes
 
@@ -185,7 +186,7 @@ class PropColliders:
             self.world.remove_body(self._bodies.pop(key))
         for item in changes.add:
             addition = item if isinstance(item, Addition) else Addition(*item)
-            shape = self.world.add_shape(addition.proxy.shape)
+            shape = self.world.add_shape(omi_shape(addition.proxy))
             self._bodies[addition.key] = int(self.world.add_body(
                 model.Motion(type=model.STATIC), collider=model.Collider(shape=shape),
                 position=tuple(addition.position),

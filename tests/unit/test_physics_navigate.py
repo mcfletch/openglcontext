@@ -86,6 +86,6 @@ def test_q_turns_left_and_e_turns_right(navigator):
 @gl
 def test_f_flies_and_walks_again(navigator):
     navigator.on_fly(None)
-    assert navigator.hero.controller.flying
+    assert navigator.hero._controller.flying
     navigator.on_fly(None)
-    assert not navigator.hero.controller.flying
+    assert not navigator.hero._controller.flying

@@ -7,7 +7,7 @@ of the seconds since the run began.
 """
 import numpy as np
 import pytest
-from omi_physics.character import CharacterCapabilities
+from OpenGLContext.physics import CharacterCapabilities
 
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition

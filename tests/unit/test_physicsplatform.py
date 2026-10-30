@@ -13,6 +13,7 @@ from omi_physics import model
 from omi_physics.world import PhysicsWorld
 from omi_physics.character import CharacterCapabilities
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from OpenGLContext.testing import physics as physics_testing
 
 
 def _ground_world():
@@ -285,7 +286,7 @@ class TestOverAServiceCharacter:
         service.frame(0.5)
         platform = PhysicsViewPlatform.over(me)
         assert platform.camera_position() == pytest.approx(tuple(me.eye))
-        assert platform.character is me.controller
+        assert platform.character is me._controller
         service.close()
 
     def test_update_does_not_step_the_character(self):

@@ -14,9 +14,13 @@ import OpenGLContext.physics as physics
     ('Proxy', 'OpenGLContext.physics.proxy'),
     ('Joint', 'OpenGLContext.physics.joints'),
     ('PhysicsDefinition', 'OpenGLContext.physics.settings'),
-    ('CharacterCapabilities', 'omi_physics.character'),
-    ('Material', 'omi_physics.model'),
-    ('CollisionFilter', 'omi_physics.model'),
+    ('CharacterCapabilities', 'OpenGLContext.physics.types'),
+    ('CharacterState', 'OpenGLContext.physics.types'),
+    ('Material', 'OpenGLContext.physics.types'),
+    ('CollisionFilter', 'OpenGLContext.physics.types'),
+    ('Poses', 'OpenGLContext.physics.types'),
+    ('EngineInfo', 'OpenGLContext.physics.types'),
+    ('GravityZone', 'OpenGLContext.physics.types'),
 ])
 def test_each_name_is_the_class_of_its_home_module(name, home):
     module = __import__(home, fromlist=[name])

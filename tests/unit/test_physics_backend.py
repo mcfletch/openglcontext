@@ -1,4 +1,4 @@
-"""``physics.backend``: the name of the compute backend the world steps with, and choosing another."""
+"""The compute backend the world steps with: ``physics.engine.compute``, and choosing another by the definition."""
 import logging
 
 import pytest
@@ -15,35 +15,37 @@ def physics():
     service.close()
 
 
+def choose(physics, name):
+    physics.set_config(physics.definition.replaced(backend=name))
+    physics.flush()
+
+
 def test_the_backend_is_named(physics):
-    assert physics.backend == physics.worker.runtime.world.backend.name
+    assert physics.engine.compute == physics.worker.runtime.world.backend.name
 
 
 def test_choosing_numpy_steps_the_world_on_numpy(physics):
-    physics.backend = 'numpy'
-    physics.flush()
-    assert physics.backend == 'numpy'
+    choose(physics, 'numpy')
+    assert physics.engine.compute == 'numpy'
 
 
 def test_a_backend_that_cannot_be_made_leaves_the_world_as_it_was(physics, caplog, monkeypatch):
-    physics.backend = 'numpy'
-    physics.flush()
+    choose(physics, 'numpy')
 
     def unavailable(prefer):
         raise RuntimeError('no GL 4.3 compute on this thread')
 
     monkeypatch.setattr(world, 'select_backend', unavailable)
     with caplog.at_level(logging.WARNING, logger='OpenGLContext.physics.runtime'):
-        physics.backend = 'gpu'
-        physics.flush()
-    assert physics.backend == 'numpy'
+        choose(physics, 'gpu')
+    assert physics.engine.compute == 'numpy'
     assert 'no GL 4.3 compute' in caplog.text
 
 
 @pytest.mark.parametrize('name', ['quantum', 42, None])
 def test_an_unknown_backend_name_is_refused(physics, name):
     with pytest.raises(ValueError, match='backend'):
-        physics.backend = name
+        choose(physics, name)
 
 
 def test_the_backend_variable_is_the_definitions_default(monkeypatch):
@@ -76,7 +78,7 @@ def test_a_definition_asking_for_a_backend_that_cannot_be_made_keeps_the_default
     monkeypatch.setattr(world, 'select_backend', unavailable)
     service = Physics(PhysicsDefinition(mode='inline', backend='gpu'))
     try:
-        assert service.backend == 'numpy'
+        assert service.engine.compute == 'numpy'
         assert 'no GL 4.3 compute' in caplog.text
     finally:
         service.close()
