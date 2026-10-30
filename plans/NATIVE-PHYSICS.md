@@ -576,7 +576,7 @@ of C++ and ran correctly in both builds.
 | P1 | World thread, settings, command batches, snapshot pool, event ring with pair aggregation, sleep events, shapes (primitives, hull, mesh, heightfield grid, compound), bodies in bulk, materials without pair grid, CCD, lockstep, applied log, `at_tick`, fork and atexit hooks, double precision | unit suite; the differential scenarios for bodies, shapes, sleep, triggers and CCD against omi; ASan run; the free-threaded wheel through the same suite | differential tolerances met; determinism and fork tests green on both builds; 5,000 active boxes within 10% of the spike's times | 3 to 4; done 2026-10-30 (P1a and P1b below) |
 | P2 | Queries (synchronous and batched), the character controller port over `CharacterVirtual`, character against character, heightfield tiles from a sample function | differential character and query scenarios; the omi character tests (the behaviour-level ones) ported as conformance | every character scenario within tolerance; a 300-character heightfield world steps under 4 ms on 8 threads | 4 to 5 |
 | P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3 |
-| P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4 |
+| P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4; P4a (the neutral API) done 2026-10-30, below |
 | P5 | Default `engine='jolt'`; `pyjoltphysics` a hard dependency; omi fallback, `worker.py`, `runtime.py`, `replica.py`, `queries.py` deleted; golden results recorded from omi; docs (`docs/physics.rst`, a page on the world thread, callbacks and determinism); omi_physics marked deprecated | full workspace `verify-everything.py`; preflight for openglcontext and pyjoltphysics | the games run on Jolt with no `engine` setting; marble-demo off direct omi imports; docs merged | 1 to 2 |
 | P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8 |
 
@@ -722,6 +722,43 @@ the one failure was the 10,000-post tick bound (26.7 ms under the sanitizers), w
 P2 starts from: shape ids for character and query shapes, `heightfield_tiles` for the sample-function
 ground (tiles sampled around the foci, added and removed as batches), the world lock's shared side
 for queries, and `SMOOTH_EDGES` to decide on for characters' inner bodies.
+
+### P4a as built (2026-10-30)
+
+P4a is the neutral public API of `OpenGLContext.physics`, still on omi_physics: commits 142c81d2,
+6b4d3d5c and 65d75a56 on `openglcontext` branch `neutral-api` (off `develop` fcef17af).
+
+- `physics/types.py`: `Material`, `CollisionFilter`, `CharacterCapabilities` (OMI field names and
+  defaults), `CharacterState`, `EngineInfo`, `Poses`, `GravityZone`, `Hit`. An object with the
+  same fields (an omi instance) is accepted at the boundary; `Material`, `CollisionFilter` and
+  `CharacterState` compare equal to omi's of the same values.
+- `physics/omi_adapter.py` holds the conversions: materials, presets, filters, capabilities, state,
+  proxy to omi `Shape` (made once a proxy), cooking, hull volume, gravity, gravity volumes, motion,
+  the contact filter. `runtime.py` holds `JointTable` and `build_joint`.
+- New calls: `physics.poses(bodies, interpolated=)`, `physics.engine`, `physics.on_step(fn)` with a
+  `StepView` (`physics/stepview.py`), `add_universal`, `add_wheel`, `add_motor`, `Joint.angles`,
+  `angle`, `position`, `drive(torques=)`, `Body.gravity_factor`, `set_gravity_factor`,
+  `step_position`, the `gravity_factor` add option, `Character.vertical_speed`, `height`, `radius`,
+  `stuck`, `motion_state`. `Proxy` is `kind` and `params`; `overlap` takes a `Proxy` only;
+  `zones.Box` and `zones.Sphere` are own classes; `set_config` applies a changed `backend` and
+  `engine.compute` names it. `BodySpec` carries a neutral `records.Motion`.
+- Deprecated aliases, each warning once a process, kept while the games use them: `physics.world`,
+  `backend`, `slot_of`, `body_at`, `index_of`, `run`, `Character.controller`, `Proxy.shape`.
+  `Character.state` answers omi's member (equal to `CharacterState`) because hill-runner compares it
+  with `is`; it becomes the `CharacterState` member when the games migrate. The commit after the
+  migration removes the aliases.
+- `OpenGLContext.testing.physics` (`inspect`, `slot_of`, `body_at`, `run`) reads the omi world for
+  tests; the engine suite's tests that read omi arrays use it.
+- Still importing omi_physics in `OpenGLContext/physics/`: `omi_adapter`, `runtime`, `worker`,
+  `replica`, `queries`, `character` (the controller), `colliders` and `gltf_world` (glTF
+  documents), `props` and `debugdraw` (plain omi worlds), `x3drigid` (X3D's own world). Outside it:
+  `move/physicswalk.py`, `move/physicsplatform.py`, `move/terrainwalk.py`,
+  `loaders/tiles3d/physics_colliders.py`, `loaders/gltf/scene.py`, `passes/zonelayers.py`,
+  `bin/physics_cook.py`, `bin/terrain_view.py`. No public signature or value names an omi type
+  (`tests/unit/test_physics_neutral_types.py` walks the API).
+- The games on `develop` pass against the branch unchanged. Their migration list is in the P4a
+  report; marble-demo's mechanisms move to `poses`, `on_step` and `set_gravity_factor`, glisteel's
+  car keeps the raw world until vehicles (P6).
 
 ## 7. Decisions
 
