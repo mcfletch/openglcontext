@@ -1,7 +1,8 @@
 # Native physics: pyjoltphysics
 
-Status: **Planned.** Decision taken 2026-10-26; design spiked the same day. No production code
-changed, and the `pyjoltphysics` repository is not created yet.
+Status: **P0 landed 2026-10-30.** Decision taken 2026-10-26; design spiked the same day. The
+`pyjoltphysics` repository exists locally (commit 8d671b7 on `develop`) with no GitHub remote
+yet; its workspace registration waits for the remote (see "P0 as built" below).
 
 The decision (maintainer): the engine steps its rigid bodies with Jolt Physics through a wrapper
 of our own. Jolt always runs on a background thread owned by the wrapper, never inline and never
@@ -538,6 +539,28 @@ The benchmark suite re-runs the spike's cases (`native/scenes.py`: active and se
 piles, characters among posts and on a heightfield, chains, scattered rays and sweeps) and the
 service frame costs of `framecost/bench.py`, writes JSON, and gates only coarse regressions under
 the `serial` marker.
+
+### P0 as built (2026-10-30)
+
+Where the repository departs from the layout above:
+
+- Jolt v5.6.0 (commit e77f1755) is a git submodule at `extern/JoltPhysics`. The sdist carries
+  `Jolt/`, `Build/CMakeLists.txt`, `LICENSE` and `README.md` from it (scikit-build-core
+  `sdist.include`; it walks the tree rather than `git ls-files`), 938 KB, and builds offline.
+- The module is `pyjoltphysics._native`, from `src/_native.cpp`; its stub is `_native.pyi`.
+- Workflows are `test.yml` (tox suite on 3.10 to 3.14 with lint, typecheck and stubs on 3.12;
+  cibuildwheel on six runners; sdist installed and tested from the unpacked archive) and
+  `release.yml` (calls `test.yml` and publishes its artifacts). No `asan` job yet.
+- cibuildwheel is pinned at 3.4.1: the 4.x series builds no cp313t.
+- Jolt's `INTERPROCEDURAL_OPTIMIZATION` is off: a static archive of LTO objects hands LTO to
+  whichever linker reads it.
+- Wheel, Linux x86_64, gcc 13.3: 857 KB, module 1.88 MB, one exported symbol.
+- `tools/release.py` reads only setuptools' `attr` version; the root patch teaches it
+  scikit-build-core's regex provider, with two tests.
+- The root registration (submodule, uv source, preflight and release entries,
+  `verify-everything.py`, CLAUDE.md) is a patch waiting for the GitHub remote. It does not list
+  the project under `[tool.opengl-dev.pre-release]`, since a pre-release checkout has no
+  preflight gates and P0 is done when preflight runs them.
 
 ## 6. Phases
 
