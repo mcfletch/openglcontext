@@ -7,8 +7,10 @@ scenegraph. The application adds bodies and reads and changes them through
     body = physics.add_dynamic(ball, translation=(0, 4.5, -2), mass=2.0)
     body.apply_impulse((0, 0, 3))
 
-The world is stepped by a worker, on a thread of its own or inline in the frame
-hook (:mod:`OpenGLContext.physics.worker`). Changes travel to it as plain-data
+The world is stepped by an engine (:mod:`OpenGLContext.physics.engine`):
+omi_physics on a thread of its own or inline in the frame hook, or Jolt on
+pyjoltphysics' world thread, free-running or in lockstep with the frame
+(``PhysicsDefinition.engine``). Changes travel to it as plain-data
 commands; results come back once a frame in :meth:`Physics.frame`, which writes
 poses onto the nodes, delivers events to their handlers and applies the scene
 changes handlers queued from the worker. A ``Physics`` holds no GL and needs no
@@ -36,18 +38,18 @@ from OpenGLContext.events.framestep import FixedSteps
 from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.character import Character, stand_in_proxy
+from OpenGLContext.physics.engine import Engine, make_engine
 from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
-from OpenGLContext.physics import omi_adapter, queries
+from OpenGLContext.physics import queries
 from OpenGLContext.physics.filters import Approach, Filters
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
 from OpenGLContext.physics.joints import READINGS, Joint, make_joint
 from OpenGLContext.physics.materials import Materials
 from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_pose
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
-from OpenGLContext.physics.queries import Hit
 from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.records import (
     BodyBatch, BodySpec, Command, Motion, PhysicsEvent, Snapshot, Step,
@@ -56,9 +58,8 @@ from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import BACKENDS, PhysicsDefinition
 from OpenGLContext.physics.stepview import StepHook, StepView
 from OpenGLContext.physics.types import (
-    CharacterCapabilities, EngineInfo, GravityZone, Material, Poses, WorldCounts,
+    CharacterCapabilities, EngineInfo, GravityZone, Hit, Material, Poses, WorldCounts,
 )
-from OpenGLContext.physics.worker import InlineWorker, ThreadWorker, Worker
 
 __all__ = ['Physics']
 
@@ -145,11 +146,12 @@ class Physics:
         #: The last failure logged for each source and character (:meth:`_guarded`).
         self._failures: weakref.WeakKeyDictionary[Any, tuple[type, str]] = weakref.WeakKeyDictionary()
         #: The worker error :meth:`frame` has raised, so it is raised once.
-        self._raised: Exception | None = None
+        self._raised: BaseException | None = None
         #: Removed bodies whose handlers end once the world has applied the removal
         #: and their last events are delivered: (command sequence, id).
         self._gone: list[tuple[int, int]] = []
-        self.worker: Worker = self._make_worker(definition.mode, None)
+        #: The engine that steps the world (:mod:`OpenGLContext.physics.engine`).
+        self._engine: Engine = make_engine(definition, wake=wake)
         self._install_hooks()
         self.scenery = SceneryTracker(self)
         #: The spec of each body in the world, to build the replica from when queries need it.
@@ -175,26 +177,41 @@ class Physics:
         self._step_hooks: list[StepHook] = []
         self._zone_ids = itertools.count(1)
 
-    # -- the worker -----------------------------------------------------
-    def _make_worker(self, mode: str, runtime: Any) -> Worker:
-        if mode == 'inline':
-            return InlineWorker(self.definition, runtime=runtime)
-        return ThreadWorker(self.definition, wake=self._wake, runtime=runtime)
+    # -- the engine -----------------------------------------------------
+    @property
+    def worker(self) -> Any:
+        """The omi engine's worker, which steps its world; on another engine, the engine."""
+        return getattr(self._engine, 'worker', self._engine)
 
     def _install_hooks(self) -> None:
-        runtime = self.worker.runtime
-        runtime.on_events.append(self._on_worker_events)
-        runtime.before_step.append(self._run_step_handlers('before-step'))
-        runtime.after_step.append(self._run_step_handlers('after-step'))
-        runtime.wants_steps.append(self.handlers.has_step_handlers)
-        runtime.before_step.append(self._settle_stand_ins)
-        runtime.wants_steps.append(self._stand_ins_want_steps)
-        runtime.after_step.append(self._run_step_hooks)
-        runtime.wants_steps.append(self._step_hooks_want_steps)
+        engine = self._engine
+        engine.on_events.append(self._on_worker_events)
+        engine.before_step.append(self._run_step_handlers('before-step'))
+        engine.after_step.append(self._run_step_handlers('after-step'))
+        engine.wants_steps.append(self.handlers.has_step_handlers)
+        if engine.stand_ins:
+            engine.before_step.append(self._settle_stand_ins)
+            engine.wants_steps.append(self._stand_ins_want_steps)
+            engine.replica = self._character_replica
+        engine.material_of = lambda name: self.materials.get(name).material
+        engine.body_of = self._body_of
+        engine.framed_characters = lambda: [one for one in self._characters if one.framed]
+        engine.after_step.append(self._run_step_hooks)
+        engine.wants_steps.append(self._step_hooks_want_steps)
 
     def _ensure_started(self) -> None:
         if self._enabled and not self._closed:
-            self.worker.start()
+            self._engine.start()
+
+    @property
+    def _omi(self) -> Any:
+        """The omi engine; RuntimeError on another engine, which has no omi_physics world."""
+        engine = self._engine
+        if engine.name != 'omi':
+            raise RuntimeError('this reads the omi_physics world, and the world is stepped by '
+                               'the %s engine; read bodies with physics.poses and run '
+                               'tick-exact code with physics.on_step' % (engine.name,))
+        return engine
 
     @property
     def closed(self) -> bool:
@@ -204,8 +221,7 @@ class Physics:
     @property
     def engine(self) -> EngineInfo:
         """The engine that steps the world: its name, version, step rate and precision."""
-        return omi_adapter.engine_info(float(self.definition.tickHz),
-                                       str(self.worker.runtime.world.backend.name))
+        return self._engine.info()
 
     @property
     def counts(self) -> WorldCounts:
@@ -244,7 +260,7 @@ class Physics:
         Assigning one of :attr:`BACKENDS` chooses another from the next step.
         """
         _deprecated('backend', 'read physics.engine, or set PhysicsDefinition.backend')
-        return str(self.worker.runtime.world.backend.name)
+        return self._engine.info().compute
 
     @backend.setter
     def backend(self, name: str) -> None:
@@ -253,10 +269,10 @@ class Physics:
             raise ValueError('backend must be one of %s, not %r' % (', '.join(self.BACKENDS), name))
         self._send_world('backend', name)
 
-    def _inline(self) -> InlineWorker:
-        """The worker, where it steps inline; RuntimeError where it has a thread."""
-        if isinstance(self.worker, InlineWorker):
-            return self.worker
+    def _inline(self) -> Any:
+        """The omi worker, where it steps inline; RuntimeError where it has a thread."""
+        if self._omi.mode == 'inline':
+            return self._omi.worker
         raise RuntimeError('the engine\'s world is read inline only; a world on its own thread '
                            'is read with physics.poses and physics.on_step')
 
@@ -299,6 +315,9 @@ class Physics:
         """
         definition.validate()
         self._bring_up_all()
+        if definition.engine != self.definition.engine:
+            raise ValueError('the engine is chosen when the service is made; this one runs %s'
+                             % (self.definition.engine,))
         if definition.backend != self.definition.backend:
             self._send_world('backend', str(definition.backend))
         self.definition = definition
@@ -308,7 +327,7 @@ class Physics:
         if self._mode() != self._worker_mode():
             self._switch(self._mode())
         elif not self._enabled:
-            self.worker.stop()
+            self._engine.stop()
         elif self._movers:
             self._ensure_started()
 
@@ -322,6 +341,7 @@ class Physics:
         finds while drawing one frame is in the world for the next frame's step.
         """
         self._pinned = bool(on)
+        self._engine.pin(self._pinned)
         if self._mode() != self._worker_mode():
             self._switch(self._mode())
 
@@ -330,7 +350,7 @@ class Physics:
         return 'inline' if self._pinned else self.definition.mode
 
     def _worker_mode(self) -> str:
-        return 'inline' if isinstance(self.worker, InlineWorker) else 'thread'
+        return self._engine.mode
 
     def _switch(self, mode: str) -> None:
         """Step the world in ``mode`` from now on, carrying the waiting commands over in order.
@@ -339,15 +359,7 @@ class Physics:
         still in a step once the worker's stop has waited for it.
         """
         self._bring_up_all()
-        old = self.worker
-        if not old.stop():
-            raise RuntimeError('the physics thread is still in its step; the world stays '
-                               'on it in %s mode' % self._worker_mode())
-        pending = old.inbox.drain()
-        new = self._make_worker(mode, old.runtime)
-        for command in pending:
-            new.inbox.post(command)
-        self.worker = new
+        self._engine.set_mode(mode)
         if self._movers:
             self._ensure_started()
 
@@ -365,7 +377,7 @@ class Physics:
         self._bring_up_all()
         self._enabled = bool(on)
         if not self._enabled:
-            self.worker.stop()
+            self._engine.stop()
         elif self._movers:
             self._ensure_started()
 
@@ -388,8 +400,8 @@ class Physics:
         they are given. A world that is not busy is not stepped, so its clock
         stands while nothing moves.
         """
-        if self.worker.on_worker_thread():
-            return float(self.worker.runtime.world.time)
+        if self._engine.on_engine_thread():
+            return self._engine.live_time()
         snapshot = self._snapshot
         return 0.0 if snapshot is None else float(snapshot.time)
 
@@ -509,13 +521,22 @@ class Physics:
 
     def _let_characters_through(self, uid: int) -> None:
         """Have the controllers of the characters walk through body ``uid``."""
+        if not self._engine.stand_ins:
+            for character in self._characters:
+                character._controller.ignore.add(uid)
+            return
         replica = self._replica
         if replica is not None and uid in replica:
             for character in self._characters:
                 character._controller.ignore.add(replica.index_of(uid))
 
     def passable_slots(self) -> list[int]:
-        """The slots, in the render thread's copy of the bodies, of the bodies characters walk through."""
+        """The slots, in the render thread's copy of the bodies, of the bodies characters walk through.
+
+        On an engine with no stand-ins, the bodies' uids.
+        """
+        if not self._engine.stand_ins:
+            return sorted(self._passable)
         replica = self._character_replica()
         return [replica.index_of(uid) for uid in self._passable if uid in replica]
 
@@ -795,6 +816,10 @@ class Physics:
         from OpenGLContext.physics.debugdraw import PROXIES, PhysicsDebugDraw  # noqa: PLC0415 imports the scenegraph
 
         if on and self._overlay is None and self._mount is not None:
+            if not self._engine.stand_ins:
+                log.warning('the proxy overlay draws the omi engine\'s copy of the world; '
+                            'the %s engine has none', self._engine.name)
+                return
             self._bring_up_all()
             self._overlay = PhysicsDebugDraw(self._character_replica().world, flags=PROXIES)
             self._overlay.update()
@@ -876,6 +901,14 @@ class Physics:
             self._replica = build(self._specs, self._snapshot)
         return self._replica
 
+    def _register_body(self, kind: str, proxy: Proxy, centre: Any) -> Body:
+        """A body of ``kind`` with no node the engine made itself, such as a character's capsule."""
+        uid = next(self._uids)
+        body = Body(self, uid, kind, None, proxy, np.asarray(centre, dtype='d'),
+                    (0.0, 0.0, 1.0, 0.0), 0.0)
+        self._bodies[uid] = body
+        return body
+
     def _add_standin(self, centre: Any, capabilities: Any, reach: float) -> Body:
         """The kinematic body the world sees for a character, with no node."""
         proxy = stand_in_proxy(capabilities, reach)
@@ -910,13 +943,8 @@ class Physics:
         It runs on the thread that steps the world, so it reads bodies and
         does not change the scene.
         """
-        made = None if function is None else omi_adapter.ContactFilter(function, self._body_of_ref)
-        self._send_world('contact_filter', made)
-
-    def _body_of_ref(self, ref: Any) -> Body | None:
-        """The body a world reference names, on the stepping thread."""
-        uid = self.worker.runtime.world.handle_of(ref)
-        return None if uid is None else self._body_of(int(uid))
+        if not self._closed:
+            self._engine.set_contact_filter(function)
 
     # -- joints (OpenGLContext.physics.joints) ----------------------------
     def add_hinge(self, body: Any, to: Any = None, *, anchor: Any, axis: Any,
@@ -1008,7 +1036,7 @@ class Physics:
         if not body.alive:
             return
         body.alive = False
-        on_worker = self.worker.on_worker_thread()
+        on_worker = self._engine.on_engine_thread()
         if on_worker:
             self.render.call(self._unpass, body.uid)
         else:
@@ -1027,7 +1055,10 @@ class Physics:
         before the slot is freed for another body."""
         if uid in self._passable:
             replica = self._replica
-            if replica is not None and uid in replica:
+            if not self._engine.stand_ins:
+                for character in self._characters:
+                    character._controller.ignore.discard(uid)
+            elif replica is not None and uid in replica:
                 for character in self._characters:
                     character._controller.ignore.discard(replica.index_of(uid))
             self._passable.discard(uid)
@@ -1103,14 +1134,14 @@ class Physics:
         on the worker thread is applied to the world at once and to them in
         the next :meth:`frame`.
         """
-        if self.worker.on_worker_thread():
-            self.worker.submit(command)
+        if self._engine.on_engine_thread():
+            self._engine.submit(command)
             self.render.call(self._record, command)
             return
         try:
             self._record(command)
         finally:
-            self.worker.submit(command)
+            self._engine.submit(command)
 
     def _record(self, command: Command) -> None:
         """Bring the specs, and the replica where there is one, to what ``command`` makes of the world."""
@@ -1164,7 +1195,7 @@ class Physics:
         self._bring_up_all()
         future: concurrent.futures.Future[Any] = concurrent.futures.Future()
         self._send_world('run', function, future)
-        self.worker.flush()
+        self._engine.flush()
         return future
 
     def post(self, function: Callable[..., Any], *arguments: Any) -> None:
@@ -1181,18 +1212,19 @@ class Physics:
         An inline or standalone service applies a write at the start of its next
         step; code that reads the world between steps calls this first to see
         the writes it has just made. A service whose thread is running applies
-        them on that thread, and this leaves them there.
+        them on that thread, and this leaves them there. A Jolt world applies
+        commands only at the start of a tick, so this does nothing there.
         """
-        self.worker.flush()
+        self._engine.flush()
 
     def index_of(self, body: Body) -> int:
         """The slot of ``body`` in the arrays of :attr:`world`, inline mode only; deprecated."""
         _deprecated('index_of', 'pass Body handles or uids to physics.poses')
-        if not isinstance(self.worker, InlineWorker):
+        if self._omi.mode != 'inline':
             raise RuntimeError('physics.index_of is for inline mode; the world is on its own thread')
         self._bring_up_all()
         self.flush()
-        return int(self.worker.runtime.entry(body.uid).index)
+        return int(self._omi.runtime.entry(body.uid).index)
 
     def drop_remainder(self) -> None:
         """Forget the time carried over toward the next step.
@@ -1208,7 +1240,7 @@ class Physics:
     # -- the frame ----------------------------------------------------------
     def step(self, dt: float) -> None:
         """Advance the world by ``dt`` seconds by hand, for a service nothing else steps."""
-        self.worker.step(dt)
+        self._engine.step(dt)
 
     def frame(self, dt: float) -> bool:
         """Do the render thread's share of one frame; True if the scene changed or is still moving.
@@ -1233,7 +1265,7 @@ class Physics:
             self._wait_for_scenery()
         self._pump_cooked()
         self._raise_worker_error()
-        out = self.worker.collect(dt)
+        out = self._engine.collect(dt)
         for character in self._characters:
             character._fresh = False
         if out.snapshot is not None:
@@ -1250,7 +1282,7 @@ class Physics:
             self._guarded(handle, handle.update)
         walking = False
         steps, alpha = self._character_steps(dt)
-        step = self.worker.runtime.step_dt
+        step = self._engine.step_dt
         for character in list(self._characters):
             if character.framed:
                 self._guarded(character, character._frame, steps, step, dt, alpha)
@@ -1263,11 +1295,11 @@ class Physics:
 
     def _character_steps(self, dt: float) -> tuple[int, float]:
         """The fixed steps the characters owe this frame, and how far through the next one it ends."""
-        worker = self.worker
-        if isinstance(worker, InlineWorker):
-            return worker.owed, worker.runtime.clock.alpha
-        clock, runtime = self._character_clock, worker.runtime
-        clock.step, clock.longest = runtime.step_dt, runtime.max_catch_up
+        engine = self._engine
+        if engine.mode == 'inline' or not engine.stand_ins:
+            return engine.character_steps(dt)
+        clock = self._character_clock
+        clock.step, clock.longest = engine.step_dt, engine.max_catch_up
         return clock.owed(dt), clock.alpha
 
     def _guarded(self, owner: Any, function: Callable[..., Any], *arguments: Any) -> None:
@@ -1385,47 +1417,43 @@ class Physics:
         row is read as :attr:`Body.position` reads it.
         """
         snapshot = self._snapshot
-        live = self.worker.on_worker_thread()
-        table: dict[int, int]
-        if live:
-            runtime = self.worker.runtime
-            table = {body.uid: runtime.entry(body.uid).index for body in bodies
-                     if body.uid in runtime}
-        else:
-            table = {} if snapshot is None else snapshot.rows
-        rows, wanted = [], []
         rest = []
+        if self._engine.on_engine_thread():
+            found = self._engine.live_poses([body.uid for body in bodies])
+            for row, body in enumerate(bodies):
+                live = found.get(body.uid)
+                if live is None:
+                    rest.append(row)
+                    continue
+                position[row], orientation[row] = live.position, live.orientation
+                velocity[row], spin[row] = live.velocity, live.angular_velocity
+                asleep[row] = live.asleep
+            return rest
+        table: dict[int, int] = {} if snapshot is None else snapshot.rows
+        rows, wanted = [], []
         for row, body in enumerate(bodies):
             at = table.get(body.uid)
-            if at is None or (body._placed is not None and not live):
+            if at is None or body._placed is not None:
                 rest.append(row)
             else:
                 rows.append(row)
                 wanted.append(at)
         if rows:
             take = np.asarray(wanted, dtype='i8')
-            if live:
-                world = self.worker.runtime.world
-                position[rows] = world.position[take]
-                orientation[rows] = world.orientation[take]
-                velocity[rows] = world.linear_velocity[take]
-                spin[rows] = world.angular_velocity[take]
-                asleep[rows] = ~world.awake[take] & (world.motion_type[take] == 2)
-            else:
-                assert snapshot is not None
-                places = (snapshot.step_position if not interpolated
-                          and snapshot.step_position is not None else snapshot.position)
-                turns = (snapshot.step_orientation if not interpolated
-                         and snapshot.step_orientation is not None else snapshot.orientation)
-                position[rows] = places[take]
-                orientation[rows] = turns[take]
-                velocity[rows] = snapshot.linear_velocity[take]
-                spin[rows] = snapshot.angular_velocity[take]
-                asleep[rows] = ~snapshot.awake[take] & snapshot.dynamic[take]
+            assert snapshot is not None
+            places = (snapshot.step_position if not interpolated
+                      and snapshot.step_position is not None else snapshot.position)
+            turns = (snapshot.step_orientation if not interpolated
+                     and snapshot.step_orientation is not None else snapshot.orientation)
+            position[rows] = places[take]
+            orientation[rows] = turns[take]
+            velocity[rows] = snapshot.linear_velocity[take]
+            spin[rows] = snapshot.angular_velocity[take]
+            asleep[rows] = ~snapshot.awake[take] & snapshot.dynamic[take]
         return rest
 
     def _state(self, body: Body, interpolated: bool = True) -> _State:
-        state = (self._live_state(body) if self.worker.on_worker_thread()
+        state = (self._live_state(body) if self._engine.on_engine_thread()
                  else self._published_state(body, interpolated))
         placed = body._placed
         if placed is not None and (placed[0] == 0 or self._snapshot is None
@@ -1437,15 +1465,12 @@ class Physics:
         return state
 
     def _live_state(self, body: Body) -> _State:
-        runtime = self.worker.runtime
-        if body.uid not in runtime:
+        live = self._engine.live_poses([body.uid]).get(body.uid)
+        if live is None:
             return self._published_state(body)
-        world = runtime.world
-        index = runtime.entry(body.uid).index
-        axis_angle = quat_to_vrml_rotation(world.orientation[index])
-        return _State(world.position[index].copy(), np.asarray(axis_angle, dtype='d'),
-                      world.linear_velocity[index].copy(), world.angular_velocity[index].copy(),
-                      not bool(world.awake[index]))
+        axis_angle = quat_to_vrml_rotation(live.orientation)
+        return _State(live.position, np.asarray(axis_angle, dtype='d'), live.velocity,
+                      live.angular_velocity, live.asleep)
 
     def _published_state(self, body: Body, interpolated: bool = True) -> _State:
         snapshot = self._snapshot
@@ -1464,30 +1489,8 @@ class Physics:
 
     def _joint_reading(self, joint: Joint) -> tuple[float, ...]:
         """``joint``'s readings: live inline and on the stepping thread, else the last published."""
-        worker = self.worker
-        none = (0.0,) * (len(joint.spec.axes) if joint.kind == 'motor'
-                         else len(READINGS.get(joint.kind, ())))
-        if worker.on_worker_thread() or isinstance(worker, InlineWorker):
-            if not worker.on_worker_thread():
-                worker.flush()
-            runtime = worker.runtime
-            return runtime.joints.reading(runtime.world, joint.uid) if joint.uid in runtime.joints else none
-        if not joint._watched:
-            joint._watched = True
-            self._command('joint_watch', joint.body, joint.uid)
-            runtime = worker.runtime
-            first = self._run(lambda _world: runtime.joints.reading(runtime.world, joint.uid)
-                              if joint.uid in runtime.joints else none)
-            try:
-                return tuple(first.result(timeout=self.JOINT_WAIT))
-            except concurrent.futures.TimeoutError:
-                return none
-        snapshot = self._snapshot
-        found = None if snapshot is None else snapshot.joints.get(joint.uid)
-        return none if found is None else found
+        return self._engine.joint_reading(joint, self._snapshot)
 
-    #: The seconds the first read of a joint on a world with its own thread waits for the thread.
-    JOINT_WAIT = 0.5
 
     # -- tick-exact code ----------------------------------------------------
     def on_step(self, function: Callable[[StepView], Any]) -> StepHook:
@@ -1531,8 +1534,8 @@ class Physics:
         another character's controller reads the stand-ins from the replica,
         which follows each write as it is asked for.
         """
-        return (len(self._characters) == 1 and isinstance(self.worker, InlineWorker)
-                and self._enabled and not self._closed and self._overlay is None)
+        return (len(self._characters) == 1 and self._engine.stand_ins
+                and self._engine.mode == 'inline' and self._enabled and not self._closed and self._overlay is None)
 
     def _bring_up_all(self) -> None:
         """Make every waiting stand-in write now."""
@@ -1570,7 +1573,7 @@ class Physics:
         moves is grown by :attr:`SEEN_MARGIN` and by twice what its speed, its
         spin about the far corner of its box and gravity can carry it in a step.
         """
-        runtime = self.worker.runtime
+        runtime = self._omi.runtime
         world = runtime.world
         uid = character.body.uid
         if uid not in runtime:
@@ -1653,7 +1656,7 @@ class Physics:
             return
         skipped = (set() if skip is None else {skip.uid} if isinstance(skip, Body)
                    else {body.uid for body in skip})
-        runtime = self.worker.runtime
+        runtime = self._omi.runtime
         for character in waiting:
             uid = character.body.uid
             if uid in skipped:
@@ -1668,38 +1671,12 @@ class Physics:
                     character._bring_up()
                     break
 
-    def _queryable(self) -> tuple[Any, Callable[[int], int | None], Callable[[int], int | None]]:
-        """The world this thread may read, and how to turn body ids into its slots and back.
-
-        An inline service is read live. A service on a thread is read through
-        the replica, made on first use.
-        """
-        live = self.worker.on_worker_thread()
-        if live or isinstance(self.worker, InlineWorker):
-            if not live:
-                self.worker.flush()
-            runtime = self.worker.runtime
-            world = runtime.world
-
-            def slot(uid: int) -> int | None:
-                return runtime.entry(uid).index if uid in runtime else None
-
-            def uid_at(index: int) -> int | None:
-                handle = world.handle_of(world.ref(index))
-                return None if handle is None else int(handle)
-
-            return world, slot, uid_at
-        if self._replica is None:
-            self._replica = build(self._specs, self._snapshot)
-        replica = self._replica
-        return (replica.world, lambda uid: replica._index.get(uid), replica.uid_at)
-
     @staticmethod
-    def _skipped(skip: Any, slot: Callable[[int], int | None]) -> set[int]:
+    def _skipped(skip: Any) -> set[int]:
         if skip is None:
             return set()
         bodies = [skip] if isinstance(skip, Body) else list(skip)
-        return {index for index in (slot(body.uid) for body in bodies) if index is not None}
+        return {body.uid for body in bodies}
 
     def raycast(self, origin: Any, direction: Any, max_distance: float = 100.0,
                 skip: Any = None) -> Hit | None:
@@ -1711,10 +1688,8 @@ class Physics:
         start = np.asarray(origin, dtype='d')
         self._bring_up_along(start[None], np.asarray(direction, dtype='d')[None],
                              float(max_distance), 0.0, skip)
-        world, slot, uid_at = self._queryable()
-        found = queries.raycast(world, origin, direction, float(max_distance),
-                                self._skipped(skip, slot))
-        return None if found is None else self._hit(found, uid_at)
+        found = self._engine.raycast(origin, direction, float(max_distance), self._skipped(skip))
+        return None if found is None else self._hit(found)
 
     def raycast_many(self, origins: Any, directions: Any, max_distance: float = 100.0,
                      skip: Any = None) -> list[Hit | None]:
@@ -1722,10 +1697,9 @@ class Physics:
         self._bring_up_along(np.asarray(origins, dtype='d').reshape(-1, 3),
                              np.asarray(directions, dtype='d').reshape(-1, 3),
                              float(max_distance), 0.0, skip)
-        world, slot, uid_at = self._queryable()
-        found = queries.raycast_many(world, origins, directions, float(max_distance),
-                             self._skipped(skip, slot))
-        return [None if one is None else self._hit(one, uid_at) for one in found]
+        found = self._engine.raycast_many(origins, directions, float(max_distance),
+                                          self._skipped(skip))
+        return [None if one is None else self._hit(one) for one in found]
 
     def line_of_sight(self, start: Any, end: Any, skip: Any = None) -> bool:
         """Whether no body lies between the points ``start`` and ``end``.
@@ -1741,8 +1715,8 @@ class Physics:
             return True
         return self.raycast(first, gap, distance, skip=skip) is None
 
-    def _hit(self, found: Any, uid_at: Callable[[int], int | None]) -> Hit:
-        uid = uid_at(int(found.body))
+    def _hit(self, found: Any) -> Hit:
+        uid = found.uid
         return Hit(None if uid is None else self._body_of(uid), np.asarray(found.point),
                    np.asarray(found.normal), float(found.distance), int(found.triangle))
 
@@ -1755,9 +1729,8 @@ class Physics:
         self._bring_up_along(np.asarray(origin, dtype='d')[None],
                              np.asarray(direction, dtype='d')[None], float(distance),
                              float(radius), skip)
-        world, slot, _uid_at = self._queryable()
-        return queries.sweep_sphere(world, origin, direction, float(distance), float(radius),
-                            self._skipped(skip, slot))
+        return self._engine.sweep_sphere(origin, direction, float(distance), float(radius),
+                                         self._skipped(skip))
 
     def overlap(self, proxy: Any, translation: Any, rotation: Any = None,
                 skip: Any = None, triggers: bool = False) -> list[Body]:
@@ -1770,12 +1743,10 @@ class Physics:
             raise TypeError('overlap takes a Proxy, not %r' % (proxy,))
         quaternion = (np.array([0.0, 0.0, 0.0, 1.0]) if rotation is None
                       else vrml_rotation_to_quat(rotation))
-        self._bring_up_within(*queries.proxy_bounds(proxy, translation, quaternion), skip)
-        world, slot, uid_at = self._queryable()
-        found = queries.overlapping(world, proxy, translation, quaternion, self._skipped(skip, slot),
-                            triggers)
-        bodies = [self._body_of(uid) for uid in (uid_at(index) for index in found)
-                  if uid is not None]
+        if self._engine.stand_ins:
+            self._bring_up_within(*queries.proxy_bounds(proxy, translation, quaternion), skip)
+        found = self._engine.overlap(proxy, translation, quaternion, self._skipped(skip), triggers)
+        bodies = [self._body_of(uid) for uid in found]
         return [body for body in bodies if body is not None]
 
     # -- events -------------------------------------------------------------
@@ -1931,13 +1902,13 @@ class Physics:
 
     # -- accounting ---------------------------------------------------------
     @property
-    def error(self) -> Exception | None:
-        """The exception that stopped the worker's thread, or None."""
-        return self.worker.error
+    def error(self) -> BaseException | None:
+        """The exception that stopped the engine's thread, or None."""
+        return self._engine.error
 
     def _raise_worker_error(self) -> None:
         """Raise a RuntimeError from the exception that stopped the worker, in the first frame after it."""
-        error = self.worker.error
+        error = self._engine.error
         if error is not None and error is not self._raised:
             self._raised = error
             raise RuntimeError('the physics worker stopped: %s' % (error,)) from error
@@ -1949,7 +1920,7 @@ class Physics:
         self._closed = True
         if self._cooker is not None:
             self._cooker.shutdown(wait=False, cancel_futures=True)
-        self.worker.stop()
+        self._engine.close()
 
 
 #: The rows of each world's fixed triggers and sensors, and of its dynamic bodies and moving

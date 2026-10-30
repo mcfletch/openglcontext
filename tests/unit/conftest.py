@@ -22,6 +22,44 @@ from OpenGLContext import renderoptions
 from OpenGLContext.passes import pbrpass, quality, shadersource, shadowcaps
 
 
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
+    """Run each test marked ``engines(...)`` once on each physics engine it names.
+
+    A module marks itself ``pytestmark = pytest.mark.engines('omi', 'jolt')``;
+    a test that reads one engine's own machinery narrows it with its own
+    ``@pytest.mark.engines('omi', reason=...)``. The ``jolt`` parameter is
+    left out where pyjoltphysics is not installed.
+    """
+    marker = metafunc.definition.get_closest_marker('engines')
+    if marker is None:
+        return
+    engines = [name for name in marker.args if name != 'jolt' or _have_jolt()]
+    metafunc.parametrize('physics_engine', engines, indirect=True)
+
+
+def _have_jolt() -> bool:
+    try:
+        import pyjoltphysics  # noqa: F401, PLC0415 asked once a module is collected
+    except ImportError:
+        return False
+    return True
+
+
+@pytest.fixture(autouse=True)
+def physics_engine(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str | None:
+    """The physics engine a test marked ``engines`` steps its worlds with, as the definition's default.
+
+    Autouse, so it is set before the fixtures that make a service; a test
+    with no ``engines`` mark is left with the environment it was given.
+    """
+    name = getattr(request, 'param', None)
+    if name is None:
+        return None
+    monkeypatch.setenv('OPENGLCONTEXT_PHYSICS_ENGINE', str(name))
+    renderoptions.reset_env_cache()
+    return str(name)
+
+
 @pytest.fixture(autouse=True)
 def reset_environment_memos() -> Iterator[None]:
     """Clear the cached environment and driver reads before and after each test.

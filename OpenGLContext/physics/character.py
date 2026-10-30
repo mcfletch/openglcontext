@@ -1,8 +1,12 @@
 """Character: a walker the physics service steps each frame.
 
-A character is a capsule controller stepped on the render thread, in the frame, against the render thread's copy of the bodies
+On the omi engine a character is a capsule controller stepped on the render
+thread, in the frame, against the render thread's copy of the bodies
 (:class:`~OpenGLContext.physics.replica.Replica`). Input reaches it with no tick
-between, and a ray cast or a step answers in the call.
+between, and a ray cast or a step answers in the call. On the Jolt engine it is
+a native character the world thread moves inside each tick
+(:class:`~OpenGLContext.physics.joltengine.JoltController`); the world runs in
+lockstep with the frame, and the moves set before a tick drive that tick.
 
 A character takes the same steps as the world: the frame steps it once for each
 fixed step the frame owes (``tickHz`` a second, 120 by default), each of the
@@ -10,7 +14,7 @@ fixed length and each with the latest moves, so its path and its jump arc do not
 depend on the frame rate. Its node and the camera over it are drawn between its
 last two steps, by the part step the frame leaves over (:attr:`Character.drawn_position`).
 
-The world sees a **stand-in**: a kinematic body, a little wider than the
+On the omi engine the world sees a **stand-in**: a kinematic body, a little wider than the
 capsule, placed at the capsule each frame with the velocity it moved at. The
 solver pushes a crate the stand-in runs into, and a crate that strikes the
 stand-in knocks the character back by the impulse it delivered. A body heavier
@@ -38,7 +42,7 @@ from OpenGLContext.character.locomotion import Locomotion, LocomotionInput
 
 from OpenGLContext.physics.checks import number
 from OpenGLContext.physics.handlers import weak_reference
-from OpenGLContext.physics.omi_adapter import character_state, omi_capabilities
+from OpenGLContext.physics.omi_adapter import character_state
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.types import CharacterCapabilities, CharacterState
 
@@ -115,14 +119,18 @@ class Character:
         #: with its own clock sets this false and calls :meth:`update` or :meth:`step`.
         self.framed = True
         centre = np.asarray(feet, dtype='d') + _UP * (capabilities.standHeight / 2.0)
-        replica = physics._character_replica()
-        #: The stand-in the world sees. Events about the character are events of this body.
-        self.body: Body = physics._add_standin(
-            centre, capabilities, CharacterController.PUSH_REACH)
-        self._controller = CharacterController(
-            replica.query, omi_capabilities(capabilities), centre, gravity=gravity,
-            ignore=[replica.index_of(self.body.uid), *physics.passable_slots()])
-        self._slot = replica.index_of(self.body.uid)
+        engine = physics._engine
+        #: Whether the world sees the character through a stand-in the frame places.
+        self._stands_in = bool(engine.stand_ins)
+        #: The body the world sees. Events about the character are events of this body.
+        self.body: Body
+        self.body, self._controller = engine.make_character(physics, centre, capabilities, gravity)
+        if self._stands_in:
+            self._slot = physics._character_replica().index_of(self.body.uid)
+        else:
+            self._slot = self.body.uid
+            for uid in physics.passable_slots():
+                self._controller.ignore.add(uid)
         self._pass_group: str | None = None
         #: Where the capsule's centre was before and after its latest step, and how far
         #: from the one toward the other the frame draws it.
@@ -471,6 +479,10 @@ class Character:
     def pass_group(self, name: str | None) -> None:
         if name == self._pass_group:
             return
+        if not self._stands_in:
+            self._pass_group = name
+            self._controller.set_pass_group(self.physics._engine.pass_group_id(name))
+            return
         if self._pass_group is not None:
             for other in self._fellows():
                 other._controller.ignore.discard(self._slot)
@@ -550,8 +562,13 @@ class Character:
         :meth:`animate` once for the frame. ``before-step``, ``after-step`` and
         ``landed`` are told here.
         """
-        listeners = self._listeners
-        if 'before-step' in listeners:
+        self._before_tick(dt)
+        self._controller.update(dt)
+        self._after_tick(dt)
+
+    def _before_tick(self, dt: float) -> None:
+        """The first half of a step: ``before-step``, blows taken, and the move along a course."""
+        if 'before-step' in self._listeners:
             self._tell('before-step', CharacterStep(self, dt))
         controller = self._controller
         self._previous, self._alpha = controller.position.copy(), 1.0
@@ -566,7 +583,11 @@ class Character:
             if self._path.finished and not self._arrived:
                 self._arrived = True
                 self._tell('arrived', self)
-        controller.update(dt)
+
+    def _after_tick(self, dt: float) -> None:
+        """The second half of a step, once the controller has moved: the stand-in, the node, landings."""
+        listeners = self._listeners
+        controller = self._controller
         self._stepped = controller.position.copy()
         pushing = controller.pushing
         self._place_stand_in(pushing[1] if pushing is not None else controller.velocity)
@@ -609,14 +630,22 @@ class Character:
     def _footfall(self, foot: str, phase: float) -> None:
         """A foot landed: tell the handlers, and play the footstep of the ground under it."""
         feet = self.position
-        under = self.physics.raycast(feet + _UP * 0.3, (0.0, -1.0, 0.0), 0.8, skip=self.body)
-        material = None if under is None or under.body is None else under.body.material
+        material = self._ground_material(feet)
         step = Footstep(self, foot, float(phase), feet.copy(), material)
         self._tell('footstep', step)
         physics = self.physics
         sound = physics.materials.footstep_of(material) if physics._audio is not None else None
         if sound is not None and physics._audio is not None:
             physics._audio().play(sound, at=tuple(float(v) for v in feet), gain=0.5)
+
+    def _ground_material(self, feet: np.ndarray) -> str | None:
+        """The name of the material under the feet: the ground the engine reports, else a ray's."""
+        if not self._stands_in and self._controller.grounded:
+            found = self.physics._engine.ground_material(self._controller)
+            if found is not None:
+                return str(found)
+        under = self.physics.raycast(feet + _UP * 0.3, (0.0, -1.0, 0.0), 0.8, skip=self.body)
+        return None if under is None or under.body is None else under.body.material
 
     def _place_stand_in(self, velocity: Any) -> None:
         """Put the stand-in at the capsule with ``velocity``, unless it is already so.
@@ -626,6 +655,8 @@ class Character:
         <OpenGLContext.physics.service.Physics._defers_stand_ins>`) the write
         waits for something that can see it.
         """
+        if not self._stands_in:
+            return
         here = tuple(float(v) for v in self._controller.position)
         moving = tuple(float(v) for v in velocity)
         if (here, moving) == self._stand_in_at:
@@ -650,7 +681,7 @@ class Character:
         here, moving = cast(tuple[tuple[float, ...], tuple[float, ...]], self._stand_in_at)
         if not self._behind:
             return here
-        dt = self.physics.worker.runtime.step_dt
+        dt = self.physics._engine.step_dt
         x, y, z = here
         vx, vy, vz = moving
         for _ in range(self._behind):

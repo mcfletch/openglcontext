@@ -95,6 +95,11 @@ def character_state(state: OmiState) -> CharacterState:
 
 # -- shapes ----------------------------------------------------------------------
 
+def engine_character_state(state: CharacterState) -> OmiState:
+    """The omi controller's member of the same name as ``state``."""
+    return OmiState[state.name]
+
+
 def omi_shape(proxy: Proxy) -> model.Shape:
     """The omi shape of ``proxy``, made on the first call and the same object after."""
     found = proxy._engine_shape

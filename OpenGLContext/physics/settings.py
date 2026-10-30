@@ -18,8 +18,8 @@ from vrml import field, node
 from OpenGLContext import renderoptions
 from OpenGLContext.physics.checks import number, vector
 
-__all__ = ['BACKENDS', 'COLLIDERS', 'MODES', 'PhysicsDefinition', 'default_backend',
-           'definition_for']
+__all__ = ['BACKENDS', 'COLLIDERS', 'ENGINES', 'MODES', 'PhysicsDefinition', 'default_backend',
+           'default_engine', 'definition_for']
 
 #: Where a context steps its world: on its own thread, or in the frame hook.
 MODES = ('thread', 'inline')
@@ -30,11 +30,22 @@ COLLIDERS = ('scene', 'explicit', 'none')
 #: compute past a count of awake bodies; ``numpy`` and ``cpu`` stay on NumPy;
 #: ``gpu`` and ``glcompute`` use GL 4.3 compute on the stepping thread.
 BACKENDS = ('auto', 'numpy', 'cpu', 'gpu', 'glcompute')
+#: The engines that step a world: omi_physics, or Jolt through pyjoltphysics.
+ENGINES = ('omi', 'jolt')
 
 
 def default_backend() -> str:
     """``OPENGLCONTEXT_PHYSICS_BACKEND``, one of :data:`BACKENDS`, else ``auto``."""
     return renderoptions.env_choice('OPENGLCONTEXT_PHYSICS_BACKEND', BACKENDS, {}, 'auto')
+
+
+def default_engine() -> str:
+    """``OPENGLCONTEXT_PHYSICS_ENGINE``, one of :data:`ENGINES`, else ``omi``.
+
+    Read once a process, so a game's whole suite runs on one engine when the
+    variable is set for the run.
+    """
+    return renderoptions.env_choice_once('OPENGLCONTEXT_PHYSICS_ENGINE', ENGINES, {}, 'omi')
 
 
 class PhysicsDefinition(node.Node):
@@ -56,6 +67,9 @@ class PhysicsDefinition(node.Node):
     #: The compute backend the world steps with, one of :data:`BACKENDS`
     #: (env: OPENGLCONTEXT_PHYSICS_BACKEND).
     backend = field.newField('backend', 'SFString', 1, default_backend)
+    #: The engine that steps the world, one of :data:`ENGINES`
+    #: (env: OPENGLCONTEXT_PHYSICS_ENGINE). ``jolt`` needs pyjoltphysics.
+    engine = field.newField('engine', 'SFString', 1, default_engine)
     #: The fixed step, in steps a second, in both modes.
     tickHz = field.newField('tickHz', 'SFFloat', 1, 120.0)
     #: The longest span of time one frame steps, in seconds. A frame that took
@@ -70,7 +84,7 @@ class PhysicsDefinition(node.Node):
     linearDamping = field.newField('linearDamping', 'SFFloat', 1, 0.3)
     angularDamping = field.newField('angularDamping', 'SFFloat', 1, 1.5)
 
-    FIELDS = ('enabled', 'mode', 'backend', 'tickHz', 'maxCatchUp', 'gravity', 'colliders',
+    FIELDS = ('enabled', 'mode', 'backend', 'engine', 'tickHz', 'maxCatchUp', 'gravity', 'colliders',
               'linearDamping', 'angularDamping')
 
     def replaced(self, **changes: Any) -> PhysicsDefinition:
@@ -85,6 +99,8 @@ class PhysicsDefinition(node.Node):
             raise ValueError('mode %r is not one of %s' % (self.mode, ', '.join(MODES)))
         if self.backend not in BACKENDS:
             raise ValueError('backend %r is not one of %s' % (self.backend, ', '.join(BACKENDS)))
+        if self.engine not in ENGINES:
+            raise ValueError('engine %r is not one of %s' % (self.engine, ', '.join(ENGINES)))
         if self.colliders not in COLLIDERS:
             raise ValueError('colliders %r is not one of %s'
                              % (self.colliders, ', '.join(COLLIDERS)))

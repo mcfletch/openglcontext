@@ -19,6 +19,8 @@ from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines("omi", "jolt")
+
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
 
@@ -38,14 +40,13 @@ def make(**named) -> Physics:
 
 
 def settled(physics: Physics):
-    """The runtime, after the commands made so far have been applied."""
+    """The omi runtime, after the commands made so far have been applied."""
     physics.worker.flush()
     return physics.worker.runtime
 
 
-def shape_type(physics: Physics, body) -> str:
-    runtime = settled(physics)
-    return runtime.world.shapes[int(runtime.world.collider_shape[runtime.entry(body.uid).index])].type
+#: The tests that read the omi engine's runtime or its worker thread.
+OMI_ONLY = pytest.mark.engines('omi', reason='reads the omi engine\'s runtime or worker thread')
 
 
 def run_for(physics: Physics, seconds: float, frame: float = 0.02) -> None:
@@ -110,14 +111,12 @@ def test_body_ids_are_never_reused(physics):
 
 def test_mass_comes_from_the_shape_when_none_is_given(physics):
     body = physics.add_dynamic(block((1, 1, 1), at=(0, 5, 0)), proxy='box')
-    index = settled(physics).entry(body.uid).index
-    assert settled(physics).world.mass[index] == pytest.approx(500.0)
+    assert physics_testing.mass(physics, body) == pytest.approx(500.0)
 
 
 def test_mass_given_is_the_mass(physics):
     body = physics.add_dynamic(ball(), mass=3.0)
-    index = settled(physics).entry(body.uid).index
-    assert settled(physics).world.mass[index] == pytest.approx(3.0)
+    assert physics_testing.mass(physics, body) == pytest.approx(3.0)
 
 
 @pytest.mark.parametrize('proxy, kind', [
@@ -126,12 +125,12 @@ def test_mass_given_is_the_mass(physics):
 ])
 def test_proxy_may_be_a_strategy_or_a_proxy(physics, proxy, kind):
     body = physics.add_dynamic(ball(), proxy=proxy)
-    assert shape_type(physics, body) == kind
+    assert physics_testing.shape_kind(physics, body) == kind
 
 
 def test_proxy_may_be_another_node_drawing_a_simpler_mesh(physics):
     body = physics.add_dynamic(block((2, 2, 2)), proxy=ball(1.0))
-    assert shape_type(physics, body) == 'sphere'
+    assert physics_testing.shape_kind(physics, body) == 'sphere'
 
 
 def test_a_proxy_is_shared_by_the_bodies_made_with_it(physics):
@@ -139,7 +138,7 @@ def test_a_proxy_is_shared_by_the_bodies_made_with_it(physics):
     for number in range(4):
         physics.add_dynamic(block((1, 1, 1), at=(number * 2, 5, 0)), proxy=crate)
     physics.frame(0.0)
-    assert len(settled(physics).world.shapes) == 1
+    assert physics_testing.shape_count(physics) == 1
 
 
 def test_a_node_that_draws_nothing_is_refused_with_its_name(physics):
@@ -151,18 +150,15 @@ def test_a_node_that_draws_nothing_is_refused_with_its_name(physics):
 def test_friction_and_restitution_keywords_make_a_material(physics):
     bouncy = physics.add_dynamic(ball(), restitution=0.9, friction=0.2)
     plain = physics.add_dynamic(ball())
-    world = settled(physics).world
-    material = world.material_for(int(world.collider_material[settled(physics).entry(bouncy.uid).index]))
+    material = physics_testing.material(physics, bouncy)
     assert material.restitution == pytest.approx(0.9)
     assert material.staticFriction == pytest.approx(0.2)
-    assert int(world.collider_material[settled(physics).entry(plain.uid).index]) == -1
+    assert physics_testing.material(physics, plain) is None
 
 
 def test_a_material_name_is_a_preset(physics):
     body = physics.add_dynamic(ball(), material='rubber')
-    world = settled(physics).world
-    index = settled(physics).entry(body.uid).index
-    assert world.material_for(int(world.collider_material[index])).restitution == pytest.approx(
+    assert physics_testing.material(physics, body).restitution == pytest.approx(
         model.MATERIAL_PRESETS['rubber'].restitution)
 
 
@@ -386,7 +382,7 @@ def test_a_body_removed_while_paused_leaves_the_world_on_resume(physics):
     physics.remove(crate)
     physics.enable(True)
     run_for(physics, 0.1)
-    assert crate.uid not in settled(physics)
+    assert not physics_testing.holds(physics, crate)
 
 
 def test_a_body_added_while_paused_falls_on_resume(physics):
@@ -407,8 +403,7 @@ def test_a_transform_set_while_paused_is_applied_and_read_back(physics):
     assert body.position == pytest.approx((3.0, 7.0, 0.0))
     physics.enable(True)
     physics.frame(0.0)
-    runtime = settled(physics)
-    assert runtime.world.position[runtime.entry(body.uid).index] == pytest.approx((3.0, 7.0, 0.0))
+    assert physics_testing.world_position(physics, body) == pytest.approx((3.0, 7.0, 0.0), abs=0.01)
 
 
 def test_a_joint_made_while_paused_holds_on_resume(physics):
@@ -417,7 +412,7 @@ def test_a_joint_made_while_paused_holds_on_resume(physics):
     physics.add_ball(body, anchor=(0, 5, 0))
     physics.enable(True)
     run_for(physics, 0.5)
-    assert len(settled(physics).joints) == 1
+    assert physics_testing.joint_count(physics) == 1
     assert np.linalg.norm(body.position - np.array((0.0, 5.0, 0.0))) == pytest.approx(1.0, abs=0.05)
 
 
@@ -443,16 +438,17 @@ def test_a_body_removed_while_paused_on_a_thread_leaves_the_world_on_resume():
         service.enable(False)
         service.remove(crate)
         service.enable(True)
-        assert service.worker.settle()
-        assert crate.uid not in service.worker.runtime
+        assert not physics_testing.holds(service, crate)
     finally:
         service.close()
 
 
-def test_enable_with_a_tick_frequency_changes_the_step(physics):
+def test_enable_with_a_tick_frequency_changes_the_step(physics, physics_engine):
     physics.enable(True, tick_frequency=200.0)
     physics.frame(0.0)
-    assert settled(physics).step_dt == pytest.approx(0.005)
+    # A Jolt world steps at the rate it was made with: its tick is part of the world thread.
+    expected = 0.005 if physics_engine == 'omi' else 0.01
+    assert physics_testing.step_dt(physics) == pytest.approx(expected)
 
 
 def test_step_advances_a_standalone_service_by_hand(physics):
@@ -463,10 +459,21 @@ def test_step_advances_a_standalone_service_by_hand(physics):
     assert node.translation[1] < 5.0
 
 
+@OMI_ONLY
 def test_world_is_the_live_world_in_inline_mode(physics):
     assert physics_testing.inspect(physics) is settled(physics).world
 
 
+def test_world_is_refused_on_the_jolt_engine():
+    service = Physics(PhysicsDefinition(mode='inline', engine='jolt'))
+    try:
+        with pytest.raises(RuntimeError, match='on_step'):
+            physics_testing.inspect(service)
+    finally:
+        service.close()
+
+
+@OMI_ONLY
 def test_world_is_refused_when_a_thread_owns_it():
     service = Physics(PhysicsDefinition(mode='thread'))
     try:
@@ -476,13 +483,15 @@ def test_world_is_refused_when_a_thread_owns_it():
         service.close()
 
 
-def test_set_config_changes_gravity_and_the_step(physics):
+def test_set_config_changes_gravity_and_the_step(physics, physics_engine):
     body = physics.add_dynamic(ball(), linear_damping=0.0)
     physics.set_config(PhysicsDefinition(mode='inline', gravity=(0, -2.0, 0), tickHz=200.0,
                                          maxCatchUp=2.0))
     run_for(physics, 0.5)
     assert body.velocity[1] == pytest.approx(-1.0, abs=0.15)
-    assert settled(physics).step_dt == pytest.approx(0.005)
+    # A Jolt world steps at the rate it was made with: its tick is part of the world thread.
+    expected = 0.005 if physics_engine == 'omi' else 0.01
+    assert physics_testing.step_dt(physics) == pytest.approx(expected)
 
 
 def test_set_config_refuses_a_definition_that_cannot_run(physics):
@@ -490,6 +499,7 @@ def test_set_config_refuses_a_definition_that_cannot_run(physics):
         physics.set_config(PhysicsDefinition(tickHz=-1.0))
 
 
+@OMI_ONLY
 def test_run_calls_a_function_with_the_world_and_returns_its_answer(physics):
     physics.add_dynamic(ball())
     future = physics_testing.run(physics, lambda world: world.live_body_count)
@@ -503,6 +513,16 @@ def test_post_calls_a_function_on_the_worker(physics):
     assert seen == ['x']
 
 
+def test_run_is_refused_on_the_jolt_engine():
+    service = make(engine='jolt')
+    try:
+        with pytest.raises(RuntimeError, match='on_step'):
+            physics_testing.run(service, lambda world: world).result(timeout=2)
+    finally:
+        service.close()
+
+
+@OMI_ONLY
 def test_run_reports_what_the_function_raised(physics):
     def fails(world):
         raise ValueError('refused')
@@ -546,11 +566,11 @@ def test_the_service_runs_on_a_thread_without_the_caller_stepping_it():
     try:
         node = ball()
         body = service.add_dynamic(node)
-        service.worker.wait_ticks(10)
+        physics_testing.wait_ticks(service, 10)
         service.frame(0.016)
         assert node.translation[1] < 5.0
         body.apply_impulse((0, 0, 4))
-        service.worker.settle()
+        physics_testing.settle(service)
         service.frame(0.016)
         assert body.velocity[2] > 0.0
     finally:
@@ -562,15 +582,13 @@ def test_a_thread_service_asks_for_frames_only_while_something_moves():
     try:
         service.add_static(block((20, 1, 20), at=(0, -0.5, 0)))
         service.add_dynamic(ball(0.5, at=(0, 0.6, 0)), restitution=0.0)
-        worker = service.worker
-        import time
         deadline = time.monotonic() + 20.0
         asked = True
         while asked and time.monotonic() < deadline:
             time.sleep(0.05)
             asked = service.frame(0.016)
         assert not asked
-        assert worker.idle
+        assert physics_testing.idle(service)
     finally:
         service.close()
 
@@ -580,7 +598,7 @@ def test_close_stops_the_thread_and_is_safe_twice():
     service.add_dynamic(ball())
     service.close()
     service.close()
-    assert service.worker.thread_id is None
+    assert not physics_testing.stepping(service)
 
 
 def test_switching_mode_keeps_the_bodies():
@@ -591,13 +609,14 @@ def test_switching_mode_keeps_the_bodies():
         run_for(service, 0.2)
         before = body.position[1]
         service.set_config(PhysicsDefinition(mode='thread', maxCatchUp=2.0))
-        service.worker.wait_ticks(10)
+        physics_testing.wait_ticks(service, 10)
         service.frame(0.016)
         assert body.alive and body.position[1] < before
     finally:
         service.close()
 
 
+@OMI_ONLY
 def test_a_place_waiting_behind_a_callback_write_is_not_read_as_applied():
     """A physics callback's write is applied in the step; a render-thread write
     still in the inbox is not, though the callback's write is numbered after it."""
@@ -633,6 +652,7 @@ def test_a_place_waiting_behind_a_callback_write_is_not_read_as_applied():
         service.close()
 
 
+@OMI_ONLY
 def test_a_physics_callback_leaves_the_render_threads_tables_to_the_render_thread():
     service = make(mode='thread')
     removed = threading.Event()
@@ -673,6 +693,7 @@ def test_a_physics_callback_leaves_the_render_threads_tables_to_the_render_threa
         service.close()
 
 
+@OMI_ONLY
 def test_a_mode_switch_waits_for_the_thread_to_leave_the_world():
     service = make(mode='thread')
     stepping, release = threading.Event(), threading.Event()
