@@ -574,7 +574,7 @@ of C++ and ran correctly in both builds.
 |---|---|---|---|---|
 | P0 | Repository, vendored Jolt, CMake, empty module exposing the version and build options, CI and wheels on every platform and tag above, stub check, workspace registration | CI on all runners; a wheel installs and imports from outside the checkout | every wheel builds, installs and passes an import test; preflight runs ruff, mypy, OGC rules and the suite | 1 to 1.5 |
 | P1 | World thread, settings, command batches, snapshot pool, event ring with pair aggregation, sleep events, shapes (primitives, hull, mesh, heightfield grid, compound), bodies in bulk, materials without pair grid, CCD, lockstep, applied log, `at_tick`, fork and atexit hooks, double precision | unit suite; the differential scenarios for bodies, shapes, sleep, triggers and CCD against omi; ASan run; the free-threaded wheel through the same suite | differential tolerances met; determinism and fork tests green on both builds; 5,000 active boxes within 10% of the spike's times | 3 to 4; done 2026-10-30 (P1a and P1b below) |
-| P2 | Queries (synchronous and batched), the character controller port over `CharacterVirtual`, character against character, heightfield tiles from a sample function | differential character and query scenarios; the omi character tests (the behaviour-level ones) ported as conformance | every character scenario within tolerance; a 300-character heightfield world steps under 4 ms on 8 threads | 4 to 5 |
+| P2 | Queries (synchronous and batched), the character controller port over `CharacterVirtual`, character against character, heightfield tiles from a sample function | differential character and query scenarios; the omi character tests (the behaviour-level ones) ported as conformance | every character scenario within tolerance; a 300-character heightfield world steps under 4 ms on 8 threads | 4 to 5; done 2026-10-30 (P2 below) |
 | P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3 |
 | P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4 |
 | P5 | Default `engine='jolt'`; `pyjoltphysics` a hard dependency; omi fallback, `worker.py`, `runtime.py`, `replica.py`, `queries.py` deleted; golden results recorded from omi; docs (`docs/physics.rst`, a page on the world thread, callbacks and determinism); omi_physics marked deprecated | full workspace `verify-everything.py`; preflight for openglcontext and pyjoltphysics | the games run on Jolt with no `engine` setting; marble-demo off direct omi imports; docs merged | 1 to 2 |
@@ -722,6 +722,139 @@ the one failure was the 10,000-post tick bound (26.7 ms under the sanitizers), w
 P2 starts from: shape ids for character and query shapes, `heightfield_tiles` for the sample-function
 ground (tiles sampled around the foci, added and removed as batches), the world lock's shared side
 for queries, and `SMOOTH_EDGES` to decide on for characters' inner bodies.
+
+### P2 as built (2026-10-30)
+
+P2 is commits e77bb63 to 41f95cf on `pyjoltphysics` `develop`.
+
+- Queries (`src/native/queries.*`, `pyjoltphysics.queries`): `World.raycast`, `raycast_batch`,
+  `sweep` with `sweep_sphere`, `sweep_capsule`, `sweep_box` (first hit, or every body's first hit
+  in order), `overlap` (ascending uids). `QueryFilter`: group and mask as bodies meet, `exclude`
+  uids, `triggers` for sensors, `characters` for proxies. Synchronous on the caller's thread under
+  the world lock's shared side, GIL released; on the world thread inside a callback, no lock.
+  `closest_point` is not built (Jolt has no cheap closest-point query; a `CollideShape` with a
+  growing sphere would answer it). The batched queries answered in the snapshot are not built:
+  `raycast_batch` is synchronous.
+- The world lock is `WorldLock`, a shared mutex whose gate holds new readers behind a waiting
+  writer. With `std::shared_mutex` (reader-preferring on glibc) six querying threads held a
+  free-threaded world to 10 of 120 ticks in half a second.
+- Characters (`src/native/characters.*`, `pyjoltphysics.characters`): omi's controller ported over
+  `CharacterVirtual`: walk, run, sprint, crouch speeds and a speed override, acceleration (inf by
+  default, as omi), air control, the exact ballistic vertical motion (`v dt - g dt^2/2` handed to
+  Jolt as the velocity that covers it in Jolt's float step) with per-character gravity and
+  terminal velocity, jump with coyote time and buffer, `jumpFollowsSlope`, stairs and floor
+  sticking (Jolt's `ExtendedUpdate` walk-stairs; the stick is our own, see below), slope limit and
+  sliding down steep ground, slide with rise and steer and `slide_progress`, knock-down, get-up,
+  crouch, fly, swim, knockback, `apply_impulse`, teleport with a floor search, ignore sets, pass
+  groups, push mass and push force, push speed, mutual push between characters by mass, kinematic
+  platforms carrying a grounded character. Inputs are `CharacterOps` batches applied at the next
+  tick; state is `Snapshot.characters` (id, centre, velocity, state, grounded, ground uid and
+  normal, slide progress, last landing speed and tick, height); events are kind `CHARACTER`, phases
+  `BEGIN`/`END` (touches), `LAND`, `JUMP`, `SLIDE`, `DOWN`, `UP`.
+- Characters move on the world thread inside the tick, under the exclusive lock, before `Update`.
+  Characters whose reach shares no other character and no dynamic body are islands moved by
+  separate jobs on Jolt's job system, each job with its own temp allocator; within an island in id
+  order, with a `CharacterVsCharacterCollision` that sees only the island. The result does not
+  depend on the job count.
+- The proxy is a kinematic capsule (not a sensor) under the character's id on a collision layer
+  role that meets sensors only: rays and overlaps meet it, static and moving sensors report it,
+  no body is solved against it. Layers carry a role (body, sensor, proxy).
+- `World.swap_bodies(remove, batch)`: one batch, one tick, for tiles streamed around foci.
+- `SMOOTH_EDGES` is on by default for static meshes and height fields; `BodyFlag.NO_SMOOTH_EDGES`
+  turns it off. Cost not measurable: 5,000 boxes on the 20,000-triangle mesh, 1 job thread, 3.12
+  ms a frame with it and 3.24 without (8 threads 1.20 to 1.95 against 1.68 to 1.98, noisy); 300
+  characters 1.49 against 1.51 ms, 30 among posts 0.19 against 0.21 ms. A ball rolls flat
+  across one field; seams between tile bodies still lift it up to 6 mm.
+- Found and fixed by the differential suite: Jolt's own stick-to-floor passes over a walker
+  climbing past a crest (it is moving up), so a runner on a height field left the ground for a
+  tick at most cell edges (12 ticks in 10 s, 0.74 m short of omi). The controller now sticks a
+  grounded walker that did not jump whatever its vertical motion: 2 cm from omi after 10 s.
+- Found by the determinism test: a character standing on another reported the other's record
+  address as its ground uid. It reports the other's id.
+
+Conformance (`tests/test_characters.py`, 46 tests after omi's character tests) and differential
+(`tests/differential/test_characters.py`, 7 scenes against omi's controller), 60 Hz:
+
+| Behaviour | omi | Jolt | Tolerance |
+|---|---|---|---|
+| Walk 1 s at 3 m/s | 3.000 m | 3.000 m | 2% |
+| Speed override 2.5 m/s, 1 s | 2.5 m | 2.500 m | 1 mm |
+| 0.3 m step, stepHeight 0.4 | onto it, feet 0.300 | onto it, feet 0.300 | 5 cm |
+| 0.6 m ledge, stepHeight 0.35, running | climbs it (feet 0.6) | stopped at the face | divergence, Jolt right |
+| 30 degree ramp, 3 s walk | 7.43, 3.17 m | 7.96, 3.49 m (analytic 8.06, 3.50) | Jolt 15 cm of analytic; omi 0.7 m |
+| 60 degree ramp, maxSlope 50 | refused | refused | |
+| Jump, g 42, jumpHeight 1.5, 60/120/240 Hz | on the parabola to 6e-15 | to 2e-8 / 9e-9 / 4e-9 | 1e-6 |
+| Flight ticks, same jump | 31 / 63 / 127 | 32 / 64 / 128 | 1 tick: Jolt stops at its contact and reports ground the tick after |
+| Landing speed, 5 m fall (closed form 9.905) | 9.974 | 9.974 | 3% |
+| 10 s run across a height field | end (7.336, 0.036, 17.204) | (7.317, 0.038, 17.212) | 10 cm, 2 cm in height |
+| Stairs, 6 x 0.2 m | top, 1.2 m | top, 1.2 m | 5 cm; x within 0.6 m |
+| Knock-down, get-up | DOWN, 1.0 m; STANDING, 1.8 m next update | same, next tick | exact |
+| Push a 20 kg crate walking | 3.0 m/s (15%) | 2.86 m/s | 15% |
+| 200 kg crate, pushMass 100 | not moved | moved 1e-6 m, walker held at 0.78 | 2 cm |
+| Kinematic platform 1 m/s | carried | 1.000 m/s | 3 cm |
+| Steep slope 60 degrees | slides | slides, AIRBORNE | |
+| Pass-group peers / non-peers | pass / block | pass / block | |
+
+Divergences beyond the table: a thrown crate shoves a Jolt character while they overlap (Jolt's
+character contact) and leaves it no momentum, where omi's service applies a knockback of the
+momentum the crate lost; omi zeroes nothing at a ceiling, the port stops the rise there.
+
+Lockstep with characters: 24 characters among posts and crates at 960 Hz, 60 inputs (moves,
+jumps, slides, knockbacks) at wall-clock moments while free-running on 8 job threads, replayed in
+lockstep with `at_tick` on 1 and 8 job threads: digests of poses and character state over 1,000
+ticks identical, 16 repeats, GIL and free-threaded builds.
+
+Benchmarks (`benchmarks/characters.py`; the machine carried other users' processes, load 3.5 for
+the rows from the final run, up to 19 for the others):
+
+| | Spike | P2, 1 job thread | P2, 8 job threads |
+|---|---|---|---|
+| 300 characters on a 256 x 256 height field, ms per 60 Hz frame, 1 tick a frame | 3.08 (1 thread) | 1.48 | 0.60 |
+| same, 120 Hz (2 ticks a frame) | | 2.62 | 1.10 |
+| 30 characters among 10,000 posts, 60 / 120 Hz | | 0.17 / 0.30 | 0.09 / 0.19 |
+| 300 proxies in `Update` | | 0.08 ms a tick | |
+| 100,000 scattered rays, one call | 54 ms (0.54 us a ray) | 55 ms (0.55 us) | same |
+| one `raycast` from Python, idle world | 1.14 us (native) | 2.3 us | |
+| single rays beside a free-running 5,000-box world: p50, p99, max | 1.14 us, 2.2 us; lock wait p99 0.98 ms, max 2.27 | 3.2 us, 2.5 ms, 9.1 ms | 3.2 us, 1.1 ms, 2.8 ms |
+| tile swap frame / quiet frame (10 sprinting characters, 32-cell tiles) | | 0.19 / 0.13 ms | 0.23 / 0.13 ms |
+
+Tests: GIL build (3.14) 285 passed, 2 skipped (NEON, free-threaded check); free-threaded 3.14t
+233 passed, 3 skipped (no omi_physics there, NEON, the GIL wait); ASan and UBSan (`tools/asan.sh`)
+233 passed, 3 skipped, no sanitizer report. Written first and seen failing against P1b's
+module (no query, character or swap API); the knock-down, trigger, character-on-character and
+many-thread query tests were each seen failing against an earlier P2 build before the fix.
+
+What P4's service layer needs that this API does not give:
+
+1. Previous-tick character rows: the camera interpolates between the last two snapshots
+   (decision 8); the service holds the previous `Snapshot` itself.
+2. Input latency: an input reaches the character at the next tick (up to one tick plus the
+   publish); `Character.frame` hooks (facing, locomotion, footsteps) read the snapshot, so they lag
+   the input by that much. Per-tick inputs (path following, `run_along`, `hop_to`) can only be set
+   at frame rate unless the service sends them with `at_tick` or a native path track is added.
+3. Knockback from struck bodies: the service decides it from the character's `BEGIN` records
+   (body uid and closing speed) and the body's mass, as omi's service does.
+4. Character-against-character touches are not records; only `ground_uid` names a character
+   stood on.
+5. Ground material: the snapshot has the ground uid and normal, not the sub-shape (mesh triangle
+   material) footsteps would read.
+6. `eye` is not published (centre, height and `eyeHeight` give it); a stuck flag from a failed
+   teleport is not reported.
+7. Gravity direction: a character's gravity is a magnitude along -Y; gravity zones (P3) need a
+   direction per character.
+8. Water volumes: `set_swim` is a command; detecting water stays with the service.
+9. Moving frames: characters ride kinematic bodies through ground velocity; a character framed in
+   a moving vehicle's local frame is not modelled.
+10. State save and restore must include the controller's state beside `CharacterVirtual`'s.
+11. The sample-function landscape: the service samples tiles and calls `swap_bodies`.
+12. The capability names beyond OMI (`acceleration`, `pushForce`, `stickToFloor`,
+    `smoothEdges`) need a place in the service's `CharacterCapabilities` and glTF extras.
+
+Open problems: (i) push speed is approximate: a character that touched a pushable body last tick
+is held to `pushSpeed`. (ii) Jolt lands a falling character a tick later than omi (it stops at the
+contact and reports ground the next update). (iii) `query_wait_max_ms` and the p99 were measured
+with other users' processes on the machine; a quiet rerun is left for the preflight pass. (iv) `closest_point` and
+snapshot-answered batched queries are not built.
 
 ## 7. Decisions
 
