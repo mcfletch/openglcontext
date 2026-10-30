@@ -34,7 +34,7 @@ def test_each_proxy_has_an_identity_of_its_own():
     (Proxy.trimesh(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0.0]]), [[0, 1, 2]]), 'trimesh'),
 ])
 def test_constructors_make_the_shape_they_name(proxy, kind):
-    assert proxy.shape.type == kind
+    assert proxy.kind == kind
 
 
 @pytest.mark.parametrize('proxy, volume', [
@@ -68,56 +68,56 @@ def test_mass_never_reaches_zero():
 
 def test_a_node_drawing_a_box_cooked_as_a_box():
     proxy = Proxy.from_node(_block((1, 2, 3)), 'box')
-    assert proxy.shape.type == 'box'
-    assert np.allclose(sorted(proxy.shape.size), [1, 2, 3], atol=1e-6)
+    assert proxy.kind == 'box'
+    assert np.allclose(sorted(proxy.params['size']), [1, 2, 3], atol=1e-6)
 
 
 def test_a_node_drawing_a_sphere_cooked_as_a_sphere():
     proxy = Proxy.from_node(_ball(0.75), 'sphere')
-    assert proxy.shape.type == 'sphere'
-    assert proxy.shape.radius == pytest.approx(0.75, rel=0.05)
+    assert proxy.kind == 'sphere'
+    assert proxy.params['radius'] == pytest.approx(0.75, rel=0.05)
 
 
 def test_a_vrml_box_node_is_cooked_as_the_box_it_draws():
     node = Transform(children=[basenodes.Shape(geometry=basenodes.Box(size=(1, 2, 3)))])
     proxy = Proxy.from_node(node, 'auto', dynamic=True)
-    assert proxy.shape.type == 'box'
-    assert np.allclose(sorted(proxy.shape.size), [1, 2, 3], atol=1e-6)
+    assert proxy.kind == 'box'
+    assert np.allclose(sorted(proxy.params['size']), [1, 2, 3], atol=1e-6)
 
 
 def test_a_vrml_sphere_node_is_cooked_as_the_sphere_it_draws():
     node = Transform(children=[basenodes.Shape(geometry=basenodes.Sphere(radius=0.75))])
     proxy = Proxy.from_node(node, 'sphere')
-    assert proxy.shape.type == 'sphere'
-    assert proxy.shape.radius == pytest.approx(0.75, rel=0.05)
+    assert proxy.kind == 'sphere'
+    assert proxy.params['radius'] == pytest.approx(0.75, rel=0.05)
 
 
 def test_the_node_scale_is_part_of_the_proxy():
     proxy = Proxy.from_node(_block((1, 1, 1), scale=(2, 2, 2)), 'box')
-    assert np.allclose(proxy.shape.size, (2, 2, 2), atol=1e-6)
+    assert np.allclose(proxy.params['size'], (2, 2, 2), atol=1e-6)
 
 
 def test_auto_gives_a_static_node_its_triangles():
-    assert Proxy.from_node(_block((1, 1, 1)), 'auto', dynamic=False).shape.type == 'trimesh'
+    assert Proxy.from_node(_block((1, 1, 1)), 'auto', dynamic=False).kind == 'trimesh'
 
 
 def test_auto_fits_a_box_to_a_dynamic_node_that_is_one():
-    assert Proxy.from_node(_block((1, 2, 3)), 'auto', dynamic=True).shape.type == 'box'
+    assert Proxy.from_node(_block((1, 2, 3)), 'auto', dynamic=True).kind == 'box'
 
 
 def test_auto_fits_a_sphere_to_a_dynamic_node_that_is_one():
     proxy = Proxy.from_node(_ball(0.75), 'auto', dynamic=True)
-    assert proxy.shape.type == 'sphere'
-    assert proxy.shape.radius == pytest.approx(0.75, rel=0.02)
+    assert proxy.kind == 'sphere'
+    assert proxy.params['radius'] == pytest.approx(0.75, rel=0.02)
 
 
 def test_auto_gives_a_dynamic_node_that_is_neither_its_hull():
     chamfered = surfaces.shape(surfaces.block((1, 1, 1), chamfer=0.2), LOOK)
-    assert Proxy.from_node(chamfered, 'auto', dynamic=True).shape.type in ('convex', 'compound')
+    assert Proxy.from_node(chamfered, 'auto', dynamic=True).kind in ('convex', 'compound')
 
 
 def test_convex_takes_the_hull_of_the_mesh():
-    assert Proxy.from_node(_ball(1.0), 'convex').shape.type == 'convex'
+    assert Proxy.from_node(_ball(1.0), 'convex').kind == 'convex'
 
 
 def test_trimesh_is_refused_for_a_dynamic_body():

@@ -9,6 +9,7 @@ import pytest
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.testing import physics as physics_testing
 
 
 @pytest.fixture
@@ -70,5 +71,5 @@ def test_a_character_that_stops_sends_nothing_once_it_has_rested(service):
     for _ in range(30):
         service.frame(1 / 60)
     assert sent.commands == []
-    assert service.worker.runtime.world.linear_velocity[service.index_of(me.body)] \
+    assert service.worker.runtime.world.linear_velocity[physics_testing.slot_of(service, me.body)] \
         == pytest.approx((0.0, 0.0, 0.0))

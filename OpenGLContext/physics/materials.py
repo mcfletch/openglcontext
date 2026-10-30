@@ -1,8 +1,7 @@
 """The physics materials of a context: presets, the ones the application defines, and pair rules.
 
-A material says how a surface grips, bounces and sounds. The presets of
-:data:`omi_physics.model.MATERIAL_PRESETS` (``wood``, ``metal``, ``rubber``,
-``ice``) are there from the start; :meth:`Materials.define` adds others, and
+A material says how a surface grips, bounces and sounds. The engine's presets
+(``wood``, ``metal``, ``rubber``, ``ice`` and others) are there from the start; :meth:`Materials.define` adds others, and
 :meth:`Materials.pair` overrides the friction between two of them. A body takes
 a material by name::
 
@@ -16,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from omi_physics import model
+from OpenGLContext.physics.types import Material
 
 if TYPE_CHECKING:
     from OpenGLContext.audio.manager import SoundSource
@@ -29,7 +28,7 @@ __all__ = ['Materials', 'PhysicsMaterial']
 class PhysicsMaterial:
     """A named material: how it grips and bounces, and the sound a strike on it makes."""
     name: str
-    material: model.Material
+    material: Material
     sound: SoundSource | None = None
     #: A clip played where a character's foot lands on a body of this material.
     footstep: SoundSource | None = None
@@ -39,10 +38,11 @@ class Materials:
     """The materials of one physics service."""
 
     def __init__(self, physics: Physics) -> None:
+        from OpenGLContext.physics.omi_adapter import presets  # noqa: PLC0415 the engine loads with the service
+
         self._physics = physics
         self._known: dict[str, PhysicsMaterial] = {
-            name: PhysicsMaterial(name, material)
-            for name, material in model.MATERIAL_PRESETS.items()}
+            name: PhysicsMaterial(name, material) for name, material in presets().items()}
 
     @property
     def names(self) -> list[str]:
@@ -70,8 +70,8 @@ class Materials:
         character's foot lands on it. Each is a path, URL, name given to
         ``audio.load`` or a decoded :class:`~omi_audio.clip.Clip`.
         """
-        base = model.Material()
-        material = model.Material(
+        base = Material()
+        material = Material(
             staticFriction=_pick(base.staticFriction, static_friction, friction),
             dynamicFriction=_pick(base.dynamicFriction, dynamic_friction, friction),
             restitution=_pick(base.restitution, restitution))

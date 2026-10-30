@@ -1,7 +1,6 @@
 """Character: a walker the physics service steps each frame.
 
-A character is a :class:`~omi_physics.character.CharacterController` stepped on
-the render thread, in the frame, against the render thread's copy of the bodies
+A character is a capsule controller stepped on the render thread, in the frame, against the render thread's copy of the bodies
 (:class:`~OpenGLContext.physics.replica.Replica`). Input reaches it with no tick
 between, and a ray cast or a step answers in the call.
 
@@ -29,15 +28,19 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
+import warnings
+
 import numpy as np
-from omi_physics.character import CharacterCapabilities, CharacterController, CharacterState
+from omi_physics.character import CharacterController
 
 from OpenGLContext.character.facing import Facing
 from OpenGLContext.character.locomotion import Locomotion, LocomotionInput
 
 from OpenGLContext.physics.checks import number
 from OpenGLContext.physics.handlers import weak_reference
+from OpenGLContext.physics.omi_adapter import character_state, omi_capabilities
 from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.types import CharacterCapabilities, CharacterState
 
 if TYPE_CHECKING:
     from OpenGLContext.move.pathmover import PathMover
@@ -48,6 +51,8 @@ if TYPE_CHECKING:
 __all__ = ['Character', 'CharacterStep', 'Footstep', 'Landing']
 
 _UP = np.array([0.0, 1.0, 0.0])
+#: Holds an entry once Character.controller has warned, so it warns once a process.
+_WARNED: list[bool] = []
 #: The events a character tells itself; every other name is an event of its stand-in.
 _OWN_EVENTS = frozenset(('landed', 'footstep', 'arrived', 'before-step', 'after-step'))
 #: The field of the capabilities that names each mode's speed.
@@ -100,7 +105,9 @@ class Character:
         self.aim: Any = None
         #: True makes the locomotion play the death clip.
         self.dead = False
-        self.capabilities = capabilities
+        #: The capsule, speeds and limits the character was made with.
+        self.capabilities = CharacterCapabilities.coerce(capabilities)
+        capabilities = self.capabilities
         #: False once the character has been removed.
         self.alive = True
         #: Whether :meth:`Physics.frame <OpenGLContext.physics.service.Physics.frame>` steps
@@ -112,21 +119,21 @@ class Character:
         #: The stand-in the world sees. Events about the character are events of this body.
         self.body: Body = physics._add_standin(
             centre, capabilities, CharacterController.PUSH_REACH)
-        self.controller = CharacterController(
-            replica.query, capabilities, centre, gravity=gravity,
+        self._controller = CharacterController(
+            replica.query, omi_capabilities(capabilities), centre, gravity=gravity,
             ignore=[replica.index_of(self.body.uid), *physics.passable_slots()])
         self._slot = replica.index_of(self.body.uid)
         self._pass_group: str | None = None
         #: Where the capsule's centre was before and after its latest step, and how far
         #: from the one toward the other the frame draws it.
-        self._previous = self.controller.position.copy()
+        self._previous = self._controller.position.copy()
         self._stepped = self._previous.copy()
         self._alpha = 1.0
         self._knocks: list[np.ndarray] = []
         self._listeners: dict[str, list[Callable[[], Callable[[Any], Any] | None]]] = {}
         self._last_velocity = np.zeros(3)
         #: Where the capsule was when the frame began, and the hardest landing since.
-        self._marked = self.controller.position.copy()
+        self._marked = self._controller.position.copy()
         #: The position and velocity the stand-in was last given, so that a character
         #: that has not moved sends the world nothing.
         self._stand_in_at: tuple[tuple[float, ...], tuple[float, ...]] | None = None
@@ -160,20 +167,21 @@ class Character:
     @property
     def busy(self) -> bool:
         """Whether the character is moving, falling or being told to move, so the frame is not idle."""
-        controller = self.controller
-        return bool(not controller.grounded or controller.state != CharacterState.STANDING
+        controller = self._controller
+        return bool(not controller.grounded
+                    or character_state(controller.state) is not CharacterState.STANDING
                     or np.any(controller.velocity) or np.any(controller.move_dir)
                     or np.any(controller.push) or controller.landing is not None)
 
     @property
     def position(self) -> np.ndarray:
         """Where the feet are."""
-        return self.controller.base()
+        return self._controller.base()
 
     @property
     def eye(self) -> np.ndarray:
         """Where the eyes are."""
-        return self.controller.eye()
+        return self._controller.eye()
 
     @property
     def drawn_position(self) -> np.ndarray:
@@ -197,39 +205,81 @@ class Character:
         """
         step = self._stepped - self._previous
         heading = np.sign(step)
-        undone = np.clip(-(np.asarray(self.controller.position) - self._stepped) * heading,
+        undone = np.clip(-(np.asarray(self._controller.position) - self._stepped) * heading,
                          0.0, np.abs(step))
         return (1.0 - self._alpha) * (step - heading * undone)
 
     @property
     def velocity(self) -> np.ndarray:
         """How fast the capsule moved over the last frame, in metres a second."""
-        return self.controller.velocity
+        return self._controller.velocity
 
     @property
     def grounded(self) -> bool:
         """Whether the feet are on the ground."""
-        return bool(self.controller.grounded)
+        return bool(self._controller.grounded)
 
     @property
     def swimming(self) -> bool:
         """Whether the character is in water."""
-        return bool(self.controller.swimming)
+        return bool(self._controller.swimming)
 
     @property
     def crouching(self) -> bool:
         """Whether the character is crouched."""
-        return bool(self.controller.crouching)
+        return bool(self._controller.crouching)
 
     @property
-    def state(self) -> CharacterState:
-        """What the character is doing: standing, crouching, sliding, airborne, down, swimming, flying."""
-        return self.controller.state
+    def state(self) -> Any:
+        """What the character is doing: standing, crouching, sliding, airborne, down, swimming, flying.
+
+        Compare it with ``==`` to a :class:`~OpenGLContext.physics.types.CharacterState`
+        member. The value is the engine's own member, equal to the
+        ``CharacterState`` member of the same name, while games still compare
+        it by identity with the engine's enumeration; :attr:`motion_state` is
+        the ``CharacterState`` member itself.
+        """
+        return self._controller.state
+
+    @property
+    def motion_state(self) -> CharacterState:
+        """What the character is doing, as a :class:`~OpenGLContext.physics.types.CharacterState` member."""
+        return character_state(self._controller.state)
+
+    @property
+    def vertical_speed(self) -> float:
+        """How fast the character rises, in metres a second; below zero it falls."""
+        return float(self._controller.vy)
+
+    @property
+    def height(self) -> float:
+        """How tall the capsule is now, in metres: the standing height, or less crouched or sliding."""
+        return float(self._controller.height)
+
+    @property
+    def radius(self) -> float:
+        """The capsule's radius, in metres."""
+        return float(self.capabilities.radius)
+
+    @property
+    def stuck(self) -> bool:
+        """Whether the capsule could not be moved out of what it overlaps in its last step."""
+        return bool(self._controller.stuck)
+
+    @property
+    def controller(self) -> Any:
+        """The engine's controller; deprecated, read the character's own properties."""
+        if not _WARNED:
+            _WARNED.append(True)
+            warnings.warn('Character.controller is the engine\'s controller and is going away; read '
+                          'the Character\'s properties (vertical_speed, height, radius, '
+                          'motion_state, grounded, capabilities)', DeprecationWarning, stacklevel=2)
+        return self._controller
 
     @property
     def landing(self) -> float | None:
         """The speed the character landed at over the last frame, else None."""
-        return self.controller.landing
+        return self._controller.landing
 
     @property
     def arrived(self) -> bool:
@@ -248,7 +298,7 @@ class Character:
         """
         if self._path is not None:
             return float(self._path.speed)
-        return float(self.controller.speed())
+        return float(self._controller.speed())
 
     @speed.setter
     def speed(self, value: float | None) -> None:
@@ -256,7 +306,7 @@ class Character:
         if self._path is not None:
             self._path_speed = given
         else:
-            self.controller.move_speed = given
+            self._controller.move_speed = given
 
     @property
     def lane(self) -> float | None:
@@ -280,11 +330,11 @@ class Character:
         number at or above zero.
         """
         given = None if speed is None else number(speed, 'speed', non_negative=True)
-        self.controller.set_move(direction, mode, speed=given)
+        self._controller.set_move(direction, mode, speed=given)
 
     def set_fly_move(self, direction: Any) -> None:
         """Fly toward ``direction``, vertical part included."""
-        self.controller.set_fly_move(direction)
+        self._controller.set_fly_move(direction)
 
     def run_along(self, course: Any,
                   speed: float | Callable[[float], float] | None = None, mode: str = 'run',
@@ -341,27 +391,27 @@ class Character:
 
     def jump(self) -> bool:
         """Leave the ground; False where the character cannot."""
-        return bool(self.controller.jump())
+        return bool(self._controller.jump())
 
     def apply_impulse(self, velocity: Any) -> None:
         """Add ``velocity`` to the character's motion, a shove that ground friction bleeds off."""
-        self.controller.apply_impulse(velocity)
+        self._controller.apply_impulse(velocity)
 
     def knockback(self, impulse: Any) -> None:
         """Change the velocity by ``impulse`` newton-seconds over the character's mass."""
-        self.controller.knockback(impulse)
+        self._controller.knockback(impulse)
 
     def set_crouch(self, crouch: bool) -> bool:
         """Crouch or stand; returns whether the character is crouching afterwards."""
-        return bool(self.controller.set_crouch(crouch))
+        return bool(self._controller.set_crouch(crouch))
 
     def set_fly(self, flying: bool) -> bool:
         """Fly without gravity or collision with the ground, or stop."""
-        return bool(self.controller.set_fly(flying))
+        return bool(self._controller.set_fly(flying))
 
     def set_swim(self, swimming: bool, buoyancy: float = 0.9) -> None:
         """Swim, pulled by what ``buoyancy`` leaves of gravity, or stop."""
-        self.controller.set_swim(swimming, buoyancy)
+        self._controller.set_swim(swimming, buoyancy)
 
     def slide(self, duration: float, rise: float = 0.3, steer: bool = False) -> bool:
         """Slide low with the speed the character has, rising over the last ``rise`` seconds.
@@ -369,30 +419,30 @@ class Character:
         With ``steer`` the slide takes no momentum and the moves of :meth:`set_move` still go,
         at the speed of their mode.
         """
-        return bool(self.controller.slide(duration, rise, steer))
+        return bool(self._controller.slide(duration, rise, steer))
 
     def extend_slide(self, duration: float) -> bool:
         """Slide for ``duration`` seconds more from now, low again; False if not sliding."""
-        return bool(self.controller.extend_slide(duration))
+        return bool(self._controller.extend_slide(duration))
 
     def end_slide(self) -> bool:
         """End a slide at once and stand, or crouch where there is no room; False if not sliding."""
-        return bool(self.controller.end_slide())
+        return bool(self._controller.end_slide())
 
     def knock_down(self) -> None:
         """Fall and stay down, ignoring input, until :meth:`get_up`."""
-        self.controller.knock_down()
+        self._controller.knock_down()
 
     def get_up(self, start_speed: float | None = None) -> None:
         """Stand and run again, from ``start_speed`` where given."""
-        self.controller.get_up(start_speed)
+        self._controller.get_up(start_speed)
 
     def teleport(self, feet: Any) -> bool:
         """Put the feet at ``feet``, or at the nearest place with room; False if none was found."""
-        found = bool(self.controller.safe_bind(
-            np.asarray(feet, dtype='d') + _UP * (self.controller.height / 2.0)))
-        self._marked = self.controller.position.copy()
-        self._previous, self._alpha = self.controller.position.copy(), 1.0
+        found = bool(self._controller.safe_bind(
+            np.asarray(feet, dtype='d') + _UP * (self._controller.height / 2.0)))
+        self._marked = self._controller.position.copy()
+        self._previous, self._alpha = self._controller.position.copy(), 1.0
         self._stepped = self._previous.copy()
         self._place_stand_in(np.zeros(3))
         self._place_node()
@@ -423,13 +473,13 @@ class Character:
             return
         if self._pass_group is not None:
             for other in self._fellows():
-                other.controller.ignore.discard(self._slot)
-                self.controller.ignore.discard(other._slot)
+                other._controller.ignore.discard(self._slot)
+                self._controller.ignore.discard(other._slot)
         self._pass_group = name
         if name is not None:
             for other in self._fellows():
-                other.controller.ignore.add(self._slot)
-                self.controller.ignore.add(other._slot)
+                other._controller.ignore.add(self._slot)
+                self._controller.ignore.add(other._slot)
 
     def _fellows(self) -> list[Character]:
         """The other characters in the world with this one's pass group."""
@@ -472,7 +522,7 @@ class Character:
     def _struck(self, hit: Collision) -> None:
         """A body hit the stand-in: the blow it delivered becomes a knock, unless it was pushed."""
         other = hit.other
-        if (not hit.solved or self.controller.pushing is not None or other is None
+        if (not hit.solved or self._controller.pushing is not None or other is None
                 or other.kind != 'dynamic'):
             return
         self._knocks.append(np.asarray(hit.normal, dtype='d') * float(hit.impulse))
@@ -503,7 +553,7 @@ class Character:
         listeners = self._listeners
         if 'before-step' in listeners:
             self._tell('before-step', CharacterStep(self, dt))
-        controller = self.controller
+        controller = self._controller
         self._previous, self._alpha = controller.position.copy(), 1.0
         for knock in self._knocks:
             controller.knockback(knock)
@@ -534,7 +584,7 @@ class Character:
         The speed it moves at is the distance it covered since the last animation over ``dt``,
         and a landing in any of the steps since is the landing the clips hear.
         """
-        controller = self.controller
+        controller = self._controller
         here = np.asarray(controller.position)
         velocity = (here - self._marked) / dt if dt > 0.0 else np.asarray(controller.velocity)
         self._marked = here.copy()
@@ -576,7 +626,7 @@ class Character:
         <OpenGLContext.physics.service.Physics._defers_stand_ins>`) the write
         waits for something that can see it.
         """
-        here = tuple(float(v) for v in self.controller.position)
+        here = tuple(float(v) for v in self._controller.position)
         moving = tuple(float(v) for v in velocity)
         if (here, moving) == self._stand_in_at:
             return

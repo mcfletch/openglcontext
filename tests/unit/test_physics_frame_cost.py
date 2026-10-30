@@ -9,18 +9,19 @@ import time
 
 import numpy as np
 import pytest
-from omi_physics import mathutil, model
+from omi_physics import mathutil
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.physics import runtime as runtime_module
 from OpenGLContext.physics import service as service_module
 from OpenGLContext.physics.proxy import Proxy
-from OpenGLContext.physics.records import BodySpec, Command
+from OpenGLContext.physics.records import Motion, BodySpec, Command
 from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker
 from OpenGLContext.scenegraph.basenodes import Transform
+from OpenGLContext.testing import physics as physics_testing
 
 #: A frame that is not a whole number of steps, so published poses are interpolated.
 FRAME = 0.015
@@ -33,13 +34,13 @@ def definition(**named) -> PhysicsDefinition:
 
 
 def floor(uid: int = 1000) -> Command:
-    return Command('add', uid, (BodySpec(uid, 'static', Proxy.box((60, 1, 60)), model.Motion(),
+    return Command('add', uid, (BodySpec(uid, 'static', Proxy.box((60, 1, 60)), Motion(),
                                          position=(0, -0.5, 0)),))
 
 
 def box(uid: int, position) -> Command:
     return Command('add', uid, (BodySpec(uid, 'dynamic', Proxy.box((0.5, 0.5, 0.5)),
-                                         model.Motion(mass=1.0), position=position),))
+                                         Motion(mass=1.0), position=position),))
 
 
 def boxes_at_rest(count: int = 20) -> InlineWorker:
@@ -83,7 +84,7 @@ def drifter_world(world) -> None:
 
 def test_a_body_that_falls_asleep_is_drawn_where_the_world_left_it():
     physics = Physics(definition(mode='inline', gravity=(0, 0, 0)))
-    drifter_world(physics.world)
+    drifter_world(physics_testing.inspect(physics))
     body = physics.add_dynamic(Transform(), Proxy.box((0.5, 0.5, 0.5)), mass=1.0,
                                linear_damping=0.0)
     body.set_velocity((0.5, 0.0, 0.0))
@@ -92,7 +93,7 @@ def test_a_body_that_falls_asleep_is_drawn_where_the_world_left_it():
         if body.asleep:
             break
     assert body.asleep
-    live = physics.world.position[physics.slot_of(body)]
+    live = physics_testing.inspect(physics).position[physics_testing.slot_of(physics, body)]
     assert live[0] > 0.01
     assert np.allclose(np.asarray(body.node.translation), live, atol=1e-6, rtol=0.0)
     physics.close()
@@ -245,7 +246,7 @@ def _specs(worker: InlineWorker) -> dict:
     runtime = worker.runtime
     for uid in range(1, 21):
         index = runtime.entry(uid).index
-        specs[uid] = BodySpec(uid, 'dynamic', Proxy.box((0.5, 0.5, 0.5)), model.Motion(mass=1.0),
+        specs[uid] = BodySpec(uid, 'dynamic', Proxy.box((0.5, 0.5, 0.5)), Motion(mass=1.0),
                               position=tuple(runtime.world.position[index]),
                               orientation=tuple(runtime.world.orientation[index]))
     return specs
@@ -264,9 +265,9 @@ def test_nodes_and_replica_agree_with_the_world_once_it_rests(mode):
         if all(body.asleep for body in bodies):
             break
     physics.frame(FRAME)
-    future = physics.run(lambda world: world.position.copy())
+    future = physics_testing.run(physics, lambda world: world.position.copy())
     live = future.result(timeout=5.0)
-    slots = physics.run(lambda world: [physics.worker.runtime.entry(b.uid).index for b in bodies])
+    slots = physics_testing.run(physics, lambda world: [physics.worker.runtime.entry(b.uid).index for b in bodies])
     slots = slots.result(timeout=5.0)
     replica = physics._replica
     for body, slot in zip(bodies, slots, strict=True):

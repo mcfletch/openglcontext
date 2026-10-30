@@ -81,14 +81,17 @@ def test_definition_for_defaults_a_context_that_has_none():
 
 
 def test_gravity_as_a_world_gravity_record():
-    definition = PhysicsDefinition(gravity=(0, -3.0, 0))
-    gravity = definition.world_gravity()
+    from OpenGLContext.physics import omi_adapter
+
+    gravity = omi_adapter.gravity(PhysicsDefinition(gravity=(0, -3.0, 0)).gravity)
     assert gravity.gravity == pytest.approx(3.0)
     assert np.allclose(gravity.direction, (0, -1, 0))
 
 
 def test_zero_gravity_gives_a_world_with_none():
-    gravity = PhysicsDefinition(gravity=(0, 0, 0)).world_gravity()
+    from OpenGLContext.physics import omi_adapter
+
+    gravity = omi_adapter.gravity(PhysicsDefinition(gravity=(0, 0, 0)).gravity)
     assert gravity.gravity == 0.0
 
 

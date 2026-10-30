@@ -9,7 +9,7 @@ import pytest
 from omi_physics import model
 
 from OpenGLContext.physics.proxy import Proxy
-from OpenGLContext.physics.records import BodySpec, Command
+from OpenGLContext.physics.records import Motion, BodySpec, Command
 from OpenGLContext.physics.runtime import WorldRuntime
 from OpenGLContext.physics.settings import PhysicsDefinition
 
@@ -20,9 +20,7 @@ def runtime(gravity=(0.0, -9.81, 0.0), tick_hz=100.0, **named) -> WorldRuntime:
 
 def add(rt: WorldRuntime, uid: int, kind: str, proxy: Proxy, position=(0, 0, 0),
         mass: float = 1.0, **named) -> BodySpec:
-    spec = BodySpec(uid, kind, proxy, model.Motion(
-        type={'static': model.STATIC, 'kinematic': model.KINEMATIC}.get(kind, model.DYNAMIC),
-        mass=mass), position=tuple(position), **named)
+    spec = BodySpec(uid, kind, proxy, Motion(mass=mass), position=tuple(position), **named)
     rt.apply(Command('add', uid, (spec,)))
     return spec
 

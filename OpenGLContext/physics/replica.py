@@ -21,6 +21,7 @@ from omi_physics.collisionquery import WorldQuery
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, Snapshot
+from OpenGLContext.physics.omi_adapter import omi_shape
 from OpenGLContext.physics.runtime import give_mass
 
 __all__ = ['KINEMATIC_MASS', 'Replica']
@@ -95,7 +96,7 @@ class Replica:
         world = self.world
         shape = self._shapes.get(spec.proxy.uid)
         if shape is None:
-            shape = self._shapes[spec.proxy.uid] = world.add_shape(spec.proxy.shape)
+            shape = self._shapes[spec.proxy.uid] = world.add_shape(omi_shape(spec.proxy))
         moves = spec.kind in ('dynamic', 'kinematic')
         motion = model.Motion(type=model.DYNAMIC if moves else model.STATIC,
                               mass=spec.motion.mass if spec.kind == 'dynamic' else KINEMATIC_MASS)
@@ -111,7 +112,7 @@ class Replica:
         world = self.world
         shape = self._shapes.get(batch.proxy.uid)
         if shape is None:
-            shape = self._shapes[batch.proxy.uid] = world.add_shape(batch.proxy.shape)
+            shape = self._shapes[batch.proxy.uid] = world.add_shape(omi_shape(batch.proxy))
         indices = world.add_bodies(shape, batch.positions, collider=model.Collider(shape=shape))
         for offset, index in enumerate(indices.tolist()):
             self._index[batch.first + offset] = int(index)

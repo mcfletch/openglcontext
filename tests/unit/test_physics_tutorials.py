@@ -19,6 +19,7 @@ import pytest
 from OpenGLContext import renderoptions
 from OpenGLContext.testing.audio import RecordingAudio
 from OpenGLContext.video.clock import FixedStepClock
+from OpenGLContext.testing import physics as physics_testing
 
 TUTORIALS = Path(__file__).resolve().parents[1] / 'tutorials'
 FRAME = 1.0 / 60.0
@@ -156,11 +157,11 @@ def test_each_body_is_given_the_shape_the_tutorial_names(gl_context):
     with running('physics', 'physics_stairs_shapes') as run:
         run.frame()
         context = run.context
-        assert context.body.proxy.shape.type == 'sphere'
-        assert context.barrel.proxy.shape.type == 'convex'
-        assert len(context.barrel.proxy.shape.points) <= 40       # the 10 sided hull, not the 64 drawn
-        assert context.bollard.proxy.shape.type == 'convex'
-        assert context.crate_shape.shape.type == 'box'
+        assert context.body.proxy.kind == 'sphere'
+        assert context.barrel.proxy.kind == 'convex'
+        assert len(context.barrel.proxy.params['points']) <= 40       # the 10 sided hull, not the 64 drawn
+        assert context.bollard.proxy.kind == 'convex'
+        assert context.crate_shape.kind == 'box'
         assert len(context.crates) >= 4
         assert all(crate.proxy is context.crate_shape for crate in context.crates)
 
@@ -251,7 +252,7 @@ def test_pausing_holds_the_ball_where_it_is_and_pausing_again_lets_it_go(gl_cont
 def test_the_finer_step_is_taken_at_the_rate_asked_for(gl_context):
     with running('physics', 'physics_stairs_tuning') as run:
         run.seconds(0.5)
-        world = run.physics.world
+        world = physics_testing.inspect(run.physics)
         before = world.step_count
         run.seconds(1.0)
         coarse = world.step_count - before
@@ -279,7 +280,7 @@ def test_with_physics_switched_off_the_ball_stays_where_it_was_put(gl_context):
         placed = np.array(run.context.ball.translation)
         run.seconds(3.0)
         assert np.allclose(run.context.ball.translation, placed)
-        assert run.physics.world.step_count == 0
+        assert physics_testing.inspect(run.physics).step_count == 0
 
 
 # -- characters ---------------------------------------------------------------------------
@@ -452,11 +453,11 @@ def test_the_joints_hold_the_pendulum_the_chain_the_spinner_and_the_drawer(gl_co
 def test_each_cooking_strategy_gives_the_proxy_it_names(gl_context):
     with running('physics', 'physics_cook_view') as run:
         run.frame()
-        seen = [run.context.proxy.shape.type]
+        seen = [run.context.proxy.kind]
         for _ in range(2):
             run.context.on_cycle(None)
             run.frame()
-            seen.append(run.context.proxy.shape.type)
+            seen.append(run.context.proxy.kind)
         assert seen == run.module.STRATEGIES
         assert run.until(lambda: run.context.body.asleep, seconds=20.0)
         assert 0.3 < run.context.body.position[1] < 2.0
@@ -473,9 +474,9 @@ def test_the_pile_falls_into_the_bowl_and_a_wave_adds_forty(gl_context):
                    for body in context.bodies)
         context.on_add_wave(None)
         assert len(context.bodies) == 2 * run.module.WAVE
-        assert run.physics.backend
+        assert run.physics.engine.compute
         run.context.on_toggle_backend(None)
-        assert run.physics.backend in ('numpy', 'glcompute')
+        assert run.physics.engine.compute in ('numpy', 'glcompute')
 
 
 @pytest.mark.parametrize('mode', ['inline', 'thread'])

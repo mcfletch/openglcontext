@@ -10,7 +10,9 @@ walk, run, jump and swim on the same collision world. The render tree, culling,
 shadows and picking work the same with or without it.
 
 The simulation itself is the ``omi_physics`` package, a dependency of
-OpenGLContext. OpenGLContext adds the service every context hosts
+OpenGLContext; the service's API names none of its types, so the engine
+underneath can change without a game changing (:ref:`physics-engine`).
+OpenGLContext adds the service every context hosts
 (``context.physics``), the binding to scene nodes, events, characters, walking
 for any context, colliders for streamed worlds, and a debug overlay. The data model is
 the `OMI glTF physics extension family
@@ -20,9 +22,12 @@ indented technical notes point at the code.
 
 A game imports what it needs from ``OpenGLContext.physics``: ``Physics``,
 ``Body``, ``Character``, ``Joint``, ``Proxy``, ``PhysicsDefinition``,
-``CharacterCapabilities``, ``Material`` and ``CollisionFilter``. A program that
-imports ``omi_physics`` itself reaches the parts of the engine the service has
-no call for.
+``CharacterCapabilities``, ``CharacterState``, ``Material``,
+``CollisionFilter``, ``Poses``, ``EngineInfo`` and ``GravityZone``. Each is
+OpenGLContext's own class (``OpenGLContext.physics.types``); the service
+converts them to the engine's at its boundary. ``CharacterCapabilities``,
+``Material`` and ``CollisionFilter`` keep the OMI field names, and an object
+with those fields (an ``omi_physics`` instance) is accepted in their place.
 
 .. _physics-authoring:
 
@@ -125,8 +130,7 @@ The options are keywords:
      - kilograms, for a dynamic body; left out, the shape's volume at
        ``density`` (500 kg per cubic metre)
    * - ``material``
-     - a preset or defined name (:ref:`physics-materials`) or an
-       ``omi_physics.model.Material``
+     - a preset or defined name (:ref:`physics-materials`) or a ``Material``
    * - ``friction``, ``restitution``
      - a Coulomb coefficient and the fraction of the closing speed a bounce
        keeps; they make an anonymous material, from ``material`` where that is
@@ -134,10 +138,13 @@ The options are keywords:
    * - ``linear_damping``, ``angular_damping``
      - per second; the world's ``linearDamping`` (0.3) and ``angularDamping``
        (1.5) where left out
+   * - ``gravity_factor``
+     - how much of gravity a body feels: 1 (the default) all of it, 0 none,
+       below 0 pulled up; ``Body.set_gravity_factor`` changes it later
    * - ``collision_filter``
      - a ``CollisionFilter``: the systems the body is a member of, and those it
-       collides with or not (:ref:`physics-presolve`); or an index in the
-       world's own filters
+       collides with or not (:ref:`physics-presolve`); or the index of a
+       filter already given
    * - ``blocks_characters``
      - False for a body every character walks through
        (:ref:`physics-characters`)
@@ -263,18 +270,19 @@ triangles for a static body and the convex hull for a dynamic one.
 The strategy names are ``'auto'``, ``'sphere'``, ``'box'``, ``'convex'`` and
 ``'trimesh'``; ``'trimesh'`` is for static bodies only, and a node that draws no
 triangles raises ``ValueError``. ``'sphere'`` and ``'box'`` fit the primitive to
-the bounds. ``Proxy`` (``OpenGLContext.physics.proxy``) wraps an
-``omi_physics.model.Shape`` and adds ``box``, ``sphere``, ``capsule``,
-``cylinder``, ``convex(points)``, ``trimesh(points, indices)`` and
-``heightfield``. A proxy is shared by every body made with it and the world
+the bounds. ``Proxy`` (``OpenGLContext.physics.proxy``) is a ``kind`` and its
+``params``: ``box(size)``, ``sphere(radius)``, ``capsule(height, radius)``,
+``cylinder(height, radius, radius_top)``, ``convex(points)``,
+``trimesh(points, indices)``, ``compound(parts)`` and ``heightfield(...)``,
+lengths in metres. ``proxy.kind`` names the shape and ``proxy.params`` holds
+its values by those names, read-only. A proxy is shared by every body made with it and the world
 holds its shape once, so a hundred crates cost one box. ``show_proxies(True)``
 draws each body's proxy as a green wireframe over the scene and
 ``show_proxies(False)`` takes it out; see :ref:`physics-debug`.
 
-``omi_physics.cookery.cook_shape()`` makes a shape from a vertex array by the
-same strategies, with ``primitive`` the best-fitting box or sphere and
-``decompose`` a compound of convex pieces for a concave moving body, which a
-body of one shape cannot hold. To add colliders to a glTF file ahead of time,
+``Proxy.from_mesh(points, indices, strategy, dynamic)`` cooks a proxy from a
+vertex array by the same strategies; a concave moving body becomes a
+``compound`` of convex pieces, which a body of one shape cannot hold. To add colliders to a glTF file ahead of time,
 run the ``physics_cook`` module:
 
 .. code-block:: bash
@@ -292,8 +300,7 @@ Materials
 ---------
 
 A material says how a surface grips, bounces and sounds. ``wood``, ``metal``,
-``rubber`` and ``ice`` (``omi_physics.model.MATERIAL_PRESETS``) are defined from
-the start:
+``rubber`` and ``ice``, the engine's presets, are defined from the start:
 
 .. code-block:: python
 
@@ -340,7 +347,9 @@ of adding to them and ``stop`` ends the counting there. ``Zone`` nodes in the
 scene that carry gravity, and ``OMI_physics_gravity`` blocks in a loaded glTF
 (:doc:`zones`), are registered without a call and follow the zone when it moves.
 Zone gravity acts on bodies and characters of ``context.physics`` and not on
-the rigid bodies of an X3D collection (:ref:`physics-x3d`).
+the rigid bodies of an X3D collection (:ref:`physics-x3d`). ``add_gravity_zone``
+returns a ``GravityZone`` record of what it made: ``region``, ``gravity``,
+``direction``, ``toward``, ``priority``, ``replace`` and ``stop``.
 
 .. _physics-events:
 
@@ -598,7 +607,8 @@ A query answers in the call, on the thread that makes it:
    distance = physics.sweep_sphere(origin, direction, distance, radius)      # how far it goes, or None
    touching = physics.overlap(proxy, translation, rotation=None, triggers=False)   # the Bodies it overlaps
 
-In inline mode a query reads the live world. In thread mode the render thread
+``proxy`` is a ``Proxy``. In inline mode a query reads the live world, and so
+does a query made in an ``on_step`` function. In thread mode the render thread
 reads a copy of the bodies it keeps in step with what the world publishes, so a
 query sees bodies as they stood at the last step, and a character as it is now.
 ``sweep_sphere`` answers 0 for a sphere that starts inside a body and steps by
@@ -628,11 +638,21 @@ capsule that is placed at it each frame with the velocity it moved at:
    me.speed = 2.0; me.speed = None           # set it; None gives the mode's speed back
    me.jump(); me.set_crouch(True); me.slide(0.8)
    me.position, me.eye, me.velocity, me.grounded, me.state, me.heading
+   me.vertical_speed, me.height, me.radius, me.stuck, me.capabilities
    me.addEventHandler('hit', function=fn)    # a body's events; 'landed' and 'footstep' too
    me.remove()
 
-The capsule's size and speeds are an ``omi_physics`` ``CharacterCapabilities``
-(:ref:`character`). ``set_move(direction, mode='walk', speed=None)`` moves at
+The capsule's size and speeds are a ``CharacterCapabilities``
+(:ref:`character`), kept as ``me.capabilities``. ``me.motion_state`` is a
+``CharacterState``: ``STANDING``, ``CROUCHING``, ``SLIDING``, ``AIRBORNE``,
+``DOWN``, ``SWIMMING`` or ``FLYING``. ``me.state`` is equal (``==``) to the
+same member; it is the engine's own member, which a game comparing with ``is``
+against the engine's enumeration still finds, and it becomes the
+``CharacterState`` member when that use is gone. ``me.vertical_speed`` is how fast the
+capsule rises in metres a second (below zero it falls), ``me.height`` its height
+now in metres (less crouched or sliding), ``me.radius`` its radius, and
+``me.stuck`` whether its last step could not move it out of what it overlaps.
+``set_move(direction, mode='walk', speed=None)`` moves at
 ``speed`` metres a second where one is given and at the mode's speed from the
 capabilities where it is None; a crouched character goes no faster than
 ``crouchSpeed``. ``me.speed`` is the speed the moves go at, and setting it
@@ -671,9 +691,8 @@ in a step, or a ray, sweep or overlap whose bounds reach it. Until then the
 stand-in waits, still, where it was last written, and the write puts it where it
 would have been had it been written at every step, so bodies, triggers and
 queries meet it as they would. Its pose read from its body is that of the last
-write. ``physics.world``, ``physics.run``, ``slot_of``, ``index_of`` and
-``body_at`` write every waiting stand-in first, so the raw world holds each one
-where its character is. With a second character, a worker
+write. ``physics.poses`` and the queries write a waiting stand-in they can
+reach first, so they meet each one where its character is. With a second character, a worker
 thread or the proxies shown, each write is made as it is asked for.
 
 A character takes the same steps as the world. The frame steps each character
@@ -812,14 +831,10 @@ accumulator capped at ``maxCatchUp`` and runs as many whole steps of ``1 /
 tickHz`` as the accumulator holds. Which step a body was in when something
 happened is therefore the same on every run at a given frame time, and
 ``physics.step(dt)`` and ``frame(dt)`` let a program supply its own time, as a
-replay's recorded frame times or a headless trace do. The world is then the
-caller's to read: ``physics.world`` is the live ``omi_physics`` world,
-``physics.slot_of(body)`` and ``body_at(slot)`` map bodies to rows of its arrays,
-``flush()`` applies the commands still waiting, and ``drop_remainder()`` forgets
-the time left over from a frame so a game that starts something afresh does not
-simulate it. ``physics.run(function)`` calls ``function(world)`` on the thread
-that steps the world at the start of a step and returns a future; it is how a
-call the service has not named is made in either mode.
+replay's recorded frame times or a headless trace do. ``flush()`` applies the
+commands still waiting, and ``drop_remainder()`` forgets the time left over from
+a frame so a game that starts something afresh does not simulate it. Reads and
+tick-exact code work the same in both modes (:ref:`physics-reading`).
 
 In ``thread`` mode the same steps run on a worker at ``tickHz``, which keeps the
 render thread free of a heavy world. Under CPython's global interpreter lock the
@@ -844,13 +859,113 @@ and calls ``context.physics.frame(dt)`` where it wants the step.
 
 An exception that ends the worker's thread is logged once with its traceback
 and kept as ``physics.error``. The world takes no more steps and bodies stay
-where they were. A ``physics.run(fn)`` future fails with that exception, and
-``physics.worker.settle()`` answers False at once. The next
+where they were, and ``physics.worker.settle()`` answers False at once. The next
 ``physics.frame(dt)`` raises a ``RuntimeError`` whose cause is that exception,
 once. A collider source or a character whose ``update`` raises in the frame is
 logged once for each distinct failure, and the frame goes on with the others.
 A context's frame hook logs what ``frame`` raises, once for each distinct
 failure, and draws the frame, so physics never raises into the draw.
+
+.. _physics-reading:
+
+Reading bodies and tick-exact code
+----------------------------------
+
+``physics.poses(bodies)`` reads many bodies at once, as arrays. ``bodies`` is a
+list of ``Body`` handles or their ``uid`` numbers, and the answer is a ``Poses``
+with a row for each, in that order:
+
+.. code-block:: python
+
+   poses = physics.poses(marbles)
+   poses.position          # (n, 3) metres
+   poses.orientation       # (n, 4) unit quaternions (x, y, z, w)
+   poses.velocity          # (n, 3) metres a second
+   poses.angular_velocity  # (n, 3) radians a second about the world axes
+   poses.mass              # (n,) kilograms, 0 for a body that is not dynamic
+   poses.asleep            # (n,) whether the world has put a dynamic body to sleep
+   poses.uids              # (n,) the bodies' uid numbers
+
+On the render thread a body that moves is read where the frame draws it, part of
+the way into the next step, as ``body.position`` is.
+``physics.poses(bodies, interpolated=False)`` and ``body.step_position`` give
+where the last step left it. An unknown uid raises ``KeyError``.
+
+``physics.on_step(function)`` calls ``function(view)`` on the thread that steps
+the world, after every fixed step, in both modes. ``view`` is a ``StepView``
+(``OpenGLContext.physics.stepview``): ``view.step`` (its ``dt``, ``index`` and the
+``time`` it began), ``view.dt``, ``view.time`` (the world's clock at its end),
+``view.poses(bodies)`` as that step left them, and ``raycast``,
+``raycast_many``, ``sweep_sphere`` and ``overlap`` answered from the world as it
+stands. Writes through ``Body`` handles inside the function take effect at once,
+so a magnet, an updraft or a buoyant pool is a function of the step:
+
+.. code-block:: python
+
+   def updraft(view):
+       poses = view.poses(balls)
+       for ball, at in zip(balls, poses.position):
+           if inside(at):
+               ball.apply_impulse((0.0, 12.0 * ball.mass * view.dt, 0.0))
+
+   hook = physics.on_step(updraft)
+   ...
+   hook.cancel()
+
+The world keeps stepping while a hook is registered. A function that raises is
+logged once and called again at the next step. ``physics.post(function, *args)``
+calls ``function(*args)`` on the same thread before the next step.
+
+``body.set_gravity_factor(factor)`` scales the gravity one body feels from the
+next step: 1 is all of it, 0 none and a value below 0 pulls it up.
+``body.gravity_factor`` answers the new value at once, and ``add_dynamic``
+takes ``gravity_factor=`` as well. A pool that lets a marble sink slowly sets a
+factor of 0.2 on the marbles in it and 1 again as they leave.
+
+.. _physics-engine:
+
+The engine
+----------
+
+``physics.engine`` describes the engine that steps the world, as an
+``EngineInfo``: ``name`` (``'omi_physics'``), ``version``, ``tick_hz`` (steps a
+second), ``precision`` (``'double'``) and ``compute``, the compute backend in
+use where the engine offers a choice. ``str(physics.engine)`` is a line such as
+``omi_physics 0.4.0 double``. It is read-only.
+
+No call of the service hands a program an engine object. Code written against
+``Physics``, ``Body``, ``Character``, ``Joint``, ``Proxy``, ``poses`` and
+``on_step`` runs on whichever engine steps the world. The conversions to and
+from ``omi_physics`` are in ``OpenGLContext.physics.omi_adapter``.
+
+These calls hand over the ``omi_physics`` world and warn with a
+``DeprecationWarning``; they go in a later release:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Deprecated
+     - Use
+   * - ``physics.world``
+     - ``physics.poses(bodies)``, ``Body`` properties, ``physics.on_step``
+   * - ``physics.slot_of(body)``, ``index_of``, ``body_at(slot)``
+     - ``Body`` handles and ``uid`` numbers, which ``poses`` takes
+   * - ``physics.run(function)``
+     - ``physics.on_step``, ``physics.post`` and the joint calls
+   * - ``physics.backend``
+     - ``physics.engine.compute``; ``set_config`` with a definition whose
+       ``backend`` differs chooses another
+   * - ``character.controller``
+     - ``vertical_speed``, ``height``, ``radius``, ``stuck``, ``motion_state``,
+       ``grounded``, ``capabilities``
+   * - ``character.state is omi_physics.character.CharacterState.X``
+     - ``character.motion_state is CharacterState.X``, or ``==``
+   * - ``proxy.shape``
+     - ``proxy.kind`` and ``proxy.params``
+
+A test that checks what ``omi_physics`` itself holds reads it through
+``OpenGLContext.testing.physics`` (:ref:`testing-physics`).
 
 .. _model:
 
@@ -947,9 +1062,9 @@ the threshold, and stays on numpy where GL 4.3 compute shaders are not
 available. ``PhysicsDefinition.backend``, whose default is
 ``OPENGLCONTEXT_PHYSICS_BACKEND``, overrides the policy with one of
 ``Physics.BACKENDS``: ``auto``, ``numpy`` or its synonym ``cpu``, and ``gpu``
-or its synonym ``glcompute``. ``physics.backend`` is the name of the backend in
-use (``'numpy'`` or ``'glcompute'``), and assigning one of ``Physics.BACKENDS``
-chooses one from the next step. The GPU backend needs GL 4.3 compute
+or its synonym ``glcompute``. ``physics.engine.compute`` is the name of the
+backend in use (``'numpy'`` or ``'glcompute'``), and ``physics.set_config``
+with a definition naming another ``backend`` chooses it from the next step. The GPU backend needs GL 4.3 compute
 on the thread that steps the world, so it is for an ``inline`` world; a backend
 that cannot be made logs a warning and the world keeps the one it has. The GPU computes in float32, so its
 trajectories match the numpy backend within a tolerance, not bit for bit. The
@@ -1524,9 +1639,17 @@ the way the joint lets it. Each kind is one call on the service, which returns a
    drawer = physics.add_slider(box, cabinet, axis=(1, 0, 0), limits=(0.0, 0.4),
                                motor=(0.5, 40.0))
    rod = physics.add_distance(bob, to_anchor=(0.0, 6.0, 0.0), length=2.0)
+   shaft = physics.add_universal(drive, engine, anchor=(0, 1, 2), axis=(0, 0, 1),
+                                 to_axis=(0, 0.3, 1))
+   wheel = physics.add_wheel(tyre, car, anchor=(0.8, 0.4, 1.2), steering_axis=(0, 1, 0),
+                             axle=(1, 0, 0), steering_limits=(-0.5, 0.5),
+                             motor=(20.0, 300.0), suspension=(30000.0, 2000.0))
+   spin = physics.add_motor(rotor, axes=[(0, 1, 0)], torques=[5.0])
 
    rotor.drive(-4.0, 30.0)                     # a new speed and the most torque
    rotor.motor                                 # (-4.0, 30.0)
+   spin.drive(torques=[0.0])                   # a motor joint's torques
+   door.angle, drawer.position, wheel.angles   # radians, metres, (steering, spin)
    door.remove()
 
 .. list-table::
@@ -1549,6 +1672,21 @@ the way the joint lets it. Each kind is one call on the service, which returns a
      - the point ``anchor`` on ``body`` stays ``length`` metres from
        ``to_anchor`` on ``to``; the anchors default to the bodies' centres and
        ``length`` to the distance between them
+   * - ``add_universal(body, to, anchor=, axis=, to_axis=)``
+     - a cardan joint: ``axis`` turns with ``body`` and ``to_axis`` with
+       ``to``, and the two keep the angle between them they start at, so a spin
+       about one is carried to the other; the axes must not lie along one line
+   * - ``add_wheel(body, to, anchor=, steering_axis=, axle=, steering_limits=, motor=, steering_motor=, suspension=)``
+     - ``body`` spins about ``axle`` and steers about ``steering_axis``, carried
+       by ``to``; ``steering_limits`` in radians (equal limits lock it);
+       ``motor`` and ``steering_motor`` are a speed in radians a second and the
+       most torque in newton-metres; ``suspension`` is ``(stiffness, damping)``
+       in newtons a metre and newton-seconds a metre, a spring along the
+       steering axis, and without it the anchor is held
+   * - ``add_motor(body, to, axes=, torques=)``
+     - turns ``body`` forward and ``to`` back about one to three ``axes``
+       (carried by ``to``) with ``torques`` in newton-metres, every step; it
+       holds nothing else, so the two bodies collide unless ``collide=False``
 
 ``body`` and ``to`` are bodies or the nodes of bodies; ``to`` left out is the
 world. Anchors and axes are world coordinates as the bodies stand when the
@@ -1560,23 +1698,24 @@ in ``inline`` and ``thread`` mode alike. The world
 reports no events of its own for joints. :doc:`tutorials/physics/physics_joints`
 hangs a pendulum and a chain, turns a motor and slides a drawer.
 
-The service makes these from ``omi_physics.joints`` (``HingeJoint``,
-``BallJoint``, ``SliderJoint`` and ``DistanceConstraint``). The others there,
-``UniversalJoint``, ``TwoAxisHingeJoint`` (a steered, sprung wheel) and
-``MotorJoint``, and a joint's angle read back, are reached through
-``physics.run``:
+``joint.angles`` reads a joint back: a hinge's angle, a wheel's steering and
+spin angles, a motor joint's angle about each axis, all in radians from where
+the joint started, and a slider's slide in metres. ``joint.angle`` is the first
+of a hinge's, wheel's or motor's, and ``joint.position`` a slider's. A ball,
+distance or universal joint has none, and reading one raises
+``AttributeError``. The first read asks the world to publish the joint's
+readings and waits for its answer; with the world on its own thread later reads
+are at most a tick old. Inside an ``on_step`` function they are the world's as
+it stands. ``joint.drive(speed, force)`` runs a hinge's, slider's or wheel
+axle's motor, and ``joint.drive(torques=[...])`` sets a motor joint's torques.
 
-.. code-block:: python
+A collider may be several shapes in one body: ``Proxy.compound(parts)`` places
+each ``(proxy, position, orientation)`` at an offset in the body's frame, and
+the body's mass is shared among them by volume. A ``cylinder`` has flat ends and
+narrows to a cone where ``radius_top`` is 0.
 
-   from omi_physics.joints import TwoAxisHingeJoint
-
-   self.physics.run(lambda world: world.add_joint_constraint(TwoAxisHingeJoint(...)))
-
-A collider may be several shapes in one body: ``model.Shape.compound`` places
-each at an offset in the body's frame, and the body's mass is shared among
-them by volume. A ``cylinder`` has flat ends and narrows to a cone where
-``radiusTop`` is 0.
-
+A program working with an ``omi_physics`` world directly, with no service (a
+tool, a test), has the engine's own calls:
 ``world.set_pair_rule(rule)`` decides, each step, which pairs collide and
 how: ``rule(a, b)`` answers False to let them pass through each other, None
 for their materials, or a ``model.ContactParameters`` (restitution and the
@@ -1700,7 +1839,7 @@ reference image.
   ``follow(view='eyes')``.
 
 - :doc:`physics_stress.py <tutorials/physics/physics_stress>` - performance as the
-  number of bodies grows, and ``physics.backend``.
+  number of bodies grows, and ``physics.engine.compute``.
 
 - :doc:`using_physics.py <tutorials/physics/using_physics>` - a cannon game in its
   context's world, with kinematic bodies, a trigger and a wind. Its rules also

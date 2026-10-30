@@ -79,13 +79,13 @@ def test_a_character_takes_the_same_steps_as_a_busy_world():
 
         physics.addEventHandler('before-step', function=stepped)
         taken = []
-        update = me.controller.update
+        update = me._controller.update
 
         def counted(dt):
             taken.append(dt)
             return update(dt)
 
-        me.controller.update = counted
+        me._controller.update = counted
         me.set_move((1, 0, 0))
         for rate in (30, 144, 60, 45):
             for _ in range(rate // 3):
@@ -160,7 +160,7 @@ def test_a_correction_that_takes_a_step_back_is_drawn_without_the_step():
         me.set_move((1, 0, 0), mode='run')
         physics.frame(1 / 120 + 1 / 240)                          # one step and half the next
         assert me.drawn_position[0] < me.position[0]              # drawn half a step behind
-        me.controller.position[0] -= 1.0                          # a host pushes it back a metre
+        me._controller.position[0] -= 1.0                          # a host pushes it back a metre
         assert me.drawn_position[0] == pytest.approx(me.position[0])
     finally:
         physics.close()

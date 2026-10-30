@@ -9,12 +9,13 @@ import math
 
 import numpy as np
 import pytest
-from omi_physics.character import CharacterCapabilities
+from OpenGLContext.physics import CharacterCapabilities
 
 from OpenGLContext.physics.callbacks import physics_callback
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.testing import physics as physics_testing
 
 FRAME = 1.0 / 60.0
 EVENTS = ('hit', 'touching', 'separate', 'enter', 'stay', 'exit')
@@ -114,7 +115,7 @@ def looks(service: Physics, walkers: list, rng: np.random.Generator) -> list:
 
 
 def state(service: Physics, walkers: list) -> list:
-    # The runtime's world as it stands: physics.world would write the stand-ins first.
+    # The runtime's world as it stands: physics_testing.inspect(physics) would write the stand-ins first.
     world = service.worker.runtime.world
     return [walker.position.tolist() for walker in walkers] + [
         world.position[i].tolist() for i in range(len(world.position))
@@ -187,7 +188,7 @@ def test_a_ray_at_the_walker_finds_the_stand_in_where_the_walker_is():
     feet = walker.position
     hit = service.raycast(feet + (0.0, 5.0, 0.0), (0.0, -1.0, 0.0), 10.0)
     assert hit is not None and hit.body is walker.body
-    top = walker.controller.position[1] + 0.5 * walker.capabilities.standHeight
+    top = walker._controller.position[1] + 0.5 * walker.capabilities.standHeight
     assert hit.point[1] == pytest.approx(top, abs=0.06)
     service.close()
 
@@ -224,14 +225,16 @@ def runner() -> tuple[Physics, object]:
 
 def test_the_raw_world_holds_the_stand_in_where_the_walker_is():
     service, walker = runner()
-    x = float(walker.controller.position[0])
-    assert float(service.world.position[service.slot_of(walker.body)][0]) == pytest.approx(x, abs=0.05)
+    x = float(walker._controller.position[0])
+    world = physics_testing.inspect(service)
+    assert float(world.position[physics_testing.slot_of(service, walker.body)][0]) == pytest.approx(x, abs=0.05)
     service.close()
 
 
 def test_run_and_body_at_see_the_stand_in_where_the_walker_is():
     service, walker = runner()
-    x = float(walker.controller.position[0])
-    found = service.run(lambda world: float(world.position[service.index_of(walker.body)][0]))
+    x = float(walker._controller.position[0])
+    found = physics_testing.run(
+        service, lambda world: float(world.position[physics_testing.slot_of(service, walker.body)][0]))
     assert found.result(1.0) == pytest.approx(x, abs=0.05)
     service.close()

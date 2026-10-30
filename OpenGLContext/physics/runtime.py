@@ -23,15 +23,21 @@ from typing import Any
 import numpy as np
 from omi_physics import mathutil, model
 from omi_physics.contactevents import BodyRef, ContactEvent, TriggerEvent, Verdict
+from omi_physics.joints import (
+    BallJoint, DistanceConstraint, HingeJoint, MotorJoint, SliderJoint, TwoAxisHingeJoint,
+    UniversalJoint,
+)
 from omi_physics.massprops import inertia_diagonal
 from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.events.framestep import FixedSteps
-from OpenGLContext.physics.joints import JointSpec, JointTable
+from OpenGLContext.physics import omi_adapter
+from OpenGLContext.physics.omi_adapter import omi_shape
+from OpenGLContext.physics.joints import JointSpec
 from OpenGLContext.physics.records import BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.settings import PhysicsDefinition
 
-__all__ = ['WorldRuntime', 'give_mass']
+__all__ = ['JointTable', 'WorldRuntime', 'build_joint', 'give_mass']
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +56,125 @@ def give_mass(world: PhysicsWorld, index: int, shape: model.Shape, mass: float) 
     world.inv_mass[index] = 1.0 / mass
     diagonal = inertia_diagonal(shape, mass)
     world.inv_inertia[index] = np.where(diagonal > 0.0, 1.0 / np.maximum(diagonal, 1e-12), 0.0)
+
+
+_ORIGIN = (0.0, 0.0, 0.0)
+_UP = (0.0, 1.0, 0.0)
+
+
+def build_joint(spec: JointSpec, world: PhysicsWorld, body: int, to: int) -> Any:
+    """The omi_physics constraint for ``spec`` between world slots ``body`` and ``to`` (-1, the world)."""
+    anchor, axis = spec.anchor or _ORIGIN, spec.axis or _UP
+    made: Any
+    if spec.kind == 'hinge':
+        made = HingeJoint(to, body, anchor, axis, lower=spec.lower, upper=spec.upper,
+                          motor_speed=spec.speed, motor_torque=spec.force)
+    elif spec.kind == 'ball':
+        made = BallJoint(to, body, anchor)
+    elif spec.kind == 'slider':
+        made = SliderJoint(to, body, axis, lower=spec.lower, upper=spec.upper,
+                           motor_speed=spec.speed, motor_force=spec.force)
+    elif spec.kind == 'universal':
+        made = UniversalJoint(to, body, anchor, spec.to_axis or _UP, axis)
+    elif spec.kind == 'wheel':
+        made = TwoAxisHingeJoint(to, body, anchor, axis, spec.to_axis or _UP, lower1=spec.lower,
+                                 upper1=spec.upper, motor1_speed=spec.steer_speed,
+                                 motor1_torque=spec.steer_force, motor2_speed=spec.speed,
+                                 motor2_torque=spec.force, suspension_stiffness=spec.stiffness,
+                                 suspension_damping=spec.damping)
+    elif spec.kind == 'motor':
+        made = MotorJoint(to, body, spec.axes, spec.torques)
+    else:
+        made = DistanceConstraint(to, body, _local(world, to, spec.to_anchor or _ORIGIN),
+                                  _local(world, body, anchor), length=spec.length)
+    made.collide_connected = spec.collide
+    return made
+
+
+def _local(world: PhysicsWorld, slot: int, point: Any) -> np.ndarray:
+    """``point`` in the frame of the body in ``slot``; the world's own frame for -1."""
+    at = np.asarray(point, dtype='d')
+    if slot < 0:
+        return at
+    turn = mathutil.quat_to_matrix(np.asarray(world.orientation[slot], dtype='d'))
+    return np.asarray(turn.T @ (at - np.asarray(world.position[slot], dtype='d')))
+
+
+class JointTable:
+    """The worker's joints: each joint's constraint in the world, by joint id."""
+
+    def __init__(self) -> None:
+        self._held: dict[int, tuple[Any, int, int]] = {}
+
+    def __len__(self) -> int:
+        return len(self._held)
+
+    def __contains__(self, joint: int) -> bool:
+        return joint in self._held
+
+    def add(self, world: PhysicsWorld, joint: int, spec: JointSpec, body: int | None,
+            to: int | None) -> None:
+        """Make joint ``joint`` from ``spec`` between world slots ``body`` and ``to`` (-1, the world).
+
+        A slot of None is a body that has left the world, and the joint is not made.
+        """
+        if body is None or to is None:
+            log.warning('joint %d names a body that has left the world; it is not made', joint)
+            return
+        made = world.add_joint_constraint(build_joint(spec, world, body, to))
+        self._held[joint] = (made, spec.body, spec.to)
+
+    def remove(self, world: PhysicsWorld, joint: int) -> None:
+        """Take joint ``joint`` out of the world; one that is not there is ignored."""
+        held = self._held.pop(joint, None)
+        if held is not None:
+            world.remove_joint_constraint(held[0])
+            self._wake(world, held[0])
+
+    @staticmethod
+    def _wake(world: PhysicsWorld, made: Any) -> None:
+        for slot in (getattr(made, 'a', -1), getattr(made, 'b', -1)):
+            if slot >= 0:
+                world.wake(slot)
+
+    def motor(self, world: PhysicsWorld, joint: int, speed: float, force: float) -> None:
+        """Give joint ``joint``'s motor (a wheel's axle motor) a new speed and limit, and wake its bodies."""
+        held = self._held.get(joint)
+        if held is None:
+            return
+        made = held[0]
+        if isinstance(made, TwoAxisHingeJoint):
+            made.motor2_speed, made.motor2_torque = float(speed), float(force)
+        elif isinstance(made, SliderJoint):
+            made.motor_speed, made.motor_force = float(speed), float(force)
+        else:
+            made.motor_speed, made.motor_torque = float(speed), float(force)
+        self._wake(world, made)
+
+    def torques(self, world: PhysicsWorld, joint: int, torques: tuple[float, ...]) -> None:
+        """Give motor joint ``joint`` new torques about its axes, and wake its bodies."""
+        held = self._held.get(joint)
+        if held is not None and isinstance(held[0], MotorJoint):
+            held[0].torques = [float(value) for value in torques]
+            self._wake(world, held[0])
+
+    def reading(self, world: PhysicsWorld, joint: int) -> tuple[float, ...]:
+        """Joint ``joint``'s angles in radians, or a slider's slide in metres; () for none."""
+        made = self._held[joint][0]
+        if isinstance(made, TwoAxisHingeJoint):
+            return (float(made.angle1(world)), float(made.angle2(world)))
+        if isinstance(made, HingeJoint):
+            return (float(made.angle(world)),)
+        if isinstance(made, SliderJoint):
+            return (float(made.separation(world)),)
+        if isinstance(made, MotorJoint):
+            return tuple(float(made.angle(world, index)) for index in range(len(made.axes_world)))
+        return ()
+
+    def forget_body(self, world: PhysicsWorld, body: int) -> None:
+        """Remove the joints of body id ``body``, which is leaving the world."""
+        for joint in [joint for joint, held in self._held.items() if body in held[1:]]:
+            self.remove(world, joint)
 
 
 class _Entry:
@@ -72,13 +197,13 @@ class WorldRuntime:
         self.step_dt = 1.0 / float(definition.tickHz)
         self.max_catch_up = float(definition.maxCatchUp)
         try:
-            self.world = PhysicsWorld(gravity=definition.world_gravity(), fixed_dt=self.step_dt,
-                                      backend=definition.backend)
+            self.world = PhysicsWorld(gravity=omi_adapter.gravity(definition.gravity),
+                                      fixed_dt=self.step_dt, backend=definition.backend)
         except Exception as error:  # noqa: BLE001 a backend that cannot be made leaves the default
             log.warning('the %s physics backend could not be made (%s); the world steps on auto',
                         definition.backend, error)
-            self.world = PhysicsWorld(gravity=definition.world_gravity(), fixed_dt=self.step_dt,
-                                      backend='auto')
+            self.world = PhysicsWorld(gravity=omi_adapter.gravity(definition.gravity),
+                                      fixed_dt=self.step_dt, backend='auto')
         self.world.log_events = False
         #: Called with each :class:`Step` before and after the world steps.
         self.before_step: list[Callable[[Step], Any]] = []
@@ -118,6 +243,8 @@ class WorldRuntime:
         self.drivers: dict[int, Callable[[float], Any]] = {}
         #: The joints in the world, by joint id.
         self.joints = JointTable()
+        #: The joints whose readings each snapshot carries.
+        self.watched_joints: set[int] = set()
         #: The application's contact filter, asked after the stand-ins' rule; None for none.
         self.contact_filter: Callable[[Any], Any] | None = None
         self._thread = threading.get_ident()
@@ -174,10 +301,10 @@ class WorldRuntime:
         proxy = spec.proxy
         index_of_shape = self._shapes.get(proxy.uid)
         if index_of_shape is None:
-            index_of_shape = self._shapes[proxy.uid] = world.add_shape(proxy.shape)
-        motion = spec.motion
-        if spec.kind in ('static', 'trigger'):
-            motion = model.Motion(type=model.STATIC)
+            index_of_shape = self._shapes[proxy.uid] = world.add_shape(omi_shape(proxy))
+        given = spec.motion
+        motion = omi_adapter.motion(spec.kind, given.mass, given.linear_damping,
+                                    given.angular_damping, given.gravity_factor)
         collider = trigger = None
         if spec.kind == 'trigger':
             trigger = model.Trigger(shape=index_of_shape, collisionFilter=spec.collision_filter)
@@ -198,7 +325,7 @@ class WorldRuntime:
         world = self.world
         shape = self._shapes.get(batch.proxy.uid)
         if shape is None:
-            shape = self._shapes[batch.proxy.uid] = world.add_shape(batch.proxy.shape)
+            shape = self._shapes[batch.proxy.uid] = world.add_shape(omi_shape(batch.proxy))
         collider = model.Collider(shape=shape, physicsMaterial=self.material_index(batch.material),
                                   collisionFilter=batch.collision_filter)
         indices = world.add_bodies(shape, batch.positions, collider=collider)
@@ -264,13 +391,12 @@ class WorldRuntime:
         self.world.wake(index)
 
     def _op_gravity(self, uid: int, vector: Any) -> None:  # noqa: ARG002 gravity belongs to the world
-        x, y, z = (float(v) for v in vector)
-        strength = (x * x + y * y + z * z) ** 0.5
-        if strength == 0.0:
-            self.world.gravity = model.Gravity(gravity=0.0, direction=(0.0, -1.0, 0.0))
-        else:
-            self.world.gravity = model.Gravity(
-                gravity=strength, direction=(x / strength, y / strength, z / strength))
+        self.world.gravity = omi_adapter.gravity(vector)
+
+    def _op_gravity_factor(self, uid: int, factor: float) -> None:
+        index = self._entries[uid].index
+        self.world.gravity_factor[index] = float(factor)
+        self.world.wake(index)
 
     def _op_damping(self, uid: int, linear: float | None, angular: float | None) -> None:
         index = self._entries[uid].index
@@ -317,6 +443,14 @@ class WorldRuntime:
 
     def _op_unjoint(self, uid: int, joint: int) -> None:  # noqa: ARG002 named by the joint
         self.joints.remove(self.world, joint)
+        self.watched_joints.discard(joint)
+
+    def _op_joint_watch(self, uid: int, joint: int) -> None:  # noqa: ARG002 named by the joint
+        self.watched_joints.add(joint)
+
+    def _op_joint_torques(self, uid: int, joint: int,  # noqa: ARG002 named by the joint
+                          torques: tuple[float, ...]) -> None:
+        self.joints.torques(self.world, joint, torques)
 
     def _op_joint_motor(self, uid: int, joint: int, speed: float,  # noqa: ARG002 named by the joint
                         force: float) -> None:
@@ -350,7 +484,8 @@ class WorldRuntime:
         self.contact_filter = function
 
     def _op_filter(self, uid: int, index: int,  # noqa: ARG002 filters are the world's
-                   collision_filter: model.CollisionFilter) -> None:
+                   given: Any) -> None:
+        collision_filter = omi_adapter.omi_filter(given)
         filters = self.world.filters
         while len(filters) < index:
             filters.append(model.CollisionFilter())
@@ -394,7 +529,7 @@ class WorldRuntime:
                     world.orientation[index], target) / step.dt
             world.wake(index)
 
-    def _op_material(self, uid: int, name: str, material: model.Material) -> None:  # noqa: ARG002 world-wide
+    def _op_material(self, uid: int, name: str, material: Any) -> None:  # noqa: ARG002 world-wide
         self.define_material(name, material)
 
     def _op_pair_friction(self, uid: int, first: str, second: str,  # noqa: ARG002 world-wide
@@ -402,18 +537,18 @@ class WorldRuntime:
         self.world.set_pair_friction(self.material_index(first), self.material_index(second),
                                      static, dynamic)
 
-    def _op_gravity_zone(self, uid: int, volume: Any) -> None:  # noqa: ARG002 world-wide
-        self.world.add_gravity_volume(volume)
+    def _op_gravity_zone(self, uid: int, zone: Any) -> None:  # noqa: ARG002 world-wide
+        self.world.add_gravity_volume(omi_adapter.gravity_volume(zone))
 
-    def _op_gravity_zones(self, uid: int, kind: type, volumes: list[Any]) -> None:  # noqa: ARG002 world-wide
-        """Replace the world's volumes whose region is of ``kind`` with ``volumes``."""
+    def _op_gravity_zones(self, uid: int, kind: type, zones: list[Any]) -> None:  # noqa: ARG002 world-wide
+        """Replace the world's volumes whose region is of ``kind`` with volumes of ``zones``."""
         kept = [volume for volume in self.world.gravity_volumes
                 if not isinstance(getattr(volume, 'region', None), kind)]
-        self.world.gravity_volumes[:] = kept + list(volumes)
+        self.world.gravity_volumes[:] = kept + [omi_adapter.gravity_volume(zone) for zone in zones]
 
     def _op_mass(self, uid: int, mass: float) -> None:
         entry = self._entries[uid]
-        give_mass(self.world, entry.index, entry.proxy.shape, mass)
+        give_mass(self.world, entry.index, omi_shape(entry.proxy), mass)
         self.world.wake(entry.index)
 
     def _op_body_material(self, uid: int, material: Any) -> None:
@@ -449,7 +584,7 @@ class WorldRuntime:
 
     # -- materials ------------------------------------------------------
     def material_index(self, material: Any) -> int:
-        """The world's index for a preset or defined name, a Material, or an index; -1 for none."""
+        """The world's index for a preset or defined name, a Material (the service's or omi's), or an index; -1 for none."""
         if material is None:
             return -1
         if isinstance(material, (int, np.integer)):
@@ -462,15 +597,16 @@ class WorldRuntime:
                 found = self._materials[material] = self.world.add_material(
                     model.MATERIAL_PRESETS[material])
             return found
-        values = dataclasses.astuple(material)
+        made = omi_adapter.omi_material(material)
+        values = dataclasses.astuple(made)
         found = self._unnamed.get(values)
         if found is None:
-            found = self._unnamed[values] = int(self.world.add_material(material))
+            found = self._unnamed[values] = int(self.world.add_material(made))
         return found
 
-    def define_material(self, name: str, material: model.Material) -> int:
+    def define_material(self, name: str, material: Any) -> int:
         """Make ``material`` the one called ``name``; the index it has in the world."""
-        index = self._materials[name] = self.world.add_material(material)
+        index = self._materials[name] = self.world.add_material(omi_adapter.omi_material(material))
         return index
 
     # -- stepping -------------------------------------------------------
@@ -582,7 +718,8 @@ class WorldRuntime:
                 snapshot = Snapshot(self.version, world.step_count, world.time, self.applied_seq,
                                     rows, last.position, last.axis_angle, last.orientation,
                                     last.linear_velocity, last.angular_velocity, last.awake,
-                                    last.dynamic, changed, last.version)
+                                    last.dynamic, changed, last.version, last.step_position,
+                                    last.step_orientation, self._joint_readings())
                 self._published = snapshot
                 return snapshot
             if len(redo) == len(indices):
@@ -595,7 +732,11 @@ class WorldRuntime:
                 position[redo] = exact_position[redo]
                 orientation[redo] = exact_orientation[redo]
         moving = redo[live[redo]]
+        step_position = step_orientation = None
         if len(moving) and alpha < 1.0:
+            if position is exact_position:
+                position, orientation = position.copy(), orientation.copy()
+            step_position, step_orientation = exact_position, exact_orientation
             take = indices[moving]
             position[moving] = (world.prev_position[take] * (1.0 - alpha)
                                 + world.position[take] * alpha)
@@ -605,10 +746,18 @@ class WorldRuntime:
             axis_angle[redo] = mathutil.quat_to_axis_angle(orientation[redo])
         snapshot = Snapshot(self.version, world.step_count, world.time, self.applied_seq, rows,
                             position, axis_angle, orientation, linear, angular, awake, dynamic,
-                            changed, -1 if last is None else last.version)
+                            changed, -1 if last is None else last.version, step_position,
+                            step_orientation, self._joint_readings())
         self._published = snapshot
         self._published_live = live
         return snapshot
+
+    def _joint_readings(self) -> dict[int, tuple[float, ...]]:
+        """The readings of the joints whose readings have been asked for, by joint id."""
+        if not self.watched_joints:
+            return {}
+        return {joint: self.joints.reading(self.world, joint) for joint in self.watched_joints
+                if joint in self.joints}
 
     # -- events ---------------------------------------------------------
     def take_events(self) -> list[PhysicsEvent]:

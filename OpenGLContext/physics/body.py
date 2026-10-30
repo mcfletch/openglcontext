@@ -13,10 +13,10 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from omi_physics import model
 
 from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.types import Material
 
 if TYPE_CHECKING:
     from OpenGLContext.physics.handlers import Handler
@@ -33,7 +33,8 @@ class Body:
 
     def __init__(self, physics: Physics, uid: int, kind: str, node: Any, proxy: Proxy | None,
                  position: Any, axis_angle: Any, mass: float,
-                 linear_damping: float = 0.0, angular_damping: float = 0.0) -> None:
+                 linear_damping: float = 0.0, angular_damping: float = 0.0,
+                 gravity_factor: float = 1.0) -> None:
         self.physics = physics
         #: Distinguishes this body from every other the service has made.
         self.uid = uid
@@ -50,7 +51,7 @@ class Body:
         self.material: str | None = None
         #: The coefficients the body's surface has: its material's, with any
         #: :meth:`set_friction` or :meth:`set_restitution` since.
-        self._surface = model.Material()
+        self._surface = Material()
         self._pending = False
         #: Writes made before the body was in the world, sent when it is.
         self._deferred: list[tuple[str, tuple[Any, ...]]] = []
@@ -60,6 +61,7 @@ class Body:
         self.alive = True
         self._linear_damping = float(linear_damping)
         self._angular_damping = float(angular_damping)
+        self._gravity_factor = float(gravity_factor)
         self._position = np.asarray(position, dtype='d')
         self._axis_angle = np.asarray(axis_angle, dtype='d')
         #: A write the world has not yet applied: (sequence, position or None, axis-angle or None).
@@ -78,6 +80,15 @@ class Body:
     def rotation(self) -> np.ndarray:
         """How the body is turned, as an axis and an angle in radians: ``(x, y, z, angle)``."""
         return self.physics._state(self).axis_angle
+
+    @property
+    def step_position(self) -> np.ndarray:
+        """Where the last step left the body, in metres.
+
+        :attr:`position` is drawn part of the way into the next step, to move
+        smoothly between frames; this is the pose the world holds.
+        """
+        return self.physics._state(self, interpolated=False).position
 
     @property
     def velocity(self) -> np.ndarray:
@@ -211,7 +222,7 @@ class Body:
         if self.kind == 'trigger':
             raise ValueError('a trigger has no surface to give a material, friction or restitution')
 
-    def _resurface(self, surface: model.Material) -> None:
+    def _resurface(self, surface: Material) -> None:
         self._surfaced()
         self._surface = surface
         self._send('body_material', surface)
@@ -235,6 +246,20 @@ class Body:
     def angular_damping(self, value: float) -> None:
         self._angular_damping = number(value, 'angular_damping', non_negative=True)
         self._send('damping', None, self._angular_damping)
+
+    @property
+    def gravity_factor(self) -> float:
+        """How much of gravity the body feels: 1 all of it, 0 none, below 0 pulled up."""
+        return self._gravity_factor
+
+    def set_gravity_factor(self, factor: float) -> None:
+        """Scale the gravity the body feels by ``factor`` from the next step.
+
+        :attr:`gravity_factor` answers the new value at once. Raises ValueError
+        for a value that is not finite.
+        """
+        self._gravity_factor = number(factor, 'gravity_factor')
+        self._send('gravity_factor', self._gravity_factor)
 
     def drive(self, pose: Callable[[float], Any]) -> None:
         """Move this kinematic body by ``pose(time)``, called at the end of each step.

@@ -17,6 +17,7 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.testing import physics as physics_testing
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -121,9 +122,9 @@ def test_mass_given_is_the_mass(physics):
 
 @pytest.mark.parametrize('proxy, kind', [
     ('sphere', 'sphere'), ('box', 'box'), ('convex', 'convex'),
-    (Proxy.capsule(1.0, 0.25), 'capsule'), (model.Shape.cylinder(1.0, 0.25), 'cylinder'),
+    (Proxy.capsule(1.0, 0.25), 'capsule'), (Proxy.cylinder(1.0, 0.25), 'cylinder'),
 ])
-def test_proxy_may_be_a_strategy_a_proxy_or_a_shape(physics, proxy, kind):
+def test_proxy_may_be_a_strategy_or_a_proxy(physics, proxy, kind):
     body = physics.add_dynamic(ball(), proxy=proxy)
     assert shape_type(physics, body) == kind
 
@@ -463,14 +464,14 @@ def test_step_advances_a_standalone_service_by_hand(physics):
 
 
 def test_world_is_the_live_world_in_inline_mode(physics):
-    assert physics.world is settled(physics).world
+    assert physics_testing.inspect(physics) is settled(physics).world
 
 
 def test_world_is_refused_when_a_thread_owns_it():
     service = Physics(PhysicsDefinition(mode='thread'))
     try:
-        with pytest.raises(RuntimeError, match='run'):
-            _ = service.world
+        with pytest.raises(RuntimeError, match='on_step'):
+            physics_testing.inspect(service)
     finally:
         service.close()
 
@@ -491,7 +492,7 @@ def test_set_config_refuses_a_definition_that_cannot_run(physics):
 
 def test_run_calls_a_function_with_the_world_and_returns_its_answer(physics):
     physics.add_dynamic(ball())
-    future = physics.run(lambda world: world.live_body_count)
+    future = physics_testing.run(physics, lambda world: world.live_body_count)
     assert future.result(timeout=2) == 1
 
 
@@ -507,7 +508,7 @@ def test_run_reports_what_the_function_raised(physics):
         raise ValueError('refused')
 
     with pytest.raises(ValueError, match='refused'):
-        physics.run(fails).result(timeout=2)
+        physics_testing.run(physics, fails).result(timeout=2)
 
 
 # -- finding a body ------------------------------------------------------------

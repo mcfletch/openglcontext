@@ -14,6 +14,7 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.testing import physics as physics_testing
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -362,10 +363,10 @@ def test_a_query_inside_a_step_handler_leaves_the_step_in_charge():
 
     @physics_callback
     def look(step):
-        physics.slot_of(body)
+        physics_testing.slot_of(physics, body)
         seen.append(physics.worker.on_worker_thread())
         body.set_velocity((1.0, 0.0, 0.0))
-        seen.append(float(physics.world.linear_velocity[physics.slot_of(body)][0]))
+        seen.append(float(physics_testing.inspect(physics).linear_velocity[physics_testing.slot_of(physics, body)][0]))
 
     physics.addEventHandler('before-step', function=look)
     physics.frame(0.01)

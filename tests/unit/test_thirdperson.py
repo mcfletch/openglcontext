@@ -329,9 +329,9 @@ def test_follow_from_the_eyes_flies_in_the_fly_mode(ctx, clock):
     me = ctx.physics.add_character(position=(0, 0.05, 0))
     follower = ctx.follow(me, view='eyes')
     assert follower.navigation.select('fly')
-    assert me.controller.flying
+    assert me._controller.flying
     assert follower.navigation.select('walk')
-    assert not me.controller.flying
+    assert not me._controller.flying
 
 
 def test_an_unknown_view_is_refused(ctx):

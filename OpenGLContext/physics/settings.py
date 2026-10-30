@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from omi_physics import model
 from vrml import field, node
 
 from OpenGLContext import renderoptions
@@ -94,14 +93,6 @@ class PhysicsDefinition(node.Node):
         vector(self.gravity, 'gravity')
         number(self.linearDamping, 'linearDamping', non_negative=True)
         number(self.angularDamping, 'angularDamping', non_negative=True)
-
-    def world_gravity(self) -> model.Gravity:
-        """:attr:`gravity` as the world's magnitude and direction."""
-        x, y, z = (float(v) for v in self.gravity)
-        strength = (x * x + y * y + z * z) ** 0.5
-        if strength == 0.0:
-            return model.Gravity(gravity=0.0, direction=(0.0, -1.0, 0.0))
-        return model.Gravity(gravity=strength, direction=(x / strength, y / strength, z / strength))
 
 
 def definition_for(context: Any) -> PhysicsDefinition:
