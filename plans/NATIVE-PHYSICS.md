@@ -1,10 +1,11 @@
 # Native physics: pyjoltphysics
 
-Status: **P0 landed 2026-10-30; P1a (the world thread, commands, snapshots, events, callbacks,
-lockstep, primitive shapes) landed the same day.** Decision taken 2026-10-26; design spiked the
-same day. The `pyjoltphysics` repository exists locally (`develop`) with no GitHub remote yet; its
-workspace registration waits for the remote (see "P0 as built" below). P1b (hull, mesh,
-heightfield and compound shapes, the fuller differential suite) is next.
+Status: **P0, P1a, P1b, P2 and P3 (joints, materials, filters, the contact filter, gravity zones,
+drag, kinematic tracks) landed 2026-10-30, with P4a (the neutral `OpenGLContext.physics` API,
+still on omi_physics).** Decision taken 2026-10-26; design spiked the same day. The
+`pyjoltphysics` repository exists locally (`develop`) with no GitHub remote yet; its workspace
+registration waits for the remote (see "P0 as built" below). P4 (`engine.py` over
+`pyjoltphysics`) is next.
 
 The decision (maintainer): the engine steps its rigid bodies with Jolt Physics through a wrapper
 of our own. Jolt always runs on a background thread owned by the wrapper, never inline and never
@@ -575,7 +576,7 @@ of C++ and ran correctly in both builds.
 | P0 | Repository, vendored Jolt, CMake, empty module exposing the version and build options, CI and wheels on every platform and tag above, stub check, workspace registration | CI on all runners; a wheel installs and imports from outside the checkout | every wheel builds, installs and passes an import test; preflight runs ruff, mypy, OGC rules and the suite | 1 to 1.5 |
 | P1 | World thread, settings, command batches, snapshot pool, event ring with pair aggregation, sleep events, shapes (primitives, hull, mesh, heightfield grid, compound), bodies in bulk, materials without pair grid, CCD, lockstep, applied log, `at_tick`, fork and atexit hooks, double precision | unit suite; the differential scenarios for bodies, shapes, sleep, triggers and CCD against omi; ASan run; the free-threaded wheel through the same suite | differential tolerances met; determinism and fork tests green on both builds; 5,000 active boxes within 10% of the spike's times | 3 to 4; done 2026-10-30 (P1a and P1b below) |
 | P2 | Queries (synchronous and batched), the character controller port over `CharacterVirtual`, character against character, heightfield tiles from a sample function | differential character and query scenarios; the omi character tests (the behaviour-level ones) ported as conformance | every character scenario within tolerance; a 300-character heightfield world steps under 4 ms on 8 threads | 4 to 5; done 2026-10-30 (P2 below) |
-| P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3 |
+| P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3; done 2026-10-30 but for the tutorials, which wait for P4 (P3 below) |
 | P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4; P4a (the neutral API) done 2026-10-30, below |
 | P5 | Default `engine='jolt'`; `pyjoltphysics` a hard dependency; omi fallback, `worker.py`, `runtime.py`, `replica.py`, `queries.py` deleted; golden results recorded from omi; docs (`docs/physics.rst`, a page on the world thread, callbacks and determinism); omi_physics marked deprecated | full workspace `verify-everything.py`; preflight for openglcontext and pyjoltphysics | the games run on Jolt with no `engine` setting; marble-demo off direct omi imports; docs merged | 1 to 2 |
 | P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8 |
@@ -855,6 +856,141 @@ is held to `pushSpeed`. (ii) Jolt lands a falling character a tick later than om
 contact and reports ground the next update). (iii) `query_wait_max_ms` and the p99 were measured
 with other users' processes on the machine; a quiet rerun is left for the preflight pass. (iv) `closest_point` and
 snapshot-answered batched queries are not built.
+
+### P3 as built (2026-10-30)
+
+P3 is commits ec87fec to 004f7a5 on `pyjoltphysics` `develop`.
+
+- Joints (`src/native/joints.*`, `pyjoltphysics.joints`): `Joint` builders `fixed`, `ball`, `hinge`,
+  `slider`, `distance`, `six_dof` (Jolt's `FixedConstraint`, `PointConstraint`, `HingeConstraint`,
+  `SliderConstraint`, `DistanceConstraint`, `SixDOFConstraint`), `universal` and `two_axis_hinge`
+  (X3D's UniversalJoint and DoubleAxisHingeJoint as six-axis joints; the two-axis hinge's
+  `suspension` is a spring on the anchor along the steering axis) and `motor` (X3D's MotorJoint:
+  torques about up to three axes, applied in the step listener, no constraint). Limits, limit
+  springs, friction, `Motor` (velocity or position, force or torque limit, spring). Joints are
+  batches with ids from their own counter, assigned at submission. `set_joint_motors`,
+  `set_joints_enabled`, `remove_joints`; removing a body ends its joints (`JOINT` `END`, reason
+  `REMOVED`). Force and torque are each constraint's total lambda over the step, read after
+  `Update` under the exclusive lock; a joint past `break_force` or `break_torque` is removed and
+  reported (`EventKind.JOINT`, `EventPhase.BREAK`). `Snapshot.joints`: id, kind, state, value
+  (angle, position or length), value2, force, torque. Jointed bodies do not collide unless
+  `collide`: a Jolt `GroupFilter` holding the pairs, set on the bodies of such joints only. There
+  is no separate wheel joint: Jolt's wheels belong to `VehicleConstraint` (P6), and the service's
+  `add_wheel` maps onto `two_axis_hinge` with `suspension`.
+- Materials (`src/native/materials.*`, `pyjoltphysics.materials`): the material index is the top 16
+  bits of Jolt's body user data; a mesh triangle carries its own (`Shape.mesh(materials=)`, an
+  `IndexedMaterial` in the mesh's material list). Index 0 is the body's own coefficients with
+  Jolt's combine. Otherwise the contact listener sets `mCombinedFriction` and
+  `mCombinedRestitution` on every contact added or persisting: the higher of the two combine modes
+  (average < minimum < multiply < maximum, the OMI modes; omi uses the first body's mode), a
+  pair entry of the (M, M) table over that, static friction below
+  `WorldSettings.static_friction_speed` (0.05 m/s, opinion) of slip at the contact, dynamic
+  above. Records carry `material_a` and `material_b` in the former reserved word; characters
+  publish `ground_material`.
+- Collision filters: a `filter` index per body is part of its object layer key; the (F, F) table
+  is read by `ObjectLayerPairFilter::ShouldCollide`. `set_filter_table` applies at the next tick
+  and wakes every dynamic body; an index outside the table meets every filter.
+- Contact filter: `Collector::OnContactValidate` asks `WorldCore::solve_pair` for solid pairs whose
+  bodies both carry `BodyFlag.FILTER_CONTACTS`, after the layer and group filters. A verdict cache
+  (mutex, keyed by body pair) answers repeats; a refused pair's verdict expires at the first tick
+  the pair is not validated again, a solved pair's when the pair tracker ends it. Each job thread
+  makes one `PyThreadState` on first use, kept in a per-world map and deleted by the world thread
+  (attached) when its loop ends. No deadlock: the world thread holds the world lock exclusively
+  and is detached during `Update`, and every call that waits for the world lock releases the GIL
+  first. A query from the filter raises (a thread-local flag); an exception stops the world after
+  the step. Decision 9 as recommended.
+- Fields (`src/native/fields.*`, `pyjoltphysics.fields`): gravity zones (box, sphere, registered
+  shape by `CollidePoint`; directional and point; priority, replace, stop) and quadratic drag in
+  one `PhysicsStepListener`, so they apply before every collision step; the zone acceleration is
+  added as a force of `m gf (g_zone - g_world)`. Characters take the vertical part of the zone
+  gravity at their centre. Kinematic tracks (sampled, linear and slerp, loop or hold) and
+  `World.drive(uid, pose_fn)` (a native `drivers` callback after `before_step`, moving bodies in
+  the same tick through `move_kinematic`) move kinematic bodies with `MoveKinematic` before the
+  characters and `Update`.
+- From P2's list: 1 (`CharacterRows.previous`), 3 (a dynamic body's momentum at the closing speed
+  as the character begin record's `impulse`), 4 (character touches of characters as `CHARACTER`
+  `BEGIN`/`END` with `b` the other's id), 6 (`eye`; `stuck` after a teleport left the capsule more
+  than 1 cm inside a body) are built.
+
+Differential suite (`tests/differential/test_p3.py`, 12 scenes, 120 Hz):
+
+| Scenario | omi | Jolt | Tolerance |
+|---|---|---|---|
+| Hinge pendulum, 1 m, 0.15 rad, period | 2.008 s | 2.008 s (analytic 2.006) | 2% |
+| Chain of 6 ball links after 2 s, worst gap at a joint | under 1 cm | under 1 cm | 1 cm |
+| Hinge stop at -0.5 rad, rest angle | -28.65 degrees (0.4 m box) | -28.69 / -28.90 / -29.44 degrees (0.4, 0.2, 0.1 m boxes) | 1 degree |
+| Hinge velocity motor 3 rad/s | 3.000 | 3.000 | 2% |
+| Slider stopped at -1 m, height | 1.0000 m | 0.99999993 m | 1 mm |
+| Rigid distance 2 m after 2 s | 2.0007 m | 2.0003 m | 1 mm |
+| Pair friction grid, 4 pairs on a 20 degree ramp, 1 s | 1.459, 0.995, 0.530, 0.205 m | 1.459, 0.995, 0.530, 0.205 m | same order; 15% |
+| Average of 0.4 and 0.1, 1 s slide (analytic 0.525) | 0.530 m | 0.530 m | 10% or 3 cm |
+| Material restitution 0.7, second apex over first | 0.564 | 0.540 | 0.05 |
+| Filters: ball and shard systems, pairs that touched | same set | same set | exact |
+| Gravity zones (box, point, replacing sphere), position at 2 s | | within 1.4e-6 of omi relative to the distance travelled | 1% |
+| Kinematic pose function, 2 s on a helix, worst error a tick | under 1e-6 m | under 1e-6 m | 1e-6 m |
+| Sampled track against linear interpolation | | under 1e-6 m | 1e-6 m |
+
+Divergences: omi's hinge stops throw a 0.2 m box (inertia 0.0067 kg m2) past the stop to +0.69
+rad and fling a 0.1 m box away (381 km in 5 s); Jolt holds all three within 0.8 degrees. The
+differential compares the 0.4 m box. omi takes the first body's combine mode; the port takes the
+higher. Jolt uses static friction until the slip passes 0.05 m/s, omi uses the dynamic
+coefficient throughout, so the grid scenes give each pair one coefficient.
+
+Unit tests: `test_joints.py` (22), `test_materials.py` (12), `test_fields.py` (17),
+`test_contact_filter.py` (8), `test_characters_p3.py` (6). `test_joints.py` was written before
+the Python layer and seen failing (no `Joint` in the package); the others were written after the
+code they test and then run against P2's package in a clean environment, where each fails to
+collect (the API it calls is absent). `test_p3_lockstep.py`:
+a free-running 480 Hz world on 8 job threads with 200 boxes in three materials and three
+filters, the contact filter, a chain of hinge and breakable ball joints, a motor joint, a motorised
+wheel, a looping kinematic track, two gravity zones and drag, given 30 impulse batches at
+wall-clock moments, replayed in lockstep with `at_tick` on 1 and on 8 job threads: digests of
+poses and joint rows over 600 ticks identical, 4 repeats.
+
+Builds: GIL build (3.14) 369 passed (doctests included), 2 skipped (NEON, the free-threaded check); free-threaded 3.14t 303 passed, 3 skipped (no omi_physics there,
+NEON, the GIL wait); ASan and UBSan (`tools/asan.sh`) 303 passed, 3 skipped, no sanitizer report. ruff, ruff format, mypy strict and `oglc-check` clean; `_native.pyi` regenerated.
+
+Benchmarks (`benchmarks/boxes5000.py`, `benchmarks/characters.py`; P2 commit 41f95cf and P3 built the
+same way and run back to back, best of 3, ms per 60 Hz frame):
+
+| | P2 | P3 |
+|---|---|---|
+| 5,000 active boxes, mesh ground, 1 job thread | 1.959 to 1.985 | 1.961 to 1.979 |
+| same, 8 job threads | 0.959 to 1.034 | 0.961 to 1.071 |
+| 300 characters on a height field, 60 Hz, 1 job thread | 1.41 to 1.44 | 1.45 to 1.46 |
+| same, 8 job threads, 960 frames, 4 runs each | 0.600 to 0.708 | 0.640 to 0.744 |
+| same, 120 Hz, 1 / 8 job threads | 2.67 to 2.73 / 1.05 to 1.18 | 2.67 to 2.68 / 1.07 to 1.20 |
+| 30 characters among 10,000 posts, 60 Hz, 1 / 8 | 0.164 to 0.199 / 0.132 to 0.136 | 0.181 to 0.227 / 0.124 to 0.133 |
+
+The ranges overlap in every row (load average 2.5 to 3.0 from other users' processes). The P3
+paths a P2 scene meets are the material lookup on each contact (where neither
+body has a material: a virtual `GetMaterial` and a user-data read per side), the empty step
+listener and the character rows' ground material.
+
+What P4 still needs from this list and from P2's:
+
+- P2 item 7, gravity direction: characters take the vertical part of zone gravity. A character
+  pulled sideways or upwards (walking on a planetoid) needs `CharacterVirtual::SetUp` and an up
+  vector through the controller's state machine, which assumes +Y throughout (`kUp`); that is a
+  controller change for P6 or a game that needs it.
+- P2 item 8, water volumes: a sensor flag that sets swimming needs a per-character overlap each
+  tick and the service's water depth rules; the service keeps detecting water and calls
+  `set_swim`.
+- P2 item 10, controller state in save and restore: belongs with `PhysicsSystem::SaveState` (P4),
+  so the two are saved together.
+- P2 item 12, capability names: the service's `CharacterCapabilities` (P4a) and glTF extras.
+- The service's mapping: `add_hinge`/`add_ball`/`add_slider`/`add_distance`/`add_universal`/
+  `add_wheel`/`add_motor` onto `Joint`; `Materials` onto `World.materials`; `CollisionFilter`
+  systems onto the (F, F) table, computed by the service from its filters; the contact filter's
+  `Approach` from `(a, b, point, normal, approach)`, with `impulse` from the bodies' masses;
+  gravity zones from `zones.py`; `Body.drive` onto `World.drive`.
+- The X3D RigidBodyPhysics tutorials against their omi captures: they render through the service,
+  which reaches Jolt only with P4's `engine.py`, so the comparison is P4's.
+
+Decisions taken in P3 where the plan left them open: the combine mode of two materials is the
+higher of the two (the OMI order), the static friction speed defaults to 0.05 m/s, a filter index
+outside the table meets every filter, the contact filter follows decision 9, and a slider's anchor
+defaults to its body's origin.
 
 ### P4a as built (2026-10-30)
 
