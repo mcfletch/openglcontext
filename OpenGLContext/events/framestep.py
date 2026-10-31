@@ -88,8 +88,10 @@ class FixedSteps:
         self.remainder = 0.0
 
     def owed(self, dt: float) -> int:
-        """Add ``dt`` seconds and answer how many whole steps are due; negative time adds none."""
-        held = min(self.remainder + max(float(dt), 0.0), self.longest)
+        """Add ``dt`` seconds and answer how many whole steps are due; negative time, and a
+        time that is not a number, add none."""
+        given = float(dt)
+        held = min(self.remainder + (given if given > 0.0 else 0.0), self.longest)
         steps = 0
         while held >= self.step * (1.0 - _HAIR):
             held = max(held - self.step, 0.0)

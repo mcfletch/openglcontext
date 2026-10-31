@@ -12,7 +12,10 @@ answer the same on every engine. Nothing here is exported by
 """
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
+
+import numpy as np
 
 if TYPE_CHECKING:
     from OpenGLContext.physics.body import Body
@@ -30,19 +33,24 @@ def settle(physics: Physics) -> None:
     """Have the engine take the commands made so far.
 
     A world in lockstep runs one tick, and a free-running one is waited for
-    until a snapshot includes them.
+    until a snapshot includes them. Raises AssertionError where it has not
+    within :data:`WAIT` seconds, as a world that is stopped or paused never does.
     """
     engine: Any = physics._engine
     world = engine.world
     seq = int(world.submitted_seq)
     if world.lockstep:
         world.run_ticks(1)
-    else:
-        deadline = world.tick + int(WAIT * float(physics.definition.tickHz))
-        while world.wait_tick(world.tick + 1, WAIT):
-            latest = world.latest()
-            if latest is not None and latest.includes(seq) or world.tick > deadline:
-                break
+        return
+    deadline = time.monotonic() + WAIT
+    while True:
+        latest = world.latest()
+        if latest is not None and latest.includes(seq):
+            return
+        left = deadline - time.monotonic()
+        if left <= 0.0 or not world.wait_tick(world.tick + 1, left):
+            raise AssertionError('the world did not take the commands made up to sequence %d '
+                                 'in %g s' % (seq, WAIT))
 
 
 def wait_ticks(physics: Physics, count: int) -> bool:
@@ -100,10 +108,27 @@ def shape_count(physics: Physics) -> int:
 
 
 def mass(physics: Physics, body: Body) -> float:
-    """The mass the engine gave ``body``, in kilograms."""
+    """The mass Jolt holds for ``body``, in kilograms; 0 for a body that is not dynamic.
+
+    Measured between ticks: an impulse is applied and the change of velocity
+    it makes read back, then the opposite impulse puts the velocity back. The
+    impulse is about the mass asked for times 1 m/s, so the change is about
+    1 m/s whatever the mass.
+    """
     settle(physics)
+    if body.kind != 'dynamic':
+        return 0.0
     engine: Any = physics._engine
-    return float(engine.given[body.uid][0])
+    world = engine.world
+    ids = np.array([engine.jolt_uid(body.uid)], dtype=np.uint32)
+    push = np.array([[max(float(engine.given[body.uid][0]), 1e-3), 0.0, 0.0]])
+    before = float(world.bodies_state(ids).linear_velocity[0][0])
+    world.add_impulses(ids, push)
+    world.flush()
+    after = float(world.bodies_state(ids).linear_velocity[0][0])
+    world.add_impulses(ids, -push)
+    world.flush()
+    return float(push[0, 0]) / (after - before)
 
 
 def material(physics: Physics, body: Body) -> Any:

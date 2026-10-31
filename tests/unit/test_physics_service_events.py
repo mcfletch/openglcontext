@@ -230,8 +230,9 @@ def test_removing_a_body_ends_its_handlers_after_the_last_end_event(world):
     assert len(physics.handlers) == 0
 
 
-def test_a_handler_that_raises_is_logged_once_and_the_others_still_hear(world, caplog):
-    physics, _floor = world
+def test_a_handler_that_raises_is_logged_once_and_the_others_still_hear(caplog):
+    physics = make(handlerErrors='log')
+    physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)), restitution=0.0)
     good = Listener()
 
     class Bad:
@@ -243,9 +244,75 @@ def test_a_handler_that_raises_is_logged_once_and_the_others_still_hear(world, c
     body.addEventHandler('hit', function=bad.OnHit)
     body.addEventHandler('hit', function=good.OnHit)
     run_for(physics, 2.0)
+    physics.close()
     assert len([r for r in caplog.records if r.levelname == 'ERROR']) == 1
     assert 'refused' in caplog.text
     assert len(good.heard) >= 2
+
+
+class Refusal(Exception):
+    """What the failing code of these tests raises."""
+
+
+def refuse(*arguments):
+    raise Refusal('refused')
+
+
+def test_the_testing_plugin_has_handler_errors_raised():
+    assert PhysicsDefinition().handlerErrors == 'raise'
+    with pytest.raises(ValueError, match='handlerErrors'):
+        PhysicsDefinition(handlerErrors='shout').validate()
+
+
+@pytest.mark.parametrize('mode', ['inline', 'thread'])
+def test_a_handler_that_raises_is_raised_from_the_frame_once(mode):
+    physics = make(mode=mode, handlerErrors='raise')
+    try:
+        physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)), restitution=0.0)
+        body = physics.add_dynamic(ball(), restitution=0.0)
+        body.addEventHandler('hit', function=refuse)
+        with pytest.raises(Refusal):
+            deadline = time.monotonic() + 10.0
+            while time.monotonic() < deadline:
+                physics.frame(0.02)
+                time.sleep(0.005 if mode == 'thread' else 0.0)
+        physics.frame(0.02)
+    finally:
+        physics.close()
+
+
+def test_step_code_and_posted_functions_that_raise_are_raised_from_the_frame():
+    physics = make(handlerErrors='raise')
+    try:
+        physics.add_dynamic(ball())
+        hook = physics.on_step(refuse)
+        with pytest.raises(Refusal):
+            physics.frame(0.02)
+        hook.cancel()
+        physics.frame(0.02)
+        physics.post(refuse)
+        with pytest.raises(Refusal):
+            physics.frame(0.02)
+        physics.frame(0.02)
+        physics.addEventHandler('after-step', physics_callback(refuse))
+        with pytest.raises(Refusal):
+            physics.step(0.02)
+    finally:
+        physics.close()
+
+
+def test_with_handler_errors_logged_the_frame_goes_on(caplog):
+    physics = make(handlerErrors='log')
+    try:
+        physics.add_dynamic(ball())
+        physics.on_step(refuse)
+        physics.post(refuse)
+        physics.frame(0.02)
+        physics.frame(0.02)
+        # The step code is logged once however often it fails, and the posted function ran once.
+        assert len([record for record in caplog.records if record.levelname == 'ERROR']) == 2
+    finally:
+        physics.close()
 
 
 def test_an_unknown_event_or_filter_is_refused(world):
@@ -506,3 +573,55 @@ def test_no_bounce_is_lost_at_a_low_frame_rate():
     at_120 = bounces(1.0 / 120.0)
     assert len(at_120) >= 3
     assert bounces(1.0 / 20.0) == at_120
+
+
+@pytest.mark.parametrize('table', ['before_step', 'after_step', 'on_events'])
+def test_an_engine_hook_that_raises_is_logged_and_raised_from_the_frame(table, caplog):
+    physics = make(handlerErrors='raise')
+    try:
+        physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)), restitution=0.0)
+        body = physics.add_dynamic(ball(), restitution=0.0)
+        body.addEventHandler('hit', function=Listener().OnHit)
+        getattr(physics._engine, table).append(refuse)
+        physics.on_step(lambda view: None)      # the world calls its step hooks while code wants steps
+        with pytest.raises(Refusal):
+            for _ in range(200):
+                physics.frame(0.02)
+        assert 'refused' in caplog.text
+    finally:
+        physics.close()
+
+
+def test_step_code_that_raises_is_logged_once_and_cancelled_code_is_dropped(caplog):
+    physics = make(handlerErrors='log')
+    try:
+        physics.add_dynamic(ball())
+        failing = physics.on_step(refuse)
+        calls = []
+        cancelled = physics.on_step(calls.append)
+        for _ in range(3):
+            physics.frame(0.02)
+        assert len([record for record in caplog.records if 'step hook' in record.message]) == 1
+        assert failing.failed and len(calls) == 6
+        cancelled.cancel()
+        physics.frame(0.02)
+        assert cancelled not in physics._step_hooks and len(calls) == 6
+    finally:
+        physics.close()
+
+
+def test_the_error_that_stopped_the_world_is_raised_from_one_frame():
+    physics = make()
+    try:
+        physics.add_dynamic(ball())
+        physics.frame(0.02)
+        stopped = RuntimeError('the world thread died')
+        physics._engine._error = stopped
+        assert physics.error is stopped
+        with pytest.raises(RuntimeError, match='the world thread died') as raised:
+            physics.frame(0.02)
+        assert raised.value.__cause__ is stopped
+        physics._engine._error = None
+        physics.frame(0.02)
+    finally:
+        physics.close()

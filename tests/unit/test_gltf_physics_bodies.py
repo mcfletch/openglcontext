@@ -172,10 +172,21 @@ def test_a_mesh_shape_is_made_from_the_triangles_its_node_draws(tmp_path, physic
     path = tmp_path / 'mesh.gltf'
     path.write_text(json.dumps(given))
     scene = gltf.load_gltf(str(path))
+    sent = []
+    submit = physics._engine.submit
+
+    def recorded(command):
+        sent.append(command)
+        submit(command)
+
+    physics._engine.submit = recorded
     physics.scenery_changed(scene.group, 1)
-    floor = physics.body_for(scene.node_transforms[0])
-    assert floor.proxy.kind == kind
-    assert np.allclose(np.sort(floor.proxy.params['points'], axis=0),
+    added = next(command for command in sent if command.op == 'add')
+    proxy = added.args[0].proxy
+    assert proxy.kind == kind
+    assert np.allclose(np.sort(proxy.params['points'], axis=0),
                        np.sort([(0, 0, 0), (1, 0, 0), (0, 1, 0)], axis=0))
+    # Three points make no hull: Jolt refuses the convex body, and the service lets go of it.
+    assert (added.uid in physics._bodies) == (kind == 'trimesh')
     # The zone's trigger names the same shape and draws nothing to make it from.
     assert physics.body_for(scene.node_transforms[2]) is None

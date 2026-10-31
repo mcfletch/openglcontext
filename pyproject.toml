@@ -322,6 +322,20 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 warn_return_any = true
 warn_unused_ignores = true
+# A module mypy cannot find is an error, so an import of a module this project
+# no longer has is caught; the packages below ship no types, and are named.
+ignore_missing_imports = false
+
+# Packages that ship neither inline types nor stubs: optional toolkits and
+# loaders, and the workspace's ttfquery and pyopengl-video, which have no
+# py.typed.
+[[tool.mypy.overrides]]
+module = [
+    "DracoPy", "OpenEXR", "PyInstaller", "PyInstaller.*", "fontTools", "fontTools.*",
+    "psutil", "pygame", "pygame.*", "pygltflib", "pygltflib.*", "pyopengl_video",
+    "pyopengl_video.*", "resourcepackage", "scipy", "scipy.*", "ttfquery", "ttfquery.*",
+    "win32con", "win32ui", "wx", "wx.*",
+]
 ignore_missing_imports = true
 
 # numpy arithmetic is typed to return ``Any`` in the shipped stubs, so

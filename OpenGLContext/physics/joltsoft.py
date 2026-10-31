@@ -23,6 +23,7 @@ from OpenGLContext.physics.ragdolls import RagdollMode, RagdollSpec, forward_kin
 from OpenGLContext.physics.softbodies import SoftBodyFrame, SoftBodySpec
 
 if TYPE_CHECKING:
+    from OpenGLContext.physics.joltvehicles import JoltVehicles
     from OpenGLContext.physics.types import CollisionFilter
 
 log = logging.getLogger(__name__)
@@ -99,21 +100,24 @@ class JoltRagdollsAndSoftBodies:
 
     if TYPE_CHECKING:
         world: pj.World
+        vehicle_table: JoltVehicles
         given: dict[int, tuple[float, int]]
         _kinds: dict[int, str]
-        _movers: list[int]
         _movers_dirty: bool
         _poses: dict[int, tuple[tuple[float, ...], tuple[float, ...]]]
         _dynamic: Any
         _filters: list[CollisionFilter]
 
         def _bind(self, uid: int, jolt: int) -> None: ...
-        def _unbind(self, uid: int) -> int | None: ...
+        def _forget_body(self, uid: int) -> int | None: ...
+        def _add_mover(self, uid: int) -> None: ...
+        def callbacks_changed(self) -> None: ...
         def jolt_uid(self, uid: int) -> int | None: ...
 
     def _init_soft(self) -> None:
-        #: Each ragdoll's pyjoltphysics handle and its bones' service uids, by service ragdoll id.
-        self._ragdoll_handles: dict[int, tuple[pj.Ragdoll, tuple[int, ...]]] = {}
+        #: Each ragdoll's pyjoltphysics handle, its bones' service uids and the settings it was
+        #: made from, by service ragdoll id.
+        self._ragdoll_handles: dict[int, tuple[pj.Ragdoll, tuple[int, ...], pj.RagdollSettings]] = {}
         #: The settings of the latest specs made, each with a copy of its spec as it was and the
         #: filter index, so a figure that falls again does not have its settings made again.
         self._ragdoll_made: list[tuple[RagdollSpec, int, pj.RagdollSettings]] = []
@@ -144,10 +148,10 @@ class JoltRagdollsAndSoftBodies:
             self._kinds[bone_uid] = 'dynamic'
             self.given[bone_uid] = (float(spec.bones[row].mass), 0)
             self._poses[bone_uid] = (tuple(places[row]), tuple(turns[row]))
-            self._movers.append(bone_uid)
+            self._add_mover(bone_uid)
         self._dynamic.set(doll.bones)
         self._movers_dirty = True
-        self._ragdoll_handles[ident] = (doll, tuple(bones))
+        self._ragdoll_handles[ident] = (doll, tuple(bones), settings)
 
     def _settings_of(self, spec: RagdollSpec, filter_index: int) -> pj.RagdollSettings:
         """The pyjoltphysics settings of ``spec``, made again only when the spec has changed."""
@@ -156,8 +160,21 @@ class JoltRagdollsAndSoftBodies:
                 return settings
         settings = ragdoll_settings(spec, filter_index)
         self._ragdoll_made.append((copy.deepcopy(spec), filter_index, settings))
+        dropped = self._ragdoll_made[:-_KEPT_SETTINGS]
         del self._ragdoll_made[:-_KEPT_SETTINGS]
+        for _spec, _index, old in dropped:
+            self._release_settings(old)
         return settings
+
+    def _release_settings(self, settings: pj.RagdollSettings) -> None:
+        """Have the world forget the bone shapes of ``settings`` once no ragdoll or kept spec uses them."""
+        if any(kept is settings for _spec, _index, kept in self._ragdoll_made) or any(
+                used is settings for _doll, _bones, used in self._ragdoll_handles.values()):
+            return
+        for bone in settings.bones:
+            # The world names a shape it has built by the Shape object: add_shape answers its id.
+            if bone.shape is not None:
+                self.world.remove_shape(self.world.add_shape(bone.shape))
 
     def _op_ragdoll_mode(self, uid: int, ident: int, mode: RagdollMode,  # noqa: ARG002 named by the ragdoll
                          blend: float) -> None:
@@ -190,12 +207,16 @@ class JoltRagdollsAndSoftBodies:
         found = self._ragdoll_handles.pop(ident, None)
         if found is None:
             return
-        doll, bones = found
+        doll, bones, settings = found
+        # A vehicle on a bone is taken out first: removing the ragdoll frees the bodies under it.
+        self.vehicle_table.remove_on(bones)
         for bone_uid in bones:
-            self._unbind(bone_uid)
-            self.given.pop(bone_uid, None)
+            self._forget_body(bone_uid)
         self._movers_dirty = True
         self.world.remove_ragdolls([doll.id])
+        self._release_settings(settings)
+        # A bone's standing force kept a world callback registered.
+        self.callbacks_changed()
 
     # -- soft bodies ------------------------------------------------------
     def _op_soft_body(self, uid: int, spec: SoftBodySpec, position: Sequence[float],

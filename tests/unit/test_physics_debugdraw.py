@@ -35,3 +35,31 @@ def test_the_sphere_rings_lie_on_the_sphere():
     for a, b in _sphere_edges(centre, 0.5):
         assert np.isclose(np.linalg.norm(a - centre), 0.5)
         assert np.isclose(np.linalg.norm(b - centre), 0.5)
+
+
+def test_the_overlay_follows_the_scene_the_context_draws_and_leaves_on_close():
+    from OpenGLContext.context import Context
+    from OpenGLContext.physics.proxy import Proxy
+    from OpenGLContext.physics.service import Physics
+    from OpenGLContext.physics.settings import PhysicsDefinition
+    from OpenGLContext.scenegraph import basenodes
+
+    first, second = basenodes.sceneGraph(children=[]), basenodes.sceneGraph(children=[])
+    drawn = {'scene': first}
+    context = Context.__new__(Context)
+    context.getSceneGraph = lambda: drawn['scene']
+    physics = Physics(PhysicsDefinition(mode='inline'), mount=context._mountOverlay)
+    try:
+        physics.add_dynamic(None, proxy=Proxy.box((1, 1, 1)), mass=1.0)
+        physics.frame(1 / 60)
+        physics.show_proxies(True)
+        overlay = physics._overlay.root
+        assert first.children == [overlay]
+        drawn['scene'] = second
+        physics.frame(1 / 60)
+        assert second.children == [overlay] and first.children == []
+        physics.frame(1 / 60)
+        assert second.children == [overlay]
+    finally:
+        physics.close()
+    assert second.children == []

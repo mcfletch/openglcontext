@@ -24,7 +24,7 @@ import numpy as np
 from OpenGLContext.character.facing import Facing
 from OpenGLContext.character.locomotion import Locomotion, LocomotionInput
 
-from OpenGLContext.physics.checks import number
+from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.handlers import weak_reference
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.types import CharacterCapabilities, CharacterState
@@ -293,15 +293,17 @@ class Character:
         capabilities; ``mode`` is ``'walk'``, ``'run'``, ``'sprint'`` or
         ``'crouch'``. A crouched character goes no faster than ``crouchSpeed``.
         A zero direction stops. The move holds until the next call, for every
-        step the frame takes. Raises ValueError for a speed that is not a finite
+        step the frame takes. Raises ValueError, leaving the move as it was,
+        for a direction that is not finite and a speed that is not a finite
         number at or above zero.
         """
+        heading = vector(direction, 'direction')
         given = None if speed is None else number(speed, 'speed', non_negative=True)
-        self._controller.set_move(direction, mode, speed=given)
+        self._controller.set_move(heading, mode, speed=given)
 
     def set_fly_move(self, direction: Any) -> None:
-        """Fly toward ``direction``, vertical part included."""
-        self._controller.set_fly_move(direction)
+        """Fly toward ``direction``, vertical part included; ValueError for one that is not finite."""
+        self._controller.set_fly_move(vector(direction, 'direction'))
 
     def run_along(self, course: Any,
                   speed: float | Callable[[float], float] | None = None, mode: str = 'run',

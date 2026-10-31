@@ -5,7 +5,7 @@ frame can each be put in front of it directly.
 """
 import pytest
 
-from OpenGLContext.events.framestep import FrameStep
+from OpenGLContext.events.framestep import FixedSteps, FrameStep
 
 
 def test_a_step_is_the_time_since_the_last():
@@ -100,3 +100,11 @@ def test_fixed_steps_refuses_a_step_or_longest_that_is_not_above_nought():
     steps = FixedSteps(step=0.01, longest=1.0)
     assert steps.owed(-0.5) == 0
     assert steps.remainder == 0.0
+
+
+def test_a_time_that_is_not_a_number_adds_none():
+    steps = FixedSteps(0.01, 0.1)
+    steps.owed(0.005)
+    assert steps.owed(float('nan')) == 0
+    assert steps.remainder == pytest.approx(0.005)
+    assert steps.owed(0.005) == 1

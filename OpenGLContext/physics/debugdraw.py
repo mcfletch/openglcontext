@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
+from OpenGLContext.physics.records import BodySpec
 from OpenGLContext.scenegraph import basenodes as _basenodes
 
 if TYPE_CHECKING:
@@ -34,7 +35,8 @@ class ProxyOverlay:
     Every box shares one unit box wireframe and every sphere one unit sphere,
     each scaled by its body's ``Transform``, so the instancing pass draws each
     kind in one line draw. :meth:`update` places the bodies the service holds
-    and drops the ones it no longer does. Other shapes are left out.
+    and drops the ones it no longer does. Other shapes, and the bodies of
+    ``Physics.add_static_instances``, are left out.
     """
 
     def __init__(self, physics: Physics) -> None:
@@ -57,7 +59,8 @@ class ProxyOverlay:
 
         physics = self.physics
         specs = physics._specs
-        shown = [uid for uid, spec in specs.items() if spec.proxy.kind in ('box', 'sphere')]
+        shown = [uid for uid, spec in specs.items()
+                 if isinstance(spec, BodySpec) and spec.proxy.kind in ('box', 'sphere')]
         gone = [uid for uid in self.placed if uid not in specs]
         changed = bool(gone)
         for uid in gone:

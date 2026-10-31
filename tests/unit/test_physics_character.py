@@ -261,3 +261,27 @@ def test_hop_to_without_a_course_is_refused(inline):
     me = inline.add_character(position=(0, 0.05, 0))
     with pytest.raises(RuntimeError, match='run_along'):
         me.hop_to(1.0)
+
+
+def test_a_direction_that_is_not_finite_is_refused_and_the_move_stands():
+    import math
+
+    from OpenGLContext.physics.proxy import Proxy
+    from OpenGLContext.physics.service import Physics
+    from OpenGLContext.physics.settings import PhysicsDefinition
+
+    physics = Physics(PhysicsDefinition(mode='inline', tickHz=120.0))
+    try:
+        physics.add_static(None, proxy=Proxy.box((80.0, 1.0, 80.0)), translation=(0.0, -0.5, 0.0))
+        walker = physics.add_character(None, position=(0, 0, 0))
+        walker.set_move((1.0, 0.0, 0.0))
+        for bad in ((math.nan, 0.0, 1.0), (math.inf, 0.0, 0.0)):
+            with pytest.raises(ValueError, match='direction'):
+                walker.set_move(bad)
+            with pytest.raises(ValueError, match='direction'):
+                walker.set_fly_move(bad)
+        for _ in range(30):
+            physics.frame(1 / 60)
+        assert walker.position[0] > 0.5
+    finally:
+        physics.close()

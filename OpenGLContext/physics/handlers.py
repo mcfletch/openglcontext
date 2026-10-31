@@ -4,14 +4,16 @@ A :class:`Handler` is a function registered for one kind of event, on some
 bodies or on all of them, with filters. It holds the function weakly, as the
 engine's other handlers are held: a bound method of a live object is called, and
 one whose object has gone is dropped. A :class:`HandlerTable` finds the handlers
-an event reaches and from which side.
+an event reaches and from which side, looking only at the handlers of the
+event's kind and phase on its two bodies and on every body.
 """
 from __future__ import annotations
 
+import itertools
 import threading
 import weakref
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, NamedTuple
 
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.records import PhysicsEvent
@@ -65,6 +67,8 @@ class Handler:
         #: The closing speed a contact must exceed to be heard.
         self.above = float(above)
         self.active = True
+        #: Its place in the order handlers are registered in, set by :meth:`HandlerTable.add`.
+        self.order = 0
         #: Whether the function raised; logged once per handler.
         self.failed = False
         self._detach: Callable[[Handler], None] | None = None
@@ -100,32 +104,59 @@ class Handler:
         return not (gated and not event.approach > self.above)
 
 
+#: Numbers each handler registered, in order.
+_registrations = itertools.count(1)
+
+
+def _registered(handler: Handler) -> int:
+    return handler.order
+
+
+class _Audience(NamedTuple):
+    """The handlers of one (kind, phase, thread): by each body they cover, and those covering every body."""
+    by_body: dict[int, tuple[Handler, ...]]
+    everyone: tuple[Handler, ...]
+
+
 class HandlerTable:
-    """The handlers of one service, safe to read from the worker while the render thread edits."""
+    """The handlers of one service, safe to read from the worker while the render thread edits.
+
+    The handlers are a tuple replaced whole on each change. :meth:`audience`
+    reads an index of them by (kind, phase, thread) and by body, built again
+    on the first read after a change.
+    """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._handlers: tuple[Handler, ...] = ()
+        self._index: dict[tuple[str, str, bool], _Audience] | None = None
 
     def __len__(self) -> int:
         return len(self._handlers)
 
+    def _set(self, handlers: tuple[Handler, ...]) -> None:
+        """Hold ``handlers``, the lock held; the index is built again when next read."""
+        self._handlers = handlers
+        self._index = None
+
     def add(self, handler: Handler) -> Handler:
         """Register ``handler``; returns it."""
         with self._lock:
-            self._handlers = (*self._handlers, handler)
+            handler.order = next(_registrations)
+            self._set((*self._handlers, handler))
         handler._detach = self._remove
         return handler
 
     def _remove(self, handler: Handler) -> None:
         with self._lock:
-            self._handlers = tuple(h for h in self._handlers if h is not handler)
+            self._set(tuple(h for h in self._handlers if h is not handler))
 
     def prune(self) -> None:
         """Drop the handlers whose function has been collected or that were cancelled."""
         with self._lock:
-            self._handlers = tuple(h for h in self._handlers
-                                   if h.active and h.function() is not None)
+            kept = tuple(h for h in self._handlers if h.active and h.function() is not None)
+            if len(kept) != len(self._handlers):
+                self._set(kept)
 
     def forget_body(self, uid: int) -> None:
         """End the handlers whose every body has gone, after a body is removed."""
@@ -139,7 +170,30 @@ class HandlerTable:
                         continue
                     handler.bodies = remaining
                 kept.append(handler)
-            self._handlers = tuple(kept)
+            self._set(tuple(kept))
+
+    def _indexed(self) -> dict[tuple[str, str, bool], _Audience]:
+        """The index of the handlers, built from the tuple held where a change cleared it."""
+        index = self._index
+        if index is not None:
+            return index
+        with self._lock:
+            if self._index is None:
+                by_body: dict[tuple[str, str, bool], dict[int, list[Handler]]] = {}
+                everyone: dict[tuple[str, str, bool], list[Handler]] = {}
+                for handler in self._handlers:
+                    key = (handler.kind, handler.phase, handler.physics)
+                    if handler.bodies is None:
+                        everyone.setdefault(key, []).append(handler)
+                        continue
+                    table = by_body.setdefault(key, {})
+                    for uid in handler.bodies:
+                        table.setdefault(uid, []).append(handler)
+                self._index = {
+                    key: _Audience({uid: tuple(found) for uid, found in by_body.get(key, {}).items()},
+                                   tuple(everyone.get(key, ())))
+                    for key in by_body.keys() | everyone.keys()}
+            return self._index
 
     def named(self, event: str, bodies: Iterable[int] | None = None) -> list[Handler]:
         """The handlers for ``event`` covering exactly ``bodies`` (None for every body)."""
@@ -154,10 +208,20 @@ class HandlerTable:
         """The handlers that hear ``event`` and from which side, running on the thread named.
 
         A handler covering both sides hears the event once, from the first.
+        Handlers are listed in the order they were registered.
         """
+        audience = self._indexed().get((event.kind, event.phase, physics))
+        if audience is None:
+            return []
+        candidates = list(audience.everyone)
+        for uid in (event.a, event.b):
+            if uid is not None:
+                candidates.extend(audience.by_body.get(uid, ()))
+        if len(candidates) > 1:
+            candidates = sorted(set(candidates), key=_registered)
         heard: list[tuple[Handler, int]] = []
-        for handler in self._handlers:
-            if not handler.active or handler.physics != physics:
+        for handler in candidates:
+            if not handler.active:
                 continue
             for side in (0, 1):
                 if handler.hears(event, side):

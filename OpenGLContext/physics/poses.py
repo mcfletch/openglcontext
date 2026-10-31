@@ -43,10 +43,13 @@ def write_pose(transform: Any, pos_row: Any, aa_row: Any) -> None:
     """Write a pose onto a scene ``Transform``: ``pos_row`` its translation, ``aa_row`` its axis and angle.
 
     Pass numpy rows, which the fields take on their array path. The rotation
-    is set without a change notification: the dispatch on ``translation``
-    already invalidates the node's cached matrix, which depends on every
-    translation, rotation and scale field.
+    is announced only where something listens for it (a route or an
+    observer): the dispatch on ``translation`` already invalidates the node's
+    cached matrix, which depends on every translation, rotation and scale
+    field.
     """
+    from pydispatch.dispatcher import Any as anyone, getReceivers  # noqa: PLC0415 the scenegraph's event machinery
+
     transform.translation = pos_row
     kind = type(transform)
     rotation = _ROT_FIELD_CACHE.get(kind)
@@ -57,7 +60,9 @@ def write_pose(transform: Any, pos_row: Any, aa_row: Any) -> None:
         if not isinstance(declared, field.Field):
             raise TypeError('%s.rotation is an event, which holds no pose' % (kind.__name__,))
         rotation = _ROT_FIELD_CACHE[kind] = declared
-    rotation.fset(transform, aa_row, False)
+    turned = ('set', rotation)
+    rotation.fset(transform, aa_row,
+                  bool(getReceivers(transform, turned) or getReceivers(anyone, turned)))
 
 
 #: Each node class's translation and rotation fields, and whether both store a
@@ -82,13 +87,17 @@ def write_poses(transforms: Any, positions: Any, axis_angles: Any) -> None:
     """Write row ``i`` of ``positions`` ``(n, 3)`` and ``axis_angles`` ``(n, 4)`` onto ``transforms[i]``.
 
     The rows are made float32 once, which is what the fields hold, and each
-    node is told of its new translation as :func:`write_pose` tells it. A
-    node whose fields store values in a way of their own is set through them.
+    node is told of its new translation as :func:`write_pose` tells it. Its
+    rotation is announced as well where something listens for it, a route
+    from it or an observer of it, from that node or from any. A node whose
+    fields store values in a way of their own is set through them.
     """
+    from pydispatch.dispatcher import Any as anyone, getReceivers  # noqa: PLC0415 the scenegraph's event machinery
     from vrml.event import announce  # noqa: PLC0415 the scenegraph's event machinery
 
     places = np.ascontiguousarray(positions, dtype=np.float32)
     turns = np.ascontiguousarray(axis_angles, dtype=np.float32)
+    heard_anywhere: dict[Any, bool] = {}
     for node, place, turn in zip(transforms, places, turns):
         translation, rotation, plain = _pose_fields(type(node), node)
         if not plain:
@@ -98,3 +107,9 @@ def write_poses(transforms: Any, positions: Any, axis_angles: Any) -> None:
         held['translation'] = place
         held['rotation'] = turn
         announce(('set', translation), node, value=place)
+        turned = ('set', rotation)
+        anywhere = heard_anywhere.get(rotation)
+        if anywhere is None:
+            anywhere = heard_anywhere[rotation] = bool(getReceivers(anyone, turned))
+        if anywhere or getReceivers(node, turned):
+            announce(turned, node, value=turn)

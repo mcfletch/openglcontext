@@ -236,6 +236,8 @@ class Ragdoll(_Bound, grouping.Grouping, nodetypes.Grouping, nodetypes.Children,
                                placement=placement, mass=float(self.mass),
                                root_force=float(self.rootForce),
                                root_torque=float(self.rootTorque))
+        # A limp figure follows no animation, as after a change to LIMP in step().
+        figure.following = str(self.mode).upper() != 'LIMP'
         self.__dict__.setdefault('_figures', weakref.WeakKeyDictionary())[context] = figure
         self.__dict__.setdefault('_modes', weakref.WeakKeyDictionary())[context] = str(self.mode)
 
@@ -249,11 +251,14 @@ class Ragdoll(_Bound, grouping.Grouping, nodetypes.Grouping, nodetypes.Children,
             figure.remove()
 
     def step(self, context: Any) -> bool:
+        """Pose the figure in ``context``; whether it moved or follows its animation, so the
+        frame is drawn again. A figure at rest asks for no redraw."""
         figure = self.figure(context)
         if figure is None:
             return False
         mode = str(self.mode)
-        if self.__dict__['_modes'].get(context) != mode:
+        changed = self.__dict__['_modes'].get(context) != mode
+        if changed:
             self.__dict__['_modes'][context] = mode
             figure.following = mode.upper() != 'LIMP'
             figure.set_mode(mode.lower(), float(self.blend))
@@ -262,7 +267,7 @@ class Ragdoll(_Bound, grouping.Grouping, nodetypes.Grouping, nodetypes.Children,
         self.__dict__['_times'][context] = now
         figure.update(max(0.0, now - last))
         figure.draw()
-        return True
+        return bool(changed or figure.following or not figure.settled)
 
 
 def _placement(translation: Any, rotation: Any) -> np.ndarray:

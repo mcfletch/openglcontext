@@ -22,6 +22,7 @@ import concurrent.futures
 import dataclasses
 import itertools
 import logging
+import math
 import os
 import queue
 import time
@@ -104,7 +105,8 @@ class Physics:
         self._recording = recording
         #: Gives the context's audio, asked only when a material's sound is to be played.
         self._audio = audio
-        #: ``mount(node, True)`` puts a node in the scene and ``mount(node, False)`` takes it out.
+        #: ``mount(node, True)`` puts a node in the scene drawn now, once, moving it from a scene
+        #: no longer drawn; ``mount(node, False)`` takes it out.
         self._mount = mount
         self._overlay: Any = None
         self._zones_placed: tuple[Any, ...] = ()
@@ -125,6 +127,7 @@ class Physics:
         #: whose poses the nodes hold, and rows held back for a pending place.
         self._pose_rows: list[Body | None] = []
         self._posed_rows: dict[int, int] | None = None
+        self._posed_layout = -1
         self._posed_version: int | None = None
         self._held: list[int] = []
         self._awake = False
@@ -137,6 +140,9 @@ class Physics:
         self._failures: weakref.WeakKeyDictionary[Any, tuple[type, str]] = weakref.WeakKeyDictionary()
         #: The engine's error :meth:`frame` has raised, so it is raised once.
         self._raised: BaseException | None = None
+        #: The first exception code the service calls raised since the last frame, kept for
+        #: :meth:`frame` to raise where the definition's ``handlerErrors`` is ``raise``.
+        self._handler_error: BaseException | None = None
         #: Removed bodies whose handlers end once the world has applied the removal
         #: and their last events are delivered: (command sequence, id).
         self._gone: list[tuple[int, int]] = []
@@ -184,8 +190,58 @@ class Physics:
         engine.framed_characters = lambda: [one for one in self._characters if one.framed]
         engine.guard = self._guarded
         engine.wants_events = self.handlers.has_physics_handlers
+        engine.refused = self._refused
+        engine.hook_failed = self._handler_failed
         engine.after_step.append(self._run_step_hooks)
         engine.wants_steps.append(self._step_hooks_want_steps)
+
+    def _refused(self, command: Command) -> None:
+        """Mark the body or ragdoll a refused command was to make dead, and let go of it on the
+        render thread."""
+        later = self._engine.on_engine_thread()
+        if command.op == 'ragdoll':
+            ragdoll = self._ragdoll_of.get(command.args[1][0])
+            if ragdoll is not None and ragdoll.alive:
+                ragdoll.alive = False
+                for bone in ragdoll.bones:
+                    bone.alive = False
+                if later:
+                    self.render.call(self._forget_ragdoll, ragdoll, 0)
+                else:
+                    self._forget_ragdoll(ragdoll, 0)
+            return
+        if command.op not in ('add', 'soft_body'):
+            return
+        body = self._bodies.get(command.uid)
+        if body is None or not body.alive:
+            return
+        body.alive = False
+        self._send_record(Command('remove', body.uid, (), 0))
+        if later:
+            self.render.call(self._forget, body, 0)
+        else:
+            self._forget(body, 0)
+
+    def _handler_failed(self, error: BaseException) -> None:
+        """Keep ``error``, logged already, for the next frame to raise where the definition asks."""
+        if self.definition.handlerErrors == 'raise' and self._handler_error is None:
+            self._handler_error = error
+
+    def _raise_handler_error(self) -> None:
+        error, self._handler_error = self._handler_error, None
+        if error is not None:
+            raise error
+
+    def _check_room(self, count: int) -> None:
+        """Raise ValueError where ``count`` more bodies would take the world past ``maxBodies``.
+
+        A removal makes room once the world has applied it, at its next step.
+        """
+        most = int(self.definition.maxBodies)
+        held = self._engine.held_bodies()
+        if held + count > most:
+            raise ValueError('%d more bodies would take the world past maxBodies (%d; it holds %d)'
+                             % (count, most, held))
 
     def _ensure_started(self) -> None:
         if self._enabled and not self._closed:
@@ -211,16 +267,19 @@ class Physics:
 
     # -- configuration --------------------------------------------------
     def set_config(self, definition: PhysicsDefinition) -> None:
-        """Apply ``definition`` between ticks: gravity, the step, damping and the mode.
+        """Apply ``definition`` between ticks: gravity, the longest catch-up, damping and the mode.
 
         Bodies stay as they are. A world held inline by :meth:`pin_inline` keeps
         stepping inline and takes the new mode when it is let go. Raises
-        ValueError, changing nothing, for a definition the service cannot run.
+        ValueError, changing nothing, for a definition the service cannot run,
+        and for one with another ``engine`` or ``tickHz``: both are chosen when
+        the service is made.
         """
         definition.validate()
         if definition.engine != self.definition.engine:
             raise ValueError('the engine is chosen when the service is made; this one runs %s'
                              % (self.definition.engine,))
+        self._check_step(float(definition.tickHz), 'tickHz')
         self.definition = definition
         self._send_world('config', float(definition.tickHz), float(definition.maxCatchUp))
         self.gravity = tuple(definition.gravity)
@@ -268,17 +327,27 @@ class Physics:
 
         A paused world takes no steps. Bodies added or removed, writes and
         joints made while it is paused are kept in order and reach the world
-        when it runs again. ``tick_frequency`` sets the step, in steps a
-        second, from now on.
+        when it runs again. ``tick_frequency``, in steps a second, must be the
+        rate the world steps at: the step is chosen when the service is made
+        (``PhysicsDefinition.tickHz``), and another raises ValueError, changing
+        nothing.
         """
         if tick_frequency is not None:
-            self.definition.tickHz = number(tick_frequency, 'tick_frequency', positive=True)
-            self._send_world('config', float(tick_frequency), float(self.definition.maxCatchUp))
+            self._check_step(number(tick_frequency, 'tick_frequency', positive=True),
+                             'tick_frequency')
         self._enabled = bool(on)
         if not self._enabled:
             self._engine.stop()
         elif self._movers:
             self._ensure_started()
+
+    def _check_step(self, tick_hz: float, name: str) -> None:
+        """Raise ValueError where ``tick_hz`` is not the rate the world steps at."""
+        made = 1.0 / self._engine.step_dt
+        if abs(tick_hz - made) > 1e-9 * made:
+            raise ValueError('%s is %g, and this world steps %g steps a second: the step is '
+                             'chosen when the service is made (PhysicsDefinition.tickHz)'
+                             % (name, tick_hz, made))
 
     @property
     def gravity(self) -> tuple[float, ...]:
@@ -308,7 +377,8 @@ class Physics:
     def add_static(self, node: Any, proxy: Any = None, **options: Any) -> Body:
         """Make ``node`` a body that never moves and stops what meets it.
 
-        ``node`` is None for a body that is only a shape, such as a level cooked
+        A node has one body at a time: adding a second raises ValueError until
+        the first is removed. ``node`` is None for a body that is only a shape, such as a level cooked
         elsewhere: ``physics.add_static(None, proxy=Proxy.trimesh(points, indices))``.
         The other ``add_*`` calls take None the same way, and ``translation=`` and
         ``rotation=`` place the body.
@@ -353,6 +423,7 @@ class Physics:
         if unknown:
             raise TypeError('unknown option %s for add_%s' % (', '.join(sorted(unknown)), kind))
         options = _checked(options)
+        self._check_room(1)
         if node is None:
             if not isinstance(proxy, Proxy):
                 raise TypeError('a body with no node needs a shape: proxy=Proxy.box(...), '
@@ -363,6 +434,9 @@ class Physics:
             axis_angle = np.asarray((0.0, 0.0, 1.0, 0.0) if turned is None else turned,
                                     dtype='d')[:4]
         else:
+            held = self._by_node.get(node)
+            if held is not None and held.alive and not held.derived:
+                raise ValueError('%r already has a body, %r: remove it first' % (node, held))
             if options.get('translation') is not None:
                 node.translation = tuple(options['translation'])
             if options.get('rotation') is not None:
@@ -607,6 +681,7 @@ class Physics:
 
         ``named`` is the name of its material, which says what a strike on it sounds like.
         """
+        self._check_room(1)
         uid = next(self._uids)
         quaternion = (0.0, 0.0, 0.0, 1.0) if orientation is None else tuple(
             float(v) for v in orientation)
@@ -656,6 +731,7 @@ class Physics:
         if points.ndim != 2 or points.shape[1] != 3 or len(points) == 0:
             raise ValueError('positions are an (n, 3) array with at least one row, not shape %r'
                              % (points.shape,))
+        self._check_room(len(points))
         first = next(self._uids)
         for _ in range(len(points) - 1):
             next(self._uids)
@@ -971,6 +1047,7 @@ class Physics:
         if not isinstance(spec, RagdollSpec):
             raise TypeError('a ragdoll is made from a RagdollSpec, not %r' % (spec,))
         made_mode = RagdollMode.coerce(mode)
+        self._check_room(len(spec))
         place = tuple(float(v) for v in vector(position, 'position'))
         turn = np.asarray(rotation, dtype='d').reshape(4)
         if not (np.isfinite(turn).all() and np.linalg.norm(turn) > 0.0):
@@ -1036,16 +1113,30 @@ class Physics:
             self._send(Command(op, 0, (ragdoll.id, *args), next(self._seq)))
 
     def _remove_ragdoll(self, ragdoll: Ragdoll) -> None:
+        """Take ``ragdoll`` and its bones out; from the stepping thread the render thread's tables
+        let go of them in the next :meth:`frame`."""
         if not ragdoll.alive:
             return
         ragdoll.alive = False
-        self._unpass(*(body.uid for body in ragdoll.bones))
+        for body in ragdoll.bones:
+            body.alive = False
+        for vehicle in tuple(self._vehicles.values()):
+            if not vehicle.chassis.alive:
+                vehicle.alive = False
+                self._vehicles.pop(vehicle.uid, None)
         seq = 0
         if not self._closed:
             seq = next(self._seq)
             self._send(Command('ragdoll_remove', 0, (ragdoll.id,), seq))
+        if self._engine.on_engine_thread():
+            self.render.call(self._forget_ragdoll, ragdoll, seq)
+        else:
+            self._forget_ragdoll(ragdoll, seq)
+
+    def _forget_ragdoll(self, ragdoll: Ragdoll, seq: int) -> None:
+        """Let go of removed ``ragdoll``'s bones in the render thread's tables."""
+        self._unpass(*(body.uid for body in ragdoll.bones))
         for body in ragdoll.bones:
-            body.alive = False
             self._ragdoll_of.pop(body.uid, None)
             self._forget(body, seq)
 
@@ -1064,6 +1155,7 @@ class Physics:
         self._require('soft_bodies')
         if not isinstance(spec, SoftBodySpec):
             raise TypeError('a soft body is made from a SoftBodySpec, not %r' % (spec,))
+        self._check_room(1)
         place = tuple(float(v) for v in vector(position, 'position'))
         turn = np.asarray(rotation, dtype='d').reshape(4)
         if not (np.isfinite(turn).all() and np.linalg.norm(turn) > 0.0):
@@ -1190,7 +1282,8 @@ class Physics:
         if ragdoll is not None:
             raise ValueError('%r is a bone of %r: remove the ragdoll' % (body, ragdoll))
         body.alive = False
-        for vehicle in [one for one in self._vehicles.values() if one.chassis is body]:
+        # A copy of the table: a vehicle may be added on the other thread meanwhile.
+        for vehicle in [one for one in tuple(self._vehicles.values()) if one.chassis is body]:
             vehicle.alive = False
             self._vehicles.pop(vehicle.uid, None)
         on_worker = self._engine.on_engine_thread()
@@ -1297,6 +1390,13 @@ class Physics:
         finally:
             self._engine.submit(command)
 
+    def _send_record(self, command: Command) -> None:
+        """Bring the specs to ``command`` on the render thread, without sending it to the engine."""
+        if self._engine.on_engine_thread():
+            self.render.call(self._record, command)
+        else:
+            self._record(command)
+
     def _record(self, command: Command) -> None:
         """Bring the specs to what ``command`` makes of the world."""
         if command.op == 'add':
@@ -1359,8 +1459,13 @@ class Physics:
 
     # -- the frame ----------------------------------------------------------
     def step(self, dt: float) -> None:
-        """Advance the world by ``dt`` seconds by hand, for a service nothing else steps."""
-        self._engine.step(dt)
+        """Advance the world by ``dt`` seconds by hand, for a service nothing else steps.
+
+        An exception step code raised is raised from here where the
+        definition's ``handlerErrors`` is ``raise``.
+        """
+        self._engine.step(_frame_time(dt))
+        self._raise_handler_error()
 
     def frame(self, dt: float) -> bool:
         """Do the render thread's share of one frame; True if the scene changed or is still moving.
@@ -1373,7 +1478,14 @@ class Physics:
         The world thread moves each framed character inside each tick, with
         the moves set before it; the frame animates the characters and draws
         them between their last two ticks.
+
+        ``dt`` is in seconds; a negative one adds no time, one past
+        ``maxCatchUp`` adds that much, and one that is not a number raises
+        ValueError. Where the definition's ``handlerErrors`` is ``raise``, the
+        first exception a handler, step code or a posted function raised since
+        the last frame is raised once this frame's work is done.
         """
+        dt = _frame_time(dt)
         if not self._enabled or self._closed:
             if not self._closed:
                 self._pump_cooked()
@@ -1385,6 +1497,9 @@ class Physics:
         self._raise_worker_error()
         out = self._engine.collect(dt)
         self._cost_frames += 1
+        if self._overlay is not None and self._mount is not None:
+            # Mounted again where the scene drawn has changed since.
+            self._mount(self._overlay.root, True)
         if out.snapshot is not None:
             self._snapshot = out.snapshot
             self._write_poses(out.snapshot)
@@ -1407,6 +1522,7 @@ class Physics:
             self._dispatch(out.events)
         self._finish_removals()
         applied = self.render.apply()
+        self._raise_handler_error()
         return bool(self._awake or applied or walking or softened)
 
     def _character_steps(self, dt: float) -> tuple[int, float]:
@@ -1446,7 +1562,7 @@ class Physics:
         A body placed by a command the snapshot does not include yet keeps the
         pose it was placed at, and is looked at again in the next frame.
         """
-        table = self._pose_table(snapshot.rows)
+        table = self._pose_table(snapshot)
         changed = snapshot.changed_since(self._posed_version)
         self._posed_version = snapshot.version
         rows: Iterable[int] = range(len(table)) if changed is None else changed.tolist()
@@ -1475,18 +1591,36 @@ class Physics:
         write_poses(nodes, snapshot.position[take], snapshot.axis_angle[take])
         return True
 
-    def _pose_table(self, rows: dict[int, int]) -> list[Body | None]:
-        """The body at each row of a snapshot with row table ``rows``; None for a row of no body here."""
-        if self._posed_rows is not rows:
-            table: list[Body | None] = [None] * len(rows)
-            for body in self._movers:
-                row = rows.get(body.uid)
-                if row is not None:
-                    table[row] = body
-            self._pose_rows, self._posed_rows = table, rows
-            self._posed_version = None
-            self._held = []
-        return self._pose_rows
+    def _pose_table(self, snapshot: Snapshot) -> list[Body | None]:
+        """The body at each row of ``snapshot``; None for a row of no body here.
+
+        Within one layout a body keeps its row and new bodies take rows at the
+        end, which are all this looks up; a new layout is read whole.
+        """
+        rows = snapshot.rows
+        if self._posed_rows is rows:
+            return self._pose_rows
+        count = len(snapshot.position)
+        if self._posed_rows is not None and snapshot.layout == self._posed_layout:
+            table = self._pose_rows
+            start = len(table)
+            table.extend([None] * (count - start))
+            # New bodies are the last entries of the table, in the order of their rows.
+            for uid, row in reversed(rows.items()):
+                if row < start:
+                    break
+                table[row] = self._bodies.get(uid)
+            self._posed_rows = rows
+            return table
+        made: list[Body | None] = [None] * count
+        for body in self._movers:
+            at = rows.get(body.uid)
+            if at is not None:
+                made[at] = body
+        self._pose_rows, self._posed_rows, self._posed_layout = made, rows, snapshot.layout
+        self._posed_version = None
+        self._held = []
+        return made
 
     # -- reading ----------------------------------------------------------
     def poses(self, bodies: Iterable[Body | int], interpolated: bool = True) -> Poses:
@@ -1650,10 +1784,11 @@ class Physics:
                 continue
             try:
                 hook.function(view)
-            except Exception:
+            except Exception as error:
                 if not hook.failed:
                     hook.failed = True
                     log.exception('physics step hook %r failed', hook.function)
+                self._handler_failed(error)
 
     def _step_hooks_want_steps(self) -> bool:
         return any(not hook.cancelled for hook in self._step_hooks)
@@ -1841,10 +1976,10 @@ class Physics:
         for event in events:
             if sounds:
                 self._strike(event)
-            if journal and (self.handlers.audience(event, physics=False)
-                            or self.handlers.audience(event, physics=True)):
+            heard = self.handlers.audience(event, physics=False)
+            if journal and (heard or self.handlers.audience(event, physics=True)):
                 self._journal(event)
-            for handler, side in self.handlers.audience(event, physics=False):
+            for handler, side in heard:
                 self._call(handler, self._collision(event, side))
         self.handlers.prune()
 
@@ -1870,14 +2005,14 @@ class Physics:
             return
         self._invoke(handler, function, collision)
 
-    @staticmethod
-    def _invoke(handler: Handler, function: Callable[..., Any], argument: Any) -> None:
+    def _invoke(self, handler: Handler, function: Callable[..., Any], argument: Any) -> None:
         try:
             function(argument)
-        except Exception:
+        except Exception as error:
             if not handler.failed:
                 handler.failed = True
                 log.exception('physics handler %r failed on %r', function, argument)
+            self._handler_failed(error)
 
     # -- accounting ---------------------------------------------------------
     @property
@@ -1897,9 +2032,18 @@ class Physics:
         if self._closed:
             return
         self._closed = True
+        self.show_proxies(False)
         if self._cooker is not None:
             self._cooker.shutdown(wait=False, cancel_futures=True)
         self._engine.close()
+
+
+def _frame_time(dt: Any) -> float:
+    """``dt`` as seconds; ValueError where it is not a number."""
+    given = float(dt)
+    if math.isnan(given):
+        raise ValueError('dt is a time in seconds, not %r' % (dt,))
+    return given
 
 
 def _path_to(root: Any, target: Any) -> list[Any] | None:
@@ -1929,7 +2073,6 @@ class StaticInstances:
         if self._alive:
             self._alive = False
             self.physics._send_world('remove_many', self._first, self.count)
-            self.physics._specs.pop(self._first, None)
 
 
 #: The ``add_*`` options that are numbers, with the bound each must keep.

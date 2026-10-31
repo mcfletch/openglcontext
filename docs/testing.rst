@@ -762,6 +762,15 @@ fails the test. A host's answer is kept for the life of the process, and a
 host that does not accept a connection within five seconds counts as
 unreachable.
 
+A physics handler that raises
+-----------------------------
+
+The plugin sets ``OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS=raise`` where the
+variable is unset, so a physics handler, step code or posted function that
+raises makes the next ``Physics.frame`` or ``step`` raise it, and the test
+fails on it. A test of the logging itself makes its service with
+``PhysicsDefinition(handlerErrors='log')``.
+
 .. _conventions:
 
 Test conventions

@@ -83,7 +83,7 @@ at a time, and each changes one thing about it:
    * - :doc:`tutorials/physics/physics_stairs_surface_sound`
      - a ``sound=`` on a material
    * - :doc:`tutorials/physics/physics_stairs_tuning`
-     - ``enable``, ``tick_frequency``, ``set_transform``, ``PhysicsDefinition``
+     - ``enable``, ``tickHz``, ``set_transform``, ``PhysicsDefinition``
 
 A character that runs across a landscape is
 :doc:`tutorials/character/character_run`, and the
@@ -1057,6 +1057,11 @@ no ``enabled`` field; ``navigation=None`` is a context with no navigation.
    * - ``maxCatchUp``
      - 0.1
      - the most time one frame steps, in seconds; the rest is dropped
+   * - ``maxBodies``
+     - 65536
+     - the most bodies the world holds at once, a static instance and a
+       ragdoll bone each counted; an ``add_*`` past it raises ``ValueError``,
+       and a removal makes room once the world has applied it
    * - ``gravity``
      - ``0 -9.81 0``
      - metres a second squared, global
@@ -1064,14 +1069,19 @@ no ``enabled`` field; ``navigation=None`` is a context with no navigation.
      - ``scene``
      - ``scene``: the shapes of the scene are static bodies; ``explicit``: only
        the program's; ``none``
+   * - ``handlerErrors``
+     - ``log`` (``OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS``)
+     - ``log``: an exception a handler, step code or a posted function raises
+       is logged once and the world goes on; ``raise``: it is also raised from
+       the next ``frame`` or ``step``. The testing plugin makes it ``raise``
    * - ``linearDamping``, ``angularDamping``
      - 0.3, 1.5
      - per second, for a body that names none
 
-``physics.set_config(definition)`` applies the same node between steps, and
-``physics.enable(False)`` pauses the world with every body where it is;
-``physics.enable(True, tick_frequency=240)`` runs it again with a finer step. A
-paused world takes no steps; bodies added and removed, writes and joints made
+``physics.set_config(definition)`` applies the same node between steps, except
+``tickHz``, which is fixed when the service is made; ``physics.enable(False)``
+pauses the world with every body where it is and ``physics.enable(True)`` runs it
+again. A paused world takes no steps; bodies added and removed, writes and joints made
 while it is paused reach it, in the order they were made, when it runs again,
 and so do those of a service that starts with ``enabled`` false. The
 variables of :doc:`environment` set the defaults. The settings are the
@@ -1216,7 +1226,8 @@ callbacks and replay in full):
   every run.
 - Free-running. In ``thread`` mode with no characters the world thread ticks
   at ``tickHz`` on its own; a world with nothing awake and no step code waits
-  using no CPU. The frame reads the newest snapshot it published.
+  using no CPU. The frame reads the newest snapshot it published, and draws a
+  tick behind its own clock, between the two newest snapshots it has read.
 
 A lockstep world that has settled (every body asleep, and no character,
 kinematic track, motor, step code or waiting command) counts the ticks a frame
@@ -1228,7 +1239,11 @@ a woken world plays out as one stepped through every tick and a replay matches.
 A frame shorter than a tick (240 frames a second against the default 120 ticks)
 draws each moving body between the last two ticks, at the frame's point in the
 next one, so no pose repeats from one frame to the next; characters are drawn
-the same way. ``physics.poses(bodies, interpolated=False)`` and
+the same way. A free-running world is drawn the same way, a tick behind the
+frame clock, and as its newest snapshot holds it once it falls more than a
+tick behind or stops ticking. A body placed by ``set_transform`` or by
+``restore_state`` is drawn at its new place from the first frame that includes
+the place, never between the old place and the new. ``physics.poses(bodies, interpolated=False)`` and
 ``body.step_position`` change once a tick. An owner-stepped character's
 ``step(dt)`` advances the world by whole ticks, so a ``dt`` shorter than a tick
 moves nothing until the steps add up to one: a game that steps a character
@@ -1259,7 +1274,8 @@ step, as Jolt reports no solver impulse.
 Limits of the engine, each Jolt's own:
 
 - The tick rate is fixed when the world is made; ``enable(tick_frequency=)``
-  and ``set_config`` with another ``tickHz`` log a warning and keep it.
+  and ``set_config`` with another ``tickHz`` raise ``ValueError`` and change
+  nothing. A program wanting another step makes a new service.
 - Commands made inside a step (an ``on_step`` function, a physics callback,
   ``post``) apply at the next tick, not in the step that made them.
 - A resting body sinks up to 5 mm into what it rests on (Jolt's penetration

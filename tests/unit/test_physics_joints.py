@@ -212,3 +212,47 @@ def test_a_joint_works_on_the_physics_thread():
     finally:
         physics.close()
 
+
+
+@pytest.mark.parametrize('speed, force', [(math.nan, 10.0), (1.0, math.inf), (1.0, -5.0),
+                                          (1.0, math.nan)])
+def test_a_drive_that_is_not_a_finite_speed_and_force_is_refused(physics, speed, force):
+    rod = bar(physics, (0.0, 3.0, 0.0))
+    hinge = physics.add_hinge(rod, anchor=(0.0, 3.0, 0.0), axis=(0, 1, 0))
+    with pytest.raises(ValueError):
+        hinge.drive(speed, force)
+    with pytest.raises(ValueError):
+        physics.add_hinge(bar(physics, (0.0, 6.0, 0.0)), anchor=(0.0, 6.0, 0.0), axis=(0, 1, 0),
+                          motor=(speed, force))
+    assert hinge.motor == (0.0, 0.0)
+
+
+@pytest.mark.parametrize('length', [math.nan, math.inf, -1.0])
+def test_a_distance_that_is_not_a_finite_length_is_refused(physics, length):
+    bob = ball(physics, (3.0, 1.0, 0.0))
+    with pytest.raises(ValueError, match='length'):
+        physics.add_distance(bob, None, to_anchor=(3.0, 2.0, 0.0), length=length)
+
+
+def test_motor_torques_and_suspension_are_finite(physics):
+    rod = bar(physics, (0.0, 3.0, 0.0))
+    with pytest.raises(ValueError, match='torque'):
+        physics.add_motor(rod, axes=[(0, 1, 0)], torques=[math.nan])
+    motor = physics.add_motor(rod, axes=[(0, 1, 0)], torques=[1.0])
+    with pytest.raises(ValueError, match='torque'):
+        motor.drive(torques=[math.inf])
+    wheel = ball(physics, (2.0, 3.0, 0.0))
+    with pytest.raises(ValueError, match='suspension'):
+        physics.add_wheel(wheel, rod, anchor=(2.0, 3.0, 0.0), steering_axis=(0, 1, 0),
+                          axle=(1, 0, 0), suspension=(math.nan, 1.0))
+
+
+def test_a_drive_with_no_force_switches_the_motor_off(physics):
+    physics.gravity = (0, 0, 0)
+    rod = bar(physics, (0.0, 3.0, 0.0))
+    hinge = physics.add_hinge(rod, anchor=(0.0, 3.0, 0.0), axis=(0, 1, 0), motor=(4.0, 50.0))
+    run_for(physics, 0.5)
+    hinge.drive(0.0, 0.0)
+    run_for(physics, 0.2)
+    # A motor switched off holds nothing: the rod spins on (its damping slows it).
+    assert float(rod.angular_velocity[1]) > 2.0

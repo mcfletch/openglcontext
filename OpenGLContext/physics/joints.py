@@ -31,6 +31,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from OpenGLContext.physics.checks import number
+
 if TYPE_CHECKING:
     from OpenGLContext.physics.body import Body
     from OpenGLContext.physics.service import Physics
@@ -154,10 +156,11 @@ class Joint:
         torque in newton-metres; a slider's is in metres a second and newtons.
         A speed of 0 with a force holds the joint still; a force of 0 switches
         the motor off. A motor joint takes ``torques``, one in newton-metres
-        for each of its axes.
+        for each of its axes. Raises ValueError for a speed or torque that is
+        not finite and a force that is not finite or is below zero.
         """
         if self.kind == 'motor':
-            given = tuple(float(v) for v in (torques if torques is not None else ()))
+            given = _torques(torques if torques is not None else ())
             if len(given) != len(self.spec.axes):
                 raise ValueError('a motor joint with %d axes takes %d torques, not %r'
                                  % (len(self.spec.axes), len(self.spec.axes), given))
@@ -165,9 +168,9 @@ class Joint:
             if self.alive:
                 self.physics._command('joint_torques', self.body, self.uid, given)
             return
-        self.motor = (float(speed), float(force))
+        self.motor = _motor((speed, force))
         if self.alive:
-            self.physics._command('joint_motor', self.body, self.uid, float(speed), float(force))
+            self.physics._command('joint_motor', self.body, self.uid, *self.motor)
 
     def remove(self) -> None:
         """Take the joint out of the world. Removing twice is harmless."""
@@ -218,11 +221,17 @@ def _body(physics: Physics, value: Any, name: str) -> Body:
     return found
 
 
-def _motor(value: Any) -> tuple[float, float]:
+def _motor(value: Any, name: str = 'motor') -> tuple[float, float]:
+    """``(speed, force)`` as finite floats, the force not below zero; (0, 0) for None."""
     if value is None:
         return 0.0, 0.0
-    speed, force = (float(v) for v in value)
-    return speed, force
+    speed, force = value
+    return (number(speed, '%s speed' % name),
+            number(force, '%s force' % name, non_negative=True))
+
+
+def _torques(values: Iterable[float]) -> tuple[float, ...]:
+    return tuple(number(value, 'torque') for value in values)
 
 
 def make_joint(physics: Physics, kind: str, body: Any, to: Any = None, *,
@@ -255,10 +264,12 @@ def make_joint(physics: Physics, kind: str, body: Any, to: Any = None, *,
         far = _vector(other.position if to_anchor is None and other is not None
                       else to_anchor, 'to_anchor')
         spec = JointSpec(kind, held.uid, to_uid, anchor=point, to_anchor=far,
-                         length=None if length is None else float(length), collide=collide)
+                         length=None if length is None else number(length, 'length',
+                                                                   non_negative=True),
+                         collide=collide)
     elif kind == 'motor':
         directions = tuple(_axis(one, 'axes') for one in (axes or ()))
-        amounts = tuple(float(v) for v in (torques or ()))
+        amounts = _torques(torques or ())
         if not 1 <= len(directions) <= 3:
             raise ValueError('a motor joint turns about one to three axes, not %d' % len(directions))
         if len(amounts) != len(directions):
@@ -272,11 +283,10 @@ def make_joint(physics: Physics, kind: str, body: Any, to: Any = None, *,
         first = _axis(axis, 'axis' if kind == 'universal' else 'steering_axis')
         second = _axis(to_axis, 'to_axis' if kind == 'universal' else 'axle')
         _apart(first, second, 'the two axes')
-        steer_speed, steer_force = _motor(steering_motor)
-        stiffness, damping = (float(v) for v in suspension) if suspension is not None else (0.0, 0.0)
-        if stiffness < 0.0 or damping < 0.0:
-            raise ValueError('suspension is (stiffness, damping), neither below zero, not %r'
-                             % (suspension,))
+        steer_speed, steer_force = _motor(steering_motor, 'steering_motor')
+        stiffness, damping = suspension if suspension is not None else (0.0, 0.0)
+        stiffness = number(stiffness, 'suspension stiffness', non_negative=True)
+        damping = number(damping, 'suspension damping', non_negative=True)
         spec = JointSpec(kind, held.uid, to_uid, anchor=_vector(anchor, 'anchor'), axis=first,
                          to_axis=second, lower=stops[0], upper=stops[1], speed=speed,
                          force=force, steer_speed=steer_speed, steer_force=steer_force,

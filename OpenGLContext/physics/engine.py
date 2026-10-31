@@ -99,6 +99,12 @@ class Engine(abc.ABC):
         self.guard: Callable[..., Any] = _call
         #: Asked whether a handler of bodies' events runs on the stepping thread; the service sets it.
         self.wants_events: Callable[[], bool] = _never
+        #: Called with a command the engine could not apply, on the thread that made it; the
+        #: service sets it.
+        self.refused: Callable[[Command], Any] = _ignore
+        #: Called with an exception a hook, a listener or a posted function raised, after it
+        #: is logged; the service sets it.
+        self.hook_failed: Callable[[BaseException], Any] = _ignore
 
     # -- stepping -------------------------------------------------------
     @property
@@ -123,6 +129,10 @@ class Engine(abc.ABC):
     @abc.abstractmethod
     def submit(self, command: Command) -> None:
         """Make ``command``, from any thread."""
+
+    @abc.abstractmethod
+    def held_bodies(self) -> int:
+        """How many bodies the world holds with those waiting to join it, every kind counted."""
 
     @abc.abstractmethod
     def collect(self, dt: float) -> Outbox:
@@ -274,6 +284,10 @@ class Engine(abc.ABC):
     def close(self) -> None:
         """Stop stepping and let go of the world."""
         self.stop()
+
+
+def _ignore(given: Any) -> None:
+    """Nothing: what an engine with no service does with a refused command or a failed hook."""
 
 
 def _no_body(uid: int) -> Any:

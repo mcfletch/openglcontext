@@ -373,6 +373,13 @@ How much work per frame
        viewer reads the same variable to walk the scene with gravity and
        collision instead of framing it, and ``yes`` turns that on. See
        :doc:`Physics <physics>`.
+   * - ``OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS``
+     - ``log`` or ``raise``
+     - ``log``
+     - The default of ``PhysicsDefinition.handlerErrors``: ``raise`` raises an
+       exception a physics handler, step code or a posted function raised from
+       the next ``frame`` or ``step``, after logging it. The testing plugin sets
+       ``raise`` where the variable is unset. See :doc:`Physics <physics>`.
    * - ``OPENGLCONTEXT_PHYSICS_MODE``
      - ``thread`` or ``inline``
      - ``thread``

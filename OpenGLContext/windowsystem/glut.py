@@ -422,13 +422,15 @@ class GLUTWindowSystem(WarpedPointer, WindowSystem):
         """GLUT up first, then the context, then its loop
 
         A context class that sets ``glutWorldMenu`` gets the pop-up menu of
-        worlds to load (:meth:`createWorldMenu`).
+        worlds to load (:meth:`createWorldMenu`), from its ``glutWorlds``
+        directory and its ``glutWorldURLs`` file where it names them.
         """
         ensureGlutInitialised()
         context = contextClass(*args, **named)
         system = context.windowsystem
         if getattr(context, 'glutWorldMenu', False) and isinstance(system, cls):
-            system.createWorldMenu()
+            system.createWorldMenu(getattr(context, 'glutWorlds', 'wrls'),
+                                   getattr(context, 'glutWorldURLs', None))
         return context.profiledMainLoop()
 
     # -- input ----------------------------------------------------------------
@@ -509,28 +511,31 @@ class GLUTWindowSystem(WarpedPointer, WindowSystem):
 
     # -- the world menu -------------------------------------------------------
 
-    def createWorldMenu(self) -> Any:
+    def createWorldMenu(self, directory: str = 'wrls', urls: str | None = None) -> Any:
         """Attach a pop-up menu of worlds to load to the middle button
 
-        The VRML97 worlds under ``OpenGLContext/tests/wrls`` and the URLs in
-        the test set, each loaded into the context with
-        :meth:`~OpenGLContext.vrmlcontext.VRMLSceneMixin.load` when chosen.
+        "Load File" lists the VRML97 worlds (``*.wrl``) in ``directory``, and
+        "Load URL" the lines of the text file ``urls`` (one URL a line, ``#``
+        starting a comment), each loaded into the context with
+        :meth:`~OpenGLContext.vrmlcontext.VRMLSceneMixin.load` when chosen. A
+        relative path is from the working directory; the engine's suite runs
+        from ``tests/``, which holds ``wrls`` and ``resources/test_vrml_set.txt``.
         """
         import glob
         import os
 
-        from OpenGLContext import tests
-        from OpenGLContext.tests.resources import test_vrml_set_txt
-
         self.worldPaths = []
-        base = os.path.join(os.path.dirname(tests.__file__), 'wrls', '*.wrl')
         fileMenu = glutCreateMenu(self.onMenuLoad)
-        for path in glob.glob(base):
+        for path in sorted(glob.glob(os.path.join(directory, '*.wrl'))):
             self.worldPaths.append(path)
-            glutAddMenuEntry(os.path.join('wrls', os.path.basename(path)),
-                             len(self.worldPaths) - 1)
+            glutAddMenuEntry(os.path.basename(path), len(self.worldPaths) - 1)
         urlMenu = glutCreateMenu(self.onMenuLoad)
-        for line in test_vrml_set_txt.data.split('\n'):
+        lines: list[str] = []
+        if urls is not None:
+            from OpenGLContext.loaders.resolver import contained_source, read_contained
+
+            lines = read_contained(contained_source(urls)).decode('utf-8').splitlines()
+        for line in lines:
             path = line.strip()
             if path and not path.startswith('#'):
                 self.worldPaths.append(path)

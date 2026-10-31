@@ -107,6 +107,14 @@ def test_mass_comes_from_the_shape_when_none_is_given(physics):
 def test_mass_given_is_the_mass(physics):
     body = physics.add_dynamic(ball(), mass=3.0)
     assert physics_testing.mass(physics, body) == pytest.approx(3.0)
+    # Read from the world, not from what the service asked for.
+    engine = physics._engine
+    engine.given[body.uid] = (1.0, engine.given[body.uid][1])
+    assert physics_testing.mass(physics, body) == pytest.approx(3.0)
+    body.set_mass(5.0)
+    assert physics_testing.mass(physics, body) == pytest.approx(5.0)
+    assert body.velocity == pytest.approx((0.0, 0.0, 0.0))
+    assert physics_testing.mass(physics, physics.add_static(block((1, 1, 1)))) == 0.0
 
 
 @pytest.mark.parametrize('proxy, kind', [
@@ -433,11 +441,22 @@ def test_a_body_removed_while_paused_on_a_thread_leaves_the_world_on_resume():
         service.close()
 
 
-def test_enable_with_a_tick_frequency_changes_the_step(physics):
-    physics.enable(True, tick_frequency=200.0)
-    physics.frame(0.0)
+def test_a_tick_frequency_other_than_the_worlds_is_refused_changing_nothing(physics):
     # A Jolt world steps at the rate it was made with: its tick is part of the world thread.
+    with pytest.raises(ValueError, match='100 steps a second'):
+        physics.enable(False, tick_frequency=200.0)
+    assert physics.definition.tickHz == 100.0
+    assert physics._enabled
+    physics.enable(True, tick_frequency=100.0)
+    physics.frame(0.0)
     assert physics_testing.step_dt(physics) == pytest.approx(0.01)
+
+
+def test_set_config_refuses_another_step_changing_nothing(physics):
+    with pytest.raises(ValueError, match='tickHz'):
+        physics.set_config(physics.definition.replaced(tickHz=240.0, gravity=(0.0, -1.0, 0.0)))
+    assert physics.definition.tickHz == 100.0
+    assert physics.gravity == pytest.approx((0.0, -9.81, 0.0))
 
 
 def test_step_advances_a_standalone_service_by_hand(physics):
@@ -448,13 +467,12 @@ def test_step_advances_a_standalone_service_by_hand(physics):
     assert node.translation[1] < 5.0
 
 
-def test_set_config_changes_gravity_and_the_step(physics):
+def test_set_config_changes_gravity_and_keeps_the_step(physics):
     body = physics.add_dynamic(ball(), linear_damping=0.0)
-    physics.set_config(PhysicsDefinition(mode='inline', gravity=(0, -2.0, 0), tickHz=200.0,
+    physics.set_config(PhysicsDefinition(mode='inline', gravity=(0, -2.0, 0), tickHz=100.0,
                                          maxCatchUp=2.0))
     run_for(physics, 0.5)
     assert body.velocity[1] == pytest.approx(-1.0, abs=0.15)
-    # A Jolt world steps at the rate it was made with: its tick is part of the world thread.
     assert physics_testing.step_dt(physics) == pytest.approx(0.01)
 
 
@@ -657,3 +675,43 @@ def test_a_static_body_placed_by_hand_reads_back_where_it_was_put(physics):
     run_for(physics, 0.1)
     assert wall.position == pytest.approx((4.0, 0.0, 0.0))
     assert wall.rotation == pytest.approx((0.0, 1.0, 0.0, 0.5))
+
+
+def test_a_node_that_has_a_body_is_refused_a_second(physics):
+    node = ball()
+    first = physics.add_dynamic(node)
+    with pytest.raises(ValueError, match='already'):
+        physics.add_static(node)
+    assert physics.body_for(node) is first
+    first.remove()
+    second = physics.add_kinematic(node)
+    assert physics.body_for(node) is second
+
+
+def test_a_frame_time_that_is_not_a_number_is_refused_and_the_clock_runs_on(physics):
+    body = physics.add_dynamic(ball())
+    physics.frame(0.02)
+    with pytest.raises(ValueError, match='dt'):
+        physics.frame(float('nan'))
+    with pytest.raises(ValueError, match='dt'):
+        physics.step(float('nan'))
+    before = physics.time
+    run_for(physics, 0.2)
+    assert physics.time == pytest.approx(before + 0.2, abs=0.011)
+    physics.frame(float('inf'))         # clamped to maxCatchUp
+    physics.frame(-1.0)                 # a clock that went back adds no time
+    assert body.alive
+
+
+def test_settle_fails_where_the_world_does_not_take_the_commands(monkeypatch):
+    service = make(mode='thread')
+    try:
+        body = service.add_dynamic(ball())
+        physics_testing.settle(service)
+        service.enable(False)           # a paused world takes no commands
+        body.set_velocity((1.0, 0.0, 0.0))
+        monkeypatch.setattr(physics_testing, 'WAIT', 0.2)
+        with pytest.raises(AssertionError, match='commands'):
+            physics_testing.settle(service)
+    finally:
+        service.close()

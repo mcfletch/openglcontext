@@ -366,6 +366,8 @@ def pytest_configure(config: Any) -> None:
         # Before this process makes a GL context, because the driver reads
         # AMD_DEBUG once, as it starts.
         _CULLING['decided'] = drivercull.settle()
+    # A handler that raises fails the test that runs it, rather than being logged.
+    os.environ.setdefault('OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS', 'raise')
     _start_open_audit(config)
 
 

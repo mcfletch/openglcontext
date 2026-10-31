@@ -264,8 +264,10 @@ A query from inside a callback runs on the world thread without taking the lock.
 Native state is guarded by C++ mutexes and atomics; nothing in the module relies on the GIL for
 exclusion. The 3.14t build ran every case with the GIL off. Two consequences fall on Python code:
 a physics-thread callback runs beside render-thread Python, so the service's tables touched from
-both threads (handler table, body registry) take a lock; and nanobind's `FREE_THREADED` build is
-a separate wheel per version (cp313t, cp314t).
+both threads take a lock (the handler table its own; the Jolt engine's body, mover, joint, force
+and vehicle tables `JoltEngine.lock`, held by every command, the frame's publish and the world
+thread's standing forces, never across a call that waits for the world thread); and nanobind's
+`FREE_THREADED` build is a separate wheel per version (cp313t, cp314t).
 
 ### Determinism and replay
 
@@ -2522,3 +2524,100 @@ commit.
   5b76b5d3, 76c218e8, fe492c85, c47dfaf1, bb7193e4); 67 subjects run over 72 characters; 24
   openglcontext and 11 pyjoltphysics commits have no bullets; 79d2bf50 mixes the
   ContextDefinition coercion (L32), the main-loop change (M26) and tutorial edits.
+
+The findings that touch the Jolt engine layer (`joltengine.py`, `service.py`, `handlers.py`,
+`joints.py`, `body.py`, `stepview.py`) landed in one commit, ENGINE-COMMIT below.
+
+- C7, C8: `JoltEngine.lock`, an `RLock` held by `submit` around each command, by the frame's
+  publish, by `_push_forces` and by the vehicle table. A posted function runs outside it. A
+  ragdoll or vehicle removed on the world thread leaves the render thread's tables in the next
+  frame; `StaticInstances.remove` leaves the specs to the command. The proxy overlay no longer
+  treats a static-instance batch as a body. `JoltVehicles.send` raced the render thread (the
+  review's unverified suspicion): ids and rows came from two passes over a table the other thread
+  changed, and `test_vehicles_removed_on_the_world_thread_leave_the_frame_whole` failed on it.
+  Tests: `tests/unit/test_physics_thread_safety.py`, five patterns of 5 s each.
+- H9, M7: shapes are counted per (proxy uid, dynamic) by the bodies and static-instance batches
+  using them, and `world.remove_shape` runs when the count reaches 0. One path,
+  `JoltEngine._forget_body`, lets go of a body's kind, pose, mass, standing forces, joints,
+  vehicles and shape, for `remove`, for each bone of `ragdoll_remove`, and `remove_many` pops the
+  kinds of its instances. A removed body's kind is kept with its retired uid for its last
+  character records. Ragdoll settings dropped from the eight kept have their bone shapes removed
+  once no live ragdoll uses them. A ragdoll's removal takes out a vehicle on one of its bones
+  first, natively, so the vehicle never steps a freed bone (the engine-side half of C3), and the
+  service marks that vehicle dead. Tests: `tests/unit/test_physics_engine_tables.py`.
+- H7: `_op_place` and `restore_state` record the sequence of their batch; a frame whose older
+  snapshot predates it draws that body (every body, for a restore) at the new place, unblended.
+  The records go once the snapshot frames draw from includes them. Tests:
+  `tests/unit/test_physics_interpolation.py`.
+- H8: a free-running world is interpolated. `JoltEngine._free_running` keeps the two newest
+  snapshots the frames read and a frame clock held between the newest snapshot's time and a
+  tick after it; the frame is drawn a tick behind that clock. The thread-mode repro repeats a
+  pose on 3 of 240 frames (it repeated on 180; inline repeats on 1). The test is serial: it paces frames by the wall
+  clock against a world thread paced the same way.
+- H10: `HandlerTable` indexes its handlers by (kind, phase, thread) and by body, built again on
+  the first read after a change, and `audience` looks at the handlers on the event's two bodies
+  and on every body, in registration order. `_dispatch` finds the render-thread audience once
+  an event. Test: `tests/unit/test_physics_handler_table.py`, `check_scaling` on the count of
+  `hears` calls (1.0 times from 250 to 1,000 handlers; it was 4.0).
+- H14: a Jolt world cannot change its step, and pyjoltphysics has no call that would.
+  `Physics.enable(tick_frequency=)` and `set_config` with another `tickHz` raise `ValueError`
+  and change nothing (the same rate is accepted). The test is
+  `test_a_tick_frequency_other_than_the_worlds_is_refused_changing_nothing`; docs/physics.rst
+  and the `physics_stairs_tuning` tutorial (its `f` key is gone) say the step is chosen in the
+  definition. marble-demo's `test_a_lethal_blow_in_an_early_step_of_a_slow_frame_still_destroys`
+  asked a 60 Hz world for 120 Hz and ran at 60 Hz; it now makes its world at 120 Hz.
+- M2: snapshot rows are stable within a layout. A removed body's row is emptied, a new body takes
+  a row at the end, and the rows are packed (a new `Snapshot.layout`) once more than half of them
+  and at least `PACK_AFTER` (1,024) are empty. `changed` is counted across adds and removals, and
+  the service extends its pose table from the new entries alone. `scaling.py` at 10,000 still
+  bodies with one spawn and one removal a frame: 1.7 ms a frame (it was 47 ms). Test:
+  `check_scaling` on the nodes written (1.0 times from 500 to 2,000 bodies; it was 3.98).
+- M3: the switch interval is one process-wide count (`joltengine._SwitchInterval`): the first
+  engine with a world callback keeps the interval it found and sets 1 ms, the last to let go
+  puts it back. Test: `test_the_switch_interval_is_short_while_any_service_has_a_world_callback`.
+- M4: `PhysicsDefinition.maxBodies` (65,536) reaches `WorldSettings.max_bodies`. Every `add_*`
+  checks `Engine.held_bodies()` plus its count against it on the calling thread and raises
+  `ValueError`. A command the engine refuses calls `Engine.refused`, and the service marks the
+  body (or the ragdoll and its bones) dead and lets go of it. A removal makes room once the world
+  applies it, as pyjoltphysics counts a body until then.
+- M5: `add_*` of a node whose body is alive and not scenery raises `ValueError`; scenery bodies
+  are still claimed.
+- M6: `Physics.frame` and `step` raise `ValueError` for a NaN `dt`; `FixedSteps.owed` adds no time
+  for one. Negative time adds none and infinite time is clamped, as before.
+- M11: joint numbers go through `checks.number`: motor speeds and forces (the force not below
+  zero), torques, suspension and a distance's length. `drive(speed, 0)` switches the motor off
+  (`MotorMode.OFF`); it set an unlimited force.
+- M16: `PhysicsDefinition.handlerErrors` (`log` or `raise`, env
+  `OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS`). With `raise`, the first exception a handler, step
+  code, an engine hook or a posted function raised since the last frame is raised from `frame`
+  (and `step`) once the frame's work is done. The testing plugin sets the variable to `raise`
+  where it is unset, so marble-demo's suite needs no change. glisteel and hill-runner keep their
+  own re-raises; they still work and are left as they are.
+- M24: `stepview.py` imports `Hit` from `physics.types`. `ignore_missing_imports` is false, and
+  an override names the packages that ship no types (optional toolkits and loaders, ttfquery,
+  pyopengl-video). The scoped check found `windowsystem/glut.py` importing the missing
+  `OpenGLContext.tests.resources`: `createWorldMenu(directory, urls)` now reads the worlds and
+  the URL list from paths it is given. `tools/preflight.py` installs again, in place, each project
+  whose source changed since the typecheck environment installed it (workspace root, 7dbb48e),
+  which removes the files the checkout deleted.
+- M28: `_settle_markers`, `_op_settle` and `_markers` had no caller and are gone. Tests cover the
+  `_svc` eviction (`RETIRED_KEPT`), engine hooks, listeners and posted functions that raise, step
+  code that raises or is cancelled, and `_raise_worker_error`.
+- L4: the service mounts its proxy overlay again each frame, `Context._mountOverlay` moves it
+  into the scene drawn now (once), and `close()` takes it out. The overlay leaves out
+  static-instance batches, which `poses()` could not answer for.
+- L6: `Character.set_move` and `set_fly_move` raise `ValueError` for a direction that is not
+  finite, leaving the move as it was.
+- L7: `Ragdoll.step` answers whether the figure changed mode, follows its animation or is not
+  settled; a LIMP node's figure follows no animation from its start, as after a change to LIMP.
+- L22: `testing.physics.mass()` measures Jolt's mass: an impulse of about the asked mass times
+  1 m/s, the change of velocity read back between ticks, then undone. A given mass forced to
+  1 kg no longer passes `test_mass_given_is_the_mass`.
+- Unverified suspicions: `JoltVehicles.send` raced (C7, above). `Physics.close()` from the world
+  thread left a free-running world ticking for good (the test saw the tick go from 23 to 83 after
+  close); `JoltEngine.close` now always calls `world.stop()`, which on the world thread stops
+  after the tick in progress, and a lockstep run that close ends runs no more ticks.
+  `write_poses` announced only translation, so a ROUTE from a physics-driven rotation never
+  fired; the rotation is now announced where something listens for it (one `getReceivers`
+  lookup a node otherwise). `testing.physics.settle()` returned silently when `wait_tick` timed
+  out or the world was stopped; it raises `AssertionError`.

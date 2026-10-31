@@ -72,6 +72,10 @@ _NO_ROWS = np.zeros(0, dtype=np.int64)
 NO_FILTER = 0xFFFF
 #: Removed bodies' uids kept for turning their last event records back into service uids.
 RETIRED_KEPT = 4096
+#: The pyjoltphysics uid of a snapshot row whose body has been removed: no body has it.
+_EMPTY_ROW = 0xFFFFFFFF
+#: Emptied rows a snapshot keeps before its rows are packed again, at the least.
+PACK_AFTER = 1024
 #: A dynamic body whose shape reaches less than this, in metres, gets continuous collision detection.
 CCD_BELOW = 0.1
 #: Metres a resting body may sink into what it rests on before the solver separates them.
@@ -96,6 +100,39 @@ _MODE_SPEEDS = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
 _PHASE = {pj.EventPhase.BEGIN: 'begin', pj.EventPhase.PERSIST: 'persist', pj.EventPhase.END: 'end'}
 _TRIGGER_PHASE = {pj.EventPhase.BEGIN: 'enter', pj.EventPhase.PERSIST: 'stay',
                   pj.EventPhase.END: 'exit'}
+
+
+class _SwitchInterval:
+    """The process's switch interval, 1 ms while any engine has a world-thread callback registered.
+
+    The interval is process-wide, so the engines share one count: the first
+    to want it short keeps the interval it found, and the last to let go puts
+    that back.
+    """
+
+    SHORT = 0.001
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._users = 0
+        self._found = 0.0
+
+    def hold(self) -> None:
+        with self._lock:
+            if not self._users:
+                self._found = sys.getswitchinterval()
+                sys.setswitchinterval(min(self._found, self.SHORT))
+            self._users += 1
+
+    def release(self) -> None:
+        with self._lock:
+            self._users -= 1
+            if not self._users:
+                sys.setswitchinterval(self._found)
+
+
+#: The one switch interval every engine of the process shares.
+_SWITCH = _SwitchInterval()
 
 
 def default_threads() -> int:
@@ -616,12 +653,16 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         self._tick_hz = float(definition.tickHz)
         self._max_catch_up = float(definition.maxCatchUp)
         gravity = _vec3(definition.gravity)
+        bodies = int(definition.maxBodies)
         self.world = pj.World(pj.WorldSettings(
             tick_hz=self._tick_hz, max_catch_up=self._max_catch_up, gravity=gravity,
-            threads=default_threads(), penetration_slop=PENETRATION_SLOP))
+            threads=default_threads(), penetration_slop=PENETRATION_SLOP, max_bodies=bodies,
+            max_body_pairs=max(bodies, 65536)))
         self._mode = str(definition.mode)
         self._pinned = False
         self._running = False
+        #: Whether :meth:`close` has stopped the world for good.
+        self._closed = False
         self._clock = FixedSteps(1.0 / self._tick_hz, self._max_catch_up)
         #: How many ticks the last :meth:`collect` ran, and how far into the next it ends.
         self.owed = 0
@@ -631,7 +672,11 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         self._svc: dict[int, int] = {}
         self._retired: collections.deque[int] = collections.deque()
         self._kinds: dict[int, str] = {}
+        #: The kind of each removed body ``_retired`` still names, for its last event records.
+        self._retired_kinds: dict[int, str] = {}
         self._batches: dict[int, np.ndarray] = {}
+        #: How many bodies the static-instance batches hold.
+        self._instances = 0
         self._grounds: dict[int, GroundTiles] = {}
         self._poses: dict[int, tuple[tuple[float, ...], tuple[float, ...]]] = {}
         #: The mass and the material row each body was given, by service uid.
@@ -642,11 +687,18 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         self._persist = False
         self._state_events = False
         self._filter_contacts = False
-        # -- movers, for snapshots
+        # -- movers, for snapshots: a row each, kept while the body is in the world. A removed
+        # body's row is emptied (service uid 0) and new bodies take rows at the end, so a frame
+        # that adds or removes a body writes only what changed; the rows are packed again,
+        # a new layout, once more than half of them (and :data:`PACK_AFTER`) are empty.
         self._movers: list[int] = []
         self._mover_jolt = np.zeros(0, dtype=np.uint32)
         self._mover_dynamic = np.zeros(0, dtype=bool)
         self._movers_dirty = False
+        self._mover_new: list[int] = []
+        self._mover_gone: list[int] = []
+        self._emptied = 0
+        self._layout = 0
         self._rows_full: dict[int, int] = {}
         self._version = 0
         self._published: Snapshot | None = None
@@ -656,12 +708,25 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         self._published_jolt = 0
         #: The world's snapshot of the tick before the newest, which frames draw moving bodies from.
         self._tick_before: Any = None
+        #: Free-running: the two newest snapshots the frames have read, and the world time the
+        #: frames are drawn a tick behind (see :meth:`_free_running`).
+        self._free_older: Any = None
+        self._free_newest: Any = None
+        self._free_clock = 0.0
+        #: The pyjoltphysics sequence of the batch that last placed each body, by service uid, and
+        #: of the last restore_state: a frame draws such a body where it was put, unblended,
+        #: until the snapshot frames draw from includes the place.
+        self._placed_at: dict[int, int] = {}
+        self._restored_at = 0
         # -- sequences: (service seq, pyjoltphysics seq) not yet applied
         self._pending: collections.deque[tuple[int, int]] = collections.deque()
         self._applied_svc = 0
-        self._markers: list[tuple[int, threading.Event]] = []
         # -- world-wide state
+        #: The native shape id of each (proxy uid, dynamic) in use, and how many bodies use it.
         self._shapes: dict[tuple[int, bool], Any] = {}
+        self._shape_uses: dict[tuple[int, bool], int] = {}
+        #: The shape key of each body and of each static-instance batch, by service uid.
+        self._body_shapes: dict[int, tuple[int, bool]] = {}
         self._materials: dict[Any, int] = {}
         self._filters: list[CollisionFilter] = []
         self._zones: list[Any] = []
@@ -692,8 +757,13 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         #: normal, approach, impulse), pyjoltphysics uids.
         self._refused: list[tuple[int, int, np.ndarray, np.ndarray, float, float]] = []
         self._refused_lock = threading.Lock()
-        self._switch_interval: float | None = None
+        #: Whether this engine counts among those holding the switch interval short.
+        self._switch_held = False
         self._local = threading.local()
+        #: Held while the engine's tables change, and while a reader walks several of them: a
+        #: command on either thread, the frame's publish, the world thread's standing forces
+        #: and the vehicles' inputs. Never held across a call that waits for the world thread.
+        self.lock = threading.RLock()
         self._error: BaseException | None = None
         #: The service's vehicles (:mod:`OpenGLContext.physics.joltvehicles`).
         self.vehicle_table = JoltVehicles(self)
@@ -715,10 +785,16 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def _unbind(self, uid: int) -> int | None:
         jolt = self._jolt.pop(uid, None)
         if jolt is not None:
-            self._retired.append(jolt)
-            while len(self._retired) > RETIRED_KEPT:
-                self._svc.pop(self._retired.popleft(), None)
+            self._retire(jolt)
         return jolt
+
+    def _retire(self, jolt: int) -> None:
+        """Keep removed pyjoltphysics body ``jolt`` nameable for its last event records, a while."""
+        self._retired.append(jolt)
+        while len(self._retired) > RETIRED_KEPT:
+            gone = self._svc.pop(self._retired.popleft(), None)
+            if gone is not None:
+                self._retired_kinds.pop(gone, None)
 
     # -- stepping -------------------------------------------------------------
     @property
@@ -785,8 +861,12 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         return True
 
     def close(self) -> None:
-        if not self.on_engine_thread():
-            self.world.stop()
+        """Stop the world; from the world thread it stops once the tick in progress ends.
+
+        A lockstep run that close ends from inside a tick runs no more ticks.
+        """
+        self._closed = True
+        self.world.stop()
         self._running = False
         self._restore_switch_interval()
 
@@ -835,6 +915,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         if self._lockstep():
             if self._running:
                 self._running = False
+            self._free_older = self._free_newest = None
             ticks = self._clock.owed(dt)
             self.owed, self.alpha = ticks, self._clock.alpha
             if ticks:
@@ -847,17 +928,59 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
                 self._sync()
                 if self._published_live.any():
                     previous = self._tick_before
+            snapshot = self.world.latest()
+            drawn_from = self._tick_before
         else:
-            self.owed, self.alpha = 0, 1.0
             self.vehicle_table.send()
             self.start()
-        snapshot = self.world.latest()
+            snapshot = self.world.latest()
+            previous = self._free_running(snapshot, dt)
+            drawn_from = self._free_older
+        self._forget_places(drawn_from)
         events = self._events()
         self._read_characters(snapshot)
         self._keep_characters_above_ground()
-        self._settle_markers(snapshot)
-        published = self._publish(snapshot, previous)
+        with self.lock:
+            published = self._publish(snapshot, previous)
         return Outbox(published, events)
+
+    def _free_running(self, snapshot: Any, dt: float) -> Any:
+        """Free-running: set :attr:`alpha` for a frame ``dt`` long; the older snapshot to draw from, or None.
+
+        A frame is drawn a tick behind the frame clock, between the two newest
+        snapshots the frames have read. The clock advances by each frame's
+        ``dt`` and is held between the newest snapshot's time and a tick after
+        it, so a world that falls behind or stops ticking is drawn as its
+        newest snapshot holds it.
+        """
+        self.owed, self.alpha = 0, 1.0
+        if snapshot is None:
+            return None
+        newest = self._free_newest
+        changed = newest is None or int(snapshot.tick) != int(newest.tick)
+        if changed:
+            self._free_older = newest
+        self._free_newest = snapshot
+        step = self.step_dt
+        now = float(snapshot.time)
+        self._free_clock = min(max(self._free_clock + max(dt, 0.0), now), now + step)
+        older = self._free_older
+        if older is None or float(older.time) >= now:
+            return None
+        self.alpha = min(max((self._free_clock - step - float(older.time))
+                             / (now - float(older.time)), 0.0), 1.0)
+        return older if changed or self._published_live.any() else None
+
+    def _forget_places(self, drawn_from: Any) -> None:
+        """Forget the places the snapshot ``drawn_from``, which later frames draw from, includes."""
+        if drawn_from is None or not (self._placed_at or self._restored_at):
+            return
+        applied = int(drawn_from.applied_seq)
+        if self._restored_at <= applied:
+            self._restored_at = 0
+        with self.lock:
+            for uid in [uid for uid, seq in self._placed_at.items() if seq <= applied]:
+                del self._placed_at[uid]
 
     def _run(self, ticks: int) -> Any:
         """Run ``ticks`` ticks in lockstep; the snapshot of the tick before the last, or None."""
@@ -884,9 +1007,14 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         return previous
 
     def _run_ticks(self, count: int) -> None:
+        if self._closed:
+            return
         self.vehicle_table.send()
         try:
             self.world.run_ticks(count)
+        except pj.WorldStopped:
+            if not self._closed:
+                raise
         except pj.WorldError as error:
             self._error = error.__cause__ if error.__cause__ is not None else error
             raise RuntimeError('the physics world stopped: %s' % (self._error,)) from self._error
@@ -928,9 +1056,9 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
 
     def _switch_interval_for(self, callbacks: bool) -> None:
         """A 1 ms switch interval while a world-thread callback is registered, the one before otherwise."""
-        if callbacks and self._switch_interval is None:
-            self._switch_interval = sys.getswitchinterval()
-            sys.setswitchinterval(min(self._switch_interval, 0.001))
+        if callbacks and not self._switch_held:
+            self._switch_held = True
+            _SWITCH.hold()
         elif not callbacks:
             self._restore_switch_interval()
 
@@ -942,9 +1070,9 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             self._tell(made)
 
     def _restore_switch_interval(self) -> None:
-        if self._switch_interval is not None:
-            sys.setswitchinterval(self._switch_interval)
-            self._switch_interval = None
+        if self._switch_held:
+            self._switch_held = False
+            _SWITCH.release()
 
     def _before(self, tick: int, time: float) -> None:
         self._local.inside = True
@@ -956,8 +1084,9 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             for hook in list(self.before_step):
                 try:
                     hook(step)
-                except Exception:
+                except Exception as error:
                     log.exception('physics hook %r failed', hook)
+                    self.hook_failed(error)
             self.vehicle_table.send()
         finally:
             self._local.inside = False
@@ -969,8 +1098,9 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             for hook in list(self.after_step):
                 try:
                     hook(step)
-                except Exception:
+                except Exception as error:
                     log.exception('physics hook %r failed', hook)
+                    self.hook_failed(error)
         finally:
             self._local.inside = False
 
@@ -984,37 +1114,72 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             for function, arguments in posted:
                 try:
                     function(*arguments)
-                except Exception:
+                except Exception as error:
                     log.exception('physics post %r failed', function)
+                    self.hook_failed(error)
         finally:
             self._local.inside = was
 
     def _push_forces(self) -> None:
         """Give each body its standing force and torque for the next tick."""
-        for table, send in ((self._forces, self.world.add_forces),
-                            (self._torques, self.world.add_torques)):
-            if not table:
-                continue
-            uids, values = [], []
-            for uid, value in table.items():
-                jolt = self._jolt.get(uid)
-                if jolt is not None:
-                    uids.append(jolt)
-                    values.append(value)
-            if uids:
-                send(np.asarray(uids, dtype=np.uint32), np.asarray(values, dtype='d'))
+        with self.lock:
+            for table, send in ((self._forces, self.world.add_forces),
+                                (self._torques, self.world.add_torques)):
+                if not table:
+                    continue
+                uids, values = [], []
+                for uid, value in table.items():
+                    jolt = self._jolt.get(uid)
+                    if jolt is not None:
+                        uids.append(jolt)
+                        values.append(value)
+                if uids:
+                    send(np.asarray(uids, dtype=np.uint32), np.asarray(values, dtype='d'))
 
     # -- publishing -----------------------------------------------------------
+    def _add_mover(self, uid: int) -> None:
+        """Give body ``uid`` a snapshot row at the next publish."""
+        self._mover_new.append(uid)
+        self._movers_dirty = True
+
     def _mover_table(self) -> None:
+        """Bring the snapshot rows to the movers added and removed since the last publish.
+
+        A removed body's row is emptied and a new body takes a row at the end;
+        the table is a new dict whenever it changes, as published snapshots
+        hold the old one.
+        """
         if not self._movers_dirty:
             return
         self._movers_dirty = False
-        self._movers = [uid for uid in self._movers if uid in self._jolt]
-        self._mover_jolt = np.array([self._jolt[uid] for uid in self._movers], dtype=np.uint32)
-        self._mover_dynamic = np.array([self._kinds[uid] == 'dynamic' for uid in self._movers],
-                                       dtype=bool)
-        self._rows_full = {uid: row for row, uid in enumerate(self._movers)}
-        self._published = None
+        gone, self._mover_gone = self._mover_gone, []
+        new, self._mover_new = self._mover_new, []
+        table = dict(self._rows_full)
+        emptied = [table.pop(uid) for uid in gone if uid in table]
+        added = [uid for uid in new if uid in self._jolt and uid not in table]
+        if self._emptied + len(emptied) > max(PACK_AFTER, len(self._movers) // 2):
+            kept = [uid for uid in self._movers if uid in table]
+            self._movers = []
+            self._mover_jolt = np.zeros(0, dtype=np.uint32)
+            self._mover_dynamic = np.zeros(0, dtype=bool)
+            self._emptied = 0
+            self._layout += 1
+            table = {}
+            added = kept + added
+        elif emptied:
+            self._mover_jolt[emptied] = _EMPTY_ROW
+            for row in emptied:
+                self._movers[row] = 0
+            self._emptied += len(emptied)
+        if added:
+            start = len(self._movers)
+            self._movers.extend(added)
+            self._mover_jolt = np.concatenate([self._mover_jolt, np.array(
+                [self._jolt[uid] for uid in added], dtype=np.uint32)])
+            self._mover_dynamic = np.concatenate([self._mover_dynamic, np.array(
+                [self._kinds[uid] == 'dynamic' for uid in added], dtype=bool)])
+            table.update((uid, start + offset) for offset, uid in enumerate(added))
+        self._rows_full = table
 
     def _note_applied(self, applied_jolt: int) -> None:
         pending = self._pending
@@ -1035,6 +1200,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             return None
         last = self._published
         if (last is not None and applied == self._last_applied and not self._published_live.any()
+                and last.rows is self._rows_full
                 and not len(snapshot.changed) and self._contacts == last.contacts):
             # Nothing moved at the last publish and nothing was applied since, so no
             # row changes but by the last tick, which wrote none: the poses stand.
@@ -1046,31 +1212,33 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             self._published = published
             return published
         self._last_tick, self._last_applied = tick, applied
+        table, dynamic, count = self._rows_full, self._mover_dynamic, len(self._movers)
+        same = last is not None and last.layout == self._layout
         rows = snapshot.rows_of(self._mover_jolt)
         present = rows >= 0
-        if present.all():
-            take, table, dynamic = rows, self._rows_full, self._mover_dynamic
-        else:
-            keep = np.flatnonzero(present)
-            take = rows[keep]
-            table = {self._movers[index]: row for row, index in enumerate(keep.tolist())}
-            dynamic = self._mover_dynamic[keep]
-        position = np.array(snapshot.position[take], dtype='d')
-        orientation = np.array(snapshot.orientation[take], dtype='d')
-        linear = np.array(snapshot.linear_velocity[take], dtype='d')
-        angular = np.array(snapshot.angular_velocity[take], dtype='d')
-        awake = np.array(snapshot.awake[take], dtype=bool)
+        position, orientation = np.empty((count, 3)), np.empty((count, 4))
+        linear, angular = np.zeros((count, 3)), np.zeros((count, 3))
+        awake = np.zeros(count, dtype=bool)
+        if not present.all():
+            self._fill_absent(np.flatnonzero(~present), last if same else None, position,
+                              orientation, awake)
+        take = rows[present]
+        position[present] = snapshot.position[take]
+        orientation[present] = snapshot.orientation[take]
+        linear[present] = snapshot.linear_velocity[take]
+        angular[present] = snapshot.angular_velocity[take]
+        awake[present] = snapshot.awake[take]
         live = np.where(dynamic, awake, linear.any(axis=1) | angular.any(axis=1))
         step_position = step_orientation = None
         alpha = self.alpha
         if (self.owed or previous is not None) and alpha < 1.0 and live.any():
-            if present.all():
-                uids, jolt = self._movers, self._mover_jolt
-            else:
-                kept = np.flatnonzero(present)
-                uids, jolt = [self._movers[i] for i in kept.tolist()], self._mover_jolt[kept]
-            moving = np.flatnonzero(live)
+            uids, jolt = self._movers, self._mover_jolt
+            moving = np.flatnonzero(live & present)
             old_position, old_orientation = self._previous_poses(previous, jolt, uids, moving)
+            placed = self._placed_rows(previous, snapshot, table, moving)
+            if placed.any():
+                old_position[placed] = position[moving[placed]]
+                old_orientation[placed] = orientation[moving[placed]]
             if len(moving):
                 step_position, step_orientation = position.copy(), orientation.copy()
                 position[moving] = old_position * (1.0 - alpha) + position[moving] * alpha
@@ -1079,21 +1247,47 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
                     np.linalg.norm(blend, axis=1), 1e-12)[:, None]
         changed = None
         base = -1
-        if last is not None and last.rows is table:
-            differs = (live | self._published_live
-                       | (position != last.position).any(axis=1)
-                       | (orientation != last.orientation).any(axis=1)
-                       | (awake != last.awake))
+        if last is not None and same:
+            # The rows of the last publish keep their places; rows past them are new.
+            before = len(last.position)
+            differs = np.ones(count, dtype=bool)
+            differs[:before] = (live[:before] | self._published_live
+                                | (position[:before] != last.position).any(axis=1)
+                                | (orientation[:before] != last.orientation).any(axis=1)
+                                | (awake[:before] != last.awake))
             changed = np.flatnonzero(differs)
             base = last.version
         self._version += 1
         published = Snapshot(self._version, tick, float(snapshot.time), applied, table, position,
                              axis_angles(orientation), orientation, linear, angular, awake,
                              dynamic, changed, base, step_position, step_orientation,
-                             self._joint_readings(snapshot), int(snapshot.count), self._contacts)
+                             self._joint_readings(snapshot), int(snapshot.count), self._contacts,
+                             layout=self._layout)
         self._published = published
         self._published_live = live
         return published
+
+    def _fill_absent(self, absent: np.ndarray, last: Snapshot | None, position: np.ndarray,
+                     orientation: np.ndarray, awake: np.ndarray) -> None:
+        """Fill the rows ``absent`` the world's snapshot does not list.
+
+        An emptied row, and a row the last publish ``last`` (of the same
+        layout) held, keep its values. A body whose add the world has not
+        applied yet stands where it was added and counts as awake, so it is
+        read as moving until the world holds it.
+        """
+        held = 0 if last is None else len(last.position)
+        old = absent[absent < held]
+        if len(old):
+            assert last is not None
+            position[old] = last.position[old]
+            orientation[old] = last.orientation[old]
+            awake[old] = last.awake[old]
+        for row in absent[absent >= held].tolist():
+            uid = self._movers[row]
+            placed = self._poses.get(uid, ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+            position[row], orientation[row] = placed
+            awake[row] = uid != 0
 
     def _previous_poses(self, previous: Any, jolt: np.ndarray, uids: Sequence[int],
                         moving: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -1113,6 +1307,29 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
                                      ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
             position[out], orientation[out] = placed
         return position, orientation
+
+    def _placed_rows(self, previous: Any, snapshot: Any, table: dict[int, int],
+                     moving: np.ndarray) -> np.ndarray:
+        """Which of the rows ``moving`` hold a body placed after ``previous`` and by ``snapshot``.
+
+        Those are drawn where they were put rather than between the old place
+        and the new. ``table`` gives each service uid's row.
+        """
+        found = np.zeros(len(moving), dtype=bool)
+        if not (self._placed_at or self._restored_at) or not len(moving):
+            return found
+        applied = int(snapshot.applied_seq)
+        before = -1 if previous is None else int(previous.applied_seq)
+        if before < self._restored_at <= applied:
+            found[:] = True
+            return found
+        for uid, seq in tuple(self._placed_at.items()):
+            row = table.get(uid) if before < seq <= applied else None
+            if row is not None:
+                at = int(np.searchsorted(moving, row))
+                if at < len(moving) and moving[at] == row:
+                    found[at] = True
+        return found
 
     def _joint_readings(self, snapshot: Any) -> dict[int, tuple[float, ...]]:
         if not self._joints:
@@ -1154,17 +1371,6 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             return None
         return _multiply(_conjugate(np.asarray(snapshot.orientation[frame_row], dtype='d')), turn)
 
-    def _settle_markers(self, snapshot: Any) -> None:
-        if not self._markers or snapshot is None:
-            return
-        waiting = []
-        for seq, marker in self._markers:
-            if snapshot.includes(seq):
-                marker.set()
-            else:
-                waiting.append((seq, marker))
-        self._markers = waiting
-
     # -- events ---------------------------------------------------------------
     def _events(self) -> list[PhysicsEvent]:
         records = self.world.drain_events()
@@ -1188,8 +1394,9 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             for listener in list(self.on_events):
                 try:
                     listener(made)
-                except Exception:
+                except Exception as error:
                     log.exception('physics hook %r failed', listener)
+                    self.hook_failed(error)
         finally:
             self._local.inside = was
 
@@ -1260,7 +1467,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
                                 0.0, 0.0, 0.0, 0.0, 0.0, tick, time, reason=reason)
         if kind == pj.EventKind.CHARACTER:
             # The service's characters meet moving bodies as a kinematic body meets them.
-            if self._kinds.get(b) != 'dynamic':
+            if self._kinds.get(b, self._retired_kinds.get(b)) != 'dynamic':
                 return None
             impulse = self._strike(int(record['b']), normal) if phase == pj.EventPhase.BEGIN else 0.0
             return PhysicsEvent('contact', _PHASE[pj.EventPhase(phase)], a, b, point, normal,
@@ -1295,7 +1502,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         rows = snapshot.characters
         table = rows.rows
         tick, applied = int(snapshot.tick), int(snapshot.applied_seq)
-        for controller in self._controllers.values():
+        for controller in tuple(self._controllers.values()):
             row = table.get(controller.native.id)
             if row is not None:
                 controller.read(rows, row, tick, applied)
@@ -1326,7 +1533,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def _ground_under(self, x: float, z: float) -> float | None:
         """The highest sampled ground at ``(x, z)``, or None with no sampled ground there."""
         found = None
-        for ground in self._grounds.values():
+        for ground in tuple(self._grounds.values()):
             if ground.extent is not None:
                 (x0, z0), (x1, z1) = ground.extent
                 if not (x0 <= x <= x1 and z0 <= z <= z1):
@@ -1352,7 +1559,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         """Lift each character whose feet are below a sampled ground back onto it."""
         if not self._grounds:
             return
-        for controller in self._controllers.values():
+        for controller in tuple(self._controllers.values()):
             ground = self._ground_under(float(controller.position[0]), float(controller.position[2]))
             feet = float(controller.position[1]) - controller.height / 2.0
             if ground is not None and feet < ground - 0.05 and controller._placed is None:
@@ -1460,8 +1667,8 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             self._foci[name] = np.asarray(position, dtype='d')[:3]
 
     def _foci_now(self, extra: np.ndarray | None) -> np.ndarray:
-        points = [controller.position for controller in self._controllers.values()]
-        points.extend(self._foci.values())
+        points = [controller.position for controller in tuple(self._controllers.values())]
+        points.extend(tuple(self._foci.values()))
         snapshot = self._published
         if snapshot is not None and len(snapshot.position):
             moving = snapshot.dynamic & snapshot.awake
@@ -1472,8 +1679,13 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         return np.asarray(points, dtype='d').reshape(-1, 3)
 
     def _stream_ground(self, extra: np.ndarray | None = None) -> None:
+        """Swap the tiles of each sampled ground for the ones its foci need now."""
         if not self._grounds:
             return
+        with self.lock:
+            self._stream_tiles(extra)
+
+    def _stream_tiles(self, extra: np.ndarray | None) -> None:
         foci = self._foci_now(extra)
         self._frames += 1
         for ground in self._grounds.values():
@@ -1508,7 +1720,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         first = np.asarray(start, dtype='d')[:3]
         last = np.asarray(end, dtype='d')[:3]
         added = False
-        for ground in self._grounds.values():
+        for ground in tuple(self._grounds.values()):
             for tile in ground.along(first, last):
                 if tile not in ground.tiles:
                     added = True
@@ -1518,19 +1730,35 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
 
     # -- commands ---------------------------------------------------------------
     def submit(self, command: Command) -> None:
+        """Apply ``command`` to the engine's tables and send its batches, on either thread.
+
+        A posted function runs outside :attr:`lock`, as it may take as long as it likes.
+        """
         operation = getattr(self, '_op_' + command.op, None)
         if operation is None:
             log.warning('unknown physics command %r', command.op)
             return
-        if command.uid and command.op not in ('add', 'soft_body') and command.uid not in self._jolt \
-                and command.uid not in self._grounds and command.uid not in self._batches:
+        if command.op == 'post':
+            self._op_post(command.uid, *command.args)
             self._done(command.seq)
             return
-        try:
-            operation(command.uid, *command.args)
-        except Exception:
-            log.exception('physics command %s for body %s failed', command.op, command.uid)
-        self._done(command.seq)
+        with self.lock:
+            if command.uid and command.op not in ('add', 'soft_body') \
+                    and command.uid not in self._jolt and command.uid not in self._grounds \
+                    and command.uid not in self._batches:
+                self._done(command.seq)
+                return
+            try:
+                operation(command.uid, *command.args)
+            except Exception:
+                log.exception('physics command %s for body %s failed', command.op, command.uid)
+                self.refused(command)
+            self._done(command.seq)
+
+    def held_bodies(self) -> int:
+        with self.lock:
+            tiles = sum(len(ground.tiles) for ground in self._grounds.values())
+            return len(self._jolt) + self._instances + tiles
 
     def _done(self, seq: int) -> None:
         """Count service command ``seq`` applied once every batch submitted so far is."""
@@ -1584,13 +1812,31 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             friction_combine=_COMBINE.get(str(material.frictionCombine), pj.Combine.AVERAGE),
             restitution_combine=_COMBINE.get(str(material.restitutionCombine), pj.Combine.AVERAGE))
 
-    def _shape(self, proxy: Proxy, moving: bool) -> Any:
-        """The pyjoltphysics shape id of ``proxy``, built once a proxy."""
+    def _use_shape(self, owner: int, proxy: Proxy, moving: bool) -> Any:
+        """The pyjoltphysics shape id of ``proxy`` for the body or batch ``owner``, built once a proxy.
+
+        Each owner counts as one use; :meth:`_release_shape` gives it back and the
+        world forgets the shape when no owner uses it.
+        """
         key = (proxy.uid, moving)
         found = self._shapes.get(key)
         if found is None:
             found = self._shapes[key] = self.world.add_shape(_shape_of(proxy, moving))
+        self._shape_uses[key] = self._shape_uses.get(key, 0) + 1
+        self._body_shapes[owner] = key
         return found
+
+    def _release_shape(self, owner: int) -> None:
+        """Give back the shape body or batch ``owner`` used; the world forgets a shape no body uses."""
+        key = self._body_shapes.pop(owner, None)
+        if key is None:
+            return
+        uses = self._shape_uses[key] - 1
+        if uses:
+            self._shape_uses[key] = uses
+            return
+        del self._shape_uses[key]
+        self.world.remove_shape(self._shapes.pop(key))
 
     def _add_bodies(self, uids: Sequence[int], batch: pj.BodyBatch) -> np.ndarray:
         made, _seq = self.world.add_bodies(batch)
@@ -1611,7 +1857,21 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             self._stream_ground()
             return
         moving = kind in ('dynamic', 'kinematic')
-        shape = self._shape(proxy, kind == 'dynamic')
+        shape = self._use_shape(uid, proxy, kind == 'dynamic')
+        try:
+            self._add_one(uid, spec, shape, material, filter_index)
+        except Exception:
+            self._kinds.pop(uid, None)
+            self._release_shape(uid)
+            raise
+        if moving:
+            self._add_mover(uid)
+
+    def _add_one(self, uid: int, spec: BodySpec, shape: Any, material: int,
+                 filter_index: int) -> None:
+        """Send the batch of body ``uid`` of ``shape``, and bind it."""
+        kind = spec.kind
+        moving = kind in ('dynamic', 'kinematic')
         motion = {'static': pj.MotionType.STATIC, 'trigger': pj.MotionType.STATIC,
                   'kinematic': pj.MotionType.KINEMATIC,
                   'dynamic': pj.MotionType.DYNAMIC}[kind]
@@ -1635,17 +1895,19 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             self._dynamic.set(made)
         self._report(uid, spec.report)
         self._poses[uid] = (tuple(spec.position), tuple(spec.orientation))
-        if moving:
-            self._movers.append(uid)
-            self._movers_dirty = True
 
     def _op_add_many(self, uid: int, batch: BodyBatch) -> None:  # noqa: ARG002 named by the batch
-        shape = self._shape(batch.proxy, False)
+        shape = self._use_shape(batch.first, batch.proxy, False)
         filter_index = NO_FILTER if batch.collision_filter < 0 else int(batch.collision_filter)
-        made, _seq = self.world.add_bodies(pj.BodyBatch.of_shape(
-            np.asarray(batch.positions, dtype='d'), shape, motion=pj.MotionType.STATIC,
-            material=self._material_index(batch.material), filter=filter_index))
+        try:
+            made, _seq = self.world.add_bodies(pj.BodyBatch.of_shape(
+                np.asarray(batch.positions, dtype='d'), shape, motion=pj.MotionType.STATIC,
+                material=self._material_index(batch.material), filter=filter_index))
+        except Exception:
+            self._release_shape(batch.first)
+            raise
         self._batches[batch.first] = made
+        self._instances += len(made)
         for offset, jolt in enumerate(made.tolist()):
             self._svc[int(jolt)] = batch.first + offset
             self._kinds[batch.first + offset] = 'static'
@@ -1653,34 +1915,56 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def _op_remove_many(self, uid: int, first: int, count: int) -> None:  # noqa: ARG002 named by the range
         made = self._batches.pop(first, None)
         if made is not None:
+            self._instances -= len(made)
             self.world.remove_bodies(made)
-            for jolt in made.tolist():
-                self._retired.append(int(jolt))
+            for offset, jolt in enumerate(made.tolist()):
+                self._kinds.pop(first + offset, None)
+                self._retire(int(jolt))
+            self._release_shape(first)
 
     def _op_remove(self, uid: int) -> None:
         ground = self._grounds.pop(uid, None)
         if ground is not None:
+            self._kinds.pop(uid, None)
             tiles = list(ground.tiles.values())
+            for tile in tiles:
+                self._retire(tile)
             if tiles:
                 self.world.remove_bodies(np.asarray(tiles, dtype=np.uint32))
             return
         controller = self._controllers.pop(uid, None)
-        self.given.pop(uid, None)
-        self.vehicle_table.chassis_removed(uid)
-        self._forget_soft(uid)
-        for joint in [joint for joint, pair in self._joint_bodies.items() if uid in pair]:
-            self._forget_joint(joint)
-        jolt = self._unbind(uid)
-        self._forces.pop(uid, None)
-        self._torques.pop(uid, None)
+        jolt = self._forget_body(uid)
         if jolt is None:
             return
         if controller is not None:
             self.world.remove_characters([jolt])
         else:
             self.world.remove_bodies([jolt])
-        if uid in self._kinds and self._kinds[uid] in ('dynamic', 'kinematic'):
+
+    def _forget_body(self, uid: int) -> int | None:
+        """Let go of what the tables hold for service body ``uid`` as the world removes it.
+
+        Its vehicles, joints, standing forces, pose, kind and shape go; its
+        pyjoltphysics uid, returned, stays nameable for its last event records.
+        """
+        self.given.pop(uid, None)
+        self.vehicle_table.chassis_removed(uid)
+        self._forget_soft(uid)
+        for joint in [joint for joint, pair in self._joint_bodies.items() if uid in pair]:
+            self._forget_joint(joint)
+        self._forces.pop(uid, None)
+        self._torques.pop(uid, None)
+        self._poses.pop(uid, None)
+        self._placed_at.pop(uid, None)
+        self._release_shape(uid)
+        kind = self._kinds.pop(uid, None)
+        jolt = self._unbind(uid)
+        if kind is not None and jolt is not None:
+            self._retired_kinds[uid] = kind
+        if kind in ('dynamic', 'kinematic'):
+            self._mover_gone.append(uid)
             self._movers_dirty = True
+        return jolt
 
     def _current_pose(self, uid: int) -> tuple[np.ndarray, np.ndarray]:
         jolt = self._jolt[uid]
@@ -1732,7 +2016,8 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         if axis_angle is not None:
             orientation = vrml_rotation_to_quat(np.asarray(axis_angle, dtype='d'))
         self._poses[uid] = (tuple(position.tolist()), tuple(orientation.tolist()))
-        self.world.set_transforms([self._jolt[uid]], position[None], orientation[None])
+        self._placed_at[uid] = int(self.world.set_transforms([self._jolt[uid]], position[None],
+                                                             orientation[None]))
 
     def _op_gravity(self, uid: int, vector: Any) -> None:  # noqa: ARG002 gravity belongs to the world
         self.world.set_gravity(_vec3(vector))
@@ -1756,10 +2041,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def _op_wake(self, uid: int) -> None:
         self.world.activate([self._jolt[uid]])
 
-    def _op_config(self, uid: int, tick_hz: float, max_catch_up: float) -> None:  # noqa: ARG002 world-wide
-        if abs(float(tick_hz) - self._tick_hz) > 1e-9:
-            log.warning('a Jolt world steps at the rate it was made with (%g Hz), not %g Hz',
-                        self._tick_hz, tick_hz)
+    def _op_config(self, uid: int, tick_hz: float, max_catch_up: float) -> None:  # noqa: ARG002 world-wide; the service refuses another tick
         self._max_catch_up = float(max_catch_up)
         self._clock.longest = self._max_catch_up
 
@@ -1783,9 +2065,6 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         with self._posted_lock:
             self._posted.append((function, arguments))
         self._update_callbacks()
-
-    def _op_settle(self, uid: int, marker: threading.Event) -> None:
-        self._markers.append((int(self.world.submitted_seq), marker))
 
     def _op_report(self, uid: int, on: bool) -> None:
         self._report(uid, bool(on))
@@ -1921,8 +2200,11 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         axis = {'hinge': 3, 'slider': 0, 'wheel': 5}.get(self._joint_kinds.get(joint, ''), 0)
         if self._joint_kinds.get(joint) in ('hinge', 'slider'):
             axis = 0
-        self.world.set_joint_motors([jid], pj.MotorMode.VELOCITY, float(speed),
-                                    float(force) if force > 0.0 else math.inf, axis=axis)
+        if force > 0.0:
+            self.world.set_joint_motors([jid], pj.MotorMode.VELOCITY, float(speed), float(force),
+                                        axis=axis)
+        else:
+            self.world.set_joint_motors([jid], pj.MotorMode.OFF, axis=axis)
 
     def _op_joint_torques(self, uid: int, joint: int,  # noqa: ARG002 named by the joint
                           torques: tuple[float, ...]) -> None:
@@ -1948,7 +2230,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             return
         if not self._filter_contacts:
             self._filter_contacts = True
-            marked = [jolt for jolt in self._jolt.values()
+            marked = [jolt for jolt in tuple(self._jolt.values())
                       if self._report_all or self._reported.of([jolt])[0]]
             if marked:
                 self.world.set_flags(marked, pj.BodyFlag.FILTER_CONTACTS, True)
@@ -1988,7 +2270,8 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     # -- reading on the stepping thread -------------------------------------------
     def live_poses(self, uids: Sequence[int]) -> dict[int, LivePose]:
         """The bodies of ``uids`` as Jolt holds them now: inside a tick, after its batches."""
-        known = [(uid, self._jolt[uid]) for uid in uids if uid in self._jolt]
+        known = [(uid, jolt) for uid, jolt in ((uid, self._jolt.get(uid)) for uid in uids)
+                 if jolt is not None]
         if not known:
             return {}
         state = self.world.bodies_state(np.array([jolt for _uid, jolt in known], dtype=np.uint32))
@@ -2011,7 +2294,8 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         snapshot = self.world.latest()
         if snapshot is None:
             return none
-        found = self._joint_readings(snapshot).get(joint.uid)
+        with self.lock:
+            found = self._joint_readings(snapshot).get(joint.uid)
         return none if found is None else found
 
     # -- queries ------------------------------------------------------------------
@@ -2120,7 +2404,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         return self.world.save_state()
 
     def restore_state(self, data: bytes) -> None:
-        self.world.restore_state(data)
+        self._restored_at = int(self.world.restore_state(data))
 
 
 def _conjugate(q: np.ndarray) -> np.ndarray:

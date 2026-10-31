@@ -1210,14 +1210,22 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return service
 
     def _mountOverlay(self, node: Any, on: bool) -> None:
-        """Put ``node`` into the scene this context draws, or take it out."""
-        scene = self.getSceneGraph()
-        if scene is None:
+        """Put ``node`` into the scene this context draws, once, or take it out.
+
+        A node mounted in a scene the context no longer draws is moved to the
+        one it draws now.
+        """
+        mounted = self.__dict__.setdefault('_overlayScenes', weakref.WeakKeyDictionary())
+        scene = self.getSceneGraph() if on else None
+        previous = mounted.get(node)
+        if previous is not None and previous is scene and node in scene.children:
             return
-        if on:
+        mounted.pop(node, None)
+        if previous is not None and node in previous.children:
+            previous.children.remove(node)
+        if scene is not None:
             scene.children.append(node)
-        elif node in scene.children:
-            scene.children.remove(node)
+            mounted[node] = scene
 
     def _framePhysics(self) -> None:
         """Give the physics service its share of the frame, after ``OnIdle`` and before the draw."""

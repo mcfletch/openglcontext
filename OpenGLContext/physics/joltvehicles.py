@@ -11,11 +11,15 @@ Where inputs land: the engine sends the waiting inputs before a lockstep run
 of ticks (so a frame's inputs drive its first tick), once a frame for a
 free-running world, and after the ``'before-step'`` handlers of each tick (so
 inputs a handler gives drive that tick).
+
+The tables change and are read under the engine's :attr:`~OpenGLContext.physics.joltengine.JoltEngine.lock`,
+since a vehicle is added or removed on either thread while the other sends inputs.
 """
 from __future__ import annotations
 
 import math
 import threading
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -63,28 +67,38 @@ class JoltVehicles:
     def add(self, vid: int, chassis: int, settings: VehicleSettings) -> None:
         """Make vehicle ``vid`` on the body of service uid ``chassis``."""
         world = self.engine.world
-        jolt = self.engine.jolt_uid(chassis)
-        if jolt is None:
-            raise ValueError('vehicle %d: body %d is not in the world' % (vid, chassis))
-        made = world.add_vehicle(jolt, native_settings(settings))
-        # Blows held against the chassis (a car pressed into a wall) are persist
-        # records, which pyjoltphysics reports for a body flagged REPORT.
-        world.set_flags([jolt], pj.BodyFlag.REPORT, True)
-        self._native[vid] = made
-        self._chassis[vid] = chassis
-        self._ids[made.id] = vid
+        with self.engine.lock:
+            jolt = self.engine.jolt_uid(chassis)
+            if jolt is None:
+                raise ValueError('vehicle %d: body %d is not in the world' % (vid, chassis))
+            made = world.add_vehicle(jolt, native_settings(settings))
+            # Blows held against the chassis (a car pressed into a wall) are persist
+            # records, which pyjoltphysics reports for a body flagged REPORT.
+            world.set_flags([jolt], pj.BodyFlag.REPORT, True)
+            self._native[vid] = made
+            self._chassis[vid] = chassis
+            self._ids[made.id] = vid
 
     def remove(self, vid: int) -> None:
         """Take vehicle ``vid`` out; its chassis stays a body."""
-        made = self._forget(vid)
-        if made is not None:
-            made.remove()
+        with self.engine.lock:
+            made = self._forget(vid)
+            if made is not None:
+                made.remove()
+
+    def remove_on(self, bodies: Iterable[int]) -> None:
+        """Take out the vehicles whose chassis is one of the service uids ``bodies``."""
+        wanted = set(bodies)
+        with self.engine.lock:
+            for vid in [vid for vid, uid in self._chassis.items() if uid in wanted]:
+                self.remove(vid)
 
     def chassis_removed(self, chassis: int) -> list[int]:
         """Forget the vehicles on the body of uid ``chassis``, which the world removes with it."""
-        gone = [vid for vid, uid in self._chassis.items() if uid == chassis]
-        for vid in gone:
-            self._forget(vid)
+        with self.engine.lock:
+            gone = [vid for vid, uid in self._chassis.items() if uid == chassis]
+            for vid in gone:
+                self._forget(vid)
         return gone
 
     def _forget(self, vid: int) -> pj.Vehicle | None:
@@ -106,15 +120,20 @@ class JoltVehicles:
 
     def send(self) -> None:
         """Send the inputs given since the last call, as one batch."""
-        with self._lock:
-            if not self._inputs:
-                return
-            waiting, self._inputs = self._inputs, {}
-        ids = [self._native[vid].id for vid in waiting if vid in self._native]
-        rows = [values for vid, values in waiting.items() if vid in self._native]
-        if ids:
-            self.engine.world.vehicle_inputs(np.asarray(ids, dtype=np.uint32),
-                                             np.asarray(rows, dtype=np.float32))
+        if not self._inputs:
+            return
+        with self.engine.lock:
+            with self._lock:
+                waiting, self._inputs = self._inputs, {}
+            ids, rows = [], []
+            for vid, values in waiting.items():
+                made = self._native.get(vid)
+                if made is not None:
+                    ids.append(made.id)
+                    rows.append(values)
+            if ids:
+                self.engine.world.vehicle_inputs(np.asarray(ids, dtype=np.uint32),
+                                                 np.asarray(rows, dtype=np.float32))
 
     def surface(self, vid: int, wheel: int | None, surface: Surface | None) -> None:
         """Set the ground under one wheel of ``vid``, or all of them; None gives them to the materials."""

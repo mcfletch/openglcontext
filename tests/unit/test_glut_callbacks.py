@@ -78,3 +78,24 @@ def test_a_window_system_whose_window_has_gone_registers_nothing(monkeypatch):
     system = _windowSystem(None)
     system.bindCallbacks()
     assert named == []
+
+
+def test_the_world_menu_lists_the_worlds_and_urls_it_is_given(monkeypatch, tmp_path):
+    entries = []
+    monkeypatch.setattr(glutwindowsystem, 'glutCreateMenu', lambda handler: len(entries))
+    monkeypatch.setattr(glutwindowsystem, 'glutAddMenuEntry',
+                        lambda label, value: entries.append((label, value)))
+    monkeypatch.setattr(glutwindowsystem, 'glutAddSubMenu', lambda label, menu: None)
+    monkeypatch.setattr(glutwindowsystem, 'glutAttachMenu', lambda button: None)
+    worlds = tmp_path / 'wrls'
+    worlds.mkdir()
+    (worlds / 'box.wrl').write_text('#VRML V2.0 utf8\n', encoding='utf-8')
+    urls = tmp_path / 'set.txt'
+    urls.write_text('# a comment\nhttp://example.com/a.wrl\n\n', encoding='utf-8')
+
+    system = _windowSystem(1)
+    system.createWorldMenu(str(worlds), str(urls))
+    assert system.worldPaths == [str(worlds / 'box.wrl'), 'http://example.com/a.wrl']
+    assert [label for label, _value in entries] == ['box.wrl', 'http://example.com/a.wrl']
+    system.createWorldMenu(str(tmp_path / 'nowhere'))
+    assert system.worldPaths == []

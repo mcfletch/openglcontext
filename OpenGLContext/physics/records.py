@@ -103,11 +103,15 @@ class Snapshot:
     published at the pose the world holds for it, so a body that has fallen
     asleep is published exactly where it rests.
 
-    Every row is filled in every snapshot. ``changed`` lists the rows whose
-    values may differ from those of snapshot version ``base``; each other row
-    holds the same values as it did there. A reader that kept version ``base``
-    reads :meth:`changed_since` and visits those rows alone; ``changed`` is None
-    when every row is to be read, as after a body is added or removed.
+    Every row is filled in every snapshot. A body keeps its row while it is in
+    the world: a removed body's row stays, no longer named by ``rows``, and a
+    new body takes a row after the others, so snapshots of one ``layout`` list
+    the same body at the same row. ``changed`` lists the rows whose values may
+    differ from those of snapshot version ``base``, and every row past the
+    ones ``base`` had; each other row holds the same values as it did there. A
+    reader that kept version ``base`` reads :meth:`changed_since` and visits
+    those rows alone; ``changed`` is None when every row is to be read, as
+    after the rows are laid out again.
     """
     version: int
     step: int
@@ -136,6 +140,8 @@ class Snapshot:
     bodies: int = 0
     #: How many pairs of bodies the step found touching.
     contacts: int = 0
+    #: Which laying out of the rows this is: snapshots of one layout keep each body's row.
+    layout: int = 0
 
     def changed_since(self, version: int | None) -> np.ndarray | None:
         """The rows to read for a reader whose last snapshot was ``version``; None for every row."""
@@ -146,7 +152,7 @@ class Snapshot:
     def following(self, earlier: Snapshot) -> Snapshot:
         """This snapshot with its changes counted from ``earlier.base``, for a reader that skips ``earlier``."""
         if (self.base != earlier.version or self.changed is None or earlier.changed is None
-                or self.rows is not earlier.rows):
+                or self.layout != earlier.layout):
             return replace(self, changed=None, base=earlier.base)
         return replace(self, changed=np.union1d(earlier.changed, self.changed),
                        base=earlier.base)

@@ -70,3 +70,29 @@ def test_a_transform_whose_translation_field_works_differently_is_set_through_it
     finally:
         del Offset.translation
     assert isinstance(declared, vrml_field.Field)
+
+
+def test_a_route_from_a_physics_driven_rotation_carries_it():
+    from vrml.route import ROUTE
+
+    from OpenGLContext.physics.proxy import Proxy
+    from OpenGLContext.physics.service import Physics
+    from OpenGLContext.physics.settings import PhysicsDefinition
+    from OpenGLContext.scenegraph.transform import Transform
+
+    physics = Physics(PhysicsDefinition(mode='inline', tickHz=60.0, gravity=(0.0, 0.0, 0.0)))
+    try:
+        spun, follower = Transform(), Transform()
+        moved = Transform()
+        keep = (ROUTE(spun, 'rotation', follower, 'rotation'),
+                ROUTE(spun, 'translation', moved, 'translation'))
+        body = physics.add_dynamic(spun, proxy=Proxy.sphere(0.5), mass=1.0)
+        body.set_angular_velocity((0.0, 2.0, 0.0))
+        for _ in range(10):
+            physics.frame(1 / 60)
+        assert tuple(follower.rotation) == tuple(spun.rotation)
+        assert follower.rotation[3] != 0.0
+        assert tuple(moved.translation) == tuple(spun.translation)
+        assert keep
+    finally:
+        physics.close()

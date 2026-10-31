@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from OpenGLContext.physics.body import Body
-    from OpenGLContext.physics.queries import Hit
+    from OpenGLContext.physics.types import Hit
     from OpenGLContext.physics.records import Step
     from OpenGLContext.physics.service import Physics
     from OpenGLContext.physics.types import Poses
