@@ -31,6 +31,7 @@ oldest frozen in the pose it reached when a new one comes in.
 """
 from __future__ import annotations
 
+import copy
 import time
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
@@ -110,12 +111,18 @@ class RagdollRig:
         self.placement = np.asarray(placement, dtype='d')
         self.parents = spec.parents
         self.bone_of_slot = _riders(rig, self.slots)
-        # Per generation of the rig, the slots a bone drives, for writing them in while composing.
         chosen = np.zeros(rig.n, dtype=bool)
         chosen[self.slots] = True
-        self._row_of_slot = np.full(rig.n, -1, dtype=np.intp)
-        self._row_of_slot[self.slots] = np.arange(len(self.slots))
-        self._levels = [(level, level[chosen[level]]) for level in rig.levels]
+        #: The slots that ride a bone, and those above the root, which ride nothing.
+        self._riders = np.flatnonzero((self.bone_of_slot >= 0) & ~chosen)
+        self._above = np.flatnonzero(self.bone_of_slot < 0)
+        # Per generation below the first, the slots whose parent is not a bone: their
+        # offsets chain on through the parent's.
+        self._chains = [(level[~chosen[rig.parent[level]]])
+                        for level in rig.levels[1:]]
+        self._offsets_pose: Any = None
+        self._offsets = np.zeros((0, 4, 4))
+        self._bone_scale = np.ones(len(self.slots))
 
     # -- building ---------------------------------------------------------
     @classmethod
@@ -190,6 +197,12 @@ class RagdollRig:
         settings.setdefault('root_force', 0.0)
         return cls(rig, slots, names, RagdollSpec(bones=made, **settings), place)
 
+    def placed(self, placement: Any) -> RagdollRig:
+        """This rig for a figure whose document root is at ``placement``; the bones are shared."""
+        made = copy.copy(self)
+        made.placement = np.asarray(placement, dtype='d').reshape(4, 4)
+        return made
+
     # -- the arithmetic -----------------------------------------------------
     def bone_poses(self, pose: tuple[np.ndarray, np.ndarray, np.ndarray],
                    placement: Any = None) -> tuple[np.ndarray, np.ndarray]:
@@ -221,25 +234,36 @@ class RagdollRig:
         the skins read them, each bone keeping the scale the pose gives it.
         """
         place = self.placement if placement is None else np.asarray(placement, dtype='d')
-        unplace = np.linalg.inv(place)
-        local = self.rig.local_matrices(*pose)
-        worlds = local.copy()
+        offsets = self._offsets_of(pose)
         bones = np.zeros((len(self.slots), 4, 4))
-        turns = quat_to_row_matrices(np.asarray(orientations, dtype='d'))
-        bones[:, :3, :3] = turns
+        bones[:, :3, :3] = quat_to_row_matrices(np.asarray(orientations, dtype='d'))
         bones[:, 3, :3] = np.asarray(positions, dtype='d')
         bones[:, 3, 3] = 1.0
-        bones = bones @ unplace
-        rows = self._row_of_slot
-        for depth, (level, driven) in enumerate(self._levels):
-            if depth:
-                worlds[level] = local[level] @ worlds[self.rig.parent[level]]
-            if len(driven):
-                scale = np.linalg.norm(worlds[driven, 0, :3], axis=1)
-                made = bones[rows[driven]].copy()
-                made[:, :3, :3] *= scale[:, None, None]
-                worlds[driven] = made
+        bones = bones @ np.linalg.inv(place)
+        bones[:, :3, :3] *= self._bone_scale[:, None, None]
+        worlds = np.empty((self.rig.n, 4, 4))
+        worlds[self._above] = offsets[self._above]
+        worlds[self._riders] = offsets[self._riders] @ bones[self.bone_of_slot[self._riders]]
+        worlds[self.slots] = bones
         return worlds
+
+    def _offsets_of(self, pose: tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+        """Each slot's matrix in the frame of the bone it rides, or of the document above the root.
+
+        Worked out again only when ``pose`` is a different object, so a figure
+        whose animation has stopped composes its riders once.
+        """
+        if pose is self._offsets_pose:
+            return self._offsets
+        local = self.rig.local_matrices(*pose)
+        offsets = local.copy()
+        for chain in self._chains:
+            if len(chain):
+                offsets[chain] = local[chain] @ offsets[self.rig.parent[chain]]
+        composed = self.rig.world_matrices(*pose)
+        self._bone_scale = np.linalg.norm(composed[self.slots, 0, :3], axis=1)
+        self._offsets, self._offsets_pose = offsets, pose
+        return offsets
 
 
 class RagdollFigure:
@@ -268,7 +292,7 @@ class RagdollFigure:
         self.model = model
         self.mixer: AnimationMixer = model.mixer
         if rig is not None and placement is not None:
-            rig.placement = np.asarray(placement, dtype='d').reshape(4, 4)
+            rig = rig.placed(placement)
         elif placement is not None:
             build['placement'] = placement
         self.rig = rig if rig is not None else RagdollRig.from_model(model, **build)
@@ -328,24 +352,24 @@ class RagdollFigure:
         return not self.ragdoll.alive or all(body.asleep for body in self.ragdoll.bones)
 
     def update(self, dt: float) -> None:
-        """Advance the animation ``dt`` seconds and, while following, send its pose as the target.
+        """While following, advance the animation ``dt`` seconds and send its pose as the target.
 
-        A figure that has stopped following and come to rest costs nothing.
+        A figure that is not following holds the pose it last took, which is
+        what the joints riding its bones keep, and costs nothing here.
         """
         if self._limp_in is not None:
             self._limp_in -= max(0.0, float(dt))
             if self._limp_in <= 0.0:
                 self._limp_in = None
                 self.following = False
-        if not self.following and self._drawn_settled:
+        if not self.following:
             return
         started = time.perf_counter()
         self.mixer.advance(dt)
         self._pose = self.mixer.blended_pose()
-        if self.following:
-            turns, moves = self.rig.targets(self._pose)
-            self.ragdoll.set_pose(turns, moves, position=(0.0, 0.0, 0.0),
-                                  rotation=(0.0, 0.0, 0.0, 1.0))
+        turns, moves = self.rig.targets(self._pose)
+        self.ragdoll.set_pose(turns, moves, position=(0.0, 0.0, 0.0),
+                              rotation=(0.0, 0.0, 0.0, 1.0))
         self.physics.note_render_cost('ragdolls', time.perf_counter() - started)
 
     def draw(self) -> np.ndarray:

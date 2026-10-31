@@ -264,8 +264,11 @@ def _waved(mixer):
 def test_a_figure_starts_in_its_animations_pose(floor):
     mixer = figure()
     pose = _waved(mixer)
-    figure_ = RagdollFigure(floor, Model(mixer), mode='kinematic', placement=(
+    shared = RagdollRig.build(mixer, BONES)
+    figure_ = RagdollFigure(floor, Model(mixer), rig=shared, mode='kinematic', placement=(
         (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2.0, 0.0, 1.0, 1)))
+    assert shared.placement == pytest.approx(np.eye(4))
+    assert figure_.rig.spec is shared.spec and figure_.rig.placement[3, 0] == 2.0
     positions, _ = figure_.rig.bone_poses(pose)
     for body, place in zip(figure_.ragdoll.bones, positions, strict=True):
         assert body.position == pytest.approx(place, abs=1e-6)
