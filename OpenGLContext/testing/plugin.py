@@ -69,7 +69,7 @@ from typing import Any, Literal, get_args
 
 import pytest
 
-from OpenGLContext.testing import gl_env, glfwteardown
+from OpenGLContext.testing import drivercull, gl_env, glfwteardown
 
 # Before anything here imports OpenGL, because the platform module is chosen at
 # import and cannot be changed afterwards.  This is why no test module needs to
@@ -96,6 +96,9 @@ _FALSE = ('0', 'false', 'no', 'off')
 
 #: What this session settled on for GLFW teardown, so a run can say which.
 _TEARDOWN: dict[str, str] = {}
+
+#: What this session settled on for the driver's vertex-stage culling.
+_CULLING: dict[str, str] = {}
 
 #: The exit status a test's child process gives when it could not draw.
 NO_CONTEXT_STATUS = 3
@@ -360,6 +363,9 @@ def pytest_configure(config: Any) -> None:
     # child process to learn something it cannot act on.
     if glcontext.windowing() == 'glfw':
         _TEARDOWN['decided'] = glfwteardown.settle_for_session()
+        # Before this process makes a GL context, because the driver reads
+        # AMD_DEBUG once, as it starts.
+        _CULLING['decided'] = drivercull.settle()
     _start_open_audit(config)
 
 
@@ -370,6 +376,15 @@ def glfw_teardown() -> str:
     decides between them.
     """
     return _TEARDOWN.get('decided', '')
+
+
+def ngg_culling() -> str:
+    """``'on'``, ``'off'`` -- or ``''`` unasked.
+
+    See :mod:`OpenGLContext.testing.drivercull` for what each means and what
+    decides between them.
+    """
+    return _CULLING.get('decided', '')
 
 
 def pytest_collection_modifyitems(config: Any, items: list) -> None:

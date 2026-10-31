@@ -643,6 +643,53 @@ and skips the probe:
    * - ``neutralised``
      - Leak the contexts: destroy no window and do not terminate GLFW.
 
+.. _ngg-culling:
+
+Back-face culling in a second context
+-------------------------------------
+
+Mesa's radeonsi driver culls primitives in the vertex stage (NGG culling) on
+GFX10 and later GPUs. On Mesa 25.2.8 with a Radeon 8060S (gfx1151), that
+culling draws the back faces of a closed mesh in a second GL context while
+the first is open. A context made just after another was released shows it
+in 2 or 3 of every 1,000 window pairs on a machine running the unit suite
+beside it. A solid Cone seen from
+inside then fills the view instead of drawing nothing, and
+``glCullFace(GL_FRONT_AND_BACK)`` does not stop it. ``AMD_DEBUG=nonggc``
+turns the vertex-stage culling off, and the same draws then cull.
+
+A test suite opens a window per test, so the tests that look at a solid
+shape from inside (``tests/unit/test_primitive_solid.py``) meet it in full
+parallel runs. ``OpenGLContext.testing.drivercull`` draws a solid Cone from
+inside in a second window, with the first open, in a child process before the
+session opens its first window. Where that draw shows the cone, the plugin
+adds ``nonggc`` to ``AMD_DEBUG`` for the session. The driver reads the
+variable as it starts, and the xdist workers and script tests the run starts
+inherit it. Where the draw is black, or the driver is not radeonsi, the
+driver is left as an application runs it. The probe takes about 1.3 seconds.
+``tests/unit/test_driver_culling.py`` draws the second window in the test
+process and fails if its back faces are drawn.
+
+An application that opens two windows on an affected stack sees the same
+fault. Set ``AMD_DEBUG=nonggc`` in its environment before it starts.
+
+``OPENGLCONTEXT_NGG_CULLING`` sets the answer for a run on a known stack,
+and skips the probe. The plugin writes the decision back into it, so a child
+process does not probe again:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Value
+     - Effect
+   * - ``auto`` (the default)
+     - Probe the machine once and act on the result.
+   * - ``on``
+     - Leave the driver's vertex-stage culling on.
+   * - ``off``
+     - Add ``nonggc`` to ``AMD_DEBUG``.
+
 .. _timeouts:
 
 Test timeouts

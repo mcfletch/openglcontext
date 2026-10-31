@@ -409,6 +409,12 @@ class TestACleanRenderingEnvironment:
             # inheriting it spares the child a probe of its own.  See
             # OpenGLContext.testing.glfwteardown.
             'OPENGLCONTEXT_GLFW_TEARDOWN',
+            # Whether the driver's vertex-stage culling is switched off where
+            # it draws back faces in a second context.  It is the driver's
+            # setting, so a child renders on the same driver as its parent,
+            # inherits AMD_DEBUG with it, and is spared a probe of its own.
+            # See OpenGLContext.testing.drivercull.
+            'OPENGLCONTEXT_NGG_CULLING',
             # Where content packs are found instead of downloading them. It
             # names the same data whichever process reads it, and a child that
             # did not inherit it would go to the network for content its parent
