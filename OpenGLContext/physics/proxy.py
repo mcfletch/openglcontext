@@ -176,7 +176,7 @@ class Proxy:
             exact = _exact_primitive(points)
             if exact is not None:
                 return exact
-        from OpenGLContext.physics.omi_adapter import cook  # noqa: PLC0415 the engine loads on use
+        from OpenGLContext.physics.cooking import cook  # noqa: PLC0415 cooking imports this module
 
         return cook(points, indices, strategy, dynamic)
 
@@ -200,9 +200,9 @@ class Proxy:
         if points is None or len(points) == 0:
             return 0.0
         if self.kind == 'convex':
-            from OpenGLContext.physics.omi_adapter import hull_volume  # noqa: PLC0415 the engine loads on use
+            from OpenGLContext.physics.cooking import points_hull_volume  # noqa: PLC0415 cooking imports this module
 
-            return hull_volume(points)
+            return points_hull_volume(points)
         return float(np.prod(points.max(axis=0) - points.min(axis=0)))
 
     def mass(self, density: float = DEFAULT_DENSITY) -> float:

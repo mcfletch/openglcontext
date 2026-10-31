@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import omi_physics
-from omi_physics import cookery, hull, model
+from omi_physics import model
 from omi_physics.character import CharacterCapabilities as OmiCapabilities
 from omi_physics.character import CharacterState as OmiState
 from omi_physics.contactevents import PairPreview, Verdict
@@ -37,9 +37,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-__all__ = ['NAME', 'ContactFilter', 'motion_from_omi', 'character_state', 'cook', 'engine_info', 'gravity', 'gravity_volume',
-           'hull_volume', 'material_from_omi', 'motion', 'omi_capabilities', 'omi_filter',
-           'omi_material', 'omi_shape', 'presets', 'proxy_from_shape']
+__all__ = ['NAME', 'ContactFilter', 'character_state', 'engine_info', 'gravity', 'gravity_volume',
+           'material_from_omi', 'motion', 'omi_capabilities', 'omi_filter', 'omi_material',
+           'omi_shape', 'proxy_from_shape']
 
 #: The engine's name, as :attr:`EngineInfo.name` gives it.
 NAME = 'omi_physics'
@@ -65,11 +65,6 @@ def omi_material(material: Any) -> model.Material:
 def material_from_omi(material: model.Material) -> Material:
     """omi's ``material`` as a :class:`Material`."""
     return Material.coerce(material)
-
-
-def presets() -> dict[str, Material]:
-    """The engine's preset materials by name (``wood``, ``metal``, ``rubber``, ``ice`` and others)."""
-    return {name: material_from_omi(found) for name, found in model.MATERIAL_PRESETS.items()}
 
 
 def omi_filter(given: Any) -> model.CollisionFilter:
@@ -163,30 +158,6 @@ def proxy_from_shape(shape: model.Shape) -> Proxy:
     return made
 
 
-def cook(points: np.ndarray, indices: np.ndarray | None, strategy: str, dynamic: bool) -> Proxy:
-    """A proxy cooked from triangles: their hull, the triangles, or convex pieces of them."""
-    from OpenGLContext.physics.proxy import Proxy  # noqa: PLC0415 proxy converts through this module
-
-    cooked = cookery.cook_shape(points, indices, 'convex' if strategy == 'convex' else 'auto',
-                                dynamic)
-    if isinstance(cooked, list):
-        return Proxy('compound', {'parts': tuple((proxy_from_shape(piece), (0.0, 0.0, 0.0),
-                                                  (0.0, 0.0, 0.0, 1.0)) for piece in cooked)})
-    return proxy_from_shape(cooked)
-
-
-def hull_volume(points: np.ndarray) -> float:
-    """The volume of the convex hull of ``points``, from tetrahedra to its centroid."""
-    vertices, faces = hull.convex_hull(points)
-    if len(faces) == 0:
-        return float(np.prod(np.maximum(points.max(axis=0) - points.min(axis=0), 1e-6)))
-    centre = vertices.mean(axis=0)
-    a = vertices[faces[:, 0]] - centre
-    b = vertices[faces[:, 1]] - centre
-    c = vertices[faces[:, 2]] - centre
-    return float(abs(np.einsum('ij,ij->i', a, np.cross(b, c)).sum()) / 6.0)
-
-
 # -- gravity and motion ----------------------------------------------------------
 
 def gravity(vector: Iterable[float]) -> model.Gravity:
@@ -225,13 +196,6 @@ def motion(kind: str, mass: float = 1.0, linear_damping: float = 0.0,
                         linearDamping=float(linear_damping),
                         angularDamping=float(angular_damping),
                         gravityFactor=float(gravity_factor))
-
-
-def motion_from_omi(given: model.Motion) -> tuple[str, Motion]:
-    """omi's ``given`` motion as the kind of body it makes and a :class:`~OpenGLContext.physics.records.Motion`."""
-    kind = {model.DYNAMIC: 'dynamic', model.KINEMATIC: 'kinematic'}.get(given.type, 'static')
-    return kind, Motion(float(given.mass), float(given.linearDamping),
-                        float(given.angularDamping), float(given.gravityFactor))
 
 
 # -- the contact filter ------------------------------------------------------------

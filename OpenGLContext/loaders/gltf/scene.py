@@ -193,7 +193,7 @@ class GLTFScene(object):
         # environment: the scene's EXT_lights_image_based light, or None.
         self.environment: Any = None
         # physics: the document's OMI physics blocks (an
-        # omi_physics.omi_gltf.PhysicsDocument), or None. Each node carrying a
+        # OpenGLContext.physics.omigltf.PhysicsDocument), or None. Each node carrying a
         # body is tagged with it, and a context's physics makes the body when
         # the node is in the scene; see OpenGLContext.physics.colliders.
         self.physics: Any = None
@@ -945,18 +945,18 @@ class _SceneBuilder:
     def _tag_physics_bodies(self) -> Any:
         """The document's OMI physics, with each node that carries a body tagged with it.
 
-        Returns the :class:`omi_physics.omi_gltf.PhysicsDocument`, or None for a
+        Returns the :class:`OpenGLContext.physics.omigltf.PhysicsDocument`, or None for a
         document with no ``OMI_physics_body`` block on any node.
         """
         used = set(getattr(self.g, 'extensionsUsed', None) or ())
         if not used & {'OMI_physics_body', 'OMI_physics_shape'}:
             return None
-        from omi_physics import omi_gltf  # noqa: PLC0415 only a document with bodies needs it
+        from OpenGLContext.physics import omigltf  # noqa: PLC0415 only a document with bodies needs it
 
         top = getattr(self.g, 'extensions', None)
         nodes = [{'extensions': getattr(node, 'extensions', None) or {}}
                  for node in (self.g.nodes or [])]
-        document = omi_gltf.load_document({
+        document = omigltf.load_document({
             'extensions': top if isinstance(top, dict) else {}, 'nodes': nodes})
         tagged = 0
         for index, body in document.node_bodies.items():

@@ -1,7 +1,7 @@
 """The physics materials of a context: presets, the ones the application defines, and pair rules.
 
-A material says how a surface grips, bounces and sounds. The engine's presets
-(``wood``, ``metal``, ``rubber``, ``ice`` and others) are there from the start; :meth:`Materials.define` adds others, and
+A material says how a surface grips, bounces and sounds. The presets
+(:data:`PRESETS`: ``wood``, ``metal``, ``rubber``, ``ice``) are there from the start; :meth:`Materials.define` adds others, and
 :meth:`Materials.pair` overrides the friction between two of them. A body takes
 a material by name::
 
@@ -21,7 +21,16 @@ if TYPE_CHECKING:
     from OpenGLContext.audio.manager import SoundSource
     from OpenGLContext.physics.service import Physics
 
-__all__ = ['Materials', 'PhysicsMaterial']
+__all__ = ['PRESETS', 'Materials', 'PhysicsMaterial']
+
+#: The materials every service starts with, by name: Coulomb friction at rest
+#: and sliding, and restitution.
+PRESETS: dict[str, Material] = {
+    'wood': Material(staticFriction=0.5, dynamicFriction=0.4, restitution=0.2),
+    'metal': Material(staticFriction=0.4, dynamicFriction=0.3, restitution=0.1),
+    'rubber': Material(staticFriction=1.0, dynamicFriction=0.9, restitution=0.8),
+    'ice': Material(staticFriction=0.05, dynamicFriction=0.02, restitution=0.05),
+}
 
 
 @dataclass(frozen=True)
@@ -38,11 +47,9 @@ class Materials:
     """The materials of one physics service."""
 
     def __init__(self, physics: Physics) -> None:
-        from OpenGLContext.physics.omi_adapter import presets  # noqa: PLC0415 the engine loads with the service
-
         self._physics = physics
         self._known: dict[str, PhysicsMaterial] = {
-            name: PhysicsMaterial(name, material) for name, material in presets().items()}
+            name: PhysicsMaterial(name, material) for name, material in PRESETS.items()}
 
     @property
     def names(self) -> list[str]:

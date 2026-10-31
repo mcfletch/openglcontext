@@ -18,11 +18,11 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from omi_physics import model
 
 from OpenGLContext.physics.body import Body
-from OpenGLContext.physics.gltf_world import MeshSite, _mesh_positions_indices, iter_meshes, site_mesh
-from OpenGLContext.physics.omi_adapter import motion_from_omi, proxy_from_shape
+from OpenGLContext.physics.gltf_world import (MeshSite, _mesh_positions_indices, iter_meshes, node_mesh,
+                                              site_mesh)
+from OpenGLContext.physics.omigltf import BodyMotion, MeshShape
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.records import BodySpec, Motion
 
@@ -89,16 +89,21 @@ class SceneryTracker:
         document, body = site.tag
         physics = self.physics
         node = site.node
-        proxies = document.__dict__.setdefault('_proxies', {})
         shape_index = body.collider.shape if body.collider else body.trigger.shape
         if not 0 <= shape_index < len(document.shapes):
             log.warning('node %r names shape %d, which the document does not have',
                         node, shape_index)
             return 0
-        proxy = proxies.get(shape_index)
-        if proxy is None:
-            proxy = proxies[shape_index] = proxy_from_shape(document.shapes[shape_index])
-        kind, motion = motion_from_omi(body.motion or model.Motion(type=model.STATIC))
+        shape = document.shapes[shape_index]
+        if isinstance(shape, MeshShape):
+            proxy = self._mesh_proxy(site, shape)
+            if proxy is None:
+                log.warning('node %r has a %s shape and draws no triangles to make it from',
+                            node, shape.kind)
+                return 0
+        else:
+            proxy = shape
+        kind, motion = (body.motion or BodyMotion(type='static')).body()
         material = None
         if body.collider is not None and 0 <= body.collider.physicsMaterial < len(document.materials):
             material = document.materials[body.collider.physicsMaterial]
@@ -111,6 +116,17 @@ class SceneryTracker:
                             pose=pose, derived=True)
         self.derived[node] = made
         return 1
+
+    @staticmethod
+    def _mesh_proxy(site: MeshSite, shape: MeshShape) -> Proxy | None:
+        """A ``convex`` or ``trimesh`` shape made from the triangles ``site``'s node draws, in its frame."""
+        mesh = node_mesh(site.node)
+        if mesh is None or len(mesh[1]) == 0:
+            return None
+        points, triangles = mesh
+        if shape.kind == 'convex':
+            return Proxy.convex(points)
+        return Proxy.trimesh(points, triangles)
 
     @staticmethod
     def _spec(body: Body, site: MeshSite, mesh: tuple[np.ndarray, np.ndarray]) -> BodySpec | None:

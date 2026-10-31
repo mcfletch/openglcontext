@@ -92,7 +92,7 @@ def test_the_loader_keeps_the_physics_document_on_the_scene(tmp_path):
     scene = load(tmp_path)
     assert scene.physics is not None
     assert set(scene.physics.node_bodies) == {0, 1, 2}
-    assert [shape.type for shape in scene.physics.shapes] == ['box', 'sphere']
+    assert [shape.kind for shape in scene.physics.shapes] == ['box', 'sphere']
 
 
 def test_a_document_without_bodies_has_no_physics(tmp_path):
@@ -163,3 +163,19 @@ def test_a_handler_on_the_ball_hears_it_land(tmp_path, physics):
     physics.wait_cooked(20.0)
     run_for(physics, 2.0)
     assert len(heard) == 1
+
+
+@pytest.mark.parametrize('kind', ['trimesh', 'convex'])
+def test_a_mesh_shape_is_made_from_the_triangles_its_node_draws(tmp_path, physics, kind):
+    given = document()
+    given['extensions']['OMI_physics_shape']['shapes'][0] = {'type': kind, kind: {'mesh': 0}}
+    path = tmp_path / 'mesh.gltf'
+    path.write_text(json.dumps(given))
+    scene = gltf.load_gltf(str(path))
+    physics.scenery_changed(scene.group, 1)
+    floor = physics.body_for(scene.node_transforms[0])
+    assert floor.proxy.kind == kind
+    assert np.allclose(np.sort(floor.proxy.params['points'], axis=0),
+                       np.sort([(0, 0, 0), (1, 0, 0), (0, 1, 0)], axis=0))
+    # The zone's trigger names the same shape and draws nothing to make it from.
+    assert physics.body_for(scene.node_transforms[2]) is None
