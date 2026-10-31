@@ -70,7 +70,8 @@ class PhysicsDefinition(node.Node):
     #: The engine that steps the world, one of :data:`ENGINES`
     #: (env: OPENGLCONTEXT_PHYSICS_ENGINE). ``jolt`` needs pyjoltphysics.
     engine = field.newField('engine', 'SFString', 1, default_engine)
-    #: The fixed step, in steps a second, in both modes.
+    #: The fixed step, in steps a second, in both modes. A frame shorter than a
+    #: step draws moving bodies between the last two steps.
     tickHz = field.newField('tickHz', 'SFFloat', 1, 120.0)
     #: The longest span of time one frame steps, in seconds. A frame that took
     #: longer steps this much and drops the rest.

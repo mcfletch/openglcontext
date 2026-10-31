@@ -807,7 +807,8 @@ Modes and settings
        pyjoltphysics (:ref:`physics-jolt`); chosen when the service is made
    * - ``tickHz``
      - 120
-     - the fixed step, in steps a second, in both modes
+     - the fixed step, in steps a second, in both modes; a frame shorter than
+       a step draws moving bodies between the last two steps
    * - ``maxCatchUp``
      - 0.1
      - the most time one frame steps, in seconds; the rest is dropped
@@ -1014,6 +1015,15 @@ owes without stepping them, and the frame publishes the poses it published
 before with the new tick and time. A settled frame costs 0.01 to 0.03 ms for
 100 to 1,000 sleeping boxes, as on omi_physics. The tick count stays exact, so
 a woken world plays out as one stepped through every tick and a replay matches.
+
+A frame shorter than a tick (240 frames a second against the default 120 ticks)
+draws each moving body between the last two ticks, at the frame's point in the
+next one, so no pose repeats from one frame to the next; characters are drawn
+the same way. ``physics.poses(bodies, interpolated=False)`` and
+``body.step_position`` change once a tick. An owner-stepped character's
+``step(dt)`` advances the world by whole ticks, so a ``dt`` shorter than a tick
+moves nothing until the steps add up to one: a game that steps a character
+at its own rate and reads where each step left it sets ``tickHz`` to that rate.
 
 Characters move inside the world's ticks. A framed character's code for a tick
 (``before-step`` handlers, blows taken, the steering of ``run_along`` and

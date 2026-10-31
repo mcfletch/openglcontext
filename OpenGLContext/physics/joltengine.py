@@ -620,6 +620,8 @@ class JoltEngine(Engine):
         self._last_tick = -1
         self._last_applied = -1
         self._published_jolt = 0
+        #: The world's snapshot of the tick before the newest, which frames draw moving bodies from.
+        self._tick_before: Any = None
         # -- sequences: (service seq, pyjoltphysics seq) not yet applied
         self._pending: collections.deque[tuple[int, int]] = collections.deque()
         self._applied_svc = 0
@@ -798,12 +800,16 @@ class JoltEngine(Engine):
                 self._running = False
             ticks = self._clock.owed(dt)
             self.owed, self.alpha = ticks, self._clock.alpha
-            if not ticks:
-                # A frame that owes no tick applies what is waiting, as an inline omi world does.
+            if ticks:
+                previous = self._tick_before = self._run(ticks)
+            else:
+                # A frame that owes no tick applies what is waiting, as an inline omi world does,
+                # and draws what moves further between the last two ticks.
                 if self._posted:
                     self._run_posted()
                 self._sync()
-            previous = self._run(ticks)
+                if self._published_live.any():
+                    previous = self._tick_before
         else:
             self.owed, self.alpha = 0, 1.0
             self.start()
@@ -1017,7 +1023,7 @@ class JoltEngine(Engine):
         live = np.where(dynamic, awake, linear.any(axis=1) | angular.any(axis=1))
         step_position = step_orientation = None
         alpha = self.alpha
-        if self.owed and alpha < 1.0 and live.any():
+        if (self.owed or previous is not None) and alpha < 1.0 and live.any():
             if present.all():
                 uids, jolt = self._movers, self._mover_jolt
             else:

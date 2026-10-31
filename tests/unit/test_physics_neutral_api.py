@@ -8,6 +8,7 @@ import pytest
 from OpenGLContext.physics import (
     CharacterCapabilities, CharacterState, Physics, PhysicsDefinition, Proxy, WorldCounts,
 )
+from OpenGLContext.scenegraph.basenodes import Transform
 from OpenGLContext.testing import physics as physics_testing
 
 pytestmark = pytest.mark.engines('omi', 'jolt')
@@ -117,6 +118,24 @@ def test_poses_at_the_end_of_the_step_are_not_interpolated():
         stepped = physics.poses([body], interpolated=False).position[0]
         assert drawn[1] > stepped[1]          # drawn between the last two steps
         assert np.allclose(body.step_position, stepped)
+    finally:
+        physics.close()
+
+
+def test_frames_faster_than_the_tick_draw_a_body_between_its_ticks():
+    """At four frames a tick, each frame draws a moving body a quarter tick further on."""
+    physics = make('inline')
+    try:
+        node = Transform(translation=(0, 10, 0))
+        body = physics.add_dynamic(node, proxy=Proxy.sphere(0.5), gravity_factor=0.0)
+        body.set_velocity((4.0, 0.0, 0.0))
+        for _ in range(8):
+            physics.frame(0.01)
+        drawn = []
+        for _ in range(8):
+            physics.frame(0.0025)
+            drawn.append(float(node.translation[0]))
+        assert np.allclose(np.diff(drawn), 0.01, atol=1e-4)
     finally:
         physics.close()
 
