@@ -2179,6 +2179,17 @@ Tests: engine `test_physics_ragdolls` (posed start, queryable, nearest bone, pus
 removal, joints, budget), `test_character_crowd` (palette claim), `test_x3d_shaders` (refused
 stage); each seen failing first. twig-bb `tests/test_corpses.py` (13) and a GL test that the
 fallen body is drawn lying where it stood.
+
+The `physics_ragdoll` baseline (2026-10-31): the posed start changes the opening's fall. Cesium
+Man now falls straight along the blow (-Z) and lies with his head toward the bench (hips 0.17 m,
+head 0.23 m up, still rolling slowly at the capture); the tutorial's camera sees him
+foreshortened, feet first, which reads as a crouch but is the lying body (a view from above
+shows it). The skin is drawn where the bones lie: `tests/unit/test_ragdoll_draw.py` settles a
+skinned figure (`_character_assets.ragdoll_figure_glb`) on a floor and holds every vertex to its
+bone's body within 1 mm, with the shader and the CPU deform drawing the same frame, in a hidden
+GLFW window and offscreen (`tests/helpers/_ragdoll_draw_harness.py`); seen failing with the
+settled-figure rule made to skip every draw. The capture is byte-identical over five runs; the
+baseline was re-blessed.
 ### Character falls as built (2026-10-31): a character's body as a ragdoll from a fall to its get-up
 
 openglcontext branch `character-tumble`, rebased onto P6e; hill-runner branch `ragdoll-trip`.

@@ -156,6 +156,127 @@ def held_glb(socket='socket_grip', translation=(0.0, 0.1, 0.3), rotation=None,
     return b"".join(g.save_to_bytes())
 
 
+#: A standing figure in metres, Y up, facing +Z, named as the humanoid bones:
+#: (name, parent index, translation from the parent).
+FIGURE = [
+    ('Armature', None, (0.0, 0.0, 0.0)),
+    ('hips', 0, (0.0, 0.95, 0.0)),
+    ('spine', 1, (0.0, 0.15, 0.0)),
+    ('chest', 2, (0.0, 0.2, 0.0)),
+    ('neck', 3, (0.0, 0.2, 0.0)),
+    ('head', 4, (0.0, 0.05, 0.0)),
+    ('leftShoulder', 3, (0.08, 0.15, 0.0)),
+    ('leftUpperArm', 6, (0.1, 0.0, 0.0)),
+    ('leftLowerArm', 7, (0.0, -0.28, 0.0)),
+    ('leftHand', 8, (0.0, -0.26, 0.0)),
+    ('rightShoulder', 3, (-0.08, 0.15, 0.0)),
+    ('rightUpperArm', 10, (-0.1, 0.0, 0.0)),
+    ('rightLowerArm', 11, (0.0, -0.28, 0.0)),
+    ('rightHand', 12, (0.0, -0.26, 0.0)),
+    ('leftUpperLeg', 1, (0.1, -0.05, 0.0)),
+    ('leftLowerLeg', 14, (0.0, -0.42, 0.0)),
+    ('leftFoot', 15, (0.0, -0.42, 0.0)),
+    ('leftToes', 16, (0.0, -0.05, 0.14)),
+    ('rightUpperLeg', 1, (-0.1, -0.05, 0.0)),
+    ('rightLowerLeg', 18, (0.0, -0.42, 0.0)),
+    ('rightFoot', 19, (0.0, -0.42, 0.0)),
+    ('rightToes', 20, (0.0, -0.05, 0.14)),
+]
+
+
+def _box(start, end, half):
+    """A box ``half`` metres either side of the segment start-end: 24 corners, normals, 36 indices."""
+    start, end = np.asarray(start, 'd'), np.asarray(end, 'd')
+    centre, reach = (start + end) / 2.0, np.abs(end - start) / 2.0 + half
+    positions, normals, index = [], [], []
+    for axis in range(3):
+        for sign in (-1.0, 1.0):
+            normal = np.zeros(3)
+            normal[axis] = sign
+            u, v = [k for k in range(3) if k != axis]
+            base = len(positions)
+            for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+                corner = centre + normal * reach
+                corner[u] += a * reach[u]
+                corner[v] += b * reach[v]
+                positions.append(corner)
+                normals.append(normal)
+            index += [base, base + 1, base + 2, base, base + 2, base + 3]
+    return positions, normals, index
+
+
+def ragdoll_figure_glb(half=0.045):
+    """The :data:`FIGURE` skeleton with a box skinned to each joint, and a ``stand`` clip.
+
+    Each joint but the root wears a box ``half`` metres either side of the
+    segment to its first child (a leaf's runs on 0.08 m past it), every
+    vertex weighted wholly to that joint, so where each vertex is drawn
+    follows from one joint's matrix. The clip holds the rest pose, so the
+    figure has an animation for a ragdoll to follow.
+    """
+    rest = []
+    for _name, parent, move in FIGURE:
+        rest.append(np.asarray(move, 'd') + (rest[parent] if parent is not None else 0.0))
+    children = {i: [k for k, (_n, p, _m) in enumerate(FIGURE) if p == i]
+                for i in range(len(FIGURE))}
+    position, normal, joints, weights, index = [], [], [], [], []
+    for i in range(1, len(FIGURE)):
+        if children[i]:
+            end = rest[children[i][0]]
+        else:
+            run = rest[i] - rest[FIGURE[i][1]]
+            end = rest[i] + run / np.linalg.norm(run) * 0.08
+        corners, faces, triangles = _box(rest[i], end, half)
+        base = len(position)
+        position += corners
+        normal += faces
+        index += [base + k for k in triangles]
+        joints += [[i, 0, 0, 0]] * len(corners)
+        weights += [[1.0, 0.0, 0.0, 0.0]] * len(corners)
+    position = np.array(position, dtype='<f4')
+    normal = np.array(normal, dtype='<f4')
+    joints = np.array(joints, dtype='<u2')
+    weights = np.array(weights, dtype='<f4')
+    index = np.array(index, dtype='<u4')
+    inverse_bind = np.tile(np.eye(4), (len(FIGURE), 1, 1))
+    inverse_bind[:, 3, :3] = -np.array(rest)
+    inverse_bind = inverse_bind.astype('<f4')
+    times = np.array([0.0, 1.0], dtype='<f4')
+    still = np.array([[0, 0, 0, 1], [0, 0, 0, 1]], dtype='<f4')
+
+    blob, spans = _pack([position, normal, joints, weights, index, inverse_bind, times, still])
+    g = GLTF2()
+    g.scene = 0
+    g.scenes = [Scene(nodes=[0, len(FIGURE)])]
+    g.nodes = [Node(name=name, children=children[i], translation=list(move))
+               for i, (name, _parent, move) in enumerate(FIGURE)]
+    g.nodes.append(Node(name='Body', mesh=0, skin=0))
+    g.meshes = [Mesh(primitives=[Primitive(
+        attributes=Attributes(POSITION=0, NORMAL=1, JOINTS_0=2, WEIGHTS_0=3),
+        indices=4)])]
+    g.skins = [Skin(joints=list(range(len(FIGURE))), inverseBindMatrices=5, skeleton=0)]
+    g.accessors = [
+        Accessor(bufferView=0, componentType=5126, count=len(position), type='VEC3',
+                 min=position.min(0).tolist(), max=position.max(0).tolist()),
+        Accessor(bufferView=1, componentType=5126, count=len(normal), type='VEC3'),
+        Accessor(bufferView=2, componentType=5123, count=len(joints), type='VEC4'),
+        Accessor(bufferView=3, componentType=5126, count=len(weights), type='VEC4'),
+        Accessor(bufferView=4, componentType=5125, count=len(index), type='SCALAR'),
+        Accessor(bufferView=5, componentType=5126, count=len(FIGURE), type='MAT4'),
+        Accessor(bufferView=6, componentType=5126, count=2, type='SCALAR',
+                 min=[0.0], max=[1.0]),
+        Accessor(bufferView=7, componentType=5126, count=2, type='VEC4'),
+    ]
+    g.bufferViews = [BufferView(buffer=0, byteOffset=o, byteLength=n) for o, n in spans]
+    g.buffers = [Buffer(byteLength=len(blob))]
+    g.animations = [Animation(
+        name='stand',
+        samplers=[AnimationSampler(input=6, output=7, interpolation='LINEAR')],
+        channels=[AnimationChannel(sampler=0, target=AnimationChannelTarget(node=1, path='rotation'))])]
+    g.set_binary_blob(blob)
+    return b"".join(g.save_to_bytes())
+
+
 def skinned_bar_glb(rings=6, degrees=60.0, axis=2, tilt=True):
     """A bar of triangles that bends about its middle when its clip plays.
 
