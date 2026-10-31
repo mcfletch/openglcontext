@@ -1032,7 +1032,9 @@ What differs from omi_physics, by design of the engine:
 - A resting body sinks up to 5 mm into what it rests on (Jolt's penetration
   slop, which the service sets to 5 mm).
 - Velocities are float32 in the snapshot: a speed read back is within about
-  1e-6 of the one set.
+  1e-6 of the one set. A ray's hit point is within a few micrometres of the
+  surface (Jolt's shapes and ray fractions are float32), and a ray exactly
+  tangent to a capsule misses it.
 - Characters push each other by their masses: a character walking into
   another of a different pass group shoves it along rather than stopping.
 - A body striking a character knocks it back by the momentum the body brings
@@ -1828,9 +1830,10 @@ Its bodies, their collidables as shapes and compounds, X3D's six joints on the
 joints above, and its ``CollisionCollection``\ s and routed ``Contact`` nodes
 as a pair rule. On Jolt the rule is asked as a pair first touches and at each
 step a refused pair still meets, a pair meets with the collider's bounce and
-first friction coefficient or a routed contact's, a body's inertia is its
-shapes', and the collection's solver settings are Jolt's own. A ``CollisionSensor`` reports touches without stepping
-anything. What each node does, and the units of its fields, are in
+first friction coefficient or a routed contact's, a body that may rest
+(``autoDisable``) rests after Jolt's own sleep time and speeds rather than the
+``disable`` fields, and the collection's solver settings are Jolt's own. A
+``CollisionSensor`` reports touches without stepping anything. What each node does, and the units of its fields, are in
 :ref:`x3d-rigid-bodies`.
 
 .. _physics-debug:

@@ -1,11 +1,12 @@
 # Native physics: pyjoltphysics
 
-Status: **P0, P1a, P1b, P2 and P3 (joints, materials, filters, the contact filter, gravity zones,
-drag, kinematic tracks) landed 2026-10-30, with P4a (the neutral `OpenGLContext.physics` API,
-still on omi_physics).** Decision taken 2026-10-26; design spiked the same day. The
-`pyjoltphysics` repository exists locally (`develop`) with no GitHub remote yet; its workspace
-registration waits for the remote (see "P0 as built" below). P4 (`engine.py` over
-`pyjoltphysics`) is next.
+Status: **P0 to P3 landed 2026-10-30, P4a the same day, and P4 (`engine.py`: the service on
+Jolt behind `PhysicsDefinition.engine='jolt'`, omi the default) 2026-10-31.** Decision taken
+2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists locally
+(`develop`) with no GitHub remote yet; its workspace registration waits for the remote (see
+"P0 as built" below). P4's engine suite is green on both engines and the 1,000-box frame is
+under 2 ms; the game suites on Jolt are not yet green, and what they need is P5's list in
+"P4 as built" below.
 
 The decision (maintainer): the engine steps its rigid bodies with Jolt Physics through a wrapper
 of our own. Jolt always runs on a background thread owned by the wrapper, never inline and never
@@ -577,7 +578,7 @@ of C++ and ran correctly in both builds.
 | P1 | World thread, settings, command batches, snapshot pool, event ring with pair aggregation, sleep events, shapes (primitives, hull, mesh, heightfield grid, compound), bodies in bulk, materials without pair grid, CCD, lockstep, applied log, `at_tick`, fork and atexit hooks, double precision | unit suite; the differential scenarios for bodies, shapes, sleep, triggers and CCD against omi; ASan run; the free-threaded wheel through the same suite | differential tolerances met; determinism and fork tests green on both builds; 5,000 active boxes within 10% of the spike's times | 3 to 4; done 2026-10-30 (P1a and P1b below) |
 | P2 | Queries (synchronous and batched), the character controller port over `CharacterVirtual`, character against character, heightfield tiles from a sample function | differential character and query scenarios; the omi character tests (the behaviour-level ones) ported as conformance | every character scenario within tolerance; a 300-character heightfield world steps under 4 ms on 8 threads | 4 to 5; done 2026-10-30 (P2 below) |
 | P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3; done 2026-10-30 but for the tutorials, which wait for P4 (P3 below) |
-| P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4; P4a (the neutral API) done 2026-10-30, below |
+| P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4; P4a (the neutral API) done 2026-10-30, P4 2026-10-31 but for the game suites on Jolt, below |
 | P5 | Default `engine='jolt'`; `pyjoltphysics` a hard dependency; omi fallback, `worker.py`, `runtime.py`, `replica.py`, `queries.py` deleted; golden results recorded from omi; docs (`docs/physics.rst`, a page on the world thread, callbacks and determinism); omi_physics marked deprecated | full workspace `verify-everything.py`; preflight for openglcontext and pyjoltphysics | the games run on Jolt with no `engine` setting; marble-demo off direct omi imports; docs merged | 1 to 2 |
 | P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8 |
 
@@ -1028,6 +1029,175 @@ P4a is the neutral public API of `OpenGLContext.physics`, still on omi_physics: 
 - The games on `develop` pass against the branch unchanged. Their migration list is in the P4a
   report; marble-demo's mechanisms move to `poses`, `on_step` and `set_gravity_factor`, glisteel's
   car keeps the raw world until vehicles (P6).
+
+### P4 as built (2026-10-31)
+
+P4 is branch `jolt-engine` on `openglcontext` (commits e37da864 to the merge) and commits
+7b255f5 to 5969b84 on `pyjoltphysics` `develop`.
+
+- `physics/engine.py`: `Engine`, the interface the service drives (commands, collect and step,
+  live reads, joint readings, queries, characters, contact filter, counts, state), `make_engine`,
+  `EngineUnavailable`. `PhysicsDefinition.engine` (`'omi'`, `'jolt'`; env
+  `OPENGLCONTEXT_PHYSICS_ENGINE`, read once, inherited by captures). A definition naming Jolt
+  without pyjoltphysics raises `EngineUnavailable`; nothing falls back.
+- `physics/omiengine.py` holds the omi worker, runtime, replica queries, the omi contact filter
+  and the omi character controller; `physics/joltengine.py` the Jolt world (1,900 lines with
+  `JoltController` and `GroundTiles`). Commands keep the service's vocabulary; the Jolt engine
+  turns each into pyjoltphysics batches and keeps the service's uids, mapping event and query
+  uids back. The stand-in machinery stays in the service for the omi engine only.
+- Threads. The Jolt world runs on pyjoltphysics' world thread. Lockstep (`run_ticks` for the
+  ticks a frame owes) for `inline`, a world held by `pin_inline` (captures, recordings,
+  replays) and any world with framed characters; free-running in `thread` mode otherwise.
+  World-thread callbacks are registered only while a step handler, `on_step` hook, physics-thread
+  event handler, standing force or posted call needs them, with the switch interval at 1 ms then
+  (decision 7).
+- Character input latency (P2 item 2). Chosen: the plan's at-tick delivery taken to lockstep.
+  A world with framed characters runs the frame's ticks one at a time; before each, every framed
+  character's code runs (`before-step` handlers, knocks, `run_along`/`hop_to` steering) and its
+  input batches apply at that tick; after it, `after-step` handlers and landings. An input set in
+  a frame drives the frame's first tick, and per-tick steering runs at the world rate, as on omi.
+  Inputs that change a character's state (jump, slide, crouch, fly, swim, knock-down, impulse)
+  read back at once and hold until the world reports the tick that applied them.
+- Characters: `JoltController` over `pyjoltphysics.Character`; eye, previous-tick rows, stuck,
+  ground material (footsteps), pass groups by name, ignore sets, knockback from the begin record's
+  momentum (only for a body moving toward the character), teleports that stand on the floor under
+  them (a ray down the axis), new characters seated on the ground, capsules kept at least their
+  diameter tall, characters lifted onto a sampled ground they are below. Owner-stepped
+  characters (`framed=False`) advance the world: `step(dt)` runs the ticks `dt` owes.
+- Ground: a sample-function ground is height field tiles, 32 cells a side at half the
+  `feature` (0.25 to 2 m), kept around characters, awake dynamic bodies, named foci and each
+  query's path, swapped with `swap_bodies`.
+- Queries apply waiting batches first (`World.flush`, which publishes); `Hit.triangle` is the
+  mesh triangle's row (`World.triangle_of`); a sweep starting inside a body answers 0.
+- Joints: hinge, ball, slider, distance, universal, wheel (`two_axis_hinge`, suspension from
+  stiffness and damping by the wheel's mass) and motor; motors and torques; readings from the
+  joint rows, a motor joint's angles from the bodies' relative turn; a removed body's joints
+  forgotten.
+- Materials, pair grid (`MaterialTable.pairing`), collision filters (the (F, F) table from the
+  filters), contact filter (asked where either body has a handler, refusals as unsolved `hit`s),
+  gravity zones (box, sphere, zone shapes by box or sphere), drag, `Body.drive`, standing forces
+  and torques (resubmitted before each tick), `post`, `Physics.counts`, `physics.engine`,
+  `Physics.save_state`/`restore_state` (bodies and joints; omi raises `NotImplementedError`).
+- `poses.write_poses` writes a frame's poses in bulk (float32 rows stored once where the
+  fields store as the base field does), for both engines.
+- `OpenGLContext.physics.x3djolt.JoltRigidSystem`: X3D's RigidBodyPhysics on a pyjoltphysics
+  world, chosen by `OPENGLCONTEXT_PHYSICS_ENGINE`: centre of mass, the inertia diagonal omi uses,
+  rest only under `autoDisable` (by Jolt's sleep rules), contacts with the world as per-frame
+  surfaces, the six joints and every joint output. `RigidSystem.joint_values` gives either
+  engine's joint outputs; the X3D rigid body suites run on both engines.
+- pyjoltphysics additions, each test first: `set_motion` (mass, damping, gravity factor,
+  inertia tensor),
+  `set_flags` (REPORT, NO_SLEEP, FILTER_CONTACTS), `save_state`/`restore_state`,
+  `WorldSettings.penetration_slop` (the service uses 5 mm), `World.flush` (publishing),
+  `Shape.mesh(ids=)` and `triangle_of`, `MaterialTable.pairing`,
+  `set_contact_filter(either=, recheck=)`, commands from `before_step`/`at_tick`/`drive` code
+  applied in the same tick, `World.bodies_state`, the event record's `depth` (72 bytes),
+  `Shape.box(rounding=)`, snapshot history by publish rather than tick.
+
+Tests. The service suites are parametrised by the `engines` marker (`tests/unit/conftest.py`):
+a module or test marked `engines('omi', 'jolt')` runs once per engine with
+`OPENGLCONTEXT_PHYSICS_ENGINE` set; one marked `engines('omi', reason=...)` reads omi's own
+objects (the runtime, the replica, the worker threads, the stand-in, the omi colliders for roads,
+props and height field chunks) and runs on omi only. Expectations that differ per engine are
+written per engine in the test, each with its reason (step length fixed by `tickHz`, float32
+positions, pushing between pass groups, owner-stepped characters advancing the world).
+`OpenGLContext.testing.physics` gained engine-neutral helpers (`settle`, `wait_ticks`, `idle`,
+`ticks`, `holds`, `shape_kind`, `mass`, `material`, `pair_friction`, `joint_count`,
+`world_position` and others) for what tests used to read from the omi world.
+
+| Suite | omi | Jolt |
+|---|---|---|
+| openglcontext `tests/unit` (not serial), engine default | 19,128 passed | 19,128 passed |
+| tests parametrised by engine within it | 1,069 (361 omi only) | 708 |
+| openglcontext `tests/unit -m serial` | 29 passed | 29 passed |
+| hill-runner | 652 passed | 648 passed, 4 failed |
+| twig-bb | 2,407 passed | 2,384 passed, 23 failed |
+| marble-demo | 941 passed | 914 passed, 27 failed |
+| marble-editor | 165 passed | 165 passed |
+| glisteel | 1,669 passed | 1,283 passed, 386 failed (the vehicle reads the omi world); with `engine='omi'` in its definition, 1,659 passed, 10 failed |
+| openglcontext-forest | 86 passed | 86 passed |
+
+The game failures on Jolt, by cause:
+
+- Reading the omi world (`physics.world` and the other deprecated aliases, which raise on
+  Jolt): marble-demo 18, twig-bb 3, glisteel 10 (`test_traffic`, through `testing.inspect`) and
+  all 386 of glisteel's without the hook (its car is omi's `RaycastVehicle`).
+- Float32 precision: hill-runner's two lattice tests ask for the ground's height to 1e-6 and
+  1e-9 m and get it within 4e-6 and 7e-6 (heights near 45 m, Jolt's float32 shapes and ray
+  fractions).
+- Rays tangent to a capsule: twig-bb's combat and hit-box tests (about 18) fire along y = 0 at
+  capsules whose lowest point is at y = 0; Jolt misses, omi hits.
+- Numbers tuned on omi: hill-runner's knocked-down runner (0.0203 m drift against a 0.02
+  tolerance) and its 240 Hz jump arc (a 120 Hz world repeats a pose); marble-demo's lip bounce
+  (0.32 m at 28 m/s), rockfall spreads and crash rule, the gauntlet's timings, banked turns,
+  narrows, pegs, the updraft gap and the destruction thresholds.
+
+Benchmarks: `scratchpad/framecost/bench.py` cases, the service's frame in ms (mean over the
+measured frames; `T_` cases are threaded with a frame handler, `s` cases settled, `k` characters):
+
+| Case | omi | Jolt |
+|---|---|---|
+| twig | 1.227 | 0.33 |
+| d100 | 16.440 | 0.358 |
+| d1000 | 159.765 | 1.60 to 1.72 |
+| d100s | 0.014 | 0.142 |
+| d1000s | 0.046 | 0.317 |
+| d1000s_10k | 0.046 | 0.638 |
+| k5 | 1.137 | 0.303 |
+| k30 | 4.988 | 1.038 |
+| k30_10k | 10.610 | 1.486 |
+| d100k30 | 21.938 | 1.223 |
+| d1000sk30 | 47.505 | 2.302 |
+| T_d1000s | 0.992 | 2.078 |
+| T_d100k5 | 4.113 | 2.507 |
+| T_d1000k30 | 129.174 | 6.460 |
+
+Hill-runner `Session.step`: omi 0.570 ms (`Physics.frame` 0.439), Jolt 0.287 ms (0.192), over
+the same 117 m. Settled worlds cost more on Jolt (0.14 to 0.64 ms against 0.01 to 0.05): a
+lockstep world ticks every owed step whether or not anything is awake, and omi's settled-world
+shortcut skips the step.
+
+X3D RigidBodyPhysics: `tests/unit/test_x3d_rigidbody_demo.py` passes on both engines. The demo's
+frames, Jolt against omi at 320x180 (channel delta over 5): 1.8% of pixels at 0.5 s, 3.5% at
+1 s, 4.9% at 2 s, 7.0% at 4 s. The door's stop bounce, the ball's bounce phase and the settled
+heap differ; the 2% visual tolerance is met by neither capture after the first contacts, so the
+tutorials do not yet compare Jolt against omi captures.
+
+Behaviour that differs on Jolt:
+
+- The tick rate is `tickHz` and fixed; a frame stepping at 240 Hz against a 120 Hz world repeats
+  poses between ticks.
+- Gravity zones turn a character's vertical axis only; sideways gravity on a character is not
+  modelled (bodies follow any direction).
+- Commands sent from `after-step` code apply at the next tick.
+- A ray exactly tangent to a capsule's pole misses; omi reports a hit at distance 0 (twig-bb
+  aims rays from y=0 at bots whose capsule pole is at y=0).
+- Positions, velocities and shapes are float32 in Jolt: test tolerances of 1e-6 fail
+  (0.4999997 for 0.5). Height field heights are quantised by Jolt's height field compression
+  (a few mm).
+- Characters push dynamic bodies through `CharacterVirtual`'s contact impulse; characters in
+  different pass groups do not push each other.
+- An owner-stepped character (`framed=False`) advances the world by its `step(dt)`.
+- A pair the contact filter refuses reaches handlers as an unsolved `hit`, with no `separate`.
+- `save_state` holds bodies and joints; characters and the tick count are not saved.
+- Bounces and stacking settle differently (Jolt's solver, restitution threshold and sleep
+  rules): marble-demo's lip bounce, rockfall crash count, and the updraft gap are numbers tuned
+  on omi.
+
+What P5 needs:
+
+- marble-demo off direct omi imports (18 of its Jolt failures read `physics.world`), and
+  hill-runner's and twig-bb's tests that read the omi world moved to `testing.physics`'s neutral
+  helpers.
+- The game tests tuned on omi numbers (above) retuned against Jolt, with the tolerances the
+  float32 world allows.
+- glisteel's vehicle stays on omi until P6: `engine='omi'` in `glisteel.world.physics_definition`
+  (one line, not committed, as it needs a released engine with the `engine` field), and
+  `test_traffic` off `testing.inspect`.
+- The omi-only engine tests (`engines('omi')`) rewritten against the neutral helpers or deleted
+  with `worker.py`, `runtime.py`, `replica.py` and `queries.py`.
+- The X3D rigid body tutorials compared against their own Jolt captures rather than omi's.
+- `pyjoltphysics` registration (GitHub remote, wheels) before it becomes a hard dependency.
 
 ## 7. Decisions
 
