@@ -163,6 +163,7 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
         sys.path.insert(0, where)
     from directdocs import dumbpydoc  # noqa: PLC0415 importable only once the sys.path entry find_directdocs answered is in place
 
+    class_sections = node_sections()
     log.info('Writing the module pages into %s', API)
     shutil.rmtree(API, ignore_errors=True)
     rendered, failed = dumbpydoc.render_projects(
@@ -175,12 +176,35 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
         entrypoints=None,
         title='API reference',
         paragraphs=API_INTRO,
+        class_sections=class_sections,
     )
     log.info(
         '%d modules documented; %d could not be imported here%s',
         len(rendered),
         len(failed),
         ': %s' % (', '.join(failed),) if failed else '',
+    )
+
+
+def node_sections() -> Any:
+    """The callable that adds a node's uses to its class on the module pages.
+
+    The files are those of the workspace's projects; a checkout outside a
+    workspace has none to read, and its node pages have no such section.
+    """
+    sys.path.insert(0, HERE)
+    from docbuild import nodeusage, tutorials  # noqa: PLC0415 importable only once this script's directory is on sys.path
+
+    root = nodeusage.workspace_root(HERE)
+    if root is None:
+        log.info('No workspace above %s; node pages list no uses', HERE)
+        return None
+    log.info('Reading the projects of %s for the nodes they use', root)
+    index = nodeusage.build(root)
+    log.info('%d nodes are used', len(index))
+    return nodeusage.class_sections(
+        index,
+        {'%s/%s' % (path.directory, name) for path in tutorials.PATHS for name in path.scripts},
     )
 
 

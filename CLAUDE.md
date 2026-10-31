@@ -49,7 +49,11 @@ from and of the ones built on it. `python build-docs.py` writes both and runs
 Sphinx; `--stage DIR` puts a copy somewhere to look at and `--publish` puts it
 on `gh-pages`. The module pages need PyOpenGL's `directdocs` package, which is
 in the PyOpenGL *repository*: `DIRECTDOCS=../pyopengl` or `--directdocs` says
-where. `docbuild/` holds this project's half of it.
+where. `docbuild/` holds this project's half of it. The class of a scenegraph
+node ends with *Where this node is used*: the files in the workspace's projects
+(Python importing the node from the engine, X3D XML, ClassicVRML and VRML97)
+that instantiate it, found by `docbuild/nodeusage.py`; the engine's own
+packages, `tests/unit` and `website` are not read.
 
 ## Project Plans
 

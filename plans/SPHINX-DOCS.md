@@ -73,6 +73,16 @@ the generated `toctree` follows the text unless the file makes one of its own,
 so a page cannot be left out of the navigation by writing an introduction. A
 script called `index` is refused, since its page would be the path's.
 
+## Where a node is used
+
+`docbuild/nodeusage.py` reads the workspace's projects (the submodules named in
+the outermost `.gitmodules`) and `build-docs.py` hands the result to
+`directdocs.dumbpydoc.render_projects` as `class_sections`, which writes a block
+after the docstring of a class. A node class gets the files that use it, up to
+twelve, with the lines and a GitHub link at the first of them; a tutorial script
+also links its walkthrough. [NODE-DOCUMENTATION.md](NODE-DOCUMENTATION.md) has
+the rest of the plan.
+
 ## What moved, and what the URLs do
 
 Every page keeps its name: `docs/pbr.html` was published at
