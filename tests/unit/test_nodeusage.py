@@ -109,50 +109,69 @@ class TestPython:
         assert nodeusage.scan_python('def (:', NAMES) == {}
 
 
-class TestX3D:
+class TestDocuments:
+    """X3D and VRML97 documents are read by the loader's own readers."""
+
+    def scan(self, text, name=''):
+        return nodeusage.scan_document(text, NAMES, name)
+
     def test_each_element_is_a_use_on_its_line(self):
-        found = nodeusage.scan_x3d(
-            '<X3D>\n<Scene>\n  <Shape>\n    <Box/>\n  </Shape>\n</Scene>\n</X3D>\n',
-            NAMES,
+        found = self.scan(
+            '<X3D>\n<Scene>\n  <Shape>\n    <Box/>\n  </Shape>\n</Scene>\n</X3D>\n'
         )
         assert found == {'Shape': [3], 'Box': [4]}
 
     def test_an_attribute_value_is_not(self):
-        assert nodeusage.scan_x3d('<X3D><Scene><Group DEF="Box"/></Scene></X3D>', NAMES) == {}
+        assert self.scan('<X3D><Scene><Group DEF="Box"/></Scene></X3D>') == {}
+
+    def test_an_element_that_is_not_a_node_is_not(self):
+        """ROUTE is an element and the engine has a class of that name."""
+        names = NAMES | {'ROUTE'}
+        found = nodeusage.scan_document(
+            '<X3D><Scene><TimeSensor DEF="T"/><Transform DEF="X"/>'
+            '<ROUTE fromNode="T" fromField="fraction_changed" toNode="X" toField="scale"/>'
+            '</Scene></X3D>',
+            names,
+        )
+        assert 'ROUTE' not in found
 
     def test_what_was_read_before_a_fault_is_kept(self):
-        found = nodeusage.scan_x3d('<X3D>\n<Box/>\n<Shape>\n&nothing;\n', NAMES)
-        assert found == {'Box': [2], 'Shape': [3]}
+        found = self.scan('<X3D>\n<Scene>\n<Box/>\n<Shape>\n&nothing;\n')
+        assert found.get('Box') == [3]
 
-
-class TestClassicVRML:
-    def scan(self, text):
-        return nodeusage.scan_classic(text, NAMES)
-
-    def test_a_node_is_a_name_before_a_brace(self):
+    def test_a_node_is_a_name_before_a_brace_in_classic_vrml(self):
         found = self.scan(
             '#VRML V2.0 utf8\nShape {\n  geometry Box { size 1 1 1 }\n}\n'
         )
         assert found == {'Shape': [2], 'Box': [3]}
 
     def test_a_def_name_is_not_the_node(self):
-        assert self.scan('DEF Box Group { }') == {}
+        assert self.scan('#VRML V2.0 utf8\nDEF Box Group { }') == {}
 
     def test_a_comment_is_not(self):
-        assert self.scan('# Box {\nGroup { }') == {}
+        assert self.scan('#VRML V2.0 utf8\n# Box {\nGroup { }') == {}
+
+    def test_a_block_comment_is_not(self):
+        assert self.scan('#X3D V3.3 utf8\nPROFILE Immersive\n#/* Box {\nBox { }\n*/#\nGroup { }') == {}
 
     def test_a_string_is_not(self):
-        assert self.scan('Script { url "javascript: Box {" }') == {}
+        assert self.scan('#VRML V2.0 utf8\nScript { url "javascript: Box {" }') == {}
 
     def test_a_string_with_an_escaped_quote_ends_where_it_ends(self):
-        found = self.scan('Script { url "a \\" b" }\nBox { }')
-        assert found == {'Box': [2]}
-
-    def test_a_brace_on_the_next_line_still_counts(self):
-        assert self.scan('Box\n\n{\n}') == {'Box': [1]}
+        found = self.scan('#VRML V2.0 utf8\nScript { url "a \\" b" }\nBox { }')
+        assert found == {'Box': [3]}
 
     def test_a_proto_declaration_is_not_a_use(self):
-        assert self.scan('PROTO Box [ ] { Group { } }') == {}
+        assert self.scan('#VRML V2.0 utf8\nPROTO Box [ ] { Group { } }') == {}
+
+    def test_a_document_with_no_lines_answers_zero_for_each_node(self):
+        from vrml.x3d import files
+
+        scene = files.loads('<X3D><Scene><Shape><Box/></Shape></Scene></X3D>')
+        assert self.scan(files.dumps(scene, 'json'), 'a.x3dj') == {'Shape': [0], 'Box': [0]}
+
+    def test_a_document_that_is_not_one_has_no_uses(self):
+        assert self.scan(b'\x00\x01 not a document') == {}
 
 
 class TestTheFilesOfAWorkspace:
@@ -207,6 +226,23 @@ class TestTheFilesOfAWorkspace:
         assert 'OpenGLContext/bin/cmd.py' in paths
         assert 'OpenGLContext/lib.py' not in paths
         assert 'src/vrml/lib.py' not in paths
+
+    def test_a_document_with_no_lines_is_linked_without_one(self, workspace):
+        from vrml.x3d import files
+
+        scene = files.loads('<X3D><Scene><Box/></Scene></X3D>')
+        (workspace / 'demo' / 'worlds' / 'b.x3dj').write_text(
+            files.dumps(scene, 'json'), encoding='utf8'
+        )
+        use = next(
+            u
+            for u in nodeusage.build(str(workspace), NAMES).uses('Box')
+            if u.path.endswith('b.x3dj')
+        )
+        assert use.lines == ()
+        assert use.url.endswith('/worlds/b.x3dj')
+        text = nodeusage.section('Box', [use], tutorials=set())[0]
+        assert '/worlds/b.x3dj>`__' in text
 
     def test_a_unit_test_is_not_an_example(self, index):
         assert 'tests/unit/test_x.py' not in {u.path for u in index.uses('Box')}

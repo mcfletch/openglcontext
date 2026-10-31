@@ -42,8 +42,7 @@ name, the files that use it. One scanner per file kind:
 | Kind | Read by | A node is |
 |---|---|---|
 | Python | `ast` | a `Name` or `Attribute` that the file's own `import`/`from` lines bind to a name in `OpenGLContext` or `vrml`; a `*` import from those packages binds every node name the file does not define itself |
-| X3D XML | `expat`, with the line of each start tag | an element whose tag is a node name |
-| ClassicVRML, VRML97 (`.wrl`, `.x3dv`) | a small lexer that skips comments and strings | an identifier followed by `{` |
+| X3D XML, ClassicVRML, VRML97, X3D JSON, binary (`.x3d`, `.x3dv`, `.wrl`, `.x3dj`, `.x3db`, gzipped) | `vrml.x3d.readers` with a `SceneBuilder` subclass that notes each `start_node` and the line the reader is on | a node the loader builds; not a `ROUTE`, an `IS`, a `DEF` name, a comment or a string |
 
 Imports are not read from the file by running it, so a file that builds nodes
 through `getattr` or from a string of VRML is not found. `Box` the node and a
@@ -71,9 +70,8 @@ answers to in a document is its `__name__`).
 
 ### Linking to files a reader cannot read
 
-- Binary X3D (`.x3db`), Fast Infoset: Web3D publishes every scene in all
-  encodings under one filename stem, so the scanner indexes the `.x3d` and links
-  the `.x3db` as "same scene, binary" beside it.
+- Binary X3D (`.x3db`, Fast Infoset) and X3D JSON are read by the same scanner
+  and have no lines, so their entry links the file without an anchor.
 - GLB and glTF: a node is an extension or a combination of extensions, not a
   name in the file. `docbuild/gltfnodes.py` maps each extension `loaders/gltf`
   reads to the nodes it produces (`KHR_materials_clearcoat` to

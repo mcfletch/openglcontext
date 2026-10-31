@@ -1,10 +1,11 @@
 """Which files use a scenegraph node.
 
 The API page of a node class ends with the files that instantiate that node:
-Python that imports it from the engine, X3D XML documents with an element of its
-name, and ClassicVRML or VRML97 documents with a node of its name.  Each is
-found by reading the file's syntax -- ``ast``, ``expat`` and a small lexer for
-the VRML encodings -- so a node named in a comment or a string does not count.
+Python that imports it from the engine, and X3D or VRML97 documents (XML,
+ClassicVRML, JSON and binary) that instantiate it.  Python is read with
+``ast``; a document is read by PyOpenGL's own ``vrml.x3d`` readers, so what
+counts as a node is what the loader counts -- not a ``ROUTE``, not a name in a
+comment or a string.
 
     index = build(workspace_root())
     index.uses('Box')        # [FileUse, ...] in the order a page lists them
@@ -27,7 +28,10 @@ import os
 import re
 import warnings
 from collections.abc import Callable, Collection, Iterator
-from xml.parsers import expat
+from typing import Any
+
+from vrml.x3d import readers
+from vrml.x3d.builder import SceneBuilder
 
 __all__ = [
     'FileUse',
@@ -36,10 +40,9 @@ __all__ = [
     'class_sections',
     'node_name',
     'node_names',
-    'scan_classic',
+    'scan_document',
     'scan_file',
     'scan_python',
-    'scan_x3d',
     'section',
     'workspace_root',
 ]
@@ -90,12 +93,17 @@ def _is_library(parts: list[str]) -> bool:
     return parts[0] in ENGINE_PACKAGES and 'bin' not in parts[:-1]
 
 
-#: The files read, by extension.
+#: The files read, by extension.  JSON is read only as ``.x3dj``: any other
+#: ``.json`` in a project is not an X3D document.
 KINDS = {
     '.py': 'python',
-    '.x3d': 'x3d',
-    '.wrl': 'classic',
-    '.x3dv': 'classic',
+    '.x3d': 'document',
+    '.x3dv': 'document',
+    '.wrl': 'document',
+    '.x3db': 'document',
+    '.x3dj': 'document',
+    '.x3dz': 'document',
+    '.wrz': 'document',
 }
 
 #: Uses listed on a page before the rest are counted.
@@ -113,7 +121,7 @@ class FileUse:
     project: str
     #: The file, relative to its project, with ``/`` separators.
     path: str
-    #: The lines the node appears on, in order.
+    #: The lines the node appears on, in order; none for a binary document.
     lines: tuple[int, ...]
     #: The file on the project's GitHub page, at its first line.
     url: str
@@ -255,68 +263,38 @@ def scan_python(source: str, names: Collection[str]) -> dict[str, list[int]]:
     return {name: sorted(lines) for name, lines in found.items()}
 
 
-def scan_x3d(source: str, names: Collection[str]) -> dict[str, list[int]]:
-    """The lines of an X3D XML document on which an element is one of ``names``.
+class _Recorder(SceneBuilder):
+    """A builder that notes where each node of the names it is given begins."""
 
-    A document that does not parse to its end keeps what was read before the
-    fault.
+    def __init__(self, names: Collection[str]) -> None:
+        super().__init__()
+        self.names = names
+        self.found: dict[str, list[int]] = {}
+
+    def start_node(self, type_name: str, *args: Any, **kwargs: Any) -> Any:
+        if type_name in self.names:
+            self.found.setdefault(type_name, []).append(self.line)
+        return super().start_node(type_name, *args, **kwargs)
+
+
+def scan_document(source: bytes | str, names: Collection[str], name: str = '') -> dict[str, list[int]]:
+    """The lines of an X3D or VRML97 document on which each of ``names`` begins a node.
+
+    ``name`` is the document's file name, which tells its encoding where the
+    content does not.  A binary document has no lines: its entry is a list of
+    zeros, one for each node.  A document that does not read to its end keeps
+    the nodes read before the fault; one that cannot be read at all has none.
     """
-    found: dict[str, list[int]] = {}
-    parser = expat.ParserCreate()
-
-    def start(tag: str, _attributes: object) -> None:
-        if tag in names:
-            found.setdefault(tag, []).append(parser.CurrentLineNumber)
-
-    parser.StartElementHandler = start
+    data = source.encode('utf-8') if isinstance(source, str) else source
     try:
-        parser.Parse(source, True)
-    except expat.ExpatError:
-        pass
-    return found
-
-
-_CLASSIC = re.compile(
-    r"""
-    (?P<comment>\#[^\n]*)
-    | (?P<string>"(?:\\.|[^"\\])*")
-    | (?P<open>\{)
-    | (?P<punctuation>[\[\]},])
-    | (?P<word>[^\s{}\[\],"\#]+)
-    """,
-    re.VERBOSE | re.DOTALL,
-)
-
-
-def scan_classic(source: str, names: Collection[str]) -> dict[str, list[int]]:
-    """The lines of a ClassicVRML or VRML97 document on which one of ``names`` opens a node.
-
-    A node is a word followed by ``{``; comments and strings are skipped, and
-    the word after ``DEF`` is a name for a node rather than the node.
-    """
-    words: list[tuple[str, str, int]] = []
-    line = 1
-    position = 0
-    for match in _CLASSIC.finditer(source):
-        line += source.count('\n', position, match.start())
-        position = match.start()
-        kind = match.lastgroup or ''
-        if kind != 'comment':
-            words.append((kind, match.group(), line))
-    found: dict[str, list[int]] = {}
-    for index, (kind, text, line) in enumerate(words[:-1]):
-        if kind == 'word' and text in names and words[index + 1][0] == 'open':
-            if index and words[index - 1][1] == 'DEF':
-                continue
-            found.setdefault(text, []).append(line)
-    return found
-
-
-_SCANNERS: dict[str, Callable[[str, Collection[str]], dict[str, list[int]]]] = {
-    'python': scan_python,
-    'x3d': scan_x3d,
-    'classic': scan_classic,
-}
+        if data.startswith(readers.GZIP_MAGIC):
+            data = readers.decompress(data)
+        recorder = _Recorder(names)
+        readers.READERS[readers.encoding_of(data, name)](data, recorder, None)
+    except Exception as err:  # noqa: BLE001 a file that will not read as a document is one with no uses to list, whatever the reader raises
+        log.debug('node usage: %s did not read: %s', name or 'document', err)
+        return {}
+    return recorder.found
 
 
 def scan_file(path: str, names: Collection[str]) -> dict[str, list[int]]:
@@ -328,12 +306,14 @@ def scan_file(path: str, names: Collection[str]) -> dict[str, list[int]]:
     if kind is None:
         return {}
     try:
-        with open(path, encoding='utf-8', errors='replace') as handle:
-            source = handle.read()
+        if kind == 'python':
+            with open(path, encoding='utf-8', errors='replace') as handle:
+                return scan_python(handle.read(), names)
+        with open(path, 'rb') as handle:
+            return scan_document(handle.read(), names, path)
     except OSError as err:
         log.warning('node usage: could not read %s: %s', path, err)
         return {}
-    return _SCANNERS[kind](source, names)
 
 
 # --------------------------------------------------------------------------- #
@@ -427,8 +407,8 @@ def build(root: str, names: Collection[str] | None = None) -> Index:
                     FileUse(
                         project=project,
                         path=relative,
-                        lines=tuple(lines),
-                        url='%s/blob/%s/%s#L%d' % (page, BRANCH, relative, lines[0]),
+                        lines=tuple(line for line in lines if line),
+                        url='%s/blob/%s/%s%s' % (page, BRANCH, relative, '#L%d' % lines[0] if lines[0] else ''),
                         rank=rank(relative),
                     ),
                 )
@@ -439,6 +419,8 @@ def build(root: str, names: Collection[str] | None = None) -> Index:
 # Writing a page
 # --------------------------------------------------------------------------- #
 def _lines(lines: tuple[int, ...]) -> str:
+    if not lines:
+        return ''
     named = ', '.join(str(line) for line in lines[:LINES_NAMED])
     if len(lines) > LINES_NAMED:
         named += ', ...'
@@ -467,8 +449,8 @@ def section(node: str, uses: list[FileUse], tutorials: Collection[str]) -> list[
     out = ['.. rubric:: Where this node is used', '']
     for use in uses[:LISTED]:
         out.append(
-            '* `%s: %s <%s>`__ %s%s'
-            % (use.project, use.path, use.url, _lines(use.lines), _walkthrough(use, tutorials))
+            ('* `%s: %s <%s>`__ %s' % (use.project, use.path, use.url, _lines(use.lines))).rstrip()
+            + _walkthrough(use, tutorials)
         )
     rest = len(uses) - LISTED
     if rest > 0:
