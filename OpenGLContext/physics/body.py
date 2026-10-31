@@ -167,6 +167,23 @@ class Body:
             if axis_angle is not None:
                 self._axis_angle = axis_angle
 
+    @property
+    def queryable(self) -> bool:
+        """Whether rays, sweeps and overlaps meet this body; it collides either way.
+
+        False for a body that is scenery to the simulation and nothing to the
+        game's questions about the world, such as a corpse's bones that a shot
+        and a line of sight pass through.
+        """
+        return self.uid not in self.physics._unqueried
+
+    @queryable.setter
+    def queryable(self, value: bool) -> None:
+        if value:
+            self.physics._unqueried.discard(self.uid)
+        elif self.alive:
+            self.physics._unqueried.add(self.uid)
+
     def set_mass(self, mass: float) -> None:
         """Make the body weigh ``mass`` kilograms, with the inertia its shape has at that mass.
 

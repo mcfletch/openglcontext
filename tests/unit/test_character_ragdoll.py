@@ -6,7 +6,7 @@ import pytest
 
 from OpenGLContext.character.mixer import AnimationMixer
 from OpenGLContext.character.ragdoll import (
-    MASS_SHARES, RagdollFigure, RagdollRig, limits_from_hanim, matrix_quaternions,
+    MASS_SHARES, RagdollBudget, RagdollFigure, RagdollRig, limits_from_hanim, matrix_quaternions,
 )
 from OpenGLContext.character.rig import Rig, quat_to_matrices
 from OpenGLContext.loaders.gltf.animation import Skin
@@ -45,11 +45,12 @@ JOINTS = [
 BONES = {name: node for node, name, _parent, _move in JOINTS if name != 'Armature'}
 
 
-def figure(scale: float = 1.0, skin_radius: float | None = None):
+def figure(scale: float = 1.0, skin_radius: float | None = None, held: bool = False):
     """A mixer over the standing figure, in a document of ``scale`` metres a unit.
 
     With ``skin_radius`` the forearms carry a skin: a ring of vertices that
-    radius (metres) around each, weighted to the forearm joint.
+    radius (metres) around each, weighted to the forearm joint. With ``held``
+    a clip ``hold`` drives every joint's rotation, holding the rest pose.
     """
     transforms = {node: Transform(translation=tuple(v / scale for v in move))
                   for node, _name, _parent, move in JOINTS}
@@ -76,7 +77,14 @@ def figure(scale: float = 1.0, skin_radius: float | None = None):
                        skin_weights=np.tile([1.0, 0, 0, 0], (len(points), 1)))
         inverse = np.array([np.linalg.inv(rest[rig.slot_of[node]]) for node in order])
         skins.append(Skin(order, inverse, 0, [mesh]))
-    return AnimationMixer({}, transforms, skins=skins, rig=rig)
+    clips = {}
+    if held:
+        from OpenGLContext.loaders.gltf import animation as ga
+        clips['hold'] = ga.Animation('hold', [
+            ga.Channel(node, 'rotation', ga.Sampler(
+                np.array([0.0, 1.0]), np.array([[0.0, 0.0, 0.0, 1.0]] * 2), 'LINEAR',
+                is_rotation=True)) for node, _name, _parent, _move in JOINTS])
+    return AnimationMixer(clips, transforms, skins=skins, rig=rig)
 
 
 class Model:
@@ -227,3 +235,140 @@ def test_a_figure_follows_its_animation_then_falls_limp():
         assert not figure_.ragdoll.alive
     finally:
         physics.close()
+
+
+@pytest.fixture
+def floor():
+    physics = Physics(PhysicsDefinition(mode='inline', engine='jolt', tickHz=120.0))
+    physics.add_static(None, proxy=Proxy.box((20.0, 1.0, 20.0)), translation=(0, -0.5, 0))
+    yield physics
+    physics.close()
+
+
+def run(physics, figure_, seconds, dt=1 / 60):
+    for _ in range(int(round(seconds / dt))):
+        figure_.update(dt)
+        physics.frame(dt)
+        figure_.draw()
+
+
+def _waved(mixer):
+    """The rest pose with the left forearm raised: a pose the mixer answers as its own."""
+    pose = mixer.rig.rest_pose()
+    half = math.sqrt(0.5)
+    pose[1][mixer.rig.slot_of[BONES['leftLowerArm']]] = (0.0, 0.0, half, half)
+    mixer.blended_pose = lambda: tuple(part.copy() for part in pose)
+    return pose
+
+
+def test_a_figure_starts_in_its_animations_pose(floor):
+    mixer = figure()
+    pose = _waved(mixer)
+    figure_ = RagdollFigure(floor, Model(mixer), mode='kinematic', placement=(
+        (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2.0, 0.0, 1.0, 1)))
+    positions, _ = figure_.rig.bone_poses(pose)
+    for body, place in zip(figure_.ragdoll.bones, positions, strict=True):
+        assert body.position == pytest.approx(place, abs=1e-6)
+    floor.frame(1 / 60)
+    speeds = [float(np.linalg.norm(body.velocity)) for body in figure_.ragdoll.bones]
+    assert max(speeds) < 1e-3
+
+
+def test_a_knock_down_carries_the_blow_and_settles(floor):
+    mixer = figure(skin_radius=0.04)
+    figure_ = RagdollFigure(floor, Model(mixer), mode='kinematic', queryable=False)
+    run(floor, figure_, 0.1)
+    chest = figure_.ragdoll.bone('chest').position
+    start = figure_.ragdoll.bone('hips').position.copy()
+    figure_.knock_down(impulse=(0.0, 0.0, -120.0), point=chest, blend=0.2)
+    assert figure_.ragdoll.mode.value == 'limp'
+    run(floor, figure_, 1.0)
+    assert not figure_.following
+    moved = figure_.ragdoll.bone('hips').position - start
+    assert moved[2] < -0.2
+    assert floor.raycast((0.0, 3.0, -0.5), (0.0, -1.0, 0.0), 10.0).body not in \
+        figure_.ragdoll.bones
+    run(floor, figure_, 5.0)
+    assert figure_.settled
+
+
+def test_a_knock_down_keeps_the_figures_momentum(floor):
+    figure_ = RagdollFigure(floor, Model(figure()), mode='kinematic')
+    run(floor, figure_, 0.1)
+    start = figure_.ragdoll.bone('hips').position.copy()
+    figure_.knock_down(velocity=(3.0, 0.0, 0.0))
+    run(floor, figure_, 0.5)
+    assert figure_.ragdoll.bone('hips').position[0] - start[0] > 0.4
+
+
+def test_a_settled_figure_skins_once_and_a_removed_one_keeps_its_pose(floor):
+    mixer = figure(skin_radius=0.04)
+    written = []
+    mixer.reskin_from = lambda worlds: written.append(worlds)
+    figure_ = RagdollFigure(floor, Model(mixer), mode='kinematic')
+    figure_.knock_down()
+    run(floor, figure_, 6.0)
+    assert figure_.settled
+    count = len(written)
+    run(floor, figure_, 0.5)
+    assert len(written) == count
+    last = figure_.draw()
+    figure_.remove()
+    assert figure_.draw() is last
+    assert len(written) == count
+
+
+def test_the_joints_follow_the_ragdoll_for_what_hangs_on_them(floor):
+    mixer = figure(skin_radius=0.04, held=True)
+    mixer.play('hold')
+    figure_ = RagdollFigure(floor, Model(mixer), mode='kinematic')
+    figure_.knock_down(impulse=(40.0, 0.0, 0.0), point=figure_.ragdoll.bone('head').position)
+    run(floor, figure_, 1.0)
+    worlds = figure_.draw()
+    rig = mixer.rig
+    composed = rig.world_matrices(*_transform_pose(rig))
+    hand = rig.slot_of[BONES['leftHand']]
+    assert composed[hand][3, :3] == pytest.approx(worlds[hand][3, :3], abs=1e-5)
+    assert composed[hand][:3, :3] == pytest.approx(worlds[hand][:3, :3], abs=1e-5)
+
+
+def _transform_pose(rig):
+    """The pose the joints' Transforms hold now, as the rig's arrays."""
+    translation = np.array([list(x.translation) for x in rig.transforms], dtype='d')
+    rotation = np.array([_axis_angle_quaternion(x.rotation) for x in rig.transforms])
+    scale = np.array([list(x.scale) for x in rig.transforms], dtype='d')
+    return translation, rotation, scale
+
+
+class Doll:
+    """What RagdollBudget asks of a figure."""
+
+    def __init__(self, name):
+        self.name = name
+        self.removed = False
+
+    def remove(self):
+        self.removed = True
+
+
+def test_a_budget_freezes_the_oldest_figures_past_its_limit():
+    budget = RagdollBudget(2)
+    a, b, c = Doll('a'), Doll('b'), Doll('c')
+    assert budget.admit(a) == [] and budget.admit(b) == []
+    assert budget.admit(c) == [a]
+    assert a.removed and not b.removed and budget.figures == (b, c)
+    budget.release(b)
+    assert budget.figures == (c,) and not b.removed
+    budget.limit = 0
+    assert c.removed and len(budget) == 0
+    d = Doll('d')
+    assert budget.admit(d) == [d] and d.removed
+    with pytest.raises(ValueError):
+        budget.limit = -1
+
+
+def _axis_angle_quaternion(rotation):
+    x, y, z, angle = (float(v) for v in rotation)
+    length = math.sqrt(x * x + y * y + z * z) or 1.0
+    s = math.sin(angle / 2.0) / length
+    return (x * s, y * s, z * s, math.cos(angle / 2.0))

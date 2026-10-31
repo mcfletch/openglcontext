@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.types import Poses
 
 __all__ = ['Ragdoll', 'RagdollBone', 'RagdollMode', 'RagdollSpec', 'forward_kinematics',
-           'quat_conjugate', 'quat_multiply', 'quat_rotate']
+           'pose_rows', 'quat_conjugate', 'quat_multiply', 'quat_rotate']
 
 Vector = tuple[float, float, float]
 Quaternion = tuple[float, float, float, float]
@@ -398,8 +398,8 @@ class Ragdoll:
         frame, None keeps it. A held pose serves while no clip plays.
         """
         count = len(self.bones)
-        turns = None if rotations is None else _rows(rotations, count, 4, 'rotations')
-        moves = None if translations is None else _rows(translations, count, 3, 'translations')
+        turns = None if rotations is None else pose_rows(rotations, count, 4, 'rotations')
+        moves = None if translations is None else pose_rows(translations, count, 3, 'translations')
         self.physics._ragdoll_command(self, 'ragdoll_pose', turns, moves,
                                       _optional(position, 3, 'position'),
                                       _optional(rotation, 4, 'rotation'))
@@ -443,6 +443,18 @@ class Ragdoll:
         body = self.bones[self._index(bone)]
         body.apply_impulse(impulse, point)
 
+    def push(self, velocity: Any) -> None:
+        """Add ``velocity`` (m/s) to every bone: an impulse of each bone's mass times it.
+
+        The whole figure is thrown alike, as a blast or the speed it was
+        running at throws it, and its joints carry no load from it.
+        """
+        change = np.asarray(_vector(velocity), dtype='d')
+        if not np.isfinite(change).all():
+            raise ValueError('velocity is three finite numbers, not %r' % (velocity,))
+        for bone, body in zip(self.spec.bones, self.bones, strict=True):
+            body.apply_impulse(tuple(change * bone.mass))
+
     def remove(self) -> None:
         """Take the ragdoll and its bones out of the world. Removing twice is harmless."""
         self.physics._remove_ragdoll(self)
@@ -451,6 +463,23 @@ class Ragdoll:
     def poses(self, interpolated: bool = True) -> Poses:
         """Every bone's pose, a row a bone in bone order; see :meth:`Physics.poses`."""
         return self.physics.poses(self.bones, interpolated)
+
+    def nearest_bone(self, point: Any) -> int:
+        """The index of the bone whose capsule surface is nearest the world ``point``.
+
+        Where a shot met a figure's hitbox, this is the bone the blow lands on.
+        """
+        where = np.asarray(_vector(point), dtype='d')
+        poses = self.poses()
+        axes = np.array([bone.axis for bone in self.spec.bones], dtype='d')
+        lengths = np.array([bone.length for bone in self.spec.bones], dtype='d')
+        radii = np.array([bone.radius for bone in self.spec.bones], dtype='d')
+        starts = np.asarray(poses.position, dtype='d')
+        directions = quat_rotate(np.asarray(poses.orientation, dtype='d'), axes)
+        along = np.clip(np.einsum('ij,ij->i', where - starts, directions), 0.0, lengths)
+        closest = starts + along[:, None] * directions
+        gaps = np.linalg.norm(where - closest, axis=1) - radii
+        return int(np.argmin(gaps))
 
 
 # -- quaternions (x, y, z, w), on rows ----------------------------------------
@@ -523,7 +552,8 @@ def _seconds(value: float, name: str) -> float:
     return seconds
 
 
-def _rows(values: Any, count: int, width: int, name: str) -> np.ndarray:
+def pose_rows(values: Any, count: int, width: int, name: str) -> np.ndarray:
+    """``values`` as ``count`` finite rows of ``width``, contiguous float64; ValueError otherwise."""
     array = np.asarray(values, dtype='d')
     if array.size != count * width:
         raise ValueError('%s has %d rows of %d for the %d bones, not shape %s'

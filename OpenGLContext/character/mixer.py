@@ -45,7 +45,7 @@ from typing import Any, Optional
 import numpy as np
 
 from OpenGLContext.character.clip import ClipSampler
-from OpenGLContext.character.rig import Rig
+from OpenGLContext.character.rig import Rig, matrix_quaternions
 from OpenGLContext.loaders.gltf.animation import (
     Animation, quat_conjugate_rows, quat_multiply, quat_multiply_rows,
     quat_normalize, quat_slerp, quat_slerp_rows, quat_xyzw_to_vrml_rows,
@@ -663,6 +663,32 @@ class AnimationMixer:
                 self._skin_plans, self.joint_matrices_from(worlds), strict=True):
             for mesh in skin.meshes:
                 mesh.set_skin_matrices(mats)
+
+    def write_joints_from(self, worlds: np.ndarray) -> None:
+        """Put :meth:`writable_slots`' joints on their Transforms from rig-slot world matrices.
+
+        What hangs on a joint the clips drive (an attachment, a camera, a
+        light) then follows a skeleton posed by something other than the
+        clips, as the skins do through :meth:`reskin_from`. A joint no clip
+        drives is left alone: :meth:`pose` reads its rest back from its
+        Transform.
+        """
+        slots = self.writable_slots()
+        if not len(slots):
+            return
+        worlds = np.asarray(worlds, dtype='d')
+        parents = self.rig.parent[slots]
+        local = worlds[slots].copy()
+        under = parents >= 0
+        if under.any():
+            local[under] = worlds[slots[under]] @ np.linalg.inv(worlds[parents[under]])
+        scales = np.linalg.norm(local[:, :3, :3], axis=2)
+        turns = local[:, :3, :3] / np.maximum(scales[:, :, None], 1e-12)
+        translations = local[:, 3, :3].tolist()
+        rotations = quat_xyzw_to_vrml_rows(matrix_quaternions(turns)).tolist()
+        for slot, translation, rotation, scale in zip(
+                slots.tolist(), translations, rotations, scales.tolist(), strict=True):
+            self._write_slot(int(slot), translation, rotation, scale)
 
     def joint_matrices_from(self, worlds: np.ndarray) -> list[np.ndarray]:
         """The ``(J, 4, 4)`` joint-matrix stack of each skin for rig-slot world matrices ``worlds``."""

@@ -27,7 +27,7 @@ import numpy as np
 
 from OpenGLContext.loaders.gltf.animation import vrml_to_quat_xyzw
 
-__all__ = ['Rig', 'quat_to_matrices', 'compose_local']
+__all__ = ['Rig', 'quat_to_matrices', 'matrix_quaternions', 'compose_local']
 
 #: Translation, rotation and scale for every slot of a rig.
 Pose = tuple[np.ndarray, np.ndarray, np.ndarray]
@@ -59,6 +59,37 @@ def quat_to_matrices(quaternions: np.ndarray) -> np.ndarray:
     out[:, 0, 2] = 2.0 * (xz - wy)
     out[:, 1, 2] = 2.0 * (yz + wx)
     out[:, 2, 2] = 1.0 - 2.0 * (xx + yy)
+    return out
+
+
+def matrix_quaternions(rows: np.ndarray) -> np.ndarray:
+    """``(N, 4)`` unit quaternions ``(x, y, z, w)`` of ``(N, 3, 3)`` row-vector matrices.
+
+    The inverse of :func:`quat_to_matrices`. Scale is divided out of each row
+    first, so a world matrix of a scaled document gives the rotation alone.
+    Each matrix is read from the largest of its trace and diagonal terms
+    (Shepperd's method), so half turns come back as exactly as small ones.
+    """
+    m = np.asarray(rows, dtype='d').reshape(-1, 3, 3)
+    m = m / np.maximum(np.linalg.norm(m, axis=2, keepdims=True), 1e-12)
+    a = np.transpose(m, (0, 2, 1))          # the column-vector matrices
+    d0, d1, d2 = a[:, 0, 0], a[:, 1, 1], a[:, 2, 2]
+    case = np.argmax(np.stack([d0 + d1 + d2, d0, d1, d2], axis=1), axis=1)
+    out = np.empty((len(a), 4))
+    s = 2.0 * np.sqrt(np.maximum(np.choose(case, [1.0 + d0 + d1 + d2, 1.0 + d0 - d1 - d2,
+                                                  1.0 - d0 + d1 - d2, 1.0 - d0 - d1 + d2]),
+                                 1e-300))
+    xy, xz, yz = a[:, 0, 1] + a[:, 1, 0], a[:, 0, 2] + a[:, 2, 0], a[:, 1, 2] + a[:, 2, 1]
+    wx, wy, wz = a[:, 2, 1] - a[:, 1, 2], a[:, 0, 2] - a[:, 2, 0], a[:, 1, 0] - a[:, 0, 1]
+    quarter = 0.25 * s
+    for which, (x, y, z, w) in enumerate((
+            (wx / s, wy / s, wz / s, quarter),
+            (quarter, xy / s, xz / s, wx / s),
+            (xy / s, quarter, yz / s, wy / s),
+            (xz / s, yz / s, quarter, wz / s))):
+        chosen = case == which
+        out[chosen] = np.stack([x, y, z, w], axis=1)[chosen]
+    out /= np.linalg.norm(out, axis=1, keepdims=True)
     return out
 
 

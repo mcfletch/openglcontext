@@ -1090,6 +1090,15 @@ class PBRMesh(x3d.X3DGeometryNode):
         self._skin_from_gpu = True
         return palette.reserve(self, joints)
 
+    def release_skin_palette(self) -> None:
+        """End a compute shader's claim on this mesh's palette range.
+
+        From the next frame the mesh draws the matrices :meth:`set_skin_matrices`
+        gives it, as a figure posed on its own does.
+        """
+        self._skin_from_gpu = False
+        self._uploaded_skin_version = -1
+
     def skin_claim(self, mode: Any) -> Optional[tuple]:
         """``(base, matrices)`` for this mesh, or None if it is not skinned here.
 

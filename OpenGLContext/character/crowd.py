@@ -117,11 +117,18 @@ class Crowd:
         return member
 
     def remove(self, figure: Any) -> None:
-        """Take a figure out of the crowd; it poses on its own again."""
+        """Take a figure out of the crowd; it poses on its own again.
+
+        Its meshes draw the matrices they are given from then on, whatever a
+        compute shader last wrote into their palette ranges.
+        """
         mixer = getattr(figure, 'mixer', figure)
         member = self._by_mixer.pop(mixer, None)
         if member is not None:
             self.members.remove(member)
+            for skin, _slots, _bind, _mesh in mixer._skin_plans:
+                for mesh in skin.meshes:
+                    mesh.release_skin_palette()
         if not self.members:
             self._layout = None
 

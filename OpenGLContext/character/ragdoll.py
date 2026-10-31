@@ -22,7 +22,12 @@ model drawn where it was loaded.
 :class:`RagdollFigure` is the per-frame part: it sends the animation's pose
 to the ragdoll as its target (one batch a frame) while the figure follows the
 animation, and writes the ragdoll's bone poses back into the skins' joint
-matrices, one bulk read a frame.
+matrices and the joints something hangs on, one bulk read a frame.
+:meth:`RagdollFigure.knock_down` is a death: the blow, the figure's own
+momentum, and the motors fading to limp.
+
+:class:`RagdollBudget` caps how many figures a game keeps simulated, the
+oldest frozen in the pose it reached when a new one comes in.
 """
 from __future__ import annotations
 
@@ -33,6 +38,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from OpenGLContext.character.humanoid import BONE_PARENT
+from OpenGLContext.character.rig import matrix_quaternions
 from OpenGLContext.physics.ragdolls import (
     HUMANOID_LIMITS, RagdollBone, RagdollMode, RagdollSpec, apply_limits, quat_conjugate,
     quat_multiply, quat_rotate,
@@ -44,8 +50,8 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.ragdolls import Ragdoll
     from OpenGLContext.physics.service import Physics
 
-__all__ = ['DEFAULT_BONES', 'ROLES', 'RagdollFigure', 'RagdollRig', 'limits_from_hanim',
-           'matrix_quaternions']
+__all__ = ['DEFAULT_BONES', 'ROLES', 'RagdollBudget', 'RagdollFigure', 'RagdollRig',
+           'limits_from_hanim', 'matrix_quaternions']
 
 #: The humanoid bones a ragdoll is made of where the model has them, parents first.
 DEFAULT_BONES: tuple[str, ...] = (
@@ -239,20 +245,31 @@ class RagdollRig:
 class RagdollFigure:
     """A character model whose skeleton a ragdoll drives.
 
-    While :attr:`following`, :meth:`update` advances the model's animation
-    and sends its pose to the ragdoll as the target; the ragdoll's mode says
-    how the bones meet it (kinematic: exactly; powered: by motors; limp: not
-    at all). :meth:`draw` writes the ragdoll's bones into the skins once a
-    frame. The model's own ``update`` is not called while a figure drives it.
+    The ragdoll starts standing in the animation's pose at the moment the
+    figure is made. While :attr:`following`, :meth:`update` advances the
+    model's animation and sends its pose to the ragdoll as the target; the
+    ragdoll's mode says how the bones meet it (kinematic: exactly; powered: by
+    motors; limp: not at all). :meth:`draw` writes the ragdoll's bones into the
+    skins once a frame. The model's own ``update`` is not called while a
+    figure drives it, nor while it is in a
+    :class:`~OpenGLContext.character.crowd.Crowd`.
+
+    ``rig`` is a :class:`RagdollRig` to share between figures of one
+    document (give each its own ``placement``); without one it is built from
+    ``model`` with ``build``. ``queryable`` False lets rays, sweeps and
+    overlaps pass through the bones (:attr:`~OpenGLContext.physics.body.Body.queryable`).
     """
 
     def __init__(self, physics: Physics, model: Any, rig: RagdollRig | None = None,
                  mode: RagdollMode | str = 'kinematic', placement: Any = None,
-                 collision_filter: Any = None, **build: Any) -> None:
+                 collision_filter: Any = None, queryable: bool = True,
+                 **build: Any) -> None:
         self.physics = physics
         self.model = model
         self.mixer: AnimationMixer = model.mixer
-        if placement is not None:
+        if rig is not None and placement is not None:
+            rig.placement = np.asarray(placement, dtype='d').reshape(4, 4)
+        elif placement is not None:
             build['placement'] = placement
         self.rig = rig if rig is not None else RagdollRig.from_model(model, **build)
         #: Whether :meth:`update` sends the animation's pose as the target.
@@ -260,9 +277,13 @@ class RagdollFigure:
         pose = self.mixer.blended_pose()
         turns, moves = self.rig.targets(pose)
         self.ragdoll: Ragdoll = physics.add_ragdoll(self.rig.spec, mode=mode,
-                                                     collision_filter=collision_filter)
-        self.ragdoll.set_pose(turns, moves)
+                                                     collision_filter=collision_filter,
+                                                     pose=(turns, moves), queryable=queryable)
         self._pose = pose
+        #: Seconds until a knock-down's motors are off and the figure stops following.
+        self._limp_in: float | None = None
+        self._drawn: np.ndarray | None = None
+        self._drawn_settled = False
 
     @property
     def placement(self) -> np.ndarray:
@@ -277,8 +298,47 @@ class RagdollFigure:
         """Change the ragdoll's mode over ``blend`` seconds; see :meth:`Ragdoll.set_mode`."""
         self.ragdoll.set_mode(mode, blend)
 
+    def knock_down(self, impulse: Any = None, point: Any = None, velocity: Any = None,
+                   blend: float = 0.3, bone: int | str | None = None) -> None:
+        """Strike the figure and let it fall: powered at once, limp over ``blend`` seconds.
+
+        ``velocity`` (m/s) is added to every bone, the speed the figure was
+        moving at or a blast's throw. ``impulse`` (N s) lands on ``bone``, or
+        on the bone nearest the world ``point`` (where a shot met the figure),
+        or on the root. The motors fade from full strength to none over the
+        blend while the figure still follows its animation, so a death clip
+        shapes the first moments of the fall; after the blend it stops
+        following.
+        """
+        if self.ragdoll.mode is RagdollMode.KINEMATIC:
+            self.ragdoll.set_mode(RagdollMode.POWERED)
+        if velocity is not None:
+            self.ragdoll.push(velocity)
+        if impulse is not None:
+            which = bone if bone is not None else (
+                self.ragdoll.nearest_bone(point) if point is not None else 0)
+            self.ragdoll.hit(which, impulse, point)
+        self.ragdoll.set_mode(RagdollMode.LIMP, blend)
+        self._limp_in = max(0.0, float(blend))
+        self._drawn_settled = False
+
+    @property
+    def settled(self) -> bool:
+        """Whether every bone is asleep, or the ragdoll is gone."""
+        return not self.ragdoll.alive or all(body.asleep for body in self.ragdoll.bones)
+
     def update(self, dt: float) -> None:
-        """Advance the animation ``dt`` seconds and, while following, send its pose as the target."""
+        """Advance the animation ``dt`` seconds and, while following, send its pose as the target.
+
+        A figure that has stopped following and come to rest costs nothing.
+        """
+        if self._limp_in is not None:
+            self._limp_in -= max(0.0, float(dt))
+            if self._limp_in <= 0.0:
+                self._limp_in = None
+                self.following = False
+        if not self.following and self._drawn_settled:
+            return
         started = time.perf_counter()
         self.mixer.advance(dt)
         self._pose = self.mixer.blended_pose()
@@ -289,17 +349,87 @@ class RagdollFigure:
         self.physics.note_render_cost('ragdolls', time.perf_counter() - started)
 
     def draw(self) -> np.ndarray:
-        """Write the ragdoll's bones into the skins; the rig-slot world matrices written."""
+        """Write the ragdoll's bones into the skins and joints; the rig-slot world matrices.
+
+        Once the bones are asleep, or the ragdoll is removed, the pose last
+        written stands and is returned without being written again.
+        """
+        if self._drawn is not None and (not self.ragdoll.alive
+                                        or (self._drawn_settled and self.settled)):
+            return self._drawn
         started = time.perf_counter()
+        settled = self.settled
         poses = self.ragdoll.poses()
         worlds = self.rig.worlds(poses.position, poses.orientation, self._pose)
         self.mixer.reskin_from(worlds)
+        self.mixer.write_joints_from(worlds)
+        self._drawn, self._drawn_settled = worlds, settled
         self.physics.note_render_cost('ragdolls', time.perf_counter() - started)
         return worlds
 
     def remove(self) -> None:
-        """Take the ragdoll out of the world; the model keeps the last pose it was given."""
+        """Take the ragdoll out of the world; the model keeps the last pose drawn."""
         self.ragdoll.remove()
+
+
+class RagdollBudget:
+    """At most :attr:`limit` figures simulated at once, the oldest frozen past it.
+
+    A figure frozen is removed from the world (:meth:`RagdollFigure.remove`)
+    and keeps the pose it last drew, so a pile of bodies costs the frame no
+    more than ``limit`` ragdolls do. Each ragdoll costs its bones in the world
+    thread's tick and one bulk read a frame until it settles.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self._figures: list[Any] = []
+        self._limit = 0
+        self.limit = limit
+
+    @property
+    def limit(self) -> int:
+        """How many figures stay simulated; 0 freezes every one at once."""
+        return self._limit
+
+    @limit.setter
+    def limit(self, value: int) -> None:
+        count = int(value)
+        if count < 0:
+            raise ValueError('a ragdoll budget is 0 or more figures, not %r' % (value,))
+        self._limit = count
+        self._trim()
+
+    @property
+    def figures(self) -> tuple[Any, ...]:
+        """The figures simulated now, oldest first."""
+        return tuple(self._figures)
+
+    def __len__(self) -> int:
+        return len(self._figures)
+
+    def __contains__(self, figure: Any) -> bool:
+        return any(held is figure for held in self._figures)
+
+    def admit(self, figure: Any) -> list[Any]:
+        """Count ``figure`` in; the figures frozen to make room for it, oldest first.
+
+        With a limit of 0 the figure itself is frozen and returned.
+        """
+        self.release(figure)
+        self._figures.append(figure)
+        return self._trim()
+
+    def release(self, figure: Any) -> None:
+        """Stop counting ``figure``, which its owner has removed or frozen itself."""
+        self._figures = [held for held in self._figures if held is not figure]
+
+    def _trim(self) -> list[Any]:
+        frozen = []
+        while len(self._figures) > self._limit:
+            oldest = self._figures.pop(0)
+            oldest.remove()
+            frozen.append(oldest)
+        return frozen
 
 
 def limits_from_hanim(lower: Any, upper: Any,
@@ -327,40 +457,6 @@ def limits_from_hanim(lower: Any, upper: Any,
 
 
 # -- arithmetic ----------------------------------------------------------------------
-
-def matrix_quaternions(rows: np.ndarray) -> np.ndarray:
-    """``(N, 4)`` unit quaternions ``(x, y, z, w)`` of ``(N, 3, 3)`` row-vector matrices.
-
-    Scale is divided out of each row first, so a world matrix of a scaled
-    document gives the rotation alone.
-    """
-    m = np.asarray(rows, dtype='d').reshape(-1, 3, 3)
-    m = m / np.maximum(np.linalg.norm(m, axis=2, keepdims=True), 1e-12)
-    # The column-vector matrix is the transpose of the row-vector one.
-    r = np.transpose(m, (0, 2, 1))
-    out = np.empty((len(r), 4))
-    trace = r[:, 0, 0] + r[:, 1, 1] + r[:, 2, 2]
-    for i in range(len(r)):
-        a = r[i]
-        if trace[i] > 0.0:
-            s = 2.0 * np.sqrt(trace[i] + 1.0)
-            out[i] = ((a[2, 1] - a[1, 2]) / s, (a[0, 2] - a[2, 0]) / s,
-                      (a[1, 0] - a[0, 1]) / s, 0.25 * s)
-        elif a[0, 0] > a[1, 1] and a[0, 0] > a[2, 2]:
-            s = 2.0 * np.sqrt(1.0 + a[0, 0] - a[1, 1] - a[2, 2])
-            out[i] = (0.25 * s, (a[0, 1] + a[1, 0]) / s, (a[0, 2] + a[2, 0]) / s,
-                      (a[2, 1] - a[1, 2]) / s)
-        elif a[1, 1] > a[2, 2]:
-            s = 2.0 * np.sqrt(1.0 + a[1, 1] - a[0, 0] - a[2, 2])
-            out[i] = ((a[0, 1] + a[1, 0]) / s, 0.25 * s, (a[1, 2] + a[2, 1]) / s,
-                      (a[0, 2] - a[2, 0]) / s)
-        else:
-            s = 2.0 * np.sqrt(1.0 + a[2, 2] - a[0, 0] - a[1, 1])
-            out[i] = ((a[0, 2] + a[2, 0]) / s, (a[1, 2] + a[2, 1]) / s, 0.25 * s,
-                      (a[1, 0] - a[0, 1]) / s)
-    out /= np.linalg.norm(out, axis=1, keepdims=True)
-    return out
-
 
 def quat_to_row_matrices(quaternions: np.ndarray) -> np.ndarray:
     """``(N, 3, 3)`` row-vector rotation matrices of unit quaternions ``(x, y, z, w)``."""

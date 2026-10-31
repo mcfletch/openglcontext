@@ -48,7 +48,9 @@ from OpenGLContext.physics.joints import READINGS, Joint, make_joint
 from OpenGLContext.physics.materials import Materials
 from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_poses
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
-from OpenGLContext.physics.ragdolls import Ragdoll, RagdollMode, RagdollSpec, forward_kinematics
+from OpenGLContext.physics.ragdolls import (
+    Ragdoll, RagdollMode, RagdollSpec, forward_kinematics, pose_rows,
+)
 from OpenGLContext.physics.records import (
     BodyBatch, BodySpec, Command, Motion, PhysicsEvent, Snapshot, Step,
 )
@@ -171,6 +173,8 @@ class Physics:
         self._ragdoll_ids = itertools.count(1)
         #: The ragdoll each bone belongs to, by the bone's uid.
         self._ragdoll_of: dict[int, Ragdoll] = {}
+        #: The uids of bodies rays, sweeps and overlaps pass through (:attr:`Body.queryable`).
+        self._unqueried: set[int] = set()
         #: Render-thread seconds spent posing ragdolls and uploading soft bodies, and the
         #: frames they were spent over, since :meth:`deformable_costs` last read them.
         self._render_costs: dict[str, float] = {'ragdolls': 0.0, 'soft bodies': 0.0}
@@ -1027,17 +1031,22 @@ class Physics:
 
     def add_ragdoll(self, spec: RagdollSpec, position: Any = (0.0, 0.0, 0.0),
                     rotation: Any = (0.0, 0.0, 0.0, 1.0), mode: RagdollMode | str = 'limp',
-                    collision_filter: Any = None) -> Ragdoll:
-        """Put a ragdoll in the world, standing in its rest pose, and return its handle.
+                    collision_filter: Any = None, pose: Any = None,
+                    queryable: bool = True) -> Ragdoll:
+        """Put a ragdoll in the world, standing in its rest pose or ``pose``, and return its handle.
 
         ``position`` and ``rotation`` (a quaternion ``(x, y, z, w)``) place the
         ragdoll's frame, which the root bone's translation is in. ``mode`` is
         a :class:`~OpenGLContext.physics.ragdolls.RagdollMode` or its name.
         ``collision_filter`` is a filter's name or definition, as the ``add_*``
-        calls take one. The bones are bodies (:attr:`Ragdoll.bones`) from the
-        call on; the world holds them from the next tick. Raises
-        :class:`~OpenGLContext.physics.engine.EngineUnavailable` on an engine
-        without ragdolls.
+        calls take one. ``pose`` is ``(rotations, translations)`` as
+        :meth:`Ragdoll.set_pose` takes them: the bones start there at rest and
+        it is the held target, while the joints' limits stay those of the
+        spec's rest pose. With ``queryable`` False rays, sweeps and overlaps
+        pass through the bones (:attr:`Body.queryable`). The bones are bodies
+        (:attr:`Ragdoll.bones`) from the call on; the world holds them from the
+        next tick. Raises :class:`~OpenGLContext.physics.engine.EngineUnavailable`
+        on an engine without ragdolls.
         """
         self._require('ragdolls')
         if not isinstance(spec, RagdollSpec):
@@ -1048,7 +1057,10 @@ class Physics:
         if not (np.isfinite(turn).all() and np.linalg.norm(turn) > 0.0):
             raise ValueError('rotation is a quaternion of finite, non-zero length')
         turn = turn / np.linalg.norm(turn)
-        places, turns = forward_kinematics(spec, position=place, rotation=turn)
+        held = None if pose is None else (pose_rows(pose[0], len(spec), 4, 'rotations'),
+                                          pose_rows(pose[1], len(spec), 3, 'translations'))
+        places, turns = forward_kinematics(spec, *(held or (None, None)), position=place,
+                                           rotation=turn)
         bones = []
         for row, bone in enumerate(spec.bones):
             uid = next(self._uids)
@@ -1069,6 +1081,14 @@ class Physics:
                 tuple(float(v) for v in turn), made_mode,
                 self.filters.index(collision_filter)), next(self._seq)))
             self._ensure_started()
+        if held is not None:
+            # The world builds the bones at rest; they are put in the pose before its next tick.
+            for body, at, facing in zip(bones, places, turns, strict=True):
+                body.set_transform(at, quat_to_vrml_rotation(facing))
+            ragdoll.set_pose(held[0], held[1])
+        if not queryable:
+            for body in bones:
+                body.queryable = False
         return ragdoll
 
     @property
@@ -1281,6 +1301,7 @@ class Physics:
         if body.derived:
             self.scenery.release(body.node)
         self._bodies.pop(body.uid, None)
+        self._unqueried.discard(body.uid)
         if body.node is not None and self._by_node.get(body.node) is body:
             del self._by_node[body.node]
         if body in self._movers:
@@ -1886,12 +1907,13 @@ class Physics:
                     character._bring_up()
                     break
 
-    @staticmethod
-    def _skipped(skip: Any) -> set[int]:
-        if skip is None:
-            return set()
-        bodies = [skip] if isinstance(skip, Body) else list(skip)
-        return {body.uid for body in bodies}
+    def _skipped(self, skip: Any) -> set[int]:
+        """The uids a query passes through: ``skip``'s and every body that is not queryable."""
+        skipped = set(self._unqueried)
+        if skip is not None:
+            bodies = [skip] if isinstance(skip, Body) else list(skip)
+            skipped.update(body.uid for body in bodies)
+        return skipped
 
     def raycast(self, origin: Any, direction: Any, max_distance: float = 100.0,
                 skip: Any = None) -> Hit | None:

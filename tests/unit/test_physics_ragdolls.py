@@ -233,6 +233,65 @@ def test_a_ray_names_the_bone_it_hits(world):
     assert hit is not None and hit.body is ragdoll.bone('head')
 
 
+def _bent(spec: RagdollSpec) -> tuple[np.ndarray, np.ndarray]:
+    """The rest pose with both knees bent a right angle."""
+    turns = spec.rest_rotations()
+    half = math.sqrt(0.5)
+    for name in ('shin_l', 'shin_r'):
+        turns[spec.index(name)] = quat_multiply(turns[spec.index(name)], (half, 0.0, 0.0, half))
+    return turns, spec.rest_translations()
+
+
+def test_a_ragdoll_starts_in_the_pose_it_is_given(world):
+    spec = RagdollSpec.humanoid()
+    turns, moves = _bent(spec)
+    places, _orientations = forward_kinematics(spec, turns, moves, position=(3.0, 0.5, 0.0))
+    ragdoll = world.add_ragdoll(spec, position=(3.0, 0.5, 0.0), mode='kinematic',
+                                pose=(turns, moves))
+    for body, place in zip(ragdoll.bones, places, strict=True):
+        assert body.position == pytest.approx(place, abs=1e-9)
+    run_for(world, 0.05)
+    poses = ragdoll.poses(interpolated=False)
+    assert poses.position == pytest.approx(places, abs=1e-4)
+    assert max(float(np.linalg.norm(body.velocity)) for body in ragdoll.bones) < 1e-3
+
+
+def test_rays_pass_through_a_ragdoll_that_is_not_queryable(world):
+    ragdoll = world.add_ragdoll(RagdollSpec.humanoid(), mode='kinematic', queryable=False)
+    run_for(world, 0.1)
+    assert world.raycast((0.0, 1.78, -3.0), (0.0, 0.0, 1.0), 10.0) is None
+    assert world.line_of_sight((0.0, 1.0, -3.0), (0.0, 1.0, 3.0))
+    head = ragdoll.bone('head')
+    assert not head.queryable
+    head.queryable = True
+    hit = world.raycast((0.0, 1.78, -3.0), (0.0, 0.0, 1.0), 10.0)
+    assert hit is not None and hit.body is head
+    ragdoll.remove()
+    assert not world._unqueried
+
+
+def test_the_nearest_bone_is_the_capsule_closest_to_a_point(world):
+    spec = RagdollSpec.humanoid()
+    ragdoll = world.add_ragdoll(spec, position=(2.0, 0.0, 0.0), mode='kinematic')
+    run_for(world, 0.05)
+    assert spec.names[ragdoll.nearest_bone((2.0, 1.85, 0.3))] == 'head'
+    assert spec.names[ragdoll.nearest_bone((2.1, 0.02, 0.1))].startswith('shin')
+
+
+def test_a_push_gives_every_bone_the_velocity():
+    physics = make(gravity=(0.0, 0.0, 0.0))
+    try:
+        ragdoll = physics.add_ragdoll(RagdollSpec.humanoid(), position=(0.0, 5.0, 0.0),
+                                      mode='limp')
+        run_for(physics, 0.05)
+        ragdoll.push((2.0, 0.0, -1.0))
+        run_for(physics, 0.1)
+        for body in ragdoll.bones:
+            assert body.velocity == pytest.approx((2.0, 0.0, -1.0), abs=0.05)
+    finally:
+        physics.close()
+
+
 def test_the_costs_name_the_ragdolls(world):
     world.add_ragdoll(RagdollSpec.humanoid(), mode='powered')
     run_for(world, 0.5)
