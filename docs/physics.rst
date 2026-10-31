@@ -597,6 +597,125 @@ velocity. The pressure
 plate of ``oglc-physics-events`` is an ``add_trigger`` body whose ``enter`` and
 ``exit`` handlers keep the set of what is on it, which the door's pose reads.
 
+.. _physics-ragdolls:
+
+Ragdolls
+--------
+
+A ragdoll is a skeleton of capsule bodies joined by swing-twist joints.
+``physics.add_ragdoll(spec, position, rotation, mode)`` puts one in the world
+and returns a ``Ragdoll`` (``OpenGLContext.physics.ragdolls``). The Jolt
+engine has ragdolls; the omi engine raises ``EngineUnavailable``.
+
+.. code-block:: python
+
+   from OpenGLContext.physics.ragdolls import RagdollSpec
+
+   spec = RagdollSpec.humanoid(height=1.8, mass=70.0, root_force=4000.0, root_torque=1500.0)
+   doll = physics.add_ragdoll(spec, position=(0, 0, 0), mode='powered')
+   doll.hit('chest', (40.0, 0.0, 0.0))        # N s, at the bone's centre of mass
+   doll.set_mode('limp', blend=0.3)           # the motors let go over 0.3 s
+   poses = doll.poses()                       # every bone at once, as the frame draws them
+
+A ``RagdollSpec`` lists ``RagdollBone`` records parents first: each bone's
+rest ``translation`` and ``rotation`` in its parent joint's frame (the root's
+in the ragdoll's frame), a capsule of ``radius`` running ``length`` metres
+along ``axis``, a ``mass`` in kg, the joint's ``twist`` (min, max) and
+``swing`` half angles in radians with an optional ``bend`` of the cone, a
+motor ``strength`` (N m) and joint ``friction`` (N m).
+``RagdollSpec.from_skeleton`` builds capsule bones from a skeleton's rest
+pose; ``RagdollSpec.humanoid`` is an 11-bone figure; ``as_dict`` and
+``from_dict`` read and write it as plain data. For a rigged character,
+:ref:`characters-ragdoll` builds the spec from the model.
+
+The modes:
+
+- kinematic - the bones follow the pose target exactly; blows do not move them.
+- powered - motors of each bone's ``strength`` turn it towards the target, and
+  a spring of ``root_force`` (N) and ``root_torque`` (N m) holds the root to
+  its target; with both 0 the ragdoll keeps its pose and falls over.
+- limp - no motors.
+
+``set_mode(mode, blend)`` changes mode over ``blend`` seconds: into powered or
+limp the motors' strength ramps, and into kinematic the bones move from where
+they lie to the target, which is a get-up. The target is a held pose
+(``set_pose(rotations, translations, position, rotation)``, each joint's
+rotation (B, 4) and translation (B, 3) in its parent's frame) or a clip
+(``play(times, rotations, translations, loop)``), evaluated on the world
+thread every tick; ``place(position, rotation)`` moves the ragdoll's frame.
+``set_strength`` sets each bone's torque limit, so one arm can swing free.
+
+Each bone is a ``Body`` (``doll.bones``, ``doll.bone('head')``): handlers,
+joints, rays and ``physics.ragdoll_of(body)`` name it as they name any body.
+A bone is removed with its ragdoll (``doll.remove()``);
+``physics.remove(bone)`` raises ``ValueError``. Limits: balance is the root
+spring and nothing computes it from the feet; a ragdoll's mode, targets and
+clips are not in ``save_state``.
+
+.. _physics-softbodies:
+
+Soft bodies and cloth
+---------------------
+
+A soft body is particles held by edge, shear, bend and volume constraints:
+cloth, a rope, a pressure ball. ``physics.add_soft_body(spec, position,
+rotation, pins)`` returns a ``SoftBody`` (``OpenGLContext.physics.softbodies``);
+``physics.add_soft_mesh(mesh, ...)`` makes one of a mesh's triangles and keeps
+the mesh drawn where the simulation puts it.
+
+.. code-block:: python
+
+   from OpenGLContext.physics.softbodies import SoftBodySpec
+
+   cloth = SoftBodySpec.cloth(1.0, 1.0, columns=21, rows=21, mass=0.5)
+   a, b, _, _ = cloth.corner_indices()
+   soft = physics.add_soft_body(cloth, position=(0, 2, 0),
+                                pins=([a, b], cloth.positions[[a, b]] + (0, 2, 0)))
+   soft.set_wind((3.0, 0.0, 0.0))     # newtons, shared among the vertices each step
+   frame = soft.frame()               # version, origin, positions, normals
+
+   flag = physics.add_soft_mesh(shape, position=(0, 2, 0), pins=(edge, points), mass=0.4)
+
+``SoftBodySpec`` fields, all optional but the positions: ``faces`` (F, 3) or
+``edges`` (E, 2) with ``edge_compliance``; ``tetrahedra``; ``mass`` (kg,
+shared) or ``masses`` per vertex (0 pins a vertex where it is placed);
+``compliance``, ``shear_compliance`` and ``bend_compliance`` (m/N; 0 is
+rigid, and the default bend constraints of 0.01 keep a fine cloth whole when
+it meets a surface); ``bend`` (``'distance'``, ``'dihedral'`` or ``'none'``);
+``volume_compliance`` and ``pressure`` (Pa m3) for a closed surface;
+``long_range`` attachments; ``iterations`` (None takes enough for the
+shortest edge); ``linear_damping`` (1/s), ``friction``, ``restitution``,
+``gravity_factor``, ``vertex_radius`` (m), ``allow_sleep`` and
+``double_sided``. The builders are ``cloth``, ``rope``, ``ball`` and
+``from_mesh``.
+
+Pins hold vertices at world points or at points in another body's frame
+(``pin_bodies``), and change at run time with ``pin`` and ``unpin``; a pin
+does not pull on its body. A soft body meets rigid bodies by the collision
+filters; soft bodies do not collide with each other, and their contacts make
+no events. A pinned cloth does not sleep.
+
+``add_soft_mesh`` takes a ``PBRMesh`` or a ``Shape`` drawing one, welds its
+vertices by position (a glTF mesh splits them at texture seams) and writes
+the particles and their normals back into the mesh's arrays each frame the
+body's ``version`` moves; the vertex buffers are written in place, so a
+still cloth costs no upload. The mesh is placed by its ``origin``, so its
+``Shape`` sits in no ``Transform``. ``pins`` name the mesh's own vertices.
+The X3D ``Cloth`` node and the glTF ``OGLC_hook`` kind ``cloth`` make one
+from a document (:ref:`x3d-cloth-ragdoll`).
+
+``oglc-cloth`` (``OpenGLContext.bin.cloth_demo``) is a banner in a gusting
+wind, a cloth draped over a stone ball and a sheet pinned to a beam;
+``oglc-ragdoll`` (``OpenGLContext.bin.ragdoll_demo``) is a walking figure
+struck, knocked down and stood up again. Their tutorials are
+``tests/tutorials/physics/physics_cloth.py`` and ``physics_ragdoll.py``.
+
+What they cost is on the developer overlay's physics section: for each of
+ragdolls and soft bodies, the count, the world thread's mean milliseconds a
+tick (``ragdolls ms``, ``soft bodies ms``) and the render thread's mean a
+frame posing skins and writing meshes (``draw ms``), from
+``physics.deformable_costs()``.
+
 .. _physics-queries:
 
 Queries

@@ -812,6 +812,61 @@ Building a crowd from one loaded model, without wandering:
    ...
    crowd.update(dt, mode=context)          # once a frame, for all of them
 
+.. _characters-ragdoll:
+
+Ragdolls
+--------
+
+``OpenGLContext.character.ragdoll`` gives a rigged character a ragdoll for a
+skeleton (:ref:`physics-ragdolls` is the physics side).
+
+.. code-block:: python
+
+   from OpenGLContext.character.ragdoll import RagdollFigure
+
+   model = CharacterModel.load(sample_model_url('CesiumMan'))
+   model.play('animation0')
+   figure = RagdollFigure(context.physics, model, mode='powered',
+                          mass=70.0, root_force=6000.0, root_torque=2000.0)
+   context.animate(lambda dt: (figure.update(dt), figure.draw()))
+   ...
+   figure.ragdoll.hit('chest', (0.0, 0.0, -60.0))       # N s
+   figure.following = False
+   figure.set_mode('limp', 0.3)                         # falls over 0.3 s
+   figure.following = True
+   figure.set_mode('kinematic', 1.0)                    # gets up over 1 s
+
+``RagdollRig.from_model(model)`` (or ``RagdollRig.build(mixer, bones)``)
+chooses the bones: ``DEFAULT_BONES`` of the humanoid bone map (hips, spine,
+chest, head, upper and lower arms, hands, thighs, shins and feet) where the
+model has them. Every other joint rides its nearest chosen ancestor at its
+rest offset: fingers, twist joints, a short neck. A joint between two chosen
+bones spanning ``bridge`` metres (0.12) or more becomes a bone too, so an arm
+whose upper joint the bone map does not name still bends at the shoulder; a
+limb chain the names give out of order is put in the hierarchy's order. Each
+capsule runs to the first chosen child; a hand, foot or head runs along the
+skin weighted to it, or to its first child joint. Its radius is the 60th
+percentile of the distances of the skin's vertices from the bone's axis
+(0.02 to 0.25 m). Masses follow each role's share of the body (``MASS_SHARES``,
+Dempster's segment fractions) scaled to ``mass``. Joint limits are
+``HUMANOID_LIMITS`` by role, turned into each joint's frame by the figure's
+left-right axis, or a document's own HAnim Euler limits
+(``limits={'head': (llimit, ulimit)}``, through ``limits_from_hanim``).
+
+The arithmetic is in the world: ``placement`` is the world matrix of the
+document's root, so a document in centimetres or turned Z-up makes a ragdoll
+in metres with Y up. ``RagdollFigure.update(dt)`` advances the mixer
+(``AnimationMixer.advance``) and, while ``following``, sends the blended pose
+(``AnimationMixer.blended_pose``) as the ragdoll's target in one batch.
+``draw()`` reads every bone in one ``physics.poses`` call and writes the skin
+matrices (``AnimationMixer.reskin_from``). A joint's ``Transform`` is not
+written while a ragdoll drives the figure, so something hung on a joint
+stays at the animated pose. The model's own ``update`` is not called while
+a figure drives it.
+
+The X3D ``Ragdoll`` node (:ref:`x3d-cloth-ragdoll`) does the same for a glTF
+character a document names. ``oglc-ragdoll`` is the demo.
+
 .. _characters-skinning:
 
 Where the skinning happens

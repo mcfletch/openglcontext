@@ -95,6 +95,8 @@ OpenGLContext/
 │   ├── x3d_sound_stress.py  # oglc-x3d-sound-stress: a document of many
 │   │                 # sounds, and the frame and block time playing it costs
 │   │                 # -- docs/audio.rst#audio-stress
+│   ├── cloth_demo.py # oglc-cloth: a banner, a drape and a sheet -- docs/physics.rst#physics-softbodies
+│   ├── ragdoll_demo.py  # oglc-ragdoll: a figure knocked down and stood up
 │   └── gait.py       # oglc-gait: the ground speed and foot landings of a
 │                     # model's locomotion clips -- docs/characters.rst#characters-gait-measure
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
@@ -108,6 +110,9 @@ OpenGLContext/
 │   │                 # -- docs/characters.rst#characters-facing
 │   ├── wander.py     # Crowds that walk about on their own: headings, strides,
 │   │                 # run_share between the walk and the run -- no GL
+│   ├── ragdoll.py    # RagdollRig (a rig's bones as a ragdoll, sized from the skin)
+│   │                 # and RagdollFigure (animation to targets, bones to skins)
+│   │                 # -- docs/characters.rst#characters-ragdoll
 │   └── hanim.py      # X3D HAnim's arithmetic: names and levels, skin weights,
 │                     # BVH channels, poses, limits -- no GL -- docs/characters.rst#characters-hanim
 ├── contentpacks/     # Data an application fetches rather than ships: the
@@ -312,6 +317,13 @@ OpenGLContext/
 │   │                 # dynamic chassis on wheels -- no GL -- docs/physics.rst#physics-vehicles
 │   ├── joltvehicles.py  # The Jolt engine's vehicles: one input batch a frame or
 │   │                 # tick, states from the newest snapshot
+│   ├── joltsoft.py   # The Jolt engine's ragdoll and soft-body commands and frames
+│   ├── ragdolls.py   # RagdollSpec, RagdollBone, RagdollMode, Ragdoll: the engine-neutral
+│   │                 # ragdoll and its handle -- docs/physics.rst#physics-ragdolls
+│   ├── softbodies.py # SoftBodySpec, SoftBody, SoftBodyFrame: cloth, ropes, pressure
+│   │                 # balls -- docs/physics.rst#physics-softbodies
+│   ├── softmesh.py   # SoftMesh: a mesh welded and simulated as a soft body, its
+│   │                 # vertices written back by version -- no GL
 │   ├── x3djolt.py    # X3D's RigidBodyPhysics on a pyjoltphysics world, a
 │   │                 # CollisionSensor's touches by Jolt's narrow phase; the
 │   │                 # engine's choice (make_rigid_system, make_sensing) -- docs/x3d.rst
@@ -397,6 +409,8 @@ OpenGLContext/
 │   │                 # graph node -- no GL -- docs/x3d.rst#x3d-sound
 │   ├── x3dsensors.py # X3D's environmental sensors told each frame what they
 │   │                 # sense: the viewer, a target, the views -- no GL
+│   ├── softnodes.py  # The engine's Cloth and Ragdoll nodes (OpenGLContext
+│   │                 # component) and the glTF cloth hook -- docs/x3d.rst#x3d-cloth-ragdoll
 │   ├── x3drigidbody.py  # X3D's RigidBodyCollection and CollisionSensor on the
 │   │                 # engine clock; collidables drawn where they are
 │   ├── layering.py   # X3D's Layering and Layout nodes: LayerSet, Layer,

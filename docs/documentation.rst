@@ -132,6 +132,14 @@ Installing the package puts these commands on your path:
    Demonstrates physics events: crates that thud at any frame rate, two panes
    of glass broken after and before the solve, a hitscan gun and a pressure
    plate that opens a door. See :ref:`Events <physics-events>`.
+``oglc-ragdoll``
+   A walking figure with a ragdoll for a skeleton: struck, it staggers and
+   recovers; knocked down, it falls limp; then it gets up and walks on. See
+   :ref:`Ragdolls <physics-ragdolls>`.
+``oglc-cloth``
+   A banner in a gusting wind, a cloth draped over a stone ball and a sheet
+   pinned to a beam that a thrown ball strikes. See
+   :ref:`Soft bodies and cloth <physics-softbodies>`.
 ``oglc-zones``
    Two rooms off a courtyard, each a zone: one shaded and lit by its own warm
    lamp, one lit by a probe captured inside it and a cool lamp, and a statue

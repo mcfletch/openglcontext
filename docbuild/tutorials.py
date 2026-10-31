@@ -178,6 +178,8 @@ PATHS = [
             'physics_friction',
             'using_collisions',
             'physics_joints',
+            'physics_ragdoll',
+            'physics_cloth',
             'physics_gravity_zones',
             'physics_navigate',
             'physics_stress',
