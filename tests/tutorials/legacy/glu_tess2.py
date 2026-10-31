@@ -1,5 +1,5 @@
 # -*- coding: latin-1 -*-
-"""Simple GLU Tess-object test with combine callbacks"""
+'''Simple GLU Tess-object test with combine callbacks'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.GLU import *

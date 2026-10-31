@@ -2,7 +2,7 @@
 '''Test glDrawArrays using string format for the arrays (draws flower)'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
-import flower_geometry
+import _flower_geometry
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -11,11 +11,11 @@ class TestContext( BaseContext ):
         print("""Should see flower pattern in gray over white background""")
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        glVertexPointer(3, GL_DOUBLE, 0, flower_geometry.points_expanded.tobytes() )
-        glNormalPointer(GL_FLOAT, 0, flower_geometry.normals_expanded.tobytes() )
+        glVertexPointer(3, GL_DOUBLE, 0, _flower_geometry.points_expanded.tobytes() )
+        glNormalPointer(GL_FLOAT, 0, _flower_geometry.normals_expanded.tobytes() )
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_NORMAL_ARRAY)
-        glDrawArrays(GL_TRIANGLES, 0, len(flower_geometry.points_expanded))
+        glDrawArrays(GL_TRIANGLES, 0, len(_flower_geometry.points_expanded))
 
 
 if __name__ == "__main__":

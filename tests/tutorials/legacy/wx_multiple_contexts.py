@@ -1,3 +1,6 @@
+'''Two wxPython contexts in one frame, each with a rotating box and a button
+that pauses its own rotation.
+'''
 from OpenGLContext import wxinteractivecontext
 from OpenGLContext.scenegraph import basenodes
 import wx

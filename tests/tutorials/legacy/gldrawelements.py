@@ -2,7 +2,7 @@
 '''Test of the glDrawElements function (draws flower)'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
-import flower_geometry
+import _flower_geometry
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -11,11 +11,11 @@ class TestContext( BaseContext ):
         print("""Should see flower pattern in gray over white background""")
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        glVertexPointerd( flower_geometry.points )
+        glVertexPointerd( _flower_geometry.points )
         glEnableClientState(GL_VERTEX_ARRAY)
         glDrawElementsui(
             GL_TRIANGLES,
-            flower_geometry.indices
+            _flower_geometry.indices
         )
 
 

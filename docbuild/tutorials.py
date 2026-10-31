@@ -281,7 +281,6 @@ PATHS = [
         vertex buffer objects.""",
         'shaders',
         [
-            'shader_intro',
             'shader_1',
             'shader_2',
             'shader_3',

@@ -1,3 +1,6 @@
+'''A wxPython context in a frame beside an ordinary wx button, which pauses the
+rotation of the box the context draws.
+'''
 from OpenGLContext import wxinteractivecontext
 from OpenGLContext.scenegraph import basenodes
 import wx

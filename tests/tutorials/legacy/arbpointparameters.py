@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Test point parameter rendering code"""
+'''Test point parameter rendering code'''
 
 from OpenGLContext import testingcontext
 from OpenGLContext.context import Context as BaseContext

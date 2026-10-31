@@ -1,4 +1,8 @@
 #! /usr/bin/env python
+'''Draws 50,000 line strips of seven vertices each from one array with
+`glMultiDrawArrays`. `USE_VBO` chooses between a vertex buffer object and the
+array in client memory.
+'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.arrays import *
 from OpenGL.GL import *

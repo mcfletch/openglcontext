@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Demonstrate/test usage of glGetTexImage"""
+'''Demonstrate/test usage of glGetTexImage'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import imagetexture
 

@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Retrieve OpenGL polygon stipple state values and print to console"""
+'''Retrieve OpenGL polygon stipple state values and print to console'''
 from OpenGLContext.context import Context as BaseContext
 #from arraystuff import *
 from OpenGL.GL import *

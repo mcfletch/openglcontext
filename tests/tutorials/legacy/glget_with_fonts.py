@@ -1,9 +1,9 @@
 #! /usr/bin/env python
-"""Retrieve OpenGL state values and print to console
+'''Retrieve OpenGL state values and print to console
 
 NOTE: This test queries legacy OpenGL state variables and requires
 a compatibility profile context.
-"""
+'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.arrays import allclose
 

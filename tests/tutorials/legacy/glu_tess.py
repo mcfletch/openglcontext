@@ -1,9 +1,9 @@
 #! /usr/bin/env python
-"""A letter H filled by the polygon tessellator, drawn fixed-function
+'''A letter H filled by the polygon tessellator, drawn fixed-function
 
 NOTE: This test uses legacy OpenGL (glBegin/glEnd, glColor, glVertex) and requires
 a compatibility profile context.
-"""
+'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import polygontessellator, vertex
 from OpenGL.GL import *

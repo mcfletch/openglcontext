@@ -6,7 +6,7 @@ a compatibility profile context.
 '''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
-import flower_geometry
+import _flower_geometry
 
 def bit_pattern( *args ):
     args = list(args[:16])
@@ -32,11 +32,11 @@ class TestContext( BaseContext):
         glEnable( GL_LINE_STIPPLE )
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        glVertexPointerd(flower_geometry.points_expanded )
-        glNormalPointerf(flower_geometry.normals_expanded )
+        glVertexPointerd(_flower_geometry.points_expanded )
+        glNormalPointerf(_flower_geometry.normals_expanded )
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_NORMAL_ARRAY)
-        glDrawArrays(GL_LINES, 0, len(flower_geometry.points_expanded))
+        glDrawArrays(GL_LINES, 0, len(_flower_geometry.points_expanded))
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

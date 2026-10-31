@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Retrieve OpenGL Light state values and print to console"""
+'''Retrieve the GLU version and extension strings and print them to the console'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GLU import *
 

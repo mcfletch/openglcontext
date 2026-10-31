@@ -1,3 +1,7 @@
+'''Prints the attributes of the context's pixel format through
+`wglGetPixelFormatAttribivARB` and `wglGetPixelFormatAttribfvARB`. WGL is
+Windows-only.
+'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL import WGL
 from OpenGL.WGL.ARB import pixel_format

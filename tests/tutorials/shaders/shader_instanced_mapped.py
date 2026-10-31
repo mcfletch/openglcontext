@@ -1,4 +1,9 @@
 #! /usr/bin/env python
+'''Draws the spheres of `shader_11` as one instanced draw, each instance reading
+its offset from a texture buffer with `texelFetch`. A `BufferLocks` fence
+marks the range of the buffer each frame uses and waits on it before the range
+is written again.
+'''
 # import OpenGL
 # OpenGL.FULL_LOGGING=True
 from shader_11 import TestContext as BaseContext

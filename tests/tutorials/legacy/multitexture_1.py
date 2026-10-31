@@ -1,9 +1,9 @@
 #! /usr/bin/env python
-"""Multi-texturing test/sample
+'''Multi-texturing test/sample
 
 NOTE: This test uses legacy OpenGL (glBegin/glEnd, glTexEnv) and requires
 a compatibility profile context.
-"""
+'''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext import texture

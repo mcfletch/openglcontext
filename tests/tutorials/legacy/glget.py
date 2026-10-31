@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Retrieve OpenGL state values and print to console"""
+'''Retrieve OpenGL state values and print to console'''
 from OpenGLContext.context import Context as BaseContext
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
