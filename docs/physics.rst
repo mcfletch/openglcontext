@@ -1008,6 +1008,13 @@ thread, in one of two ways:
   at ``tickHz`` on its own; a world with nothing awake and no step code waits
   using no CPU. The frame reads the newest snapshot it published.
 
+A lockstep world that has settled (every body asleep, and no character,
+kinematic track, motor, step code or waiting command) counts the ticks a frame
+owes without stepping them, and the frame publishes the poses it published
+before with the new tick and time. A settled frame costs 0.01 to 0.03 ms for
+100 to 1,000 sleeping boxes, as on omi_physics. The tick count stays exact, so
+a woken world plays out as one stepped through every tick and a replay matches.
+
 Characters move inside the world's ticks. A framed character's code for a tick
 (``before-step`` handlers, blows taken, the steering of ``run_along`` and
 ``hop_to``) runs on the render thread before that tick runs, and its

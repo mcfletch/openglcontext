@@ -58,6 +58,7 @@ __all__ = ['GroundTiles', 'JoltController', 'JoltEngine', 'axis_angles']
 log = logging.getLogger(__name__)
 
 _ZERO3 = np.zeros(3)
+_NO_ROWS = np.zeros(0, dtype=np.int64)
 #: The filter index of a body with no collision filter: outside every table, so it meets every filter.
 NO_FILTER = 0xFFFF
 #: Removed bodies' uids kept for turning their last event records back into service uids.
@@ -986,6 +987,18 @@ class JoltEngine(Engine):
         if (tick == self._last_tick and applied == self._last_applied
                 and self._published is not None and previous is None):
             return None
+        last = self._published
+        if (last is not None and applied == self._last_applied and not self._published_live.any()
+                and not len(snapshot.changed) and self._contacts == last.contacts):
+            # Nothing moved at the last publish and nothing was applied since, so no
+            # row changes but by the last tick, which wrote none: the poses stand.
+            self._last_tick = tick
+            self._version += 1
+            published = dataclasses.replace(last, version=self._version, step=tick,
+                                            time=float(snapshot.time), changed=_NO_ROWS,
+                                            base=last.version, bodies=int(snapshot.count))
+            self._published = published
+            return published
         self._last_tick, self._last_applied = tick, applied
         rows = snapshot.rows_of(self._mover_jolt)
         present = rows >= 0
@@ -1018,7 +1031,6 @@ class JoltEngine(Engine):
                 blend = old_orientation * (1.0 - alpha) + orientation[moving] * alpha
                 orientation[moving] = blend / np.maximum(
                     np.linalg.norm(blend, axis=1), 1e-12)[:, None]
-        last = self._published
         changed = None
         base = -1
         if last is not None and last.rows is table:
