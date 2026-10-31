@@ -2,23 +2,27 @@
 
 :class:`JoltRigidSystem` is :class:`~OpenGLContext.physics.x3drigid.RigidSystem`
 with its world a pyjoltphysics world stepped in lockstep with the frame: the
-same reading of the collection's nodes (bodies, collidables, joints, the
-collider, the contacts sent to it), the same fields sent back, the steps run
-by the Jolt world thread. :func:`make_rigid_system` makes the one the physics
-engine of the run names (``OPENGLCONTEXT_PHYSICS_ENGINE``).
+collection's nodes as x3drigid reads them (bodies, collidables, joints, the
+collider, the contacts sent to it), the fields sent back, the steps run by
+the Jolt world thread. :class:`JoltSensing` finds a `CollisionSensor`'s
+touches. :func:`make_rigid_system` and :func:`make_sensing` make the ones the
+physics engine of the run names (``OPENGLCONTEXT_PHYSICS_ENGINE``).
 
-Where the two differ:
+What Jolt does with the X3D fields (docs/x3d.rst lists them all):
 
-- what collides is decided as the omi system decides it, by the contact
-  filter, once for each pair as it first touches; the answer holds until the
-  pair parts;
+- what collides is decided by the contact filter, once for each pair as it
+  first touches; the answer holds until the pair parts;
 - a pair meets with the collider's bounce and first friction coefficient, as
   each body's material, and a contact sent to ``set_contacts`` makes its pair
-  meet with those too;
-- the products of inertia off the diagonal are not used, as on omi;
+  meet with those too; the collider's ``minBounceSpeed`` is the world's least
+  bounce speed;
+- the products of inertia off the diagonal are not used;
 - the collection's iterations, error correction, force mixing and surface
   thickness are Jolt's own; a body that may rest (``autoDisable``) rests by
-  Jolt's sleep speeds and time rather than its own;
+  Jolt's sleep rule, at the collection's ``disableLinearSpeed`` and
+  ``disableTime``;
+- a joint that meets its stop is sent back at its ``stopBounce`` times the
+  speed it met it at (:data:`STOP_BOUNCE_SPEED` and up);
 - a slider's force pushes its second body along the axis, and the first back,
   as a force each step.
 """

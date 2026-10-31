@@ -218,11 +218,13 @@ simulation packages update.
        contact filters, colliders that stream), the walking view platform and
        the debug overlay. ``engine.py`` is the interface the service drives an
        engine through; ``joltengine.py`` is the Jolt engine, the default, and
-       ``x3djolt.py`` X3D's rigid bodies on it. ``omigltf.py`` reads glTF's
-       ``OMI_physics_*`` extensions into the engine's own types, and
-       ``cooking.py`` cooks triangles into hulls and convex pieces.
-       ``omiengine.py``, ``omi_adapter.py``, ``runtime.py``, ``worker.py``,
-       ``replica.py`` and ``queries.py`` are the deprecated omi engine's.
+       ``x3djolt.py`` X3D's rigid bodies on it, read from the nodes by
+       ``x3drigid.py``. ``omigltf.py`` reads glTF's ``OMI_physics_*``
+       extensions into the engine's own types, ``cooking.py`` cooks triangles
+       into hulls and convex pieces, and ``massprops.py`` gives a shape's
+       inertia and bounds. ``omiengine.py``, ``omi_adapter.py``,
+       ``runtime.py``, ``worker.py``, ``replica.py``, ``queries.py`` and
+       ``x3domi.py`` are the deprecated omi engine's.
      - :doc:`Physics <physics>`, :doc:`The world thread <physicsthread>`
    * - ``nav``
      - The navigation mesh generated from the collision mesh, and routes

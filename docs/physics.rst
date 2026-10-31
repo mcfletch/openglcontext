@@ -1214,17 +1214,15 @@ need the extra:
        made on a world of its own; ``TerrainWalkMixin`` and
        ``PhysicsViewPlatform.over(character)`` walk a service character and
        run on Jolt
-   * - X3D RigidBodyPhysics shapes and ``CollisionCollection`` detection
-     - ``physics.x3drigid``, and ``physics.x3djolt``, which builds on
-       x3drigid's shapes
+   * - X3D RigidBodyPhysics on the omi engine
+     - ``physics.x3domi``
    * - Helpers over a plain omi_physics world, for code with no service
      - ``physics.gltf_world.collision_world_from_scene``,
        ``physics.props.PropColliders``,
        ``loaders.tiles3d.physics_colliders``
 
-Without the extra, ``PhysicsWalkMixin`` logs a warning naming
-``OpenGLContext[omi-physics]`` and the camera stays in free flight; a
-``RigidBodyCollection`` or ``CollisionSensor`` logs the same once and stays
+Without the extra, a ``RigidBodyCollection`` or ``CollisionSensor`` on the omi
+engine logs a warning naming ``OpenGLContext[omi-physics]`` once and stays
 still; the omi-world helpers raise ``EngineUnavailable`` naming it. The
 service's own cooking (``Proxy.from_node``, ``physics.cooking``) does not
 need the extra. glTF documents with OMI
@@ -2003,17 +2001,18 @@ X3D rigid bodies
 An X3D document's ``RigidBodyCollection`` is a world of its own, stepped once a
 frame on the engine's clock: a Jolt world (``OpenGLContext.physics.x3djolt``),
 or an omi_physics world where ``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``omi``
-(``OpenGLContext.physics.x3drigid``). Both read the collidables through
-x3drigid's shapes, which need the ``omi-physics`` extra (:ref:`physics-omi`).
-Its bodies, their collidables as shapes and compounds, X3D's six joints on the
-joints above, and its ``CollisionCollection``\ s and routed ``Contact`` nodes
-as a pair rule. On Jolt the rule is asked as a pair first touches and at each
-step a refused pair still meets, a pair meets with the collider's bounce and
-first friction coefficient or a routed contact's, a body that may rest
-(``autoDisable``) rests after Jolt's own sleep time and speeds rather than the
-``disable`` fields, and the collection's solver settings are Jolt's own. A
-``CollisionSensor`` reports touches without stepping anything. What each node does, and the units of its fields, are in
-:ref:`x3d-rigid-bodies`.
+(``OpenGLContext.physics.x3domi``, which needs the ``omi-physics`` extra,
+:ref:`physics-omi`). ``OpenGLContext.physics.x3drigid`` reads the nodes for
+both: the collidables as ``Proxy`` shapes and compounds, a body's default
+inertia from them (``OpenGLContext.physics.massprops``), and each
+``CollisionCollection`` and routed ``Contact`` as a ``ContactRule``. X3D's six
+joints are made on the joints above. On Jolt the rule is asked as a pair first
+touches and at each step a refused pair still meets, and a pair meets with the
+collider's bounce and first friction coefficient or a routed contact's. A
+``CollisionSensor`` reports touches without stepping anything, on Jolt by
+casting each collidable's shape where it stands in a world of its
+collidables. What each node does, the units of its fields and which fields
+Jolt reads are in :ref:`x3d-rigid-bodies`.
 
 .. _physics-debug:
 

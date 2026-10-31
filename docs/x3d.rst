@@ -781,14 +781,13 @@ Rigid bodies
 
 The RigidBodyPhysics component runs on Jolt, the default engine
 (``OpenGLContext.physics.x3djolt``), or on omi_physics where
-``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``omi`` (:ref:`physics-x3d`). Both build
-their shapes with omi_physics' model, and ``CollisionSensor`` finds its
-touches with omi_physics' narrow phase, so the component needs the ``omi``
-extra (:ref:`physics-omi`); without it a collection or sensor logs that once
-and stays still. On Jolt a joint's ``stopBounce`` is not
-applied: the door in ``oglc-x3d-rigidbody`` leaves its stop at 0.12 rad/s,
-where a ``stopBounce`` of 0.4 asks for about 1 rad/s. The two engines' frames
-differ after the first contacts. Each
+``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``omi`` (:ref:`physics-x3d`). The nodes
+are read into the engine's own shapes (``Proxy``) and contact rules
+(``OpenGLContext.physics.x3drigid``), so on Jolt nothing needs omi_physics.
+A collection or sensor whose engine is ``omi`` without omi_physics installed
+logs that once and stays still. The two engines' frames differ after the
+first contacts; :ref:`x3d-rigid-jolt` lists what Jolt does with each field.
+Each
 ``RigidBodyCollection`` is a world of its own, stepped once a frame on the
 engine's clock in steps of 1/120 s (1/240 s where ``preferAccuracy`` is
 true), and at most 0.25 s a frame. A capture, whose clock advances a fixed
@@ -889,11 +888,16 @@ What collides:
   them.
 
 A ``CollisionSensor`` finds the touches among its collider's collidables
-each frame, where they stand, and sends a ``Contact`` per touching point in
+each frame, where they stand, and sends a ``Contact`` per touch in
 ``contacts`` (``position``, ``contactNormal`` from ``geometry1`` toward
 ``geometry2``, ``depth``, the bodies and the collider's parameters), the
 collidables touching in ``intersections``, and ``isActive``. An empty
-``contacts`` is sent once when the touching stops.
+``contacts`` is sent once when the touching stops. On Jolt each touching
+pair is one ``Contact``, at the deepest point, and ``geometry1`` is the
+collidable listed first in the collider; two collidables that are both
+triangle meshes (geometry other than a primitive, in no moving body) are not
+tested against each other. On omi a pair sends a ``Contact`` per point of
+its contact manifold.
 
 Joints hold bodies of their collection; a joint whose ``body1`` or ``body2``
 is NULL holds the other body to the world. Anchors and axes are in world
@@ -938,6 +942,61 @@ collision parameters -- is read every frame. Of the Basic archive's
 examples, the ones whose contacts pass through a ``Script`` (``BallBounce``,
 ``BounceTrimesh``, ``CarDemoMain``) do not collide, since scripts are not
 run; the rest simulate as written.
+
+.. _x3d-rigid-jolt:
+
+What Jolt does with each field
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Jolt honours these as described above:
+
+- Bodies - ``mass``, ``centerOfMass``, ``inertia`` (its diagonal, or the
+  shapes' at uniform density), ``forces``, ``torques``, ``useGlobalGravity``,
+  ``autoDamp`` with ``linearDampingFactor`` and ``angularDampingFactor``,
+  ``fixed``, and the positions and velocities sent in.
+- ``bounce`` - the collider's, and a sent ``Contact``'s for its pair, as the
+  restitution of the pair's materials.
+- ``minBounceSpeed`` - the collider's (where it applies ``BOUNCE``), as the
+  least approach speed in m/s at which any pair of the collection bounces.
+  Jolt holds one such speed for a world, so a sent ``Contact``'s
+  ``minBounceSpeed`` is not read; without a collider it is 1 m/s.
+- ``frictionCoefficients`` - the first coefficient, both ways.
+- ``autoDisable``, ``disableLinearSpeed`` and ``disableTime`` - the
+  collection's where its ``autoDisable`` is true, or else those of the first
+  body whose ``autoDisable`` is true, for every body of the collection that
+  may rest. Jolt rests a body once the speed of its furthest points has been
+  under ``disableLinearSpeed`` m/s for ``disableTime`` seconds; a threshold of
+  0 is read as Jolt's own (0.03 m/s, 0.5 s). ``disableAngularSpeed`` is not
+  read: the speed of the furthest points includes the turn.
+- ``stopBounce`` (``SingleAxisHingeJoint``, ``SliderJoint``) and
+  ``stop1Bounce`` (``DoubleAxisHingeJoint``) - a joint that meets its stop
+  faster than 0.1 rad/s (or m/s) leaves it at ``stopBounce`` times that
+  speed. Jolt's stops stop a joint dead; after the step that meets the stop,
+  the bodies' velocities are set to send it back, the change shared between
+  the two bodies by how hard each is to move along the axis.
+- ``desiredAngularVelocity1`` and ``2`` with ``maxTorque1`` and ``2`` - a
+  motor of at most that torque; a ``maxTorque`` of 0 is no motor.
+- ``suspensionForce`` and ``suspensionErrorCorrection`` - a spring of the
+  stiffness and damping they give over 1/60 s, by ``body2``'s mass.
+- ``sliderForce`` - a force along the axis each step, on ``body2`` forward
+  and ``body1`` back.
+- Every joint output listed above, by the joint's reading of ``body2``
+  against ``body1``: a joint whose ``body2`` is NULL reads the world against
+  ``body1``.
+
+Jolt keeps these and does not read them; its solver's own values apply:
+
+- ``iterations``, ``errorCorrection``, ``constantForceMix``,
+  ``maxCorrectionSpeed`` and ``contactSurfaceThickness`` of the collection
+  (Jolt lets a resting contact overlap by 5 mm).
+- ``softnessConstantForceMix`` and ``softnessErrorCorrection`` of a collider
+  or a ``Contact``.
+- The second of ``frictionCoefficients``, ``frictionDirection``,
+  ``surfaceSpeed`` and ``slipFactors``: Jolt's friction is one coefficient,
+  the same in every direction, on surfaces that do not move.
+- ``stopErrorCorrection`` and ``stop1ConstantForceMix``: a stop is held hard.
+- ``useFiniteRotation``: Jolt integrates every turn the same way.
+- ``disableAngularSpeed`` (above).
 
 Humanoids
 ~~~~~~~~~

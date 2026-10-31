@@ -312,8 +312,12 @@ OpenGLContext/
 │   │                 # dynamic chassis on wheels -- no GL -- docs/physics.rst#physics-vehicles
 │   ├── joltvehicles.py  # The Jolt engine's vehicles: one input batch a frame or
 │   │                 # tick, states from the newest snapshot
-│   ├── x3djolt.py    # X3D's RigidBodyPhysics on a pyjoltphysics world (shapes from
-│   │                 # x3drigid's omi model: needs the omi extra)
+│   ├── x3djolt.py    # X3D's RigidBodyPhysics on a pyjoltphysics world, a
+│   │                 # CollisionSensor's touches by Jolt's narrow phase; the
+│   │                 # engine's choice (make_rigid_system, make_sensing) -- docs/x3d.rst
+│   ├── x3domi.py     # X3D's RigidBodyPhysics on an omi_physics world (the
+│   │                 # omi-physics extra); deleted with the omi engine
+│   ├── massprops.py  # A Proxy's volume, centroid, inertia and bounds -- no GL
 │   ├── omigltf.py    # glTF's OMI_physics_* extensions read into the engine's own
 │   │                 # types (Proxy, Material, CollisionFilter) -- docs/physics.rst#model
 │   ├── cooking.py    # Hulls, convex pieces and their volumes: what Proxy.from_mesh
@@ -357,9 +361,8 @@ OpenGLContext/
 │   │                 # as two bodies meet -- docs/physics.rst#physics-presolve
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
-│   └── x3drigid.py   # X3D's RigidBodyPhysics: collidable shapes, a sensor's
-│                     # touches, and a collection as an omi_physics world (the
-│                     # omi extra) -- no GL
+│   └── x3drigid.py   # X3D's RigidBodyPhysics read from the nodes: collidables
+│                     # as Proxy, ContactRule, RigidSystem the engines' base -- no GL
 ├── resources/        # Generated Python modules holding icons and shader text
 ├── py.typed          # The engine's declarations are real -- docs/typing.rst
 ├── scenegraph/       # VRML97-style nodes

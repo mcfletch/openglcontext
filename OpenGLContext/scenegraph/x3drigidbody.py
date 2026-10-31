@@ -199,10 +199,11 @@ class RigidBodyCollection(_Stepped, x3d.RigidBodyCollection):
 class CollisionSensor(_Stepped, x3d.CollisionSensor):
     """X3D's CollisionSensor: the touches among its collider's collidables, each frame
 
-    `contacts` is a `Contact` per touching point, `intersections` the
-    collidables touching, and `isActive` whether there are any. The contacts
-    carry the collider's parameters, and a normal from `geometry1` toward
-    `geometry2`. An empty `contacts` is sent once when the touching stops.
+    `contacts` is a `Contact` per touch (on Jolt one per touching pair, at
+    the deepest point), `intersections` the collidables touching, and
+    `isActive` whether there are any. The contacts carry the collider's
+    parameters, and a normal from `geometry1` toward `geometry2`. An empty
+    `contacts` is sent once when the touching stops.
     """
 
     def sense(self) -> None:
