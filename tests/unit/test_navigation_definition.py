@@ -224,6 +224,27 @@ class TestTheDefinitionField:
         assert not definition.physics.enabled
         assert not definition.audio.enabled
 
+    def test_physics_and_audio_take_a_mapping_of_their_fields(self):
+        definition = ContextDefinition(physics={'tickHz': 240.0},
+                                       audio={'enabled': False})
+        assert definition.physics.tickHz == 240.0
+        assert not definition.audio.enabled
+
+    @pytest.mark.parametrize('value', [True, False])
+    def test_navigation_refuses_a_bool_and_says_what_it_takes(self, value):
+        """A Navigation has no ``enabled``; ``None`` is the one with no modes."""
+        with pytest.raises(ValueError, match='navigation=None'):
+            ContextDefinition(navigation=value)
+
+    @pytest.mark.parametrize('key', ['physics', 'audio'])
+    def test_an_integer_is_not_taken_for_a_bool(self, key):
+        with pytest.raises(ValueError):
+            ContextDefinition(**{key: 1})
+
+    def test_a_mapping_naming_no_field_is_refused_by_name(self):
+        with pytest.raises(AttributeError, match='bogus'):
+            ContextDefinition(audio={'bogus': 1})
+
     def test_it_is_not_offered_as_a_rendering_setting(self):
         assert 'navigation' not in ContextDefinition.UI_HINTS
 

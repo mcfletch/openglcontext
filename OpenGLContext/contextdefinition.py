@@ -66,6 +66,41 @@ def _deprecated(name: str) -> None:
         DeprecationWarning, stacklevel=3)
 
 
+#: The fields of a definition that hold a settings node, which the
+#: constructor also takes as a mapping of that node's fields.
+SETTINGS_NODES = ('physics', 'audio', 'navigation')
+
+
+def settings_node(name: str, value: Any) -> Any:
+    """The node a definition's ``name`` settings field holds for ``value``.
+
+    A mapping is the fields of a new node: ``physics={'tickHz': 240.0}``.
+    ``True`` or ``False`` is the ``enabled`` field of a new
+    :class:`~OpenGLContext.physics.settings.PhysicsDefinition` or
+    :class:`~OpenGLContext.audio.settings.AudioSettings`. A
+    :class:`~OpenGLContext.move.navigationdefinition.Navigation` has no
+    ``enabled`` field, so ``navigation`` refuses a bool with ValueError;
+    ``navigation=None`` is the definition with no navigation. Anything else
+    is returned unchanged, for the field to take or refuse.
+    """
+    from OpenGLContext.move import navigationdefinition
+    cls = {
+        'physics': physicssettings.PhysicsDefinition,
+        'audio': audiosettings.AudioSettings,
+        'navigation': navigationdefinition.Navigation,
+    }[name]
+    if isinstance(value, dict):
+        return cls(**value)
+    if isinstance(value, bool):
+        if name == 'navigation':
+            raise ValueError(
+                'navigation=%r: navigation takes a Navigation or a mapping of '
+                'its fields; navigation=None is the one with no navigation'
+                % (value,))
+        return cls(enabled=value)
+    return value
+
+
 def _get_default_renderer() -> str:
     """The render passes a definition asks for when its program names none.
 
@@ -550,19 +585,9 @@ class ContextDefinition( node.Node ):
     def __init__( self, **named: Any ) -> None:
         forwarded = {name: named.pop( name ) for name in
                      ('movementModes', 'movementMode') if name in named}
-        from OpenGLContext.move import navigationdefinition
-        for key, cls in (
-            ('physics',physicssettings.PhysicsDefinition),
-            ('audio',audiosettings.AudioSettings,),
-            ('navigation',navigationdefinition.Navigation)
-        ):
-            if key not in named:
-                continue
-            tmp = named[key]
-            if isinstance(tmp, bool) and key != 'navigation':
-                named[key] = cls(enabled=tmp)
-            elif isinstance(tmp, dict):
-                named[key] = cls(**tmp)
+        for name, value in named.items():
+            if name in SETTINGS_NODES:
+                named[name] = settings_node( name, value )
         # Zero-argument super, so an instance of this class still finds its own
         # base after the module has been reloaded: the two-argument form looks
         # the class up as a module global, which a reload has rebound to a

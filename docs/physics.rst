@@ -1026,6 +1026,12 @@ Modes and settings
 
    ContextDefinition(physics=PhysicsDefinition(mode='inline', tickHz=240.0))
 
+The constructor also takes the node's fields as a mapping,
+``physics={'mode': 'inline', 'tickHz': 240.0}``, and ``physics=False`` for
+``PhysicsDefinition(enabled=False)``. ``audio=`` takes the same two forms.
+``navigation=`` takes a mapping and refuses a bool, since a ``Navigation`` has
+no ``enabled`` field; ``navigation=None`` is a context with no navigation.
+
 .. list-table::
    :widths: auto
    :header-rows: 1
