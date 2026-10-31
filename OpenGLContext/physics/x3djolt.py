@@ -114,6 +114,36 @@ def _limits(low: float, high: float) -> Optional[tuple[float, float]]:
     return max(low, -math.pi), min(high, math.pi)
 
 
+#: The least speed, in rad/s or m/s, at which a joint meeting its stop bounces off it.
+STOP_BOUNCE_SPEED = 0.1
+#: How near its stop, in radians or metres, a joint is read as having met it.
+_STOP_REACH = 0.05
+
+
+class _Stop:
+    """A joint's stops, which it bounces off by its node's bounce field
+
+    ``ends`` are the world uids of X3D's body1 and body2 (0 for the world);
+    ``axis`` is in body1's frame, or the world's; ``sign`` turns the motion
+    of body2 against body1 along the axis into the engine's joint reading.
+    """
+
+    __slots__ = ('anchor', 'axis', 'bounce', 'ends', 'jid', 'linear', 'limits', 'sign')
+
+    def __init__(self, jid: int, ends: tuple[int, int], axis: np.ndarray, anchor: np.ndarray,
+                 limits: tuple[float, float], sign: float, linear: bool, bounce: str) -> None:
+        self.jid = jid
+        self.ends = ends
+        self.axis = axis
+        #: The anchor in body1's frame, or the world's.
+        self.anchor = anchor
+        self.limits = limits
+        self.sign = sign
+        self.linear = linear
+        #: The node's field holding the bounce.
+        self.bounce = bounce
+
+
 class JoltRigidSystem(x3drigid.RigidSystem):
     """A `RigidBodyCollection` simulated on a pyjoltphysics world."""
 
@@ -137,6 +167,10 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self._origins: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         #: Each joint's anchor and axes on its bodies, by the entry's place.
         self._frames: list[_Frames] = []
+        #: The joints with stops, and the node each reads its bounce from.
+        self._stops: list[tuple[_Stop, Any]] = []
+        #: Each moving body's mass and inertia diagonal, by world uid.
+        self._masses: dict[int, tuple[float, np.ndarray]] = {}
 
     def signature(self) -> tuple[Any, ...]:
         return (*super().signature(), bool(self.collection.preferAccuracy))
@@ -159,6 +193,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self._surfaces, self._surfaces_used = [], 0
         self._materials, self._paired = {}, {}
         self._origins, self._frames = {}, []
+        self._stops, self._masses = [], {}
         for node in self._bodies():
             self._add_jolt_body(node)
         for collidable, bounds in members(self.collection.collider):
@@ -219,7 +254,9 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self._materials[int(uid)] = material
         self._origins[int(uid)] = (origin, turn)
         if moving:
-            self.jolt.set_motion([uid], inertia=np.diag(self._inertia(node, shape)))
+            inertia = np.asarray(self._inertia(node, shape), dtype='d')
+            self._masses[int(uid)] = (max(float(node.mass), 1e-9), inertia)
+            self.jolt.set_motion([uid], inertia=np.diag(inertia))
             self.jolt.set_velocities([uid], np.asarray(node.linearVelocity, dtype='d'),
                                      np.asarray(node.angularVelocity, dtype='d'))
         entry.sent = {name: _kept(getattr(node, name)) for name in _BODY_OUTPUTS}
@@ -270,18 +307,21 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         # pyjoltphysics reads a joint as its first body against its second; X3D reads
         # body2 against body1.
         b, a = ends
+        sign = 1.0
         if a == 0:
-            a, b = b, 0
+            a, b, sign = b, 0, -1.0
         kind = _kind(node)
         made: Optional[pj.Joint] = None
+        stops: Optional[tuple[float, float]] = None
         if kind == 'BallJoint':
             made = pj.Joint.ball(a, b, anchor=_floats(node.anchorPoint))
         elif kind == 'SingleAxisHingeJoint' and not np.any(_floats(node.axis)):
             # A hinge with no axis holds only its anchor, as a ball does.
             made = pj.Joint.ball(a, b, anchor=_floats(node.anchorPoint))
         elif kind == 'SingleAxisHingeJoint':
+            stops = _limits(float(node.minAngle), float(node.maxAngle))
             made = pj.Joint.hinge(a, b, anchor=_floats(node.anchorPoint), axis=_floats(node.axis),
-                                  limits=_limits(float(node.minAngle), float(node.maxAngle)))
+                                  limits=stops)
         elif kind == 'DoubleAxisHingeJoint':
             stiffness, damping = _suspension(float(node.suspensionForce),
                                              float(node.suspensionErrorCorrection))
@@ -290,17 +330,17 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             if stiffness > 0.0:
                 suspension = (math.sqrt(stiffness / mass) / (2.0 * math.pi),
                               damping / (2.0 * math.sqrt(stiffness * mass)))
+            stops = _limits(float(node.minAngle1), float(node.maxAngle1))
             made = pj.Joint.two_axis_hinge(
                 a, b, anchor=_floats(node.anchorPoint), axis1=_floats(node.axis1),
-                axis2=_floats(node.axis2),
-                limits1=_limits(float(node.minAngle1), float(node.maxAngle1)),
+                axis2=_floats(node.axis2), limits1=stops,
                 motor1=self._motor(node.desiredAngularVelocity1, node.maxTorque1),
                 motor2=self._motor(node.desiredAngularVelocity2, node.maxTorque2),
                 suspension=suspension)
         elif kind == 'SliderJoint':
             low, high = float(node.minSeparation), float(node.maxSeparation)
-            limits = (min(low, 0.0), max(high, 0.0)) if low <= high else None
-            made = pj.Joint.slider(a, b, axis=_floats(node.axis), limits=limits)
+            stops = (min(low, 0.0), max(high, 0.0)) if low <= high else None
+            made = pj.Joint.slider(a, b, axis=_floats(node.axis), limits=stops)
             axis = np.asarray(_floats(node.axis), dtype='d')
             axis = axis / max(float(np.linalg.norm(axis)), 1e-12)
             if b:
@@ -324,6 +364,11 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self._joint_ids.append(int(jid))
         self._frames.append(frames)
         self._joint_settings(entry)
+        if stops is not None:
+            bounce = {'SingleAxisHingeJoint': 'stopBounce', 'SliderJoint': 'stopBounce',
+                      'DoubleAxisHingeJoint': 'stop1Bounce'}[kind]
+            self._stops.append((_Stop(int(jid), frames.ends, frames.axes[0], frames.anchors[0],
+                                      stops, sign, kind == 'SliderJoint', bounce), node))
 
     @staticmethod
     def _motor(speed: Any, torque: Any) -> Optional[pj.Motor]:
@@ -339,12 +384,13 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         jid = self._joint_ids[self.joints.index(entry)]
         node = entry.node
         if entry.kind == 'DoubleAxisHingeJoint':
-            self.jolt.set_joint_motors([jid], pj.MotorMode.VELOCITY,
-                                       float(node.desiredAngularVelocity1),
-                                       float(node.maxTorque1) or math.inf, axis=4)
-            self.jolt.set_joint_motors([jid], pj.MotorMode.VELOCITY,
-                                       float(node.desiredAngularVelocity2),
-                                       float(node.maxTorque2) or math.inf, axis=5)
+            # A hinge's motor drives at no more than its maxTorque; at 0 it is off.
+            for axis, speed, torque in ((4, node.desiredAngularVelocity1, node.maxTorque1),
+                                        (5, node.desiredAngularVelocity2, node.maxTorque2)):
+                torque = float(torque)
+                self.jolt.set_joint_motors(
+                    [jid], pj.MotorMode.VELOCITY if torque > 0.0 else pj.MotorMode.OFF,
+                    float(speed), max(torque, 0.0), axis=axis)
         elif entry.kind == 'MotorJoint':
             for number in range(min(max(int(node.enabledAxes), 0), 3)):
                 self.jolt.set_joint_motors([jid], pj.MotorMode.VELOCITY,
@@ -472,10 +518,105 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                 world.add_forces([uid], force)
                 world.add_torques([uid], torque)
             self._push_sliders()
+            approach = self._approaches()
             world.run_ticks(1)
+            if approach:
+                self._bounce(approach)
             self._waiting = max(self._waiting - self._step, 0.0)
         self._send()
         return self.awake()
+
+    def _motion(self, snapshot: pj.Snapshot, uid: int) -> Optional[tuple[np.ndarray, ...]]:
+        """A body's position, turn, linear and angular velocity; None for the world"""
+        row = snapshot.rows.get(uid) if uid else None
+        if row is None:
+            return None
+        return (np.asarray(snapshot.position[row], dtype='d'),
+                np.asarray(snapshot.orientation[row], dtype='d'),
+                np.asarray(snapshot.linear_velocity[row], dtype='d'),
+                np.asarray(snapshot.angular_velocity[row], dtype='d'))
+
+    def _stop_rate(self, stop: _Stop, snapshot: pj.Snapshot) -> tuple[float, np.ndarray]:
+        """How fast body2 moves against body1 along a stop's axis, and the axis in the world"""
+        first, second = (self._motion(snapshot, end) for end in stop.ends)
+        axis = stop.axis if first is None else _matrix(first[1]) @ stop.axis
+        which = 2 if stop.linear else 3
+        rate = 0.0
+        if second is not None:
+            rate += float(np.dot(second[which], axis))
+        if first is not None:
+            rate -= float(np.dot(first[which], axis))
+        return rate, axis
+
+    def _approaches(self) -> list[tuple[_Stop, float, float]]:
+        """Each bouncing stop's joint, the speed it moves at and the bounce, before a step"""
+        snapshot = None if self.jolt is None else self.jolt.latest()
+        if snapshot is None:
+            return []
+        found = []
+        for stop, node in self._stops:
+            bounce = float(getattr(node, stop.bounce))
+            if bounce > 0.0:
+                found.append((stop, self._stop_rate(stop, snapshot)[0], min(bounce, 1.0)))
+        return found
+
+    def _bounce(self, approach: list[tuple[_Stop, float, float]]) -> None:
+        """Send back each joint a step brought onto its stop, at its bounce times the speed it met it at
+
+        Jolt's limits stop a joint dead; the bounce is set on the bodies'
+        velocities for the next step, shared between them by how hard each is
+        to move along the axis.
+        """
+        world = self.jolt
+        assert world is not None
+        snapshot = world.latest()
+        if snapshot is None:
+            return
+        rows = snapshot.joints.rows
+        for stop, before, bounce in approach:
+            row = rows.get(stop.jid)
+            if row is None:
+                continue
+            reading, toward = float(snapshot.joints.value[row]), stop.sign * before
+            low, high = stop.limits
+            if not ((toward > STOP_BOUNCE_SPEED and reading >= high - _STOP_REACH)
+                    or (toward < -STOP_BOUNCE_SPEED and reading <= low + _STOP_REACH)):
+                continue
+            after, axis = self._stop_rate(stop, snapshot)
+            wanted = -bounce * before
+            # Already going back at least as fast: the step did not meet the stop.
+            if (wanted - after) * before >= 0.0:
+                continue
+            self._send_back(stop, snapshot, axis, wanted - after)
+
+    def _send_back(self, stop: _Stop, snapshot: pj.Snapshot, axis: np.ndarray, change: float) -> None:
+        """Change how fast body2 moves against body1 along ``axis`` by ``change``"""
+        assert self.jolt is not None
+        first = self._motion(snapshot, stop.ends[0])
+        anchor = stop.anchor if first is None else first[0] + _matrix(first[1]) @ stop.anchor
+        shares = []
+        for end, side in zip(stop.ends, (-1.0, 1.0), strict=True):
+            motion, held = self._motion(snapshot, end), self._masses.get(end)
+            if motion is None or held is None:
+                continue
+            mass, inertia = held
+            arm = motion[0] - anchor
+            if stop.linear:
+                ease = 1.0 / mass
+            else:
+                along = _matrix(motion[1]).T @ axis
+                across = arm - float(np.dot(arm, axis)) * axis
+                ease = 1.0 / (float(np.dot(along * along, inertia)) + mass * float(np.dot(across, across)))
+            shares.append((end, side, ease, motion, arm))
+        total = sum(ease for _end, _side, ease, _motion, _arm in shares)
+        for end, side, ease, motion, arm in shares:
+            amount = side * change * ease / total
+            if stop.linear:
+                linear, angular = motion[2] + amount * axis, motion[3]
+            else:
+                angular = motion[3] + amount * axis
+                linear = motion[2] + np.cross(amount * axis, arm)
+            self.jolt.set_velocities([end], linear, angular)
 
     def _push_sliders(self) -> None:
         """Each slider's force along its axis, for the next step: the second body forward, the first back."""

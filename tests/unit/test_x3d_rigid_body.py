@@ -444,6 +444,73 @@ class TestJoints:
         assert np.allclose(joint.body1AnchorPoint, joint.body2AnchorPoint, atol=0.02)
         assert np.linalg.norm(graph.getDEF('B').position) == pytest.approx(1.0, abs=0.02)
 
+    SWINGING = b'''<CollidableShape DEF="BAR"><Shape containerField="shape">
+        <Box size="1 0.1 0.1"/></Shape></CollidableShape>
+      <RigidBodyCollection DEF="C">
+        <RigidBody DEF="B" containerField="bodies" position="0.5 0 0" useGlobalGravity="false"
+          linearVelocity="0 1.25 0" angularVelocity="0 0 2.5">
+          <CollidableShape USE="BAR" containerField="geometry"/></RigidBody>
+        %s
+      </RigidBodyCollection>'''
+
+    @staticmethod
+    def rates_after_the_stop(graph, name, frames=20):
+        """The joint's rate output each frame after the first that met a stop"""
+        collection, joint = graph.getDEF('C'), graph.getDEF('J')
+        rates = []
+        for _ in range(frames):
+            collection.advance(FRAME)
+            rates.append(getattr(joint, name))
+        moving = next(index for index, rate in enumerate(rates) if rate > 2.0)
+        hit = next(index for index, rate in enumerate(rates) if index > moving and rate < 2.0)
+        return rates[hit + 2:]
+
+    @pytest.mark.engines('jolt', reason='omi returns a hinge off its stop at its own rate (1.0 rad/s at stopBounce 0, 1.77 at 0.8, from 2.5)')
+    @pytest.mark.parametrize('bounce', [0.0, 0.4, 0.8])
+    def test_a_hinge_bounces_off_its_stop(self, bounce):
+        """The door comes back off its stop at stopBounce of the speed it met it at"""
+        graph = scene(self.SWINGING % (b'''<SingleAxisHingeJoint DEF="J" containerField="joints"
+            anchorPoint="0 0 0" axis="0 0 1" minAngle="-0.3" maxAngle="0.3" stopBounce="%.1f"
+            forceOutput='"angleRate"'><RigidBody USE="B" containerField="body2"/>
+            </SingleAxisHingeJoint>''' % bounce))
+        rates = self.rates_after_the_stop(graph, 'angleRate')
+        assert np.allclose(rates, -2.5 * bounce, atol=0.15)
+
+    @pytest.mark.engines('jolt', reason='omi returns a hinge off its stop at its own rate (1.0 rad/s at stopBounce 0, 1.77 at 0.8, from 2.5)')
+    def test_a_hinge_between_two_bodies_bounces_off_its_stop(self):
+        graph = scene(self.SWINGING % b'''<RigidBody DEF="A" containerField="bodies" fixed="true"/>
+          <SingleAxisHingeJoint DEF="J" containerField="joints" anchorPoint="0 0 0" axis="0 0 1"
+            minAngle="-0.3" maxAngle="0.3" stopBounce="0.5" forceOutput='"angleRate"'>
+            <RigidBody USE="A" containerField="body1"/><RigidBody USE="B" containerField="body2"/>
+          </SingleAxisHingeJoint>''')
+        rates = self.rates_after_the_stop(graph, 'angleRate')
+        assert np.allclose(rates, -1.25, atol=0.15)
+
+    def test_a_slider_bounces_off_its_stop(self):
+        graph = scene(b'''<RigidBodyCollection DEF="C">
+          <RigidBody DEF="B" containerField="bodies" useGlobalGravity="false" linearVelocity="0 2.5 0"/>
+          <SliderJoint DEF="J" containerField="joints" axis="0 1 0" minSeparation="-0.5"
+            maxSeparation="0.3" stopBounce="0.6" forceOutput='"separationRate"'>
+            <RigidBody USE="B" containerField="body2"/></SliderJoint></RigidBodyCollection>''')
+        rates = self.rates_after_the_stop(graph, 'separationRate')
+        assert np.allclose(rates, -1.5, atol=0.15)
+
+    @pytest.mark.engines('jolt', reason='omi returns a hinge off its stop at its own rate (1.0 rad/s at stopBounce 0, 1.77 at 0.8, from 2.5)')
+    def test_a_double_axis_hinge_bounces_off_its_first_stop(self):
+        graph = scene(b'''<RigidBodyCollection DEF="C">
+          <RigidBody DEF="CAR" containerField="bodies" fixed="true"/>
+          <RigidBody DEF="WHEEL" containerField="bodies" position="1 0 0" useGlobalGravity="false"
+            angularVelocity="0 2.5 0"><Sphere containerField="massDensityModel" radius="0.3"/>
+          </RigidBody>
+          <DoubleAxisHingeJoint DEF="J" containerField="joints" anchorPoint="1 0 0"
+            axis1="0 1 0" axis2="1 0 0" minAngle1="-0.3" maxAngle1="0.3" stop1Bounce="0.4"
+            forceOutput='"hinge1AngleRate"'>
+            <RigidBody USE="CAR" containerField="body1"/>
+            <RigidBody USE="WHEEL" containerField="body2"/></DoubleAxisHingeJoint>
+          </RigidBodyCollection>''')
+        rates = self.rates_after_the_stop(graph, 'hinge1AngleRate')
+        assert np.allclose(rates, -1.0, atol=0.15)
+
     def test_a_slider_between_its_stops(self):
         graph = scene(b'''<RigidBodyCollection DEF="C">
           <RigidBody DEF="B" containerField="bodies"/>
