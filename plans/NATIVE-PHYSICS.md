@@ -580,7 +580,7 @@ of C++ and ran correctly in both builds.
 | P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3; done 2026-10-30 but for the tutorials, which wait for P4 (P3 below) |
 | P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4; P4a (the neutral API) done 2026-10-30, P4 2026-10-31 but for the game suites on Jolt, below |
 | P5 | Default `engine='jolt'`; `pyjoltphysics` a hard dependency; omi fallback, `worker.py`, `runtime.py`, `replica.py`, `queries.py` deleted; golden results recorded from omi; docs (`docs/physics.rst`, a page on the world thread, callbacks and determinism); omi_physics marked deprecated | full workspace `verify-everything.py`; preflight for openglcontext and pyjoltphysics | the games run on Jolt with no `engine` setting; marble-demo off direct omi imports; docs merged | 1 to 2 |
-| P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8 |
+| P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8; P6a (vehicles in pyjoltphysics) done 2026-10-31, below |
 
 P0 to P5: 14 to 19.5 weeks. The games stay on omi until P5: P4 runs them on both engines in CI,
 and a program selects Jolt with one definition field.
@@ -1405,6 +1405,191 @@ and `collision_groups`, `props.PropColliders`, `loaders/tiles3d/physics_collider
 `body_at`), every test marked `engines('omi', ...)` and the `omi` parameter of the others,
 the omi live check in pyjoltphysics' `engines.reference`, and the docs' "The omi engine
 (deprecated)" section.
+
+### P6a as built (2026-10-31): vehicles in pyjoltphysics
+
+pyjoltphysics `develop` dd6f219 to 2a22a25. The library half of P6; the service layer
+(P6b) is not started.
+
+Chosen: Jolt's `VehicleConstraint` with its own controllers, and glisteel's tuning mapped onto
+them (section 3's second option). A native port of the raycast vehicle as a custom
+`VehicleController` was not needed: the mapping reaches every behaviour below within its
+tolerance.
+
+- `src/native/vehicles.*`: a `VehicleSystem` on the world thread. A vehicle is a
+  `VehicleConstraint` over a dynamic chassis with a `WheeledVehicleController`,
+  `MotorcycleController` or `TrackedVehicleController`, added to the system as a constraint and
+  a step listener; Jolt runs the listeners on its job system, each touching only its own
+  chassis, so replays do not depend on the job count. Batches: `AddVehicle` (ids from 1 at
+  submission, never reused), `RemoveVehicles`, `VehicleInputs` (throttle, steer, brake,
+  handbrake, held until changed; `at_tick` as every batch), `SetVehicleSurfaces` (grip and
+  rolling per wheel or vehicle) and `SetSurfaceTable` (by material index). Removing a chassis
+  removes its vehicle; vehicles are removed before bodies at teardown.
+- Before each `Update`, natively per vehicle: the steering lock falls as
+  `max_steer / (1 + (v / falloff)^2)` and the angle moves at `steer_rate`; an idle vehicle that
+  comes down to `holding_speed` brakes with `holding` until it is driven again (a latch: without
+  it the landing bounce lifted the speed over 0.5 m/s and the car rolled away); `drag` against
+  the velocity, `downforce` while a wheel is grounded, and rolling resistance from the last
+  step's suspension load at each contact. omi's model applies the same three; drag is applied in
+  the air as well (omi applies it only through grounded wheels).
+- Wheel casts use the chassis's object layer, so groups, masks and the filter table decide what
+  a wheel stands on; a `BodyFilter` skips sensors, character proxies and the chassis. Ray,
+  sphere and cylinder casts. A wheel's grip is its own surface, else the surface table's entry
+  for the material index of the body under it; Jolt's combine function multiplies the tyre
+  curves by it, and by `sqrt(curve * body friction)` only where `body_friction` is set.
+- Snapshot: per vehicle id, chassis, kind, rpm, gear, forward speed, steer angle, inputs and the
+  tick's heaviest blow (closing speed, impulse, uid); per wheel the centre and orientation
+  (a model with axle X and up Y to the world), suspension length and compression, steer, angle,
+  spin, load (N), longitudinal and lateral slip, contact, ground uid, material index, mesh
+  triangle number, grip, contact point and normal.
+- Blows (omi's `impact_on`): after the events are folded, the largest `approach` among the
+  tick's contact `BEGIN` and `PERSIST` records naming a chassis. At `impact_speed` or more it is
+  also a record of kind `VEHICLE` (5), phase `IMPACT` (11), or `CRASH` (12) at `crash_speed`.
+- Quiet lockstep ticks are off in a world with a vehicle: an asleep vehicle's engine rpm still
+  decays each tick, so counted ticks would not match stepped ones bitwise.
+- Python: `pyjoltphysics.vehicles`: `VehicleSettings` (with `WheelSettings`, `Engine`,
+  `Transmission`, `Differential`, `AntiRollBar`, `VehicleTrack`, `Lean`, `VehicleKind`,
+  `WheelCast`), plain data in SI units with `as_dict`/`from_dict` for files and services;
+  `VehicleSettings.from_raycast(tuning, wheels, mass, gravity)`, the documented mapping of
+  omi's `VehicleTuning` and `WheelSpec` (duck-typed, no omi import); `Vehicle`, `VehicleRows`,
+  `WheelRows`; `World.add_vehicle`, `remove_vehicles`, `vehicle_inputs`,
+  `set_vehicle_surfaces`, `set_surface_table`; `testing.vehicle_digest`.
+
+The mapping (`from_raycast`), as glisteel's car uses it:
+
+| omi | Jolt |
+|---|---|
+| `suspension_stiffness` s (car weights per metre) | `stiffness = s m g` N/m, `ESpringMode::StiffnessAndDamping` |
+| `suspension_damping` z (fraction of critical) | `damping = z 2 sqrt(stiffness m / wheels)` N s/m |
+| `suspension_travel` | `suspension_min` 0, `suspension_max` travel, no preload |
+| `engine_force` F, `base_speed` vb | one gear of ratio 1, differential ratio 1, `max_torque = F r`, torque curve flat to vb and `vb / v` above (constant power), `max_rpm` at 3 times the speed power meets drag (232 m/s for glisteel), `min_rpm` 0, clutch strength 5000, engine inertia 0.05 |
+| `reverse_fraction` | reverse gear ratio `-reverse_fraction` |
+| equal force to each driven wheel | open differentials (limited slip inf), one per driven axle |
+| `brake_force` B | `brake_torque = B / braked wheels * r`; the unsteered braked wheels take as much again as a handbrake |
+| `grip` 1.9, `Surface.grip` | wheel `grip` multiplies tyre curves saturating at 1 from slip ratio 0.05 and slip angle 0.1 degrees; the surface multiplies again |
+| `maximum_steer`, `steer_falloff_speed`, `steer_speed` | `max_steer`, the same falloff, `steer_rate = steer_speed * maximum_steer` |
+| `drag`, `downforce`, `rolling_resistance`, `Surface.rolling` | the same, natively each tick |
+| `holding` H N | brake input `H / B` (0.375) from 0.5 m/s, latched |
+| `ground_recovery`, `recovery_speed` | none: Jolt casts from the mount; its suspension hard stop at `suspension_min` holds a bottomed wheel |
+
+Differential suite (`tests/differential/test_vehicles.py`, glisteel's `CarSpec` on both engines
+at 120 Hz). Tolerances are what glisteel's handling tests read: its feel tests bound lateral g,
+heading change and line keeping, its power tests speed bands, its settle tests ride height.
+
+| Scenario | omi | Jolt | Tolerance |
+|---|---|---|---|
+| Standing: ride height | 0.5604 m | 0.5604 m | 1 mm |
+| Launch, speed after 2 / 4 / 8 s of throttle | 30.2 / 45.8 / 61.0 m/s | 28.3 / 44.1 / 59.6 m/s | 12% |
+| Launch: off the line after 8 s (300 m) | 0.00 m | 0.03 m | 0.5 m |
+| Braking from 39 m/s (omi) / 37 m/s (Jolt): distance over v^2 | 0.0362 s2/m | 0.0372 s2/m | 8% |
+| Cornering, steer 0.5 at 15 m/s: lateral g, yaw rate | 0.720 g, 0.464 rad/s | 0.728 g, 0.490 rad/s | 6%, 10% |
+| steer 0.3 at 27 m/s | 0.546 g, 0.190 | 0.550 g, 0.203 | 6%, 10% |
+| steer 1.0 at 27 m/s | 1.837 g, 0.648 | 1.860 g, 0.692 | 6%, 10% |
+| Jump off a 15 degree ramp: apex, flight, landing distance | 4.31 m, 1.52 s, 62.3 m | 4.31 m, 1.38 s, 59.2 m | 0.15 m, 12%, 8% |
+| Wall at 40 m: impact, against the speed before | 32.4 at 32.2 m/s | 31.0 at 30.9 m/s | 5% of own speed; 8% between |
+| 10 degree bank, standing: creep in 3 s | 0.21 m | 0.17 m | 0.25 m |
+| 10 degree bank, driven 6 s: speed, off line, heading | 40.3 m/s, 0.51 m, 0.002 | 38.3 m/s, 0.04 m, 0.005 | 8%; 0.6 m; 0.01 rad |
+| Bumps (4 cm, 3 m): vertical speed rms, speed, off line | 0.120 m/s, 31.7 m/s, 0.77 m | 0.126, 29.7, 1.56 m | 15%, 10%, 2 m |
+
+Divergences, with numbers and what would bridge them:
+
+- Launch. Off the line both are grip-limited (20 kN asked of about 19 kN of rear grip once the
+  weight has moved back); Jolt reaches 28.3 m/s at 2 s against omi's 30.2 (6%), and the gap
+  holds at about 1.5 m/s after. Jolt's force is at its friction budget (0.97 of it measured), but
+  the driven wheels spin up to 30 times the ground speed in the first 0.1 s and stay over it to
+  15 m/s, and the engine's constant-power curve is read at the wheel speed, so the torque falls
+  away early. omi has no wheel speed and reads the curve at the chassis's speed. Clutch strength
+  mattered most: at 200 the clutch slipped and the 2 s speed was 25.6 m/s. A traction control
+  easing the throttle while a driven wheel slipped was tried and dropped: the engine and clutch
+  keep the wheels spinning after the throttle falls, so it held the car to 10 m/s at 2 s.
+  `engine_force` about 6% higher in the mapping, or a knee in the torque curve 6% further out,
+  would close the gap; neither is applied, so the mapping stays the stated one.
+- Bank and crown. The slip-curve tyre needs a slip angle to hold the slope's sideways pull. With
+  the lateral curve full at 2 degrees a car driven straight on a 10 degree bank drifted 9.5 m
+  downhill in 200 m, at 0.5 degrees 2.8 m, at 0.25 degrees 1.2 m; at 0.1 degrees it holds within
+  0.04 m (omi 0.5 m). The yaw rate at 1.7 m/s and full lock varies by 0.020 to 0.022 rad/s at
+  every one of those peaks, so the stiff curve adds no jitter at walking speed.
+- Speed-dependent numbers (braking, cornering radius, jump distance) follow from the launch
+  deficit: per-speed measures (distance over v^2, lateral g) agree within 3%. Yaw rates run 5 to
+  7% above omi's at the same steer: Jolt's car is 5% slower there, and the lock eases off with
+  speed.
+- The landing blow: the heaviest contact on Jolt's chassis over the jump was 8.8 m/s against
+  omi's 3.6; both land upright on four wheels.
+- `ground_recovery` (omi casts from 1 m above the hub to find ground that rose through a wheel)
+  has no counterpart; a wheel buried in streamed ground loses contact until the chassis rises.
+  A custom `VehicleCollisionTester` casting from above the mount would give it.
+- Top speed: 71.5 m/s after 20 s on Jolt and still rising 0.3 m/s a second (257 km/h). glisteel's
+  power tests read the tuning rather than a drive (279 km/h from power and drag alone), so they
+  hold on either engine.
+
+Motorcycle and tracked smoke tests (`tests/test_vehicles.py`): a 240 kg bike on two wheels with
+the lean controller rides at over 5 m/s within 18 degrees of upright and leans into a steer 0.5
+turn (0.2 rad of heading in 1.5 s, leaning less than 53 degrees); a 4 t tank on ten
+wheels in two tracks settles with every wheel down, drives at over 1 m/s, turns 0.2 rad in 1 s at
+full steer and stays within 12 degrees of level. Tracked steering slows the inside track and runs
+it backwards past half a turn.
+
+Determinism: ten cars and ten crates, 60 inputs at random ticks through `at_tick`, 600 ticks in
+lockstep: the `vehicle_digest` of 40 snapshots is identical on 1 and 8 job threads and on a
+second 1-thread run, GIL and free-threaded builds.
+
+Tests: GIL build (3.14, the workspace venv) 467 passed, 2 skipped, and the `serial` pass 1 passed;
+free-threaded 3.14t 434 passed, 2 skipped (no omi_physics there, NEON); ASan and UBSan
+(`tools/asan.sh`) 387 passed, 3 skipped on the full suite before the free-running replay test
+was added, then 43 passed, 1 skipped on `-k vehicle` with it; no sanitizer report. `tests/test_vehicles.py` was
+seen failing at collection against the develop module before the implementation (no vehicle
+API); within it the holding test failed before the latch, the top-speed test before its floor
+was long enough, and the tracked turn before its duration was short enough to stay inside one
+revolution. ruff, ruff format, mypy (strict, 47 files) and oglc-check clean; `_native.pyi`
+regenerated.
+
+Benchmarks (the machine carried other users' processes, load 11 to 31). `benchmarks/vehicles.py`:
+cars on a 256 x 256 height field at 120 Hz, throttle 0.6, steer changed every 60 ticks; ms a tick
+from the world's own timings.
+
+| | 1 job thread | 8 job threads |
+|---|---|---|
+| 10 cars, `Update` / whole tick | 0.048 / 0.054 ms | 0.061 / 0.068 ms (target 0.3 ms) |
+| 100 cars | 0.79 / 0.85 ms | 0.24 / 0.33 ms |
+
+The existing benchmarks, develop before P6a against P6a, both built with the same flags, four
+interleaved runs each, ms a frame (lowest, median):
+
+| | before | after |
+|---|---|---|
+| boxes5000 (1,000 active), 1 thread | 3.22, 3.65 | 3.22, 3.86 |
+| same, 8 threads | 1.31, 1.74 | 1.33, 1.79 |
+| 300 characters on a height field, 60 Hz, 1 thread | 1.49, 1.57 | 1.44, 1.60 |
+| same, 8 threads | 0.59, 0.72 | 0.60, 0.91 |
+
+The lowest of each pair agree within 3%; the medians spread with the load. A world without
+vehicles pays an empty loop before and after each step and a resize of the snapshot's vehicle
+arrays to 0 at each publish.
+
+What P6b's service layer needs:
+
+1. `engine.py`: a `Physics.add_vehicle(chassis, settings)` returning a handle over `Vehicle`,
+   inputs sent once a frame with `vehicle_inputs` (or per tick with `at_tick` for scripted
+   drivers), wheel poses from `Snapshot.vehicles.wheels` for drawing, and interpolation between
+   the last two snapshots as for bodies.
+2. glisteel's seam (`omi_vehicle.ServiceVehicle`) replaced: `control()` becomes `set_input`;
+   `update(dt)` goes (the world thread applies the forces); `wheels[i].compression`,
+   `steer_angle`, `grounded` and `slip` read `WheelRows`; `struck(among, above)` reads
+   `impact()` or the `VEHICLE` records and filters by uid; `place()` is `set_transforms` plus
+   zero velocities (and a fresh input to clear the latch); `Surface` per wheel is
+   `set_surface`, or the surface table keyed by the road and verge materials.
+3. glisteel's tests that drive omi directly (`test_feel.py`'s `TestItSlidesRatherThanRolls`
+   through `standalone_physics`) need the Jolt path as well. Car feel to re-verify in glisteel's
+   own suites on Jolt: the 7% launch deficit (power tests),
+   the line keeping on the crown (0.5 m allowed), the steering falloff (shared code), and the
+   settle budget (`test_settling.py`; not measured on Jolt).
+4. glisteel steps inline and reads the vehicle between steps; on Jolt, forces are the world
+   thread's, so a car's update is one input batch a frame and the race reads the snapshot.
+5. Not built: `ground_recovery`; per-wheel `braked` beyond brake torque 0; anti-roll bars are
+   exposed but glisteel's car has none; vehicle state beyond Jolt's (steer angle, holding latch)
+   is not in `save_state`.
+6. glTF: `VehicleSettings.as_dict` is the shape for an extension or extras on the chassis node;
+   OMI has no vehicle extension yet.
 
 ## 7. Decisions
 
