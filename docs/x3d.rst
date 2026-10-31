@@ -779,9 +779,13 @@ Rigid bodies
    ``OpenGLContext/bin/x3d_rigidbody.x3d``. The p key pauses the collection
    and r reads the document again.
 
-The RigidBodyPhysics component runs on omi_physics (:ref:`physics-x3d`), or on
-Jolt where ``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``jolt``
-(``OpenGLContext.physics.x3djolt``). On Jolt a joint's ``stopBounce`` is not
+The RigidBodyPhysics component runs on Jolt, the default engine
+(``OpenGLContext.physics.x3djolt``), or on omi_physics where
+``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``omi`` (:ref:`physics-x3d`). Both build
+their shapes with omi_physics' model, and ``CollisionSensor`` finds its
+touches with omi_physics' narrow phase, so the component needs the ``omi``
+extra (:ref:`physics-omi`); without it a collection or sensor logs that once
+and stays still. On Jolt a joint's ``stopBounce`` is not
 applied: the door in ``oglc-x3d-rigidbody`` leaves its stop at 0.12 rad/s,
 where a ``stopBounce`` of 0.4 asks for about 1 rad/s. The two engines' frames
 differ after the first contacts. Each

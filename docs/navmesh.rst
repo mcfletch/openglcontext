@@ -44,7 +44,7 @@ From triangles you already have:
    mesh.path((0.5, 0.0, 0.5), (0.5, 0.0, 3.5))
    # [(0.5, 0.0, 0.5), (0.5, 0.0, 3.5)]
 
-From a loaded level's :doc:`physics world <physics>`, which is the usual way:
+From an omi_physics world (the deprecated ``omi`` extra, :ref:`physics-omi`):
 
 .. code-block:: python
 
@@ -115,8 +115,8 @@ between two neighbours is kept as a **portal**, which the
 ``from_world(world, max_slope, clearance)``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Builds a navmesh from an ``omi_physics`` world, which is how a game usually
-calls it. It takes every static trimesh collider in the world, offsets each
+Builds a navmesh from an ``omi_physics`` world (the deprecated ``omi`` extra,
+:ref:`physics-omi`). It takes every static trimesh collider in the world, offsets each
 by its body's position, and builds one mesh from all of them. Characters walk
 on the collision mesh, so a navmesh built from the same triangles agrees with
 it; a separate description of the geometry could differ.

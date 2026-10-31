@@ -151,9 +151,9 @@ The objects that did move are classified together
 (``ZoneTable.classify_many``). The boxes are put in the order of a Z-order
 curve through space (``spatial_order``), so neighbouring boxes are
 neighbours in the order, and taken ``chunk`` (512) at a time. The table keeps
-each zone's reach in an ``omi_physics`` dynamic AABB tree, the physics
-engine's broad phase: a chunk is tested only against the zones the tree finds
-near it, and carried only into the frames of the zones whose world reach
+each zone's reach as a world box, and a chunk's bounds are compared with every
+zone's box in one vectorised test: a chunk is tested only against the zones
+that test finds near it, and carried only into the frames of the zones whose world reach
 overlaps one of its boxes. The cost of a call grows with the objects and the
 zones near each, not with the objects times every zone, and its memory is
 bounded by the chunk and the zones near it. ``sphere_slack`` queries the same
