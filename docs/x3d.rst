@@ -937,8 +937,8 @@ tested against each other.
 
 Joints hold bodies of their collection; a joint whose ``body1`` or ``body2``
 is NULL holds the other body to the world. Anchors and axes are in world
-coordinates as the bodies stand when the collection is built, and angles in
-radians from there. Each sends the outputs its ``forceOutput`` names
+coordinates as the bodies stand when the collection is first built, and
+angles in radians from there. Each sends the outputs its ``forceOutput`` names
 (``ALL``, or the fields by name; ``NONE``, the default, sends none), each
 frame they change:
 
@@ -971,10 +971,16 @@ frame they change:
   ``axis3Angle`` given otherwise; ``motor1AngleRate`` to ``motor3AngleRate``.
 
 What a collection is built from is read again whenever it changes: its
-bodies, their mass, inertia, centre of mass and collidables, the joints and
-their anchors and axes, the collider. What changes from frame to frame --
-positions and velocities sent in, forces, gravity, motors, stops and the
-collision parameters -- is read every frame. Of the Basic archive's
+bodies, their centre of mass and collidables, the joints' bodies, anchors
+and axes, the collider, and the collider's ``minBounceSpeed`` and the
+collection's rest thresholds and ``preferAccuracy``. A joint the new build
+makes from the same bodies, anchor and axes is made where it stands, so its
+stops and readings stay measured from the first build. What changes from
+frame to frame -- positions and velocities sent in, mass and inertia,
+forces, gravity, motors, stops, ``suspensionForce`` and the collider's
+``bounce`` and ``frictionCoefficients`` -- is read every frame. A stop moved
+past where its joint stands holds the joint there; it turns back within the
+stops and not past them. Of the Basic archive's
 examples, the ones whose contacts pass through a ``Script`` (``BallBounce``,
 ``BounceTrimesh``, ``CarDemoMain``) do not collide, since scripts are not
 run; the rest simulate as written.

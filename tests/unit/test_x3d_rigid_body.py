@@ -611,6 +611,132 @@ class TestJoints:
         assert joint.motor1Angle == pytest.approx(0.25, abs=0.02)
 
 
+class TestChangesMidRun:
+    """Fields changed while the collection runs, read from the frame they change"""
+
+    HINGE = TestJoints.HINGE % b'forceOutput="ALL" minAngle="-0.3" maxAngle="0.3"'
+
+    @staticmethod
+    def bar_angle(body) -> float:
+        turn = body.orientation
+        return float(turn[3]) * float(np.sign(turn[2]))
+
+    def test_a_mass_changed_mid_run_leaves_the_hinge_at_its_stop(self):
+        graph = scene(self.HINGE)
+        collection, joint, body = graph.getDEF('C'), graph.getDEF('J'), graph.getDEF('B')
+        run(collection, 1.5)
+        world = collection.system.jolt
+        for mass in (2.0, 3.0):
+            body.mass = mass
+            run(collection, 1.5)
+            assert joint.angle == pytest.approx(-0.3, abs=0.03)
+            assert self.bar_angle(body) == pytest.approx(-0.3, abs=0.03)
+        assert collection.system.jolt is world
+
+    def test_a_mass_changed_mid_run_is_the_mass_used(self):
+        """A push of 2 N s on a 4 kg body sets it going at 0.5 m/s"""
+        graph = falling(body=b'position="0 2 0" useGlobalGravity="false"')
+        collection, body = graph.getDEF('C'), graph.getDEF('B')
+        collection.advance(FRAME)
+        body.mass = 4.0
+        body.forces = [(2.0 * 60.0, 0.0, 0.0)]
+        collection.advance(FRAME)
+        body.forces = []
+        run(collection, 0.1)
+        assert body.linearVelocity[0] == pytest.approx(0.5, rel=0.02)
+
+    @pytest.mark.parametrize('edit', [
+        lambda graph: setattr(graph.getDEF('B'), 'centerOfMass', (0.1, 0.0, 0.0)),
+        lambda graph: setattr(graph.getDEF('C'), 'disableTime', 2.0),
+    ])
+    def test_a_world_made_again_keeps_the_hinge_at_its_stop(self, edit):
+        graph = scene(self.HINGE)
+        collection, joint, body = graph.getDEF('C'), graph.getDEF('J'), graph.getDEF('B')
+        run(collection, 1.5)
+        world = collection.system.jolt
+        edit(graph)
+        run(collection, 1.5)
+        assert collection.system.jolt is not world
+        assert joint.angle == pytest.approx(-0.3, abs=0.03)
+        assert self.bar_angle(body) == pytest.approx(-0.3, abs=0.03)
+        assert np.allclose(joint.body2AnchorPoint, (0, 0, 0), atol=0.02)
+
+    def test_a_world_made_again_carries_the_motor_angles_on(self):
+        """0.5 N m on 1 kg m2 from rest: 0.75 rad/s and 0.5625 rad at 1.5 s"""
+        graph = scene(b'''<RigidBodyCollection DEF="C">
+          <RigidBody DEF="A" containerField="bodies" fixed="true"/>
+          <RigidBody DEF="B" containerField="bodies" useGlobalGravity="false" inertia="1 0 0 0 1 0 0 0 1"/>
+          <MotorJoint DEF="J" containerField="joints" enabledAxes="1" motor1Axis="0 1 0"
+            axis1Torque="0.5" autoCalc="true" forceOutput="ALL">
+            <RigidBody USE="A" containerField="body1"/><RigidBody USE="B" containerField="body2"/>
+          </MotorJoint></RigidBodyCollection>''')
+        collection, joint = graph.getDEF('C'), graph.getDEF('J')
+        run(collection, 1.0)
+        collection.disableTime = 2.0
+        run(collection, 0.5)
+        assert joint.motor1AngleRate == pytest.approx(0.75, abs=0.02)
+        assert joint.motor1Angle == pytest.approx(0.5625, abs=0.02)
+
+    def test_a_hinge_stop_moved_mid_run_is_where_it_stops(self):
+        graph = scene(self.HINGE)
+        collection, joint, body = graph.getDEF('C'), graph.getDEF('J'), graph.getDEF('B')
+        run(collection, 1.5)
+        joint.minAngle = -1.2
+        run(collection, 2.0)
+        assert joint.angle == pytest.approx(-1.2, abs=0.03)
+        assert self.bar_angle(body) == pytest.approx(-1.2, abs=0.03)
+
+    def test_a_slider_stop_moved_mid_run_is_where_it_stops(self):
+        graph = scene(b'''<RigidBodyCollection DEF="C">
+          <RigidBody DEF="B" containerField="bodies"/>
+          <SliderJoint DEF="J" containerField="joints" axis="0 1 0" minSeparation="-0.5"
+            maxSeparation="0.5" forceOutput="ALL">
+            <RigidBody USE="B" containerField="body2"/></SliderJoint></RigidBodyCollection>''')
+        collection, joint = graph.getDEF('C'), graph.getDEF('J')
+        run(collection, 1.5)
+        joint.minSeparation = -1.0
+        run(collection, 1.5)
+        assert joint.separation == pytest.approx(-1.0, abs=0.03)
+        assert graph.getDEF('B').position[1] == pytest.approx(-1.0, abs=0.03)
+
+    @pytest.mark.parametrize('later, bounces', [(0.8, True), (0.0, False)])
+    def test_a_bounce_set_while_the_ball_falls_is_the_bounce_it_lands_with(self, later, bounces):
+        graph = scene(BALL + b'''<RigidBodyCollection DEF="C">
+          <CollisionCollection DEF="K" containerField="collider" appliedParameters='"BOUNCE"'
+            bounce="0" minBounceSpeed="0.1">
+            <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection>
+          <RigidBody DEF="B" containerField="bodies" position="0 1 0">
+            <CollidableShape USE="BALL-GEOM" containerField="geometry"/>
+          </RigidBody></RigidBodyCollection>''')
+        collection, body = graph.getDEF('C'), graph.getDEF('B')
+        run(collection, 0.2)
+        graph.getDEF('K').bounce = later
+        heights = []
+        run(collection, 1.8, each=lambda: heights.append(float(body.position[1])))
+        landed = heights.index(min(heights))
+        assert bool(max(heights[landed:]) - min(heights) > 0.3) is bounces
+
+    def test_a_friction_set_mid_run_is_the_friction_used(self):
+        """A box sliding at 2 m/s on friction 0 keeps going until friction 1 stops it"""
+        graph = scene(BALL + b'''<CollidableShape DEF="BOX"><Shape containerField="shape">
+            <Box size="0.2 0.2 0.2"/></Shape></CollidableShape>
+          <RigidBodyCollection DEF="C">
+          <CollisionCollection DEF="K" containerField="collider"
+            appliedParameters='"FRICTION_COEFFICIENT-2"' frictionCoefficients="0 0">
+            <CollidableShape USE="BOX"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection>
+          <RigidBody DEF="B" containerField="bodies" position="0 -0.35 0" linearVelocity="2 0 0">
+            <CollidableShape USE="BOX" containerField="geometry"/>
+          </RigidBody></RigidBodyCollection>''')
+        collection, body = graph.getDEF('C'), graph.getDEF('B')
+        run(collection, 0.3)
+        assert body.linearVelocity[0] == pytest.approx(2.0, abs=0.05)
+        graph.getDEF('K').frictionCoefficients = (1.0, 1.0)
+        run(collection, 1.0)
+        assert abs(body.linearVelocity[0]) < 0.05
+
+
 def test_the_parameters_a_collection_applies():
     from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
     collection = x3d.CollisionCollection(

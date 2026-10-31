@@ -517,6 +517,15 @@ def _floats(values: Any) -> tuple[float, ...]:
     return tuple(float(value) for value in np.asarray(values, dtype='d').ravel())
 
 
+def joint_signature(joint: Any) -> tuple[Any, ...]:
+    """What a joint is built from: its bodies, anchor, axes and motor axes"""
+    return (joint, joint.body1, joint.body2,
+            *(_key(getattr(joint, name)) for name in
+              ('anchorPoint', 'axis', 'axis1', 'axis2', 'motor1Axis', 'motor2Axis', 'motor3Axis')
+              if hasattr(joint, name)),
+            getattr(joint, 'enabledAxes', None))
+
+
 def _suspension(force_mix: float, error_correction: float) -> tuple[float, float]:
     """The stiffness (N/m) and damping (N s/m) of a suspension X3D gives as ERP and CFM
 
@@ -539,10 +548,11 @@ class RigidSystem:
 
     The world is built from the collection's nodes at the first
     :meth:`advance`, and again whenever what it is built from changes
-    (:meth:`signature`): the bodies, their geometry, mass and enabled state,
-    the joints, the collider. Field values that change from frame to frame --
-    positions and velocities sent in, forces, torques, gravity, motor speeds
-    -- are read every frame. An engine's subclass provides :meth:`build`,
+    (:meth:`signature`): the bodies, their geometry, centre of mass and
+    enabled state, the joints' bodies, anchors and axes, the collider. Field
+    values that change from frame to frame -- positions and velocities sent
+    in, mass and inertia, forces, torques, gravity, motor speeds, stops, the
+    collider's bounce and friction -- are read every frame. An engine's subclass provides :meth:`build`,
     :meth:`advance`, :meth:`awake`, :meth:`_held_index`, :meth:`_surface`,
     :meth:`_park_surfaces` and :meth:`_joint_values`.
     """
@@ -596,22 +606,13 @@ class RigidSystem:
         for body in self._bodies():
             density = body.massDensityModel
             moving = not body.fixed
-            bodies.append((body, body.fixed, float(body.mass), _key(body.centerOfMass),
-                           _key(body.inertia), density,
+            bodies.append((body, body.fixed, _key(body.centerOfMass), density,
                            None if not density else geometry_shape(density, True),
                            tuple(self._collidable_signature(collidable, moving)
                                  for collidable in body.geometry if collidable)))
-        joints = []
-        for joint in self.collection.joints:
-            if not joint:
-                continue
-            joints.append((joint, joint.body1, joint.body2,
-                           *(_key(getattr(joint, name)) for name in
-                             ('anchorPoint', 'axis', 'axis1', 'axis2', 'motor1Axis',
-                              'motor2Axis', 'motor3Axis') if hasattr(joint, name)),
-                           getattr(joint, 'enabledAxes', None)))
+        joints = tuple(joint_signature(joint) for joint in self.collection.joints if joint)
         collider = self.collection.collider
-        return (tuple(bodies), tuple(joints), collider,
+        return (tuple(bodies), joints, collider,
                 tuple((node, bounds, self._collidable_signature(node, False))
                       for node, bounds in members(collider)))
 
