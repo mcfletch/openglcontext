@@ -45,7 +45,7 @@ __all__ = ['NAME', 'ContactFilter', 'character_state', 'engine_info', 'gravity',
 NAME = 'omi_physics'
 
 #: Held while a proxy's engine shape is made, so every thread is given the same object.
-_SHAPING = threading.Lock()
+_SHAPING = threading.RLock()
 
 
 def engine_info(tick_hz: float, compute: str = '') -> EngineInfo:
