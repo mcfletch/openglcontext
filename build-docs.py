@@ -187,25 +187,36 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
 
 
 def node_sections() -> Any:
-    """The callable that adds a node's uses to its class on the module pages.
+    """The callable that adds a node's sample world and its uses to its class on the module pages.
 
-    The files are those of the workspace's projects; a checkout outside a
+    The sample's render is copied from the baselines to ``docs/images/samples``.
+    The uses are the files of the workspace's projects; a checkout outside a
     workspace has none to read, and its node pages have no such section.
     """
     sys.path.insert(0, HERE)
-    from docbuild import nodeusage, tutorials  # noqa: PLC0415 importable only once this script's directory is on sys.path
+    from docbuild import nodesamples, nodeusage, tutorials  # noqa: PLC0415 importable only once this script's directory is on sys.path
+    from OpenGLContext.bin import x3d_regression  # noqa: PLC0415 for where the baselines are
 
+    shown = nodesamples.class_sections(
+        nodesamples.find(),
+        nodesamples.publish_images(x3d_regression.default_baseline_root(samples=True)),
+    )
     root = nodeusage.workspace_root(HERE)
     if root is None:
         log.info('No workspace above %s; node pages list no uses', HERE)
-        return None
+        return shown
     log.info('Reading the projects of %s for the nodes they use', root)
     index = nodeusage.build(root)
     log.info('%d nodes are used', len(index))
-    return nodeusage.class_sections(
+    used = nodeusage.class_sections(
         index,
         {'%s/%s' % (path.directory, name) for path in tutorials.PATHS for name in path.scripts},
     )
+
+    def sections(cls: type) -> list[str]:
+        return shown(cls) + used(cls)
+
+    return sections
 
 
 def build_tutorials() -> None:

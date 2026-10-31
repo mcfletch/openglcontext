@@ -1,8 +1,9 @@
 # Node documentation: where a node is used, and a world for each
 
 **Status:** 🟡 Part 1 (the usage index and its section on the API pages) is
-built; part 2 (the sample worlds) is built for the 54 nodes of VRML97 and open
-for the rest of X3D; the page figures and the glTF links are open. The tutorial
+built; part 2 (the sample worlds) is built for the 54 nodes of VRML97, with their
+renders and sources on the node pages, and open for the rest of X3D; the live view
+and the glTF links are open. The tutorial
 paths' hand-written `index.rst` (background text ahead of the first script) is
 in [SPHINX-DOCS.md](SPHINX-DOCS.md#a-paths-introduction).
 
@@ -110,10 +111,8 @@ the corpus run uses, and compares it with
 holds the renderer, date and size). A sample whose point is behaviour names the
 frames to draw in `sample:frames`, so the render shows the result of the circuit
 and not its starting state: a TimeSensor starting at 0 with a four second cycle
-is at a quarter of it after 59 frames. `tools/doc_images.py` gets one manifest
-group generating an entry per sample with the `baseline` producer, so the page
-figure, size, JPEG quality and licence tag follow the rest of the set. The
-samples are ours and BSD, so `ATTRIBUTION.md` gains nothing.
+is at a quarter of it after 59 frames. The page figure is that PNG, copied by the build. The samples are ours and BSD,
+so `ATTRIBUTION.md` gains nothing.
 
 ### On the page
 
@@ -167,8 +166,11 @@ engine's components).
 2. [x] `class_sections` in `directdocs` (PyOpenGL repository) and the section on
    node classes' API pages.
 3. [x] Samples for the 54 nodes of VRML97, the load and circuit tests and the
-   reference renders; [ ] the manifest group for the page figures.
-4. [ ] The sample on the node's page: source in both syntaxes and the render.
+   reference renders.
+4. [x] The sample on the node's page: the reference render and the source in both
+   syntaxes, a *Sample world* block ahead of *Where this node is used*. The renders
+   are copied from the baselines to `docs/images/samples` by the build, so the page
+   needs no manifest group; `tools/doc_images.py` is for the curated gallery.
 5. [ ] The `x3d-sample` directive and X_ITE in the built site, for the
    interactive samples.
 6. [ ] The glTF extension table.

@@ -6,6 +6,7 @@ import math
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from vrml.x3d import files, pointing
 
@@ -199,3 +200,64 @@ class TestTheCircuitsOperated:
         scene.getDEF('Seen').observe(True, now=70.0)
         scene.getDEF('Clock').advance(70.5)
         assert scene.getDEF('Spinner').rotation[3] == pytest.approx(math.pi, abs=1e-3)
+
+
+class TestOnTheNodesPage:
+    """Each node's class page shows its sample: the render and both sources."""
+
+    @pytest.fixture
+    def sample(self):
+        return next(s for s in SAMPLES if s.node == 'Box')
+
+    def test_the_block_names_the_sample_and_shows_its_sources(self, sample):
+        text = nodesamples.section(sample, image=False)[0]
+        assert text.startswith('.. rubric:: Sample world')
+        assert sample.meta()['description'] in text
+        assert '.. literalinclude:: /samples/nodes/Box.x3d\n   :language: xml' in text
+        assert '.. literalinclude:: /samples/nodes/Box.wrl' in text
+
+    def test_the_render_is_shown_where_there_is_one(self, sample):
+        assert '.. image:: /images/samples/Box.png' in nodesamples.section(sample, image=True)[0]
+        assert '.. image::' not in nodesamples.section(sample, image=False)[0]
+
+    def test_a_node_vrml97_lacks_has_only_its_x3d_source(self, tmp_path):
+        (tmp_path / 'Arc2D.x3d').write_text(
+            '<X3D profile="Immersive" version="3.3"><head>'
+            '<meta name="title" content="Arc2D"/><meta name="description" content="An arc."/>'
+            '</head><Scene/></X3D>',
+            encoding='utf8',
+        )
+        text = nodesamples.section(nodesamples.find(str(tmp_path))[0], image=False)[0]
+        assert 'Arc2D.x3d' in text
+        assert 'Arc2D.wrl' not in text
+
+    def test_an_interactive_sample_says_so(self):
+        sample = next(s for s in SAMPLES if s.node == 'TouchSensor')
+        assert 'operate' in nodesamples.section(sample, image=False)[0]
+        assert 'operate' not in nodesamples.section(
+            next(s for s in SAMPLES if s.node == 'Box'), image=False)[0]
+
+    def test_the_renders_are_copied_where_the_pages_read_them(self, tmp_path):
+        baselines = tmp_path / 'baselines'
+        baselines.mkdir()
+        Image.new('RGB', (4, 4), (200, 0, 0)).save(baselines / 'Samples.Box.png')
+        (baselines / 'Samples.Box.json').write_text('{}', encoding='utf8')
+        copied = nodesamples.publish_images(str(baselines), str(tmp_path / 'images'))
+        assert copied == {'Box'}
+        assert (tmp_path / 'images' / 'Box.png').read_bytes() == (baselines / 'Samples.Box.png').read_bytes()
+        assert sorted(p.name for p in (tmp_path / 'images').iterdir()) == ['Box.png']
+
+    def test_a_pointer_file_is_not_a_render(self, tmp_path):
+        """A checkout without its LFS objects holds a text pointer where the PNG is."""
+        baselines = tmp_path / 'baselines'
+        baselines.mkdir()
+        (baselines / 'Samples.Box.png').write_text('version https://git-lfs.github.com/spec/v1\n', encoding='utf8')
+        assert nodesamples.publish_images(str(baselines), str(tmp_path / 'images')) == set()
+
+    def test_the_callable_for_the_api_pages_answers_a_node_class_its_sample(self):
+        from vrml.x3d import nodes
+
+        sections = nodesamples.class_sections(SAMPLES, images={'Box'})
+        assert 'Box.x3d' in sections(nodes.Box)[0]
+        assert sections(nodes.Arc2D) == []
+        assert sections(dict) == []

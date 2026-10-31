@@ -17,6 +17,11 @@ document:
 
     python -m docbuild.nodesamples            # the .wrl files out of date, and the nodes with no sample
     python -m docbuild.nodesamples --write    # bring the .wrl files up to date
+
+The build gives each node's class page a *Sample world* block: the reference
+render, and the two sources included from ``docs/samples/nodes`` (:func:`section`,
+:func:`class_sections`).  The renders are copied from the baselines to
+``docs/images/samples`` by :func:`publish_images`.
 """
 
 from __future__ import annotations
@@ -25,8 +30,9 @@ import argparse
 import dataclasses
 import logging
 import os
+import shutil
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Collection, Iterable
 
 from OpenGLContext import atomicfiles
 from OpenGLContext.bin.x3d_regression import SAMPLE_FRAMES
@@ -34,8 +40,11 @@ from OpenGLContext.bin.x3d_regression import SAMPLE_FRAMES
 __all__ = [
     'SAMPLES',
     'Sample',
+    'class_sections',
     'find',
     'problems',
+    'publish_images',
+    'section',
     'stale',
     'unsampled',
     'vrml97_nodes',
@@ -49,6 +58,9 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 #: Where the samples are.
 SAMPLES = os.path.join(HERE, 'docs', 'samples', 'nodes')
+
+#: Where the pages read the renders: ``docs/images/samples``, which a build writes.
+IMAGES = os.path.join(HERE, 'docs', 'images', 'samples')
 
 #: What the loader says of a sample that is not a fault in it: the Script
 #: sample holds a program the engine reads and does not run.
@@ -166,6 +178,78 @@ def write(samples: Iterable[Sample]) -> list[Sample]:
         assert text is not None  # noqa: S101 stale() lists only samples that convert
         atomicfiles.write_text(sample.wrl, text)
     return changed
+
+
+def publish_images(baselines: str, destination: str = IMAGES) -> set[str]:
+    """Copy each sample's baseline render to ``<destination>/<Node>.png``; the nodes copied.
+
+    A file under 1 KiB is not a render: a checkout without its LFS objects holds a
+    text pointer where the picture is.
+    """
+    found: set[str] = set()
+    if not os.path.isdir(baselines):
+        return found
+    os.makedirs(destination, exist_ok=True)
+    for name in sorted(os.listdir(baselines)):
+        if not (name.startswith('Samples.') and name.endswith('.png')):
+            continue
+        source = os.path.join(baselines, name)
+        if os.path.getsize(source) < 1024 and not _is_png(source):
+            continue
+        node = name[len('Samples.') : -len('.png')]
+        target = os.path.join(destination, node + '.png')
+        if not os.path.exists(target) or _bytes(target) != _bytes(source):
+            atomicfiles.copy_file(source, target)
+        found.add(node)
+    return found
+
+
+def _bytes(path: str) -> bytes:
+    with open(path, 'rb') as handle:
+        return handle.read()
+
+
+def _is_png(path: str) -> bool:
+    return _bytes(path)[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def section(sample: Sample, image: bool, source: str = '/samples/nodes', images: str = '/images/samples') -> list[str]:
+    """The reST block showing ``sample`` on its node's page, in a list of one.
+
+    ``image`` is whether there is a render to show.  ``source`` and ``images``
+    are where the page finds the sample files and the renders, from the root of
+    the documentation.
+    """
+    meta = sample.meta()
+    out = ['.. rubric:: Sample world', '', meta.get('description', '')]
+    if image:
+        out += ['', '.. image:: %s/%s.png' % (images, sample.node), '   :alt: %s' % (meta.get('title', sample.node),), '   :width: 480px']
+    if sample.interactive:
+        out += ['', 'The sample is one to operate: click it or drag it in a viewer such as ``oglc-view``.']
+    for path, language in ((sample.path, 'xml'), (sample.wrl, 'text')):
+        if os.path.exists(path):
+            name = os.path.basename(path)
+            out += ['', '.. literalinclude:: %s/%s' % (source, name), '   :language: %s' % (language,), '   :caption: %s' % (name,)]
+    return ['\n'.join(out)]
+
+
+def class_sections(samples: Iterable[Sample], images: Collection[str] = ()) -> Callable[[type], list[str]]:
+    """The callable PyOpenGL's ``directdocs`` takes as ``class_sections``.
+
+    It answers the *Sample world* block for the class of a node that has a
+    sample, and nothing for any other class.  ``images`` names the nodes with a render.
+    """
+    from docbuild import nodeusage  # noqa: PLC0415 only when the pages are written
+
+    by_node = {sample.node: sample for sample in samples}
+
+    def sections(cls: type) -> list[str]:
+        node = nodeusage.node_name(cls)
+        if node is None or node not in by_node:
+            return []
+        return section(by_node[node], node in images)
+
+    return sections
 
 
 def main(argv: list[str] | None = None) -> int:
