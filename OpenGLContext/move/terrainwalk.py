@@ -53,9 +53,6 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from OpenGLContext.events import systemtime
-from OpenGLContext.events.framestep import FrameStep
-from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 from OpenGLContext.physics.landscape import Landscape, NearbyColliders
 
@@ -124,7 +121,6 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
     #: The callables the colliders that come and go are asked of, for the rocks the
     #: avatar stands on.
     _tw_sources: Sequence[ColliderAnswer] = ()
-    _tw_hooked = False
     #: What the free-fly camera was last held down at, so a parked one is not seated
     #: again and a move is seated from where the last one ended.
     _tw_clamped: tuple[float, ...] | None = None
@@ -355,64 +351,25 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
             walker.framed = False
         return walker
 
-    def ensurePhysicsWorld(self) -> bool:
-        """Make the avatar once, in the physics world.  False if no height field is bound."""
-        if self.physicsPlatform is not None:
-            return True
-        if self._tw_hf is None or self.platform is None:
-            return False
-        low, high = self.walkBounds()
-        scale = self.physicsAvatarScale(low, high)
-        capabilities = self.characterCapabilities(scale)
-        self.applyMovementModes(scale)
-        self.physicsPlatform = PhysicsViewPlatform.over(self._tw_walker(), yaw=self.physicsYaw)
-        self._tw_hook()
-        self.spawnAvatar(low, high, capabilities, self.physicsSpawnViewpoints())
-        self.physicsPlatform.apply(self)
-        return True
+    def buildPhysicsWorld(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """The bounds of the height field, whose ground and trunks :meth:`init_walk` put in the world.
 
-    def _tw_hook(self) -> None:
-        """Take the frame: input before the world is stepped, the camera after.
-
-        The render queue runs these around the physics service's own, which was
-        registered when :meth:`init_walk` first asked for it.
+        None until a height field is bound and the context has a camera.
         """
-        if self._tw_hooked:
-            return
-        queue = getattr(self, 'renderQueue', None)
-        if queue is None:
-            return
-        self._tw_hooked = True
-        self._tw_steps = FrameStep(longest=float(self.physicsMaxStep))
-        queue.on_frame(self._tw_input, first=True)
-        queue.on_frame(self._tw_camera)
+        if self._tw_hf is None or self.platform is None:
+            return None
+        return self.walkBounds()
 
-    def _tw_moving_to_a_viewpoint(self) -> bool:
-        from OpenGLContext.passes import viewpointbinding  # noqa: PLC0415 cycle: passes import move
+    def physicsAvatar(self, capabilities: CharacterCapabilities, scale: float,
+                      lo: Any, hi: Any) -> Character:
+        """The walker the free-fly camera is held down by, which becomes the avatar."""
+        return self._tw_walker()
 
-        return viewpointbinding.in_transition(self)
-
-    def _tw_input(self) -> None:
-        """Give the declared movement mode the frame, so the avatar's move is set before it steps."""
-        dt = self._tw_steps.step(systemtime.systemTime())
-        if (not self.physicsWalking or self.physicsPlatform is None
-                or self._tw_moving_to_a_viewpoint()):
-            return
-        self.updateNavigation(dt)
-
-    def _tw_camera(self) -> None:
-        """Put the camera at the avatar's eye once the world has stepped it."""
-        if (not self.physicsWalking or self.physicsPlatform is None
-                or self._tw_moving_to_a_viewpoint()):
-            return
-        self.resolvePhysicsStep()
-        self.physicsPlatform.apply(self)
+    def watchCollisionGroups(self) -> None:
+        """Nothing: the walker's world is the landscape, and the scene's shapes are not bodies in it."""
 
     def onPhysicsModeChanged(self) -> None:
-        """Have the service step the avatar while the context walks, and leave it where it is otherwise."""
-        walker = self._tw_character
-        if walker is not None:
-            walker.framed = bool(self.physicsWalking)
+        """Seat the free-fly camera afresh after a switch, as well as framing the avatar."""
         self._tw_clamped = None
         super(TerrainWalkMixin, self).onPhysicsModeChanged()
 

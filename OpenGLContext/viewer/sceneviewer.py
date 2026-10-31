@@ -36,7 +36,7 @@ handful of methods meant to be overridden:
 ``onSceneReady()``
     Just after a scene has been built, on the render thread.
 ``buildPhysicsWorld()``
-    Where the collision world comes from, if not from ``self.sg``.
+    What the walking avatar stands on, if not the shapes of ``self.sg``.
 
 The pieces underneath are useful on their own and live beside this module:
 :mod:`~OpenGLContext.viewer.adapters` (what a source is and how to read it),
@@ -159,6 +159,8 @@ if TYPE_CHECKING:
         def setMovementManager(self, manager: Any) -> None: ...
         def cycleMovementMode(self, event: Any = None) -> Any: ...
         physicsPlatform: Any
+        def onPhysicsModeChanged(self) -> None: ...
+        def forgetPhysicsWorld(self) -> None: ...
         def setupCallbacks(self) -> None: ...
         def presentFrame(self) -> Any: ...
 else:
@@ -585,14 +587,14 @@ class SceneViewerMixin( CaptionMixin,
     def onSceneReady(self) -> None:
         """A scene has been built.  Give walking a world to work with.
 
-        The collision world is dropped rather than kept, because it was cooked
-        from the model that has just been replaced.
+        The avatar is taken out of the world rather than kept, because it was
+        stood on the model that has just been replaced.
         """
         first = not self.sceneLoaded
         self.sceneLoaded = True
         if self.capturing or not self.options.physics:
             return
-        self.physicsPlatform = None
+        self.forgetPhysicsWorld()
         if not self.enablePhysics(True) and first:
             commentary.say("Physics: no walkable geometry; using free-fly.\n")
 
@@ -1056,6 +1058,7 @@ class SceneViewerMixin( CaptionMixin,
         return list(self.viewpoints[index:]) + list(self.viewpoints[:index])
 
     def onPhysicsModeChanged(self) -> None:
+        super(SceneViewerMixin, self).onPhysicsModeChanged()
         self.updateOverlay()
 
     # -- animation --------------------------------------------------------

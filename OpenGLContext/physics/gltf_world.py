@@ -5,10 +5,10 @@ them as a static ``trimesh`` collider so a character can walk on and bump into t
 model.  A node that carries an OMI physics body
 (:mod:`OpenGLContext.physics.omigltf`) is met as itself.
 
-:func:`collision_world_from_scene` builds an omi_physics world, the one the
-viewer's walk-around mode (:class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin`)
-steps; it needs the deprecated omi_physics (the ``omi`` extra). The rest of
-the module is the scenegraph walk the physics service's scenery and proxies use.
+:func:`collision_world_from_scene` builds an omi_physics world and needs the
+deprecated omi_physics (the ``omi`` extra). The rest of the module is the
+scenegraph walk the physics service's scenery, its proxies and the walking
+avatar (:func:`scene_bounds`) use.
 """
 from __future__ import annotations
 
@@ -300,6 +300,25 @@ def _merged(buckets: dict[tuple[Any, ...], _Bucket]) -> Optional[tuple[np.ndarra
         if found is not None:
             _append_mesh(found[0], found[1], whole.points, whole.tris, whole.state, 0.0)
     return whole.arrays()
+
+
+def scene_bounds(group: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """The corners ``(low, high)`` of the triangles ``group`` collides with, or None for none.
+
+    The triangles are the ones the scenery is made of: every mesh under
+    ``group`` placed in the world, a disabled X3D ``Collision`` group's left
+    out and an enabled one's proxy in place of its children.
+    """
+    lows, highs = [], []
+    for bucket in _buckets(group, 0.0).values():
+        found = bucket.arrays()
+        if found is None or not len(found[1]):
+            continue
+        lows.append(found[0].min(axis=0))
+        highs.append(found[0].max(axis=0))
+    if not lows:
+        return None
+    return np.min(lows, axis=0), np.max(highs, axis=0)
 
 
 #: Each world's X3D Collision groups, by the static body their geometry is.

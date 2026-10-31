@@ -142,8 +142,6 @@ def test_the_features_built_on_an_omi_world_name_the_extra() -> None:
         from OpenGLContext.physics.props import PropColliders
         from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
         from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
-        from OpenGLContext.move.physicswalk import PhysicsWalkMixin
-        from OpenGLContext.scenegraph import basenodes
         from OpenGLContext.scenegraph.x3drigidbody import RigidBodyCollection
 
         for make in (lambda: PropColliders(None, []), lambda: TerrainColliders(None),
@@ -153,19 +151,56 @@ def test_the_features_built_on_an_omi_world_name_the_extra() -> None:
             except EngineUnavailable as error:
                 print('OpenGLContext[omi-physics]' in str(error))
 
-        class Host(PhysicsWalkMixin):
-            sg = basenodes.sceneGraph(children=[basenodes.Shape(geometry=basenodes.Box())])
-
         heard = []
         handler = logging.Handler()
         handler.emit = lambda record: heard.append(record.getMessage())
         logging.getLogger().addHandler(handler)
-        print(Host().ensurePhysicsWorld())
         collection = RigidBodyCollection()
         print(collection.step(), collection.step())
         print(sum('OpenGLContext[omi-physics]' in message for message in heard))
     ''')
-    assert out.split() == ['True', 'True', 'True', 'False', 'False', 'False', '2']
+    assert out.split() == ['True', 'True', 'True', 'False', 'False', '1']
+
+
+def test_walking_needs_no_omi_physics() -> None:
+    out = run_without_omi('''
+        import numpy as np
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.move.physicswalk import PhysicsWalkMixin
+        from OpenGLContext.physics import Physics, PhysicsDefinition
+        from OpenGLContext.scenegraph import basenodes
+
+        class Platform:
+            position = np.array([0.0, 1.6, 0.0, 1.0])
+            def setPosition(self, position):
+                self.position = np.array(tuple(position) + (1.0,))
+            def setOrientation(self, orientation):
+                pass
+
+        class Host(PhysicsWalkMixin):
+            movementManager = None
+            sg = basenodes.sceneGraph(children=[basenodes.Shape(
+                geometry=basenodes.Box(size=(20.0, 1.0, 20.0)))])
+            def __init__(self):
+                self.physics = Physics(PhysicsDefinition(mode='inline'))
+                self.platform = Platform()
+                self.contextDefinition = ContextDefinition()
+            def triggerRedraw(self, force=0):
+                pass
+            def getNavigation(self):
+                return None
+            def updateNavigation(self, dt):
+                pass
+
+        host = Host()
+        print(host.enablePhysics(True))
+        for _ in range(20):
+            host.stepPhysics(0.05)
+        print(host.physicsPlatform.managed.grounded,
+              round(float(host.physicsPlatform.managed.position[1]), 1))
+        host.physics.close()
+    ''')
+    assert out.split() == ['True', 'True', '0.5']
 
 
 @pytest.mark.engines('jolt')

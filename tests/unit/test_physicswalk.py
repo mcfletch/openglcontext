@@ -1,12 +1,12 @@
 """Walking as a capability of any context (:mod:`OpenGLContext.move.physicswalk`).
 
 These drive :class:`PhysicsWalkMixin` on a host that knows nothing about glTF and
-has no GL: a real :class:`~omi_physics.world.PhysicsWorld` cooked from a real
-scenegraph, a real character controller, and a stub for the handful of things the
-mix-in asks of the context it is mixed into.  What is exercised is the capability
-itself -- switching between the avatar and the free-fly camera, building the world
-through the ``buildPhysicsWorld`` seam, standing the avatar on clear floor, moving
-it to a defined view, and stepping it.
+has no GL: a real physics service whose scenery is a real scenegraph, the avatar a
+real character of it, and a stub for the handful of things the mix-in asks of the
+context it is mixed into.  What is exercised is the capability itself -- switching
+between the avatar and the free-fly camera, building the world through the
+``buildPhysicsWorld`` seam, standing the avatar on clear floor, moving it to a
+defined view, and stepping it.
 """
 import numpy as np
 import pytest
@@ -21,14 +21,29 @@ from OpenGLContext.move.viewplatform import ViewPlatform
 from OpenGLContext import quaternion
 from OpenGLContext.move.navigation import NavigationManager
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
-from OpenGLContext.passes import renderpass
-from OpenGLContext.physics.gltf_world import collision_world_from_scene
-from OpenGLContext.physics.zones import ZoneRegion
-from OpenGLContext.scenegraph.zone import placed_zones, Zone, ZoneGravity
-from tests.unit.omi import requires_omi
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.scenegraph.zone import Zone, ZoneGravity
 
-#: PhysicsWalkMixin walks an omi_physics world of its own; omi_physics is the omi extra.
-pytestmark = [pytest.mark.engines('omi', 'jolt'), requires_omi]
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
+#: The physics services the hosts of a test made, closed after it.
+_SERVICES = []
+
+
+@pytest.fixture(autouse=True)
+def _close_services():
+    yield
+    while _SERVICES:
+        _SERVICES.pop().close()
+
+
+def _service():
+    """A physics service stepped in the frame, as a capture's is."""
+    made = Physics(PhysicsDefinition(mode='inline'))
+    _SERVICES.append(made)
+    return made
 
 
 # -- worlds to walk in -------------------------------------------------------
@@ -46,9 +61,11 @@ def _floor_scene():
     return Transform(children=[_quad()])
 
 
-def _huge_scene(size=400.0):
-    """A world so large the avatar is taller than the floor-snap search reaches."""
-    return Transform(children=[_quad(size=size)])
+def _wall_scene():
+    """Two walls standing apart: nowhere in the world is there a floor."""
+    return Transform(children=[basenodes.Shape(geometry=basenodes.IndexedFaceSet(
+        coord=basenodes.Coordinate(point=[(-5, 0, z), (5, 0, z), (5, 10, z), (-5, 10, z)]),
+        coordIndex=[0, 1, 2, 3, -1])) for z in (-3.0, 3.0)])
 
 
 def _hollow_scene(gap=2.0, size=20.0):
@@ -110,6 +127,7 @@ class _Host(PhysicsWalkMixin):
 
     def __init__(self, scene=None):
         self.sg = scene
+        self.physics = _service()
         self.platform = _Platform()
         self.movementManager = _Manager()
         self.contextDefinition = _Definition()
@@ -133,6 +151,7 @@ class _Host(PhysicsWalkMixin):
         pass
 
     def onPhysicsModeChanged(self):
+        super().onPhysicsModeChanged()
         self.modeChanges += 1
 
 
@@ -226,25 +245,35 @@ class TestEnableAndDisable:
 # -- the world is a seam ----------------------------------------------------
 
 class TestBuildPhysicsWorldSeam:
-    def test_default_cooks_the_world_from_the_scenegraph(self):
+    def test_default_makes_the_scenegraph_the_worlds_scenery(self):
         host = _started()
-        world, bounds = host.buildPhysicsWorld()
-        lo, hi = bounds
+        lo, hi = host.buildPhysicsWorld()
         assert hi[0] - lo[0] == pytest.approx(20.0)
-        assert world is not None
+        floor = host.physics.body_for(host.sg.children[0])
+        assert floor is not None and floor.kind == 'static'
+        assert host.physics.raycast((0.0, 5.0, 0.0), (0.0, -1.0, 0.0), 10.0).body is floor
 
-    def test_a_host_may_supply_a_world_it_built_itself(self):
-        """A terrain or level context has its own world; it never comes from `sg`."""
-        built = collision_world_from_scene(_floor_scene())
+    def test_a_service_with_no_colliders_is_given_the_scenes(self):
+        host = _Host(_floor_scene())
+        host.physics.set_config(host.physics.definition.replaced(colliders='none', enabled=False))
+        assert host.buildPhysicsWorld() is not None
+        assert host.physics.definition.colliders == 'scene'
+        assert host.physics.definition.enabled
+
+    def test_a_host_may_supply_bodies_of_its_own(self):
+        """A terrain or level context has its own bodies; they never come from `sg`."""
 
         class _OwnWorld(_Host):
             def buildPhysicsWorld(self):
-                return built
+                self.physics.add_static(Transform(translation=(0.0, -0.5, 0.0)),
+                                        Proxy.box((20.0, 1.0, 20.0)))
+                return np.array([-10.0, 0.0, -10.0]), np.array([10.0, 0.0, 10.0])
 
         host = _OwnWorld(None)          # no scenegraph at all
         host.setupPhysics()
         assert host.enablePhysics(True) is True
-        assert host.physicsPlatform.character.world is built[0]
+        assert host.physicsHasFloor()
+        assert host.physicsPlatform.managed in host.physics.characters
 
     def test_avatar_scale_follows_the_size_of_the_world(self):
         lo, hi = np.zeros(3), np.array([40.0, 10.0, 10.0])
@@ -266,7 +295,7 @@ class TestBuildPhysicsWorldSeam:
         host.enablePhysics(True)
         modes = host.contextDefinition.navigation.movingModes()
         assert [mode.name for mode in modes] == ['walk', 'fly']
-        scale = host.physicsAvatarScale(*host.buildPhysicsWorld()[1])
+        scale = host.physicsAvatarScale(*host.buildPhysicsWorld())
         assert modes[0].walkSpeed == pytest.approx(3.0 * scale)
 
 
@@ -276,14 +305,17 @@ class TestSpawnAvatar:
     def test_the_avatar_ends_up_standing_on_the_floor(self):
         host = _started()
         host.enablePhysics(True)
+        host.stepPhysics(0.05)
         character = host.physicsPlatform.character
         assert character.grounded
         assert not character.stuck
+        assert float(host.physicsPlatform.managed.position[1]) == pytest.approx(0.0, abs=0.05)
 
     def test_a_centre_with_no_floor_under_it_is_avoided(self):
         """Nothing to stand on in the middle, so an open spot is found instead."""
         host = _started(_hollow_scene())
         host.enablePhysics(True)
+        host.stepPhysics(0.05)
         character = host.physicsPlatform.character
         assert abs(character.position[0]) > 2.0, 'spawned over the gap'
         assert character.grounded and not character.stuck
@@ -314,9 +346,10 @@ class TestSpawnAvatar:
         real capsule report a partial score has to be tuned to the avatar's
         size to the point where it tests the collision engine instead.
         """
-        monkeypatch.setattr(physicswalk, '_clearance', lambda _character, _radius: 2)
+        monkeypatch.setattr(physicswalk, 'clearance', lambda *_arguments, **_named: 2)
         host = _started()
         host.enablePhysics(True)
+        host.stepPhysics(0.05)
         character = host.physicsPlatform.character
         assert character.grounded and not character.stuck
         # every candidate scored 2, so the tie went to the most central
@@ -329,11 +362,25 @@ class TestSpawnAvatar:
         Somewhere is better than nowhere: free-fly out is one keypress, while an
         unplaced avatar has no pose for the camera to take at all.
         """
-        host = _started(_huge_scene())
+        host = _started(_wall_scene())
         host.enablePhysics(True)
-        position = np.asarray(host.physicsPlatform.character.position, dtype='d')
-        assert not host.physicsPlatform.character.grounded
+        position = np.asarray(host.physicsPlatform.managed.position, dtype='d')
+        assert not host.physicsHasFloor()
         assert np.allclose(position[[0, 2]], (0.0, 0.0), atol=1e-6)
+
+    def test_a_solid_slab_is_stood_on_rather_than_in(self):
+        """A ray meets the slab's underside as it meets a floor; the slab has no headroom."""
+        host = _started(Transform(children=[basenodes.Shape(
+            geometry=basenodes.Box(size=(20.0, 1.0, 20.0)))]))
+        host.enablePhysics(True)
+        feet = host.physicsPlatform.managed.position
+        assert float(feet[1]) == pytest.approx(0.5, abs=0.05)
+
+    def test_a_building_is_entered_on_its_ground_floor(self):
+        host = _started(Transform(children=[_quad(), _quad(y=3.0)]))
+        host.enablePhysics(True)
+        feet = host.physicsPlatform.managed.position
+        assert float(feet[1]) == pytest.approx(0.0, abs=0.05)
 
     def test_it_is_a_no_op_before_the_avatar_exists(self):
         host = _started()
@@ -412,16 +459,13 @@ class TestStepPhysics:
         """
         host = _started()
         host.enablePhysics(True)
-        lifted = float(host.physicsPlatform.character.position[1]) + 5.0
-
-        def resolve():
-            host.physicsPlatform.character.position[1] = lifted
-        host.resolvePhysicsStep = resolve
+        order = []
+        host.resolvePhysicsStep = lambda: order.append('resolve')
+        platform = host.physicsPlatform
+        apply = platform.apply
+        platform.apply = lambda context: (order.append('camera'), apply(context))
         host.stepPhysics(0.016)
-        assert float(host.physicsPlatform.character.position[1]) \
-            == pytest.approx(lifted)
-        eye = np.asarray(host.physicsPlatform.character.eye(), dtype='d')
-        assert np.allclose(np.asarray(host.platform.position[:3], dtype='d'), eye)
+        assert order == ['resolve', 'camera']
 
     def test_the_correction_hook_does_nothing_by_default(self):
         host = _started()
@@ -552,49 +596,42 @@ class TestTheClock:
 
 
 class TestClearance:
+    def capabilities(self):
+        return _Host(None).characterCapabilities(1.0)
+
     def test_open_ground_is_clear_in_every_direction(self):
         host = _started()
-        host.enablePhysics(True)
-        character = host.physicsPlatform.character
-        assert physicswalk._clearance(character, 0.3) == 4  # noqa: SLF001 the headroom measurement is this test's subject
+        host.buildPhysicsWorld()
+        assert physicswalk.clearance(host.physics, (0.0, 0.9, 0.0), self.capabilities()) == 4
+
+    def test_a_wall_beside_the_avatar_closes_one_direction(self):
+        wall = Transform(translation=(0.8, 1.0, 0.0), children=[basenodes.Shape(
+            geometry=basenodes.Box(size=(0.2, 2.0, 4.0)))])
+        host = _started(Transform(children=[_quad(), wall]))
+        host.buildPhysicsWorld()
+        assert physicswalk.clearance(host.physics, (0.0, 0.9, 0.0), self.capabilities()) == 3
+
+    def test_a_floor_steeper_than_the_slope_limit_is_not_one(self):
+        ramp = Transform(rotation=(0, 0, 1, 1.2), children=[_quad(size=6.0)])
+        host = _started(Transform(children=[ramp]))
+        host.buildPhysicsWorld()
+        capabilities = self.capabilities()
+        assert physicswalk.floor_below(host.physics, (0.0, 2.0, 0.0), capabilities) is None
+        capabilities.maxSlope = 89.0
+        assert physicswalk.floor_below(host.physics, (0.0, 2.0, 0.0), capabilities) is not None
 
 
 class TestZoneGravity:
-    """A zone's gravity is where the render pass places the zone, step by step."""
+    """The scene's zones carrying gravity are in the world the avatar walks."""
 
-    def scene(self, zone):
+    def test_the_worlds_zones_are_the_scenes(self):
+        zone = Zone(size=(4.0, 4.0, 4.0), settings=[ZoneGravity(gravity=2.0)])
         scene = _floor_scene()
         scene.children.append(Transform(translation=(0.0, 5.0, 0.0), children=[zone]))
-        return scene
-
-    def test_the_world_follows_a_zone_the_pass_has_moved(self, monkeypatch):
-        zone = Zone(size=(4.0, 4.0, 4.0), settings=[ZoneGravity(gravity=2.0)])
-        host = _started(self.scene(zone))
+        host = _started(scene)
         assert host.enablePhysics(True)
-        world = host.gravityZones.world
-
-        def mine():
-            return [v for v in world.gravity_volumes if isinstance(v.region, ZoneRegion)]
-
-        assert len(mine()) == 1 and mine()[0].contains(np.array([0.0, 5.0, 0.0]))
-        moved = np.identity(4)
-        moved[3, :3] = (30.0, 5.0, 0.0)
-
-        class Pass:
-            zones = placed_zones([(zone, moved)])
-        monkeypatch.setattr(renderpass, 'current_pass', lambda: Pass)
-        host.stepPhysics(0.01)
-        (volume,) = mine()
-        assert volume.contains(np.array([30.0, 5.0, 0.0]))
-        assert not volume.contains(np.array([0.0, 5.0, 0.0]))
-
-    def test_without_a_pass_the_world_keeps_what_it_was_built_with(self, monkeypatch):
-        host = _started(self.scene(Zone(size=(4.0, 4.0, 4.0), settings=[ZoneGravity()])))
-        assert host.enablePhysics(True)
-        before = list(host.gravityZones.world.gravity_volumes)
-        monkeypatch.setattr(renderpass, 'current_pass', lambda: None)
-        host.stepPhysics(0.01)
-        assert host.gravityZones.world.gravity_volumes == before
+        placed = host.physics._zones_placed  # noqa: SLF001 the zones the world was given have no public reader
+        assert [one.zone for one in placed] == [zone]
 
 
 # -- X3D's Collision groups ----------------------------------------------------
@@ -602,20 +639,40 @@ class TestZoneGravity:
 class TestCollisionGroups:
     """A world with Collision groups gives the avatar a body their touches report"""
 
-    def test_the_avatar_has_a_body_where_the_world_has_groups(self):
+    def test_a_world_with_groups_reports_the_avatars_touches(self):
         group = basenodes.Collision(children=[_quad(size=4.0, y=3.0)])
         host = _started(Transform(children=[_quad(), group]))
         host.enablePhysics(True)
-        assert host.physicsPlatform.character.body is not None
         reporter = host.physicsCollisionReporter
-        assert reporter is not None and reporter.walker == host.physicsPlatform.character.body
+        assert reporter is not None and reporter.walker is host.physicsPlatform.managed
         assert [group] in reporter.groups.values()
 
-    def test_a_world_without_groups_gives_the_avatar_no_body(self):
+    def test_a_world_without_groups_has_no_reporter(self):
         host = _started()
         host.enablePhysics(True)
-        assert host.physicsPlatform.character.body is None
         assert host.physicsCollisionReporter is None
+
+    def test_walking_into_a_groups_wall_sets_its_collide_time(self, monkeypatch):
+        from OpenGLContext.events import systemtime  # noqa: PLC0415 kept with its use
+
+        wall = Transform(translation=(1.2, 1.0, 0.0), children=[basenodes.Shape(
+            geometry=basenodes.Box(size=(0.6, 2.0, 4.0)))])
+        group = basenodes.Collision(children=[wall])
+        host = _started(Transform(children=[_quad(), group]))
+        host.enablePhysics(True)
+        host.physicsPlatform.bind((-1.0, 0.9, 0.0))
+        host.stepPhysics(0.05)
+        assert 'isActive' not in group.__dict__
+        monkeypatch.setattr(systemtime, 'systemTime', lambda: 4.0)
+        for _ in range(40):
+            host.physicsPlatform.set_move(forward=0.0, strafe=1.0)
+            host.stepPhysics(0.05)
+        assert group.isActive is True
+        assert group.collideTime == 4.0
+        for _ in range(40):
+            host.physicsPlatform.set_move(forward=0.0, strafe=-1.0)
+            host.stepPhysics(0.05)
+        assert group.isActive is False
 
 
 class TestNavigationAvatar:
@@ -632,3 +689,59 @@ class TestNavigationAvatar:
         host = _Host(_floor_scene())
         found = host.characterCapabilities(scale=10.0)
         assert found.radius == pytest.approx(3.0)
+
+
+class _QueueHost(_Host):
+    """A host with a render queue, which steps the avatar in the frame."""
+
+    def __init__(self, scene=None):
+        super().__init__(scene)
+        from OpenGLContext.events.renderqueue import RenderQueue  # noqa: PLC0415 kept with its use
+
+        self.renderQueue = RenderQueue()
+        self.renderQueue.on_frame(lambda: self.physics.frame(0.05))
+
+
+class TestTheFrameStepsTheAvatar:
+    """Where the host has a render queue, the service steps the avatar between the input and the camera"""
+
+    def test_the_service_steps_the_avatar_only_while_walking(self):
+        host = _QueueHost(_floor_scene())
+        host.setupPhysics(enable=True)
+        avatar = host.physicsPlatform.managed
+        assert avatar.framed
+        host.enablePhysics(False)
+        assert not avatar.framed
+
+    def test_the_camera_follows_the_avatar_after_the_frame(self):
+        host = _QueueHost(_floor_scene())
+        host.setupPhysics(enable=True)
+        host.platform.setPosition((7.0, 7.0, 7.0))
+        host.renderQueue.frame()
+        eye = np.asarray(host.physicsPlatform.managed.drawn_eye, dtype='d')
+        assert np.allclose(np.asarray(host.platform.position[:3], dtype='d'), eye)
+
+    def test_asking_to_step_asks_for_a_frame(self):
+        host = _QueueHost(_floor_scene())
+        host.setupPhysics(enable=True)
+        before = host.redraws
+        feet = np.array(host.physicsPlatform.managed.position)
+        host.stepPhysics(0.5)
+        assert host.redraws > before
+        assert np.allclose(host.physicsPlatform.managed.position, feet)
+
+
+class TestForgetting:
+    def test_forgetting_takes_the_avatar_out_of_the_world(self):
+        host = _started()
+        host.enablePhysics(True)
+        avatar = host.physicsPlatform.managed
+        host.forgetPhysicsWorld()
+        assert host.physicsPlatform is None
+        assert not avatar.alive
+        assert avatar not in host.physics.characters
+
+    def test_forgetting_without_an_avatar_is_harmless(self):
+        host = _started()
+        host.forgetPhysicsWorld()
+        assert host.physicsPlatform is None
