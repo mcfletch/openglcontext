@@ -173,7 +173,33 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self._masses: dict[int, tuple[float, np.ndarray]] = {}
 
     def signature(self) -> tuple[Any, ...]:
-        return (*super().signature(), bool(self.collection.preferAccuracy))
+        """Everything the world is built from, with the world's own settings"""
+        return (*super().signature(), bool(self.collection.preferAccuracy), self._world_settings())
+
+    def _world_settings(self) -> tuple[float, float, float]:
+        """Jolt's least bounce speed, sleep speed and time before sleep, from the collection
+
+        The least bounce speed is the collider's ``minBounceSpeed`` where it
+        applies ``BOUNCE``. Rest follows the collection's ``autoDisable``
+        thresholds, or else those of the first body that rests by its own:
+        Jolt holds one sleep speed and time for a world, and measures the
+        speed of each body's furthest points against ``disableLinearSpeed``.
+        X3D's 0 for a threshold is read as Jolt's own.
+        """
+        defaults = pj.WorldSettings()
+        bounce = defaults.min_velocity_for_restitution
+        collider = self.collection.collider
+        if collider and collider.enabled:
+            least = x3drigid.contact_parameters(collider).bounce_speed
+            if least is not None:
+                bounce = max(float(least), 0.0)
+        source = self.collection
+        if not source.autoDisable:
+            source = next((body for body in self._bodies() if body.autoDisable), source)
+        speed = float(source.disableLinearSpeed)
+        after = float(source.disableTime)
+        return (bounce, speed if speed > 0.0 else defaults.sleep_velocity,
+                after if after > 0.0 else defaults.time_before_sleep)
 
     # -- building -----------------------------------------------------------
     def build(self) -> None:
@@ -183,9 +209,11 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             self.jolt.stop()
         self._step = x3drigid.ACCURATE_STEP if self.collection.preferAccuracy else x3drigid.STEP
         gravity = _vec3(self.collection.gravity)
+        bounce, sleep_speed, sleep_after = self._world_settings()
         self.jolt = world = pj.World(pj.WorldSettings(
             tick_hz=1.0 / self._step, gravity=gravity, threads=default_threads(),
-            penetration_slop=x3drigid.MIN_SURFACE_THICKNESS))
+            penetration_slop=x3drigid.MIN_SURFACE_THICKNESS, min_velocity_for_restitution=bounce,
+            sleep_velocity=sleep_speed, time_before_sleep=sleep_after))
         self._gravity = gravity
         self.bodies, self.joints, self.held, self.free = [], [], {}, {}
         self._joint_ids, self._angles, self._forces = [], {}, {}

@@ -189,6 +189,18 @@ class TestBodies:
         angle = turn[3] if turn[0] > 0 else -turn[3]
         assert math.remainder(angle - 40.0, 2 * math.pi) == pytest.approx(0.0, abs=1e-4)
 
+    @pytest.mark.parametrize('owner', ['collection', 'body'])
+    def test_a_body_rests_after_its_disable_time_below_its_disable_speed(self, owner):
+        rule = b'autoDisable="true" disableTime="1.0" disableLinearSpeed="0.2" disableAngularSpeed="0.2"'
+        graph = falling(body=b'useGlobalGravity="false" linearVelocity="0.08 0 0" '
+                             + (rule if owner == 'body' else b''),
+                        collection=rule if owner == 'collection' else b'')
+        collection = graph.getDEF('C')
+        run(collection, 0.6)
+        assert collection.awake()
+        run(collection, 1.5)
+        assert not collection.awake()
+
     def test_bodies_rest_only_where_told_to(self):
         graph = falling(body=b'useGlobalGravity="false"')
         run(graph.getDEF('C'), 2.0)
@@ -215,6 +227,23 @@ class TestCollisions:
           </RigidBody></RigidBodyCollection>''')
         run(graph.getDEF('C'), 2.0)
         assert graph.getDEF('B').position[1] == pytest.approx(-0.45 + 0.1, abs=0.02)
+
+    @pytest.mark.parametrize('least, bounces', [(1.0, True), (8.0, False)])
+    def test_a_ball_bounces_only_above_the_least_bounce_speed(self, least, bounces):
+        """Dropped 2 m, the ball meets the ground at about 6 m/s"""
+        graph = scene(BALL + b'''<RigidBodyCollection DEF="C">
+          <CollisionCollection containerField="collider" appliedParameters='"BOUNCE"'
+            bounce="0.8" minBounceSpeed="%.1f">
+            <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection>
+          <RigidBody DEF="B" containerField="bodies" position="0 2 0">
+            <CollidableShape USE="BALL-GEOM" containerField="geometry"/>
+          </RigidBody></RigidBodyCollection>''' % least)
+        heights = []
+        body = graph.getDEF('B')
+        run(graph.getDEF('C'), 2.0, each=lambda: heights.append(body.position[1]))
+        landed = heights.index(min(heights))
+        assert bool(max(heights[landed:]) - min(heights) > 0.3) is bounces
 
     def test_contacts_routed_to_the_collection_bounce_the_ball(self):
         graph = scene(BALL + b'''<RigidBodyCollection DEF="C">
@@ -863,3 +892,28 @@ def test_a_bodys_settings_follow_its_fields(check_memo_inputs):
         ('disableAngularSpeed', lambda: setattr(body, 'disableAngularSpeed', 0.4)),
         ('disableTime', lambda: setattr(body, 'disableTime', 1.5)),
     ], fresh=fresh)
+
+
+@pytest.mark.engines('jolt', reason="the Jolt world's own settings")
+@pytest.mark.parametrize('edit', [
+    lambda graph: setattr(graph.getDEF('CC'), 'minBounceSpeed', 3.0),
+    lambda graph: setattr(graph.getDEF('C'), 'disableTime', 2.0),
+    lambda graph: setattr(graph.getDEF('C'), 'disableLinearSpeed', 0.4),
+    lambda graph: setattr(graph.getDEF('B'), 'autoDisable', True),
+    lambda graph: setattr(graph.getDEF('C'), 'preferAccuracy', True),
+])
+def test_a_jolt_world_is_made_again_for_its_settings(edit):
+    graph = scene(BALL + b'''<RigidBodyCollection DEF="C">
+      <CollisionCollection DEF="CC" containerField="collider" appliedParameters='"BOUNCE"'>
+        <CollidableShape USE="BALL-GEOM"/></CollisionCollection>
+      <RigidBody DEF="B" containerField="bodies" disableTime="1.5">
+        <CollidableShape USE="BALL-GEOM" containerField="geometry"/></RigidBody>
+      </RigidBodyCollection>''')
+    collection = graph.getDEF('C')
+    collection.advance(FRAME)
+    world = collection.system.jolt
+    collection.advance(FRAME)
+    assert collection.system.jolt is world
+    edit(graph)
+    collection.advance(FRAME)
+    assert collection.system.jolt is not world
