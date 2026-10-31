@@ -9,9 +9,11 @@ shapes and meshes, and supports triggers, gravity zones and joints. Characters
 walk, run, jump and swim on the same collision world. The render tree, culling,
 shadows and picking work the same with or without it.
 
-The simulation itself is the ``omi_physics`` package, a dependency of
-OpenGLContext; the service's API names none of its types, so the engine
-underneath can change without a game changing (:ref:`physics-engine`).
+The simulation is Jolt Physics 5.6, through the ``pyjoltphysics`` package,
+which ``pip install OpenGLContext`` installs. Jolt steps the world on a native
+thread of its own (:doc:`physicsthread`). The service's API names none of the
+engine's types, so the engine underneath can change without a game changing
+(:ref:`physics-engine`).
 OpenGLContext adds the service every context hosts
 (``context.physics``), the binding to scene nodes, events, characters, walking
 for any context, colliders for streamed worlds, and a debug overlay. The data model is
@@ -28,7 +30,7 @@ A game imports what it needs from ``OpenGLContext.physics``: ``Physics``,
 OpenGLContext's own class (``OpenGLContext.physics.types``); the service
 converts them to the engine's at its boundary. ``CharacterCapabilities``,
 ``Material`` and ``CollisionFilter`` keep the OMI field names, and an object
-with those fields (an ``omi_physics`` instance) is accepted in their place.
+with those fields is accepted in their place.
 
 .. _physics-authoring:
 
@@ -797,12 +799,14 @@ Modes and settings
      - ``thread`` steps the world on a thread of its own, ``inline`` in the frame
    * - ``backend``
      - ``auto`` (``OPENGLCONTEXT_PHYSICS_BACKEND``)
-     - the compute backend (:ref:`below <physics-backends>`); one that cannot
-       be made is logged and the world steps on ``auto``
+     - the omi engine's compute backend (:ref:`below <physics-backends>`); one
+       that cannot be made is logged and the world steps on ``auto``. The
+       Jolt engine reads none
    * - ``engine``
-     - ``omi`` (``OPENGLCONTEXT_PHYSICS_ENGINE``)
-     - ``omi`` steps the world with omi_physics, ``jolt`` with Jolt through
-       pyjoltphysics (:ref:`physics-jolt`); chosen when the service is made
+     - ``jolt`` (``OPENGLCONTEXT_PHYSICS_ENGINE``)
+     - ``jolt`` steps the world with Jolt through pyjoltphysics
+       (:ref:`physics-jolt`), ``omi`` with the deprecated omi_physics
+       (:ref:`physics-omi`); chosen when the service is made
    * - ``tickHz``
      - 120
      - the fixed step, in steps a second, in both modes; a frame shorter than
@@ -946,15 +950,11 @@ the developer overlay.
 
 No call of the service hands a program an engine object. Code written against
 ``Physics``, ``Body``, ``Character``, ``Joint``, ``Proxy``, ``poses`` and
-``on_step`` runs on whichever engine steps the world. The conversions to and
-from ``omi_physics`` are in ``OpenGLContext.physics.omi_adapter``.
+``on_step`` runs on whichever engine steps the world.
 
 ``character.state`` and ``character.motion_state`` are the same
 ``CharacterState`` member on either engine; compare with ``is`` or ``==``.
-The compute backend is ``physics.engine.compute``, and ``set_config`` with a
-definition whose ``backend`` differs chooses another.
-
-A test that checks what ``omi_physics`` itself holds reads it through
+A test reads what the engine holds (masses, materials, tick counts) through
 ``OpenGLContext.testing.physics`` (:ref:`testing-physics`).
 
 .. _physics-jolt:
@@ -962,18 +962,20 @@ A test that checks what ``omi_physics`` itself holds reads it through
 The Jolt engine
 ---------------
 
-``PhysicsDefinition(engine='jolt')``, or ``OPENGLCONTEXT_PHYSICS_ENGINE=jolt``
-for a whole run, steps the world with Jolt Physics 5.6 through
-``pyjoltphysics``. The variable is read once a process, and a capture or
-script a run starts inherits it, so a game's suite run with it set runs on Jolt
-throughout. Without pyjoltphysics installed, a service asked for Jolt raises
+Jolt is the default engine: a ``PhysicsDefinition`` that names none steps
+its world with Jolt Physics 5.6 through ``pyjoltphysics``, a requirement of
+OpenGLContext. ``OPENGLCONTEXT_PHYSICS_ENGINE`` sets the default for a whole
+run. The variable is read once a process, and a capture or script a run starts
+inherits it. A service asked for an engine whose package is missing raises
 ``EngineUnavailable`` (``OpenGLContext.physics.engine``) and does not fall back
-to omi_physics. ``set_config`` with another ``engine`` raises ``ValueError``:
-the engine is chosen when the service is made. ``OpenGLContext.physics.engine``
-holds the interface the service drives either engine through.
+to the other engine. ``set_config`` with another ``engine`` raises
+``ValueError``: the engine is chosen when the service is made.
+``OpenGLContext.physics.engine`` holds the interface the service drives either
+engine through.
 
 The Jolt world steps on pyjoltphysics' world thread, never on the render
-thread, in one of two ways:
+thread, in one of two ways (:doc:`physicsthread` has the threading,
+callbacks and replay in full):
 
 - Lockstep. Each frame runs exactly the ticks it owes (``tickHz`` a second,
   capped by ``maxCatchUp``) while the render thread waits with the GIL
@@ -1055,14 +1057,70 @@ What differs from omi_physics, by design of the engine:
   sideways or upwards needs an up vector the controller does not have.
 - ``Hit.triangle`` is the row of the mesh triangle a ray met, and -1 for a
   part that is no mesh triangle.
-- The proxy overlay (``show_proxies``) draws the omi_physics world; on Jolt it
-  logs a warning and draws nothing.
+- The proxy overlay (``show_proxies``) draws the omi engine's copy of the
+  world; on Jolt it logs a warning and draws nothing.
 
 ``physics.save_state()`` returns the bodies' and joints' state as bytes
 (Jolt's ``PhysicsSystem::SaveState``) and ``physics.restore_state(data)`` puts
 them back from the next tick; the world must hold the same bodies. Characters,
 the tick count and commands still waiting are not part of the state. The omi
 engine raises ``NotImplementedError`` for both.
+
+.. _physics-omi:
+
+The omi engine (deprecated)
+---------------------------
+
+``PhysicsDefinition(engine='omi')`` steps the world with ``omi_physics``, the
+NumPy rigid-body engine. It is deprecated and is supported
+only for programs that still name it: glisteel's race drives omi_physics'
+``RaycastVehicle`` until Jolt vehicles land (phase P6 of
+``plans/NATIVE-PHYSICS.md``), and the engine is removed with that phase.
+omi_physics is not a requirement of OpenGLContext. It is the ``omi`` extra:
+
+.. code-block:: bash
+
+   pip install OpenGLContext[omi]
+
+A definition naming ``omi`` where omi_physics is not installed raises
+``EngineUnavailable``, whose message names ``OpenGLContext[omi]``.
+
+These parts of OpenGLContext still import omi_physics, each on first use, and
+need the extra:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Part
+     - Modules
+   * - The omi engine
+     - ``physics.omiengine``, ``physics.omi_adapter``, ``physics.runtime``,
+       ``physics.worker``, ``physics.replica``, ``physics.queries``
+   * - The proxy overlay, ``physics.show_proxies``
+     - ``physics.debugdraw`` (it draws the omi engine's copy of the world)
+   * - The viewer's walk with gravity, ``PhysicsWalkMixin``, which every
+       context has
+     - ``move.physicswalk`` and ``move.physicsplatform.PhysicsViewPlatform``
+       made on a world of its own; ``TerrainWalkMixin`` and
+       ``PhysicsViewPlatform.over(character)`` walk a service character and
+       run on Jolt
+   * - X3D RigidBodyPhysics shapes and ``CollisionCollection`` detection
+     - ``physics.x3drigid``, and ``physics.x3djolt``, which builds on
+       x3drigid's shapes
+   * - Helpers over a plain omi_physics world, for code with no service
+     - ``physics.gltf_world.collision_world_from_scene``,
+       ``physics.props.PropColliders``,
+       ``loaders.tiles3d.physics_colliders``
+
+Without the extra, ``PhysicsWalkMixin`` logs a warning naming
+``OpenGLContext[omi]`` and the camera stays in free flight; a
+``RigidBodyCollection`` or ``CollisionSensor`` logs the same once and stays
+still; the omi-world helpers raise ``EngineUnavailable`` naming it. The
+service's own cooking (``Proxy.from_node``, ``physics.cooking``) does not
+need the extra. glTF documents with OMI
+physics bodies do not need it: the engine reads ``OMI_physics_*`` itself
+(:ref:`model`).
 
 .. _model:
 
@@ -1082,17 +1140,17 @@ The loader, the nodes and the simulation all use the same structures.
      - In code
    * - ``OMI_physics_shape``
      - box, sphere, capsule, cylinder, convex, trimesh
-     - ``model.Shape``
+     - ``Proxy``
    * - ``OMI_physics_body``
      - ``motion`` / ``collider`` / ``trigger``, materials, collision filters
-     - ``model.Motion``, ``Collider``, ``Trigger``, ``Material``, ``CollisionFilter``
+     - a body's kind and motion, ``Proxy``, ``Material``, ``CollisionFilter``
    * - ``OMI_physics_gravity``
      - global gravity *and* per-volume gravity zones; also a zone's gravity
        (:doc:`zones`)
-     - ``model.Gravity``
+     - ``GravityZone``
    * - ``OMI_physics_joint``
      - limits + drives between bodies
-     - ``model.Joint``, ``joints.*``
+     - the joints of :ref:`physics-joints`
 
 An object's physical properties are OMI motion fields. An immovable body, such
 as the ground, is ``type:"static"``. Weight is ``mass × |g|``. The centre of
@@ -1100,18 +1158,19 @@ gravity is ``centerOfMass``.
 
 .. rst-class:: technical
 
-The structures are in ``omi_physics/model.py``, with the OMI specification's
-defaults. The reader and writer are in ``omi_physics/omi_gltf.py``:
-``load_document()`` parses a glTF's extension blocks into these structures, and
-``export_extensions()`` writes them back, so a load followed by an export
-gives nearly the same document. ``KHR_physics_rigid_bodies`` is not read.
+The reader is ``OpenGLContext.physics.omigltf``, with the OMI
+specification's defaults: it parses a glTF's ``OMI_physics_*`` blocks into the
+engine's own types, on either engine and with omi_physics absent. The glTF
+loader keeps the document as ``scene.physics`` and tags each node that carries
+a body. ``KHR_physics_rigid_bodies`` is not read.
 
 .. _engine:
 
-How the simulation runs
+How the omi engine runs
 -----------------------
 
-The engine uses the standard real-time methods (Catto's Box2D, and Gaffer on
+This section describes the deprecated omi engine (:ref:`physics-omi`); Jolt's
+methods are in its own documentation. The omi engine uses the standard real-time methods (Catto's Box2D, and Gaffer on
 Games' *Fix Your Timestep*):
 
 - Integration - semi-implicit (symplectic) Euler, which stays stable at low
@@ -1236,7 +1295,10 @@ Walking any scene
 Any interactive context can walk. ``OpenGLContext.move.physicswalk.PhysicsWalkMixin``
 is mixed into ``ViewPlatformMixin``, so any context with a camera can hand that
 camera to an avatar. Every physics import is inside a method, so a context
-that never turns walking on never imports the physics package.
+that never turns walking on never imports the physics package. The avatar
+walks a world of its own built on omi_physics, which needs the ``omi`` extra
+(:ref:`physics-omi`); a program on Jolt walks a service character and hands
+the camera to ``PhysicsViewPlatform.over(character)`` (:ref:`navigation-follow`).
 
 .. code-block:: python
 
@@ -1514,8 +1576,11 @@ the vertical speed of the run along the ground to the launch, and a jump rises
 
 .. rst-class:: technical
 
-The controller is ``omi_physics/character.py``. ``PhysicsViewPlatform`` in
-``move/physicsplatform.py`` drives a context's camera from it. See the
+On Jolt the controller is pyjoltphysics' port of this state machine over
+Jolt's ``CharacterVirtual``, driven by ``JoltController`` in
+``physics/joltengine.py``; on the omi engine it is
+``omi_physics/character.py``. ``PhysicsViewPlatform`` in
+``move/physicsplatform.py`` drives a context's camera from either. See the
 ``physics_navigate.py`` demo.
 
 .. _streamed:
@@ -1827,9 +1892,10 @@ X3D rigid bodies
 ~~~~~~~~~~~~~~~~
 
 An X3D document's ``RigidBodyCollection`` is a world of its own, stepped once a
-frame on the engine's clock: an omi_physics world
-(``OpenGLContext.physics.x3drigid``), or a Jolt world where
-``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``jolt`` (``OpenGLContext.physics.x3djolt``).
+frame on the engine's clock: a Jolt world (``OpenGLContext.physics.x3djolt``),
+or an omi_physics world where ``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``omi``
+(``OpenGLContext.physics.x3drigid``). Both read the collidables through
+x3drigid's shapes, which need the ``omi`` extra (:ref:`physics-omi`).
 Its bodies, their collidables as shapes and compounds, X3D's six joints on the
 joints above, and its ``CollisionCollection``\ s and routed ``Contact`` nodes
 as a pair rule. On Jolt the rule is asked as a pair first touches and at each
@@ -1847,8 +1913,9 @@ The debug overlay
 
 ``physics.show_proxies(True)`` draws each body's collision proxy as a green
 wireframe over the scene, and ``show_proxies(False)`` takes it out. The overlay
-is ``OpenGLContext.physics.debugdraw.PhysicsDebugDraw`` over the render
-thread's copy of the world; it follows the bodies as they move.
+is ``OpenGLContext.physics.debugdraw.PhysicsDebugDraw`` over the omi engine's
+render-thread copy of the world; it follows the bodies as they move. On Jolt
+it logs a warning and draws nothing.
 
 ``PhysicsDebugDraw`` can draw more of a world that a program owns: a bit-flag
 mask selects collision proxies, broad-phase AABBs, contact points and normals,

@@ -299,17 +299,37 @@ OpenGLContext/
 │   ├── body.py       # Body, the handle of one body: reads, commands, handlers
 │   ├── checks.py     # number and vector: physical inputs made finite floats, or
 │   │                 # a ValueError naming the argument
-│   ├── character.py  # Character: a walker stepped by the frame, its stand-in in the world
+│   ├── character.py  # Character: a walker's facing, locomotion, footsteps and handlers
+│   │                 # over the engine's controller (the omi engine's stand-in too)
+│   ├── engine.py     # Engine, the interface the service drives a world through;
+│   │                 # make_engine, EngineUnavailable -- docs/physics.rst#physics-engine
+│   ├── joltengine.py # JoltEngine, the default: the world on pyjoltphysics' native
+│   │                 # thread, lockstep or free-running; JoltController -- docs/physicsthread.rst
+│   ├── x3djolt.py    # X3D's RigidBodyPhysics on a pyjoltphysics world (shapes from
+│   │                 # x3drigid's omi model: needs the omi extra)
+│   ├── omigltf.py    # glTF's OMI_physics_* extensions read into the engine's own
+│   │                 # types (Proxy, Material, CollisionFilter) -- docs/physics.rst#model
+│   ├── cooking.py    # Hulls, convex pieces and their volumes: what Proxy.from_mesh
+│   │                 # cooks triangles into -- no GL
+│   ├── omiengine.py  # OmiEngine: the deprecated omi_physics engine (the omi
+│   │                 # extra); deleted with it -- docs/physics.rst#physics-omi
+│   ├── omi_adapter.py  # The omi engine's conversions to and from omi_physics' types
+│   ├── types.py      # Material, CollisionFilter, CharacterCapabilities, CharacterState,
+│   │                 # EngineInfo, Poses, GravityZone, Hit: the engine-neutral types
+│   ├── stepview.py   # StepView: what on_step code reads and posts on the world thread
 │   ├── handlers.py   # Handler and HandlerTable: who hears which event, held weakly
 │   ├── callbacks.py  # physics_callback: marks a function that runs on the physics thread
 │   ├── records.py    # Command, BodySpec, PhysicsEvent, Step, Snapshot: the plain data
-│   │                 # that crosses between the render thread and the worker
-│   ├── runtime.py    # WorldRuntime: applies commands, steps the omi_physics world,
-│   │                 # collects events and snapshots -- the worker's core
+│   │                 # that crosses between the render thread and the engine
+│   ├── runtime.py    # WorldRuntime: the omi engine's world, commands and events
+│   │                 # (deprecated; deleted with the omi engine)
 │   ├── worker.py     # InlineWorker and ThreadWorker: who steps a WorldRuntime
+│   │                 # (deprecated; deleted with the omi engine)
 │   ├── proxy.py      # Proxy: the collision shape of a node, cooked or by hand
-│   ├── replica.py    # The render thread's copy of the bodies, for queries and characters
-│   ├── queries.py    # sweep_sphere and overlap over a world; Hit
+│   ├── replica.py    # The omi engine's render-thread copy of the bodies
+│   │                 # (deprecated; deleted with the omi engine)
+│   ├── queries.py    # sweep_sphere and overlap over an omi world
+│   │                 # (deprecated; deleted with the omi engine)
 │   ├── materials.py  # Materials: presets, defined materials, pair friction, sounds
 │   ├── sources.py    # Collider sources: bodies made as a focus nears them
 │   ├── colliders.py  # Scenery: the shapes of a scene as static bodies, cooked off the frame
@@ -320,7 +340,8 @@ OpenGLContext/
 │   ├── heightfield.py, road.py, props.py  # Colliders for ground chunks, road
 │   │                 # sections and props near a focus
 │   ├── gltf_world.py # A scene's triangles and glTF OMI bodies as a world
-│   ├── debugdraw.py  # The proxy, contact and velocity overlay (show_proxies)
+│   ├── debugdraw.py  # The proxy, contact and velocity overlay (show_proxies),
+│   │                 # over the omi engine's copy of the world
 │   ├── events.py     # Collision: one collision as a body's handler is given it
 │   ├── poses.py      # Quaternions to axis-angle, and a pose written onto a Transform
 │   ├── joints.py     # Joint, JointSpec, JointTable: hinges, balls, sliders and
@@ -329,8 +350,9 @@ OpenGLContext/
 │   │                 # as two bodies meet -- docs/physics.rst#physics-presolve
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
-│   └── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics
-│                     # world, a sensor's touches, the joints -- no GL
+│   └── x3drigid.py   # X3D's RigidBodyPhysics: collidable shapes, a sensor's
+│                     # touches, and a collection as an omi_physics world (the
+│                     # omi extra) -- no GL
 ├── resources/        # Generated Python modules holding icons and shader text
 ├── py.typed          # The engine's declarations are real -- docs/typing.rst
 ├── scenegraph/       # VRML97-style nodes

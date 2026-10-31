@@ -33,7 +33,8 @@ OpenGLContext needs Python 3.10 or newer. Install it from PyPI:
 
 This installs the core dependencies: NumPy, PyOpenGL, Pillow, PyVRML97,
 TTFQuery, SimpleParse, PyDispatcher, pygltflib, opengl_extrusions, omi_audio
-and omi_physics.
+and pyjoltphysics, the Jolt Physics engine the physics service steps its
+world with.
 
 Optional extras add the packages for particular features:
 
@@ -59,6 +60,10 @@ Optional extras add the packages for particular features:
    Basis Universal textures, through ``opengl_basisu``: glTF's
    :ref:`KHR_texture_basisu <gltf-basisu>`, and KTX 2 or ``.basis`` files named
    by X3D's texture nodes, uploaded in the block formats the GPU samples.
+``OpenGLContext[omi]``
+   The deprecated omi_physics engine, for a program whose
+   ``PhysicsDefinition`` names ``engine='omi'``, and the parts listed in
+   :ref:`physics-omi` that still use it. It is removed with Jolt vehicles.
 ``OpenGLContext[all]``
    GLFW, Pygame, Draco, OpenEXR and audio playback together.
 
@@ -467,6 +472,11 @@ The application around it
   queries, characters that walk and run over land, colliders that stream in
   and out, a motion debug overlay, and :ref:`walking <walking>` in every
   interactive context. ``oglc-physics-events`` shows the events.
+
+- :doc:`The Physics World Thread <physicsthread>` -- how Jolt steps on its own
+  thread: commands applied at the next tick, snapshots read without copying,
+  free-running and lockstep worlds, handlers and world-thread callbacks,
+  queries under the world lock, determinism and replay, free-threaded builds.
 
 - :doc:`Sound <audio>` -- sound placed in the scene on glTF's
   ``KHR_audio_emitter`` model: file formats, sound in glTF files, and how to

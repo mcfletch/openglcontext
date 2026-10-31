@@ -8,7 +8,7 @@ applications. It is built from a number of open source packages, most of them
 maintained alongside it. The demos and games at the top of the diagram keep
 their reusable code in the engine, so each one is a small application on top
 of it. Parts that are useful outside OpenGLContext, such as ``omi_audio``,
-``omi_physics``, ``opengl_extrusions`` and ``pyopengl-video``, are separate
+``pyjoltphysics``, ``opengl_extrusions`` and ``pyopengl-video``, are separate
 packages.
 
 .. mermaid::
@@ -29,7 +29,7 @@ packages.
        space:7
 
        pyopengl["PyOpenGL"]:1
-       omip["omi_physics"]:1
+       omip["pyjoltphysics"]:1
        omia["omi_audio"]:1
        ext["opengl_extrusions"]:1
        ttf["TTFQuery"]:1
@@ -82,9 +82,15 @@ The packages it is built on
    * - `pygltflib <https://gitlab.com/dodgyville/pygltflib>`__
      - Reads and writes glTF 2.0 and GLB, as the typed records the
        specification describes.
+   * - pyjoltphysics
+     - Jolt Physics 5.6 in double precision, stepped on a native world thread:
+       command batches, snapshots read without copying, an event ring,
+       queries, characters, joints, materials and gravity zones
+       (:doc:`physicsthread`).
    * - `omi_physics <https://github.com/mcfletch/omi_physics>`__
-     - Rigid bodies, colliders, joints and gravity zones on the OMI glTF
-       physics model, computed in NumPy.
+     - Deprecated. Rigid bodies on the OMI glTF physics model, computed in
+       NumPy: the ``omi`` engine and the parts listed in :ref:`physics-omi`.
+       An extra: ``OpenGLContext[omi]``.
    * - `omi_audio <https://github.com/mcfletch/omi_audio>`__
      - Spatial audio on glTF's ``KHR_audio_emitter`` model: the gain curves,
        the voice pool and the block mixing, in NumPy.
@@ -210,8 +216,14 @@ simulation packages update.
      - The physics service a context hosts (``Physics``, ``Body``,
        ``Character``, ``Joint``, events, queries, materials, collision and
        contact filters, colliders that stream), the walking view platform and
-       the debug overlay, on ``omi_physics``.
-     - :doc:`Physics <physics>`
+       the debug overlay. ``engine.py`` is the interface the service drives an
+       engine through; ``joltengine.py`` is the Jolt engine, the default, and
+       ``x3djolt.py`` X3D's rigid bodies on it. ``omigltf.py`` reads glTF's
+       ``OMI_physics_*`` extensions into the engine's own types, and
+       ``cooking.py`` cooks triangles into hulls and convex pieces.
+       ``omiengine.py``, ``omi_adapter.py``, ``runtime.py``, ``worker.py``,
+       ``replica.py`` and ``queries.py`` are the deprecated omi engine's.
+     - :doc:`Physics <physics>`, :doc:`The world thread <physicsthread>`
    * - ``nav``
      - The navigation mesh generated from the collision mesh, and routes
        pulled taut through its portals.
