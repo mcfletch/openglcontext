@@ -142,6 +142,7 @@ class TestTheSamplerIsTheDrawnSurface:
 
 
 class TestTheColliderIsTheDrawnSurface:
+    @pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
     def test_a_ray_lands_where_the_sampler_says_the_ground_is(self) -> None:
         """What the walker stands on and what a wheel rolls over are one surface."""
         field = _field(res=17)
@@ -153,6 +154,17 @@ class TestTheColliderIsTheDrawnSurface:
             assert hit is not None, 'no ground under (%.2f, %.2f)' % (x, z)
             assert float(hit.point[1]) == pytest.approx(
                 float(field.sample(x, z)), abs=1e-3)
+
+
+    @pytest.mark.engines('omi', 'jolt')
+    def test_a_ray_through_the_service_lands_on_the_drawn_ground(self) -> None:
+        field = _field(res=17)
+        ground = Streamed(HeightFieldColliders(field, reach=EXTENT))
+        ground.update((0.0, 0.0, 0.0))
+        for x, z in _spots(count=30, seed=7, margin=1.0):
+            hit = ground.physics.raycast((x, 400.0, z), (0.0, -1.0, 0.0), 900.0)
+            assert hit is not None, 'no ground under (%.2f, %.2f)' % (x, z)
+            assert float(hit.point[1]) == pytest.approx(float(field.sample(x, z)), abs=1e-3)
 
 
 class TestWhatStandsOnIt:

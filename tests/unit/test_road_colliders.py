@@ -20,6 +20,8 @@ from OpenGLContext.physics.road import RoadColliders
 from OpenGLContext.scenegraph.road import RoadProfile
 from tests.unit._streamed import Streamed
 
+pytestmark = pytest.mark.engines('omi', reason="reads the omi world the colliders are made in, and drives omi's raycast vehicle on it")
+
 PROFILE = RoadProfile()
 
 #: The heading that points a car along +X, which is the way these roads run.
@@ -52,6 +54,7 @@ def _surface(road, x, z):
 
 
 class TestASource:
+    @pytest.mark.engines('omi', 'jolt')
     def test_each_stretch_is_a_body_of_the_service(self) -> None:
         road = _road(_straight(), PROFILE, reach=200.0)
         road.update((0.0, 0.0, 0.0))

@@ -11,6 +11,8 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.worker import InlineWorker, ThreadWorker
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', reason="tests the omi engine's workers")
+
 
 def definition(**named) -> PhysicsDefinition:
     named.setdefault('tickHz', 100.0)

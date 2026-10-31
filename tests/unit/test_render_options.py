@@ -416,6 +416,11 @@ class TestACleanRenderingEnvironment:
             # and is pointed at a local copy for exactly that reason. See
             # OpenGLContext.contentpacks.store.
             'OPENGLCONTEXT_CONTENT',
+            # Which physics engine a whole run is made on. A game's suite run on
+            # one engine runs the captures it starts on that engine too, which is
+            # what running the suite on that engine means; a capture that needs
+            # one engine pins it. See OpenGLContext.physics.settings.
+            'OPENGLCONTEXT_PHYSICS_ENGINE',
         }
         assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)
 
@@ -469,6 +474,11 @@ class TestWhatCleanMeans:
         fixed one pins it rather than taking whatever the parent carried."""
         monkeypatch.setenv('OPENGLCONTEXT_SEED', '4242')
         assert 'OPENGLCONTEXT_SEED' not in renderoptions.clean_environment()
+
+    def test_a_child_capture_runs_on_the_physics_engine_of_the_run(self, monkeypatch):
+        """A suite run on one physics engine makes its captures on that engine."""
+        monkeypatch.setenv('OPENGLCONTEXT_PHYSICS_ENGINE', 'jolt')
+        assert renderoptions.clean_environment()['OPENGLCONTEXT_PHYSICS_ENGINE'] == 'jolt'
 
     def test_a_caller_can_still_say_otherwise(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')

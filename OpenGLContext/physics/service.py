@@ -231,10 +231,7 @@ class Physics:
 
         Both are 0 before the world has published a step.
         """
-        snapshot = self._snapshot
-        if snapshot is None:
-            return WorldCounts(0, 0)
-        return WorldCounts(snapshot.bodies, snapshot.contacts)
+        return self._engine.counts(self._snapshot)
 
     @property
     def world(self) -> Any:

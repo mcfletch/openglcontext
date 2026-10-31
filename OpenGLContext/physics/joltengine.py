@@ -47,7 +47,7 @@ from OpenGLContext.physics.records import (
 )
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.types import (
-    CharacterState, CollisionFilter, EngineInfo, Material,
+    CharacterState, CollisionFilter, EngineInfo, Material, WorldCounts,
 )
 
 if TYPE_CHECKING:
@@ -76,6 +76,9 @@ _STATE = {pj.CharacterState.STANDING: CharacterState.STANDING,
           pj.CharacterState.DOWN: CharacterState.DOWN,
           pj.CharacterState.SWIMMING: CharacterState.SWIMMING,
           pj.CharacterState.FLYING: CharacterState.FLYING}
+#: The field of the capabilities that names each mode's speed.
+_MODE_SPEEDS = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
+                'crouch': 'crouchSpeed'}
 _PHASE = {pj.EventPhase.BEGIN: 'begin', pj.EventPhase.PERSIST: 'persist', pj.EventPhase.END: 'end'}
 _TRIGGER_PHASE = {pj.EventPhase.BEGIN: 'enter', pj.EventPhase.PERSIST: 'stay',
                   pj.EventPhase.END: 'exit'}
@@ -219,6 +222,8 @@ class JoltController:
         self.engine = engine
         self.native = character
         self.capabilities = capabilities
+        #: The capabilities the native character was made with.
+        self._made_with = capabilities
         self.position = np.asarray(centre, dtype='d').copy()
         self.velocity = np.zeros(3)
         self.previous = self.position.copy()
@@ -236,8 +241,9 @@ class JoltController:
         self.move_dir = np.zeros(3)
         self.push = np.zeros(3)
         self.pushing = None
-        #: The capabilities under the omi controller's name, which the movement modes read.
-        self.caps = capabilities
+        #: The capabilities under the omi controller's name, which the movement modes read
+        #: and retune: a changed speed reaches the world as the move's speed.
+        self.caps = _Capabilities(self, capabilities)
         self._move_speed: float | None = None
         self._mode = 'walk'
         #: A state an input asked for, held until a snapshot includes the input's batch.
@@ -281,6 +287,19 @@ class JoltController:
     def vy(self) -> float:
         return float(self.velocity[1])
 
+    @vy.setter
+    def vy(self, speed: float) -> None:
+        """Launch the capsule at its velocity with the vertical part ``speed``, m/s."""
+        self.velocity = np.array([self.velocity[0], float(speed), self.velocity[2]])
+        self.native.apply_impulse(tuple(float(v) for v in self.velocity))
+
+    def place(self, centre: Any) -> None:
+        """Put the capsule's centre at ``centre`` as it is, with no search for a floor."""
+        at = np.asarray(centre, dtype='d')[:3].copy()
+        seq = self.native.teleport(tuple(float(v) for v in at), 0.0)
+        self._placed = (seq, at)
+        self.position = at
+
     @property
     def state(self) -> Any:
         """The state as the omi controller's enumeration has it where omi_physics is installed, else the service's."""
@@ -313,6 +332,12 @@ class JoltController:
         self._move_speed = speed
         self.native.set_move(self.move_dir, self._mode, speed)
 
+    def _retuned(self) -> float | None:
+        """The mode's speed where the capabilities were retuned since the character was made, else None."""
+        name = _MODE_SPEEDS.get(self._mode, 'walkSpeed')
+        now = getattr(self.capabilities, name)
+        return None if now == getattr(self._made_with, name) else float(now)
+
     def _expect(self, state: pj.CharacterState, seq: int) -> None:
         self.native_state = state
         self._expected = (seq, state)
@@ -320,9 +345,7 @@ class JoltController:
     def speed(self) -> float:
         if self._move_speed is not None:
             return float(self._move_speed)
-        name = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
-                'crouch': 'crouchSpeed'}.get(self._mode, 'walkSpeed')
-        return float(getattr(self.capabilities, name))
+        return float(getattr(self.capabilities, _MODE_SPEEDS.get(self._mode, 'walkSpeed')))
 
     # -- inputs -----------------------------------------------------------
     def set_move(self, direction: Any, mode: str = 'walk', speed: float | None = None) -> None:
@@ -330,7 +353,7 @@ class JoltController:
         self.move_dir = np.array([heading[0], 0.0, heading[2]])
         self._mode = mode
         self._move_speed = speed
-        self.native.set_move(self.move_dir, mode, speed)
+        self.native.set_move(self.move_dir, mode, speed if speed is not None else self._retuned())
 
     def set_fly_move(self, direction: Any) -> None:
         self.move_dir = np.asarray(direction, dtype='d')[:3].copy()
@@ -414,6 +437,31 @@ class JoltController:
     def update(self, dt: float) -> None:
         """Advance the world by the ticks ``dt`` owes; the world thread moves the character in them."""
         self.engine.advance(dt)
+
+
+class _Capabilities:
+    """A Jolt character's capabilities as the movement modes read and retune them.
+
+    Reads answer the character's capabilities. Setting a mode's speed sends the
+    character's move again at the speed of its mode; the other capabilities are
+    the ones it was made with.
+    """
+
+    def __init__(self, controller: JoltController, capabilities: Any) -> None:
+        object.__setattr__(self, '_controller', controller)
+        object.__setattr__(self, '_values', capabilities)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, '_values'), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        values = object.__getattribute__(self, '_values')
+        updated = dataclasses.replace(values, **{name: value})
+        object.__setattr__(self, '_values', updated)
+        controller = object.__getattribute__(self, '_controller')
+        controller.capabilities = updated
+        if name.endswith('Speed') and controller._move_speed is None:
+            controller.native.set_move(controller.move_dir, controller._mode, controller._retuned())
 
 
 class _IgnoreSet(set[int]):
@@ -597,6 +645,12 @@ class JoltEngine(Engine):
     def character_steps(self, dt: float) -> tuple[int, float]:  # noqa: ARG002 the ticks ran in collect
         return 0, self.alpha
 
+    def counts(self, published: Snapshot | None) -> WorldCounts:
+        """The bodies the world holds now, the waiting adds applied first, and the touching pairs."""
+        if not self.on_engine_thread():
+            self.world.flush()
+        return WorldCounts(int(self.world.stats()['bodies']), self._contacts)
+
     def info(self) -> EngineInfo:
         options = pj.build_options()
         return EngineInfo('jolt', pj.jolt_version(), self._tick_hz,
@@ -663,6 +717,7 @@ class JoltEngine(Engine):
         snapshot = self.world.latest()
         events = self._events()
         self._read_characters(snapshot)
+        self._keep_characters_above_ground()
         self._settle_markers(snapshot)
         published = self._publish(snapshot, previous)
         return Outbox(published, events)
@@ -1092,7 +1147,8 @@ class JoltEngine(Engine):
         from OpenGLContext.physics.character import stand_in_proxy  # noqa: PLC0415 imports the service's types
 
         caps = _capabilities(capabilities)
-        self._stream_ground(extra=np.asarray(centre, dtype='d')[None])
+        centre = self._above_ground(np.asarray(centre, dtype='d'), float(capabilities.standHeight))
+        self._stream_ground(extra=centre[None])
         native = self.world.add_character(tuple(float(v) for v in centre), caps, gravity=gravity)
         body = physics._register_body('kinematic', stand_in_proxy(capabilities, 0.0), centre)
         self._bind(body.uid, native.id)
@@ -1100,6 +1156,42 @@ class JoltEngine(Engine):
         controller = JoltController(self, native, capabilities, centre)
         self._controllers[body.uid] = controller
         return body, controller
+
+    def _ground_under(self, x: float, z: float) -> float | None:
+        """The highest sampled ground at ``(x, z)``, or None with no sampled ground there."""
+        found = None
+        for ground in self._grounds.values():
+            if ground.extent is not None:
+                (x0, z0), (x1, z1) = ground.extent
+                if not (x0 <= x <= x1 and z0 <= z <= z1):
+                    continue
+            height = float(np.asarray(ground.sample(np.array([x]), np.array([z])) if ground.vectorized
+                                      else ground.sample(x, z)).reshape(-1)[0])
+            found = height if found is None else max(found, height)
+        return found
+
+    def _above_ground(self, centre: np.ndarray, height: float) -> np.ndarray:
+        """``centre`` of a capsule ``height`` tall, raised where its feet are below a sampled ground.
+
+        Everything below a sampled ground is solid, as the omi engine holds it;
+        a height field tile collides from above only.
+        """
+        ground = self._ground_under(float(centre[0]), float(centre[2]))
+        if ground is not None and centre[1] - height / 2.0 < ground:
+            centre = centre.copy()
+            centre[1] = ground + height / 2.0
+        return centre
+
+    def _keep_characters_above_ground(self) -> None:
+        """Lift each character whose feet are below a sampled ground back onto it."""
+        if not self._grounds:
+            return
+        for controller in self._controllers.values():
+            ground = self._ground_under(float(controller.position[0]), float(controller.position[2]))
+            feet = float(controller.position[1]) - controller.height / 2.0
+            if ground is not None and feet < ground - 0.05 and controller._placed is None:
+                controller.place((controller.position[0], ground + controller.height / 2.0,
+                                  controller.position[2]))
 
     def pass_group_id(self, name: str | None) -> int:
         """The native pass group of the characters given the name ``name``; 0 for none."""

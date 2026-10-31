@@ -141,6 +141,7 @@ class TestWhatAGameDoesWithIt:
         finally:
             terrain.shutdown()
 
+    @pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
     def test_colliders_can_be_built_from_it(self, tmp_path) -> None:
         terrain = TilesTerrain(_world(tmp_path), workers=1)
         try:

@@ -14,6 +14,7 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+from OpenGLContext.testing import physics as physics_testing
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -139,12 +140,14 @@ def test_physics_off_in_the_definition_leaves_bodies_where_they_were_put(clock):
     made.releaseWindow()
 
 
+@pytest.mark.engines('omi', 'jolt')
 def test_releasing_the_window_stops_the_worker(clock):
     made = _Context(physics=PhysicsDefinition(mode='thread'))
     made.physics.add_dynamic(ball())
-    assert made.physics.worker.thread_id is not None
+    made.physics.frame(0.0)
+    assert physics_testing.stepping(made.physics)
     made.releaseWindow()
-    assert made.physics.worker.thread_id is None
+    assert not physics_testing.stepping(made.physics)
 
 
 def test_physics_callback_is_on_the_context_class():
@@ -282,6 +285,22 @@ def test_services_made_again_after_closing_are_framed_once(ctx, clock, monkeypat
     assert len(framed) == 2
 
 
+@pytest.mark.engines('jolt')
+def test_a_recording_holds_a_jolt_world_in_lockstep(tmp_path):
+    made = _Context(physics=PhysicsDefinition(mode='thread'))
+    try:
+        made.physics.add_dynamic(ball())
+        assert made.physics._engine.mode == 'thread'
+        made.startTelemetry(str(tmp_path / 'session.jsonl'))
+        assert made.physics._engine.mode == 'inline'
+        made.stopTelemetry()
+        assert made.physics._engine.mode == 'thread'
+    finally:
+        made.stopTelemetry()
+        made.releaseWindow()
+
+
+@pytest.mark.engines('omi', reason="names the omi engine's workers")
 def test_a_recording_started_after_physics_exists_runs_the_world_inline(tmp_path):
     from OpenGLContext.physics.worker import InlineWorker, ThreadWorker  # noqa: PLC0415 only these cases name the workers
 
@@ -302,6 +321,7 @@ def test_a_recording_started_after_physics_exists_runs_the_world_inline(tmp_path
         made.releaseWindow()
 
 
+@pytest.mark.engines('omi', reason="names the omi engine's workers")
 def test_a_mode_change_while_capturing_keeps_the_world_inline():
     from OpenGLContext.physics.worker import InlineWorker  # noqa: PLC0415 only these cases name the workers
 

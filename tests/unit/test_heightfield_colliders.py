@@ -18,6 +18,8 @@ from OpenGLContext.physics.heightfield import HeightFieldColliders
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from tests.unit._streamed import Streamed
 
+pytestmark = pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
+
 EXTENT = 1024.0
 
 

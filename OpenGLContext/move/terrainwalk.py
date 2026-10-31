@@ -497,7 +497,11 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         half = float(controller.height) * 0.5
         ground = self._tw_ground(x, z)
         if controller.position[1] - half <= ground:
-            controller.position[1] = ground + half
+            place = getattr(controller, 'place', None)
+            if place is not None:           # a Jolt character is moved by a command
+                place((x, ground + half, z))
+            else:
+                controller.position[1] = ground + half
             if controller.vy < 0.0:
                 controller.vy = 0.0
 

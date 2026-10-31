@@ -14,6 +14,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf.scene import unread_required
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.testing import physics as physics_testing
 
 
 def _b64(data: bytes) -> str:
@@ -133,10 +134,7 @@ def test_the_balls_mass_and_material_come_from_the_document(tmp_path, physics):
     physics.scenery_changed(scene.group, 1)
     body = physics.body_for(scene.node_transforms[1])
     assert body.mass == pytest.approx(2.0)
-    physics.frame(0.0)
-    runtime = physics.worker.runtime
-    index = runtime.entry(body.uid).index
-    assert runtime.world.material_for(int(runtime.world.collider_material[index])).staticFriction == pytest.approx(0.5)
+    assert physics_testing.material(physics, body).staticFriction == pytest.approx(0.5)
 
 
 def test_a_body_is_made_once_whatever_is_under_the_tagged_node(tmp_path, physics):

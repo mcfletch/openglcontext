@@ -23,6 +23,8 @@ from OpenGLContext.physics.worker import InlineWorker, ThreadWorker
 from OpenGLContext.scenegraph.basenodes import Transform
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', reason="counts the omi engine's work in a frame")
+
 #: A frame that is not a whole number of steps, so published poses are interpolated.
 FRAME = 0.015
 

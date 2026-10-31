@@ -166,6 +166,7 @@ def test_each_body_is_given_the_shape_the_tutorial_names(gl_context):
         assert all(crate.proxy is context.crate_shape for crate in context.crates)
 
 
+@pytest.mark.engines('omi', reason="the overlay draws the omi engine's copy of the world")
 def test_the_proxies_are_drawn_over_the_scene(gl_context):
     with running('physics', 'physics_stairs_shapes') as run:
         run.frame()
@@ -249,6 +250,7 @@ def test_pausing_holds_the_ball_where_it_is_and_pausing_again_lets_it_go(gl_cont
         assert not np.allclose(context.ball.translation, held)
 
 
+@pytest.mark.engines('omi', reason='a Jolt world steps at the rate it was made with')
 def test_the_finer_step_is_taken_at_the_rate_asked_for(gl_context):
     with running('physics', 'physics_stairs_tuning') as run:
         run.seconds(0.5)
@@ -280,7 +282,7 @@ def test_with_physics_switched_off_the_ball_stays_where_it_was_put(gl_context):
         placed = np.array(run.context.ball.translation)
         run.seconds(3.0)
         assert np.allclose(run.context.ball.translation, placed)
-        assert physics_testing.inspect(run.physics).step_count == 0
+        assert physics_testing.ticks(run.physics) == 0
 
 
 # -- characters ---------------------------------------------------------------------------
@@ -474,9 +476,13 @@ def test_the_pile_falls_into_the_bowl_and_a_wave_adds_forty(gl_context):
                    for body in context.bodies)
         context.on_add_wave(None)
         assert len(context.bodies) == 2 * run.module.WAVE
-        assert run.physics.engine.compute
-        run.context.on_toggle_backend(None)
-        assert run.physics.engine.compute in ('numpy', 'glcompute')
+        if run.physics.engine.name == 'omi_physics':
+            assert run.physics.engine.compute
+            run.context.on_toggle_backend(None)
+            assert run.physics.engine.compute in ('numpy', 'glcompute')
+        else:
+            # Jolt offers no compute backend to choose.
+            assert run.physics.engine.compute == ''
 
 
 @pytest.mark.parametrize('mode', ['inline', 'thread'])

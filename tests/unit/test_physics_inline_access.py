@@ -14,6 +14,8 @@ from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', reason="reads the omi engine's world inline")
+
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 STEP = 1.0 / 100.0
 

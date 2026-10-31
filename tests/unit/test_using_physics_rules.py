@@ -28,6 +28,10 @@ def _load():
 
 game = _load()
 
+#: The table of winning shots below is the omi engine's, found by find_shot(), and the
+#: helpers read its world live.
+pytestmark = pytest.mark.engines('omi', reason="the winning shots and the live reads are the omi engine's")
+
 #: The ball kinds, and the levels by what is in them.
 BALLS = [ammo.name for ammo in game.AMMO]
 OPEN, WALL, CRATES, CROSSWIND, FERRY, PORTCULLIS = range(6)

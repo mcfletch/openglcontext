@@ -7,6 +7,8 @@ from omi_physics import world
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 
+pytestmark = pytest.mark.engines('omi', reason="chooses the omi engine's compute backend")
+
 
 @pytest.fixture
 def physics():

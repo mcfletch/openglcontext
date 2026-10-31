@@ -148,7 +148,9 @@ class RigidBodyCollection(_Stepped, x3d.RigidBodyCollection):
         """The collection's simulation"""
         found: Optional[x3drigid.RigidSystem] = self.__dict__.get('_system')
         if found is None:
-            found = self.__dict__['_system'] = x3drigid.RigidSystem(self)
+            from OpenGLContext.physics.x3djolt import make_rigid_system  # noqa: PLC0415 pyjoltphysics loads on use
+
+            found = self.__dict__['_system'] = make_rigid_system(self)
         return found
 
     def on_set_contacts(self, value: Any) -> None:

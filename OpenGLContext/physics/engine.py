@@ -24,7 +24,7 @@ import numpy as np
 
 from OpenGLContext.physics.records import Command, PhysicsEvent, Snapshot, Step
 from OpenGLContext.physics.settings import ENGINES, PhysicsDefinition
-from OpenGLContext.physics.types import EngineInfo
+from OpenGLContext.physics.types import EngineInfo, WorldCounts
 
 if TYPE_CHECKING:
     from OpenGLContext.physics.proxy import Proxy
@@ -179,6 +179,12 @@ class Engine(abc.ABC):
     @abc.abstractmethod
     def info(self) -> EngineInfo:
         """The engine's name, version, step rate and precision."""
+
+    def counts(self, published: Snapshot | None) -> WorldCounts:
+        """How many bodies the world holds and how many pairs touch; from ``published`` by default."""
+        if published is None:
+            return WorldCounts(0, 0)
+        return WorldCounts(published.bodies, published.contacts)
 
     # -- reading on the stepping thread ----------------------------------
     @abc.abstractmethod

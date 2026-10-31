@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.service import Physics
 
 __all__ = ['body_at', 'filter_count', 'holds', 'idle', 'inspect', 'joint_count', 'mass', 'material', 'run', 'settle',
-           'material_count', 'material_index', 'pair_friction', 'shape_count', 'shape_kind', 'slot_of', 'step_dt', 'stepping', 'wait_ticks',
+           'material_count', 'material_index', 'pair_friction', 'shape_count', 'shape_kind', 'slot_of', 'step_dt', 'stepping', 'ticks', 'wait_ticks',
            'world_position']
 
 #: Seconds :func:`settle` and :func:`wait_ticks` wait for a world stepping on its own.
@@ -77,6 +77,14 @@ def stepping(physics: Physics) -> bool:
     if engine.name == 'omi':
         return engine.worker.__dict__.get('_thread') is not None and engine.worker.thread_id is not None
     return bool(engine.world.stats()['running'])
+
+
+def ticks(physics: Physics) -> int:
+    """How many steps the engine's thread has taken."""
+    engine: Any = physics._engine
+    if engine.name == 'omi':
+        return int(engine.runtime.world.step_count)
+    return int(engine.world.tick)
 
 
 def holds(physics: Physics, body: Body) -> bool:

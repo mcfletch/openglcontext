@@ -20,6 +20,8 @@ from OpenGLContext.physics.props import PropColliders, PropSource
 from OpenGLContext.scenegraph.props import Prop
 from tests.unit._streamed import Streamed
 
+pytestmark = pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
+
 
 def _scattered(count=40, spacing=25.0):
     return [Prop(kind='rock', position=(index * spacing, 0.0, 0.0),
