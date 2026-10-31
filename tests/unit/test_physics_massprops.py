@@ -45,6 +45,54 @@ def test_a_cone_is_heavier_at_its_base():
     assert massprops.inertia_diagonal(cone, 1.0)[1] == pytest.approx(axial)
 
 
+def _revolved(radius_at, low: float, high: float, mass: float) -> tuple[float, np.ndarray]:
+    """A solid of revolution about y, integrated slice by slice: its volume and inertia diagonal about y=0
+
+    ``radius_at(y)`` is the radius of the slice at height ``y``; each slice is
+    a disc, and 200001 of them span ``low`` to ``high``.
+    """
+    heights = np.linspace(low, high, 200001)
+    area = np.pi * radius_at(heights) ** 2
+    amount = float(np.trapezoid(area, heights))
+    density = mass / amount
+    axial = density * float(np.trapezoid(area * radius_at(heights) ** 2 / 2.0, heights))
+    across = density * float(np.trapezoid(area * (radius_at(heights) ** 2 / 4.0 + heights ** 2),
+                                          heights))
+    return amount, np.array([across, axial, across])
+
+
+def test_a_capsule_is_its_cylinder_and_two_half_spheres():
+    height, radius = 1.5, 0.4
+
+    def radius_at(y):
+        beyond = np.clip(np.abs(y) - height / 2.0, 0.0, radius)
+        return np.sqrt(radius * radius - beyond * beyond)
+
+    amount, inertia = _revolved(radius_at, -height / 2.0 - radius, height / 2.0 + radius, 3.0)
+    capsule = Proxy.capsule(height, radius)
+    assert massprops.volume(capsule) == pytest.approx(amount, rel=1e-6)
+    assert massprops.inertia_diagonal(capsule, 3.0) == pytest.approx(inertia, rel=1e-6)
+    assert np.allclose(massprops.centroid(capsule), 0.0)
+
+
+def test_a_frustum_narrows_between_its_radii():
+    height, bottom, top = 1.0, 0.3, 0.6
+
+    def radius_at(y):
+        return bottom + (top - bottom) * (y + height / 2.0) / height
+
+    amount, inertia = _revolved(radius_at, -height / 2.0, height / 2.0, 3.0)
+    frustum = Proxy.cylinder(height, bottom, radius_top=top)
+    assert massprops.volume(frustum) == pytest.approx(amount, rel=1e-6)
+    offset = massprops.centroid(frustum)[1]
+    heights = np.linspace(-height / 2.0, height / 2.0, 200001)
+    area = radius_at(heights) ** 2
+    assert offset == pytest.approx(np.trapezoid(area * heights, heights) / np.trapezoid(area, heights))
+    # The tensor is about the centroid: the integral about y=0, less the mass carried at the centroid.
+    about = inertia - 3.0 * offset * offset * np.array([1.0, 0.0, 1.0])
+    assert massprops.inertia_diagonal(frustum, 3.0) == pytest.approx(about, rel=1e-6)
+
+
 def test_a_compound_shares_its_mass_by_volume():
     one = Proxy.box((1.0, 1.0, 1.0))
     pair = Proxy.compound([(one, (1.0, 0.0, 0.0), (0, 0, 0, 1)), (one, (-1.0, 0.0, 0.0), (0, 0, 0, 1))])
@@ -92,7 +140,9 @@ def test_a_heightfield_has_no_bounds():
 #: omi_physics' answers for :func:`shapes`, recorded from omi_physics 0.4 (``massprops.
 #: inertia_diagonal`` at mass 3, and ``body.world_aabb`` at (1, 2, 3) turned by
 #: :data:`TURN`): the inertia diagonal, then the box's low and high corners. omi_physics
-#: is the source of these formulas, and its answers hold them to it.
+#: is the source of these formulas, and its answers hold them to it. omi_physics weighs
+#: a capsule as its cylinder; the capsule's inertia is held by
+#: test_a_capsule_is_its_cylinder_and_two_half_spheres instead.
 OMI = {
     'box': ([3.25, 2.5, 1.25], [-0.414213562373, 1.0, 1.585786437627], [2.414213562373, 3.0, 4.414213562373]),
     'capsule': ([0.6825, 0.24, 0.6825], [0.6, 0.85, 2.6], [1.4, 3.15, 3.4]),
@@ -109,7 +159,7 @@ OMI = {
 }
 
 
-@pytest.mark.parametrize('name', sorted(shapes()))
+@pytest.mark.parametrize('name', sorted(set(shapes()) - {'capsule'}))
 def test_the_inertia_is_omis(name):
     """Bodies weigh and turn as omi_physics' massprops has them."""
     assert np.allclose(massprops.inertia_diagonal(shapes()[name], 3.0), OMI[name][0], atol=1e-9)
@@ -123,7 +173,7 @@ def test_the_bounds_are_omis(name):
 
 def test_each_kinds_volume():
     assert massprops.volume(Proxy.sphere(1.0)) == pytest.approx(4.0 / 3.0 * math.pi)
-    assert massprops.volume(Proxy.capsule(2.0, 1.0)) == pytest.approx(2.0 * math.pi)
+    assert massprops.volume(Proxy.capsule(2.0, 1.0)) == pytest.approx(2.0 * math.pi + 4.0 / 3.0 * math.pi)
     assert massprops.volume(Proxy.cylinder(3.0, 1.0, radius_top=0.0)) == pytest.approx(math.pi)
     assert massprops.volume(Proxy.convex(np.eye(3))) == pytest.approx(1.0)
     assert massprops.volume(Proxy.convex(np.zeros((0, 3)))) == 0.0

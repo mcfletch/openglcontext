@@ -2,13 +2,16 @@
 
 Every shape is a solid of uniform density. A ``convex`` or ``trimesh`` proxy
 is measured as the box its points span, and a ``capsule`` as the cylinder of
-its height and radius. A ``compound`` shares its mass among its parts by volume;
-its inertia is the sum of theirs about the compound's origin.
+its height and radius with a half sphere on each end. A ``compound`` shares
+its mass among its parts by volume; its inertia is the sum of theirs about
+the compound's origin.
 
 :func:`inertia_diagonal` is the diagonal X3D's ``RigidBody`` takes as its
 default inertia: the products of inertia a lopsided compound has are left
-out. The formulas are those of omi_physics' ``massprops`` (MIT, Mike C.
-Fletcher); ``tests/unit/test_physics_massprops.py`` holds its answers.
+out. The formulas other than the capsule's are those of omi_physics'
+``massprops`` (MIT, Mike C. Fletcher); ``tests/unit/test_physics_massprops.py``
+holds its answers, and integrates the capsule and the narrowing cylinder
+slice by slice.
 """
 from __future__ import annotations
 
@@ -44,7 +47,8 @@ def volume(proxy: Proxy) -> float:
     if kind == 'box':
         return float(np.prod(params['size']))
     if kind == 'capsule':
-        return float(np.pi * params['radius'] ** 2 * params['height'])
+        radius = params['radius']
+        return float(np.pi * radius * radius * (params['height'] + 4.0 / 3.0 * radius))
     if kind == 'cylinder':
         bottom, top = params['radius'], params['radius_top']
         return float(np.pi * params['height'] * (bottom * bottom + bottom * top + top * top) / 3.0)
@@ -170,9 +174,7 @@ def _principal(proxy: Proxy, mass: float) -> np.ndarray:
     if kind == 'box':
         return _box(np.asarray(params['size'], dtype='d'), mass)
     if kind == 'capsule':
-        radius, height = params['radius'], params['height']
-        across = mass * (3 * radius * radius + height * height) / 12.0
-        return np.array([across, 0.5 * mass * radius * radius, across])
+        return _capsule(float(params['height']), float(params['radius']), mass)
     if kind == 'cylinder':
         axial, across, offset = _cylinder_moments(proxy)
         across -= offset * offset
@@ -187,6 +189,27 @@ def _box(size: np.ndarray, mass: float) -> np.ndarray:
     """A solid box's inertia about its centre"""
     x, y, z = size
     return mass / 12.0 * np.array([y * y + z * z, x * x + z * z, x * x + y * y])
+
+
+def _capsule(height: float, radius: float, mass: float) -> np.ndarray:
+    """A solid capsule's inertia about its centre: a cylinder ``height`` long, with half spheres on its ends
+
+    The half spheres hold 2/5 m r^2 about the centres of their flat faces,
+    moved to the capsule's centre by the parallel axis rule through their
+    centroids, 3/8 r beyond the cylinder's ends.
+    """
+    cylinder_volume = height
+    spheres_volume = 4.0 / 3.0 * radius
+    total = cylinder_volume + spheres_volume
+    if total <= 0.0:
+        return np.zeros(3)
+    cylinder = mass * cylinder_volume / total
+    spheres = mass * spheres_volume / total
+    squared = radius * radius
+    axial = cylinder * squared / 2.0 + spheres * 2.0 * squared / 5.0
+    across = (cylinder * (height * height / 12.0 + squared / 4.0)
+              + spheres * (2.0 * squared / 5.0 + height * height / 4.0 + 3.0 * height * radius / 8.0))
+    return np.array([across, axial, across])
 
 
 def _cylinder_moments(proxy: Proxy) -> tuple[float, float, float]:
