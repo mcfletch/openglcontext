@@ -133,6 +133,7 @@ def test_uncached_allocates_a_vao_every_frame(perf_results):
 
 
 @pytest.mark.performance
+@pytest.mark.serial  # compares wall-clock frame medians: 43.7 against 31.9 ms under a full -n 16 run
 def test_cached_is_not_slower(perf_results):
     """Caching must not regress per-frame submission cost."""
     _, cached, uncached = perf_results
