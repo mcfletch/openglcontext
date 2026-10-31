@@ -16,13 +16,11 @@ from vrml.x3d import nodes as x3d
 
 from OpenGLContext.loaders.loader import Loader
 from OpenGLContext.scenegraph.x3drigidbody import CollisionSensor, RigidBodyCollection
-from tests.unit.omi import requires_omi
 
 FRAME = 1.0 / 60.0
 FOLDER = os.path.join(corpus.examples('Basic'), 'RigidBodyPhysics')
 
-#: X3D's rigid bodies build their shapes with omi_physics' model; omi_physics is the omi extra.
-pytestmark = [pytest.mark.engines('omi', 'jolt'), requires_omi,
+pytestmark = [pytest.mark.engines('omi', 'jolt'),
               pytest.mark.skipif(not os.path.isdir(FOLDER),
                                  reason='the Basic example archive has not been fetched')]
 

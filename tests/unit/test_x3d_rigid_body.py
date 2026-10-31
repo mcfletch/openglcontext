@@ -10,10 +10,7 @@ import pytest
 
 from OpenGLContext.loaders.loader import Loader
 from OpenGLContext.loaders.x3d import prototypes
-
-#: X3D's rigid bodies build their shapes with omi_physics' model, the deprecated omi extra.
-x3drigid = pytest.importorskip('OpenGLContext.physics.x3drigid',
-                               reason='omi_physics (the omi extra) is not installed')
+from OpenGLContext.physics import x3drigid
 
 FRAME = 1.0 / 60.0
 
@@ -276,6 +273,75 @@ class TestCollisions:
         assert sensor.isActive is False
         assert len(sensor.contacts) == 0
 
+    def test_a_sensors_normal_points_from_the_first_collidable_to_the_second(self):
+        graph = scene(BALL + b'''<CollisionSensor DEF="S"><CollisionCollection containerField="collider">
+            <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection></CollisionSensor>''')
+        sensor, ball = graph.getDEF('S'), graph.getDEF('BALL-GEOM')
+        ball.translation = (0.3, -0.36, 0.2)
+        sensor.sense()
+        contact = sensor.contacts[0]
+        assert (contact.geometry1, contact.geometry2) == (ball, graph.getDEF('GROUND-GEOM'))
+        assert np.allclose(contact.contactNormal, (0, -1, 0), atol=1e-5)
+        assert np.allclose(contact.position[::2], (0.3, 0.2), atol=1e-5)
+
+    def test_a_sensor_finds_a_ball_on_a_mesh(self):
+        graph = scene(b'''<CollidableShape DEF="BALL"><Shape containerField="shape">
+            <Sphere radius="0.5"/></Shape></CollidableShape>
+          <CollidableShape DEF="FLOOR"><Shape containerField="shape">
+            <IndexedFaceSet coordIndex="0 1 2 -1 0 2 3 -1">
+              <Coordinate point="-5 0 -5 -5 0 5 5 0 5 5 0 -5"/></IndexedFaceSet></Shape>
+          </CollidableShape>
+          <CollisionSensor DEF="S"><CollisionCollection containerField="collider">
+            <CollidableShape USE="FLOOR"/><CollidableShape USE="BALL"/>
+          </CollisionCollection></CollisionSensor>''')
+        sensor, ball = graph.getDEF('S'), graph.getDEF('BALL')
+        ball.translation = (0.0, 0.45, 0.0)
+        sensor.sense()
+        assert sensor.isActive is True
+        contact = sensor.contacts[0]
+        assert (contact.geometry1, contact.geometry2) == (graph.getDEF('FLOOR'), ball)
+        assert contact.contactNormal[1] == pytest.approx(1.0, abs=1e-4)
+        assert contact.depth == pytest.approx(0.05, abs=2e-3)
+
+    def test_a_sensor_follows_its_collidables_and_their_shapes(self):
+        graph = scene(BALL + b'''<CollisionSensor DEF="S"><CollisionCollection DEF="CC"
+            containerField="collider">
+            <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection></CollisionSensor>''')
+        sensor, ball = graph.getDEF('S'), graph.getDEF('BALL-GEOM')
+        ball.translation = (0.0, -0.3, 0.0)
+        sensor.sense()
+        assert sensor.isActive is False
+        ball.shape.geometry.radius = 0.2
+        sensor.sense()
+        assert sensor.isActive is True
+        graph.getDEF('CC').collidables = [ball]
+        sensor.sense()
+        assert sensor.isActive is False
+        graph.getDEF('CC').collidables = [ball, graph.getDEF('GROUND-GEOM')]
+        sensor.sense()
+        assert sensor.isActive is True
+
+    def test_a_sensor_passes_over_two_collidables_of_one_body(self):
+        graph = scene(b'''<CollidableShape DEF="A"><Shape containerField="shape">
+            <Box size="1 1 1"/></Shape></CollidableShape>
+          <CollidableOffset DEF="B" translation="0.5 0 0"><CollidableShape containerField="collidable">
+            <Shape containerField="shape"><Box size="1 1 1"/></Shape></CollidableShape>
+          </CollidableOffset>
+          <RigidBodyCollection DEF="C"><RigidBody containerField="bodies" useGlobalGravity="false">
+            <CollidableShape USE="A" containerField="geometry"/>
+            <CollidableOffset USE="B" containerField="geometry"/></RigidBody></RigidBodyCollection>
+          <CollisionSensor DEF="S"><CollisionCollection containerField="collider">
+            <CollidableShape USE="A"/><CollidableOffset USE="B"/>
+          </CollisionCollection></CollisionSensor>''')
+        sensor = graph.getDEF('S')
+        sensor.sense()
+        assert sensor.isActive is True
+        graph.getDEF('C').advance(FRAME)
+        sensor.sense()
+        assert sensor.isActive is False
+
     def test_a_space_without_geometry_collides_by_bounds(self):
         graph = scene(b'''<CollidableShape DEF="A" translation="0.9 0.9 0">
             <Shape containerField="shape"><Sphere radius="0.5"/></Shape></CollidableShape>
@@ -306,20 +372,20 @@ class TestGeometry:
         graph = scene(b'<CollidableShape DEF="G"><Shape containerField="shape">' + geometry
                       + b'</Shape></CollidableShape>')
         found = x3drigid.geometry_shape(graph.getDEF('G').shape.geometry, moving=False)
-        assert found.type == kind
+        assert found.kind == kind
 
     def test_a_moving_mesh_is_its_hull(self):
         graph = scene(b'''<CollidableShape DEF="G"><Shape containerField="shape">
           <TriangleSet><Coordinate point="0 0 0 1 0 0 0 1 0"/></TriangleSet>
           </Shape></CollidableShape>''')
         found = x3drigid.geometry_shape(graph.getDEF('G').shape.geometry, moving=True)
-        assert found.type == 'convex'
+        assert found.kind == 'convex'
 
     def test_a_cone_narrows_to_its_tip(self):
         graph = scene(b'''<CollidableShape DEF="G"><Shape containerField="shape">
           <Cone height="2" bottomRadius="1"/></Shape></CollidableShape>''')
         found = x3drigid.geometry_shape(graph.getDEF('G').shape.geometry, moving=True)
-        assert (found.radiusBottom, found.radiusTop, found.height) == (1.0, 0.0, 2.0)
+        assert (found.params['radius'], found.params['radius_top'], found.params['height']) == (1.0, 0.0, 2.0)
 
     def test_a_collidable_offset_moves_its_shape_in_the_body(self):
         graph = scene(b'''<CollidableOffset DEF="O" translation="5 5 5">
@@ -591,9 +657,9 @@ def test_a_document_draws_its_bodies_where_they_are(gl_context):
 def _shape_facts(shape):
     if shape is None:
         return None
-    return (shape.type, tuple(shape.size), shape.radius, shape.height, shape.radiusBottom,
-            shape.radiusTop, None if shape.points is None else shape.points.tobytes(),
-            None if shape.indices is None else shape.indices.tobytes())
+    return (shape.kind, tuple(
+        (name, value.tobytes() if isinstance(value, np.ndarray) else value)
+        for name, value in sorted(shape.params.items())))
 
 
 @pytest.mark.parametrize('geometry, edits', [
@@ -651,7 +717,8 @@ def test_a_collections_world_follows_what_it_is_built_from(check_memo_inputs):
         return _world_facts(collection.system)
 
     def fresh():
-        system = x3drigid.RigidSystem(collection)
+        from OpenGLContext.physics.x3domi import OmiRigidSystem  # noqa: PLC0415 omi_physics, where installed
+        system = OmiRigidSystem(collection)
         system.advance(0.0)
         return _world_facts(system)
 
@@ -709,7 +776,8 @@ def test_a_bodys_settings_follow_its_fields(check_memo_inputs):
         return facts(collection.system)
 
     def fresh():
-        system = x3drigid.RigidSystem(collection)
+        from OpenGLContext.physics.x3domi import OmiRigidSystem  # noqa: PLC0415 omi_physics, where installed
+        system = OmiRigidSystem(collection)
         system.advance(0.0)
         return facts(system)
 

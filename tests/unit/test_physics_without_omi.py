@@ -108,6 +108,9 @@ ENGINE_MODULES = (
     'OpenGLContext.physics.road',
     'OpenGLContext.physics.heightfield',
     'OpenGLContext.scenegraph.x3drigidbody',
+    'OpenGLContext.physics.x3drigid',
+    'OpenGLContext.physics.x3djolt',
+    'OpenGLContext.physics.massprops',
     'OpenGLContext.scenegraph.basenodes',
     'OpenGLContext.move.physicswalk',
     'OpenGLContext.move.physicsplatform',
@@ -137,12 +140,10 @@ def test_engine_modules_import_without_omi_physics() -> None:
 
 def test_the_features_built_on_an_omi_world_name_the_extra() -> None:
     out = run_without_omi('''
-        import logging
         from OpenGLContext.physics.engine import EngineUnavailable
         from OpenGLContext.physics.props import PropColliders
         from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
         from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
-        from OpenGLContext.scenegraph.x3drigidbody import RigidBodyCollection
 
         for make in (lambda: PropColliders(None, []), lambda: TerrainColliders(None),
                      lambda: PhysicsViewPlatform(None)):
@@ -150,16 +151,8 @@ def test_the_features_built_on_an_omi_world_name_the_extra() -> None:
                 make()
             except EngineUnavailable as error:
                 print('OpenGLContext[omi-physics]' in str(error))
-
-        heard = []
-        handler = logging.Handler()
-        handler.emit = lambda record: heard.append(record.getMessage())
-        logging.getLogger().addHandler(handler)
-        collection = RigidBodyCollection()
-        print(collection.step(), collection.step())
-        print(sum('OpenGLContext[omi-physics]' in message for message in heard))
     ''')
-    assert out.split() == ['True', 'True', 'True', 'False', 'False', '1']
+    assert out.split() == ['True', 'True', 'True']
 
 
 def test_walking_needs_no_omi_physics() -> None:
@@ -201,6 +194,37 @@ def test_walking_needs_no_omi_physics() -> None:
         host.physics.close()
     ''')
     assert out.split() == ['True', 'True', '0.5']
+
+
+def test_an_x3d_rigid_body_scene_steps_and_senses() -> None:
+    out = run_without_omi('''
+        from OpenGLContext.loaders.loader import Loader
+        graph = Loader.loads(b"""<X3D version="4.0"><Scene>
+          <CollidableShape DEF="BALL"><Shape containerField="shape"><Sphere radius="0.1"/></Shape>
+          </CollidableShape>
+          <CollidableShape DEF="GROUND" translation="0 -0.5 0">
+            <Shape containerField="shape"><Box size="20 0.1 20"/></Shape></CollidableShape>
+          <RigidBodyCollection DEF="C">
+            <CollisionCollection containerField="collider">
+              <CollidableShape USE="BALL"/><CollidableShape USE="GROUND"/></CollisionCollection>
+            <RigidBody DEF="B" containerField="bodies" position="0 1 0">
+              <CollidableShape USE="BALL" containerField="geometry"/></RigidBody>
+          </RigidBodyCollection>
+          <CollisionSensor DEF="S"><CollisionCollection containerField="collider">
+            <CollidableShape USE="BALL"/><CollidableShape USE="GROUND"/></CollisionCollection>
+          </CollisionSensor></Scene></X3D>""", 'rigid.x3d')
+        collection, sensor = graph.getDEF('C'), graph.getDEF('S')
+        for _ in range(120):
+            collection.advance(1.0 / 60.0)
+        sensor.sense()
+        print(type(collection.system).__name__)
+        print(round(float(graph.getDEF('B').position[1]), 2))
+        print(sensor.isActive)
+    ''')
+    name, height, touching = out.split()
+    assert name == 'JoltRigidSystem'
+    assert abs(float(height) + 0.35) < 0.02
+    assert touching == 'True'
 
 
 @pytest.mark.engines('jolt')

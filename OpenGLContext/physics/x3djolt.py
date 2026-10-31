@@ -31,23 +31,29 @@ import numpy as np
 import pyjoltphysics as pj
 
 from OpenGLContext.physics import x3drigid
+from OpenGLContext.physics.engine import require_omi
 from OpenGLContext.physics.joltengine import _shape_of, _vec3, axis_angles, default_threads
-from OpenGLContext.physics.omi_adapter import proxy_from_shape
 from OpenGLContext.physics.settings import default_engine
 from OpenGLContext.physics.x3drigid import (
-    _BODY_OUTPUTS, _CARRIED, _LEVEL, _PARKED, _SURFACE, JOINT_OUTPUTS, _Body, _carry, _floats,
-    _inner_collidables, _Joint, _kept, _kind, _same, _suspension, _turn_onto, collidable_parts,
-    members, pose_of, quaternion, single_shape,
+    _BODY_OUTPUTS, _PARKED, _SURFACE, ContactRule, _Body, _floats, _inner_collidables, _Joint, _kept, _kind, _same, _suspension,
+    _turn_onto, collidable_parts, members, pose_of, quaternion, single_shape,
 )
 
 __all__ = ['JoltRigidSystem', 'make_rigid_system']
 
 
 def make_rigid_system(collection: Any) -> x3drigid.RigidSystem:
-    """The simulation of ``collection`` on the physics engine of the run."""
+    """The simulation of ``collection`` on the physics engine of the run
+
+    Raises :class:`~OpenGLContext.physics.engine.EngineUnavailable` for the
+    omi engine without omi_physics.
+    """
     if default_engine() == 'jolt':
         return JoltRigidSystem(collection)
-    return x3drigid.RigidSystem(collection)
+    require_omi('X3D RigidBodyCollection')
+    from OpenGLContext.physics.x3domi import OmiRigidSystem  # noqa: PLC0415 omi_physics loads on use
+
+    return OmiRigidSystem(collection)
 
 
 def _matrix(turn: np.ndarray) -> np.ndarray:
@@ -138,10 +144,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
     # -- building -----------------------------------------------------------
     def build(self) -> None:
         """Make the world from the collection's nodes, as they stand"""
-        for entry in self.bodies:
-            for collidable in entry.collidables:
-                if x3drigid.carrier(collidable) is entry.node:
-                    del _CARRIED[collidable]
+        self._forget_carried()
         if self.jolt is not None:
             self.jolt.stop()
         self._step = x3drigid.ACCURATE_STEP if self.collection.preferAccuracy else x3drigid.STEP
@@ -150,7 +153,6 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             tick_hz=1.0 / self._step, gravity=gravity, threads=default_threads(),
             penetration_slop=x3drigid.MIN_SURFACE_THICKNESS))
         self._gravity = gravity
-        self.world = None
         self.bodies, self.joints, self.held, self.free = [], [], {}, {}
         self._joint_ids, self._angles, self._forces = [], {}, {}
         self._sliders = []
@@ -174,10 +176,8 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         collider = self.collection.collider
         friction, restitution = 0.6, 0.0
         if collider:
-            parameters = x3drigid.contact_parameters(collider)
-            given = parameters.friction
-            friction = float(given[0] if isinstance(given, tuple) else given)
-            restitution = float(parameters.restitution)
+            rule = x3drigid.contact_parameters(collider)
+            friction, restitution = rule.frictions[0], rule.restitution
         return self.jolt.materials.define(friction=max(friction, 0.0),
                                           restitution=max(restitution, 0.0))
 
@@ -188,20 +188,8 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         """Put one X3D body into the world"""
         assert self.jolt is not None
         moving = not node.fixed
-        com = np.asarray(node.centerOfMass, dtype='d')
-        parts = []
-        entry = _Body(node, -1, com)
-        for collidable in node.geometry:
-            if not collidable:
-                continue
-            entry.carried.append(collidable)
-            for held in _inner_collidables(collidable):
-                entry.collidables.add(held)
-            _carry(node, collidable, np.zeros(3), _LEVEL.copy())
-            for part in collidable_parts(collidable, moving):
-                parts.append(type(part)(part.shape, tuple(np.asarray(part.position) - com),
-                                        part.orientation))
-        shape = single_shape(parts)
+        entry, shape = self._body_entry(node)
+        com = entry.com
         turn = quaternion(node.orientation)
         origin = np.asarray(node.position, dtype='d') + _matrix(turn) @ com
         material = self._define_material()
@@ -217,7 +205,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                                          mass=max(float(node.mass), 1e-9), group=0, mask=0,
                                          **values)
         else:
-            made = self.jolt.add_shape(_shape_of(proxy_from_shape(shape), moving))
+            made = self.jolt.add_shape(_shape_of(shape, moving))
             # Jolt turns a body about its shapes' centre; the X3D body turns about its
             # centre of mass, which is the body's origin here.
             centre = self.jolt.shape_info(made).center_of_mass if moving else (0.0, 0.0, 0.0)
@@ -253,7 +241,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         position, turn = pose_of(collidable)
         material = self._define_material()
         (uid,), _seq = self.jolt.add_bodies(pj.BodyBatch.of_shape(
-            np.asarray(position, dtype='d')[None], _shape_of(proxy_from_shape(shape), False),
+            np.asarray(position, dtype='d')[None], _shape_of(shape, False),
             motion=pj.MotionType.STATIC, orientations=np.asarray(turn, dtype='d')[None],
             material=material, flags=pj.BodyFlag.FILTER_CONTACTS))
         self.free[collidable] = int(uid)
@@ -425,45 +413,11 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                          gravity_factor=1.0 if node.useGlobalGravity else 0.0)
         world.set_flags([entry.index], pj.BodyFlag.NO_SLEEP, not rests)
 
-    def _read_contacts(self) -> None:
-        """The pairs the `Contact` nodes sent since the last frame name"""
-        collider = self.collection.collider
-        self._collider = set()
-        self._collider_parameters = None
-        if collider and collider.enabled:
-            self._collider = {node for node, _ in members(collider)}
-            self._collider_parameters = x3drigid.contact_parameters(collider)
-        routed = {}
-        by_body = {entry.node: entry.index for entry in self.bodies}
-        for contact in self.contacts:
-            if not contact:
-                continue
-            ends = []
-            for body, geometry in ((contact.body1, contact.geometry1),
-                                   (contact.body2, contact.geometry2)):
-                found = by_body.get(body) if body else None
-                if found is None and geometry:
-                    found = self._held_index(geometry)
-                ends.append(found)
-            if ends[0] is None and ends[1] is None:
-                continue
-            if ends[0] is None or ends[1] is None:
-                # A side that names nothing is the world: a surface through the
-                # contact, solid on the far side of it from the body.
-                normal = np.asarray(contact.contactNormal, dtype='d')
-                surface = self._surface(np.asarray(contact.position, dtype='d'),
-                                        normal if ends[1] is None else -normal)
-                ends = [surface if end is None else end for end in ends]
-            one, other = (int(end) for end in ends if end is not None)
-            if one != other:
-                routed[(one, other)] = parameters = x3drigid.contact_parameters(contact)
-                self._pair(one, other, parameters)
-        self.contacts = []
-        self._routed = routed
+    def _park_surfaces(self, unused: list[int]) -> None:
+        """Move the surfaces no contact needs this frame out of the way"""
         if self.jolt is not None:
-            for uid in self._surfaces[self._surfaces_used:]:
+            for uid in unused:
                 self.jolt.set_transforms([uid], _PARKED[None], np.array([[0.0, 0.0, 0.0, 1.0]]))
-        self._surfaces_used = 0
 
     def _surface(self, point: np.ndarray, into: np.ndarray) -> int:
         """A static body whose face passes through `point`, solid along `into`, for this frame"""
@@ -488,15 +442,13 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                              np.asarray(_turn_onto((0.0, 1.0, 0.0), -into), dtype='d')[None])
         return uid
 
-    def _pair(self, one: int, other: int, parameters: Any) -> None:
-        """Have the bodies ``one`` and ``other`` meet with a contact's bounce and friction."""
+    def _pair(self, one: int, other: int, rule: ContactRule) -> None:
+        """Have the bodies ``one`` and ``other`` meet with a contact's bounce and first friction."""
         assert self.jolt is not None
         first, second = self._materials.get(one), self._materials.get(other)
         if first is None or second is None:
             return
-        given = parameters.friction
-        friction = max(float(given[0] if isinstance(given, tuple) else given), 0.0)
-        values = (friction, max(float(parameters.restitution), 0.0))
+        values = (max(float(rule.frictions[0]), 0.0), max(float(rule.restitution), 0.0))
         key = (min(first, second), max(first, second))
         if self._paired.get(key) != values:
             self._paired[key] = values
@@ -654,3 +606,125 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             last[name] = reading
         last['time'] = now
         return found
+
+
+def make_sensing() -> Any:
+    """What finds a `CollisionSensor`'s touches on the physics engine of the run
+
+    An object whose ``detect(collection)`` gives the touches among a
+    `CollisionCollection`'s collidables as they stand
+    (:class:`JoltSensing`, or the omi engine's
+    :class:`~OpenGLContext.physics.x3domi.OmiSensing`).
+    """
+    if default_engine() == 'jolt':
+        return JoltSensing()
+    require_omi('X3D CollisionSensor')
+    from OpenGLContext.physics.x3domi import OmiSensing  # noqa: PLC0415 omi_physics loads on use
+
+    return OmiSensing()
+
+
+#: How far each collidable's shape is cast to find what it overlaps where it
+#: stands, in metres; only what it overlaps at the start of the cast is a touch.
+_PROBE = 1e-4
+
+
+class _Sensed:
+    """One collidable as a static body of a sensing world"""
+
+    __slots__ = ('cast', 'pose', 'shape', 'uid')
+
+    def __init__(self, uid: int, shape: Any, cast: Optional[int], pose: tuple[float, ...]) -> None:
+        self.uid = uid
+        self.shape = shape
+        #: The shape id the collidable's shape is cast as; None for a shape with a mesh.
+        self.cast = cast
+        self.pose = pose
+
+
+class JoltSensing:
+    """A `CollisionSensor`'s touches, found by Jolt's narrow phase
+
+    Each collidable is a static body of a pyjoltphysics world that is never
+    stepped, moved where the collidable is before each :meth:`detect`. Each
+    collidable's shape is then cast a short way (:data:`_PROBE`) from where
+    it stands, and every body it overlaps at the start is a touch: one per
+    touching pair, at the deepest point, with the normal from the collidable
+    met first in the collection toward the other. Two collidables holding
+    triangle meshes are not tested against each other: a mesh is not cast.
+    """
+
+    def __init__(self) -> None:
+        self.world: Optional[pj.World] = None
+        self.sensed: dict[Any, _Sensed] = {}
+
+    def _world(self) -> pj.World:
+        if self.world is None:
+            self.world = pj.World(pj.WorldSettings(threads=1))
+        return self.world
+
+    def _place(self, collidable: Any, shape: Any, position: np.ndarray,
+               turn: np.ndarray) -> _Sensed:
+        """The collidable's body, made or moved to where it is"""
+        world = self._world()
+        pose = tuple(float(value) for value in (*position, *turn))
+        entry = self.sensed.get(collidable)
+        if entry is not None and entry.shape is not shape:
+            world.remove_bodies([entry.uid])
+            if entry.cast is not None:
+                world.remove_shape(entry.cast)
+            entry = None
+        if entry is None:
+            (uid,), _seq = world.add_bodies(pj.BodyBatch.of_shape(
+                np.asarray(position, dtype='d')[None], _shape_of(shape, False),
+                motion=pj.MotionType.STATIC, orientations=np.asarray(turn, dtype='d')[None]))
+            cast = world.add_shape(_shape_of(shape, True)) if x3drigid.mesh_free(shape) else None
+            entry = self.sensed[collidable] = _Sensed(int(uid), shape, cast, pose)
+        elif entry.pose != pose:
+            world.set_transforms([entry.uid], np.asarray(position, dtype='d')[None],
+                                 np.asarray(turn, dtype='d')[None])
+            entry.pose = pose
+        return entry
+
+    def detect(self, collection: Any) -> list[x3drigid.Touch]:
+        """Where the collidables of a `CollisionCollection` touch, as they stand"""
+        placed = [(collidable, self._place(collidable, shape, position, turn))
+                  for collidable, shape, position, turn in x3drigid.placed_members(collection)]
+        present = {collidable for collidable, _ in placed}
+        gone = [node for node in self.sensed if node not in present]
+        if gone and self.world is not None:
+            self.world.remove_bodies([self.sensed[node].uid for node in gone])
+            for node in gone:
+                cast = self.sensed.pop(node).cast
+                if cast is not None:
+                    self.world.remove_shape(cast)
+        if len(placed) < 2 or self.world is None:
+            return []
+        world = self.world
+        world.flush()
+        order = {entry.uid: place for place, (_node, entry) in enumerate(placed)}
+        bodies = [x3drigid.carrier(collidable) for collidable, _ in placed]
+        found: dict[tuple[int, int], x3drigid.Touch] = {}
+        for place, (_collidable, entry) in enumerate(placed):
+            if entry.cast is None:
+                continue
+            body = bodies[place]
+            exclude = [other.uid for other_place, (_node, other) in enumerate(placed)
+                       if other_place == place or (body is not None and bodies[other_place] is body)]
+            x, y, z = entry.pose[:3]
+            hits = world.sweep(entry.cast, (x, y, z), (x, y + _PROBE, z), entry.pose[3:],
+                               pj.QueryFilter(exclude=exclude), all_hits=True)
+            for hit in hits:
+                other = order.get(hit.uid)
+                if other is None or hit.fraction > 0.0 or hit.depth <= 0.0:
+                    continue
+                key = (min(place, other), max(place, other))
+                if key in found:
+                    continue
+                # The hit's normal points from the body met toward the cast shape.
+                normal = np.asarray(hit.normal, dtype='d')
+                if place == key[0]:
+                    normal = -normal
+                found[key] = x3drigid.Touch(placed[key[0]][0], placed[key[1]][0],
+                                            np.asarray(hit.point, dtype='d'), normal, float(hit.depth))
+        return [found[key] for key in sorted(found)]

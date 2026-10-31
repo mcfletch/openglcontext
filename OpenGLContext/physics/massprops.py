@@ -29,7 +29,7 @@ _NODES, _WEIGHTS = np.polynomial.legendre.leggauss(3)
 _LEVEL = (0.0, 0.0, 0.0, 1.0)
 
 
-def rotation_matrix(turn: Sequence[float]) -> np.ndarray:
+def rotation_matrix(turn: Any) -> np.ndarray:
     """The 3x3 rotation of a unit quaternion ``(x, y, z, w)``"""
     x, y, z, w = (float(v) for v in turn)
     return np.array([
@@ -100,8 +100,8 @@ def inertia_diagonal(proxy: Proxy | None, mass: float) -> np.ndarray:
     return np.diag(inertia_tensor(proxy, mass)).copy()
 
 
-def bounds(proxy: Proxy, position: Sequence[float] = (0.0, 0.0, 0.0),
-           orientation: Sequence[float] = _LEVEL) -> tuple[np.ndarray, np.ndarray]:
+def bounds(proxy: Proxy, position: Any = (0.0, 0.0, 0.0),
+           orientation: Any = _LEVEL) -> tuple[np.ndarray, np.ndarray]:
     """The axis-aligned box ``(low, high)`` the proxy fills at a pose
 
     Raises ValueError for a ``heightfield``, which has no box.
@@ -144,7 +144,7 @@ def bounds(proxy: Proxy, position: Sequence[float] = (0.0, 0.0, 0.0),
     return centre - half, centre + half
 
 
-def _multiply(a: Sequence[float], b: Sequence[float]) -> tuple[float, float, float, float]:
+def _multiply(a: Any, b: Any) -> tuple[float, float, float, float]:
     """The quaternion turning by ``b`` then by ``a``"""
     ax, ay, az, aw = (float(v) for v in a)
     bx, by, bz, bw = (float(v) for v in b)

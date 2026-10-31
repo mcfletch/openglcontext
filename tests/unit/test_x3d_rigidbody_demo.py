@@ -10,10 +10,8 @@ from OpenGLContext.bin import x3d_rigidbody
 from OpenGLContext.loaders import background
 from OpenGLContext.scenegraph.scenegraph import X3DScene
 from OpenGLContext.testing.scenes import drawn_image, scene_context
-from tests.unit.omi import requires_omi
 
-#: X3D's rigid bodies build their shapes with omi_physics' model; omi_physics is the omi extra.
-pytestmark = [pytest.mark.engines("omi", "jolt"), requires_omi]
+pytestmark = pytest.mark.engines("omi", "jolt")
 
 FRAME = 1.0 / 60.0
 COMPONENT = {'RigidBodyCollection', 'RigidBody', 'CollidableShape', 'CollidableOffset',
