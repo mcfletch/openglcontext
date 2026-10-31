@@ -6,7 +6,7 @@ model.  A node that carries an OMI physics body
 (:mod:`OpenGLContext.physics.omigltf`) is met as itself.
 
 :func:`collision_world_from_scene` builds an omi_physics world and needs the
-deprecated omi_physics (the ``omi`` extra). The rest of the module is the
+deprecated omi_physics (the ``omi-physics`` extra). The rest of the module is the
 scenegraph walk the physics service's scenery, its proxies and the walking
 avatar (:func:`scene_bounds`) use.
 """

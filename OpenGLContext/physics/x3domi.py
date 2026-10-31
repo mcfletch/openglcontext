@@ -6,7 +6,7 @@ with its world an omi_physics :class:`~omi_physics.world.PhysicsWorld`, and
 phase. :func:`~OpenGLContext.physics.x3djolt.make_rigid_system` and
 :func:`~OpenGLContext.physics.x3djolt.make_sensing` choose these where the
 run's engine is ``'omi'``. Importing this module needs omi_physics, the
-``omi`` extra; it is deleted with the omi engine.
+``omi-physics`` extra; it is deleted with the omi engine.
 """
 from __future__ import annotations
 
