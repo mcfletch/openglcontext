@@ -1034,7 +1034,12 @@ What differs from omi_physics, by design of the engine:
 - Velocities are float32 in the snapshot: a speed read back is within about
   1e-6 of the one set. A ray's hit point is within a few micrometres of the
   surface (Jolt's shapes and ray fractions are float32), and a ray exactly
-  tangent to a capsule misses it.
+  tangent to a capsule misses it. A height field holds its samples in 16-bit
+  blocks: a ray meets it within 2e-5 m of a sample at heights near 50 m and
+  6e-5 m near 270 m.
+- A character with no move asked for, standing or knocked down, stays where it
+  is on walkable ground. On omi_physics such a character creeps downhill: 5 cm
+  in two seconds on a 10 degree slope, 0.7 m on 25 degrees.
 - Characters push each other by their masses: a character walking into
   another of a different pass group shoves it along rather than stopping.
 - A body striking a character knocks it back by the momentum the body brings
