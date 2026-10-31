@@ -29,7 +29,8 @@ What is here is the two seams between that engine and a context:
                            step once a frame.
 :mod:`~.vehicle`           :class:`~.vehicle.VehicleSoundtrack`, a road
                            vehicle's motor, tyres, wind and impacts as one
-                           emitter, fed from an ``omi_physics`` vehicle.
+                           emitter, fed from a vehicle's speed, wheels and
+                           throttle.
 =========================  ====================================================
 
 The nodes that put a sound *in* a scene are ``AudioEmitter`` and

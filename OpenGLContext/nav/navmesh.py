@@ -60,7 +60,7 @@ from OpenGLContext import entropy
 
 log = logging.getLogger(__name__)
 
-__all__ = ['NavMesh', 'build', 'from_world']
+__all__ = ['NavMesh', 'build', 'from_scene']
 
 #: Steepest surface a character is assumed to walk, in degrees.  A default
 #: rather than a constant: it belongs to the body, and
@@ -488,34 +488,23 @@ def build(points: Any, triangles: Any,
     return NavMesh(points, cells, neighbours, portals)
 
 
-def from_world(world: Any, max_slope: float = DEFAULT_MAX_SLOPE,
+def from_scene(group: Any, max_slope: float = DEFAULT_MAX_SLOPE,
                clearance: float = DEFAULT_CLEARANCE) -> NavMesh:
-    """A navmesh over every static trimesh in a physics world.
+    """A navmesh over the triangles a scenegraph collides with.
 
-    The seam a game uses: the collision mesh a level was loaded into is already
-    the thing a character walks on, so the navmesh is built from that rather
-    than from a second description of the same geometry that could disagree
-    with it.
+    The triangles are the ones the physics service makes the scene's static
+    bodies of (:func:`~OpenGLContext.physics.gltf_world.extract_trimesh`): every
+    mesh under ``group`` placed in the world, a disabled X3D ``Collision``
+    group's left out and an enabled one's proxy in place of its children. A
+    scene with no triangles gives an empty mesh.
     """
-    parts = []
-    for body in range(world.body_count):
-        index = int(world.collider_shape[body])
-        if index < 0:
-            continue
-        shape = world.shapes[index]
-        if str(shape.type) != 'trimesh' or shape.points is None:
-            continue
-        centre = np.asarray(world.position[body], dtype='d')
-        parts.append((np.asarray(shape.points, dtype='d') + centre,
-                      np.asarray(shape.indices, dtype='i')))
-    if not parts:
+    from OpenGLContext.physics.gltf_world import extract_trimesh  # noqa: PLC0415 the scenegraph walk loads on use
+
+    found = extract_trimesh(group)
+    if found is None or not len(found[1]):
         return NavMesh(np.zeros((0, 3)), np.zeros((0, 3), dtype='i'), {}, {})
-    points, triangles, offset = [], [], 0
-    for part_points, part_triangles in parts:
-        points.append(part_points)
-        triangles.append(part_triangles + offset)
-        offset += len(part_points)
-    return build(np.vstack(points), np.vstack(triangles),
+    points, triangles = found
+    return build(np.asarray(points, dtype='d'), np.asarray(triangles, dtype='i'),
                  max_slope=max_slope, clearance=clearance)
 
 

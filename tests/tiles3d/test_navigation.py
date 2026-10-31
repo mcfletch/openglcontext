@@ -2,30 +2,53 @@
 
 Validates the walk/fly workflow the terrain must support: gravity settles the avatar
 onto the surface, walking follows the terrain, flying moves freely, and switching
-from fly back to walk drops the avatar to the surface. Pure numpy physics against the
-terrain's static trimesh collider — no GL.
+from fly back to walk drops the avatar to the surface. Physics against the
+terrain's static trimesh body in a physics service, the avatar a character of
+the service its platform steps -- no GL.
 """
 import math
 
 import numpy as np
-from omi_physics import model
-from omi_physics.character import CharacterCapabilities
-from omi_physics.world import PhysicsWorld
+import pytest
 
 from OpenGLContext.loaders.tiles3d import procedural as P
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.physics.types import CharacterCapabilities
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
 
-def _terrain_world(extent=400.0, res=81):
+@pytest.fixture
+def made():
+    """Make services, closing each when the test ends."""
+    services = []
+
+    def make():
+        services.append(Physics(PhysicsDefinition(mode='inline', colliders='none')))
+        return services[-1]
+    yield make
+    for service in services:
+        service.close()
+
+
+def _terrain_world(made, extent=400.0, res=81):
     pos, nrm, col, idx = P.terrain_patch(-extent / 2, extent / 2,
                                          -extent / 2, extent / 2, res)
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
-    shape = world.add_shape(model.Shape.trimesh(
-        pos.astype("d"), idx.reshape(-1, 3)))
-    world.add_body(model.Motion(type=model.STATIC),
-                   collider=model.Collider(shape=shape))
-    return world
+    physics = made()
+    physics.add_static(None, proxy=Proxy.trimesh(pos.astype("d"), idx.reshape(-1, 3)))
+    return physics
+
+
+def _avatar(physics, capabilities=None, position=(0.0, 0.0, 0.0), yaw=0.0):
+    """A platform over a character of ``physics`` with its capsule's centre at ``position``,
+    stepped by the platform."""
+    caps = capabilities or CharacterCapabilities()
+    feet = np.asarray(position, dtype='d') - (0.0, caps.standHeight / 2.0, 0.0)
+    character = physics.add_character(capabilities=caps, position=feet)
+    character.framed = False
+    return PhysicsViewPlatform(character, yaw=yaw)
 
 
 def _surface(x, z):
@@ -54,11 +77,11 @@ def _step(platform, steps, dt=1.0 / 60.0):
         platform.update(dt)
 
 
-def test_gravity_settles_avatar_onto_the_surface():
-    world = _terrain_world()
+def test_gravity_settles_avatar_onto_the_surface(made):
+    world = _terrain_world(made)
     x, z = _flat_spot()
     surf = _surface(x, z)
-    plat = PhysicsViewPlatform(world, position=(x, surf + 40, z))
+    plat = _avatar(world, position=(x, surf + 40, z))
     plat.bind((x, surf + 40, z))
     _step(plat, 700)
     base_y = plat.character.base()[1]
@@ -66,11 +89,11 @@ def test_gravity_settles_avatar_onto_the_surface():
     assert abs(base_y - surf) < 2.5, (base_y, surf)
 
 
-def test_walking_follows_the_terrain_surface():
-    world = _terrain_world()
+def test_walking_follows_the_terrain_surface(made):
+    world = _terrain_world(made)
     x, z = _flat_spot()
     surf = _surface(x, z)
-    plat = PhysicsViewPlatform(world, position=(x, surf + 5, z))
+    plat = _avatar(world, position=(x, surf + 5, z))
     plat.bind((x, surf + 5, z))
     _step(plat, 200)                       # settle
     start = plat.character.position.copy()
@@ -87,11 +110,11 @@ def test_walking_follows_the_terrain_surface():
     assert plat.character.grounded
 
 
-def test_flying_moves_freely_above_the_surface():
-    world = _terrain_world()
+def test_flying_moves_freely_above_the_surface(made):
+    world = _terrain_world(made)
     x, z = _flat_spot()
     surf = _surface(x, z)
-    plat = PhysicsViewPlatform(world, position=(x, surf + 5, z))
+    plat = _avatar(world, position=(x, surf + 5, z))
     plat.bind((x, surf + 5, z))
     _step(plat, 120)
     y0 = plat.character.position[1]
@@ -103,11 +126,11 @@ def test_flying_moves_freely_above_the_surface():
     assert not plat.character.grounded
 
 
-def test_switch_fly_to_walk_drops_to_surface():
-    world = _terrain_world()
+def test_switch_fly_to_walk_drops_to_surface(made):
+    world = _terrain_world(made)
     x, z = _flat_spot()
     surf = _surface(x, z)
-    plat = PhysicsViewPlatform(world, position=(x, surf + 5, z))
+    plat = _avatar(world, position=(x, surf + 5, z))
     plat.bind((x, surf + 5, z))
     _step(plat, 120)
     # Fly up high.
@@ -126,13 +149,13 @@ def test_switch_fly_to_walk_drops_to_surface():
     assert plat.character.grounded
 
 
-def test_avatar_walks_on_streamed_tileset_colliders(tmp_path):
+def test_avatar_walks_on_streamed_tileset_colliders(tmp_path, made):
     """Full loop: terrain streams -> per-tile colliders register -> avatar stands on them."""
 
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
+    world = made()
     path = P.build_terrain_tileset(str(tmp_path), extent=1024, levels=2, tile_res=33)
     terrain = TilesTerrain(path, fovy=math.radians(50.0), workers=4,
-                           physics_world=world, memory_budget=64 * 1024 * 1024)
+                           physics=world, memory_budget=64 * 1024 * 1024)
     try:
         # Stream the tiles near a spot so their colliders enter the world.
         x, z = 0.0, 0.0
@@ -141,9 +164,9 @@ def test_avatar_walks_on_streamed_tileset_colliders(tmp_path):
             terrain.update_for_camera((x, surf + 60, z), 720)
             terrain.wait_for_loads(timeout=6.0)
         assert terrain.colliders.collider_count >= 1
-        assert len(world.bodies) >= 1
+        assert world.counts.bodies == terrain.colliders.collider_count
         # Drop an avatar onto the streamed terrain; gravity should seat it on the surface.
-        plat = PhysicsViewPlatform(world, position=(x, surf + 30, z))
+        plat = _avatar(world, position=(x, surf + 30, z))
         plat.bind((x, surf + 30, z))
         for _ in range(700):
             plat.update(1.0 / 60.0)
@@ -153,14 +176,14 @@ def test_avatar_walks_on_streamed_tileset_colliders(tmp_path):
         terrain.shutdown()
 
 
-def test_walks_a_long_distance_without_getting_stuck():
+def test_walks_a_long_distance_without_getting_stuck(made):
     """The viewer's collision is one skirt-free surface; walking should travel far,
     not bounce back against skirt walls or overlapping LOD colliders."""
-    world = _terrain_world(extent=1200.0, res=161)   # skirt-free (skirt_depth=0)
+    world = _terrain_world(made, extent=1200.0, res=161)   # skirt-free (skirt_depth=0)
     x, z = _flat_spot()
     surf = _surface(x, z)
     caps = CharacterCapabilities(walkSpeed=16.0, stepHeight=0.7, eyeHeight=1.7)
-    plat = PhysicsViewPlatform(world, caps, position=(x, surf + 5, z), yaw=0.0)
+    plat = _avatar(world, caps, position=(x, surf + 5, z), yaw=0.0)
     plat.bind((x, surf + 5, z))
     _step(plat, 200)                       # settle
     start = plat.character.position.copy()

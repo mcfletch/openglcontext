@@ -26,7 +26,6 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph.zone import Zone, ZoneGravity
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 #: The physics services the hosts of a test made, closed after it.
 _SERVICES = []

@@ -258,8 +258,8 @@ class JoltController:
         self.move_dir = np.zeros(3)
         self.push = np.zeros(3)
         self.pushing = None
-        #: The capabilities under the omi controller's name, which the movement modes read
-        #: and retune: a changed speed reaches the world as the move's speed.
+        #: The capabilities as the movement modes read and retune them: a changed
+        #: speed reaches the world as the move's speed.
         self.caps = _Capabilities(self, capabilities)
         self._move_speed: float | None = None
         self._mode = 'walk'
@@ -481,21 +481,34 @@ class JoltController:
 
     #: Metres below the feet a teleport looks for a floor to stand on.
     SEARCH = 4.0
+    #: How many times a teleport pushes the capsule out of what it overlaps.
+    PUSHES = 6
 
     def safe_bind(self, centre: Any) -> bool:
-        """Teleport the capsule's centre to ``centre``, standing on the floor under it.
+        """Teleport the capsule's centre to ``centre``, standing on the floor under it and out of
+        what it overlaps; False where no room was found.
 
         The floor is the first surface a ray meets down the capsule's axis from
         its top to :attr:`SEARCH` metres below its feet: a capsule whose feet
         are inside a floor is raised onto it, and one above a floor drops onto
-        it, as the omi controller's teleport does. With no floor in reach it
-        stays where it is put.
+        it. With no floor in reach it stays at the height it is put. A capsule
+        overlapping a wall, a post or a rock is pushed out sideways to the
+        nearest clear place (:meth:`JoltEngine.push_out`), at most
+        :attr:`PUSHES` times, seated on the floor again after each push; a
+        capsule still overlapping something then answers False, and is left
+        where the pushes put it.
         """
-        at = np.asarray(centre, dtype='d')[:3].copy()
-        half = self.height / 2.0
-        top = self.engine.floor_under(at, half, self.native.id, below=self.SEARCH)
-        if top is not None:
-            at[1] = top + half
+        at = self._seated(np.asarray(centre, dtype='d')[:3].copy())
+        clear = False
+        for _ in range(self.PUSHES):
+            push = self.engine.push_out(at, float(self.capabilities.radius), self.height,
+                                        self.native.id)
+            if push is None:
+                clear = True
+                break
+            if not push.any():
+                break
+            at = self._seated(at + push)
         seq = self.native.teleport(tuple(float(v) for v in at))
         self._placed = (seq, at)
         self.position = at
@@ -503,7 +516,16 @@ class JoltController:
         self.eye_point = at + np.array(
             [0.0, float(self.capabilities.eyeHeight) - float(self.capabilities.standHeight) / 2.0, 0.0])
         self.velocity = np.zeros(3)
-        return True
+        return clear
+
+    def _seated(self, at: np.ndarray) -> np.ndarray:
+        """``at`` with the capsule's feet on the floor under it, where :meth:`safe_bind` finds one."""
+        half = self.height / 2.0
+        top = self.engine.floor_under(at, half, self.native.id, below=self.SEARCH)
+        if top is not None:
+            at = at.copy()
+            at[1] = top + half
+        return at
 
     def set_pass_group(self, group: int) -> None:
         self.native.set_pass_group(int(group))
@@ -586,7 +608,6 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     """A Jolt world, stepped by pyjoltphysics on its world thread."""
 
     name = 'jolt'
-    stand_ins = False
     vehicles = True
 
     def __init__(self, definition: PhysicsDefinition, wake: Callable[[], Any] | None = None) -> None:
@@ -819,8 +840,8 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             if ticks:
                 previous = self._tick_before = self._run(ticks)
             else:
-                # A frame that owes no tick applies what is waiting, as an inline omi world does,
-                # and draws what moves further between the last two ticks.
+                # A frame that owes no tick applies what is waiting and draws what
+                # moves further between the last two ticks.
                 if self._posted:
                     self._run_posted()
                 self._sync()
@@ -1281,16 +1302,16 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
 
     def make_character(self, physics: Any, centre: np.ndarray, capabilities: Any,
                        gravity: float) -> tuple[Any, Any]:
-        from OpenGLContext.physics.character import stand_in_proxy  # noqa: PLC0415 imports the service's types
+        from OpenGLContext.physics.character import capsule_proxy  # noqa: PLC0415 imports the service's types
 
         caps = _capabilities(capabilities)
         centre = self._above_ground(np.asarray(centre, dtype='d'), float(capabilities.standHeight))
         self._stream_ground(extra=centre[None])
         native = self.world.add_character(tuple(float(v) for v in centre), caps, gravity=gravity)
         # Seated in the tick that adds it, so a character made standing on the ground is
-        # grounded from its first tick, as the omi controller is from its first step.
+        # grounded from its first tick.
         seated = native.teleport(tuple(float(v) for v in centre), SEAT_SEARCH)
-        body = physics._register_body('kinematic', stand_in_proxy(capabilities, 0.0), centre)
+        body = physics._register_body('kinematic', capsule_proxy(capabilities), centre)
         self._bind(body.uid, native.id)
         self._kinds[body.uid] = 'character'
         controller = JoltController(self, native, capabilities, centre, gravity)
@@ -1318,8 +1339,8 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def _above_ground(self, centre: np.ndarray, height: float) -> np.ndarray:
         """``centre`` of a capsule ``height`` tall, raised where its feet are below a sampled ground.
 
-        Everything below a sampled ground is solid, as the omi engine holds it;
-        a height field tile collides from above only.
+        Everything below a sampled ground is solid; a height field tile collides
+        from above only.
         """
         ground = self._ground_under(float(centre[0]), float(centre[2]))
         if ground is not None and centre[1] - height / 2.0 < ground:
@@ -1344,15 +1365,77 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         under its feet; None for nothing.
 
         Read with a ray down from the capsule's top, passing over character
-        ``own``, the characters' capsules and triggers.
+        ``own``, the characters' capsules and triggers. A body the capsule's
+        top is inside is no floor (the ray meets it where it starts) and the
+        ray passes through it, at most :attr:`FLOOR_PASSES` of them.
         """
         start = np.array([centre[0], centre[1] + half, centre[2]], dtype='d')
         reach = 2.0 * half + max(float(below), 0.0)
         self._ground_for_query(start, start - np.array([0.0, reach, 0.0]))
         self._sync()
-        hit = self.world.raycast(_vec3(start), (0.0, -1.0, 0.0), reach,
-                                 filter=pj.QueryFilter(exclude=[own], characters=False))
-        return None if hit is None else float(hit.point[1])
+        passed = [own]
+        for _ in range(self.FLOOR_PASSES):
+            hit = self.world.raycast(_vec3(start), (0.0, -1.0, 0.0), reach,
+                                     filter=pj.QueryFilter(exclude=passed, characters=False))
+            if hit is None:
+                return None
+            if hit.distance > 0.0:
+                return float(hit.point[1])
+            passed.append(int(hit.uid))
+        return None
+
+    #: How many bodies a floor ray starting inside them passes through.
+    FLOOR_PASSES = 4
+
+    #: Metres a capsule is pushed beyond where it first clears what it overlapped.
+    PUSH_SKIN = 2e-3
+    #: Metres above its seat the capsule is tested, so the floor it stands on is not an overlap.
+    PUSH_LIFT = 0.05
+    #: The furthest a capsule is pushed out sideways in one push, in metres.
+    PUSH_REACH = 2.0
+    #: How many level directions a push tries.
+    PUSH_DIRECTIONS = 32
+
+    def push_out(self, centre: np.ndarray, radius: float, height: float,
+                 own: int) -> np.ndarray | None:
+        """The shortest move, in metres, that takes a standing capsule at ``centre`` out of what
+        it overlaps, sideways or up; None where it overlaps nothing, and a zero move where no
+        move within reach is clear.
+
+        The capsule is tested :attr:`PUSH_LIFT` above ``centre``, so a floor it
+        stands on is no overlap. The move is found by sweeping the capsule back
+        towards ``centre`` from :attr:`PUSH_REACH` out in each of
+        :attr:`PUSH_DIRECTIONS` level directions, and from :attr:`PUSH_REACH`
+        and its own height above (onto the top of a block it is inside): where
+        it first touches something is clear, and the nearest such place is
+        taken, :attr:`PUSH_SKIN` further out. A sweep that starts overlapping
+        something finds no place. Character ``own``, the characters' capsules
+        and triggers are passed through.
+        """
+        middle = max(float(height) - 2.0 * float(radius), 1e-3)
+        shape = pj.Shape.capsule(float(radius), middle)
+        here = np.asarray(centre, dtype='d')[:3] + np.array([0.0, self.PUSH_LIFT, 0.0])
+        query = pj.QueryFilter(exclude=[own], characters=False)
+        self._sync()
+        if not len(self.world.overlap(shape, _vec3(here), filter=query)):
+            return None
+        best: np.ndarray | None = None
+        nearest = math.inf
+        headings = [(np.array([math.cos(angle), 0.0, math.sin(angle)]), self.PUSH_REACH)
+                    for angle in (2.0 * math.pi * k / self.PUSH_DIRECTIONS
+                                  for k in range(self.PUSH_DIRECTIONS))]
+        headings.append((np.array([0.0, 1.0, 0.0]), self.PUSH_REACH + float(height)))
+        for heading, reach in headings:
+            start = here + heading * reach
+            hit = self.world.sweep(shape, _vec3(start), _vec3(here), filter=query)
+            if hit is None or hit.fraction <= 0.0:
+                continue
+            out = reach * (1.0 - float(hit.fraction))
+            if out < nearest:
+                nearest, best = out, heading
+        if best is None:
+            return np.zeros(3)
+        return best * (nearest + self.PUSH_SKIN)
 
     def pass_group_id(self, name: str | None) -> int:
         """The native pass group of the characters given the name ``name``; 0 for none."""
@@ -1462,7 +1545,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             flags |= pj.BodyFlag.CONTINUOUS
         if kind == 'dynamic':
             # A dynamic body rolls across the seam between static bodies laid
-            # flush as across one surface, as it does on omi_physics.
+            # flush as across one surface.
             flags |= pj.BodyFlag.SMOOTH_EDGES
         if report and self._persist:
             flags |= pj.BodyFlag.REPORT
@@ -1686,24 +1769,11 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def _op_logging(self, uid: int, on: bool) -> None:
         """Nothing: a Jolt world always reports begin and end records."""
 
-    def _op_backend(self, uid: int, name: str) -> None:
-        """Nothing: Jolt has no compute backends to choose."""
-
-    def _op_standin(self, uid: int, body: int, push_mass: float) -> None:
-        """Nothing: a Jolt character pushes by its own mass and push limits."""
-
     def _op_noop(self, uid: int) -> None:
         """Nothing; a command whose arrival changes nothing."""
 
     def _op_joint_watch(self, uid: int, joint: int) -> None:
         """Nothing: every joint's readings are in every snapshot."""
-
-    def _op_run(self, uid: int, function: Callable[[Any], Any],  # noqa: ARG002 world-wide
-                future: Any) -> None:
-        if future.set_running_or_notify_cancel():
-            future.set_exception(RuntimeError(
-                'Physics.run hands over an omi_physics world; the Jolt engine has none. '
-                'Use physics.on_step, physics.poses and the add_* joint calls'))
 
     def _op_post(self, uid: int, function: Callable[..., Any],  # noqa: ARG002 world-wide
                  arguments: tuple[Any, ...]) -> None:
@@ -2104,9 +2174,9 @@ def _concat(batches: list[pj.BodyBatch]) -> pj.BodyBatch:
 def _shape_of(proxy: Proxy, dynamic: bool) -> pj.Shape:
     """The pyjoltphysics shape of ``proxy``, for a dynamic body where ``dynamic``.
 
-    A triangle mesh collides from both faces, as the omi engine's does, so each
-    triangle is listed in both windings. A moving body cannot be a mesh in
-    Jolt: a dynamic mesh is held as the hull of its points. A box of a body
+    A triangle mesh collides from both faces, so each triangle is listed in
+    both windings. A moving body cannot be a mesh in Jolt: a dynamic mesh is
+    held as the hull of its points. A box of a body
     that is not dynamic is rounded by :data:`STATIC_ROUNDING`.
     """
     params = proxy.params

@@ -1,4 +1,5 @@
 """The service's calls that read and drive the world without naming the engine underneath."""
+import dataclasses
 import math
 import time
 
@@ -12,7 +13,6 @@ from OpenGLContext.physics.character import Character
 from OpenGLContext.scenegraph.basenodes import Transform
 from OpenGLContext.testing import physics as physics_testing
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 MODES = ['inline', 'thread']
 
@@ -28,15 +28,30 @@ def physics(request):
     service.close()
 
 
-def test_materials_equal_engine_materials_with_the_same_values():
-    model = pytest.importorskip('omi_physics.model', reason='omi_physics (the omi extra) is not installed')
+@dataclasses.dataclass
+class EngineMaterial:
+    """An engine's material: another class with the same fields."""
+    staticFriction: float = 0.6
+    dynamicFriction: float = 0.6
+    restitution: float = 0.0
+    frictionCombine: str = 'average'
+    restitutionCombine: str = 'average'
 
+
+@dataclasses.dataclass
+class EngineFilter:
+    """An engine's collision filter: another class with the same fields."""
+    collisionSystems: tuple = ()
+    collideWithSystems: tuple | None = None
+    notCollideWithSystems: tuple = ()
+
+
+def test_materials_equal_engine_materials_with_the_same_values():
     from OpenGLContext.physics import CollisionFilter, Material
 
-    assert Material(restitution=0.5) == model.Material(restitution=0.5)
-    assert model.Material(restitution=0.5) == Material(restitution=0.5)
-    assert Material(restitution=0.5) != model.Material(restitution=0.4)
-    assert CollisionFilter(('a',)) == model.CollisionFilter(('a',))
+    assert Material(restitution=0.5) == EngineMaterial(restitution=0.5)
+    assert Material(restitution=0.5) != EngineMaterial(restitution=0.4)
+    assert CollisionFilter(('a',)) == EngineFilter(('a',))
     assert Material() != 'average'
     assert len({Material(), Material()}) == 1
 
@@ -150,9 +165,9 @@ def test_a_gravity_factor_must_be_finite(physics):
 
 # -- the engine ------------------------------------------------------------
 
-def test_the_engine_is_described_and_read_only(physics, physics_engine):
+def test_the_engine_is_described_and_read_only(physics):
     engine = physics.engine
-    name = {'omi': 'omi_physics', 'jolt': 'jolt'}[physics_engine]
+    name = 'jolt'
     assert engine.name == name
     assert engine.tick_hz == 100.0
     assert engine.precision == 'double'
@@ -267,10 +282,13 @@ def test_a_character_reads_its_capsule_without_the_controller(physics):
 
 
 def test_a_character_takes_engine_capabilities_at_the_boundary(physics):
-    OmiCapabilities = pytest.importorskip(  # noqa: N806 the class, under the name it is compared by
-        'omi_physics.character', reason='omi_physics (the omi extra) is not installed').CharacterCapabilities
+    @dataclasses.dataclass
+    class EngineCapabilities:
+        """An engine's capabilities: another class with some of the same fields."""
+        radius: float = 0.3
+        standHeight: float = 1.8
 
-    walker = physics.add_character(capabilities=OmiCapabilities(radius=0.2))
+    walker = physics.add_character(capabilities=EngineCapabilities(radius=0.2))
     assert isinstance(walker.capabilities, CharacterCapabilities)
     assert walker.radius == pytest.approx(0.2)
 
@@ -357,41 +375,14 @@ def test_no_public_name_hands_over_the_engine(owner, name):
     assert not hasattr(owner, name)
 
 
-@pytest.mark.engines('omi', reason='reads the omi world and its slots')
-def test_the_test_helper_reaches_the_omi_world_and_slots():
-    physics = make('inline')
-    try:
-        body = physics.add_dynamic(None, proxy=Proxy.sphere(0.5), translation=(1, 2, 3))
-        world = physics_testing.inspect(physics)
-        slot = physics_testing.slot_of(physics, body)
-        assert np.allclose(world.position[slot], (1, 2, 3))
-        assert physics_testing.body_at(physics, slot) is body
-    finally:
-        physics.close()
-
-
-def test_the_test_helper_refuses_a_threaded_world():
-    physics = make('thread')
-    try:
-        with pytest.raises(RuntimeError):
-            physics_testing.inspect(physics)
-    finally:
-        physics.close()
-
-
 # -- state ------------------------------------------------------------------
 
-def test_a_saved_state_puts_the_bodies_back(physics_engine):
+def test_a_saved_state_puts_the_bodies_back():
     physics = make('inline')
     try:
         physics.add_static(None, proxy=Proxy.box((20, 1, 20)), translation=(0, -0.5, 0))
         body = physics.add_dynamic(None, proxy=Proxy.sphere(0.5), translation=(0, 5, 0))
         run(physics, 0.2)
-        if physics_engine == 'omi':
-            # omi_physics keeps no state to save.
-            with pytest.raises(NotImplementedError):
-                physics.save_state()
-            return
         saved = physics.save_state()
         settle(physics)
         at_save = float(physics.poses([body], interpolated=False).position[0][1])

@@ -199,9 +199,9 @@ value that is not finite (a mass must be above zero, a coefficient at or above
 zero), for ``set_mass`` on a body that is not dynamic, and for a name no
 material has.
 
-A scene with nothing awake costs nothing: the worker blocks until something
-moves, the frame asks for no redraw, and the window draws only what else
-changed.
+A scene with nothing awake costs nothing: the world thread waits until
+something moves, the frame asks for no redraw, and the window draws only what
+else changed.
 
 .. _physics-scenery:
 
@@ -211,7 +211,7 @@ Scenery and glTF bodies
 With ``colliders='scene'``, the default, each shape in the scene graph that no
 body claims becomes a static body when the render pass first sees it: a box or a
 sphere where the mesh is exactly one, otherwise its triangles. Cooking runs off
-the frame, on a worker, and the body joins the world when it is done. A shape is
+the frame, on a cooking thread, and the body joins the world when it is done. A shape is
 left out when it
 
 - sits in an X3D ``Collision`` group that is not enabled,
@@ -542,9 +542,7 @@ the pair's reduced mass, in N*s), ``point`` and ``normal``. True or None solves
 the pair; False lets the two pass through each other until they part. An
 ignored pair is still delivered, with ``solved`` False, so the handler that
 spawns the fragments hears it. A filter that raises is logged once and the pair
-is solved. ``physics.set_contact_filter(None)`` removes it. A character's
-stand-in passing a body heavier than it can push is decided before the filter
-is asked.
+is solved. ``physics.set_contact_filter(None)`` removes it.
 
 The fragments should not deflect the ball either. A collision filter puts bodies
 in systems and says which systems meet:
@@ -604,8 +602,7 @@ Ragdolls
 
 A ragdoll is a skeleton of capsule bodies joined by swing-twist joints.
 ``physics.add_ragdoll(spec, position, rotation, mode)`` puts one in the world
-and returns a ``Ragdoll`` (``OpenGLContext.physics.ragdolls``). The Jolt
-engine has ragdolls; the omi engine raises ``EngineUnavailable``.
+and returns a ``Ragdoll`` (``OpenGLContext.physics.ragdolls``).
 
 .. code-block:: python
 
@@ -765,10 +762,10 @@ Characters
 ----------
 
 ``add_character`` makes a walker: a capsule that slides against the bodies, steps
-up ledges, jumps, flies and swims, stepped by the frame on the render thread so
-that input reaches the camera with no step between and a query answers in the
-call. The world sees a *stand-in*, a kinematic body a little wider than the
-capsule that is placed at it each frame with the velocity it moved at:
+up ledges, jumps, flies and swims, moved by the world thread inside each tick
+(Jolt's ``CharacterVirtual``), with the moves set before a tick driving it. The
+world sees the capsule as the character's body, ``me.body``, which rays, sweeps,
+overlaps and triggers meet:
 
 .. code-block:: python
 
@@ -804,46 +801,39 @@ toward where it goes and animated by what it does (:doc:`characters`).
 puts the camera at its eyes and walks it with the walk and fly modes' keys.
 A character that is dead, hidden or between rounds is removed.
 
-A character and a dynamic body act on each other. The stand-in carries the
-character's velocity, so the solver pushes a body the character walks into, at
-up to ``pushSpeed``, and a body heavier than ``pushMass`` (200 kg) blocks the
-character instead. A blow the stand-in takes becomes a change of velocity of
-``impulse / mass`` (80 kg) on the character's next step, so a crate thrown at a
-walker knocks it back. A character stands on a dynamic body and is carried by
-it. A body added with ``blocks_characters=False`` is walked through.
+A character and a dynamic body act on each other. The character pushes a body
+it walks into, at up to ``pushSpeed``, and a body heavier than ``pushMass``
+(200 kg) blocks it instead. A body striking a character knocks it back by the
+momentum the body brings toward it (the character's ``mass``, 80 kg); a body
+the character walks into does not. A character stands on a dynamic body and
+is carried by it. A body added with ``blocks_characters=False`` is walked
+through.
 
-Characters block one another: each one's moves slide against the others'
-stand-ins, so two walkers meeting in a corridor one capsule wide stop face to
-face. Characters made with the same ``pass_group`` name walk through one
-another, and each still blocks, and is blocked by, every character outside the
-group:
+Characters push each other by their masses: a character walking into another
+shoves it along. Characters made with the same ``pass_group`` name walk through
+one another, and each still meets every character outside the group:
 
 .. code-block:: python
 
    bot = physics.add_character(capabilities=caps, position=spawn, pass_group='bots')
    bot.pass_group = None                    # blocks everybody again
 
-The group changes only who walks through whom. A member's stand-in is still a
-body that rays, shots, triggers and the solver meet.
+The group changes only who walks through whom. A member's body is still one
+that rays, shots, triggers and the solver meet.
 
-The lone character of an inline service writes its stand-in to the world when
-something can see it: a dynamic body, a trigger or a sensor within reach of it
-in a step, or a ray, sweep or overlap whose bounds reach it. Until then the
-stand-in waits, still, where it was last written, and the write puts it where it
-would have been had it been written at every step, so bodies, triggers and
-queries meet it as they would. Its pose read from its body is that of the last
-write. ``physics.poses`` and the queries write a waiting stand-in they can
-reach first, so they meet each one where its character is. With a second character, a worker
-thread or the proxies shown, each write is made as it is asked for.
+``me.teleport(feet)`` puts the feet at ``feet``, standing on the floor under
+them, and out of anything the capsule would overlap there: it is moved, in the
+call, to the nearest clear place up to 2 m to the side or onto the top of a
+block it is inside, and the answer is False where none is found (the character
+is then left where the pushes put it). The camera of a free-fly walk is seated
+this way (``TerrainWalkMixin.collide_and_clamp``), so it is held out of trunks
+and rocks.
 
-A character takes the same steps as the world. The frame steps each character
-once for each fixed step of ``1 / tickHz`` seconds the frame owes (120 a second
-by default), each step with the character's latest ``set_move``, ``jump`` and
-other input, so a walk or a jump traces the same path at 30, 60 or 144 frames a
-second. Inline, the count is the one the world's own clock gives, whether or not
-the world was busy enough to take its steps; with the world on a thread, the
-service counts steps at the same rate on the render thread. The node and a
-camera at the eyes are drawn between the character's last two steps, by the
+A character takes the same steps as the world: each tick of ``1 / tickHz``
+seconds (120 a second by default) moves it with its latest ``set_move``,
+``jump`` and other input, so a walk or a jump traces the same path at 30, 60 or
+144 frames a second. A world with framed characters runs in lockstep with the
+frame (:ref:`physics-jolt`). The node and a camera at the eyes are drawn between the character's last two steps, by the
 part of a step the frame leaves over: ``me.drawn_position`` and
 ``me.drawn_eye``. ``me.position`` and ``me.eye`` are where the latest step put
 it. ``physics.drop_remainder()`` forgets the characters' part step with the
@@ -1016,8 +1006,7 @@ removing the chassis removes the vehicle. ``physics.vehicles`` lists them.
 
 Limits. A wheel casts from its mount, so ground that rises through a wheel
 from above is not found until the chassis rises. The steer angle and the idle
-hold are not part of ``physics.save_state()``. The omi engine has no
-vehicles: ``add_vehicle`` raises NotImplementedError naming the jolt engine.
+hold are not part of ``physics.save_state()``.
 
 .. _physics-service-modes:
 
@@ -1045,16 +1034,11 @@ Modes and settings
    * - ``mode``
      - ``thread`` (``OPENGLCONTEXT_PHYSICS_MODE``)
      - ``thread`` steps the world on a thread of its own, ``inline`` in the frame
-   * - ``backend``
-     - ``auto`` (``OPENGLCONTEXT_PHYSICS_BACKEND``)
-     - the omi engine's compute backend (:ref:`below <physics-backends>`); one
-       that cannot be made is logged and the world steps on ``auto``. The
-       Jolt engine reads none
    * - ``engine``
      - ``jolt`` (``OPENGLCONTEXT_PHYSICS_ENGINE``)
      - ``jolt`` steps the world with Jolt through pyjoltphysics
-       (:ref:`physics-jolt`), ``omi`` with the deprecated omi_physics
-       (:ref:`physics-omi`); chosen when the service is made
+       (:ref:`physics-jolt`), the only engine; the field is where another
+       engine would be named. ``omi`` is refused (:ref:`physics-omi`)
    * - ``tickHz``
      - 120
      - the fixed step, in steps a second, in both modes; a frame shorter than
@@ -1092,15 +1076,8 @@ commands still waiting, and ``drop_remainder()`` forgets the time left over from
 a frame so a game that starts something afresh does not simulate it. Reads and
 tick-exact code work the same in both modes (:ref:`physics-reading`).
 
-In ``thread`` mode the same steps run on a worker at ``tickHz``, which keeps the
-render thread free of a heavy world. Under CPython's global interpreter lock the
-worker and the render thread share one core's worth of Python: the worker runs
-``tickHz`` steps a second of wall time, so while a step costs most of its tick
-the render thread's own physics work (characters, queries) runs at a fraction of
-its inline speed, and a longer frame lets the worker run more steps in it. At 30
-characters among 10 000 static posts, with a world whose step takes 14 ms of a
-16.7 ms tick, the characters cost 42 ms of render time a frame against 10 ms
-inline. A world whose steps cost a large share of the tick runs better inline. A bounded capture, a recorded session and a
+In ``thread`` mode the world thread ticks at ``tickHz`` on its own, which keeps
+the render thread free of a heavy world (:ref:`physics-jolt`). A bounded capture, a recorded session and a
 replay run inline whatever the mode says, so a captured frame is the same bytes
 on every run. A recording started with ``context.startTelemetry()`` after the
 world exists moves it inline, the commands waiting for its thread carried over
@@ -1113,9 +1090,9 @@ every run. A game that steps its world on a clock of its own, or only while it
 is not paused, sets the class attribute ``stepsPhysics = False`` on its context
 and calls ``context.physics.frame(dt)`` where it wants the step.
 
-An exception that ends the worker's thread is logged once with its traceback
+An exception that ends the world thread is logged once with its traceback
 and kept as ``physics.error``. The world takes no more steps and bodies stay
-where they were, and ``physics.worker.settle()`` answers False at once. The next
+where they were. The next
 ``physics.frame(dt)`` raises a ``RuntimeError`` whose cause is that exception,
 once. A collider source or a character whose ``update`` raises in the frame is
 logged once for each distinct failure, and the frame goes on with the others.
@@ -1184,11 +1161,9 @@ The engine
 ----------
 
 ``physics.engine`` describes the engine that steps the world, as an
-``EngineInfo``: ``name`` (``'omi_physics'`` or ``'jolt'``), ``version``,
-``tick_hz`` (steps a second), ``precision`` (``'double'``) and ``compute``, the
-compute backend in use where the engine offers a choice (``''`` on Jolt).
-``str(physics.engine)`` is a line such as ``omi_physics 0.4.0 double`` or
-``jolt 5.6.0 double``. It is read-only.
+``EngineInfo``: ``name`` (``'jolt'``), ``version``, ``tick_hz`` (steps a
+second) and ``precision`` (``'double'``). ``str(physics.engine)`` is a line such
+as ``jolt 5.6.0 double``. It is read-only.
 
 ``physics.counts`` is a ``WorldCounts`` of ``bodies``, every body in the world
 with characters' bodies included, and ``contacts``, the pairs of bodies the
@@ -1198,10 +1173,10 @@ the developer overlay.
 
 No call of the service hands a program an engine object. Code written against
 ``Physics``, ``Body``, ``Character``, ``Joint``, ``Proxy``, ``poses`` and
-``on_step`` runs on whichever engine steps the world.
+``on_step`` names no engine's types.
 
 ``character.state`` and ``character.motion_state`` are the same
-``CharacterState`` member on either engine; compare with ``is`` or ``==``.
+``CharacterState`` member; compare with ``is`` or ``==``.
 A test reads what the engine holds (masses, materials, tick counts) through
 ``OpenGLContext.testing.physics`` (:ref:`testing-physics`).
 
@@ -1210,15 +1185,12 @@ A test reads what the engine holds (masses, materials, tick counts) through
 The Jolt engine
 ---------------
 
-Jolt is the default engine: a ``PhysicsDefinition`` that names none steps
-its world with Jolt Physics 5.6 through ``pyjoltphysics``, a requirement of
-OpenGLContext. ``OPENGLCONTEXT_PHYSICS_ENGINE`` sets the default for a whole
-run. The variable is read once a process, and a capture or script a run starts
-inherits it. A service asked for an engine whose package is missing raises
-``EngineUnavailable`` (``OpenGLContext.physics.engine``) and does not fall back
-to the other engine. ``set_config`` with another ``engine`` raises
-``ValueError``: the engine is chosen when the service is made.
-``OpenGLContext.physics.engine`` holds the interface the service drives either
+A ``PhysicsDefinition`` steps its world with Jolt Physics 5.6 through
+``pyjoltphysics``, a requirement of OpenGLContext. A service made where
+pyjoltphysics cannot be imported raises ``EngineUnavailable``
+(``OpenGLContext.physics.engine``). ``set_config`` with another ``engine``
+raises ``ValueError``: the engine is chosen when the service is made.
+``OpenGLContext.physics.engine`` holds the interface the service drives the
 engine through.
 
 The Jolt world steps on pyjoltphysics' world thread, never on the render
@@ -1239,7 +1211,7 @@ A lockstep world that has settled (every body asleep, and no character,
 kinematic track, motor, step code or waiting command) counts the ticks a frame
 owes without stepping them, and the frame publishes the poses it published
 before with the new tick and time. A settled frame costs 0.01 to 0.03 ms for
-100 to 1,000 sleeping boxes, as on omi_physics. The tick count stays exact, so
+100 to 1,000 sleeping boxes. The tick count stays exact, so
 a woken world plays out as one stepped through every tick and a replay matches.
 
 A frame shorter than a tick (240 frames a second against the default 120 ticks)
@@ -1255,8 +1227,8 @@ Characters move inside the world's ticks. A framed character's code for a tick
 (``before-step`` handlers, blows taken, the steering of ``run_along`` and
 ``hop_to``) runs on the render thread before that tick runs, and its
 ``after-step`` handlers and landings after it, so a move set in a frame drives
-the first tick that frame runs and a course is steered at every tick, as on
-omi_physics. ``character.step(dt)`` and ``update(dt)`` on a character its
+the first tick that frame runs and a course is steered at every tick.
+``character.step(dt)`` and ``update(dt)`` on a character its
 owner steps advance the whole world by the ticks ``dt`` owes, since the world
 thread moves every character in each tick; the frame's ticks move unframed
 characters too. An input that changes what a character is doing
@@ -1268,12 +1240,12 @@ ago is hit by a ray.
 
 A dynamic body has Jolt's enhanced internal edge removal, carried across the
 seams between static bodies: a ball rolling from one static box onto another
-laid flush beside it meets no edge between them, as on omi_physics, so a floor
+laid flush beside it meets no edge between them, so a floor
 of tiles each a body of its own is one surface. The ``impulse`` of a contact on
 a ``'touching'`` step is the impulse estimated to stop the two closing in that
 step, as Jolt reports no solver impulse.
 
-What differs from omi_physics, by design of the engine:
+Limits of the engine, each Jolt's own:
 
 - The tick rate is fixed when the world is made; ``enable(tick_frequency=)``
   and ``set_config`` with another ``tickHz`` log a warning and keep it.
@@ -1288,19 +1260,14 @@ What differs from omi_physics, by design of the engine:
   blocks: a ray meets it within 2e-5 m of a sample at heights near 50 m and
   6e-5 m near 270 m.
 - A character with no move asked for, standing or knocked down, stays where it
-  is on walkable ground. On omi_physics such a character creeps downhill: 5 cm
-  in two seconds on a 10 degree slope, 0.7 m on 25 degrees.
-- Characters push each other by their masses: a character walking into
-  another of a different pass group shoves it along rather than stopping.
-- A body striking a character knocks it back by the momentum the body brings
-  toward it; a body the character walks into does not.
+  is on walkable ground.
 - A pair the contact filter lets through makes an unsolved ``'hit'`` and no
   ``'separate'``.
 - A sample-function ground (``add_ground``) is held as height field tiles,
   32 cells a side, around the characters, the awake dynamic bodies and each
   query's path; its normals are the tiles' triangles' rather than the
   ground's ``normal()``. A character whose feet are below such a ground is
-  lifted onto it, as the ground is solid below its surface on omi_physics.
+  lifted onto it: the ground is solid below its surface.
 - Gravity zones act on a character's vertical motion only: a character pulled
   sideways or upwards needs an up vector the controller does not have.
 - ``Hit.triangle`` is the row of the mesh triangle a ray met, and -1 for a
@@ -1309,63 +1276,37 @@ What differs from omi_physics, by design of the engine:
 ``physics.save_state()`` returns the bodies' and joints' state as bytes
 (Jolt's ``PhysicsSystem::SaveState``) and ``physics.restore_state(data)`` puts
 them back from the next tick; the world must hold the same bodies. Characters,
-the tick count and commands still waiting are not part of the state. The omi
-engine raises ``NotImplementedError`` for both.
+the tick count and commands still waiting are not part of the state.
 
 .. _physics-omi:
 
-The omi engine (deprecated)
----------------------------
+Programs that named the omi engine
+----------------------------------
 
-``PhysicsDefinition(engine='omi')`` steps the world with ``omi_physics``, the
-NumPy rigid-body engine. It is deprecated, is supported only for programs
-that still name it, and has no vehicles. It is removed in phase P6 of
-``plans/NATIVE-PHYSICS.md``.
-omi_physics is not a requirement of OpenGLContext. It is the ``omi-physics`` extra:
+OpenGLContext's physics engine is Jolt. ``PhysicsDefinition(engine='omi')`` is
+refused with a ``ValueError`` that points here: leave ``engine`` unset (or name
+``'jolt'``), and the program runs on Jolt through the same ``Physics``,
+``Body``, ``Character``, ``Joint`` and ``Vehicle`` calls. An
+``OPENGLCONTEXT_PHYSICS_ENGINE=omi`` in the environment is reported and Jolt is
+used. Where a program read omi_physics objects of its own:
 
-.. code-block:: bash
+- ``PhysicsViewPlatform(world, ...)`` is ``PhysicsViewPlatform(character)``
+  over ``physics.add_character(...)``.
+- ``TilesTerrain(..., physics_world=world)`` is ``TilesTerrain(...,
+  physics=context.physics)``; ``TerrainColliders`` takes the service.
+- ``PropColliders`` is ``physics.add_collider_source(PropSource(props),
+  focus=...)``.
+- ``collision_world_from_scene(scene)`` is the service's scenery
+  (``colliders='scene'``), and ``navmesh.from_world(world)`` is
+  ``navmesh.from_scene(scene)``.
+- ``PhysicsDefinition.backend``, ``OPENGLCONTEXT_PHYSICS_BACKEND`` and
+  ``EngineInfo.compute`` do not exist: Jolt has no compute backend to choose.
+- ``PhysicsDebugDraw``, the overlay of an omi_physics world's AABBs, contacts
+  and velocities, does not exist; ``physics.show_proxies()`` draws the box and
+  sphere bodies.
 
-   pip install OpenGLContext[omi-physics]
-
-A definition naming ``omi`` where omi_physics is not installed raises
-``EngineUnavailable``, whose message names ``OpenGLContext[omi-physics]``.
-
-These parts of OpenGLContext still import omi_physics, each on first use, and
-need the extra:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Part
-     - Modules
-   * - The omi engine
-     - ``physics.omiengine``, ``physics.omi_adapter``, ``physics.runtime``,
-       ``physics.worker``, ``physics.replica``, ``physics.queries``
-   * - The full debug overlay of an omi world (AABBs, contacts, velocities, joints)
-     - ``physics.debugdraw.PhysicsDebugDraw``; ``physics.show_proxies`` draws
-       the service's box and sphere bodies on any engine
-       (``physics.debugdraw.ProxyOverlay``)
-   * - ``PhysicsViewPlatform`` made on an omi_physics world of its own, for
-       code with no service
-     - ``move.physicsplatform.PhysicsViewPlatform(world)``;
-       ``PhysicsWalkMixin``, ``TerrainWalkMixin`` and
-       ``PhysicsViewPlatform.over(character)`` walk a service character on any
-       engine
-   * - X3D RigidBodyPhysics on the omi engine
-     - ``physics.x3domi``
-   * - Helpers over a plain omi_physics world, for code with no service
-     - ``physics.gltf_world.collision_world_from_scene``,
-       ``physics.props.PropColliders``,
-       ``loaders.tiles3d.physics_colliders``
-
-Without the extra, a ``RigidBodyCollection`` or ``CollisionSensor`` on the omi
-engine logs a warning naming ``OpenGLContext[omi-physics]`` once and stays
-still; the omi-world helpers raise ``EngineUnavailable`` naming it. The
-service's own cooking (``Proxy.from_node``, ``physics.cooking``) does not
-need the extra. glTF documents with OMI
-physics bodies do not need it: the engine reads ``OMI_physics_*`` itself
-(:ref:`model`).
+The ``omi_physics`` package is usable on its own, for a program that steps an
+omi_physics world itself; OpenGLContext does not install it.
 
 .. _model:
 
@@ -1405,132 +1346,9 @@ gravity is ``centerOfMass``.
 
 The reader is ``OpenGLContext.physics.omigltf``, with the OMI
 specification's defaults: it parses a glTF's ``OMI_physics_*`` blocks into the
-engine's own types, on either engine and with omi_physics absent. The glTF
+engine's own types. The glTF
 loader keeps the document as ``scene.physics`` and tags each node that carries
 a body. ``KHR_physics_rigid_bodies`` is not read.
-
-.. _engine:
-
-How the omi engine runs
------------------------
-
-This section describes the deprecated omi engine (:ref:`physics-omi`); Jolt's
-methods are in its own documentation. The omi engine uses the standard real-time methods (Catto's Box2D, and Gaffer on
-Games' *Fix Your Timestep*):
-
-- Integration - semi-implicit (symplectic) Euler, which stays stable at low
-  cost.
-
-- Timestep - fixed, with an accumulator, independent of the render frame rate.
-  The rendered pose interpolates between the last two states, so motion is
-  smooth and deterministic.
-
-- Broad phase - a dynamic AABB tree of enlarged boxes, filtered by collision
-  groups, removes most of the O(N²) candidate pairs.
-
-- Narrow phase - analytic tests for pairs of primitives, and GJK with EPA for
-  convex against convex (cylinders and cones among them) and convex against
-  triangle; a compound part by part. A sphere, a capsule or a box against a
-  static mesh is tested against all its nearby triangles in one call, and a
-  character's capsule against all its nearby static boxes in another.
-
-- Solver - sequential impulses (projected Gauss-Seidel) with warm starting and
-  split-impulse position correction. Restitution and Coulomb friction combine
-  according to the OMI material modes. Contacts are grouped into islands, and
-  bodies that have come to rest sleep.
-
-.. rst-class:: technical
-
-Simulation state is a flat structure of arrays (``world.py``), kept beside the
-scenegraph and copied to the ``Transform`` nodes only between steps. The
-per-stage kernels run through ``backend.py``, which has two implementations:
-``NumpyBackend`` (vectorised, on the CPU) and ``GLComputeBackend``
-(``glcompute.py``). The GPU backend runs the per-body force and position
-integration as GL 4.3 compute shaders over the same arrays. When a step has no
-collisions and no joints, both stages run in one dispatch and the intermediate
-velocity stays on the GPU. At 10\ :sup:`5` moving bodies it is about 2.4×
-faster than numpy.
-
-.. _physics-backends:
-
-.. rst-class:: technical
-
-The default policy, ``auto``, runs on numpy until the number of awake bodies
-reaches ``gpu_threshold`` (default 10 000), and then switches to the GPU. Below
-that count, the cost of transferring the data is larger than the per-body work
-it saves. The world switches back to numpy when the count falls below 80% of
-the threshold, and stays on numpy where GL 4.3 compute shaders are not
-available. ``PhysicsDefinition.backend``, whose default is
-``OPENGLCONTEXT_PHYSICS_BACKEND``, overrides the policy with one of
-``Physics.BACKENDS``: ``auto``, ``numpy`` or its synonym ``cpu``, and ``gpu``
-or its synonym ``glcompute``. ``physics.engine.compute`` is the name of the
-backend in use (``'numpy'`` or ``'glcompute'``), and ``physics.set_config``
-with a definition naming another ``backend`` chooses it from the next step. The GPU backend needs GL 4.3 compute
-on the thread that steps the world, so it is for an ``inline`` world; a backend
-that cannot be made logs a warning and the world keeps the one it has. The GPU computes in float32, so its
-trajectories match the numpy backend within a tolerance, not bit for bit. The
-broad phase, narrow phase and solver run on the CPU with either backend. In
-``tests/tutorials/physics/physics_stress.py``, the ``b`` key switches backends while the demo
-runs.
-
-.. _physics-cost:
-
-What a frame costs
-------------------
-
-A world at rest costs nothing. When no command has arrived and nothing moves,
-neither mode steps: the inline frame returns at once and the worker thread
-blocks, and the last published poses stand. A world stays busy, and is stepped,
-while a dynamic body is awake, a kinematic body moves, a body is driven by a pose
-function, or a ``before-step`` or ``after-step`` handler is registered, so a
-game's step handler runs every step whether or not anything moves. Its clock does
-not advance while it is not stepped.
-
-What a step costs follows what moves:
-
-- The broad phase sweeps the moving bodies against each other and against the
-  static ones near them; the static bodies are sorted once.
-- A pair with no awake dynamic body, no kinematic body, no trigger and no sensor
-  in it is left out of the step, so a sleeping pile costs its broad phase and
-  nothing more.
-- Collision filters are compared once per step for each pair of filters in use,
-  not once per pair of bodies.
-
-What the render thread does each frame follows what changed: a snapshot lists
-the rows of the bodies whose pose or velocity changed since the snapshot before
-(``Snapshot.changed``), and only those nodes are written and only those rows of
-the replica copied and refitted. A body that falls asleep is published once more,
-at the pose the world holds for it, so its node rests exactly where the body
-does.
-
-A step reads only the static bodies the world recorded as added, removed or
-placed since the step before (``PhysicsWorld.layout_epoch``); the others are not
-compared, refitted or copied. The world's ``position`` and ``orientation`` are
-read-only: ``PhysicsWorld.place_body`` places a body and records it, and a pose
-written through ``PhysicsWorld.pose_arrays()`` into a static body is recorded
-with ``PhysicsWorld.moved(rows)``. ``OMI_PHYSICS_CHECK_STATICS=1`` makes a step
-raise for one that was not. A
-step with no awake dynamic body, trigger, sensor or touching pair skips the
-collision pass, as does a step in a world with no dynamic body where no
-kinematic body's box meets a trigger's, and a world with a few moving bodies is
-swept from them outward. A swept sphere is tested against a fixed body only at
-the distances where its box meets that body's.
-
-A character holds the static bodies it gathered across updates while the layout
-is unchanged, and depenetrates against them: the few boxes near it one at a time
-with numbers, the triangles of a mesh in one call, and a height field as the
-column of spheres down its axis, of which only those low enough to touch a
-slope that gentle are slid. Its poses agree with the contact solver's to 1e-9 m
-a step. Where ``omi_physics``'s compiled accelerator is built, a grid answers
-the whole column in one call and a mesh its triangles near the capsule, with the
-same numbers as the Python. The lone character's stand-in is written only when
-something can see it (:ref:`physics-characters`). On this machine one walker on
-a box floor costs about 130 us a frame, 60 us of it the controller; 30 among box
-posts about 2.7 ms in a median frame and 5.5 ms on average;
-the forest walker about 1.7 ms; twig-bb with 8 bots about 1.8 ms; and the
-hill-runner's runner on its streamed height-field hill, stepped at 120 Hz with
-the rules and the camera, about 0.59 ms a frame, of which the controller is
-85 us a step and the world 63 us a step.
 
 .. _walking:
 
@@ -1840,11 +1658,10 @@ the vertical speed of the run along the ground to the launch, and a jump rises
 
 .. rst-class:: technical
 
-On Jolt the controller is pyjoltphysics' port of this state machine over
+The controller is pyjoltphysics' port of this state machine over
 Jolt's ``CharacterVirtual``, driven by ``JoltController`` in
-``physics/joltengine.py``; on the omi engine it is
-``omi_physics/character.py``. ``PhysicsViewPlatform`` in
-``move/physicsplatform.py`` drives a context's camera from either. See the
+``physics/joltengine.py``. ``PhysicsViewPlatform`` in
+``move/physicsplatform.py`` drives a context's camera from a character. See the
 ``physics_navigate.py`` demo.
 
 .. _streamed:
@@ -1918,9 +1735,10 @@ A streamer keeps some tiles that it is not drawing: a coarse parent, so it can
 show it again when the camera pulls back, and siblings until the memory budget
 needs their space. Left in the physics world, those tiles form a second
 surface under the drawn one.
-``OpenGLContext.loaders.tiles3d.physics_colliders.TerrainColliders`` connects
-its ``on_drawn`` method to the runtime's ``on_drawn`` hook and holds colliders
-for exactly the tiles on screen.
+``OpenGLContext.loaders.tiles3d.physics_colliders.TerrainColliders(physics)``
+connects its ``on_drawn`` method to the runtime's ``on_drawn`` hook and holds a
+static triangle-mesh body of the service for exactly the tiles on screen.
+``TilesTerrain(path, physics=context.physics)`` makes one.
 
 Road colliders
 ~~~~~~~~~~~~~~
@@ -2002,9 +1820,7 @@ every body it holds.
    context.physics.add_collider_source(obstacles, focus=lambda: car.position)
 
 ``obstacles.standing`` lists the props with a body. Props of one shape and size
-share one proxy. ``PropColliders(physics_world, props)`` stands the same bodies
-up in a plain ``omi_physics`` world with ``update(position)`` and
-``release()``, for code with no service.
+share one proxy.
 
 A prop's collider is the simple shape its record names, at the size the
 record gives, not its render mesh; a triangle mesh per rock costs both the
@@ -2140,33 +1956,20 @@ each ``(proxy, position, orientation)`` at an offset in the body's frame, and
 the body's mass is shared among them by volume. A ``cylinder`` has flat ends and
 narrows to a cone where ``radius_top`` is 0.
 
-A program working with an ``omi_physics`` world directly, with no service (a
-tool, a test), has the engine's own calls:
-``world.set_pair_rule(rule)`` decides, each step, which pairs collide and
-how: ``rule(a, b)`` answers False to let them pass through each other, None
-for their materials, or a ``model.ContactParameters`` (restitution and the
-speed below which nothing bounces, friction in two directions, a surface
-speed, slip, softness and error correction). ``world.set_force``,
-``set_torque``, ``set_exact_rotation`` and ``set_sleep`` push, spin and rest
-one body. The omi_physics README has the details.
-
 .. _physics-x3d:
 
 X3D rigid bodies
 ~~~~~~~~~~~~~~~~
 
 An X3D document's ``RigidBodyCollection`` is a world of its own, stepped once a
-frame on the engine's clock: a Jolt world (``OpenGLContext.physics.x3djolt``),
-or an omi_physics world where ``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``omi``
-(``OpenGLContext.physics.x3domi``, which needs the ``omi-physics`` extra,
-:ref:`physics-omi`). ``OpenGLContext.physics.x3drigid`` reads the nodes for
-both: the collidables as ``Proxy`` shapes and compounds, a body's default
+frame on the engine's clock: a Jolt world (``OpenGLContext.physics.x3djolt``).
+``OpenGLContext.physics.x3drigid`` reads the nodes for it: the collidables as ``Proxy`` shapes and compounds, a body's default
 inertia from them (``OpenGLContext.physics.massprops``), and each
 ``CollisionCollection`` and routed ``Contact`` as a ``ContactRule``. X3D's six
-joints are made on the joints above. On Jolt the rule is asked as a pair first
+joints are made on the joints above. The rule is asked as a pair first
 touches and at each step a refused pair still meets, and a pair meets with the
 collider's bounce and first friction coefficient or a routed contact's. A
-``CollisionSensor`` reports touches without stepping anything, on Jolt by
+``CollisionSensor`` reports touches without stepping anything, by
 casting each collidable's shape where it stands in a world of its
 collidables. What each node does, the units of its fields and which fields
 Jolt reads are in :ref:`x3d-rigid-bodies`.
@@ -2180,23 +1983,7 @@ The debug overlay
 wireframe over the scene, and ``show_proxies(False)`` takes it out. The overlay
 is ``OpenGLContext.physics.debugdraw.ProxyOverlay``: one unit box and one unit
 sphere wireframe, scaled to each body by a ``Transform`` placed where the frame
-draws the body, so each kind is one instanced line draw. It works on either
-engine. Capsules, cylinders, hulls, meshes and compounds are not drawn.
-
-``PhysicsDebugDraw`` draws more of an omi_physics world that a program owns,
-and needs the ``omi-physics`` extra (:ref:`physics-omi`): a bit-flag
-mask selects collision proxies, broad-phase AABBs, contact points and normals,
-joint connections (from each body to the anchor it carries), and each body's
-velocity, acceleration and angular-velocity vectors. Angular velocity is drawn at
-the body's corners, so opposite corners point opposite ways and the rotation is
-easy to see. Sleeping bodies are drawn in a different colour.
-
-.. rst-class:: technical
-
-``PhysicsDebugDraw`` builds an ``IndexedLineSet`` with per-vertex colour each
-frame, so it renders in both the legacy and the core profile. Flags:
-``PROXIES | AABBS | CONTACTS | VELOCITY | ACCELERATION | ANGULAR | SLEEP |
-JOINTS``.
+draws the body, so each kind is one instanced line draw. Capsules, cylinders, hulls, meshes and compounds are not drawn.
 
 .. _physics-demos:
 
@@ -2276,7 +2063,7 @@ reference image.
   ``follow(view='eyes')``.
 
 - :doc:`physics_stress.py <tutorials/physics/physics_stress>` - performance as the
-  number of bodies grows, and ``physics.engine.compute``.
+  number of bodies grows.
 
 - :doc:`using_physics.py <tutorials/physics/using_physics>` - a cannon game in its
   context's world, with kinematic bodies, a trigger and a wind. Its rules also

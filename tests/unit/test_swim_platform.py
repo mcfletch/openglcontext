@@ -12,22 +12,28 @@ import pytest
 
 
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from OpenGLContext.physics.service import Physics
 
-#: These tests check a part of the engine built on an omi_physics world, or use
-#: omi_physics as their reference; it is the deprecated omi extra.
-REASON_OMI = 'omi_physics (the omi extra) is not installed'
-model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
-PhysicsWorld = pytest.importorskip('omi_physics.world', reason=REASON_OMI).PhysicsWorld
+#: The services the platforms of a test were made over, closed after it.
+_MADE: list[Physics] = []
 
 
-def platform(**named):
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
-    return PhysicsViewPlatform(world, **named)
+@pytest.fixture(autouse=True)
+def _close_services():
+    yield
+    while _MADE:
+        _MADE.pop().close()
+
+
+def platform():
+    physics = Physics()
+    _MADE.append(physics)
+    return PhysicsViewPlatform(physics.add_character())
 
 
 def moved(made):
     """The direction the character was last told to move."""
-    return np.asarray(made.character.fly_dir, dtype='d')
+    return np.asarray(made.character.move_dir, dtype='d')
 
 
 class TestMovingAlongTheGaze:

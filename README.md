@@ -88,8 +88,8 @@ uv run --with "OpenGLContext[glfw,draco,audio]" oglc-view
 
 Physics comes with the install: `pyjoltphysics`, the Jolt Physics engine, is a
 requirement. Extras add optional pieces: `audio` for sound you can hear,
-`draco` for Draco-compressed glTF, `pygame` and `wx` for those backends, `all`
-for those together, and `omi` for the deprecated omi_physics engine.
+`draco` for Draco-compressed glTF, `pygame` and `wx` for those backends, and
+`all` for those together.
 
 ## Documentation
 

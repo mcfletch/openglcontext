@@ -12,8 +12,7 @@ eight pieces, until each piece's concavity is under 0.3. Both run in NumPy on
 the calling thread; the service cooks scenery on a worker thread.
 
 The hull and decomposition are those of omi_physics' ``hull`` and ``cookery``
-modules (MIT, Mike C. Fletcher), so an engine and the omi engine cook a mesh
-into the same pieces.
+modules (MIT, Mike C. Fletcher).
 """
 from __future__ import annotations
 

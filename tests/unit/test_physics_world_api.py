@@ -13,7 +13,6 @@ from OpenGLContext.scenegraph.zone import Zone, ZoneGravity
 from OpenGLContext.testing.audio import RecordingAudio
 from OpenGLContext.testing import physics as physics_testing
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -71,7 +70,7 @@ def test_a_ground_answers_a_ray(physics):
     assert hit.point[1] == pytest.approx(3.0, abs=0.02)
 
 
-def test_a_ground_that_answers_normals_is_asked_for_them(physics, physics_engine):
+def test_a_rays_normal_on_a_ground_is_its_tiles_slope(physics):
     class Tilted(Slope):
         asked = 0
 
@@ -84,13 +83,9 @@ def test_a_ground_that_answers_normals_is_asked_for_them(physics, physics_engine
 
     physics.add_ground(Tilted(), extent=((-50, -50), (50, 50)))
     hit = physics.raycast((10, 20, 0), (0, -1, 0))
-    if physics_engine == 'omi':
-        assert hit.normal == pytest.approx((0.0, 1.0, 0.0))
-        assert Tilted.asked > 0
-    else:
-        # Jolt holds the ground as height field tiles sampled from the heights; its
-        # normals are the tiles' triangles', the slope's own.
-        assert hit.normal == pytest.approx(np.array((-0.3, 1.0, 0.0)) / np.hypot(0.3, 1.0), abs=1e-3)
+    # Jolt holds the ground as height field tiles sampled from the heights; a ray's
+    # normal is the tiles' triangles', the slope's own, whatever normal() answers.
+    assert hit.normal == pytest.approx(np.array((-0.3, 1.0, 0.0)) / np.hypot(0.3, 1.0), abs=1e-3)
 
 
 def test_a_ground_is_a_static_body_found_by_the_object(physics):
@@ -220,23 +215,6 @@ def test_every_pair_of_a_grid_of_materials_keeps_its_own_friction(physics):
     for (marble, surface), friction in grips.items():
         found = physics_testing.pair_friction(physics, bodies[marble], bodies[surface])
         assert found == pytest.approx((friction, friction)), (marble, surface)
-
-
-@pytest.mark.engines('omi', reason="reads the omi world's slots")
-def test_a_body_and_its_slot_in_the_world_name_each_other(physics):
-    first = physics.add_dynamic(ball(), proxy='sphere')
-    second = physics.add_dynamic(ball(at=(3, 3, 0)), proxy='sphere')
-    world = physics_testing.inspect(physics)
-    assert physics_testing.slot_of(physics, first) != physics_testing.slot_of(physics, second)
-    assert world.position[physics_testing.slot_of(physics, second)][0] == pytest.approx(3.0)
-    assert physics_testing.body_at(physics, physics_testing.slot_of(physics, first)) is first
-    assert physics_testing.body_at(physics, physics_testing.slot_of(physics, second)) is second
-
-
-@pytest.mark.engines('omi', reason="reads the omi world's slots")
-def test_a_slot_with_no_body_names_none(physics):
-    assert physics_testing.body_at(physics, 0) is None
-    assert physics_testing.body_at(physics, 99) is None
 
 
 def test_materials_are_listed_and_can_be_read_back(physics):
@@ -432,7 +410,7 @@ def test_a_source_that_raises_is_logged_once_and_the_frame_goes_on(physics, capl
 
 
 def test_a_character_whose_update_raises_is_logged_once_and_the_frame_goes_on(
-        physics, caplog, physics_engine):
+        physics, caplog):
     physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)))
     first = physics.add_character(position=(0, 0.05, 0))
     second = physics.add_character(position=(3, 0.05, 0))
@@ -441,9 +419,9 @@ def test_a_character_whose_update_raises_is_logged_once_and_the_frame_goes_on(
     def broken(dt):
         raise KeyError('the character lost its clip')
 
-    # The omi frame steps each character whole; a Jolt world moves every character in
-    # its tick, and the frame runs each one's code before the tick.
-    name = 'step' if physics_engine == 'omi' else '_before_tick'
+    # The world moves every character in its tick, and the frame runs each one's code
+    # before the tick.
+    name = '_before_tick'
     setattr(first, name, broken)
     real = getattr(second, name)
     setattr(second, name, lambda dt: stepped.append(dt) or real(dt))

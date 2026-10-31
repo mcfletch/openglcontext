@@ -14,7 +14,6 @@ from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
 from OpenGLContext.testing import physics as physics_testing
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 
 def make(**named) -> Physics:
@@ -213,11 +212,3 @@ def test_a_joint_works_on_the_physics_thread():
     finally:
         physics.close()
 
-
-@pytest.mark.engines('omi', reason="the copy of the bodies characters step against is the omi engine's")
-def test_the_characters_copy_of_the_world_is_made_with_joints_in_it(physics):
-    rod = bar(physics, (1.0, 5.0, 0.0))
-    physics.add_hinge(rod, anchor=(0.0, 5.0, 0.0), axis=(0, 0, 1))
-    replica = physics._character_replica()
-    assert rod.uid in replica
-    run_for(physics, 0.5)

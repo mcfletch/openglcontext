@@ -37,11 +37,5 @@ class Streamed:
         self.handle.remove()
         self.physics.flush()
 
-    @property
-    def world(self) -> Any:
-        """The service's world, with every waiting command applied."""
-        self.physics.flush()
-        return physics_testing.inspect(self.physics)
-
     def __getattr__(self, name: str) -> Any:
         return getattr(self.source, name)

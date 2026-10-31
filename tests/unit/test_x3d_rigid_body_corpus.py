@@ -20,9 +20,8 @@ from OpenGLContext.scenegraph.x3drigidbody import CollisionSensor, RigidBodyColl
 FRAME = 1.0 / 60.0
 FOLDER = os.path.join(corpus.examples('Basic'), 'RigidBodyPhysics')
 
-pytestmark = [pytest.mark.engines('omi', 'jolt'),
-              pytest.mark.skipif(not os.path.isdir(FOLDER),
-                                 reason='the Basic example archive has not been fetched')]
+pytestmark = pytest.mark.skipif(not os.path.isdir(FOLDER),
+                                reason='the Basic example archive has not been fetched')
 
 
 def nodes_of(root):

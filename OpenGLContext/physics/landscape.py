@@ -2,7 +2,9 @@
 
 A landscape of kilometres is too large to hold as a triangle mesh, and the
 renderer already answers its height at any point. So the world holds the ground
-as a :class:`~omi_physics.heightfield.FunctionSurface` over the same
+as a body that answers a height at each point
+(:meth:`Physics.add_ground <OpenGLContext.physics.service.Physics.add_ground>`)
+over the same
 :class:`~OpenGLContext.scenegraph.vegetation.grid.Ground` the terrain node draws
 (:class:`Landscape`), the trunks standing on it as static cylinders in a few
 radius classes, and the rocks as bodies made when a focus comes within reach

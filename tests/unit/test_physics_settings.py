@@ -80,23 +80,6 @@ def test_definition_for_defaults_a_context_that_has_none():
     assert definition_for(object()).mode == 'thread'
 
 
-def test_gravity_as_a_world_gravity_record():
-    omi_adapter = pytest.importorskip('OpenGLContext.physics.omi_adapter',
-                                      reason='omi_physics (the omi extra) is not installed')
-
-    gravity = omi_adapter.gravity(PhysicsDefinition(gravity=(0, -3.0, 0)).gravity)
-    assert gravity.gravity == pytest.approx(3.0)
-    assert np.allclose(gravity.direction, (0, -1, 0))
-
-
-def test_zero_gravity_gives_a_world_with_none():
-    omi_adapter = pytest.importorskip('OpenGLContext.physics.omi_adapter',
-                                      reason='omi_physics (the omi extra) is not installed')
-
-    gravity = omi_adapter.gravity(PhysicsDefinition(gravity=(0, 0, 0)).gravity)
-    assert gravity.gravity == 0.0
-
-
 def test_replaced_gives_a_new_definition_with_some_fields_changed():
     original = PhysicsDefinition(mode='thread', tickHz=90.0)
     changed = original.replaced(mode='inline')

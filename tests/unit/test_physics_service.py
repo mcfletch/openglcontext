@@ -2,7 +2,7 @@
 
 These build scenegraph nodes from the engine's own surfaces and step a real
 world with no window. Most run the service inline, where the test sets the clock;
-the thread cases at the end run it on its worker.
+the thread cases at the end run it on the world thread.
 """
 import threading
 import time
@@ -19,7 +19,6 @@ from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.testing import physics as physics_testing
 
-pytestmark = pytest.mark.engines("omi", "jolt")
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -38,15 +37,6 @@ def make(**named) -> Physics:
     named.setdefault('tickHz', 100.0)
     return Physics(PhysicsDefinition(**named))
 
-
-def settled(physics: Physics):
-    """The omi runtime, after the commands made so far have been applied."""
-    physics.worker.flush()
-    return physics.worker.runtime
-
-
-#: The tests that read the omi engine's runtime or its worker thread.
-OMI_ONLY = pytest.mark.engines('omi', reason='reads the omi engine\'s runtime or worker thread')
 
 
 def run_for(physics: Physics, seconds: float, frame: float = 0.02) -> None:
@@ -443,12 +433,11 @@ def test_a_body_removed_while_paused_on_a_thread_leaves_the_world_on_resume():
         service.close()
 
 
-def test_enable_with_a_tick_frequency_changes_the_step(physics, physics_engine):
+def test_enable_with_a_tick_frequency_changes_the_step(physics):
     physics.enable(True, tick_frequency=200.0)
     physics.frame(0.0)
     # A Jolt world steps at the rate it was made with: its tick is part of the world thread.
-    expected = 0.005 if physics_engine == 'omi' else 0.01
-    assert physics_testing.step_dt(physics) == pytest.approx(expected)
+    assert physics_testing.step_dt(physics) == pytest.approx(0.01)
 
 
 def test_step_advances_a_standalone_service_by_hand(physics):
@@ -459,39 +448,14 @@ def test_step_advances_a_standalone_service_by_hand(physics):
     assert node.translation[1] < 5.0
 
 
-@OMI_ONLY
-def test_world_is_the_live_world_in_inline_mode(physics):
-    assert physics_testing.inspect(physics) is settled(physics).world
-
-
-def test_world_is_refused_on_the_jolt_engine():
-    service = Physics(PhysicsDefinition(mode='inline', engine='jolt'))
-    try:
-        with pytest.raises(RuntimeError, match='on_step'):
-            physics_testing.inspect(service)
-    finally:
-        service.close()
-
-
-@OMI_ONLY
-def test_world_is_refused_when_a_thread_owns_it():
-    service = Physics(PhysicsDefinition(mode='thread'))
-    try:
-        with pytest.raises(RuntimeError, match='on_step'):
-            physics_testing.inspect(service)
-    finally:
-        service.close()
-
-
-def test_set_config_changes_gravity_and_the_step(physics, physics_engine):
+def test_set_config_changes_gravity_and_the_step(physics):
     body = physics.add_dynamic(ball(), linear_damping=0.0)
     physics.set_config(PhysicsDefinition(mode='inline', gravity=(0, -2.0, 0), tickHz=200.0,
                                          maxCatchUp=2.0))
     run_for(physics, 0.5)
     assert body.velocity[1] == pytest.approx(-1.0, abs=0.15)
     # A Jolt world steps at the rate it was made with: its tick is part of the world thread.
-    expected = 0.005 if physics_engine == 'omi' else 0.01
-    assert physics_testing.step_dt(physics) == pytest.approx(expected)
+    assert physics_testing.step_dt(physics) == pytest.approx(0.01)
 
 
 def test_set_config_refuses_a_definition_that_cannot_run(physics):
@@ -499,36 +463,11 @@ def test_set_config_refuses_a_definition_that_cannot_run(physics):
         physics.set_config(PhysicsDefinition(tickHz=-1.0))
 
 
-@OMI_ONLY
-def test_run_calls_a_function_with_the_world_and_returns_its_answer(physics):
-    physics.add_dynamic(ball())
-    future = physics_testing.run(physics, lambda world: world.live_body_count)
-    assert future.result(timeout=2) == 1
-
-
-def test_post_calls_a_function_on_the_worker(physics):
+def test_post_calls_a_function_on_the_stepping_thread(physics):
     seen = []
     physics.post(seen.append, 'x')
     physics.frame(0.0)
     assert seen == ['x']
-
-
-def test_run_is_refused_on_the_jolt_engine():
-    service = make(engine='jolt')
-    try:
-        with pytest.raises(RuntimeError, match='on_step'):
-            physics_testing.run(service, lambda world: world).result(timeout=2)
-    finally:
-        service.close()
-
-
-@OMI_ONLY
-def test_run_reports_what_the_function_raised(physics):
-    def fails(world):
-        raise ValueError('refused')
-
-    with pytest.raises(ValueError, match='refused'):
-        physics_testing.run(physics, fails).result(timeout=2)
 
 
 # -- finding a body ------------------------------------------------------------
@@ -620,60 +559,13 @@ def test_switching_mode_keeps_the_bodies():
         service.close()
 
 
-@OMI_ONLY
-def test_a_place_waiting_behind_a_callback_write_is_not_read_as_applied():
-    """A physics callback's write is applied in the step; a render-thread write
-    still in the inbox is not, though the callback's write is numbered after it."""
-    # Two ticks a second: after publishing a step the thread waits half a
-    # second before it takes the next commands, the frame's window to read it.
-    service = make(mode='thread', gravity=(0.0, 0.0, 0.0), tickHz=2.0)
-    in_step, posted = threading.Event(), threading.Event()
-    try:
-        node = ball(at=(0, 5, 0))
-        body = service.add_dynamic(node)
-        body.set_velocity((1.0, 0.0, 0.0))
-
-        @physics_callback
-        def push(step):
-            if not in_step.is_set():
-                in_step.set()
-                posted.wait(5.0)
-            body.set_force((0.0, 0.0, 0.0))
-
-        service.addEventHandler('before-step', push)
-        assert in_step.wait(5.0)
-        body.set_transform((9.0, 9.0, 9.0))
-        steps = service.worker.steps
-        posted.set()
-        deadline = time.monotonic() + 5.0
-        while service.worker.steps == steps and time.monotonic() < deadline:
-            time.sleep(0.001)
-        service.frame(0.02)
-        assert body.position == pytest.approx((9.0, 9.0, 9.0))
-        assert tuple(node.translation) == pytest.approx((0.0, 5.0, 0.0))   # no stale pose written
-    finally:
-        posted.set()
-        service.close()
-
-
-@OMI_ONLY
 def test_a_physics_callback_leaves_the_render_threads_tables_to_the_render_thread():
     service = make(mode='thread')
     removed = threading.Event()
-    touched = []
     try:
         service.add_static(block((20, 1, 20), at=(0, -0.5, 0)))
         crate = service.add_dynamic(ball(at=(0, 3, 0)))
         other = service.add_dynamic(ball(at=(4, 3, 0)))
-        service.raycast((0, 10, 0), (0, -1, 0))          # the render thread's replica now exists
-        replica = service._replica
-        real_apply = replica.apply
-
-        def recording(command):
-            touched.append(threading.get_ident())
-            return real_apply(command)
-
-        replica.apply = recording
 
         @physics_callback
         def remove_it(step):
@@ -684,40 +576,13 @@ def test_a_physics_callback_leaves_the_render_threads_tables_to_the_render_threa
 
         service.addEventHandler('before-step', remove_it)
         assert removed.wait(5.0)
-        assert service.worker.settle()
-        assert crate.uid not in service.worker.runtime
+        physics_testing.settle(service)
+        assert not physics_testing.holds(service, crate)
         assert crate.uid in service._bodies and crate.uid in service._specs
-        assert touched == []
         service.frame(0.02)
         assert crate.uid not in service._bodies and crate.uid not in service._specs
         assert crate not in service._movers
-        assert touched and set(touched) == {threading.get_ident()}
-        assert crate.uid not in replica
     finally:
-        service.close()
-
-
-@OMI_ONLY
-def test_a_mode_switch_waits_for_the_thread_to_leave_the_world():
-    service = make(mode='thread')
-    stepping, release = threading.Event(), threading.Event()
-
-    @physics_callback
-    def slow(step):
-        stepping.set()
-        release.wait(5.0)
-
-    try:
-        service.add_dynamic(ball())
-        service.addEventHandler('before-step', slow)
-        assert stepping.wait(5.0)
-        service.worker.stop_timeout = 0.05
-        with pytest.raises(RuntimeError, match='still in its step'):
-            service.set_config(PhysicsDefinition(mode='inline', tickHz=100.0, maxCatchUp=2.0))
-        assert service.worker.runtime is not None
-        assert type(service.worker).__name__ == 'ThreadWorker'
-    finally:
-        release.set()
         service.close()
 
 

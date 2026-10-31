@@ -1,7 +1,7 @@
 """Per-tile static collision for streamed terrain.
 
-Turns each terrain tile the streamer is *drawing* into a static `trimesh`
-collider in a physics world, so a character walks the surface and a car drives
+Turns each terrain tile the streamer is *drawing* into a static triangle-mesh
+body of a physics service, so a character walks the surface and a car drives
 on it. Wire it into `TilesetRuntime`/`TilesTerrain` through the `on_drawn` hook.
 
 **The set of colliders is the set of drawn tiles, and nothing else.** A streamer
@@ -13,39 +13,27 @@ everything, and a car at speed catches the step between them, which reads as
 hitting a wall in the middle of an open road.
 
 Tracking the drawn set also bounds the working set: a session that drives across
-a map for an hour costs what one view of it costs.
-`PhysicsWorld.remove_body` frees the slot for the next tile to arrive in; a
-world without that call keeps the body and is told so, once.
-
-The world is an omi_physics ``PhysicsWorld``, which needs the deprecated
-omi_physics (the ``omi`` extra); a physics service streams tile ground through
-its own collider sources (:mod:`OpenGLContext.physics.sources`).
+a map for an hour costs what one view of it costs, since a tile that stops
+being drawn has its body removed.
 """
-import logging
 from typing import TYPE_CHECKING, Any
 
 from OpenGLContext.physics import gltf_world
-from OpenGLContext.physics.engine import require_omi
+from OpenGLContext.physics.proxy import Proxy
 
 if TYPE_CHECKING:
-    from omi_physics.world import PhysicsWorld
-
-log = logging.getLogger(__name__)
+    from OpenGLContext.physics.body import Body
+    from OpenGLContext.physics.service import Physics
 
 
 class TerrainColliders:
-    """Static trimesh colliders for the tiles a streamer is drawing."""
+    """Static triangle-mesh bodies of ``physics`` for the tiles a streamer is drawing."""
 
-    def __init__(self, world: "PhysicsWorld", min_hull_size: float = 0.0) -> None:
-        require_omi('TerrainColliders')
-        self.world = world
+    def __init__(self, physics: "Physics", min_hull_size: float = 0.0) -> None:
+        self.physics = physics
         self.min_hull_size = min_hull_size
-        #: Each tile's body index, keyed by the tile, which hashes by identity.
-        self._bodies: dict[Any, int] = {}
-        # Kept for API compatibility; stays empty because unremovable handles
-        # are dropped rather than queued (see :meth:`on_evicted`).
-        self.pending_removals: list[Any] = []
-        self._warned_no_removal = False
+        #: Each tile's body, keyed by the tile, which hashes by identity.
+        self._bodies: dict[Any, "Body"] = {}
 
     def on_drawn(self, pairs: Any) -> None:
         """Hold colliders for exactly these ``(tile, drawable)`` pairs.
@@ -63,6 +51,7 @@ class TerrainColliders:
                 self.on_renderable(tile, drawable)
 
     def on_renderable(self, tile: Any, drawable: Any) -> None:
+        """Give ``tile`` a static body of the triangles ``drawable`` draws, unless it has one."""
         if tile in self._bodies:
             return
         extracted = gltf_world.extract_trimesh(
@@ -72,40 +61,23 @@ class TerrainColliders:
         points, indices = extracted
         if len(indices) == 0:
             return
-        from omi_physics import model  # noqa: PLC0415 the omi world loads on use
-
-        shape = self.world.add_shape(model.Shape.trimesh(points, indices))
-        body = self.world.add_body(
-            model.Motion(type=model.STATIC),
-            collider=model.Collider(shape=shape))
-        self._bodies[tile] = body
+        self._bodies[tile] = self.physics.add_static(None, proxy=Proxy.trimesh(points, indices))
 
     def on_evicted(self, tile: Any, drawable: Any) -> None:
-        """Take the evicted tile's collider out of the physics world.
-
-        A world whose `PhysicsWorld` has no `remove_body` keeps the body; the
-        handle is dropped rather than queued, and the fact is logged once. A
-        list of handles that could never be acted on would grow for as long as
-        the stream ran.
-        """
+        """Take the evicted tile's body out of the world."""
         self._release(tile)
 
     def _release(self, tile: Any) -> None:
-        """Drop the collider held for a tile."""
+        """Remove the body held for a tile."""
         body = self._bodies.pop(tile, None)
-        if body is None:
-            return
-        remove = getattr(self.world, 'remove_body', None)
-        if callable(remove):
-            remove(body)
-            return
-        if not self._warned_no_removal:
-            self._warned_no_removal = True
-            log.warning(
-                "PhysicsWorld has no remove_body; tile colliders that are no "
-                "longer drawn remain in the world. Handles are dropped, not "
-                "queued, to keep the working set bounded.")
+        if body is not None:
+            body.remove()
 
     @property
     def collider_count(self) -> int:
+        """How many tiles have a body."""
         return len(self._bodies)
+
+    def bodies(self) -> list["Body"]:
+        """The tiles' bodies, in the order they were made."""
+        return list(self._bodies.values())

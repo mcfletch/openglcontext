@@ -11,10 +11,6 @@ whose props near the focus are static bodies of a physics service::
     stones = PropSource(props, reach=60.0)
     physics.add_collider_source(stones, focus=lambda: car.position)
 
-:class:`PropColliders` stands the same bodies up in a plain
-:class:`omi_physics.world.PhysicsWorld`, for code with no service; it needs
-the deprecated omi_physics (the ``omi`` extra).
-
 A prop's body comes from the prop's own measurements rather than from the mesh
 in a tile. Tile geometry is level-of-detail geometry that arrives and leaves as
 a camera moves, and a collider that came and went with it would be a rock a car
@@ -29,16 +25,13 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from OpenGLContext.physics.engine import require_omi
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.sources import Addition, Changes
 
 if TYPE_CHECKING:
-    from omi_physics.world import PhysicsWorld
-
     from OpenGLContext.scenegraph.props import Prop
 
-__all__ = ['PropColliders', 'PropSource', 'REACH_METRES', 'SETTLED_METRES']
+__all__ = ['PropSource', 'REACH_METRES', 'SETTLED_METRES']
 
 #: How far from the focus props are kept, in metres. Past this nothing is going
 #: to reach one before the next update does.
@@ -140,69 +133,6 @@ class PropSource:
                 Proxy.box((prop.radius * 2.0, prop.height, prop.radius * 2.0)))
         return Addition(index, proxy, tuple(np.asarray(prop.position, dtype='d') + _lift(prop)),
                         orientation=_yaw(prop.yaw))
-
-
-class PropColliders:
-    """The bodies of a :class:`PropSource` in a plain physics world, for code with no service.
-
-    :param world: the physics world the props are added to and removed from.
-    :param props: every :class:`~OpenGLContext.scenegraph.props.Prop` in the
-        world. Held as given; nothing here writes to it.
-    :param reach: how far from the point props are kept, in metres.
-    :param settled: how far the point may move before the set is re-chosen.
-
-    Call :meth:`update` with where the thing that might hit one is.
-    """
-
-    def __init__(self, world: PhysicsWorld, props: Sequence[Prop],
-                 reach: float = REACH_METRES,
-                 settled: float = SETTLED_METRES) -> None:
-        require_omi('PropColliders')
-        self.world = world
-        self.source = PropSource(props, reach=reach, settled=settled)
-        self._bodies: dict[Any, int] = {}
-
-    @classmethod
-    def baked(cls, world: PhysicsWorld, extras: Any, channel: str, base: str,
-              **named: Any) -> PropColliders:
-        """Colliders for the props a baked world carries in ``extras[channel]``,
-        read as :meth:`PropSource.baked` reads them."""
-        from OpenGLContext.loaders.tiles3d.props import baked_props
-        return cls(world, baked_props(extras, channel, base), **named)
-
-    @property
-    def props(self) -> list[Prop]:
-        """Every prop in the world."""
-        return self.source.props
-
-    @property
-    def standing(self) -> list[Prop]:
-        """The props with a body in the world now."""
-        return self.source.standing
-
-    def update(self, position: Sequence[float]) -> None:
-        """Hold the props within reach of here, and let go of the rest."""
-        from omi_physics import model  # noqa: PLC0415 the omi world loads on use
-
-        from OpenGLContext.physics.omi_adapter import omi_shape  # noqa: PLC0415 the omi world loads on use
-
-        changes = self.source.update(position)
-        for key in changes.remove:
-            self.world.remove_body(self._bodies.pop(key))
-        for item in changes.add:
-            addition = item if isinstance(item, Addition) else Addition(*item)
-            shape = self.world.add_shape(omi_shape(addition.proxy))
-            self._bodies[addition.key] = int(self.world.add_body(
-                model.Motion(type=model.STATIC), collider=model.Collider(shape=shape),
-                position=tuple(addition.position),
-                orientation=addition.quaternion() or (0.0, 0.0, 0.0, 1.0)))
-
-    def release(self) -> None:
-        """Take every prop out of the physics world."""
-        for body in self._bodies.values():
-            self.world.remove_body(body)
-        self._bodies.clear()
-        self.source.clear()
 
 
 def _lift(prop: Prop) -> np.ndarray:

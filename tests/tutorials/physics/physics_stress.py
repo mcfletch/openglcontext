@@ -4,15 +4,10 @@
 [physics_stress.py-screen-0001.png Screenshot]
 
 A large pile of boxes and spheres drops into a bowl to exercise the broad phase,
-islands, and sleeping under load.  The SoA world runs the per-body integration on
-numpy for small scenes and hands off to the GPU compute backend past ~10k awake
-bodies (``gpu_threshold``); press ``b`` to switch backends live and watch the step
-time change (the GPU win is largest for big collider-free swarms).
-``physics.engine.compute`` names the backend, and a definition whose ``backend``
-is ``'gpu'``, ``'numpy'`` or ``'auto'``, given to ``physics.set_config``, chooses
-another from the next step.  The GPU backend needs GL compute
-on the thread that steps the world, so this script steps it in the frame with
-``mode='inline'``.
+islands, and sleeping under load.  Jolt steps the pile on pyjoltphysics' world
+thread with its job threads; ``mode='inline'`` runs the world in lockstep with
+the frame, so a capture of it is the same on every run.  ``physics.engine``
+names the engine, its version and its precision.
 
 Bodies render through the instanced mesh path (all boxes of a size share one GPU
 batch), so the render cost stays flat as the pile grows.  The collision-proxy
@@ -25,7 +20,6 @@ Usage:
 
 Keys:
     space  add another wave of bodies
-    b      toggle GPU / numpy physics backend
     r      reset
 '''
 import numpy as np
@@ -65,8 +59,7 @@ class TestContext(BaseContext):
         # weakly, so a lambda with no other reference is collected and never fires.
         self.addEventHandler('keypress', name='r', function=self.on_reset)
         self.addEventHandler('keypress', name=' ', function=self.on_add_wave)
-        self.addEventHandler('keypress', name='b', function=self.on_toggle_backend)
-        print('physics:', self.physics.engine, self.physics.engine.compute, flush=True)
+        print('physics:', self.physics.engine, flush=True)
 
     def on_reset(self, event):
         for body in self.bodies:
@@ -76,13 +69,6 @@ class TestContext(BaseContext):
 
     def on_add_wave(self, event):
         self.add_wave()
-
-    def on_toggle_backend(self, event):
-        '''A backend that cannot be made logs why, and the world keeps the one it has.'''
-        wanted = 'numpy' if self.physics.engine.compute == 'glcompute' else 'gpu'
-        self.physics.set_config(self.physics.definition.replaced(backend=wanted))
-        self.physics.flush()
-        print('physics:', self.physics.engine, self.physics.engine.compute, flush=True)
 
     def build(self):
         '''A shallow bowl: a floor and four walls, shapes of the scene and so

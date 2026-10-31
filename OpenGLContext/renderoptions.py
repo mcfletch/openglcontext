@@ -143,9 +143,8 @@ ENVIRONMENT: tuple[str, ...] = (
     # model on the turntable a model with no camera of its own is framed
     # against.  A reference image rendered with either inherited is a
     # reference for whatever the parent process happened to be carrying.  The
-    # physics mode decides which step a body is in when a frame is drawn, and
-    # the backend whether its poses are computed in float64 or float32.
-    'OPENGLCONTEXT_PHYSICS', 'OPENGLCONTEXT_PHYSICS_MODE', 'OPENGLCONTEXT_PHYSICS_BACKEND',
+    # physics mode decides which step a body is in when a frame is drawn.
+    'OPENGLCONTEXT_PHYSICS', 'OPENGLCONTEXT_PHYSICS_MODE',
     'OPENGLCONTEXT_VIEW_YAW',
     # Whether an OGLC_hook tag in a glTF is read decides what the file's
     # materials and nodes become -- a lake either moves or is a flat sheet --

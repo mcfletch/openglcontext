@@ -48,7 +48,8 @@ The modules
      - ``apply_zones``: emitter gains and the reverb from the listener's
        position.
    * - ``physics/zones.py``
-     - Zones as ``omi_physics`` gravity volumes.
+     - Zones as the physics service's gravity zones (``gravity_zones``,
+       ``scene_zones``).
 
 Placing a zone
 --------------

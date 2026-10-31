@@ -1,4 +1,4 @@
-"""What a game author imports from ``OpenGLContext.physics`` without reaching into omi_physics."""
+"""What a game author imports from ``OpenGLContext.physics`` without reaching into an engine's package."""
 import subprocess
 import sys
 

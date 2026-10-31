@@ -200,9 +200,9 @@ def test_the_costs_name_the_soft_bodies(world):
     assert costs['soft bodies'] == 1.0 and costs['soft bodies ms'] > 0.0
 
 
-@pytest.mark.engines('omi')
 def test_an_engine_without_soft_bodies_says_so():
     physics = Physics(PhysicsDefinition(mode='inline'))
+    physics._engine.soft_bodies = False     # noqa: SLF001 an engine that declares no soft bodies
     try:
         with pytest.raises(EngineUnavailable, match='soft bodies need the jolt engine'):
             physics.add_soft_body(SoftBodySpec.ball())

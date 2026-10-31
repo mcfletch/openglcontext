@@ -13,7 +13,6 @@ import pytest
 
 from OpenGLContext.physics.gltf_world import node_mesh
 from OpenGLContext.testing.paths import tests_root
-from OpenGLContext.testing import physics as physics_testing
 
 
 def _load():
@@ -28,10 +27,6 @@ def _load():
 
 game = _load()
 
-#: The table of winning shots below is the omi engine's, found by find_shot(), and the
-#: helpers read its world live.
-pytestmark = pytest.mark.engines('omi', reason="the winning shots and the live reads are the omi engine's")
-
 #: The ball kinds, and the levels by what is in them.
 BALLS = [ammo.name for ammo in game.AMMO]
 OPEN, WALL, CRATES, CROSSWIND, FERRY, PORTCULLIS = range(6)
@@ -41,15 +36,16 @@ OPEN, WALL, CRATES, CROSSWIND, FERRY, PORTCULLIS = range(6)
 #: at the target, the elevation, the power and the seconds to wait before
 #: firing.  Each power is in the middle of a run of powers that win, found by
 #: ``find_shot`` below.  The crates cover the mark on course 3, so a lead ball
-#: clears them for the steel one.  When the physics changes enough to move
-#: them, ``find_shot`` finds new ones.
+#: clears them for the steel one.  On the portcullis course a steel ball comes
+#: back off the crates on the mark, and a lead one stays.  When the physics
+#: changes enough to move them, ``find_shot`` finds new ones.
 SOLUTIONS: dict[int, list[tuple[str, float, float, float, float]]] = {
     OPEN: [('steel', 0.0, 45.0, 22.913, 0.0)],
     WALL: [('steel', 0.0, 45.0, 22.913, 0.0)],
     CRATES: [('lead', 0.0, 45.0, 22.86, 0.0), ('steel', 0.0, 45.0, 22.86, 0.0)],
     CROSSWIND: [('steel', 1.0, 30.0, 24.42, 0.0)],
     FERRY: [('steel', 0.0, 30.0, 23.96, 2.0)],
-    PORTCULLIS: [('steel', 1.0, 30.0, 24.4, 3.0)],
+    PORTCULLIS: [('lead', 1.0, 30.0, 24.4, 3.0)],
 }
 
 
@@ -139,22 +135,19 @@ def winning_power():
 
 
 def velocity_of(course, body):
-    """The live velocity of ``body``: its row is found first, since finding it makes the world's arrays current."""
-    index = physics_testing.slot_of(course.physics, body)
-    return physics_testing.inspect(course.physics).linear_velocity[index]
+    """The velocity of ``body`` as the world's last tick left it."""
+    return np.asarray(body.velocity, dtype='d')
 
 
 def position_of(course, body):
-    """The live position of ``body``."""
-    index = physics_testing.slot_of(course.physics, body)
-    return physics_testing.inspect(course.physics).position[index]
+    """Where ``body`` is as the world's last tick left it."""
+    return np.asarray(body.position, dtype='d')
 
 
 def put(course, point):
-    """Stand the ball at ``point`` with no velocity."""
-    index = physics_testing.slot_of(course.physics, course.ball)
-    physics_testing.inspect(course.physics).place_body(index, position=point)
-    velocity_of(course, course.ball)[:] = 0.0
+    """Stand the ball at ``point`` with no velocity, from the next tick."""
+    course.ball.set_transform(point)
+    course.ball.set_velocity((0.0, 0.0, 0.0))
 
 
 class TestTheKick:
@@ -163,10 +156,12 @@ class TestTheKick:
         course = aimed_game(ammo=ammo)
         course.aim.power = 20.0
         course.fire()
-        expected = along(course.aim.bearing, course.aim.elevation)
-        velocity = velocity_of(course, course.ball)
-        assert tuple(velocity) == pytest.approx(tuple(20.0 * part for part in expected),
-                                                rel=1e-6)
+        course.physics.frame(game.STEP)
+        # Read after the tick that applies the impulse, which gravity has
+        # also pulled on for one step.
+        expected = np.asarray(along(course.aim.bearing, course.aim.elevation)) * 20.0
+        expected[1] -= 9.81 * game.STEP
+        assert tuple(velocity_of(course, course.ball)) == pytest.approx(tuple(expected), rel=1e-4)
 
     def test_the_ball_starts_in_the_mouth_of_the_barrel(self):
         course = aimed_game()
@@ -241,10 +236,10 @@ class TestTheKick:
         course = aimed_game()
         shoot(course, 12.0)
         course.physics.flush()
-        before = physics_testing.inspect(course.physics).live_body_count
+        before = course.physics.counts.bodies
         shoot(course, 12.0)
         course.physics.flush()
-        assert physics_testing.inspect(course.physics).live_body_count == before
+        assert course.physics.counts.bodies == before
 
 
 class TestTheBalls:
@@ -291,7 +286,7 @@ class TestTheBalls:
         course.fire()
         centre = np.mean([position_of(course, body) for body in course.crates], axis=0)
         put(course, centre - (6.0, 0.0, 0.0))
-        velocity_of(course, course.ball)[:] = (30.0, 0.0, 0.0)
+        course.ball.set_velocity((30.0, 0.0, 0.0))
         fastest = 0.0
         for _ in range(60):
             course.tick(1 / 60)
@@ -357,7 +352,8 @@ class TestWhatTheShotDoes:
     def test_a_ball_that_falls_out_of_the_world_is_a_miss(self):
         course = aimed_game()
         course.fire()
-        physics_testing.inspect(course.physics).place_body(physics_testing.slot_of(course.physics, course.ball), position=(0.0, game.FALLEN - 1.0, 0.0))
+        course.ball.set_transform((0.0, game.FALLEN - 1.0, 0.0))
+        course.tick(1 / 60)
         course.tick(1 / 60)
         assert course.state == 'aiming'
 
@@ -457,7 +453,7 @@ class TestTheScore:
     def test_crates_knocked_off_their_place_are_paid_for(self):
         course = aimed_game(level=CRATES)
         for body in course.crates:
-            physics_testing.inspect(course.physics).place_body(physics_testing.slot_of(course.physics, body), position=(0.0, 3.0, 40.0))
+            body.set_transform((0.0, 3.0, 40.0))
         course.physics.frame(0.0)
         assert course.toppled == len(course.crates) == 8
         self.land_on_mark(course)

@@ -31,9 +31,7 @@ removed or moved takes effect at the next tick. Queries apply the waiting
 batches first (``World.flush``), so a ray meets a body added a moment ago.
 
 The queue is pyjoltphysics' own: a submitted batch is appended under a short
-lock and the world thread takes every batch due at its tick. The deprecated
-omi engine queues the same commands in an ``OpenGLContext.events.handoff.Inbox``
-that its worker thread drains before each step. The submission lock is held
+lock and the world thread takes every batch due at its tick. The submission lock is held
 for an append. The world lock is held exclusively
 only while the world thread applies batches and runs ``PhysicsSystem::Update``.
 

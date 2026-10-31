@@ -18,26 +18,32 @@ from vrml import field, node
 from OpenGLContext import renderoptions
 from OpenGLContext.physics.checks import number, vector
 
-__all__ = ['BACKENDS', 'COLLIDERS', 'ENGINES', 'MODES', 'PhysicsDefinition', 'default_backend',
-           'default_engine', 'definition_for']
+__all__ = ['COLLIDERS', 'ENGINES', 'MODES', 'PhysicsDefinition', 'check_engine', 'default_engine',
+           'definition_for']
 
 #: Where a context steps its world: on its own thread, or in the frame hook.
 MODES = ('thread', 'inline')
 #: Which scenery becomes static bodies: every shape of the scene, only the
 #: ones the application adds, or none.
 COLLIDERS = ('scene', 'explicit', 'none')
-#: The compute backends a world steps with: ``auto`` hands off from NumPy to GL
-#: compute past a count of awake bodies; ``numpy`` and ``cpu`` stay on NumPy;
-#: ``gpu`` and ``glcompute`` use GL 4.3 compute on the stepping thread.
-BACKENDS = ('auto', 'numpy', 'cpu', 'gpu', 'glcompute')
-#: The engines that step a world: Jolt through pyjoltphysics, or omi_physics
-#: (deprecated: the ``omi-physics`` extra, for programs that still name it).
-ENGINES = ('jolt', 'omi')
+#: The engines that step a world: Jolt, through pyjoltphysics.
+ENGINES = ('jolt',)
+#: Where the physics guide tells a program that named the omi engine what to do.
+MIGRATION_NOTE = 'docs/physics.rst, "Programs that named the omi engine"'
 
 
-def default_backend() -> str:
-    """``OPENGLCONTEXT_PHYSICS_BACKEND``, one of :data:`BACKENDS`, else ``auto``."""
-    return renderoptions.env_choice('OPENGLCONTEXT_PHYSICS_BACKEND', BACKENDS, {}, 'auto')
+def check_engine(name: str) -> str:
+    """``name`` where it is one of :data:`ENGINES`; ValueError naming the choices otherwise.
+
+    ``'omi'`` is told that the engine is Jolt and where the migration note is.
+    """
+    if name in ENGINES:
+        return name
+    if name == 'omi':
+        raise ValueError("engine 'omi' is not an engine of OpenGLContext; the engine is 'jolt' "
+                         '(leave engine unset), and omi_physics is a package of its own (see %s)'
+                         % (MIGRATION_NOTE,))
+    raise ValueError('engine %r is not one of %s' % (name, ', '.join(ENGINES)))
 
 
 def default_engine() -> str:
@@ -65,13 +71,9 @@ class PhysicsDefinition(node.Node):
     mode = field.newField(
         'mode', 'SFString', 1,
         lambda: renderoptions.env_choice('OPENGLCONTEXT_PHYSICS_MODE', MODES, {}, 'thread'))
-    #: The omi engine's compute backend, one of :data:`BACKENDS`
-    #: (env: OPENGLCONTEXT_PHYSICS_BACKEND). The Jolt engine reads none.
-    backend = field.newField('backend', 'SFString', 1, default_backend)
     #: The engine that steps the world, one of :data:`ENGINES`
-    #: (env: OPENGLCONTEXT_PHYSICS_ENGINE). ``jolt``, the default, is
-    #: pyjoltphysics, which OpenGLContext requires; ``omi`` needs the deprecated
-    #: omi_physics, installed by ``pip install OpenGLContext[omi-physics]``.
+    #: (env: OPENGLCONTEXT_PHYSICS_ENGINE): ``jolt``, pyjoltphysics, which
+    #: OpenGLContext requires. The field is where a further engine would be named.
     engine = field.newField('engine', 'SFString', 1, default_engine)
     #: The fixed step, in steps a second, in both modes. A frame shorter than a
     #: step draws moving bodies between the last two steps.
@@ -88,7 +90,7 @@ class PhysicsDefinition(node.Node):
     linearDamping = field.newField('linearDamping', 'SFFloat', 1, 0.3)
     angularDamping = field.newField('angularDamping', 'SFFloat', 1, 1.5)
 
-    FIELDS = ('enabled', 'mode', 'backend', 'engine', 'tickHz', 'maxCatchUp', 'gravity', 'colliders',
+    FIELDS = ('enabled', 'mode', 'engine', 'tickHz', 'maxCatchUp', 'gravity', 'colliders',
               'linearDamping', 'angularDamping')
 
     def replaced(self, **changes: Any) -> PhysicsDefinition:
@@ -101,10 +103,7 @@ class PhysicsDefinition(node.Node):
         """Raise ValueError naming the first field the service cannot run with."""
         if self.mode not in MODES:
             raise ValueError('mode %r is not one of %s' % (self.mode, ', '.join(MODES)))
-        if self.backend not in BACKENDS:
-            raise ValueError('backend %r is not one of %s' % (self.backend, ', '.join(BACKENDS)))
-        if self.engine not in ENGINES:
-            raise ValueError('engine %r is not one of %s' % (self.engine, ', '.join(ENGINES)))
+        check_engine(self.engine)
         if self.colliders not in COLLIDERS:
             raise ValueError('colliders %r is not one of %s'
                              % (self.colliders, ', '.join(COLLIDERS)))

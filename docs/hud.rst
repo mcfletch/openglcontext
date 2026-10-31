@@ -653,10 +653,10 @@ every context has what they report on:
 
 - ``physics_provider(lambda: context.physics)`` reports the body and contact
   counts of a ``Physics`` service's last step (``Physics.counts``).
-- ``simulation_provider(lambda: context.physics.worker)`` reports on a
-  background physics thread (the worker of a ``Physics`` whose ``mode`` is
-  ``thread``): the rate it achieves against its target rate, its total ticks,
-  and any ticks it dropped. A physics thread that falls behind makes the world move
+- ``simulation_provider(lambda: simulation)`` reports on a simulation stepped
+  on a thread of its own, any object with ``rate()``, ``sim_hz``, ``steps``
+  and ``dropped``: the rate it achieves against its target rate, its total
+  ticks, and any ticks it dropped. A physics thread that falls behind makes the world move
   in slow motion, which looks like wrong gravity or a wrong timestep until
   the two rates are compared.
 

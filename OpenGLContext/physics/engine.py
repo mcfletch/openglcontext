@@ -5,15 +5,13 @@ handlers and the scene in step with the world. Everything it asks of the world
 goes through an :class:`Engine`: the commands, stepping and publishing, live
 reads on the stepping thread, queries, joint readings, characters and state.
 
-Two engines implement it. ``'jolt'``, the default
-(:class:`~OpenGLContext.physics.joltengine.JoltEngine`), steps a Jolt world
-from pyjoltphysics on its native world thread: free-running at the tick rate,
+One engine implements it: ``'jolt'``
+(:class:`~OpenGLContext.physics.joltengine.JoltEngine`) steps a Jolt world
+from pyjoltphysics on its native world thread, free-running at the tick rate,
 or in lockstep with the frame, which runs exactly the ticks the frame owes.
-``'omi'`` (:class:`~OpenGLContext.physics.omiengine.OmiEngine`) steps an
-omi_physics world inline in the frame or on a Python thread; omi_physics is
-deprecated and is installed only by the ``omi-physics`` extra, for programs that still
-name it. ``PhysicsDefinition.engine`` chooses (env:
-OPENGLCONTEXT_PHYSICS_ENGINE); :func:`make_engine` makes the one it names.
+``PhysicsDefinition.engine`` names it (env: OPENGLCONTEXT_PHYSICS_ENGINE), and
+:func:`make_engine` makes the engine a definition names. The interface is the
+place a second engine would be added.
 """
 from __future__ import annotations
 
@@ -24,7 +22,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import numpy as np
 
 from OpenGLContext.physics.records import Command, PhysicsEvent, Snapshot, Step
-from OpenGLContext.physics.settings import ENGINES, PhysicsDefinition
+from OpenGLContext.physics.settings import ENGINES, PhysicsDefinition, check_engine
 from OpenGLContext.physics.types import EngineInfo, WorldCounts
 
 if TYPE_CHECKING:
@@ -32,28 +30,12 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.vehicles import Surface, VehicleSettings, VehicleState
     from OpenGLContext.physics.softbodies import SoftBodyFrame
 
-__all__ = ['ENGINES', 'OMI_EXTRA', 'Engine', 'EngineUnavailable', 'LivePose', 'Outbox', 'RawHit',
-           'make_engine', 'require_omi']
+__all__ = ['ENGINES', 'Engine', 'EngineUnavailable', 'LivePose', 'Outbox', 'RawHit', 'make_engine']
 
-#: What installs omi_physics beside the engine.
-OMI_EXTRA = 'pip install OpenGLContext[omi-physics]'
 
 class EngineUnavailable(RuntimeError):
     """The engine a definition names cannot be made here: its package is not installed."""
 
-
-def require_omi(feature: str) -> None:
-    """Raise :class:`EngineUnavailable` naming ``feature`` where omi_physics cannot be imported.
-
-    The parts of the engine still built on an omi_physics world call this
-    before they make one, so a program without the ``omi-physics`` extra is told
-    which extra to install.
-    """
-    try:
-        import omi_physics  # noqa: F401, PLC0415 asked when a feature is used
-    except ImportError as error:
-        raise EngineUnavailable('%s needs the deprecated omi_physics (%s); install it with %s'
-                                % (feature, error, OMI_EXTRA)) from error
 
 
 class Outbox(NamedTuple):
@@ -91,11 +73,6 @@ class Engine(abc.ABC):
 
     #: The engine's name, one of :data:`ENGINES`.
     name: str = ''
-    #: Whether a character stands in the world as a kinematic body the service places.
-    stand_ins: bool = False
-    #: How far beyond its capsule a character's controller meets the bodies it pushes, in
-    #: metres; the stand-in's box reaches this far.
-    push_reach: float = 0.0
     #: Whether the engine carries vehicles (:meth:`add_vehicle`).
     vehicles: bool = False
     #: Whether the engine simulates ragdolls (the ``ragdoll_*`` commands).
@@ -118,8 +95,6 @@ class Engine(abc.ABC):
         self.body_of: Callable[[int], Any] = _no_body
         #: Gives a material name's coefficients; the service sets it.
         self.material_of: Callable[[str], Any] | None = None
-        #: Gives the render thread's copy of the bodies, for an engine that queries one; the service sets it.
-        self.replica: Callable[[], Any] | None = None
         #: ``guard(owner, function, *arguments)`` calls a character's code, logging a failure once.
         self.guard: Callable[..., Any] = _call
         #: Asked whether a handler of bodies' events runs on the stepping thread; the service sets it.
@@ -274,16 +249,6 @@ class Engine(abc.ABC):
         """Vehicle ``vid`` as the newest tick left it; None before the world has stepped it."""
         return None
 
-    # -- stand-ins (an engine whose characters step against a copy of the bodies) --
-    def build_replica(self, specs: dict[int, Any], published: Snapshot | None) -> Any:
-        """The render thread's copy of the bodies ``specs`` holds, posed as ``published`` left them."""
-        raise NotImplementedError('the %s engine keeps no copy of the bodies' % (self.name,))
-
-    def proxy_bounds(self, proxy: Proxy, position: Any,
-                     quaternion: Any) -> tuple[np.ndarray, np.ndarray]:
-        """The world box of ``proxy`` at ``position`` turned by ``quaternion``, as the copy holds it."""
-        raise NotImplementedError('the %s engine keeps no copy of the bodies' % (self.name,))
-
     # -- ragdolls and soft bodies -------------------------------------------
     def soft_body_frame(self, uid: int) -> SoftBodyFrame | None:
         """Soft body ``uid``'s vertices as the newest step left them; None where the engine has none."""
@@ -322,21 +287,14 @@ def _call(owner: Any, function: Callable[..., Any], *arguments: Any) -> Any:
 def make_engine(definition: PhysicsDefinition, wake: Callable[[], Any] | None = None) -> Engine:
     """The engine ``definition.engine`` names, made for ``definition``.
 
-    Raises :class:`EngineUnavailable` where that engine's package is not
-    installed; the service does not fall back to the other.
+    Raises :class:`EngineUnavailable` where pyjoltphysics cannot be imported,
+    and ValueError for a name that is not one of :data:`ENGINES`.
     """
-    if definition.engine == 'jolt':
-        try:
-            from OpenGLContext.physics.joltengine import JoltEngine  # noqa: PLC0415 the engine loads on use
-        except ImportError as error:
-            raise EngineUnavailable(
-                "PhysicsDefinition.engine is 'jolt' and pyjoltphysics cannot be imported (%s); "
-                'OpenGLContext requires pyjoltphysics: install it' % (error,)) from error
-        return JoltEngine(definition, wake=wake)
+    check_engine(definition.engine)
     try:
-        from OpenGLContext.physics.omiengine import OmiEngine  # noqa: PLC0415 omi_physics loads with its engine
+        from OpenGLContext.physics.joltengine import JoltEngine  # noqa: PLC0415 the engine loads on use
     except ImportError as error:
         raise EngineUnavailable(
-            "PhysicsDefinition.engine is 'omi' and omi_physics cannot be imported (%s); "
-            'install it with %s, or choose the jolt engine' % (error, OMI_EXTRA)) from error
-    return OmiEngine(definition, wake=wake)
+            "PhysicsDefinition.engine is 'jolt' and pyjoltphysics cannot be imported (%s); "
+            'OpenGLContext requires pyjoltphysics: install it' % (error,)) from error
+    return JoltEngine(definition, wake=wake)

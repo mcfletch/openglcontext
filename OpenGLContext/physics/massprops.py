@@ -2,15 +2,13 @@
 
 Every shape is a solid of uniform density. A ``convex`` or ``trimesh`` proxy
 is measured as the box its points span, and a ``capsule`` as the cylinder of
-its height and radius, so a body weighs and turns on every engine as it does
-on the omi engine. A ``compound`` shares its mass among its parts by volume;
+its height and radius. A ``compound`` shares its mass among its parts by volume;
 its inertia is the sum of theirs about the compound's origin.
 
 :func:`inertia_diagonal` is the diagonal X3D's ``RigidBody`` takes as its
 default inertia: the products of inertia a lopsided compound has are left
 out. The formulas are those of omi_physics' ``massprops`` (MIT, Mike C.
-Fletcher); ``tests/unit/test_physics_massprops.py`` compares the two while
-omi_physics is installed.
+Fletcher); ``tests/unit/test_physics_massprops.py`` holds its answers.
 """
 from __future__ import annotations
 

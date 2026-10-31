@@ -9,11 +9,9 @@ it by a frame's time, in fixed steps of :data:`STEP` seconds
 moved: each body's `position`, `orientation`, `linearVelocity` and
 `angularVelocity`, the `translation` and `rotation` of the collidables a body
 carries, and each joint's outputs its `forceOutput` names. This module reads
-the nodes into the engine's own records; the worlds are
-:class:`~OpenGLContext.physics.x3djolt.JoltRigidSystem` (the default) and
-:class:`~OpenGLContext.physics.x3domi.OmiRigidSystem` (the deprecated omi
-engine), and :func:`~OpenGLContext.physics.x3djolt.make_rigid_system` makes
-the one the run's engine names.
+the nodes into the engine's own records; the world is
+:class:`~OpenGLContext.physics.x3djolt.JoltRigidSystem`, which
+:func:`~OpenGLContext.physics.x3djolt.make_rigid_system` makes.
 
 What collides is what the X3D model says collides:
 

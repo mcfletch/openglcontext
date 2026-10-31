@@ -637,7 +637,7 @@ A vehicle
 ``OpenGLContext.audio.vehicle.VehicleSoundtrack`` is a road vehicle's sound
 made this way: a motor whine whose pitch follows the road speed, tyre noise
 from rolling and from scrub, wind that goes as the square of speed, and a
-one-shot impact. It reads an ``omi_physics`` vehicle - its ``speed()``, its
+one-shot impact. It reads a vehicle - its ``speed()``, its
 wheels' ``slip`` (the sideways speed at the contact patch, m/s) and
 ``grounded``, and its ``throttle`` - and writes gains and playback rates onto
 one ``global`` emitter, so the sound rides with the listener in the vehicle.

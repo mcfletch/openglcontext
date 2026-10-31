@@ -1,9 +1,9 @@
 """The engine runs on Jolt with omi_physics absent.
 
-``pip install OpenGLContext`` brings pyjoltphysics and leaves omi_physics to the
-``omi-physics`` extra, so each check runs in a child interpreter where importing
-``omi_physics`` raises ``ModuleNotFoundError``, as it does where the extra is
-not installed. The engine's own modules come from this checkout.
+``pip install OpenGLContext`` brings pyjoltphysics and no omi_physics, while the
+development environment installs omi_physics for one reference test, so each
+check runs in a child interpreter where importing ``omi_physics`` raises
+``ModuleNotFoundError``. The engine's own modules come from this checkout.
 """
 from __future__ import annotations
 
@@ -56,17 +56,17 @@ def test_the_default_engine_is_jolt() -> None:
     assert out.split() == ['jolt']
 
 
-def test_naming_omi_without_omi_physics_says_which_extra_to_install() -> None:
+def test_naming_omi_says_the_engine_is_jolt_and_where_the_note_is() -> None:
     out = run_without_omi('''
         from OpenGLContext.physics import Physics, PhysicsDefinition
-        from OpenGLContext.physics.engine import EngineUnavailable
         try:
             Physics(PhysicsDefinition(engine='omi', mode='inline'))
-        except EngineUnavailable as error:
-            print('unavailable:', error)
+        except ValueError as error:
+            print('refused:', error)
     ''')
-    assert out.startswith('unavailable:')
-    assert 'OpenGLContext[omi-physics]' in out
+    assert out.startswith('refused:')
+    assert "the engine is 'jolt'" in out
+    assert 'Programs that named the omi engine' in out
 
 
 def test_a_world_steps_bodies_and_characters() -> None:
@@ -136,23 +136,6 @@ def test_engine_modules_import_without_omi_physics() -> None:
         print('done')
     ''' % (ENGINE_MODULES,), timeout=240.0)
     assert out.split('\n')[0] == 'done', out
-
-
-def test_the_features_built_on_an_omi_world_name_the_extra() -> None:
-    out = run_without_omi('''
-        from OpenGLContext.physics.engine import EngineUnavailable
-        from OpenGLContext.physics.props import PropColliders
-        from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
-        from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
-
-        for make in (lambda: PropColliders(None, []), lambda: TerrainColliders(None),
-                     lambda: PhysicsViewPlatform(None)):
-            try:
-                make()
-            except EngineUnavailable as error:
-                print('OpenGLContext[omi-physics]' in str(error))
-    ''')
-    assert out.split() == ['True', 'True', 'True']
 
 
 def test_walking_needs_no_omi_physics() -> None:
@@ -225,18 +208,3 @@ def test_an_x3d_rigid_body_scene_steps_and_senses() -> None:
     assert name == 'JoltRigidSystem'
     assert abs(float(height) + 0.35) < 0.02
     assert touching == 'True'
-
-
-@pytest.mark.engines('jolt')
-def test_an_engine_without_stand_ins_keeps_no_copy_of_the_bodies(physics_engine: str) -> None:
-    from OpenGLContext.physics import Physics, PhysicsDefinition, Proxy
-
-    physics = Physics(PhysicsDefinition(mode='inline'))
-    try:
-        with pytest.raises(NotImplementedError, match='no copy'):
-            physics._engine.build_replica({}, None)
-        with pytest.raises(NotImplementedError, match='no copy'):
-            physics._engine.proxy_bounds(Proxy.sphere(1.0), (0, 0, 0), (0, 0, 0, 1))
-        assert physics._engine.push_reach == 0.0
-    finally:
-        physics.close()

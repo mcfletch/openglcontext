@@ -87,10 +87,6 @@ The packages it is built on
        command batches, snapshots read without copying, an event ring,
        queries, characters, joints, materials and gravity zones
        (:doc:`physicsthread`).
-   * - `omi_physics <https://github.com/mcfletch/omi_physics>`__
-     - Deprecated. Rigid bodies on the OMI glTF physics model, computed in
-       NumPy: the ``omi`` engine and the parts listed in :ref:`physics-omi`.
-       An extra: ``OpenGLContext[omi-physics]``.
    * - `omi_audio <https://github.com/mcfletch/omi_audio>`__
      - Spatial audio on glTF's ``KHR_audio_emitter`` model: the gain curves,
        the voice pool and the block mixing, in NumPy.
@@ -217,14 +213,12 @@ simulation packages update.
        ``Character``, ``Joint``, events, queries, materials, collision and
        contact filters, colliders that stream), the walking view platform and
        the debug overlay. ``engine.py`` is the interface the service drives an
-       engine through; ``joltengine.py`` is the Jolt engine, the default, and
+       engine through; ``joltengine.py`` is the Jolt engine, and
        ``x3djolt.py`` X3D's rigid bodies on it, read from the nodes by
        ``x3drigid.py``. ``omigltf.py`` reads glTF's ``OMI_physics_*``
        extensions into the engine's own types, ``cooking.py`` cooks triangles
        into hulls and convex pieces, and ``massprops.py`` gives a shape's
-       inertia and bounds. ``omiengine.py``, ``omi_adapter.py``,
-       ``runtime.py``, ``worker.py``, ``replica.py``, ``queries.py`` and
-       ``x3domi.py`` are the deprecated omi engine's.
+       inertia and bounds.
      - :doc:`Physics <physics>`, :doc:`The world thread <physicsthread>`
    * - ``nav``
      - The navigation mesh generated from the collision mesh, and routes

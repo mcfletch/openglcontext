@@ -9,7 +9,6 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 
 from OpenGLContext.testing import physics as physics_testing
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 
 @pytest.fixture
@@ -61,16 +60,6 @@ def test_one_filter_given_twice_is_one_filter_in_the_world(physics):
     ball(physics, (2, 0, 0), collision_filter=CollisionFilter(collisionSystems=('ball',)))
     ball(physics, (4, 0, 0), collision_filter=SHARDS)
     assert physics_testing.filter_count(physics) == 2
-
-
-@pytest.mark.engines('omi', reason="adds a filter to the omi world itself")
-def test_an_index_names_a_filter_of_the_world_as_it_is(physics):
-    physics.flush()
-    physics.worker.runtime.world.add_filter(CollisionFilter(collisionSystems=('ball',)))
-    body = ball(physics, (0, 0, 0), collision_filter=0)
-    physics.flush()
-    runtime = physics.worker.runtime
-    assert int(runtime.world.collider_filter[runtime.entry(body.uid).index]) == 0
 
 
 def test_a_contact_filter_answering_false_lets_a_ball_through_a_wall(physics):

@@ -3,8 +3,8 @@
 :class:`VehicleSoundtrack` owns one ``global`` :class:`AudioEmitter` with four
 sources -- the motor, tyre and wind loops and a one-shot impact -- and writes
 :class:`omi_audio.vehicle.VehicleSound`'s gains and rates onto them once a
-frame from an ``omi_physics`` vehicle: its speed, its wheels' ``slip`` and
-``grounded``, and its ``throttle``.
+frame from a vehicle: its speed, its wheels' ``slip`` and ``grounded``, and
+its ``throttle``.
 
     track = VehicleSoundtrack(VehicleSoundTuning(tyre_scrub_at=3.5))
     scene.children.append(track.node)

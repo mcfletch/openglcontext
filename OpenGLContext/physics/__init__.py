@@ -9,9 +9,9 @@ this package::
     from OpenGLContext.physics import CharacterCapabilities, Material, Proxy
 
 They are loaded on first use, so importing the package imports neither the
-service nor the engine that steps the world. No name here is an engine's: each
-engine converts the service's values to its own (:mod:`~OpenGLContext.physics.joltengine`,
-and the deprecated omi engine's :mod:`~OpenGLContext.physics.omi_adapter`). The modules:
+service nor the engine that steps the world. No name here is an engine's: the
+engine converts the service's values to its own
+(:mod:`~OpenGLContext.physics.joltengine`). The modules:
 
 * :mod:`~OpenGLContext.physics.service` -- the service: adding, removing,
   queries, events, the frame.
@@ -25,10 +25,7 @@ and the deprecated omi engine's :mod:`~OpenGLContext.physics.omi_adapter`). The 
   engine's description.
 * :mod:`~OpenGLContext.physics.engine` -- the interface the service steps a
   world through, and :func:`~OpenGLContext.physics.engine.make_engine`;
-  :mod:`~OpenGLContext.physics.joltengine` is the default engine, and
-  :mod:`~OpenGLContext.physics.omiengine` the deprecated omi engine (the
-  ``omi`` extra) with its :mod:`~OpenGLContext.physics.worker` and
-  :mod:`~OpenGLContext.physics.runtime`.
+  :mod:`~OpenGLContext.physics.joltengine` is the engine, on pyjoltphysics.
 * :mod:`~OpenGLContext.physics.debugdraw` -- the wireframe overlay of the
   bodies' proxies.
 * :mod:`~OpenGLContext.physics.omigltf` and :mod:`~OpenGLContext.physics.gltf_world`

@@ -819,14 +819,11 @@ Rigid bodies
    ``OpenGLContext/bin/x3d_rigidbody.x3d``. The p key pauses the collection
    and r reads the document again.
 
-The RigidBodyPhysics component runs on Jolt, the default engine
-(``OpenGLContext.physics.x3djolt``), or on omi_physics where
-``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``omi`` (:ref:`physics-x3d`). The nodes
-are read into the engine's own shapes (``Proxy``) and contact rules
-(``OpenGLContext.physics.x3drigid``), so on Jolt nothing needs omi_physics.
-A collection or sensor whose engine is ``omi`` without omi_physics installed
-logs that once and stays still. The two engines' frames differ after the
-first contacts; :ref:`x3d-rigid-jolt` lists what Jolt does with each field.
+The RigidBodyPhysics component runs on Jolt
+(``OpenGLContext.physics.x3djolt``, :ref:`physics-x3d`). The nodes are read
+into the engine's own shapes (``Proxy``) and contact rules
+(``OpenGLContext.physics.x3drigid``); :ref:`x3d-rigid-jolt` lists what Jolt
+does with each field.
 Each
 ``RigidBodyCollection`` is a world of its own, stepped once a frame on the
 engine's clock in steps of 1/120 s (1/240 s where ``preferAccuracy`` is
@@ -932,12 +929,11 @@ each frame, where they stand, and sends a ``Contact`` per touch in
 ``contacts`` (``position``, ``contactNormal`` from ``geometry1`` toward
 ``geometry2``, ``depth``, the bodies and the collider's parameters), the
 collidables touching in ``intersections``, and ``isActive``. An empty
-``contacts`` is sent once when the touching stops. On Jolt each touching
+``contacts`` is sent once when the touching stops. Each touching
 pair is one ``Contact``, at the deepest point, and ``geometry1`` is the
 collidable listed first in the collider; two collidables that are both
 triangle meshes (geometry other than a primitive, in no moving body) are not
-tested against each other. On omi a pair sends a ``Contact`` per point of
-its contact manifold.
+tested against each other.
 
 Joints hold bodies of their collection; a joint whose ``body1`` or ``body2``
 is NULL holds the other body to the world. Anchors and axes are in world

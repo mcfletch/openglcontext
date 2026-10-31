@@ -76,7 +76,6 @@ PROJECTS = [
     'OpenGLContext_qt',
     'vrml',
     'omi_audio',
-    'omi_physics',
     'opengl_decimate',
     'opengl_extrusions',
     'pyopengl_video',

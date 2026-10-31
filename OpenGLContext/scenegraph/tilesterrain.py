@@ -53,6 +53,10 @@ class TilesTerrain(Group):
     (nested) tilesets resolve against it, and remote payloads are cached under
     `cache_dir` (default: the per-user cache dir).
 
+    `physics`, a :class:`~OpenGLContext.physics.service.Physics`, gets a static
+    body for each tile being drawn (:attr:`colliders`, a
+    :class:`~OpenGLContext.loaders.tiles3d.physics_colliders.TerrainColliders`).
+
     `field_terrain` and `vegetation` mount the landscape and the forest a world
     carries beside its tiles, when it carries them; turn either off in a tool
     that wants only what streams and should not pay to decode them.
@@ -71,7 +75,7 @@ class TilesTerrain(Group):
                  max_sse: float = 16.0, fovy: Optional[float] = None,
                  prefetch_factor: float = 2.0,
                  max_uploads_per_update: int = 4, workers: int = 2,
-                 physics_world: Any = None,
+                 physics: Any = None,
                  recenter: bool = True, cache_dir: Optional[str] = None,
                  field_terrain: bool = True, vegetation: bool = True,
                  **named: Any) -> None:
@@ -97,9 +101,9 @@ class TilesTerrain(Group):
         self.tileset = tileset
         on_drawn = on_evicted = None
         self.colliders = None
-        if physics_world is not None:
+        if physics is not None:
             from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
-            self.colliders = TerrainColliders(physics_world)
+            self.colliders = TerrainColliders(physics)
             # Driven by what is *drawn* rather than by what is resident: a
             # cached parent's ground is the same ground at another resolution,
             # and left in the physics world it is a second surface for a car to

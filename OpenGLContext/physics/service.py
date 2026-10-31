@@ -8,12 +8,11 @@ scenegraph. The application adds bodies and reads and changes them through
     body.apply_impulse((0, 0, 3))
 
 The world is stepped by an engine (:mod:`OpenGLContext.physics.engine`): Jolt,
-the default, on pyjoltphysics' world thread, free-running or in lockstep with
-the frame, or the deprecated omi_physics (the ``omi`` extra) on a thread of its
-own or inline in the frame hook (``PhysicsDefinition.engine``). Changes travel to it as plain-data
-commands; results come back once a frame in :meth:`Physics.frame`, which writes
-poses onto the nodes, delivers events to their handlers and applies the scene
-changes handlers queued from the worker. A ``Physics`` holds no GL and needs no
+on pyjoltphysics' world thread, free-running or in lockstep with the frame.
+Changes travel to it as plain-data commands; results come back once a frame in
+:meth:`Physics.frame`, which writes poses onto the nodes, delivers events to
+their handlers and applies the scene changes handlers queued from the stepping
+thread. A ``Physics`` holds no GL and needs no
 context, so a tool or a test builds one and steps it by hand with :meth:`step`.
 """
 from __future__ import annotations
@@ -33,10 +32,9 @@ from typing import Any
 
 import numpy as np
 
-from OpenGLContext.events.framestep import FixedSteps
 from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
-from OpenGLContext.physics.character import Character, stand_in_proxy
+from OpenGLContext.physics.character import Character
 from OpenGLContext.physics.engine import Engine, EngineUnavailable, make_engine
 from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.callbacks import is_physics_callback
@@ -113,7 +111,7 @@ class Physics:
         self.materials = Materials(self)
         #: The collision filters sent to the world (``collision_filter=`` of the ``add_*`` calls).
         self.filters = Filters(lambda index, given: self._send_world('filter', index, given))
-        #: Scene changes the worker queues for the render thread (``render.set`` and ``render.call``).
+        #: Scene changes the stepping thread queues for the render thread (``render.set`` and ``render.call``).
         self.render = Updates(wake=wake, owner=render_thread)
         self.handlers = HandlerTable()
         self._uids = itertools.count(1)
@@ -137,7 +135,7 @@ class Physics:
         self._pinned = False
         #: The last failure logged for each source and character (:meth:`_guarded`).
         self._failures: weakref.WeakKeyDictionary[Any, tuple[type, str]] = weakref.WeakKeyDictionary()
-        #: The worker error :meth:`frame` has raised, so it is raised once.
+        #: The engine's error :meth:`frame` has raised, so it is raised once.
         self._raised: BaseException | None = None
         #: Removed bodies whose handlers end once the world has applied the removal
         #: and their last events are delivered: (command sequence, id).
@@ -146,17 +144,9 @@ class Physics:
         self._engine: Engine = make_engine(definition, wake=wake)
         self._install_hooks()
         self.scenery = SceneryTracker(self)
-        #: The spec of each body in the world, to build the replica from when queries need it.
+        #: The spec of each body in the world, for the proxy overlay.
         self._specs: dict[int, BodySpec] = {}
-        self._replica: Any = None
         self._characters: list[Character] = []
-        #: The fixed steps the characters owe each frame where the world steps on its own thread.
-        self._character_clock = FixedSteps(1.0 / float(definition.tickHz),
-                                           float(definition.maxCatchUp))
-        #: For each character's stand-in, by id, the fixed triggers and sensors near it
-        #: (:meth:`_fixed_seen`).
-        self._seen_gathers: dict[int, tuple[Any, tuple[float, ...], tuple[float, ...],
-                                            list[tuple[float, ...]]]] = {}
         #: The bodies that characters walk through, by id.
         self._passable: set[int] = set()
         self._sources: list[SourceHandle] = []
@@ -183,21 +173,12 @@ class Physics:
         self._soft_meshes: list[SoftMesh] = []
 
     # -- the engine -----------------------------------------------------
-    @property
-    def worker(self) -> Any:
-        """The omi engine's worker, which steps its world; on another engine, the engine."""
-        return getattr(self._engine, 'worker', self._engine)
-
     def _install_hooks(self) -> None:
         engine = self._engine
         engine.on_events.append(self._on_worker_events)
         engine.before_step.append(self._run_step_handlers('before-step'))
         engine.after_step.append(self._run_step_handlers('after-step'))
         engine.wants_steps.append(self.handlers.has_step_handlers)
-        if engine.stand_ins:
-            engine.before_step.append(self._settle_stand_ins)
-            engine.wants_steps.append(self._stand_ins_want_steps)
-            engine.replica = self._character_replica
         engine.material_of = lambda name: self.materials.get(name).material
         engine.body_of = self._body_of
         engine.framed_characters = lambda: [one for one in self._characters if one.framed]
@@ -209,16 +190,6 @@ class Physics:
     def _ensure_started(self) -> None:
         if self._enabled and not self._closed:
             self._engine.start()
-
-    @property
-    def _omi(self) -> Any:
-        """The omi engine; RuntimeError on another engine, which has no omi_physics world."""
-        engine = self._engine
-        if engine.name != 'omi':
-            raise RuntimeError('this reads the omi_physics world, and the world is stepped by '
-                               'the %s engine; read bodies with physics.poses and run '
-                               'tick-exact code with physics.on_step' % (engine.name,))
-        return engine
 
     @property
     def closed(self) -> bool:
@@ -238,53 +209,18 @@ class Physics:
         """
         return self._engine.counts(self._snapshot)
 
-    def _engine_world(self) -> Any:
-        """The engine's world of an inline service, with each waiting stand-in written."""
-        worker = self._inline()
-        self._bring_up_all()
-        return worker.runtime.world
-
-    def _inline(self) -> Any:
-        """The omi worker, where it steps inline; RuntimeError where it has a thread."""
-        if self._omi.mode == 'inline':
-            return self._omi.worker
-        raise RuntimeError('the engine\'s world is read inline only; a world on its own thread '
-                           'is read with physics.poses and physics.on_step')
-
-    def _slot_of(self, body: Body) -> int:
-        """The row ``body`` has in the engine's arrays; KeyError for a body the world does not hold."""
-        worker = self._inline()
-        self._bring_up_all()
-        worker.flush()
-        return int(worker.runtime.entry(body.uid).index)
-
-    def _body_at(self, slot: int) -> Body | None:
-        """The body in row ``slot`` of the engine's arrays, or None for a row no body has."""
-        worker = self._inline()
-        self._bring_up_all()
-        world = worker.runtime.world
-        if not 0 <= slot < len(world.bodies):
-            return None
-        uid = world.handle_of(world.ref(slot))
-        return None if uid is None else self._bodies.get(int(uid))
-
     # -- configuration --------------------------------------------------
     def set_config(self, definition: PhysicsDefinition) -> None:
         """Apply ``definition`` between ticks: gravity, the step, damping and the mode.
 
-        Bodies stay as they are. A new ``backend`` is used from the next step;
-        one that cannot be made logs a warning and the world keeps the one it
-        has (:attr:`engine` names it). A world held inline by :meth:`pin_inline` keeps
+        Bodies stay as they are. A world held inline by :meth:`pin_inline` keeps
         stepping inline and takes the new mode when it is let go. Raises
         ValueError, changing nothing, for a definition the service cannot run.
         """
         definition.validate()
-        self._bring_up_all()
         if definition.engine != self.definition.engine:
             raise ValueError('the engine is chosen when the service is made; this one runs %s'
                              % (self.definition.engine,))
-        if definition.backend != self.definition.backend:
-            self._send_world('backend', str(definition.backend))
         self.definition = definition
         self._send_world('config', float(definition.tickHz), float(definition.maxCatchUp))
         self.gravity = tuple(definition.gravity)
@@ -320,10 +256,9 @@ class Physics:
     def _switch(self, mode: str) -> None:
         """Step the world in ``mode`` from now on, carrying the waiting commands over in order.
 
-        Raises RuntimeError, leaving the worker as it is, where its thread is
-        still in a step once the worker's stop has waited for it.
+        Raises RuntimeError, leaving the engine as it is, where its thread is
+        still in a step once the engine's stop has waited for it.
         """
-        self._bring_up_all()
         self._engine.set_mode(mode)
         if self._movers:
             self._ensure_started()
@@ -339,7 +274,6 @@ class Physics:
         if tick_frequency is not None:
             self.definition.tickHz = number(tick_frequency, 'tick_frequency', positive=True)
             self._send_world('config', float(tick_frequency), float(self.definition.maxCatchUp))
-        self._bring_up_all()
         self._enabled = bool(on)
         if not self._enabled:
             self._engine.stop()
@@ -486,15 +420,8 @@ class Physics:
 
     def _let_characters_through(self, *uids: int) -> None:
         """Have the controllers of the characters walk through the bodies ``uids``."""
-        if not self._engine.stand_ins:
-            for character in self._characters:
-                character._controller.ignore.update(uids)
-            return
-        replica = self._replica
-        if replica is not None:
-            slots = [replica.index_of(uid) for uid in uids if uid in replica]
-            for character in self._characters:
-                character._controller.ignore.update(slots)
+        for character in self._characters:
+            character._controller.ignore.update(uids)
 
     @property
     def passable(self) -> tuple[Body, ...]:
@@ -502,14 +429,8 @@ class Physics:
         return tuple(self._bodies[uid] for uid in sorted(self._passable) if uid in self._bodies)
 
     def passable_slots(self) -> list[int]:
-        """The slots, in the render thread's copy of the bodies, of the bodies characters walk through.
-
-        On an engine with no stand-ins, the bodies' uids.
-        """
-        if not self._engine.stand_ins:
-            return sorted(self._passable)
-        replica = self._character_replica()
-        return [replica.index_of(uid) for uid in self._passable if uid in replica]
+        """The uids of the bodies characters walk through."""
+        return sorted(self._passable)
 
     def _claim(self, node: Any) -> None:
         """Remove the scenery bodies made for ``node`` and for the shapes under it."""
@@ -788,8 +709,6 @@ class Physics:
         if on and self._overlay is None and self._mount is not None:
             from OpenGLContext.physics.debugdraw import ProxyOverlay  # noqa: PLC0415 imports the scenegraph
 
-            if self._engine.stand_ins:
-                self._bring_up_all()
             self._overlay = ProxyOverlay(self)
             self._overlay.update()
             self._mount(self._overlay.root, True)
@@ -848,7 +767,6 @@ class Physics:
                 parent.children.append(node)
         from OpenGLContext.character.facing import Facing  # noqa: PLC0415 only a character with a body needs it
 
-        self._bring_up_all()
         made = Character(self, node, caps, position, pull, model=wearing, clip_map=clip_map,
                          facing=Facing() if facing and wearing is not None else None,
                          turn_node=turn)
@@ -874,33 +792,12 @@ class Physics:
         """The characters in the world, in the order they were added."""
         return tuple(self._characters)
 
-    def _character_replica(self) -> Any:
-        """The render thread's copy of the bodies, made on first use; characters step against it."""
-        if self._replica is None:
-            self._replica = self._engine.build_replica(self._specs, self._snapshot)
-        return self._replica
-
     def _register_body(self, kind: str, proxy: Proxy, centre: Any) -> Body:
         """A body of ``kind`` with no node the engine made itself, such as a character's capsule."""
         uid = next(self._uids)
         body = Body(self, uid, kind, None, proxy, np.asarray(centre, dtype='d'),
                     (0.0, 0.0, 1.0, 0.0), 0.0)
         self._bodies[uid] = body
-        return body
-
-    def _add_standin(self, centre: Any, capabilities: Any, reach: float) -> Body:
-        """The kinematic body the world sees for a character, with no node."""
-        proxy = stand_in_proxy(capabilities, reach)
-        uid = next(self._uids)
-        spec = BodySpec(uid, 'kinematic', proxy, Motion(),
-                        tuple(float(v) for v in centre), (0.0, 0.0, 0.0, 1.0), report=True)
-        body = Body(self, uid, 'kinematic', None, proxy, np.asarray(centre, dtype='d'),
-                    (0.0, 0.0, 1.0, 0.0), 0.0)
-        self._bodies[uid] = body
-        self._movers.append(body)
-        if not self._closed:
-            self._send(Command('add', uid, (spec,), next(self._seq)))
-            self._ensure_started()
         return body
 
     def log_handler_failure(self, function: Callable[..., Any], argument: Any) -> None:
@@ -1311,19 +1208,12 @@ class Physics:
             self._forget(body, seq)
 
     def _unpass(self, *uids: int) -> None:
-        """Have the characters' controllers stop walking through the slots of the bodies
-        ``uids``, before the slots are freed for other bodies."""
+        """Have the characters' controllers stop walking through the bodies ``uids``."""
         passed = [uid for uid in uids if uid in self._passable]
         if not passed:
             return
-        replica = self._replica
-        if not self._engine.stand_ins:
-            for character in self._characters:
-                character._controller.ignore.difference_update(passed)
-        elif replica is not None:
-            slots = [replica.index_of(uid) for uid in passed if uid in replica]
-            for character in self._characters:
-                character._controller.ignore.difference_update(slots)
+        for character in self._characters:
+            character._controller.ignore.difference_update(passed)
         self._passable.difference_update(passed)
 
     def _forget(self, body: Body, seq: int) -> None:
@@ -1392,11 +1282,11 @@ class Physics:
         return seq
 
     def _send(self, command: Command) -> None:
-        """Send ``command`` to the worker and keep the specs and the replica in step.
+        """Send ``command`` to the engine and keep the specs in step.
 
-        The specs and the replica belong to the render thread: a command made
-        on the worker thread is applied to the world at once and to them in
-        the next :meth:`frame`.
+        The specs belong to the render thread: a command made on the stepping
+        thread is applied to the world at once and to them in the next
+        :meth:`frame`.
         """
         if self._engine.on_engine_thread():
             self._engine.submit(command)
@@ -1408,7 +1298,7 @@ class Physics:
             self._engine.submit(command)
 
     def _record(self, command: Command) -> None:
-        """Bring the specs, and the replica where there is one, to what ``command`` makes of the world."""
+        """Bring the specs to what ``command`` makes of the world."""
         if command.op == 'add':
             self._specs[command.uid] = command.args[0]
         elif command.op == 'add_many':
@@ -1426,12 +1316,10 @@ class Physics:
                 dataclasses.replace(spec, motion=dataclasses.replace(spec.motion,
                                                                      mass=command.args[0]))
                 if command.op == 'mass' else dataclasses.replace(spec, material=command.args[0]))
-        if self._replica is not None:
-            self._replica.apply(command)
 
     @staticmethod
     def _respec_placed(spec: BodySpec, translation: Any, axis_angle: Any) -> BodySpec:
-        """``spec`` with the pose a 'place' command gives, so a replica made later starts there."""
+        """``spec`` with the pose a 'place' command gives."""
         position = spec.position if translation is None else tuple(translation)
         orientation = spec.orientation if axis_angle is None else tuple(
             vrml_rotation_to_quat(np.asarray(axis_angle, dtype='d')))
@@ -1440,18 +1328,6 @@ class Physics:
     def _send_world(self, op: str, *args: Any) -> None:
         if not self._closed:
             self._send(Command(op, 0, args, next(self._seq)))
-
-    def _run(self, function: Callable[[Any], Any]) -> concurrent.futures.Future[Any]:
-        """Call ``function(world)`` on the worker; the future holds its answer.
-
-        A world with no thread running is reached on the calling thread, at
-        once. Each character's stand-in is written first.
-        """
-        self._bring_up_all()
-        future: concurrent.futures.Future[Any] = concurrent.futures.Future()
-        self._send_world('run', function, future)
-        self._engine.flush()
-        return future
 
     def post(self, function: Callable[..., Any], *arguments: Any) -> None:
         """Call ``function(*arguments)`` on the stepping thread before the next step; returns None.
@@ -1477,11 +1353,9 @@ class Physics:
 
         An inline or standalone service steps whole ticks and carries what is
         left of a frame to the next; a game that starts something afresh calls
-        this so the leftover is not simulated into it. The characters' part
-        step is forgotten with it.
+        this so the leftover is not simulated into it.
         """
         self._send_world('drop_remainder')
-        self._character_clock.drop()
 
     # -- the frame ----------------------------------------------------------
     def step(self, dt: float) -> None:
@@ -1491,16 +1365,14 @@ class Physics:
     def frame(self, dt: float) -> bool:
         """Do the render thread's share of one frame; True if the scene changed or is still moving.
 
-        Takes what the worker has published, writes poses onto the nodes of
+        Takes what the engine has published, writes poses onto the nodes of
         bodies that move, delivers events to render-thread handlers and applies
-        the scene changes handlers queued from the worker. An inline worker
-        steps ``dt`` seconds first.
+        the scene changes handlers queued from the stepping thread. A world in
+        lockstep runs the ticks ``dt`` owes first.
 
-        Each framed character takes one step of the world's fixed length for
-        each fixed step the frame owes, with its latest moves, so a character
-        takes the same steps as the world. Inline, that is the count the
-        world's clock gives; with the world on its own thread, the service
-        counts the steps at the same rate on the render thread.
+        The world thread moves each framed character inside each tick, with
+        the moves set before it; the frame animates the characters and draws
+        them between their last two ticks.
         """
         if not self._enabled or self._closed:
             if not self._closed:
@@ -1513,12 +1385,8 @@ class Physics:
         self._raise_worker_error()
         out = self._engine.collect(dt)
         self._cost_frames += 1
-        for character in self._characters:
-            character._fresh = False
         if out.snapshot is not None:
             self._snapshot = out.snapshot
-            if self._replica is not None:
-                self._replica.sync(out.snapshot)
             self._write_poses(out.snapshot)
             if self._overlay is not None:
                 self._overlay.update()
@@ -1543,12 +1411,7 @@ class Physics:
 
     def _character_steps(self, dt: float) -> tuple[int, float]:
         """The fixed steps the characters owe this frame, and how far through the next one it ends."""
-        engine = self._engine
-        if engine.mode == 'inline' or not engine.stand_ins:
-            return engine.character_steps(dt)
-        clock = self._character_clock
-        clock.step, clock.longest = engine.step_dt, engine.max_catch_up
-        return clock.owed(dt), clock.alpha
+        return self._engine.character_steps(dt)
 
     def _guarded(self, owner: Any, function: Callable[..., Any], *arguments: Any) -> None:
         """Call ``function(*arguments)`` for ``owner``, a source or a character, in the frame.
@@ -1749,8 +1612,7 @@ class Physics:
         """The bodies' and joints' state as bytes, read between steps, for :meth:`restore_state`.
 
         Characters, the step count and commands still waiting are not part of
-        it. Raises NotImplementedError on an engine that keeps no such state
-        (omi_physics).
+        it.
         """
         return self._engine.save_state()
 
@@ -1797,151 +1659,6 @@ class Physics:
         return any(not hook.cancelled for hook in self._step_hooks)
 
     # -- queries ---------------------------------------------------------
-    # -- stand-ins that wait ------------------------------------------------
-    def _defers_stand_ins(self) -> bool:
-        """Whether a character's stand-in is written to the world only when something can see it.
-
-        So for the lone character of an inline service showing no proxies:
-        another character's controller reads the stand-ins from the replica,
-        which follows each write as it is asked for.
-        """
-        return (len(self._characters) == 1 and self._engine.stand_ins
-                and self._engine.mode == 'inline' and self._enabled and not self._closed and self._overlay is None)
-
-    def _bring_up_all(self) -> None:
-        """Make every waiting stand-in write now."""
-        for character in self._characters:
-            character._bring_up()
-
-    def _settle_stand_ins(self, step: Step) -> None:  # noqa: ARG002 the step is the hook's argument
-        """Before a step: write each waiting stand-in that a body in the world can see."""
-        for character in self._characters:
-            if not character._written:
-                character._settle(self._seen_in_step)
-
-    def _stand_ins_want_steps(self) -> bool:
-        """Whether a waiting stand-in keeps the world stepping as its write would have: a write
-        asked for since the last frame was collected, or a velocity it would have."""
-        for character in self._characters:
-            if not character._written:
-                moving = character._stand_in_at[1] if character._stand_in_at else ()
-                if character._fresh or any(moving):
-                    return True
-        return False
-
-    #: Metres past the box of a body that moves, and past the stand-in's, within which a step
-    #: is taken to see the stand-in, beyond what the body can travel in the step.
-    SEEN_MARGIN = 0.1
-    #: How far past the stand-in, in metres, the fixed triggers and sensors near it are gathered
-    #: for the steps that follow, while the layout of the world holds.
-    SEEN_GATHER = 4.0
-
-    def _seen_in_step(self, character: Character, due: tuple[float, ...]) -> bool:
-        """Whether a dynamic body, a trigger or a sensor of the world can meet ``character``'s
-        stand-in in the coming step, at ``due`` or where the world holds it now.
-
-        A fixed trigger or sensor is tested by its box. The box of a body that
-        moves is grown by :attr:`SEEN_MARGIN` and by twice what its speed, its
-        spin about the far corner of its box and gravity can carry it in a step.
-        """
-        runtime = self._omi.runtime
-        world = runtime.world
-        uid = character.body.uid
-        if uid not in runtime:
-            return True
-        index = runtime.entry(uid).index
-        fixed, moving = _observers(world)
-        across, up = character._stand_in_reach(self.SEEN_MARGIN)
-        boxes = [(x - across, y - up, z - across, x + across, y + up, z + across)
-                 for x, y, z in (due, world.position[index].tolist())]
-        if len(fixed) and self._fixed_seen(character, world, fixed, boxes):
-            return True
-        moving = moving[moving != index]
-        if not len(moving):
-            return False
-        low, high = world.aabb_min[moving], world.aabb_max[moving]
-        dt = runtime.step_dt
-        spin = np.linalg.norm(world.angular_velocity[moving], axis=1)
-        reach = (np.linalg.norm(world.linear_velocity[moving], axis=1)
-                 + spin * np.linalg.norm(high - low, axis=1))
-        pull = float(np.linalg.norm(np.asarray(self._gravity, dtype='d')))
-        grow = (self.SEEN_MARGIN + 2.0 * dt * reach + pull * dt * dt)[:, None]
-        low, high = low - grow, high + grow
-        for x0, y0, z0, x1, y1, z1 in boxes:
-            if bool(np.any((high[:, 0] >= x0) & (high[:, 1] >= y0) & (high[:, 2] >= z0)
-                           & (low[:, 0] <= x1) & (low[:, 1] <= y1) & (low[:, 2] <= z1))):
-                return True
-        return False
-
-    def _fixed_seen(self, character: Character, world: Any, fixed: np.ndarray,
-                    boxes: Sequence[tuple[float, ...]]) -> bool:
-        """Whether a fixed trigger or sensor's box meets one of ``boxes``, each
-        ``(x0, y0, z0, x1, y1, z1)``.
-
-        The fixed ones within :attr:`SEEN_GATHER` of the boxes are gathered once
-        and kept while the boxes stay inside the gathered region and the
-        world's layout holds.
-        """
-        (a, b, c, d, e, f), (g, h, i, j, k, m) = boxes
-        lo = (min(a, g), min(b, h), min(c, i))
-        hi = (max(d, j), max(e, k), max(f, m))
-        key = (world.population_epoch, world.layout_epoch)
-        held = self._seen_gathers.get(character.body.uid)
-        if (held is None or held[0] != key
-                or not (held[1][0] <= lo[0] and held[1][1] <= lo[1] and held[1][2] <= lo[2]
-                        and hi[0] <= held[2][0] and hi[1] <= held[2][1] and hi[2] <= held[2][2])):
-            gather = self.SEEN_GATHER
-            region_lo = tuple(value - gather for value in lo)
-            region_hi = tuple(value + gather for value in hi)
-            low, high = world.aabb_min[fixed], world.aabb_max[fixed]
-            near = (np.all(high >= np.array(region_lo), axis=1)
-                    & np.all(low <= np.array(region_hi), axis=1))
-            held = (key, region_lo, region_hi,
-                    [(*one, *two) for one, two in zip(low[near].tolist(), high[near].tolist(),
-                                                      strict=True)])
-            self._seen_gathers[character.body.uid] = held
-        for x0, y0, z0, x1, y1, z1 in boxes:
-            for a0, b0, c0, a1, b1, c1 in held[3]:
-                if a1 >= x0 and b1 >= y0 and c1 >= z0 and a0 <= x1 and b0 <= y1 and c0 <= z1:
-                    return True
-        return False
-
-    def _bring_up_along(self, origins: np.ndarray, directions: np.ndarray, distance: float,
-                        radius: float, skip: Any) -> None:
-        """Write each waiting stand-in that rays or swept spheres from ``origins`` along
-        ``directions`` for ``distance`` can reach."""
-        if all(character._written for character in self._characters):
-            return
-        lengths = np.linalg.norm(directions, axis=1)
-        heading = np.divide(directions, lengths[:, None], out=np.zeros_like(directions),
-                            where=lengths[:, None] > 0.0)
-        ends = origins + heading * max(distance, 0.0)
-        self._bring_up_within(np.minimum(origins, ends).min(axis=0) - radius,
-                              np.maximum(origins, ends).max(axis=0) + radius, skip)
-
-    def _bring_up_within(self, lo: np.ndarray, hi: np.ndarray, skip: Any) -> None:
-        """Write each waiting stand-in, not in ``skip``, whose box meets ``lo`` to ``hi``, at the
-        place it is due or where the world holds it."""
-        waiting = [character for character in self._characters if not character._written]
-        if not waiting:
-            return
-        skipped = (set() if skip is None else {skip.uid} if isinstance(skip, Body)
-                   else {body.uid for body in skip})
-        runtime = self._omi.runtime
-        for character in waiting:
-            uid = character.body.uid
-            if uid in skipped:
-                continue
-            if uid not in runtime:
-                character._bring_up()       # added by a command the world has not taken yet
-                continue
-            held = runtime.world.position[runtime.entry(uid).index]
-            for centre in (character._due(), held):
-                low, high = character._stand_in_box(centre, self.SEEN_MARGIN)
-                if bool(np.all(high >= lo) and np.all(low <= hi)):
-                    character._bring_up()
-                    break
-
     def _skipped(self, skip: Any) -> set[int]:
         """The uids a query passes through: ``skip``'s and every body that is not queryable."""
         skipped = set(self._unqueried)
@@ -1957,18 +1674,12 @@ class Physics:
         Answers in the call, from the world as the last tick left it. ``skip``
         is a body, or a list of them, the ray passes through.
         """
-        start = np.asarray(origin, dtype='d')
-        self._bring_up_along(start[None], np.asarray(direction, dtype='d')[None],
-                             float(max_distance), 0.0, skip)
         found = self._engine.raycast(origin, direction, float(max_distance), self._skipped(skip))
         return None if found is None else self._hit(found)
 
     def raycast_many(self, origins: Any, directions: Any, max_distance: float = 100.0,
                      skip: Any = None) -> list[Hit | None]:
         """Several rays at once, each answered as :meth:`raycast` would answer it."""
-        self._bring_up_along(np.asarray(origins, dtype='d').reshape(-1, 3),
-                             np.asarray(directions, dtype='d').reshape(-1, 3),
-                             float(max_distance), 0.0, skip)
         found = self._engine.raycast_many(origins, directions, float(max_distance),
                                           self._skipped(skip))
         return [None if one is None else self._hit(one) for one in found]
@@ -1998,9 +1709,6 @@ class Physics:
 
         None where it travels ``distance`` clear; 0 where it starts inside a body.
         """
-        self._bring_up_along(np.asarray(origin, dtype='d')[None],
-                             np.asarray(direction, dtype='d')[None], float(distance),
-                             float(radius), skip)
         return self._engine.sweep_sphere(origin, direction, float(distance), float(radius),
                                          self._skipped(skip))
 
@@ -2015,8 +1723,6 @@ class Physics:
             raise TypeError('overlap takes a Proxy, not %r' % (proxy,))
         quaternion = (np.array([0.0, 0.0, 0.0, 1.0]) if rotation is None
                       else vrml_rotation_to_quat(rotation))
-        if self._engine.stand_ins:
-            self._bring_up_within(*self._engine.proxy_bounds(proxy, translation, quaternion), skip)
         found = self._engine.overlap(proxy, translation, quaternion, self._skipped(skip), triggers)
         bodies = [self._body_of(uid) for uid in found]
         return [body for body in bodies if body is not None]
@@ -2194,25 +1900,6 @@ class Physics:
         if self._cooker is not None:
             self._cooker.shutdown(wait=False, cancel_futures=True)
         self._engine.close()
-
-
-#: The rows of each world's fixed triggers and sensors, and of its dynamic bodies and moving
-#: triggers and sensors, by population epoch.
-_OBSERVERS: weakref.WeakKeyDictionary[Any, tuple[int, np.ndarray, np.ndarray]] = (
-    weakref.WeakKeyDictionary())
-
-
-def _observers(world: Any) -> tuple[np.ndarray, np.ndarray]:
-    """The rows of what can meet a stand-in in ``world``: its fixed triggers and sensors, and its
-    dynamic bodies and the triggers and sensors that move."""
-    epoch = world.population_epoch
-    found = _OBSERVERS.get(world)
-    if found is None or found[0] != epoch:
-        kind = world.motion_type
-        sensing = (world.trigger_shape >= 0) | world.sensor
-        found = _OBSERVERS[world] = (epoch, np.flatnonzero(sensing & (kind == 0)),
-                                     np.flatnonzero((kind == 2) | (sensing & (kind != 0))))
-    return found[1], found[2]
 
 
 def _path_to(root: Any, target: Any) -> list[Any] | None:

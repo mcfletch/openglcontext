@@ -21,12 +21,9 @@ pytest.importorskip("pygltflib")
 from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
 from OpenGLContext.physics import gltf_world
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
-
-#: These tests check a part of the engine built on an omi_physics world, or use
-#: omi_physics as their reference; it is the deprecated omi extra.
-REASON_OMI = 'omi_physics (the omi extra) is not installed'
-PhysicsWorld = pytest.importorskip('omi_physics.world', reason=REASON_OMI).PhysicsWorld
 
 
 class _Tile:
@@ -39,27 +36,17 @@ class _Tile:
         return 'Tile(%s)' % (self.name,)
 
 
-class _World:
-    """A physics world that counts what it is asked to hold."""
+@pytest.fixture
+def physics():
+    """A service with no scenery of its own, stepped by hand."""
+    service = Physics(PhysicsDefinition(mode='inline', colliders='none'))
+    yield service
+    service.close()
 
-    def __init__(self, removable=True):
-        self.shapes = []
-        self.bodies = {}
-        self._next = 0
-        if not removable:
-            self.remove_body = None
 
-    def add_shape(self, shape):
-        self.shapes.append(shape)
-        return len(self.shapes) - 1
-
-    def add_body(self, _motion, collider=None, position=None):  # noqa: ARG002 the signature of the add_body it stands in for
-        self._next += 1
-        self.bodies[self._next] = collider
-        return self._next
-
-    def remove_body(self, body):
-        self.bodies.pop(body, None)
+def _held(physics):
+    """How many bodies the world is carrying."""
+    return physics.counts.bodies
 
 
 def _patch(offset=0.0, side=3):
@@ -97,63 +84,61 @@ def _pair(name, offset=0.0):
 
 @pytest.mark.usefixtures('_extractable')
 class TestTheDrawnSetIsTheColliderSet:
-    def test_a_drawn_tile_gets_a_collider(self) -> None:
-        world = _World()
-        ground = TerrainColliders(world)
+    def test_a_drawn_tile_gets_a_collider(self, physics) -> None:
+        ground = TerrainColliders(physics)
         ground.on_drawn([_pair('a')])
         assert ground.collider_count == 1
+        hit = physics.raycast((0.0, 5.0, 0.0), (0.0, -1.0, 0.0), 10.0)
+        assert hit is not None and hit.body is ground.bodies()[0]
 
-    def test_a_tile_that_stops_being_drawn_loses_it(self) -> None:
-        world = _World()
-        ground = TerrainColliders(world)
+    def test_a_tile_that_stops_being_drawn_loses_it(self, physics) -> None:
+        ground = TerrainColliders(physics)
         coarse = _pair('coarse')
         ground.on_drawn([coarse])
         ground.on_drawn([_pair('fine')])
         assert ground.collider_count == 1
-        assert len(world.bodies) == 1
+        assert _held(physics) == 1
 
-    def test_a_tile_still_drawn_keeps_the_one_it_had(self) -> None:
+    def test_a_tile_still_drawn_keeps_the_one_it_had(self, physics) -> None:
         """Rebuilding a trimesh every frame would cost more than the physics."""
-        world = _World()
-        ground = TerrainColliders(world)
+        ground = TerrainColliders(physics)
         held = _pair('held')
         ground.on_drawn([held])
-        shapes = len(world.shapes)
+        (body,) = ground.bodies()
         ground.on_drawn([held, _pair('new')])
-        assert len(world.shapes) == shapes + 1
+        assert ground.bodies()[0] is body and body.alive
+        assert _held(physics) == 2
 
-    def test_drawing_nothing_holds_nothing(self) -> None:
-        world = _World()
-        ground = TerrainColliders(world)
+    def test_drawing_nothing_holds_nothing(self, physics) -> None:
+        ground = TerrainColliders(physics)
         ground.on_drawn([_pair('a'), _pair('b')])
         ground.on_drawn([])
         assert ground.collider_count == 0
+        assert _held(physics) == 0
 
-    def test_a_tile_drawn_again_gets_a_collider_again(self) -> None:
-        world = _World()
-        ground = TerrainColliders(world)
+    def test_a_tile_drawn_again_gets_a_collider_again(self, physics) -> None:
+        ground = TerrainColliders(physics)
         back = _pair('back')
         ground.on_drawn([back])
         ground.on_drawn([])
         ground.on_drawn([back])
         assert ground.collider_count == 1
 
-    def test_a_drawable_with_no_triangles_is_no_collider(self) -> None:
-        world = _World()
-        ground = TerrainColliders(world)
+    def test_a_drawable_with_no_triangles_is_no_collider(self, physics) -> None:
+        ground = TerrainColliders(physics)
         empty = _Drawable()
         empty.points, empty.indices = np.zeros((0, 3)), np.zeros((0, 3), 'i')
         ground.on_drawn([(_Tile('empty'), empty)])
         assert ground.collider_count == 0
 
-    def test_a_tile_with_a_collider_outlives_every_other_reference(self) -> None:
+    def test_a_tile_with_a_collider_outlives_every_other_reference(self, physics) -> None:
         """A collider is found by its tile, not by where the tile was allocated.
 
         A collected tile's address is handed to the next object of its size,
         so a table keyed on addresses would answer a newcomer with the old
         tile's body. Holding the tile keeps its address from being reused.
         """
-        ground = TerrainColliders(_World())
+        ground = TerrainColliders(physics)
         tile = _Tile('held')
         ground.on_renderable(tile, _Drawable())
         held = weakref.ref(tile)
@@ -163,17 +148,6 @@ class TestTheDrawnSetIsTheColliderSet:
         ground.on_drawn([])
         gc.collect()
         assert held() is None
-
-    def test_a_world_that_cannot_remove_says_so_once(self, caplog) -> None:
-        world = _World(removable=False)
-        ground = TerrainColliders(world)
-        ground.on_drawn([_pair('a')])
-        with caplog.at_level('WARNING'):
-            ground.on_drawn([])
-            ground.on_drawn([_pair('b')])
-            ground.on_drawn([])
-        assert sum('remove_body' in record.message
-                   for record in caplog.records) == 1
 
 
 class TestTheStreamerDrivesIt:
@@ -190,16 +164,16 @@ class TestTheStreamerDrivesIt:
         finally:
             terrain.shutdown()
 
-    def test_a_streamed_world_holds_only_what_it_draws(self, tmp_path) -> None:
+    def test_a_streamed_world_holds_only_what_it_draws(self, tmp_path, physics) -> None:
         path = build_sample_tileset(str(tmp_path))
-        world = PhysicsWorld()
-        terrain = TilesTerrain(path, physics_world=world, workers=1)
+        terrain = TilesTerrain(path, physics=physics, workers=1)
         try:
             for _ in range(6):
                 terrain.update_for_camera(np.array([0.0, 60.0, 0.0]), 720.0)
                 terrain.wait_for_loads(timeout=5.0)
             drawn = terrain.update_for_camera(np.array([0.0, 60.0, 0.0]), 720.0)
             assert terrain.colliders.collider_count <= len(drawn)
+            assert _held(physics) == terrain.colliders.collider_count
         finally:
             terrain.shutdown()
 

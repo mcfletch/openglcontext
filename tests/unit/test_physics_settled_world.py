@@ -13,7 +13,6 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph.basenodes import Transform
 
-pytestmark = pytest.mark.engines('jolt')
 
 FRAME = 1.0 / 60.0
 

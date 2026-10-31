@@ -434,17 +434,6 @@ def test_a_vehicle_reads_nothing_before_its_first_tick(physics):
     assert 'Vehicle' in repr(car)
 
 
-def test_the_omi_engine_says_it_has_no_vehicles():
-    pytest.importorskip('omi_physics', reason='omi_physics (the omi extra) is not installed')
-    physics = Physics(PhysicsDefinition(engine='omi'))
-    try:
-        chassis = physics.add_dynamic(None, Proxy.box((1.85, 0.62, 4.2)), mass=MASS)
-        with pytest.raises(NotImplementedError, match='jolt'):
-            physics.add_vehicle(chassis, car_settings())
-    finally:
-        physics.close()
-
-
 # -- no engine type crosses the API ----------------------------------------------
 
 def _mentions_engine(annotation):

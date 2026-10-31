@@ -11,7 +11,6 @@ from OpenGLContext.physics import CharacterState
 
 from ._locomotion_assets import marching, striding, walker_glb, waving
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 CLIPS = dict(idle='idle', walk=('walk', 3.0), run=('run', 6.0))
@@ -279,13 +278,10 @@ def test_a_character_outside_the_pass_group_still_blocks_it(physics):
     bot.set_move((1, 0, 0), 'walk')
     for _ in range(round(3.0 / TICK)):
         bot.step(TICK)
-    if physics.engine.name == 'omi_physics':
-        assert float(bot.position[0]) < -0.5
-    else:
-        # Jolt characters push one another by their masses: the bot shoves the
-        # character outside its group along rather than passing through it.
-        assert float(me.position[0]) > 0.5
-        assert float(me.position[0]) - float(bot.position[0]) >= 2 * me.radius - 0.02
+    # Characters push one another by their masses: the bot shoves the
+    # character outside its group along rather than passing through it.
+    assert float(me.position[0]) > 0.5
+    assert float(me.position[0]) - float(bot.position[0]) >= 2 * me.radius - 0.02
     assert physics.raycast((-6, 1.0, 0), (1, 0, 0), 20.0).body is bot.body
 
 

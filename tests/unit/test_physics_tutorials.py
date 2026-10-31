@@ -166,7 +166,6 @@ def test_each_body_is_given_the_shape_the_tutorial_names(gl_context):
         assert all(crate.proxy is context.crate_shape for crate in context.crates)
 
 
-@pytest.mark.engines('omi', reason="the overlay draws the omi engine's copy of the world")
 def test_the_proxies_are_drawn_over_the_scene(gl_context):
     with running('physics', 'physics_stairs_shapes') as run:
         run.frame()
@@ -248,22 +247,6 @@ def test_pausing_holds_the_ball_where_it_is_and_pausing_again_lets_it_go(gl_cont
         context.OnPause(None)
         run.seconds(0.5)
         assert not np.allclose(context.ball.translation, held)
-
-
-@pytest.mark.engines('omi', reason='a Jolt world steps at the rate it was made with')
-def test_the_finer_step_is_taken_at_the_rate_asked_for(gl_context):
-    with running('physics', 'physics_stairs_tuning') as run:
-        run.seconds(0.5)
-        world = physics_testing.inspect(run.physics)
-        before = world.step_count
-        run.seconds(1.0)
-        coarse = world.step_count - before
-        run.context.OnFine(None)
-        before = world.step_count
-        run.seconds(1.0)
-        fine = world.step_count - before
-        assert coarse == pytest.approx(120, abs=3)
-        assert fine == pytest.approx(240, abs=3)
 
 
 def test_the_reset_puts_the_ball_back_on_the_landing_and_rolls_it_again(gl_context):
@@ -476,13 +459,6 @@ def test_the_pile_falls_into_the_bowl_and_a_wave_adds_forty(gl_context):
                    for body in context.bodies)
         context.on_add_wave(None)
         assert len(context.bodies) == 2 * run.module.WAVE
-        if run.physics.engine.name == 'omi_physics':
-            assert run.physics.engine.compute
-            run.context.on_toggle_backend(None)
-            assert run.physics.engine.compute in ('numpy', 'glcompute')
-        else:
-            # Jolt offers no compute backend to choose.
-            assert run.physics.engine.compute == ''
 
 
 @pytest.mark.parametrize('mode', ['inline', 'thread'])

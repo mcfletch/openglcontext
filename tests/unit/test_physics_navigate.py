@@ -12,7 +12,6 @@ from OpenGLContext.events import synthetic
 from OpenGLContext.testing.glcontext import gl_available
 from OpenGLContext.video.clock import FixedStepClock
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
 

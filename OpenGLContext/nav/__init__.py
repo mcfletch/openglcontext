@@ -8,6 +8,6 @@ project may not read.
 See :mod:`OpenGLContext.nav.navmesh`.
 """
 
-from OpenGLContext.nav.navmesh import NavMesh, build, from_world
+from OpenGLContext.nav.navmesh import NavMesh, build, from_scene
 
-__all__ = ['NavMesh', 'build', 'from_world']
+__all__ = ['NavMesh', 'build', 'from_scene']

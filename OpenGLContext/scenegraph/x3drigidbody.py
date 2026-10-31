@@ -1,11 +1,9 @@
 """X3D's RigidBodyPhysics nodes, on the engine's clock -- docs/x3d.rst
 
-A `RigidBodyCollection` simulates its bodies on the engine the physics
-definition names (:func:`~OpenGLContext.physics.x3djolt.make_rigid_system`),
-Jolt by default, and a `CollisionSensor` reports the touches among its
-collider's collidables (:func:`~OpenGLContext.physics.x3djolt.make_sensing`).
-Where the engine named is the deprecated omi engine and omi_physics is not
-installed, a collection or sensor logs that once and stays still. Bound to
+A `RigidBodyCollection` simulates its bodies on the physics engine
+(:func:`~OpenGLContext.physics.x3djolt.make_rigid_system`),
+and a `CollisionSensor` reports the touches among its collider's collidables
+(:func:`~OpenGLContext.physics.x3djolt.make_sensing`). Bound to
 contexts, each
 steps once a frame through the context's render queue, on the engine's clock
 (:class:`~OpenGLContext.scenegraph.x3druntime.EngineTimed`), for as long as

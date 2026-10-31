@@ -36,9 +36,7 @@ import numpy as np
 import pyjoltphysics as pj
 
 from OpenGLContext.physics import x3drigid
-from OpenGLContext.physics.engine import require_omi
 from OpenGLContext.physics.joltengine import _shape_of, _vec3, axis_angles, default_threads
-from OpenGLContext.physics.settings import default_engine
 from OpenGLContext.physics.x3drigid import (
     _BODY_OUTPUTS, _PARKED, _SURFACE, ContactRule, _Body, _floats, _inner_collidables, _Joint, _kept, _kind, _same, _suspension,
     _turn_onto, collidable_parts, members, pose_of, quaternion, single_shape,
@@ -48,17 +46,8 @@ __all__ = ['JoltRigidSystem', 'make_rigid_system']
 
 
 def make_rigid_system(collection: Any) -> x3drigid.RigidSystem:
-    """The simulation of ``collection`` on the physics engine of the run
-
-    Raises :class:`~OpenGLContext.physics.engine.EngineUnavailable` for the
-    omi engine without omi_physics.
-    """
-    if default_engine() == 'jolt':
-        return JoltRigidSystem(collection)
-    require_omi('X3D RigidBodyCollection')
-    from OpenGLContext.physics.x3domi import OmiRigidSystem  # noqa: PLC0415 omi_physics loads on use
-
-    return OmiRigidSystem(collection)
+    """The simulation of ``collection`` on the physics engine (:class:`JoltRigidSystem`)"""
+    return JoltRigidSystem(collection)
 
 
 def _matrix(turn: np.ndarray) -> np.ndarray:
@@ -813,16 +802,9 @@ def make_sensing() -> Any:
     """What finds a `CollisionSensor`'s touches on the physics engine of the run
 
     An object whose ``detect(collection)`` gives the touches among a
-    `CollisionCollection`'s collidables as they stand
-    (:class:`JoltSensing`, or the omi engine's
-    :class:`~OpenGLContext.physics.x3domi.OmiSensing`).
+    `CollisionCollection`'s collidables as they stand (:class:`JoltSensing`).
     """
-    if default_engine() == 'jolt':
-        return JoltSensing()
-    require_omi('X3D CollisionSensor')
-    from OpenGLContext.physics.x3domi import OmiSensing  # noqa: PLC0415 omi_physics loads on use
-
-    return OmiSensing()
+    return JoltSensing()
 
 
 #: How far each collidable's shape is cast to find what it overlaps where it

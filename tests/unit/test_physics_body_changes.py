@@ -13,7 +13,6 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.testing import physics as physics_testing
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 
 def make(mode):
@@ -40,16 +39,6 @@ def settle(physics, frames=3):
     physics.frame(0.0)
 
 
-def column(physics, body, name):
-    slot = {}
-
-    def read(world):
-        slot['value'] = np.array(getattr(world, name)[physics.worker.runtime.entry(body.uid).index])
-
-    physics_testing.run(physics, read).result(5.0)
-    return slot['value']
-
-
 def crate(physics, mass=1.0):
     return physics.add_dynamic(None, proxy=Proxy.box((1.0, 2.0, 3.0)), mass=mass,
                                translation=(0, 5, 0))
@@ -64,14 +53,11 @@ def test_set_mass_changes_the_mass_and_the_inertia_of_the_shape(physics):
     assert physics_testing.mass(physics, body) == pytest.approx(4.0)
     # A box's inertia about each axis is m (a^2 + b^2) / 12 over the other two sides.
     expected = 4.0 / 12.0 * np.array([2.0 ** 2 + 3.0 ** 2, 1.0 ** 2 + 3.0 ** 2, 1.0 ** 2 + 2.0 ** 2])
-    if physics.engine.name == 'omi_physics':
-        assert np.allclose(column(physics, body, 'inv_inertia'), 1.0 / expected)
-    else:
-        # Jolt has no inertia to read back: the spin an angular impulse gives is I^-1 L.
-        body.set_angular_velocity((0.0, 0.0, 0.0))
-        body.apply_torque_impulse((1.0, 0.0, 0.0))
-        settle(physics, frames=1)
-        assert body.angular_velocity[0] == pytest.approx(1.0 / expected[0], rel=0.05)
+    # The engine's inertia is read through the spin an angular impulse gives, I^-1 L.
+    body.set_angular_velocity((0.0, 0.0, 0.0))
+    body.apply_torque_impulse((1.0, 0.0, 0.0))
+    settle(physics, frames=1)
+    assert body.angular_velocity[0] == pytest.approx(1.0 / expected[0], rel=0.05)
 
 
 def test_an_impulse_after_set_mass_moves_the_body_by_impulse_over_the_new_mass(physics):

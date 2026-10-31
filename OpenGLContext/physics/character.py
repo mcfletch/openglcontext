@@ -1,10 +1,6 @@
 """Character: a walker the physics service steps each frame.
 
-On the omi engine a character is a capsule controller stepped on the render
-thread, in the frame, against the render thread's copy of the bodies
-(:class:`~OpenGLContext.physics.replica.Replica`). Input reaches it with no tick
-between, and a ray cast or a step answers in the call. On the Jolt engine it is
-a native character the world thread moves inside each tick
+A character is a native Jolt character the world thread moves inside each tick
 (:class:`~OpenGLContext.physics.joltengine.JoltController`); the world runs in
 lockstep with the frame, and the moves set before a tick drive that tick.
 
@@ -14,23 +10,13 @@ fixed length and each with the latest moves, so its path and its jump arc do not
 depend on the frame rate. Its node and the camera over it are drawn between its
 last two steps, by the part step the frame leaves over (:attr:`Character.drawn_position`).
 
-On the omi engine the world sees a **stand-in**: a kinematic body, a little wider than the
-capsule, placed at the capsule each frame with the velocity it moved at. The
-solver pushes a crate the stand-in runs into, and a crate that strikes the
-stand-in knocks the character back by the impulse it delivered. A body heavier
-than ``pushMass`` is ignored by the stand-in, so it blocks the character instead.
-
-The lone character of an inline service writes its stand-in to the world when
-something can see it: a dynamic body, a trigger or a sensor within reach of it
-in a step, or a ray, sweep or overlap that reaches it. Until then the stand-in
-waits, still, where it was last written, and a step finds it where it would have
-been had it been written at every step. Read from its body, a waiting stand-in's
-pose is that of the last step it was written in.
+The world sees the capsule as a body (:attr:`Character.body`): rays, sweeps and
+overlaps meet it, and events about the character are events of that body.
 """
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 
 import numpy as np
@@ -53,7 +39,7 @@ if TYPE_CHECKING:
 __all__ = ['Character', 'CharacterStep', 'Footstep', 'Landing']
 
 _UP = np.array([0.0, 1.0, 0.0])
-#: The events a character tells itself; every other name is an event of its stand-in.
+#: The events a character tells itself; every other name is an event of its body.
 _OWN_EVENTS = frozenset(('landed', 'footstep', 'arrived', 'before-step', 'after-step'))
 #: The field of the capabilities that names each mode's speed.
 _MODE_SPEEDS = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
@@ -118,18 +104,12 @@ class Character:
         #: with its own clock sets this false and calls :meth:`update` or :meth:`step`.
         self.framed = True
         centre = np.asarray(feet, dtype='d') + _UP * (capabilities.standHeight / 2.0)
-        engine = physics._engine
-        #: Whether the world sees the character through a stand-in the frame places.
-        self._stands_in = bool(engine.stand_ins)
         #: The body the world sees. Events about the character are events of this body.
         self.body: Body
-        self.body, self._controller = engine.make_character(physics, centre, capabilities, gravity)
-        if self._stands_in:
-            self._slot = physics._character_replica().index_of(self.body.uid)
-        else:
-            self._slot = self.body.uid
-            for uid in physics.passable_slots():
-                self._controller.ignore.add(uid)
+        self.body, self._controller = physics._engine.make_character(
+            physics, centre, capabilities, gravity)
+        for uid in physics.passable_slots():
+            self._controller.ignore.add(uid)
         self._pass_group: str | None = None
         #: Where the feet were before and after the latest step, and how far from the one
         #: toward the other the frame draws them. Feet, not the capsule's centre, so a change
@@ -142,18 +122,6 @@ class Character:
         self._last_velocity = np.zeros(3)
         #: Where the capsule was when the frame began, and the hardest landing since.
         self._marked = self._controller.position.copy()
-        #: The position and velocity the stand-in was last given, so that a character
-        #: that has not moved sends the world nothing.
-        self._stand_in_at: tuple[tuple[float, ...], tuple[float, ...]] | None = None
-        #: Whether the world's stand-in is where :attr:`_stand_in_at` and the steps
-        #: since put it; while it is not, the write waits (:meth:`_settle`).
-        self._written = True
-        #: The steps the world has taken since the waiting write was asked for.
-        self._behind = 0
-        #: The velocity the world's stand-in has.
-        self._given_velocity: tuple[float, ...] = (0.0, 0.0, 0.0)
-        #: Whether a write was asked for since the service last collected a frame.
-        self._fresh = False
         self._landed: float | None = None
         self._path: PathMover | None = None
         self._path_mode = 'run'
@@ -165,7 +133,6 @@ class Character:
         if self.locomotion is not None:
             self.locomotion.on_footstep(self._footfall)
         self.body.addEventHandler('hit', function=self._struck)
-        physics._send_world('standin', self.body.uid, float(capabilities.pushMass))
         self._place_node()
 
     def __repr__(self) -> str:
@@ -435,7 +402,6 @@ class Character:
         self._marked = self._controller.position.copy()
         self._previous, self._alpha = self._controller.base(), 1.0
         self._stepped = self._previous.copy()
-        self._place_stand_in(np.zeros(3))
         self._place_node()
         return found
 
@@ -455,7 +421,7 @@ class Character:
         """The name of the characters this one walks through, and that walk through it, or None.
 
         Characters with the same name do not block one another's moves; each still
-        blocks every character outside the group, and its stand-in is still a body
+        blocks every character outside the group, and its body is still one
         that rays, shots and the solver meet. None, the default, blocks everybody.
         """
         return self._pass_group
@@ -464,24 +430,8 @@ class Character:
     def pass_group(self, name: str | None) -> None:
         if name == self._pass_group:
             return
-        if not self._stands_in:
-            self._pass_group = name
-            self._controller.set_pass_group(self.physics._engine.pass_group_id(name))
-            return
-        if self._pass_group is not None:
-            for other in self._fellows():
-                other._controller.ignore.discard(self._slot)
-                self._controller.ignore.discard(other._slot)
         self._pass_group = name
-        if name is not None:
-            for other in self._fellows():
-                other._controller.ignore.add(self._slot)
-                self._controller.ignore.add(other._slot)
-
-    def _fellows(self) -> list[Character]:
-        """The other characters in the world with this one's pass group."""
-        return [other for other in self.physics._characters
-                if other is not self and other._pass_group == self._pass_group]
+        self._controller.set_pass_group(self.physics._engine.pass_group_id(name))
 
     # -- events -------------------------------------------------------------
     def addEventHandler(self, event: str, function: Callable[..., Any] | None = None,
@@ -517,7 +467,7 @@ class Character:
         return self.locomotion.play_action(name, layer, **named)
 
     def _struck(self, hit: Collision) -> None:
-        """A body hit the stand-in: the blow it delivered becomes a knock, unless it was pushed."""
+        """A body hit the character: the blow it delivered becomes a knock, unless it was pushed."""
         other = hit.other
         if (not hit.solved or self._controller.pushing is not None or other is None
                 or other.kind != 'dynamic'):
@@ -572,12 +522,10 @@ class Character:
                 self._tell('arrived', self)
 
     def _after_tick(self, dt: float) -> None:
-        """The second half of a step, once the controller has moved: the stand-in, the node, landings."""
+        """The second half of a step, once the controller has moved: the node and landings."""
         listeners = self._listeners
         controller = self._controller
         self._stepped = controller.base()
-        pushing = controller.pushing
-        self._place_stand_in(pushing[1] if pushing is not None else controller.velocity)
         self._place_node()
         landing = controller.landing
         if landing is not None:
@@ -630,88 +578,12 @@ class Character:
 
     def _ground_material(self, feet: np.ndarray) -> str | None:
         """The name of the material under the feet: the ground the engine reports, else a ray's."""
-        if not self._stands_in and self._controller.grounded:
+        if self._controller.grounded:
             found = self.physics._engine.ground_material(self._controller)
             if found is not None:
                 return str(found)
         under = self.physics.raycast(feet + _UP * 0.3, (0.0, -1.0, 0.0), 0.8, skip=self.body)
         return None if under is None or under.body is None else under.body.material
-
-    def _place_stand_in(self, velocity: Any) -> None:
-        """Put the stand-in at the capsule with ``velocity``, unless it is already so.
-
-        Placing a body and setting its velocity each wake it. Where the service
-        defers stand-ins (:meth:`Physics._defers_stand_ins
-        <OpenGLContext.physics.service.Physics._defers_stand_ins>`) the write
-        waits for something that can see it.
-        """
-        if not self._stands_in:
-            return
-        here = tuple(float(v) for v in self._controller.position)
-        moving = tuple(float(v) for v in velocity)
-        if (here, moving) == self._stand_in_at:
-            return
-        self._stand_in_at = (here, moving)
-        if self.physics._defers_stand_ins():
-            self._written, self._behind, self._fresh = False, 0, True
-        else:
-            self._write(here, moving)
-
-    def _write(self, here: tuple[float, ...], moving: tuple[float, ...]) -> None:
-        """Place the stand-in at ``here`` with velocity ``moving``."""
-        physics, body = self.physics, self.body
-        physics._command('place', body, here, None)
-        physics._command('velocity', body, moving)
-        self._given_velocity = moving
-        self._written = True
-
-    def _due(self) -> tuple[float, ...]:
-        """Where the world's stand-in would be had the waiting write been made: the place
-        asked for, moved on by its velocity for each step since, as a step moves it."""
-        here, moving = cast(tuple[tuple[float, ...], tuple[float, ...]], self._stand_in_at)
-        if not self._behind:
-            return here
-        dt = self.physics._engine.step_dt
-        x, y, z = here
-        vx, vy, vz = moving
-        for _ in range(self._behind):
-            x, y, z = x + vx * dt, y + vy * dt, z + vz * dt
-        return x, y, z
-
-    def _bring_up(self) -> None:
-        """Make the waiting write now."""
-        if not self._written:
-            self._write(self._due(), cast(tuple[tuple[float, ...], tuple[float, ...]],
-                                          self._stand_in_at)[1])
-
-    def _settle(self, seen: Callable[[Character, tuple[float, ...]], bool]) -> None:
-        """Before a step: make the waiting write where ``seen(self, due)`` says something can see
-        the stand-in, else keep it waiting, still, and count the step."""
-        if self._written:
-            return
-        due = self._due()
-        if seen(self, due):
-            self._write(due, cast(tuple[tuple[float, ...], tuple[float, ...]],
-                                  self._stand_in_at)[1])
-            return
-        if any(self._given_velocity):
-            self.physics._command('velocity', self.body, (0.0, 0.0, 0.0))
-            self._given_velocity = (0.0, 0.0, 0.0)
-        self._behind += 1
-
-    def _stand_in_reach(self, grow: float) -> tuple[float, float]:
-        """How far the stand-in's box, grown by ``grow`` metres, reaches from its centre: across,
-        and up and down."""
-        caps = self.capabilities
-        across = caps.radius + self.physics._engine.push_reach + grow
-        return across, 0.5 * max(caps.standHeight - 2.0 * caps.radius, 1e-3) + across
-
-    def _stand_in_box(self, centre: Any, grow: float) -> tuple[np.ndarray, np.ndarray]:
-        """The box of the stand-in centred at ``centre``, grown by ``grow`` metres."""
-        across, up = self._stand_in_reach(grow)
-        half = np.array([across, up, across])
-        middle = np.asarray(centre, dtype='d')
-        return middle - half, middle + half
 
     def _place_node(self) -> None:
         """Put the node at the drawn feet, unless a ragdoll holds the body."""
@@ -738,7 +610,7 @@ def _state(state: Any) -> CharacterState:
     return CharacterState[state.name]
 
 
-def stand_in_proxy(capabilities: CharacterCapabilities, reach: float) -> Proxy:
-    """The capsule the world sees for a character: the controller's, widened by ``reach``."""
+def capsule_proxy(capabilities: CharacterCapabilities) -> Proxy:
+    """The capsule the world sees for a character of ``capabilities``, standing."""
     middle = max(capabilities.standHeight - 2.0 * capabilities.radius, 1e-3)
-    return Proxy.capsule(middle, capabilities.radius + reach)
+    return Proxy.capsule(middle, capabilities.radius)

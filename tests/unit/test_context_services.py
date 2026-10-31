@@ -140,7 +140,6 @@ def test_physics_off_in_the_definition_leaves_bodies_where_they_were_put(clock):
     made.releaseWindow()
 
 
-@pytest.mark.engines('omi', 'jolt')
 def test_releasing_the_window_stops_the_worker(clock):
     made = _Context(physics=PhysicsDefinition(mode='thread'))
     made.physics.add_dynamic(ball())
@@ -285,13 +284,14 @@ def test_services_made_again_after_closing_are_framed_once(ctx, clock, monkeypat
     assert len(framed) == 2
 
 
-@pytest.mark.engines('jolt')
-def test_a_recording_holds_a_jolt_world_in_lockstep(tmp_path):
+def test_a_recording_holds_the_world_in_lockstep(tmp_path):
     made = _Context(physics=PhysicsDefinition(mode='thread'))
     try:
         made.physics.add_dynamic(ball())
         assert made.physics._engine.mode == 'thread'
         made.startTelemetry(str(tmp_path / 'session.jsonl'))
+        assert made.physics._engine.mode == 'inline'
+        made.physics.set_config(PhysicsDefinition(mode='thread'))
         assert made.physics._engine.mode == 'inline'
         made.stopTelemetry()
         assert made.physics._engine.mode == 'thread'
@@ -300,36 +300,13 @@ def test_a_recording_holds_a_jolt_world_in_lockstep(tmp_path):
         made.releaseWindow()
 
 
-@pytest.mark.engines('omi', reason="names the omi engine's workers")
-def test_a_recording_started_after_physics_exists_runs_the_world_inline(tmp_path):
-    from OpenGLContext.physics.worker import InlineWorker, ThreadWorker  # noqa: PLC0415 only these cases name the workers
-
-    made = _Context(physics=PhysicsDefinition(mode='thread'))
-    try:
-        body = made.physics.add_dynamic(ball())
-        assert isinstance(made.physics.worker, ThreadWorker)
-        made.startTelemetry(str(tmp_path / 'session.jsonl'))
-        assert isinstance(made.physics.worker, InlineWorker)
-        made.physics.flush()
-        assert body.uid in made.physics.worker.runtime
-        made.physics.set_config(PhysicsDefinition(mode='thread'))
-        assert isinstance(made.physics.worker, InlineWorker)
-        made.stopTelemetry()
-        assert isinstance(made.physics.worker, ThreadWorker)
-    finally:
-        made.stopTelemetry()
-        made.releaseWindow()
-
-
-@pytest.mark.engines('omi', reason="names the omi engine's workers")
 def test_a_mode_change_while_capturing_keeps_the_world_inline():
-    from OpenGLContext.physics.worker import InlineWorker  # noqa: PLC0415 only these cases name the workers
 
     made = _Context(physics=PhysicsDefinition(mode='thread'))
     made._captureClock = object()
     try:
         made.physics.set_config(PhysicsDefinition(mode='thread'))
-        assert isinstance(made.physics.worker, InlineWorker)
+        assert made.physics._engine.mode == 'inline'
     finally:
         made.releaseWindow()
 

@@ -19,7 +19,6 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph.transform import Transform
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 #: The half width of the floor, metres: a city's ground.
 HALF = 3000.0

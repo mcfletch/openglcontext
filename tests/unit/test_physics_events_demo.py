@@ -15,7 +15,6 @@ from OpenGLContext.bin.physics_events_demo import CollisionYard
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.testing.audio import RecordingAudio
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 FRAME = 1.0 / 60.0
 RATE = 8000

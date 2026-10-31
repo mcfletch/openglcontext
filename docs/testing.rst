@@ -1044,28 +1044,7 @@ A test of what the engine holds reads it through
 ``material_count``, ``pair_friction``, ``filter_count``, ``joint_count``,
 ``step_dt``, ``world_position``, ``wait_ticks``, ``ticks``, ``idle``,
 ``stepping`` and ``event_backlog`` (the events the engine holds that the
-service has not taken, and those it dropped) answer on either engine. A unit test runs on both by its
-module's ``pytestmark = pytest.mark.engines('omi', 'jolt')``, which
-``tests/unit/conftest.py`` turns into one run on each engine; a test that
-reads one engine's own machinery narrows it with
-``@pytest.mark.engines('omi', reason=...)``. The rest reach the omi_physics
-world, inline, and go away with it:
-
-.. code-block:: python
-
-   from OpenGLContext.testing import physics as physics_testing
-
-   world = physics_testing.inspect(physics)          # inline only
-   row = physics_testing.slot_of(physics, body)      # waiting commands applied first
-   assert physics_testing.body_at(physics, row) is body
-   physics_testing.run(physics, lambda world: world.step_count).result()
-
-``slot_of`` applies the commands still waiting first; ``physics.flush()`` does
-that on its own. Read the row before the array:
-``world.linear_velocity[physics_testing.slot_of(physics, body)]`` evaluates the
-array first, and a body added since may have made a new one. The world's
-``position`` and ``orientation`` are read-only; a test moves a body with
-``body.set_transform()`` or ``world.place_body(row, position, orientation)``.
+service has not taken, and those it dropped) read the Jolt engine's world.
 
 Scenery becomes bodies as the render pass finds it, which a test with no
 window does not have: add what the test collides with by name

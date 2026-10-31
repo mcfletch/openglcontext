@@ -15,8 +15,6 @@ from OpenGLContext.scenegraph.terrain import HeightField
 
 from ._terrain_host import Clock, eye, flat_field, run
 
-pytestmark = pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
-
 
 @pytest.fixture
 def clock():

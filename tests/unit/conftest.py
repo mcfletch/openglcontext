@@ -11,7 +11,6 @@ The environment those memos are read from is the shipped plugin's to restore --
 rather than for this directory.
 """
 
-import importlib
 import os
 import shutil
 import stat
@@ -21,59 +20,6 @@ import pytest
 
 from OpenGLContext import renderoptions
 from OpenGLContext.passes import pbrpass, quality, shadersource, shadowcaps
-
-
-def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    """Run each test marked ``engines(...)`` once on each physics engine it names.
-
-    A module marks itself ``pytestmark = pytest.mark.engines('omi', 'jolt')``;
-    a test that reads one engine's own machinery narrows it with its own
-    ``@pytest.mark.engines('omi', reason=...)``. An engine whose package is
-    not installed is skipped, with the package named.
-    """
-    marker = metafunc.definition.get_closest_marker('engines')
-    if marker is None:
-        return
-    metafunc.parametrize('physics_engine', [
-        pytest.param(name, marks=pytest.mark.skipif(
-            not _have(_PACKAGES[name]), reason='%s is not installed' % (_PACKAGES[name],)))
-        for name in marker.args], indirect=True)
-
-
-#: The package each engine steps its worlds with. pyjoltphysics is a requirement
-#: of OpenGLContext; omi_physics is the deprecated ``omi`` extra, installed in
-#: this workspace, so the omi engine's tests run here.
-_PACKAGES = {'jolt': 'pyjoltphysics', 'omi': 'omi_physics'}
-
-
-def _have(package: str) -> bool:
-    try:
-        importlib.import_module(package)
-    except ImportError:
-        return False
-    return True
-
-
-#: The modules that test the omi engine's own modules (its runtime, workers,
-#: replica and queries) import them at the top; they are not collected where
-#: omi_physics, the deprecated omi extra, is not installed.
-collect_ignore = [] if _have('omi_physics') else [
-    'test_physics_frame_cost.py', 'test_physics_runtime.py', 'test_physics_sweep_steps.py']
-
-
-@pytest.fixture(autouse=True)
-def physics_engine(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str | None:
-    """The physics engine a test marked ``engines`` steps its worlds with, as the definition's default.
-
-    Autouse, so it is set before the fixtures that make a service; a test
-    with no ``engines`` mark is left with the environment it was given.
-    """
-    name = getattr(request, 'param', None)
-    if name is None:
-        return None
-    monkeypatch.setenv('OPENGLCONTEXT_PHYSICS_ENGINE', str(name))
-    renderoptions.reset_env_cache()
-    return str(name)
 
 
 @pytest.fixture(autouse=True)

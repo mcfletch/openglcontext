@@ -19,77 +19,42 @@ from typing import Any, ClassVar, Optional
 import numpy as np
 
 from OpenGLContext import quaternion
-from OpenGLContext.physics.types import CharacterCapabilities
 
 
 class PhysicsViewPlatform:
-    def __init__(self, world: Any, capabilities: Optional[CharacterCapabilities] = None,
-                 position: Any = (0, 0, 0), yaw: float = 0.0,
-                 gravity: float = 9.81, body: bool = False) -> None:
-        """Walk a capsule of ``capabilities`` in ``world``, starting at ``position``.
+    """A camera on a character of a physics service, and the keys' moves given to it."""
 
-        ``world`` is an omi_physics ``PhysicsWorld``, and the capsule its
-        controller, so this needs the deprecated omi_physics (the ``omi``
-        extra). :meth:`over` drives a character of the physics service on
-        any engine.
-
-        ``body`` gives the walker a body in the world: a sensor capsule that
-        enters trigger volumes and whose touches with moving bodies are
-        reported, without pushing or being pushed (:attr:`body`). Each update
-        places that body in the world, so a world stepped on another thread
-        is updated on that thread.
-        """
-        from OpenGLContext.physics.engine import require_omi  # noqa: PLC0415 the omi world loads on use
-
-        require_omi('PhysicsViewPlatform over its own world')
-        from omi_physics.character import CharacterController  # noqa: PLC0415 the omi world loads on use
-
-        from OpenGLContext.physics.omi_adapter import omi_capabilities  # noqa: PLC0415 the omi world loads on use
-
-        self.character = CharacterController(
-            world, omi_capabilities(capabilities or CharacterCapabilities()), position,
-            gravity=gravity, body=body)
-        self.yaw = yaw
-        self.pitch = 0.0
-        #: The service character this platform reads, where the physics service steps it.
-        self.managed: Any = None
-
-    @classmethod
-    def over(cls, character: Any, yaw: float = 0.0) -> 'PhysicsViewPlatform':
-        """A platform over ``character``, one the context's physics service steps.
+    def __init__(self, character: Any, yaw: float = 0.0) -> None:
+        """A platform over ``character``, a :class:`~OpenGLContext.physics.character.Character`.
 
         It turns the keys' moves into the character's, and reads the camera from
         its eye. The service steps the character each frame, so :meth:`update`
         does nothing, unless the character's ``framed`` is false: the caller then
         steps it, and :meth:`update` does.
         """
-        platform = cls.__new__(cls)
-        platform.character = character._controller
-        platform.yaw = yaw
-        platform.pitch = 0.0
-        platform.managed = character
-        return platform
+        #: The character's controller, which takes the moves.
+        self.character = character._controller
+        self.yaw = yaw
+        self.pitch = 0.0
+        #: The service character this platform reads.
+        self.managed = character
+
+    @classmethod
+    def over(cls, character: Any, yaw: float = 0.0) -> 'PhysicsViewPlatform':
+        """A platform over ``character``, as the constructor makes one."""
+        return cls(character, yaw)
 
     @property
     def body(self) -> Any:
-        """The walker's body, for a collision subscription; None without one.
-
-        The index of the sensor body a platform made with ``body=True`` has, or
-        the stand-in :class:`~OpenGLContext.physics.body.Body` of a service character.
-        """
-        return self.managed.body if self.managed is not None else self.character.body
+        """The character's :class:`~OpenGLContext.physics.body.Body`, for a collision subscription."""
+        return self.managed.body
 
     # -- binding ---------------------------------------------------------
     def bind(self, position: Any) -> Any:
-        """Safe-bind the capsule at ``position`` (the capsule *centre*).
-
-        Over a service character the body the world sees moves with it.
-        """
-        if self.managed is not None:
-            feet = np.asarray(position, dtype='d')[:3] - np.array(
-                [0.0, self.character.height * 0.5, 0.0])
-            return self.managed.teleport(feet)
-        return self.character.safe_bind(position)
+        """Safe-bind the capsule at ``position`` (the capsule *centre*); False if no room was found."""
+        feet = np.asarray(position, dtype='d')[:3] - np.array(
+            [0.0, self.character.height * 0.5, 0.0])
+        return self.managed.teleport(feet)
 
     def bind_eye(self, eye: Any) -> Any:
         """Safe-bind so the camera eye lands at ``eye`` (used for viewpoints)."""
@@ -234,16 +199,13 @@ class PhysicsViewPlatform:
 
     # -- stepping / camera ----------------------------------------------
     def update(self, dt: float) -> None:
-        if self.managed is None:
-            self.character.update(dt)
-        elif not self.managed.framed:
+        """Step the character by ``dt`` seconds where its owner steps it (``framed`` false)."""
+        if not self.managed.framed:
             self.managed.update(dt)
 
     def camera_position(self) -> tuple[float, ...]:
-        """The eye; over a service character, the eye where the frame draws it (``drawn_eye``)."""
-        if self.managed is not None:
-            return tuple(float(v) for v in self.managed.drawn_eye)
-        return tuple(self.character.eye())
+        """The eye where the frame draws it (``drawn_eye``)."""
+        return tuple(float(v) for v in self.managed.drawn_eye)
 
     def feet_position(self) -> tuple[float, ...]:
         """Where the body ends, which is not where it looks from.

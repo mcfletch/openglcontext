@@ -63,8 +63,8 @@ class TestContext(Context):
         halves of the room are not joined straight through it.
 
         A game that has loaded a level has the argument already:
-        ``navmesh.from_world(world)`` takes the same triangles out of a physics
-        world.'''
+        ``navmesh.from_scene(scene)`` takes the triangles the level's static
+        bodies are made of.'''
         points, triangles = room_mesh()
         self.mesh = navmesh.build(points, triangles, clearance=1.8)
         print('navmesh: %d walkable cells from %d triangles'

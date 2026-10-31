@@ -569,13 +569,9 @@ step over a trunk. The offscreen capture and benchmark tools use that mode.
 
 .. rst-class:: technical
 
-Bodies in the world cost the world a step. On Jolt, the default engine, every
-trunk (230,000 in the forest demo) is a static body in Jolt's broad phase, and a
-character's step asks it for the few within reach. On the deprecated omi engine
-the world holds them in a grid over their footprints
-(``omi_physics.staticindex``); a trunk or a rock added later does not rebuild
-the grid, and a step with that many static bodies spends a few milliseconds on
-checks that run over every body.
+Bodies in the world cost the world a step. Every trunk (230,000 in the forest
+demo) is a static body in Jolt's broad phase, and a character's step asks it
+for the few within reach.
 
 Rocks beyond ``collider_reach`` of the walker are not bodies. A body thrown
 further from the walker than that meets the ground and the trunks and falls

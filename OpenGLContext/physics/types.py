@@ -1,8 +1,8 @@
 """The values the physics service takes and returns: materials, filters, characters' settings, poses.
 
-These are the package's own classes. The service converts them to the
-engine's at its boundary (:mod:`OpenGLContext.physics.omi_adapter`), so a game
-written against them runs on whichever engine steps the world. The field
+These are the package's own classes. The engine converts them to its own at
+its boundary (:mod:`OpenGLContext.physics.joltengine`), so a game written
+against them names no engine's types. The field
 names of :class:`Material`, :class:`CollisionFilter` and
 :class:`CharacterCapabilities` are those of the OMI glTF physics extensions,
 since a glTF document carries them by those names.
@@ -193,14 +193,12 @@ class EngineInfo:
     """The engine that steps a world: its name, version, step rate and floating-point precision.
 
     ``tick_hz`` is in steps a second; ``precision`` is ``'single'`` or
-    ``'double'``. ``compute`` names where the engine computes, for an engine
-    that offers a choice (``PhysicsDefinition.backend`` chooses it), else ``''``.
+    ``'double'``.
     """
     name: str
     version: str
     tick_hz: float
     precision: str
-    compute: str = ''
 
     def __str__(self) -> str:
         return '%s %s %s' % (self.name, self.version, self.precision)

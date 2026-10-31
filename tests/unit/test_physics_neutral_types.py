@@ -1,4 +1,4 @@
-"""The physics package's own types, their conversion to the engine underneath, and the API contract."""
+"""The physics package's own types and the API contract that no engine type crosses it."""
 import dataclasses
 import enum
 import inspect
@@ -21,10 +21,24 @@ from OpenGLContext.physics.vehicles import (
 from OpenGLContext.physics.softbodies import SoftBody, SoftBodyFrame, SoftBodySpec
 from OpenGLContext.physics.zones import Box, Sphere
 
-#: The neutral types are checked against omi_physics' of the same names, through
-#: the omi engine's adapter; omi_physics is the deprecated omi extra.
-omi_adapter = pytest.importorskip('OpenGLContext.physics.omi_adapter',
-                                  reason='omi_physics (the omi extra) is not installed')
+#: The OMI glTF physics extensions' field names and defaults, as omi_physics 0.4
+#: states them: a glTF document carries the values by these names, so the
+#: package's types keep them.
+OMI_MATERIAL = {'staticFriction': 0.6, 'dynamicFriction': 0.6, 'restitution': 0.0,
+                'frictionCombine': 'average', 'restitutionCombine': 'average'}
+OMI_FILTER = {'collisionSystems': (), 'collideWithSystems': None, 'notCollideWithSystems': ()}
+#: omi_physics 0.4's character capabilities, the names pyjoltphysics' characters keep.
+OMI_CAPABILITIES = {
+    'walkSpeed': 3.0, 'runSpeed': 6.0, 'sprintSpeed': 9.0, 'crouchSpeed': 1.5, 'canSprint': True,
+    'canCrouch': True, 'canJump': True, 'canFly': True, 'flySpeed': 8.0, 'swimSpeed': 2.0,
+    'swimDrag': 4.0, 'jumpHeight': 1.2, 'jumpFollowsSlope': False, 'stepHeight': 0.35,
+    'maxSlope': 50.0, 'eyeHeight': 1.6, 'standHeight': 1.8, 'crouchHeight': 1.0, 'radius': 0.3,
+    'airControl': 0.4, 'pushFriction': 6.0, 'terminalVelocity': 55.0, 'suppressOverVoid': False,
+    'coyoteTime': 0.12, 'jumpBuffer': 0.12, 'mass': 80.0, 'pushMass': 200.0, 'pushSpeed': None,
+}
+OMI_STATES = {('AIRBORNE', 'airborne'), ('CROUCHING', 'crouching'), ('DOWN', 'down'),
+              ('FLYING', 'flying'), ('SLIDING', 'sliding'), ('STANDING', 'standing'),
+              ('SWIMMING', 'swimming')}
 
 
 # -- the types are the package's own --------------------------------------
@@ -34,88 +48,46 @@ def test_the_exported_types_are_defined_in_opengl_context(cls):
     assert cls.__module__.startswith('OpenGLContext.physics')
 
 
-def test_material_has_the_omi_field_names_and_defaults():
-    import omi_physics.model as model
-
-    ours = {f.name: f.default for f in dataclasses.fields(Material)}
-    theirs = {f.name: f.default for f in dataclasses.fields(model.Material)}
-    assert ours == theirs
-
-
-def test_collision_filter_has_the_omi_field_names_and_defaults():
-    import omi_physics.model as model
-
-    ours = {f.name: f.default for f in dataclasses.fields(CollisionFilter)}
-    theirs = {f.name: f.default for f in dataclasses.fields(model.CollisionFilter)}
-    assert ours == theirs
-
-
-def test_character_capabilities_have_the_omi_field_names_and_defaults():
-    from omi_physics import character
-
-    ours = {f.name: f.default for f in dataclasses.fields(CharacterCapabilities)}
-    theirs = {f.name: f.default for f in dataclasses.fields(character.CharacterCapabilities)}
-    assert ours == theirs
+@pytest.mark.parametrize('cls, expected', [(Material, OMI_MATERIAL), (CollisionFilter, OMI_FILTER),
+                                           (CharacterCapabilities, OMI_CAPABILITIES)])
+def test_the_types_have_the_omi_field_names_and_defaults(cls, expected):
+    assert {f.name: f.default for f in dataclasses.fields(cls)} == expected
 
 
 def test_character_state_has_the_omi_members():
-    from omi_physics import character
-
-    assert {(m.name, m.value) for m in CharacterState} == {
-        (m.name, m.value) for m in character.CharacterState}
+    assert {(m.name, m.value) for m in CharacterState} == OMI_STATES
 
 
-# -- conversions -----------------------------------------------------------
-
-def test_a_material_converts_to_the_engine_and_back():
-    given = Material(staticFriction=0.9, dynamicFriction=0.7, restitution=0.3,
-                     frictionCombine='minimum')
-    made = omi_adapter.omi_material(given)
-    assert type(made).__module__ == 'omi_physics.model'
-    assert (made.staticFriction, made.dynamicFriction, made.restitution, made.frictionCombine) == (
-        0.9, 0.7, 0.3, 'minimum')
-    assert omi_adapter.material_from_omi(made) == given
-
-
-def test_a_collision_filter_converts_and_keeps_its_rule():
+def test_a_collision_filter_keeps_its_rule():
     balls = CollisionFilter(collisionSystems=('ball',))
     shards = CollisionFilter(collisionSystems=('shard',), notCollideWithSystems=('ball',))
     assert not balls.collides_with(shards)
     assert balls.collides_with(balls)
-    made = omi_adapter.omi_filter(shards)
-    assert type(made).__module__ == 'omi_physics.model'
-    assert not omi_adapter.omi_filter(balls).collides_with(made)
 
 
-def test_capabilities_convert_to_the_engine():
-    caps = CharacterCapabilities(radius=0.4, standHeight=1.6, jumpHeight=2.0)
-    made = omi_adapter.omi_capabilities(caps)
-    assert type(made).__module__ == 'omi_physics.character'
-    assert (made.radius, made.standHeight, made.jumpHeight) == (0.4, 1.6, 2.0)
+class _EngineState(enum.Enum):
+    """An engine's character state enumeration, of the same name and members."""
+    STANDING = 'standing'
+    SLIDING = 'sliding'
+
+
+_EngineState.__name__ = 'CharacterState'
 
 
 def test_a_state_equals_the_engine_member_of_the_same_name():
-    from omi_physics import character
-
-    for member in character.CharacterState:
+    for member in _EngineState:
         assert CharacterState[member.name] == member and member == CharacterState[member.name]
         assert hash(CharacterState[member.name]) == hash(member)
-    assert CharacterState.STANDING != character.CharacterState.SLIDING
+    assert CharacterState.STANDING != _EngineState.SLIDING
     assert CharacterState.STANDING != 'standing'
 
 
-def test_the_engine_state_converts_to_the_neutral_state():
-    from omi_physics import character
-
-    for member in character.CharacterState:
-        assert omi_adapter.character_state(member) is CharacterState[member.name]
-
-
 def test_coerce_takes_an_object_with_the_same_fields():
-    from omi_physics import character
+    @dataclasses.dataclass
+    class EngineCapabilities:
+        radius: float = 0.3
 
-    given = character.CharacterCapabilities(radius=0.25)
-    made = CharacterCapabilities.coerce(given)
+    made = CharacterCapabilities.coerce(EngineCapabilities(radius=0.25))
     assert isinstance(made, CharacterCapabilities) and made.radius == 0.25
     assert CharacterCapabilities.coerce(None) == CharacterCapabilities()
     assert Material.coerce(Material(restitution=0.5)).restitution == 0.5
@@ -132,17 +104,6 @@ def test_coerce_takes_an_object_with_the_same_fields():
 def test_a_proxy_is_a_kind_and_its_parameters(proxy, kind, names):
     assert proxy.kind == kind
     assert set(proxy.params) == names
-    shape = omi_adapter.omi_shape(proxy)
-    assert shape.type == kind
-    assert omi_adapter.omi_shape(proxy) is shape        # converted once
-
-
-def test_a_proxy_made_from_an_engine_shape_reads_back_its_parameters():
-    from omi_physics import model
-
-    proxy = omi_adapter.proxy_from_shape(model.Shape.box((2.0, 4.0, 6.0)))
-    assert proxy.kind == 'box' and tuple(proxy.params['size']) == (2.0, 4.0, 6.0)
-    assert proxy.volume() == pytest.approx(48.0)
 
 
 def test_a_compound_proxy_lists_its_parts_as_proxies():
@@ -283,8 +244,9 @@ def test_the_test_inspection_helper_is_not_public():
 
 
 def test_the_presets_are_omi_physics_presets():
-    """materials.PRESETS states omi_physics' preset materials, so a world keeps them without it."""
+    """materials.PRESETS states omi_physics 0.4's preset materials."""
     from OpenGLContext.physics.materials import PRESETS
 
-    model = pytest.importorskip('omi_physics.model', reason='omi_physics is the reference')
-    assert PRESETS == {name: Material.coerce(found) for name, found in model.MATERIAL_PRESETS.items()}
+    assert PRESETS == {
+        'wood': Material(0.5, 0.4, 0.2), 'metal': Material(0.4, 0.3, 0.1),
+        'rubber': Material(1.0, 0.9, 0.8), 'ice': Material(0.05, 0.02, 0.05)}

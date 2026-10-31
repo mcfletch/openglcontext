@@ -6,14 +6,16 @@
 volume whose region is its zone's shape. :func:`gravity_zones` turns a scene's
 zones into :class:`~OpenGLContext.physics.types.GravityZone` records, which the
 world resolves for each body by its centre, in ascending priority, with
-``replace`` and ``stop`` as the extension defines them. :func:`scene_zones` finds the zones in a scenegraph and places them, as
-the scene is when it is asked; :class:`GravityZones` keeps a world's volumes
-where the render pass places the zones each frame, so gravity follows a zone
-that moves or is edited.
+``replace`` and ``stop`` as the extension defines them. :func:`scene_zones`
+finds the zones in a scenegraph and places them, as the scene is when it is
+asked. :meth:`Physics.zones_changed
+<OpenGLContext.physics.service.Physics.zones_changed>` takes the zones the
+render pass places each frame, so gravity follows a zone that moves or is
+edited.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
@@ -23,8 +25,7 @@ from OpenGLContext.scenegraph.zone import (
 from OpenGLContext.physics.types import GravityZone
 from OpenGLContext.scenegraph.zones import PlacedShape
 
-__all__ = ['Box', 'GravityZones', 'Sphere', 'ZoneRegion', 'gravity_volumes', 'gravity_zones',
-           'scene_zones']
+__all__ = ['Box', 'Sphere', 'ZoneRegion', 'gravity_zones', 'scene_zones']
 
 
 class ZoneRegion:
@@ -64,13 +65,6 @@ def gravity_zones(zones: Iterable[PlacedZone]) -> list[GravityZone]:
     return volumes
 
 
-def gravity_volumes(zones: Iterable[PlacedZone]) -> list[Any]:
-    """The engine's gravity volume for each zone whose gravity setting is enabled."""
-    from OpenGLContext.physics.omi_adapter import gravity_volume  # noqa: PLC0415 the engine loads on use
-
-    return [gravity_volume(zone) for zone in gravity_zones(zones)]
-
-
 def scene_zones(group: Any) -> list[PlacedZone]:
     """Every zone under ``group``, placed by the transforms above it.
 
@@ -92,34 +86,6 @@ def scene_zones(group: Any) -> list[PlacedZone]:
         for child in children or ():
             todo.append((child, world))
     return placed_zones(found)
-
-
-class GravityZones:
-    """A physics world's gravity volumes from zones, kept where the zones are.
-
-    :meth:`follow` is given the zones as they are placed now -- the render
-    pass's ``zones``, each frame -- and, where the zones carrying gravity are
-    other placements than last time, replaces every volume in the world whose
-    region is a :class:`ZoneRegion` with volumes made from them. A zone that
-    moves, or whose gravity setting is edited, has a new placement. Volumes
-    the application added itself are left as they are.
-    """
-
-    def __init__(self, world: Any) -> None:
-        self.world = world
-        self._placed: tuple[PlacedZone, ...] = ()
-
-    def follow(self, zones: Sequence[PlacedZone]) -> bool:
-        """Bring the world's zone volumes to ``zones``; return whether they changed."""
-        placed = tuple(zone for zone in zones if zone.setting(GRAVITY) is not None)
-        if len(placed) == len(self._placed) and all(
-                one is other for one, other in zip(placed, self._placed, strict=True)):
-            return False
-        self._placed = placed
-        kept = [volume for volume in self.world.gravity_volumes
-                if not isinstance(getattr(volume, 'region', None), ZoneRegion)]
-        self.world.gravity_volumes[:] = kept + gravity_volumes(placed)
-        return True
 
 
 class Box:

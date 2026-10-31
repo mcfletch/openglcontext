@@ -16,7 +16,6 @@ from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.testing import physics as physics_testing
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -260,7 +259,7 @@ def test_an_unknown_event_or_filter_is_refused(world):
 
 # -- the physics thread --------------------------------------------------------
 
-def test_a_marked_function_runs_on_the_worker_thread_and_may_change_the_world():
+def test_a_marked_function_runs_on_the_world_thread_and_may_change_the_world():
     physics = Physics(PhysicsDefinition(mode='thread', tickHz=200.0))
     try:
         physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)), restitution=0.0)
@@ -278,7 +277,7 @@ def test_a_marked_function_runs_on_the_worker_thread_and_may_change_the_world():
         while len(listener.heard) < 1 and time.monotonic() < deadline:
             time.sleep(0.02)
         assert listener.heard
-        assert listener.threads[0] == physics.worker.thread_id
+        assert listener.threads[0] == physics._engine.thread_id  # noqa: SLF001 the world thread's id
         assert listener.threads[0] != threading.get_ident()
         physics_testing.wait_ticks(physics, 5)
         physics.frame(0.016)
@@ -287,7 +286,7 @@ def test_a_marked_function_runs_on_the_worker_thread_and_may_change_the_world():
         physics.close()
 
 
-def test_a_render_handler_is_not_called_on_the_worker_thread():
+def test_a_render_handler_is_not_called_on_the_world_thread():
     physics = Physics(PhysicsDefinition(mode='thread', tickHz=200.0))
     try:
         physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)), restitution=0.0)
@@ -369,26 +368,7 @@ def test_a_step_handler_may_change_a_body_between_steps():
     physics.close()
 
 
-@pytest.mark.engines('omi', reason="reads the omi world's slots inside the step")
-def test_a_query_inside_a_step_handler_leaves_the_step_in_charge():
-    physics = make(gravity=(0, 0, 0))
-    body = physics.add_dynamic(ball(at=(0, 0, 0)), linear_damping=0.0)
-    seen = []
-
-    @physics_callback
-    def look(step):
-        physics_testing.slot_of(physics, body)
-        seen.append(physics.worker.on_worker_thread())
-        body.set_velocity((1.0, 0.0, 0.0))
-        seen.append(float(physics_testing.inspect(physics).linear_velocity[physics_testing.slot_of(physics, body)][0]))
-
-    physics.addEventHandler('before-step', function=look)
-    physics.frame(0.01)
-    assert seen == [True, 1.0]
-    physics.close()
-
-
-# -- scene changes from the worker ------------------------------------------------
+# -- scene changes from the world thread --------------------------------------------
 
 def test_render_set_from_a_marked_handler_reaches_the_scene_before_the_frame_ends():
     physics = make()

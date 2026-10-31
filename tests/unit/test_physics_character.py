@@ -1,21 +1,19 @@
-"""Characters in a physics service: walkers stepped by the frame, seen by the world as kinematic bodies.
+"""Characters in a physics service: walkers the world thread moves in each tick.
 
-A character is stepped on the render thread, against a copy of the bodies, so
-input reaches it with no tick between. The world sees a stand-in that carries the
-character's velocity, which is how it pushes a crate and how a crate pushes it.
+The world sees the character's capsule as a body: it pushes a crate, a crate
+that strikes it is a ``hit`` event of that body, and rays meet it.
 """
 import time
 
 import numpy as np
 import pytest
-from OpenGLContext.physics import CharacterCapabilities, CharacterState
+from OpenGLContext.physics import CharacterCapabilities, CharacterState, Proxy
 
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -175,7 +173,7 @@ def test_two_characters_do_not_walk_through_each_other(inline):
     assert first.position[0] < second.position[0]
 
 
-def test_remove_takes_the_stand_in_out_of_the_world(inline):
+def test_remove_takes_the_body_out_of_the_world(inline):
     me = inline.add_character(position=(0, 0.05, 0))
     body = me.body
     me.remove()
@@ -192,7 +190,27 @@ def test_teleport_puts_the_character_somewhere_safe(inline):
     assert me.position[1] == pytest.approx(0.0, abs=0.05)
 
 
-def test_a_character_hit_on_the_stand_in_is_a_body_event(inline):
+def test_teleport_into_a_post_puts_the_character_out_of_it_at_once(inline):
+    """The capsule is pushed out sideways in the call, so the place it answers is clear."""
+    inline.add_static(None, proxy=Proxy.cylinder(4.0, 0.3), translation=(10.0, 2.0, 0.0))
+    me = inline.add_character(position=(0, 0.05, 0))
+    assert me.teleport((10.1, 0.0, 0.0)) is True
+    reach = float(np.hypot(me.position[0] - 10.0, me.position[2]))
+    assert reach >= 0.3 + me.radius - 0.02
+    assert me.position[0] > 10.1
+    run_for(inline, 0.5)
+    assert float(np.hypot(me.position[0] - 10.0, me.position[2])) >= 0.3 + me.radius - 0.02
+
+
+def test_teleport_into_a_gap_narrower_than_the_capsule_answers_false(inline):
+    """Walls 4 m thick, 6 m long and 10 m high: no clear place within the push's reach."""
+    for x in (-2.2, 2.2):
+        inline.add_static(None, proxy=Proxy.box((4.0, 10.0, 6.0)), translation=(20.0 + x, 5.0, 0.0))
+    me = inline.add_character(position=(0, 0.05, 0))
+    assert me.teleport((20.0, 0.0, 0.0)) is False
+
+
+def test_a_character_hit_on_its_body_is_a_body_event(inline):
     me = inline.add_character(position=(0, 0.05, 0))
     heard = []
     keep = heard.append

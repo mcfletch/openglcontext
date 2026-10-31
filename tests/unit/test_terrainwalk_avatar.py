@@ -23,7 +23,6 @@ from ._terrain_host import (
     FRAME, Clock, eye, flat_field, press, ramp_field, run, walking,
 )
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 
 @pytest.fixture
@@ -288,9 +287,8 @@ class TestMounds:
         run(host, clock, 0.2)
         walker = host.physicsPlatform.managed
         walker.teleport((0.0, 2.0, -6.0))
-        if host.physics.engine.name == 'jolt':
-            # A Jolt character's teleport finds its floor in the tick that applies it.
-            run(host, clock, 0.05)
+        # A character's teleport finds its floor in the tick that applies it.
+        run(host, clock, 0.05)
         assert tuple(walker.position[::2]) == pytest.approx((0.0, -6.0), abs=1e-3)
         assert walker.position[1] == pytest.approx(1.4, abs=0.02)
 

@@ -12,19 +12,10 @@ import pytest
 
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.heightfield import HeightFieldColliders
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.vehicles import CarTuning, VehicleSettings, car_wheels
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from tests.unit._streamed import Streamed
-
-#: These tests check a part of the engine built on an omi_physics world, or use
-#: omi_physics as their reference; it is the deprecated omi extra.
-REASON_OMI = 'omi_physics (the omi extra) is not installed'
-raycast = pytest.importorskip('omi_physics.raycast', reason=REASON_OMI).raycast
-model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
-RaycastVehicle = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).RaycastVehicle
-VehicleTuning = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).VehicleTuning
-car_wheels = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).car_wheels
-
-pytestmark = pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
 
 EXTENT = 1024.0
 
@@ -43,7 +34,8 @@ def _ground(field=None, **named):
 
 
 def _ground_under(ground, x, z):
-    hit = raycast(ground.world, (x, 400.0, z), (0.0, -1.0, 0.0), max_distance=900.0)
+    ground.physics.flush()
+    hit = ground.physics.raycast((x, 400.0, z), (0.0, -1.0, 0.0), 900.0)
     return None if hit is None else float(hit.point[1])
 
 
@@ -116,7 +108,7 @@ class TestTheGroundIsThere:
         standing = _ground(field, reach=200.0)
         standing.update(arrived)
         assert driven.chunk_count() == standing.chunk_count()
-        assert driven.world.live_body_count == standing.world.live_body_count
+        assert driven.physics.counts.bodies == standing.physics.counts.bodies
 
     def test_standing_still_reloads_nothing(self) -> None:
         ground = _ground(reach=200.0)
@@ -177,17 +169,15 @@ class TestACarOnIt:
         field = _field()
         ground = _ground(field, reach=300.0)
         ground.update((0.0, 0.0, 0.0))
-        world = ground.world
-        body = world.add_body(model.Motion(type=model.DYNAMIC, mass=1200.0),
-                              position=(0.0, float(field.sample(0.0, 0.0)) + 4.0,
-                                        0.0))
-        car = RaycastVehicle(world, body, car_wheels(), VehicleTuning())
-        for _step in range(360):
-            car.control()
-            car.update(1.0 / 120.0)
-            world.step(1.0 / 120.0)
-        resting = float(world.position[body][1]) - float(field.sample(
-            float(world.position[body][0]), float(world.position[body][2])))
+        physics = ground.physics
+        start = (0.0, float(field.sample(0.0, 0.0)) + 4.0, 0.0)
+        chassis = physics.add_dynamic(None, Proxy.box((1.8, 0.6, 4.2)), mass=1200.0,
+                                      translation=start)
+        physics.add_vehicle(chassis, VehicleSettings.from_tuning(CarTuning(), car_wheels(), 1200.0))
+        for _step in range(180):
+            physics.frame(1.0 / 60.0)
+        x, y, z = (float(v) for v in chassis.position)
+        resting = y - float(field.sample(x, z))
         assert resting == pytest.approx(0.64, abs=0.4)
 
 

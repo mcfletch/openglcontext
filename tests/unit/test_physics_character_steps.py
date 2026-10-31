@@ -13,7 +13,6 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 #: Seconds at which every frame rate below has a frame boundary: multiples of 1/6.
@@ -81,17 +80,14 @@ def test_a_character_takes_the_same_steps_as_a_busy_world():
 
         physics.addEventHandler('before-step', function=stepped)
         taken = []
-        # The omi frame steps the character's controller; the Jolt frame runs the
-        # character's code around each tick the world runs.
-        name = '_after_tick' if physics.engine.name == 'jolt' else 'update'
-        owner = me if name == '_after_tick' else me._controller
-        update = getattr(owner, name)
+        # The frame runs the character's code around each tick the world runs.
+        update = me._after_tick
 
         def counted(dt):
             taken.append(dt)
             return update(dt)
 
-        setattr(owner, name, counted)
+        me._after_tick = counted
         me.set_move((1, 0, 0))
         for rate in (30, 144, 60, 45):
             for _ in range(rate // 3):

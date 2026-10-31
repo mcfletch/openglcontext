@@ -1,28 +1,18 @@
-"""Build a physics collision world from a loaded glTF/scenegraph.
+"""The triangles a loaded glTF/scenegraph collides with.
 
-Walks a scenegraph, pulls the world-space triangles out of every mesh, and adds
-them as a static ``trimesh`` collider so a character can walk on and bump into the
-model.  A node that carries an OMI physics body
-(:mod:`OpenGLContext.physics.omigltf`) is met as itself.
-
-:func:`collision_world_from_scene` builds an omi_physics world and needs the
-deprecated omi_physics (the ``omi-physics`` extra). The rest of the module is the
-scenegraph walk the physics service's scenery, its proxies and the walking
-avatar (:func:`scene_bounds`) use.
+Walks a scenegraph and pulls the world-space triangles out of every mesh: the
+physics service's scenery, its proxies and the walking avatar
+(:func:`scene_bounds`) are made from them. A node that carries an OMI physics
+body (:mod:`OpenGLContext.physics.omigltf`) is met as itself.
 """
 from __future__ import annotations
 
-import weakref
 from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 import numpy as np
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.physics.settings import default_backend
 from OpenGLContext.scenegraph import coordinates
-
-if TYPE_CHECKING:
-    from omi_physics.world import PhysicsWorld
 
 
 def _local_matrix(node: Any) -> np.ndarray:
@@ -321,19 +311,6 @@ def scene_bounds(group: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
     return np.min(lows, axis=0), np.max(highs, axis=0)
 
 
-#: Each world's X3D Collision groups, by the static body their geometry is.
-_GROUPS: weakref.WeakKeyDictionary[PhysicsWorld, dict[int, list[Any]]] = (
-    weakref.WeakKeyDictionary())
-
-
-def collision_groups(world: PhysicsWorld) -> dict[int, list[Any]]:
-    """The enabled X3D Collision groups each static body of `world` is the geometry of
-
-    By body index: the group the geometry is in, then each enabled group
-    around it. Empty for a world with none.
-    """
-    return dict(_GROUPS.get(world, {}))
-
 
 def node_mesh(node: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
     """Return ``(points, indices)`` of the triangles a node draws, in its own frame.
@@ -358,59 +335,3 @@ def node_mesh(node: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
         found = found * np.asarray(scale, dtype='d')
     return found, tris
 
-
-def collision_world_from_scene(
-        group: Any, gravity: float = 9.81, ground_pad: float = 0.0,
-        min_hull_size: float = 0.0
-) -> tuple[PhysicsWorld, Optional[tuple[np.ndarray, np.ndarray]]]:
-    """Build a :class:`PhysicsWorld` whose static geometry is the model's mesh.
-
-    ``group`` is the root scenegraph node. Every zone in it that carries
-    gravity becomes a gravity volume of the world; see
-    :mod:`OpenGLContext.physics.zones`.
-
-    Each enabled X3D ``Collision`` group's geometry is a static body of its
-    own, reported when touched (:func:`collision_groups`); the rest is one.
-
-    Returns ``(world, bounds)`` where bounds is ``(lo, hi)`` of the collision
-    geometry (``None`` if the model had no extractable triangles). ``min_hull_size``
-    box-ifies sub-components at or below that world-space size (see
-    :func:`extract_trimesh`) to speed up loading of large multi-part scenes.
-    """
-    from OpenGLContext.physics.engine import require_omi  # noqa: PLC0415 the omi world loads on use
-
-    require_omi('the walk-around collision world')
-    from omi_physics import model  # noqa: PLC0415 the omi world loads on use
-    from omi_physics.world import PhysicsWorld  # noqa: PLC0415 the omi world loads on use
-
-    world = PhysicsWorld(gravity=model.Gravity(gravity=gravity, direction=(0, -1, 0)),
-                         default_linear_damping=0.2, default_angular_damping=1.0,
-                         backend=default_backend())
-    from OpenGLContext.physics.zones import gravity_volumes, scene_zones
-    for volume in gravity_volumes(scene_zones(group)):
-        world.add_gravity_volume(volume)
-    groups: dict[int, list[Any]] = {}
-    lows, highs = [], []
-    for enclosing, bucket in _buckets(group, min_hull_size).items():
-        found = bucket.arrays()
-        if found is None or not len(found[1]):
-            continue
-        points, indices = found
-        shape = world.add_shape(model.Shape.trimesh(points, indices))
-        body = world.add_body(model.Motion(type=model.STATIC),
-                              collider=model.Collider(shape=shape), position=(0, 0, 0))
-        if enclosing:
-            # Reported when the walker touches it, as X3D's collideTime.
-            world.report_contacts(body)
-            groups[body] = list(enclosing)
-        lows.append(points.min(axis=0))
-        highs.append(points.max(axis=0))
-    if not lows:
-        return world, None
-    if groups:
-        _GROUPS[world] = groups
-        if world.contact_reporting == 'off':
-            world.contact_reporting = 'flagged'
-    lo = np.min(lows, axis=0) - ground_pad
-    hi = np.max(highs, axis=0) + ground_pad
-    return world, (lo, hi)

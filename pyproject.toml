@@ -90,11 +90,6 @@ exr = ["OpenEXR>=3.3"]
 # (omi_audio.device). Re-check when a wheel appears; this is a response to a
 # packaging gap and should not outlive it.
 audio = ["omi_audio[playback]"]
-# The deprecated omi_physics engine, for programs that name
-# PhysicsDefinition(engine='omi'), and the parts of the engine still built on
-# its own world (docs/physics.rst#physics-omi). Not in `all`: removed with the
-# omi engine. `dev` has it, so the omi engine's tests run in CI.
-omi-physics = ["omi_physics>=0.4.0"]
 # accelerate is now part of the core install; kept as an empty set so external
 # setups that still request OpenGLContext[accelerate] don't break.
 accelerate = []
@@ -107,8 +102,9 @@ all = ["OpenGLContext[pygame,glfw,gltf,draco,exr,audio,accelerate]"]
 docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid", "pyyaml"]
 # The development environment builds the documentation too: the workspace
 # syncs each project's dev extra, and a docs extra it skipped would leave
-# `build-docs.py` without sphinxcontrib-mermaid.
-dev = ["OpenGLContext[all,docs,omi-physics]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
+# `build-docs.py` without sphinxcontrib-mermaid. omi_physics is the reference
+# tests/unit/test_physics_cooking.py compares the hull and decomposition with.
+dev = ["OpenGLContext[all,docs]", "omi_physics>=0.4.0", "pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
 
 [project.scripts]
 oglc-test = "OpenGLContext.bin.gltest:main"
@@ -471,7 +467,6 @@ markers = [
     "core_profile: marks tests that require core profile",
     "compatibility_profile: marks tests for compatibility profile",
     "network: marks tests that fetch remote sample assets",
-    "engines(*names, reason=None): run the test once on each physics engine named ('omi', 'jolt'); see tests/unit/conftest.py",
     "serial: marks tests that need a quiet machine (no concurrent GPU/CPU load); wall-clock timing checks whose ratio compresses under load. Run them alone with '-m serial' after a '-m \"not serial\"' bulk pass.",
 ]
 

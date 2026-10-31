@@ -2261,6 +2261,83 @@ Limits: the hit's blow is the rules' (`game.BLOWS`), not a contact's impulse; th
 capsule's velocity and not each limb's animated velocity; joint transforms (attachments) stay at
 the animated pose while a ragdoll or a blend draws the figure.
 
+### P5c as built (2026-10-31): the omi engine deleted
+
+openglcontext branch `p5c-omi-removal`; pyjoltphysics c929894; twig-bb 527eeba;
+openglcontext-editor 0613426; glisteel 00ad36a; glisteel-editor ddfdeac; marble-demo 231f815.
+The root `uv.lock` is not regenerated (it still lists the `omi-physics` extra).
+
+Deleted from OpenGLContext: `physics/omiengine.py`, `omi_adapter.py`, `runtime.py`,
+`worker.py`, `replica.py`, `queries.py`, `x3domi.py`; `engine.require_omi`, `OMI_EXTRA`, the
+stand-in machinery (`Engine.stand_ins`, `push_reach`, `build_replica`, `proxy_bounds`,
+`Engine.replica`, the service's replica, `_settle_stand_ins`, `_bring_up*`, `_seen_in_step`,
+`_defers_stand_ins`, the character clock, `Physics.worker`, `_run`, `_engine_world`,
+`_slot_of`, `_body_at`; the character's stand-in writes; `stand_in_proxy` is
+`character.capsule_proxy`); the Jolt engine's `backend`, `standin` and `run` commands;
+`PhysicsDefinition.backend`, `BACKENDS`, `default_backend`, `OPENGLCONTEXT_PHYSICS_BACKEND`
+and `EngineInfo.compute`; `gltf_world.collision_world_from_scene` and `collision_groups`;
+`props.PropColliders`; `zones.gravity_volumes` and `GravityZones`; `debugdraw.PhysicsDebugDraw`
+with the omi proxy helpers (`ProxyOverlay` stays); `nav.navmesh.from_world`;
+`OpenGLContext.testing.physics`'s `inspect`, `slot_of`, `body_at`, `run` and every omi branch;
+the `omi-physics` extra; `tests/unit/omi.py`, the `engines` marker and the `physics_engine`
+fixture.
+
+Ported:
+
+- `PhysicsDefinition.engine` stays, with `ENGINES = ('jolt',)`, as the field another engine
+  would be named in. `settings.check_engine` refuses `'omi'` with a ValueError naming the
+  engine and the migration note (docs/physics.rst, "Programs that named the omi engine");
+  `OPENGLCONTEXT_PHYSICS_ENGINE=omi` is reported and ignored by `env_choice`.
+- `TerrainColliders(physics)` holds a static triangle-mesh body of the service per drawn
+  tile; `TilesTerrain(physics=)` replaces `physics_world=`.
+- `PhysicsViewPlatform(character, yaw)` takes a service character (`over` is the same).
+- `navmesh.from_scene(group)` builds from `gltf_world.extract_trimesh`, the triangles the
+  scenery's static bodies are made of.
+- The tile, prop, road, height-field and landscape collider tests use the service's
+  queries on Jolt, and drive the engine's vehicle where they drove omi's raycast vehicle;
+  `tests/tiles_walk.py` and `tests/tiles3d/test_navigation.py` walk a service character on
+  streamed tile colliders.
+- Recorded omi answers in place of live ones: `test_physics_massprops` (inertia and bounds of
+  nine shapes), `test_physics_neutral_types` (OMI field names and defaults, character states,
+  material presets). The tests of conversions to omi types went with the adapter.
+- `omi_physics` stays in OpenGLContext's `dev` extra only, for
+  `test_physics_cooking::test_the_same_pieces_as_omi_physics` (live, skipped without it);
+  `test_physics_without_omi.py` still runs the engine in child interpreters that cannot
+  import omi_physics.
+
+Found and fixed on Jolt (the omi-only tests that guarded it ran on omi alone):
+
+- A teleport did not move a capsule out of what it overlapped, so the free-fly camera
+  (`TerrainWalkMixin.collide_and_clamp`) stood inside trunks and rocks
+  (`test_terrainwalk_colliders`, 11 tests). `JoltController.safe_bind` now asks
+  `JoltEngine.push_out`: an overlap test of the capsule 5 cm above its seat, then the
+  capsule swept back towards its place from 2 m out in 32 level directions and from above,
+  the nearest clear place taken, at most six pushes, each reseated; False where none is
+  clear. Jolt's shape cast from a start inside a body missed 8 to 22 of 41 heights in a
+  measured case, so the escape is found by sweeps that start outside. `floor_under` passes
+  through a body the capsule's top is inside rather than taking its inside as a floor.
+  Tests: `test_physics_character` (into a post, into a gap with no clear place).
+
+Tests deleted with what they tested (each read omi internals): the worker, runtime, frame
+cost, sweep steps, backend, quiet-character, stand-in, inline-access modules; the replica and
+slot tests in `test_physics_service`, `test_physics_world_api`, `test_physics_neutral_api`,
+`test_physics_service_events`, `test_physics_joints`, `test_physics_filters`,
+`test_physics_queries`; the X3D collection's world and body-settings memo tests (they read
+omi world arrays; `test_a_jolt_world_is_made_again_for_its_settings` covers the rebuild);
+`test_the_finer_step_is_taken_at_the_rate_asked_for` (a Jolt world keeps the tick it was
+made with); the `PhysicsDebugDraw` tests; a vehicle-less engine's vehicle test.
+
+RESULTS
+
+Left:
+
+- `Character.stuck` stays set until the next teleport (pyjoltphysics sets it only there).
+- Crouched with `set_move(speed=9)`, `JoltController.speed()` answers 9 while the body moves at
+  `crouchSpeed`.
+- `tickHz` given to `enable` or `set_config` is kept until the world is made again; the
+  `physics_stairs_tuning` tutorial's finer step changes nothing on Jolt.
+- The root `uv.lock` needs `uv lock` for the removed extra.
+
 ## 7. Decisions
 
 Decided 2026-10-30: each recommendation below was accepted as written. On 5 the answer was to
@@ -2277,7 +2354,8 @@ turn the deterministic build on, and on 10 to ship both free-threaded and ordina
    `RaycastVehicle` until P6 and deleting the engine first would break it. Nothing falls back:
    naming `omi` without omi_physics raises `EngineUnavailable` naming the extra. The engine and
    the parts still built on an omi world are isolated behind `engine.py` and `require_omi`;
-   "P5 as built" lists what blocks the deletion and exactly what it removes.
+   "P5 as built" lists what blocks the deletion and exactly what it removes. As taken at
+   P5c (2026-10-31): the omi engine is deleted and `engine='omi'` is refused.
 4. Precision. Recommended: double precision in every wheel; within noise of single here, 3% in
    the first spike, 0.98 mm resolution at 8 to 16 km in single.
 5. Cross-platform determinism (`CROSS_PLATFORM_DETERMINISTIC`). Recommended: on, if replays or

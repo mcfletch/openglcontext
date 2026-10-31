@@ -452,8 +452,9 @@ collider, which makes the terrain walkable.
 
 ``scenegraph/tilesterrain.py`` is the node; call
 ``update_for_camera(camera, viewport_height, view_projection=…)`` each frame
-before rendering. ``physics_colliders.py`` adds and removes colliders through
-the runtime's ``on_renderable`` and ``on_evicted`` hooks. See
+before rendering. Given ``physics=``, a physics service, ``physics_colliders.py``
+adds and removes a static body for each drawn tile through the runtime's
+``on_drawn`` and ``on_evicted`` hooks. See
 :doc:`Physics & Collision <physics>` for the character controller.
 
 .. _making:

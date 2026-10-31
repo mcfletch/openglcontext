@@ -1,4 +1,4 @@
-"""A proxy's bounds and inertia, against the formulas and against omi_physics' massprops."""
+"""A proxy's bounds and inertia, against the formulas and against omi_physics' recorded answers."""
 import math
 
 import numpy as np
@@ -89,29 +89,36 @@ def test_a_heightfield_has_no_bounds():
         massprops.bounds(Proxy.heightfield(np.zeros((2, 2))))
 
 
+#: omi_physics' answers for :func:`shapes`, recorded from omi_physics 0.4 (``massprops.
+#: inertia_diagonal`` at mass 3, and ``body.world_aabb`` at (1, 2, 3) turned by
+#: :data:`TURN`): the inertia diagonal, then the box's low and high corners. omi_physics
+#: is the source of these formulas, and its answers hold them to it.
+OMI = {
+    'box': ([3.25, 2.5, 1.25], [-0.414213562373, 1.0, 1.585786437627], [2.414213562373, 3.0, 4.414213562373]),
+    'capsule': ([0.6825, 0.24, 0.6825], [0.6, 0.85, 2.6], [1.4, 3.15, 3.4]),
+    'compound': ([1.511900453875, 8.166311145183, 9.096977007647], [0.092893218813, 1.5, 1.085786437627],
+                 [2.914213562373, 3.5, 3.5]),
+    'cone': ([0.9, 0.9, 0.9], [0.0, 1.0, 2.0], [2.0, 3.0, 4.0]),
+    'convex': ([13.819473124748, 3.32185410116, 15.263809148732], [-0.995519159045, -0.68842909457, 1.896540232775],
+               [1.950222492042, 6.489513252972, 4.346661910166]),
+    'cylinder': ([1.1875, 0.375, 1.1875], [0.5, 1.0, 2.5], [1.5, 3.0, 3.5]),
+    'frustum': ([0.40206122449, 0.358714285714, 0.40206122449], [0.4, 1.5, 2.4], [1.6, 2.5, 3.6]),
+    'sphere': ([0.588, 0.588, 0.588], [0.3, 1.3, 2.3], [1.7, 2.7, 3.7]),
+    'trimesh': ([13.819473124748, 3.32185410116, 15.263809148732], [-0.995519159045, -0.68842909457, 1.896540232775],
+                [1.950222492042, 6.489513252972, 4.346661910166]),
+}
+
+
 @pytest.mark.parametrize('name', sorted(shapes()))
 def test_the_inertia_is_omis(name):
-    """Bodies weigh and turn as they do on the omi engine."""
-    pytest.importorskip('omi_physics', reason='omi_physics (the omi extra) is not installed')
-    from omi_physics.massprops import inertia_diagonal  # noqa: PLC0415 the reference, where installed
-
-    from OpenGLContext.physics.omi_adapter import omi_shape  # noqa: PLC0415 the reference, where installed
-
-    proxy = shapes()[name]
-    assert np.allclose(massprops.inertia_diagonal(proxy, 3.0), inertia_diagonal(omi_shape(proxy), 3.0))
+    """Bodies weigh and turn as omi_physics' massprops has them."""
+    assert np.allclose(massprops.inertia_diagonal(shapes()[name], 3.0), OMI[name][0], atol=1e-9)
 
 
 @pytest.mark.parametrize('name', sorted(shapes()))
 def test_the_bounds_are_omis(name):
-    pytest.importorskip('omi_physics', reason='omi_physics (the omi extra) is not installed')
-    from omi_physics.body import world_aabb  # noqa: PLC0415 the reference, where installed
-
-    from OpenGLContext.physics.omi_adapter import omi_shape  # noqa: PLC0415 the reference, where installed
-
-    proxy = shapes()[name]
-    mine = massprops.bounds(proxy, (1.0, 2.0, 3.0), TURN)
-    theirs = world_aabb(omi_shape(proxy), (1.0, 2.0, 3.0), np.asarray(TURN))
-    assert np.allclose(mine, theirs, atol=1e-9)
+    mine = massprops.bounds(shapes()[name], (1.0, 2.0, 3.0), TURN)
+    assert np.allclose(mine, OMI[name][1:], atol=1e-9)
 
 
 def test_each_kinds_volume():

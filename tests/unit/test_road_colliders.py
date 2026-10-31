@@ -13,20 +13,11 @@ import numpy as np
 import pytest
 
 from OpenGLContext.physics.body import Body
+from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.road import RoadColliders
+from OpenGLContext.physics.vehicles import CarTuning, VehicleSettings, car_wheels
 from OpenGLContext.scenegraph.road import RoadProfile
 from tests.unit._streamed import Streamed
-
-#: These tests check a part of the engine built on an omi_physics world, or use
-#: omi_physics as their reference; it is the deprecated omi extra.
-REASON_OMI = 'omi_physics (the omi extra) is not installed'
-raycast = pytest.importorskip('omi_physics.raycast', reason=REASON_OMI).raycast
-model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
-car_wheels = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).car_wheels
-RaycastVehicle = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).RaycastVehicle
-VehicleTuning = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).VehicleTuning
-
-pytestmark = pytest.mark.engines('omi', reason="reads the omi world the colliders are made in, and drives omi's raycast vehicle on it")
 
 PROFILE = RoadProfile()
 
@@ -37,6 +28,9 @@ _EAST = -np.pi / 2.0
 #: Where a car starts on them: in from the end, so it is on the surface rather
 #: than on the rim of it.
 _START = (200.0, 1.0, 0.0)
+
+#: Where the default car's chassis rides over a level road, in metres above it.
+RIDE_HEIGHT = 0.7
 
 
 def _straight(length=1200.0, spacing=6.0, grade=0.0):
@@ -55,12 +49,12 @@ def _road(line, *arguments, **named):
 
 
 def _surface(road, x, z):
-    hit = raycast(road.world, (x, 400.0, z), (0.0, -1.0, 0.0), max_distance=800.0)
+    road.physics.flush()
+    hit = road.physics.raycast((x, 400.0, z), (0.0, -1.0, 0.0), 800.0)
     return None if hit is None else float(hit.point[1])
 
 
 class TestASource:
-    @pytest.mark.engines('omi', 'jolt')
     def test_each_stretch_is_a_body_of_the_service(self) -> None:
         road = _road(_straight(), PROFILE, reach=200.0)
         road.update((0.0, 0.0, 0.0))
@@ -128,7 +122,7 @@ class TestTheRoadIsThere:
         standing = _road(line, PROFILE, reach=150.0)
         standing.update((9 * 120.0, 0.0, 0.0))
         assert driven.chunk_count() == standing.chunk_count()
-        assert driven.world.live_body_count == standing.world.live_body_count
+        assert driven.physics.counts.bodies == standing.physics.counts.bodies
 
     def test_standing_still_rebuilds_nothing(self) -> None:
         road = RoadColliders(_straight(), PROFILE, reach=150.0)
@@ -182,24 +176,28 @@ class TestACarOnIt:
         line = _straight(length=3000.0)
         road = _road(line, PROFILE, reach=250.0)
         road.update(_START)
-        world = road.world
-        body = world.add_body(model.Motion(type=model.DYNAMIC, mass=1200.0),
-                              position=_START)
-        car = RaycastVehicle(world, body, car_wheels(), VehicleTuning())
+        physics = road.physics
+        chassis = physics.add_dynamic(None, Proxy.box((1.8, 0.6, 4.2)), mass=1200.0,
+                                      translation=_START)
+        car = physics.add_vehicle(chassis, VehicleSettings.from_tuning(
+            CarTuning(), car_wheels(), 1200.0))
         car.place(_START, _EAST)
+        car.set_input(throttle=1.0)
+        frame = 1.0 / 60.0
         worst = 0.0
-        for step in range(int(seconds * 120)):
-            if step % 30 == 0:
-                road.update(world.position[body])
-            car.control(throttle=1.0)
-            car.update(1.0 / 120.0)
-            world.step(1.0 / 120.0)
-            if step > 240:
-                worst = max(worst, abs(float(world.position[body][1]) - 0.7))
-        return float(world.position[body][0]), worst
+        for step in range(int(seconds / frame)):
+            if step % 15 == 0:
+                road.update(chassis.position)
+            physics.frame(frame)
+            if step > 120:
+                worst = max(worst, abs(float(chassis.position[1]) - RIDE_HEIGHT))
+        return float(chassis.position[0]), worst
 
     def test_a_car_drives_along_it_without_being_stopped(self) -> None:
-        assert self._driven()[0] > 700.0
+        """The default car at full throttle covers 349 m in 25 s from the start
+        (16.2 m/s at the end, its top speed); a chunk boundary that held it up
+        would take tens of metres off that."""
+        assert self._driven()[0] - _START[0] > 300.0
 
     def test_it_stays_on_the_surface_the_whole_way(self) -> None:
         """Across every chunk boundary it crosses: no step, no launch."""
@@ -290,8 +288,8 @@ class TestTheEdgeOfADeck:
         """Fire across the road at the height a car's body is, and see what
         stops it. Not over the top of the barrier: what is being asked is what
         the car meets, and half a metre up is where the car is."""
-        return raycast(world.world, (x, 0.5, z), (0.0, 0.0, float(towards)),
-                       max_distance=40.0)
+        world.physics.flush()
+        return world.physics.raycast((x, 0.5, z), (0.0, 0.0, float(towards)), 40.0)
 
     def test_a_road_on_the_ground_has_no_edge_to_fall_off(self) -> None:
         world, _road = self._world()

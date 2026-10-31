@@ -140,16 +140,12 @@ class TestWhatAGameDoesWithIt:
         finally:
             terrain.shutdown()
 
-    @pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
     def test_colliders_can_be_built_from_it(self, tmp_path) -> None:
-        from omi_physics.raycast import raycast  # noqa: PLC0415 the omi engine's world, the deprecated omi extra
-
         terrain = TilesTerrain(_world(tmp_path), workers=1)
         try:
             ground = Streamed(HeightFieldColliders(terrain.field, reach=200.0))
             ground.update((0.0, 0.0, 0.0))
-            hit = raycast(ground.world, (0.0, 300.0, 0.0), (0.0, -1.0, 0.0),
-                          max_distance=600.0)
+            hit = ground.physics.raycast((0.0, 300.0, 0.0), (0.0, -1.0, 0.0), 600.0)
             assert hit is not None
             assert float(hit.point[1]) == pytest.approx(float(_hilly(0.0, 0.0)),
                                                         abs=1.0)
