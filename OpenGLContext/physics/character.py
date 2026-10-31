@@ -195,6 +195,15 @@ class Character:
         return bool(self._controller.grounded)
 
     @property
+    def ground(self) -> Body | None:
+        """The body the feet stand on; None off the ground, or on ground that is no body."""
+        controller = self._controller
+        if not controller.grounded:
+            return None
+        uid = self.physics._engine.service_uid(controller.ground_uid)
+        return None if uid is None else self.physics._body_of(uid)
+
+    @property
     def swimming(self) -> bool:
         """Whether the character is in water."""
         return bool(self._controller.swimming)

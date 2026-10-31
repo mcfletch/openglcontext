@@ -799,8 +799,9 @@ Walking (:doc:`physics`) collides with what X3D's ``Collision`` groups say:
 a disabled group's children are walked through, a ``proxy`` collides in
 place of the children, and each shape inside an enabled group is a scenery
 body of the context's physics service. Each step the avatar's capsule, a
-tenth of its radius and 3 cm wider, is overlapped with those bodies
-(``x3dcollision.collision_group_bodies``, ``CollisionReporter``). A body it
+tenth of its radius and 3 cm wider and no taller, is overlapped with those
+bodies (``x3dcollision.collision_group_bodies``, ``CollisionReporter``); the
+ground the avatar stands on is not counted. A body it
 begins touching makes its group send ``isActive TRUE`` and ``collideTime``,
 as does each enabled group around it, and a group sends ``isActive FALSE``
 when the avatar touches none of its bodies

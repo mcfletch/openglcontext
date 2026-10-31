@@ -778,7 +778,7 @@ overlaps and triggers meet:
    me.speed = 2.0; me.speed = None           # set it; None gives the mode's speed back
    me.jump(); me.set_crouch(True); me.slide(0.8)
    me.position, me.eye, me.velocity, me.grounded, me.state, me.heading
-   me.vertical_speed, me.height, me.radius, me.stuck, me.capabilities
+   me.vertical_speed, me.height, me.radius, me.stuck, me.ground, me.capabilities
    me.addEventHandler('hit', function=fn)    # a body's events; 'landed' and 'footstep' too
    me.remove()
 
@@ -790,6 +790,8 @@ The capsule's size and speeds are a ``CharacterCapabilities``
 capsule rises in metres a second (below zero it falls), ``me.height`` its height
 now in metres (less crouched or sliding), ``me.radius`` its radius, and
 ``me.stuck`` whether its last step could not move it out of what it overlaps.
+``me.ground`` is the body the feet stand on, None in the air or on ground
+that is no body.
 ``set_move(direction, mode='walk', speed=None)`` moves at
 ``speed`` metres a second where one is given and at the mode's speed from the
 capabilities where it is None; a crouched character goes no faster than

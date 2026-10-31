@@ -110,3 +110,46 @@ def test_a_removed_walker_reports_nothing():
     reporter.now_touching = {'wall'}
     reporter.update(now=1.0)
     assert 'isActive' not in group.__dict__
+
+
+class _Group:
+    """Stands for a Collision node: the reporter sets isActive and collideTime on it"""
+
+
+def _standing(physics, ground, at=(0.0, 0.0, 0.0)):
+    """A walker settled on ``ground``, and a reporter for ``ground`` and a wall beside it in one group"""
+    from OpenGLContext.physics.proxy import Proxy
+    walker = physics.add_character(None, position=at)
+    for _ in range(60):
+        physics.frame(1 / 60)
+    assert walker.grounded
+    side = physics.add_static(None, proxy=Proxy.box((1.0, 3.0, 3.0)),
+                              translation=(at[0] + 3.0, at[1] + 1.5, at[2]))
+    group = _Group()
+    return walker, side, group, CollisionReporter({ground: [group], side: [group]}, walker)
+
+
+@pytest.mark.parametrize('slope', [0.0, 25.0])
+def test_the_ground_the_walker_stands_on_is_no_collision(physics, slope):
+    from OpenGLContext.physics.proxy import Proxy
+    angle = np.radians(slope)
+    ground = physics.add_static(None, proxy=Proxy.box((40.0, 1.0, 40.0)),
+                                translation=(0.0, -0.5 / np.cos(angle), 0.0),
+                                rotation=(0.0, 0.0, 1.0, angle))
+    walker, _side, group, reporter = _standing(physics, ground)
+    reporter.update(1.0)
+    assert 'isActive' not in group.__dict__ and 'collideTime' not in group.__dict__
+
+
+def test_a_wall_of_the_group_beside_the_walker_is_a_collision(physics):
+    from OpenGLContext.physics.proxy import Proxy
+    ground = physics.add_static(None, proxy=Proxy.box((40.0, 1.0, 40.0)), translation=(0.0, -0.5, 0.0))
+    walker, side, group, reporter = _standing(physics, ground)
+    reporter.update(1.0)
+    assert 'isActive' not in group.__dict__
+    # The wall's face 2 cm from the capsule, where a Jolt character stops walking into it.
+    walker.teleport((3.0 - 0.5 - float(walker.radius) - 0.02, 0.0, 0.0))
+    physics.frame(1 / 60)
+    reporter.update(2.0)
+    assert group.isActive is True and group.collideTime == 2.0
+    assert reporter.touching == {side}

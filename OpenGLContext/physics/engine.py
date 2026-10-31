@@ -164,6 +164,10 @@ class Engine(abc.ABC):
         """The name of the material under a character, where the engine reports it."""
         return None
 
+    def service_uid(self, engine_uid: int) -> int | None:
+        """The service uid of the engine's own body ``engine_uid`` (a character's ground), or None."""
+        return None
+
     @abc.abstractmethod
     def set_mode(self, mode: str) -> None:
         """Step ``'inline'`` (with the frame) or ``'thread'`` (on its own), carrying waiting commands over."""

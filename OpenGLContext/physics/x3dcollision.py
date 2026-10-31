@@ -5,7 +5,10 @@ physics service's scenery (:mod:`OpenGLContext.physics.colliders`).
 :func:`collision_group_bodies` finds those bodies and the groups around each.
 A :class:`CollisionReporter` asks, once a step, which of them the walker's
 capsule touches: the capsule, :data:`TOUCH` of its radius and :data:`SKIN`
-metres wider, overlapping the body (:meth:`Physics.overlap <OpenGLContext.physics.service.Physics.overlap>`).
+metres wider and no taller, overlapping the body (:meth:`Physics.overlap
+<OpenGLContext.physics.service.Physics.overlap>`). The ground the walker
+stands on is not a touch, since X3D's ``collideTime`` is for what the avatar
+walks into.
 A body the walker begins touching sends ``isActive TRUE`` and ``collideTime``
 from its group and from each enabled group around it, and ``isActive FALSE``
 when the last body of a group is no longer touched.
@@ -64,17 +67,19 @@ class CollisionReporter:
         self.touching: set[Body] = set()
 
     def touched(self) -> set[Body]:
-        """The groups' bodies the walker's capsule touches now."""
+        """The groups' bodies the walker's capsule touches now, less the ground it stands on."""
         from OpenGLContext.physics.proxy import Proxy  # noqa: PLC0415 kept with the physics package
 
         walker = self.walker
         radius = float(walker.radius)
         height = float(walker.height)
-        reach = radius * (1.0 + TOUCH) + SKIN
-        capsule = Proxy.capsule(max(height - 2.0 * radius, 0.0), reach)
+        reach = min(radius * (1.0 + TOUCH) + SKIN, 0.5 * height)
+        # Wider than the walker and as tall: from the feet to the top of the head.
+        capsule = Proxy.capsule(max(height - 2.0 * reach, 0.0), reach)
         centre = walker.position + (0.0, 0.5 * height, 0.0)
         found = walker.physics.overlap(capsule, tuple(float(v) for v in centre), skip=walker.body)
-        return {body for body in found if body in self.groups}
+        ground = walker.ground
+        return {body for body in found if body in self.groups and body is not ground}
 
     def update(self, now: float) -> None:
         """Send the groups' events for the touches begun and ended since the last update, at time ``now``."""
