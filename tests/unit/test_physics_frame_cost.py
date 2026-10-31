@@ -212,13 +212,13 @@ def test_a_thread_worker_lists_rows_changed_in_snapshots_nobody_collected():
 def test_a_frame_writes_the_nodes_of_the_bodies_that_moved_and_no_others(monkeypatch):
     physics, bodies = service_at_rest(20)
     written = []
-    original = service_module.write_pose
+    original = service_module.write_poses
 
-    def counting(node, position, axis_angle):
-        written.append(node)
-        original(node, position, axis_angle)
+    def counting(nodes, positions, axis_angles):
+        written.extend(nodes)
+        original(nodes, positions, axis_angles)
 
-    monkeypatch.setattr(service_module, 'write_pose', counting)
+    monkeypatch.setattr(service_module, 'write_poses', counting)
     bodies[7].apply_impulse((0.0, 3.0, 0.0))
     physics.frame(FRAME)
     assert written == [bodies[7].node]

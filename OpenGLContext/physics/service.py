@@ -48,7 +48,7 @@ from OpenGLContext.physics.filters import Approach, Filters
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
 from OpenGLContext.physics.joints import READINGS, Joint, make_joint
 from OpenGLContext.physics.materials import Materials
-from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_pose
+from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_poses
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
 from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.records import (
@@ -1341,8 +1341,8 @@ class Physics:
         held, self._held = self._held, []
         if held:
             rows = sorted(set(rows).union(held))
-        wrote = False
-        position, axis_angle, applied = snapshot.position, snapshot.axis_angle, snapshot.applied_seq
+        applied = snapshot.applied_seq
+        nodes, written = [], []
         for row in rows:
             body = table[row]
             if body is None:
@@ -1355,9 +1355,13 @@ class Physics:
                 body._placed = None
             if body.node is None:
                 continue
-            write_pose(body.node, position[row], axis_angle[row])
-            wrote = True
-        return wrote
+            nodes.append(body.node)
+            written.append(row)
+        if not nodes:
+            return False
+        take = np.asarray(written, dtype=np.intp)
+        write_poses(nodes, snapshot.position[take], snapshot.axis_angle[take])
+        return True
 
     def _pose_table(self, rows: dict[int, int]) -> list[Body | None]:
         """The body at each row of a snapshot with row table ``rows``; None for a row of no body here."""
