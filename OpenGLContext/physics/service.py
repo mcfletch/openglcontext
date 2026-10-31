@@ -55,6 +55,7 @@ from OpenGLContext.physics.records import (
 from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.softbodies import SoftBody, SoftBodyFrame, SoftBodySpec
+from OpenGLContext.physics.softmesh import SoftMesh
 from OpenGLContext.physics.stepview import StepHook, StepView
 from OpenGLContext.physics.vehicles import Vehicle, VehicleSettings
 from OpenGLContext.physics.types import (
@@ -174,6 +175,8 @@ class Physics:
         #: frames they were spent over, since :meth:`deformable_costs` last read them.
         self._render_costs: dict[str, float] = {'ragdolls': 0.0, 'soft bodies': 0.0}
         self._cost_frames = 0
+        #: The meshes soft bodies move, written each frame (:meth:`add_soft_mesh`).
+        self._soft_meshes: list[SoftMesh] = []
 
     # -- the engine -----------------------------------------------------
     @property
@@ -1133,6 +1136,44 @@ class Physics:
             self._ensure_started()
         return handle
 
+    def add_soft_mesh(self, mesh: Any, position: Any = (0.0, 0.0, 0.0),
+                      rotation: Any = (0.0, 0.0, 0.0, 1.0), pins: Any = None,
+                      pin_bodies: Any = None, collision_filter: Any = None,
+                      **values: Any) -> SoftMesh:
+        """Make a soft body of a mesh's triangles, and keep the mesh's vertices where it moves them.
+
+        ``mesh`` is a :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh`, or a
+        ``Shape`` drawing one; its vertices are welded by position. ``pins``
+        name the mesh's own vertices. ``values`` are
+        :class:`~OpenGLContext.physics.softbodies.SoftBodySpec` fields
+        (``mass``, ``compliance``, ``pressure``, ``vertex_radius``...). Every
+        :meth:`frame` writes the vertices the world moved into the mesh; see
+        :mod:`OpenGLContext.physics.softmesh`.
+        """
+        geometry = getattr(mesh, 'geometry', None)
+        target = geometry if geometry is not None and hasattr(geometry, 'set_vertices') else mesh
+        if not hasattr(target, 'set_vertices'):
+            raise TypeError('a soft mesh is made from a PBRMesh or a Shape drawing one, not %r'
+                            % (mesh,))
+        made = SoftMesh.build(self, target, position, rotation, pins=pins, pin_bodies=pin_bodies,
+                              collision_filter=collision_filter, **values)
+        self._soft_meshes.append(made)
+        return made
+
+    def _forget_soft_mesh(self, soft_mesh: SoftMesh) -> None:
+        if soft_mesh in self._soft_meshes:
+            self._soft_meshes.remove(soft_mesh)
+
+    def _sync_soft_meshes(self) -> bool:
+        """Write each soft mesh the world moved; whether any was written."""
+        wrote = False
+        for soft_mesh in list(self._soft_meshes):
+            if not soft_mesh.soft.alive:
+                self._soft_meshes.remove(soft_mesh)
+                continue
+            wrote = soft_mesh.sync() or wrote
+        return wrote
+
     def _pin_rows(self, soft: SoftBody, vertices: Any, points: Any,
                   bodies: Any) -> tuple[np.ndarray, np.ndarray, list[int | None]]:
         """Pins as the engine takes them: vertex indices, points, and the uid of each pin's body or None."""
@@ -1437,11 +1478,12 @@ class Physics:
             if character.framed:
                 self._guarded(character, character._frame, steps, step, dt, alpha)
                 walking = walking or character.busy
+        softened = self._sync_soft_meshes() if self._soft_meshes else False
         if out.events:
             self._dispatch(out.events)
         self._finish_removals()
         applied = self.render.apply()
-        return bool(self._awake or applied or walking)
+        return bool(self._awake or applied or walking or softened)
 
     def _character_steps(self, dt: float) -> tuple[int, float]:
         """The fixed steps the characters owe this frame, and how far through the next one it ends."""

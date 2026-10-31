@@ -11,7 +11,7 @@
         "kind": {
           "type": "string",
           "minLength": 1,
-          "description": "The kind: one the application registered. OpenGLContext registers water, mirror, fire, smoke and sparks. A kind nothing is registered for loads as ordinary geometry."
+          "description": "The kind: one the application registered. OpenGLContext registers water, mirror, cloth, fire, smoke and sparks. A kind nothing is registered for loads as ordinary geometry."
         }
       },
       "allOf": [
@@ -22,6 +22,10 @@
         {
           "if": {"properties": {"kind": {"const": "mirror"}}},
           "then": {"$ref": "#/$defs/mirror"}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "cloth"}}},
+          "then": {"$ref": "#/$defs/cloth"}
         },
         {
           "if": {"properties": {"kind": {"enum": ["fire", "smoke", "sparks"]}}},
@@ -71,6 +75,22 @@
         "reflectance": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.97},
         "replace": {"type": "boolean", "description": "Whether the surface shows only the reflection: false on a material and true on a node unless given."}
       }
+    },
+    "cloth": {
+      "description": "Read on a node: the node becomes a Cloth holding its mesh, simulated as a soft body and placed where the node is. The node is at the top of the scene.",
+      "properties": {
+        "kind": true,
+        "mass": {"type": "number", "minimum": 0, "default": 1, "description": "Kilograms, shared among the welded vertices."},
+        "compliance": {"type": "number", "minimum": 0, "default": 0, "description": "Metres a newton, of the edges; 0 is rigid."},
+        "bendCompliance": {"type": "number", "minimum": 0, "default": 0.01, "description": "Metres a newton, of the bend constraints."},
+        "pressure": {"type": "number", "minimum": 0, "default": 0, "description": "Pa m3 holding a closed mesh round."},
+        "linearDamping": {"type": "number", "minimum": 0, "default": 0.1, "description": "1/s."},
+        "friction": {"type": "number", "minimum": 0, "default": 0.2},
+        "vertexRadius": {"type": "number", "minimum": 0, "default": 0, "description": "Metres the vertices keep from surfaces."},
+        "pinned": {"type": "array", "items": {"type": "integer", "minimum": 0}, "description": "Vertex indices of the mesh, held where they start."},
+        "wind": {"$ref": "#/$defs/vector3", "description": "A force in newtons, shared among the vertices every step."}
+      },
+      "additionalProperties": false
     },
     "particles": {
       "description": "Read on a node: an emitter started from the engine's preset of the kind's name stands where the node stands.",

@@ -571,8 +571,8 @@ Reference
   reproducible render.
 
 - :doc:`OGLC_hook <extensions/OGLC_hook>` -- the specification of the glTF
-  tag that names what a material or an object is (water, a mirror, fire,
-  smoke, sparks), with every kind's parameters and its JSON schema.
+  tag that names what a material or an object is (water, a mirror, cloth,
+  fire, smoke, sparks), with every kind's parameters and its JSON schema.
 
 - :doc:`OGLC_zone <extensions/OGLC_zone>` -- the specification of the glTF
   extension that marks a region and the extensions that apply inside it, for

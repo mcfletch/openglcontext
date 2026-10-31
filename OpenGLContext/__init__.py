@@ -391,6 +391,8 @@ Node( 'SphereBackground', 'OpenGLContext.scenegraph.spherebackground.SphereBackg
 Node( 'MMImageTexture', 'OpenGLContext.scenegraph.imagetexture.MMImageTexture' )
 Node( 'Contour2D', 'OpenGLContext.scenegraph.nurbs.Contour2D' )
 Node( 'CoordinateDeformer', 'OpenGLContext.scenegraph.coordinatedeformer.CoordinateDeformer' )
+Node( 'Cloth', 'OpenGLContext.scenegraph.softnodes.Cloth' )
+Node( 'Ragdoll', 'OpenGLContext.scenegraph.softnodes.Ragdoll' )
 Node( 'NurbsCurve', 'OpenGLContext.scenegraph.nurbs.NurbsCurve' )
 Node( 'NurbsCurve2D', 'OpenGLContext.scenegraph.nurbs.NurbsCurve2D' )
 Node( 'NurbsDomainDistanceSample', 'OpenGLContext.scenegraph.nurbs.NurbsDomainDistanceSample' )

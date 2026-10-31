@@ -171,7 +171,7 @@ implements these X3D nodes, by component:
   IsoSurfaceVolumeData, OpacityMapVolumeStyle, ProjectionVolumeStyle,
   SegmentedVolumeData, ShadedVolumeStyle, SilhouetteEnhancementVolumeStyle,
   ToneMappedVolumeStyle, VolumeData
-- OpenGLContext - CoordinateDeformer
+- OpenGLContext - Cloth, CoordinateDeformer, Ragdoll
 - X_ITE - AnisotropyMaterialExtension, BlendMode, ClearcoatMaterialExtension,
   DepthMode, InstancedShape,
   DiffuseTransmissionMaterialExtension, DispersionMaterialExtension,
@@ -188,7 +188,44 @@ for. A document names it with ``<component name='OpenGLContext' level='1'/>``
 (``COMPONENT OpenGLContext:1`` in the ClassicVRML encoding), and the writers
 write a scene holding one of its nodes with that statement. A browser without
 the component does not read such a document. ``CoordinateDeformer`` is
-described in :doc:`NURBS <nurbs>`.
+described in :doc:`NURBS <nurbs>`, and ``Cloth`` and ``Ragdoll`` below.
+
+.. _x3d-cloth-ragdoll:
+
+Cloth and Ragdoll
+~~~~~~~~~~~~~~~~~
+
+X3D's RigidBodyPhysics and HAnim components have no soft body and no ragdoll;
+these two nodes are in the ``OpenGLContext`` component and run on the
+physics service of the context that draws them (the Jolt engine).
+
+``Cloth`` is a group whose first ``Shape`` is simulated as a soft body. Its
+geometry is welded by position into particles; a geometry other than the
+engine's mesh is drawn as a mesh of its triangles from then on. Fields:
+``translation`` and ``rotation`` place it; ``mass`` (kg, 1), ``compliance``
+(m/N, 0 for rigid edges), ``bendCompliance`` (0.01), ``pressure`` (Pa m3, 0;
+holds a closed mesh round), ``linearDamping`` (1/s, 0.1), ``friction`` (0.2)
+and ``vertexRadius`` (m, 0) are the body's; ``pinned`` lists vertex indices
+held where they start; ``wind`` is a force in newtons shared among the
+vertices every step and may be routed; ``enabled`` false leaves it a group.
+The vertices are written in world coordinates, so a ``Cloth`` sits in no
+``Transform``.
+
+.. code-block:: none
+
+   DEF flag Cloth {
+     translation 0 2 0  mass 0.3  pinned [ 0 4 ]  wind 0 0 1.5
+     children Shape { geometry IndexedTriangleSet { ... } }
+   }
+
+``Ragdoll`` draws the glTF character ``url`` names, playing its first clip,
+with a ragdoll for a skeleton (``OpenGLContext.character.ragdoll``):
+``translation`` and ``rotation`` place it, ``mode`` is ``KINEMATIC``,
+``POWERED`` or ``LIMP``, and a new ``mode`` takes ``blend`` seconds;
+``mass`` (kg, 70), ``rootForce`` (N) and ``rootTorque`` (N m) are the
+ragdoll's. A ``LIMP`` ragdoll stops following the clip. The node reads no
+``HAnimHumanoid``: an HAnim figure's joints are not yet a rig the builder
+takes. See :doc:`characters` and :doc:`physics`.
 
 Geometry
 ~~~~~~~~

@@ -808,8 +808,13 @@ class TestTheHookSchemaMatchesTheKinds:
             return json.load(handle)['$defs']
 
     def test_every_shipped_kind_is_covered(self):
-        described = {'water', 'mirror', 'fire', 'smoke', 'sparks'}
+        described = {'water', 'mirror', 'cloth', 'fire', 'smoke', 'sparks'}
         assert set(hooks.BUILTIN) == described
+
+    def test_the_cloth_parameters(self):
+        from OpenGLContext.scenegraph.softnodes import CLOTH_PARAMETERS
+        cloth = self.schema()['cloth']['properties']
+        assert set(CLOTH_PARAMETERS) | {'kind', 'pinned', 'wind'} == set(cloth)
 
     def test_the_mirror_parameters_and_their_limits(self):
         mirror = self.schema()['mirror']['properties']

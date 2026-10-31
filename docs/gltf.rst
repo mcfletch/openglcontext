@@ -528,7 +528,7 @@ same way. :ref:`What a glTF file may ask the engine to do <asks>` gives the
 limits on each of the engine's kinds.
 
 The engine claims the bare lowercase names it documents and ships — ``water``,
-``mirror`` (:ref:`mirror-hook`), ``fire``, ``smoke`` and ``sparks`` — so an application naming its own keeps
+``mirror`` (:ref:`mirror-hook`), ``cloth``, ``fire``, ``smoke`` and ``sparks`` — so an application naming its own keeps
 them out of that namespace: ``glisteel:rail``, ``twigbb:teleporter``. A
 convention, read by nothing, so that a kind a game invents today does not
 collide with one the engine ships later.

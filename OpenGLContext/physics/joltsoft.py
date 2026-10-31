@@ -12,7 +12,6 @@ reach the service's snapshot, interpolated with the rest.
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -114,10 +113,10 @@ class JoltRagdollsAndSoftBodies:
         self._ragdoll_handles: dict[int, tuple[pj.Ragdoll, tuple[int, ...]]] = {}
         #: Each soft body's pyjoltphysics handle, by service uid.
         self._soft_handles: dict[int, pj.SoftBody] = {}
-        #: Each soft body's last frame read, by service uid: (snapshot tick, frame).
-        self._soft_frames: dict[int, tuple[int, SoftBodyFrame]] = {}
-        #: Render-thread seconds spent reading soft-body frames since the last :meth:`soft_costs`.
-        self._soft_read_s = 0.0
+        #: Each soft body's last frame read, by service uid: ((tick, applied sequence), frame).
+        self._soft_frames: dict[int, tuple[tuple[int, int], SoftBodyFrame]] = {}
+        #: The snapshot's (tick, applied sequence) and the row of each soft body's uid in it.
+        self._soft_rows: tuple[tuple[int, int], dict[int, int]] = ((-1, -1), {})
 
     # -- ragdolls ---------------------------------------------------------
     def _op_ragdoll(self, uid: int, ident: int, bones: Sequence[int],  # noqa: ARG002 named by the ragdoll
@@ -218,27 +217,26 @@ class JoltRagdollsAndSoftBodies:
 
     def soft_body_frame(self, uid: int) -> SoftBodyFrame | None:
         """Soft body ``uid``'s vertices from the newest snapshot, or None before it holds them."""
-        started = time.perf_counter()
-        try:
-            handle = self._soft_handles.get(uid)
-            snapshot = self.world.latest()
-            if handle is None or snapshot is None:
-                return None
-            tick = int(snapshot.tick)
-            held = self._soft_frames.get(uid)
-            if held is not None and held[0] == tick:
-                return held[1]
-            rows = snapshot.soft_bodies
-            found = np.flatnonzero(rows.uid == handle.uid)
-            if not len(found):
-                return None
-            i = int(found[0])
-            frame = SoftBodyFrame(int(rows.version[i]), tick, np.array(rows.origin[i], dtype='d'),
-                                  rows.vertices(i), rows.normals_of(i))
-            self._soft_frames[uid] = (tick, frame)
-            return frame
-        finally:
-            self._soft_read_s += time.perf_counter() - started
+        handle = self._soft_handles.get(uid)
+        snapshot = self.world.latest()
+        if handle is None or snapshot is None:
+            return None
+        tick = int(snapshot.tick)
+        # A flush publishes again at the same tick with what it applied: the sequence tells them apart.
+        key = (tick, int(snapshot.applied_seq))
+        held = self._soft_frames.get(uid)
+        if held is not None and held[0] == key:
+            return held[1]
+        rows = snapshot.soft_bodies
+        if self._soft_rows[0] != key:
+            self._soft_rows = (key, rows.rows())
+        i = self._soft_rows[1].get(handle.uid)
+        if i is None:
+            return None
+        frame = SoftBodyFrame(int(rows.version[i]), tick, np.array(rows.origin[i], dtype='d'),
+                              rows.vertices(i), rows.normals_of(i))
+        self._soft_frames[uid] = (key, frame)
+        return frame
 
     def world_costs(self) -> dict[str, float]:
         """Mean world-thread milliseconds a tick on ragdolls and on soft bodies, and their counts."""
