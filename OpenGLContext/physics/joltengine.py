@@ -244,6 +244,7 @@ class JoltController:
         self.ground_material = 0
         self.stuck = False
         self.landing: float | None = None
+        self._advancing = False
         self.move_dir = np.zeros(3)
         self.push = np.zeros(3)
         self.pushing = None
@@ -277,17 +278,27 @@ class JoltController:
         self.grounded = bool(rows.grounded[row])
         if expected is None:
             self.native_state = pj.CharacterState(int(rows.state[row]))
-        self.height = float(rows.height[row])
+            self.height = self._exact(float(rows.height[row]))
         self.slide_progress = float(rows.slide_progress[row])
         self.ground_normal = np.array(rows.ground_normal[row], dtype='d') if self.grounded else None
         self.ground_uid = int(rows.ground_uid[row])
         self.ground_material = int(rows.ground_material[row])
         self.stuck = bool(rows.stuck[row])
         landed = int(rows.landed_tick[row])
-        self.landing = (float(rows.landing_speed[row])
-                        if landed == tick and landed != self._landed_tick else None)
-        if self.landing is not None:
+        if landed == tick and landed != self._landed_tick:
             self._landed_tick = landed
+            speed = float(rows.landing_speed[row])
+            # Within one advance of several ticks a landing stays until the advance ends.
+            self.landing = speed if not self._advancing else max(self.landing or 0.0, speed)
+        elif not self._advancing:
+            self.landing = None
+
+    def _exact(self, height: float) -> float:
+        """``height`` as the capabilities give it where it is one of theirs read back in float32."""
+        for given in (self.capabilities.standHeight, self.capabilities.crouchHeight):
+            if abs(height - float(given)) < 1e-5:
+                return float(given)
+        return height
 
     @property
     def vy(self) -> float:
@@ -400,7 +411,15 @@ class JoltController:
         seq = self.native.set_crouch(bool(crouch))
         if self.native_state in (pj.CharacterState.STANDING, pj.CharacterState.CROUCHING):
             self._expect(pj.CharacterState.CROUCHING if crouch else pj.CharacterState.STANDING, seq)
+            self._resize(float(self.capabilities.crouchHeight if crouch
+                               else self.capabilities.standHeight))
         return bool(crouch)
+
+    def _resize(self, height: float) -> None:
+        """Read the capsule back at ``height``, its feet where they are."""
+        feet = float(self.position[1]) - self.height / 2.0
+        self.height = height
+        self.position = np.array([self.position[0], feet + height / 2.0, self.position[2]])
 
     @property
     def flying(self) -> bool:
@@ -423,6 +442,7 @@ class JoltController:
             return False
         seq = self.native.slide(float(duration), float(rise), bool(steer))
         self._expect(pj.CharacterState.SLIDING, seq)
+        self._resize(float(self.capabilities.crouchHeight))
         return True
 
     def extend_slide(self, duration: float) -> bool:
@@ -435,6 +455,7 @@ class JoltController:
         if self.native_state != pj.CharacterState.SLIDING:
             return False
         self._expect(pj.CharacterState.STANDING, self.native.end_slide())
+        self._resize(float(self.capabilities.standHeight))
         return True
 
     def knock_down(self) -> None:
@@ -473,8 +494,16 @@ class JoltController:
         self.native.set_pass_group(int(group))
 
     def update(self, dt: float) -> None:
-        """Advance the world by the ticks ``dt`` owes; the world thread moves the character in them."""
-        self.engine.advance(dt)
+        """Advance the world by the ticks ``dt`` owes; the world thread moves the character in them.
+
+        A landing in any of those ticks is :attr:`landing` once the advance ends.
+        """
+        self.landing = None
+        self._advancing = True
+        try:
+            self.engine.advance(dt)
+        finally:
+            self._advancing = False
 
 
 class _Capabilities:
@@ -739,10 +768,19 @@ class JoltEngine(Engine):
         self._run(self._clock.owed(dt))
 
     def advance(self, dt: float) -> None:
-        """Run the ticks ``dt`` owes for a character its owner steps, and read the characters."""
-        for _ in range(self._clock.owed(dt)):
+        """Run the ticks ``dt`` owes for a character its owner steps, and read the characters.
+
+        Sampled ground is kept around the characters for those ticks, as a
+        frame keeps it.
+        """
+        ticks = self._clock.owed(dt)
+        if not ticks:
+            return
+        self._stream_ground()
+        for _ in range(ticks):
             self._run_ticks(1)
             self._read_characters(self.world.latest())
+        self._keep_characters_above_ground()
 
     def collect(self, dt: float) -> Outbox:
         self._check_failed()
