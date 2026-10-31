@@ -209,7 +209,14 @@ and ``vertexRadius`` (m, 0) are the body's; ``pinned`` lists vertex indices
 held where they start; ``wind`` is a force in newtons shared among the
 vertices every step and may be routed; ``enabled`` false leaves it a group.
 The vertices are written in world coordinates, so a ``Cloth`` sits in no
-``Transform``.
+``Transform``. Each soft body is made from the geometry's vertices as
+authored, so a ``Cloth`` drawn again (its scene shown again, or in a second
+context) starts where it was authored. A geometry with tangents has them
+turned with its normals each frame, so a normal map follows the folds. A
+glTF node tagged ``cloth`` takes its place in the document as the Cloth's
+``translation`` and ``rotation``, and its parents' placement is undone by a
+``MatrixTransform`` around it; a scale on the node or its parents is not
+applied.
 
 .. code-block:: none
 

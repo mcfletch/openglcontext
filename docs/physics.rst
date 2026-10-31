@@ -714,8 +714,11 @@ no events. A pinned cloth does not sleep.
 ``add_soft_mesh`` takes a ``PBRMesh`` or a ``Shape`` drawing one, welds its
 vertices by position (a glTF mesh splits them at texture seams) and writes
 the particles and their normals back into the mesh's arrays each frame the
-body's ``version`` moves; the vertex buffers are written in place, so a
-still cloth costs no upload. The mesh is placed by its ``origin``, so its
+body's ``version`` moves, with each tangent turned as its normal turned; the
+vertex buffers are written in place, so a still cloth costs no upload. The
+soft body is made from the mesh's vertices as authored
+(``softmesh.rest_pose``), so a mesh simulated again starts where it was
+authored. The mesh is placed by its ``origin``, so its
 ``Shape`` sits in no ``Transform``. ``pins`` name the mesh's own vertices.
 The X3D ``Cloth`` node and the glTF ``OGLC_hook`` kind ``cloth`` make one
 from a document (:ref:`x3d-cloth-ragdoll`).
