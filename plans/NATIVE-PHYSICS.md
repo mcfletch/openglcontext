@@ -4,7 +4,7 @@ Status: **P0 to P3 landed 2026-10-30, P4a the same day, P4 (`engine.py`) 2026-10
 (Jolt the default, pyjoltphysics a requirement, omi_physics the `omi-physics` extra) 2026-10-31; in
 pyjoltphysics, P6a (vehicles) and P6c (ragdolls and soft bodies) 2026-10-31; P6b (vehicles
 through the service, glisteel on Jolt) 2026-10-31; P5b (walking and X3D rigid bodies off
-omi_physics) 2026-10-31.**
+omi_physics) 2026-10-31; P6d (ragdolls and soft bodies through the service) 2026-10-31.**
 Decision taken 2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists
 locally (`develop`) with no GitHub remote yet; its workspace registration waits for the remote
 (see "P0 as built" below). Every game suite passes with no engine setting; glisteel's car is a
@@ -583,7 +583,7 @@ of C++ and ran correctly in both builds.
 | P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3; done 2026-10-30 but for the tutorials, which wait for P4 (P3 below) |
 | P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4; P4a (the neutral API) done 2026-10-30, P4 2026-10-31 but for the game suites on Jolt, below |
 | P5 | Default `engine='jolt'`; `pyjoltphysics` a hard dependency; omi fallback, `worker.py`, `runtime.py`, `replica.py`, `queries.py` deleted; golden results recorded from omi; docs (`docs/physics.rst`, a page on the world thread, callbacks and determinism); omi_physics marked deprecated | full workspace `verify-everything.py`; preflight for openglcontext and pyjoltphysics | the games run on Jolt with no `engine` setting; marble-demo off direct omi imports; docs merged | 1 to 2 |
-| P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8; P6a (vehicles in pyjoltphysics) and P6c (ragdolls and soft bodies in pyjoltphysics) done 2026-10-31, below; P6b (vehicles through the service) done 2026-10-31; P6d not started |
+| P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8; P6a (vehicles in pyjoltphysics) and P6c (ragdolls and soft bodies in pyjoltphysics) done 2026-10-31, below; P6b (vehicles through the service) done 2026-10-31; P6d (ragdolls and soft bodies through the service) done 2026-10-31, below |
 
 P0 to P5: 14 to 19.5 weeks. The games stay on omi until P5: P4 runs them on both engines in CI,
 and a program selects Jolt with one definition field.
@@ -2022,6 +2022,97 @@ The deletion list of "P5 as built" now reads: `physics/omiengine.py`, `omi_adapt
 `PhysicsViewPlatform.__init__`'s world path, and the rest of that list as written. Blockers
 4 (tests with omi as their reference) and 5 (pyjoltphysics' vehicle scenarios against omi live)
 remain.
+
+### P6d as built (2026-10-31): ragdolls and soft bodies through the service
+
+openglcontext branch `p6d-ragdoll-cloth` (three commits on develop after P6b); pyjoltphysics
+893e48c and 3321231; pyopengl 070eeda3.
+
+Service and engine:
+
+- `physics.ragdolls`: `RagdollSpec` and `RagdollBone` (capsule bones by radius, length and axis;
+  twist, swing, bend, strength, friction; `from_skeleton`, `humanoid`, `as_dict`/`from_dict`),
+  `RagdollMode`, `HUMANOID_LIMITS` by role, `forward_kinematics`, and the `Ragdoll` handle:
+  `set_mode(mode, blend)`, `set_pose`, `place`, `play`/`stop`, `set_strength`, `hit(bone,
+  impulse, point)`, `poses()`, `remove()`. `Physics.add_ragdoll(spec, position, rotation, mode,
+  collision_filter)`, `Physics.ragdolls`, `Physics.ragdoll_of(body)`. Bones are `Body` handles
+  and movers, so their poses come through the service's snapshot interpolated with the other
+  bodies, and handlers, joints and rays name them. `Physics.remove(bone)` raises; a bone goes
+  with its ragdoll.
+- `physics.softbodies`: `SoftBodySpec` (pyjoltphysics' fields; enums as strings; `cloth`, `rope`,
+  `ball`, `from_mesh`), `SoftBody` (`pin` to world points or `Body` frames, `unpin`, `set_wind`,
+  `frame()`, `vertices()`, `remove()`), `SoftBodyFrame` (version, tick, origin, float32 positions
+  and normals as views). `Physics.add_soft_body`.
+- `physics.softmesh`: `weld` (vertices by position; glTF seams), `SoftMesh`;
+  `Physics.add_soft_mesh(mesh or Shape, ...)` writes the particles and their normals into the
+  mesh by version each `frame()`. `PBRMesh.set_vertices` writes in place; `_MeshGPU.update_dynamic`
+  writes a buffer of unchanged size with `glBufferSubData` (also the CPU skinning path's uploads).
+  Frames are read through one uid-to-row table a snapshot (`check_scaling` holds it).
+- `physics.joltsoft.JoltRagdollsAndSoftBodies`, a base of `JoltEngine`: the `ragdoll*`,
+  `soft_body`, `soft_pins` and `wind` commands; `Engine.ragdolls` and `Engine.soft_bodies`
+  flags, so the omi engine raises `EngineUnavailable` naming the jolt engine.
+- The Jolt engine's impulse at a point uses pyjoltphysics' `points` instead of a torque for a tick.
+- Frame cost: `Physics.deformable_costs()` (counts; world-thread `ragdolls ms` and `soft bodies
+  ms` a tick from pyjoltphysics' new `stats()` keys; render-thread `draw ms` a frame from
+  `note_render_cost`), shown by `debugoverlay.physics_provider` under the physics section.
+
+Characters (`character.ragdoll`): `RagdollRig.build(mixer, bones)` / `from_model(model)` chooses
+`DEFAULT_BONES` from the humanoid map, bridges a rig joint of 0.12 m or more between two chosen
+bones (Cesium Man's left upper arm, which the bone map misses), orders limb chains by depth (its
+left arm is numbered from the hand), runs capsules to the first chosen child or along the skin,
+reads radii from the skin (60th percentile of vertex distances from the axis), shares mass by
+Dempster's segment fractions, takes limits by role turned into each joint's frame by the
+figure's left, or HAnim Euler limits (`limits_from_hanim`). The arithmetic is in the world
+(`placement`), so centimetre and Z-up documents give metre ragdolls. `RagdollFigure.update`
+sends `AnimationMixer.blended_pose` as the target (one batch) while `following`; `draw` reads
+all bones in one `poses` call and writes `AnimationMixer.reskin_from`. New mixer API:
+`advance`, `blended_pose`, `reskin_from`, `joint_matrices_from`.
+
+Documents: `scenegraph.softnodes.Cloth` and `Ragdoll` in the `OpenGLContext` component, read and
+written in every X3D encoding (round trip tested); the glTF `OGLC_hook` kind `cloth` (no KHR or
+OMI extension exists for cloth or ragdolls) with schema, the Blender tag's kinds and the hook
+page. `Ragdoll` takes a glTF character by `url`; it reads no `HAnimHumanoid`.
+
+Demos: `oglc-ragdoll` (`bin/ragdoll_demo.py`, `RagdollYard`: Cesium Man walking powered, struck,
+knocked limp over 0.3 s, kinematic get-up over 1 s back to powered) and `oglc-cloth`
+(`bin/cloth_demo.py`, `ClothYard`: a banner on a bronze pole in gusting wind, a drape on a
+sandstone ball, a canvas sheet pinned to a beam and struck by thrown steel balls); tutorials
+`physics_ragdoll` and `physics_cloth` in the Physics path; captures are identical between runs.
+
+Defects found and fixed where they belong:
+
+- pyjoltphysics: an impulse or force on a body still awake in the half second before it sleeps
+  was lost: Jolt put it to sleep in that step. A push now resets the body's sleep timer
+  (3321231, test over 15 push ticks; it surfaced as `test_a_shot_pushes_the_crate_it_hits` once
+  impulses at points went through `points`).
+- pyopengl accelerate: `VBO.data` and `VBOOffset.vbo` were refcounted by hand on top of
+  Cython's own references, so an array assigned to `vbo.data` was released once too often at
+  collection: segfaults during GC in `test_hanim_nodes` and `test_pbrmesh_gl` once
+  `update_dynamic` assigned it. Fixed in `accelerate/src/vbo.pyx` (070eeda3, test of reference
+  counts); `update_dynamic` uses `set_array` and `copied` so a released accelerate is safe too.
+
+Limits and what is left:
+
+- `Ragdoll` over an `HAnimHumanoid`: HAnim joints are not yet a `Rig` the builder takes.
+- A ragdoll in a glTF document: no hook kind; the character's root would need the scene's rig.
+- Joint `Transform`s are not written while a ragdoll drives a figure, so attachments stay at the
+  animated pose.
+- A pinned cloth never sleeps, so a world holding one keeps stepping.
+- `Cloth` places its vertices in world coordinates: it sits in no `Transform`.
+- Humanoid detection maps Cesium Man's left arm wrongly (`humanoid.py`); the builder's chain
+  ordering and bridging correct it for ragdolls only.
+
+Tests: the new unit modules (`test_physics_ragdolls`, `test_physics_softbodies`,
+`test_physics_softmesh`, `test_character_ragdoll`, `test_softnodes`, `test_softbody_demos`) were
+written against the new modules, which did not exist before (red at collection); the
+`deformable_costs` row-table scaling test fails against a linear search per body. openglcontext
+`tests/unit -m "not serial"` 19,317 passed, 65 skipped, 6 xfailed; `-m serial` 29 passed;
+`tests/test_all_scripts.py -k physics` 22 passed. pyjoltphysics 501 passed, 2 skipped, serial 1,
+doctests 12 (scratch venv without omi_physics). pyopengl `tests/gl` and `accelerate/tests` 573
+passed, 301 skipped.
+Game suites against the branch (`-m "not serial"`): twig-bb 2,407 passed, 1 skipped;
+hill-runner 652 passed, 1 skipped; marble-demo 941 passed, 6 xfailed; marble-editor 165 passed;
+openglcontext-forest 86 passed; glisteel GLISTEEL_COUNT.
 
 ## 7. Decisions
 
