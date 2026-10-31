@@ -42,6 +42,9 @@ The navigation declaration
   replaced by the node its registration makes, so ``'fly'`` and
   ``modes.FlyMode(name='fly')`` declare the same thing.
 - ``mode`` - the mode selected at start; empty for the first selectable one.
+  A name that ``modes`` does not list is declared with the others, so
+  ``Navigation(mode='fly')`` is a navigation with the one fly mode, and a name
+  no mode is registered under raises ``KeyError``.
 - ``current`` - the mode in force, written by the navigation manager each
   frame. It is an ``SFNode``, so a HUD, a settings screen or an animation
   state machine can watch it instead of polling.

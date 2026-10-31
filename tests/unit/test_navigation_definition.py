@@ -165,6 +165,40 @@ class TestViews:
             nd.ViewDefinition(name='top', camera='top', gestures=['no-such-gesture'])
 
 
+class TestTheModeNamedAtStart:
+    def names(self, navigation):
+        return [mode.name for mode in navigation.modes]
+
+    def test_a_mode_named_alone_is_the_only_one_declared(self):
+        assert self.names(nd.Navigation(mode='fly')) == ['fly']
+
+    def test_a_mode_the_list_lacks_is_declared_with_it(self):
+        navigation = nd.Navigation(modes=['examine'], mode='fly')
+        assert self.names(navigation) == ['examine', 'fly']
+
+    def test_a_mode_already_declared_is_not_declared_twice(self):
+        navigation = nd.Navigation(modes=['fly', 'walk'], mode='walk')
+        assert self.names(navigation) == ['fly', 'walk']
+
+    def test_a_mode_given_as_a_node_counts_by_its_name(self):
+        navigation = nd.Navigation(modes=[FlyMode(name='fly')], mode='fly')
+        assert self.names(navigation) == ['fly']
+
+    def test_no_mode_named_declares_nothing_more(self):
+        assert self.names(nd.Navigation(modes=['walk'])) == ['walk']
+        assert self.names(nd.Navigation()) == []
+
+    def test_a_name_that_is_registered_nowhere_is_refused(self):
+        with pytest.raises(KeyError, match='no-such-mode'):
+            nd.Navigation(mode='no-such-mode')
+
+    def test_the_navigation_manager_starts_in_it(self):
+        from OpenGLContext.move.navigation import NavigationManager
+        definition = ContextDefinition(navigation={'mode': 'fly'})
+        manager = NavigationManager(definition, platform=None)
+        assert manager.current.name == 'fly'
+
+
 class TestTheDefinitionField:
     def test_a_fresh_definition_navigates_as_it_always_has(self):
         navigation = ContextDefinition().navigation
