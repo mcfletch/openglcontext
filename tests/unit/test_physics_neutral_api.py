@@ -413,3 +413,28 @@ def test_the_proxy_shape_is_a_deprecated_alias():
     proxy = Proxy.sphere(0.5)
     with pytest.warns(DeprecationWarning):
         assert proxy.shape.radius == 0.5
+
+
+# -- state ------------------------------------------------------------------
+
+def test_a_saved_state_puts_the_bodies_back(physics_engine):
+    physics = make('inline')
+    try:
+        physics.add_static(None, proxy=Proxy.box((20, 1, 20)), translation=(0, -0.5, 0))
+        body = physics.add_dynamic(None, proxy=Proxy.sphere(0.5), translation=(0, 5, 0))
+        run(physics, 0.2)
+        if physics_engine == 'omi':
+            # omi_physics keeps no state to save.
+            with pytest.raises(NotImplementedError):
+                physics.save_state()
+            return
+        saved = physics.save_state()
+        settle(physics)
+        at_save = float(physics.poses([body], interpolated=False).position[0][1])
+        run(physics, 0.5)
+        assert float(body.position[1]) < at_save - 0.1
+        physics.restore_state(saved)
+        run(physics, 0.02)
+        assert float(physics.poses([body], interpolated=False).position[0][1]) > at_save - 0.05
+    finally:
+        physics.close()

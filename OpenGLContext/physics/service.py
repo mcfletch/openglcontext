@@ -1491,6 +1491,24 @@ class Physics:
         return self._engine.joint_reading(joint, self._snapshot)
 
 
+    # -- state ------------------------------------------------------------
+    def save_state(self) -> bytes:
+        """The bodies' and joints' state as bytes, read between steps, for :meth:`restore_state`.
+
+        Characters, the step count and commands still waiting are not part of
+        it. Raises NotImplementedError on an engine that keeps no such state
+        (omi_physics).
+        """
+        return self._engine.save_state()
+
+    def restore_state(self, data: bytes) -> None:
+        """Put the bodies and joints back as :meth:`save_state` found them, from the next step.
+
+        The world must hold the bodies it held when the state was saved; one
+        that does not keeps its own state.
+        """
+        self._engine.restore_state(data)
+
     # -- tick-exact code ----------------------------------------------------
     def on_step(self, function: Callable[[StepView], Any]) -> StepHook:
         """Call ``function(view)`` on the stepping thread after every fixed step; returns its hook.

@@ -982,10 +982,18 @@ delivering anything. A test that checks a body reads ``body.position`` and
 ``body.velocity``, which answer the last frame, or ``physics.poses(bodies)``
 for many at once; those reads are the same on every engine.
 
-A test of what ``omi_physics`` itself holds (its arrays, its materials, its
-step count) reads the engine's world through ``OpenGLContext.testing.physics``,
-which exists only for the omi backend and is not exported by
-``OpenGLContext.physics``:
+A test of what the engine holds reads it through
+``OpenGLContext.testing.physics``, which is not exported by
+``OpenGLContext.physics``. ``settle``, ``holds``, ``shape_kind``,
+``shape_count``, ``mass``, ``material``, ``material_index``,
+``material_count``, ``pair_friction``, ``filter_count``, ``joint_count``,
+``step_dt``, ``world_position``, ``wait_ticks``, ``ticks``, ``idle`` and
+``stepping`` answer on either engine. A unit test runs on both by its
+module's ``pytestmark = pytest.mark.engines('omi', 'jolt')``, which
+``tests/unit/conftest.py`` turns into one run on each engine; a test that
+reads one engine's own machinery narrows it with
+``@pytest.mark.engines('omi', reason=...)``. The rest reach the omi_physics
+world, inline, and go away with it:
 
 .. code-block:: python
 

@@ -801,6 +801,10 @@ Modes and settings
      - ``auto`` (``OPENGLCONTEXT_PHYSICS_BACKEND``)
      - the compute backend (:ref:`below <physics-backends>`); one that cannot
        be made is logged and the world steps on ``auto``
+   * - ``engine``
+     - ``omi`` (``OPENGLCONTEXT_PHYSICS_ENGINE``)
+     - ``omi`` steps the world with omi_physics, ``jolt`` with Jolt through
+       pyjoltphysics (:ref:`physics-jolt`); chosen when the service is made
    * - ``tickHz``
      - 120
      - the fixed step, in steps a second, in both modes
@@ -929,10 +933,11 @@ The engine
 ----------
 
 ``physics.engine`` describes the engine that steps the world, as an
-``EngineInfo``: ``name`` (``'omi_physics'``), ``version``, ``tick_hz`` (steps a
-second), ``precision`` (``'double'``) and ``compute``, the compute backend in
-use where the engine offers a choice. ``str(physics.engine)`` is a line such as
-``omi_physics 0.4.0 double``. It is read-only.
+``EngineInfo``: ``name`` (``'omi_physics'`` or ``'jolt'``), ``version``,
+``tick_hz`` (steps a second), ``precision`` (``'double'``) and ``compute``, the
+compute backend in use where the engine offers a choice (``''`` on Jolt).
+``str(physics.engine)`` is a line such as ``omi_physics 0.4.0 double`` or
+``jolt 5.6.0 double``. It is read-only.
 
 ``physics.counts`` is a ``WorldCounts`` of ``bodies``, every body in the world
 with characters' bodies included, and ``contacts``, the pairs of bodies the
@@ -974,6 +979,84 @@ These calls hand over the ``omi_physics`` world and warn with a
 
 A test that checks what ``omi_physics`` itself holds reads it through
 ``OpenGLContext.testing.physics`` (:ref:`testing-physics`).
+
+.. _physics-jolt:
+
+The Jolt engine
+---------------
+
+``PhysicsDefinition(engine='jolt')``, or ``OPENGLCONTEXT_PHYSICS_ENGINE=jolt``
+for a whole run, steps the world with Jolt Physics 5.6 through
+``pyjoltphysics``. The variable is read once a process, and a capture or
+script a run starts inherits it, so a game's suite run with it set runs on Jolt
+throughout. Without pyjoltphysics installed, a service asked for Jolt raises
+``EngineUnavailable`` (``OpenGLContext.physics.engine``) and does not fall back
+to omi_physics. ``set_config`` with another ``engine`` raises ``ValueError``:
+the engine is chosen when the service is made. ``OpenGLContext.physics.engine``
+holds the interface the service drives either engine through.
+
+The Jolt world steps on pyjoltphysics' world thread, never on the render
+thread, in one of two ways:
+
+- Lockstep. Each frame runs exactly the ticks it owes (``tickHz`` a second,
+  capped by ``maxCatchUp``) while the render thread waits with the GIL
+  released. A world in ``inline`` mode, a world held there by
+  ``pin_inline`` (a capture, a recording, a replay) and any world with framed
+  characters runs this way, so a capture or a replay makes the same poses on
+  every run.
+- Free-running. In ``thread`` mode with no characters the world thread ticks
+  at ``tickHz`` on its own; a world with nothing awake and no step code waits
+  using no CPU. The frame reads the newest snapshot it published.
+
+Characters move inside the world's ticks. A framed character's code for a tick
+(``before-step`` handlers, blows taken, the steering of ``run_along`` and
+``hop_to``) runs on the render thread before that tick runs, and its
+``after-step`` handlers and landings after it, so a move set in a frame drives
+the first tick that frame runs and a course is steered at every tick, as on
+omi_physics. ``character.step(dt)`` and ``update(dt)`` on a character its
+owner steps advance the whole world by the ticks ``dt`` owes, since the world
+thread moves every character in each tick; the frame's ticks move unframed
+characters too. An input that changes what a character is doing
+(``knock_down``, ``slide``, ``end_slide``, ``set_crouch``, ``set_fly``,
+``set_swim``) reads back at once and holds until the world reports the tick
+that applied it. A teleport, and a body added, removed or moved, take effect at
+the next tick; queries apply waiting commands first, so a body added a moment
+ago is hit by a ray.
+
+What differs from omi_physics, by design of the engine:
+
+- The tick rate is fixed when the world is made; ``enable(tick_frequency=)``
+  and ``set_config`` with another ``tickHz`` log a warning and keep it.
+- Commands made inside a step (an ``on_step`` function, a physics callback,
+  ``post``) apply at the next tick, not in the step that made them.
+- A resting body sinks up to 5 mm into what it rests on (Jolt's penetration
+  slop, which the service sets to 5 mm).
+- Velocities are float32 in the snapshot: a speed read back is within about
+  1e-6 of the one set.
+- Characters push each other by their masses: a character walking into
+  another of a different pass group shoves it along rather than stopping.
+- A body striking a character knocks it back by the momentum the body brings
+  toward it; a body the character walks into does not.
+- A pair the contact filter lets through makes an unsolved ``'hit'`` and no
+  ``'separate'``.
+- A sample-function ground (``add_ground``) is held as height field tiles,
+  32 cells a side, around the characters, the awake dynamic bodies and each
+  query's path; its normals are the tiles' triangles' rather than the
+  ground's ``normal()``. A character whose feet are below such a ground is
+  lifted onto it, as the ground is solid below its surface on omi_physics.
+- Gravity zones act on a character's vertical motion only: a character pulled
+  sideways or upwards needs an up vector the controller does not have.
+- ``Hit.triangle`` is the row of the mesh triangle a ray met, and -1 for a
+  part that is no mesh triangle.
+- ``physics.world``, ``slot_of``, ``body_at``, ``index_of``, ``run`` and the
+  proxy overlay (``show_proxies``) reach the omi_physics world; on Jolt they
+  raise ``RuntimeError`` or, for the overlay, log a warning.
+
+``physics.save_state()`` returns the bodies' and joints' state as bytes
+(Jolt's ``PhysicsSystem::SaveState``) and ``physics.restore_state(data)`` puts
+them back from the next tick; the world must hold the same bodies. Characters,
+the tick count and commands still waiting are not part of the state. The omi
+engine raises ``NotImplementedError`` for both.
 
 .. _model:
 
@@ -1737,11 +1820,16 @@ one body. The omi_physics README has the details.
 X3D rigid bodies
 ~~~~~~~~~~~~~~~~
 
-An X3D document's ``RigidBodyCollection`` is an omi_physics world of its own
-(``OpenGLContext.physics.x3drigid``), stepped once a frame on the engine's
-clock: its bodies, their collidables as shapes and compounds, X3D's six joints
-on the joints above, and its ``CollisionCollection``\ s and routed ``Contact``
-nodes as a pair rule. A ``CollisionSensor`` reports touches without stepping
+An X3D document's ``RigidBodyCollection`` is a world of its own, stepped once a
+frame on the engine's clock: an omi_physics world
+(``OpenGLContext.physics.x3drigid``), or a Jolt world where
+``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``jolt`` (``OpenGLContext.physics.x3djolt``).
+Its bodies, their collidables as shapes and compounds, X3D's six joints on the
+joints above, and its ``CollisionCollection``\ s and routed ``Contact`` nodes
+as a pair rule. On Jolt the rule is asked as a pair first touches and at each
+step a refused pair still meets, a pair meets with the collider's bounce and
+first friction coefficient or a routed contact's, a body's inertia is its
+shapes', and the collection's solver settings are Jolt's own. A ``CollisionSensor`` reports touches without stepping
 anything. What each node does, and the units of its fields, are in
 :ref:`x3d-rigid-bodies`.
 
