@@ -423,10 +423,18 @@ class AnimationMixer:
     # -- the frame --------------------------------------------------------
     def update(self, dt: float) -> None:
         """Advance every track by ``dt`` seconds and pose the model."""
+        self.advance(dt)
+        self.apply()
+
+    def advance(self, dt: float) -> None:
+        """Advance every track by ``dt`` seconds without posing the model.
+
+        For a caller that poses the skeleton itself from :meth:`blended_pose`,
+        such as a ragdoll following the animation.
+        """
         step = max(0.0, float(dt))
         for layer in self.layers:
             layer._settle(step)
-        self.apply()
 
     def apply(self) -> None:
         """Pose the model from where the tracks stand, without moving them on.
@@ -634,11 +642,30 @@ class AnimationMixer:
         directly. ``pose`` defaults to where the tracks stand now.
         """
         if pose is None:
-            pose = self.pose()
-            for layer in self.layers:
-                if layer.weight and layer.tracks:
-                    self._apply_layer(layer, pose, {})
-        worlds = self.rig.world_matrices(*pose)
+            pose = self.blended_pose()
+        return self.joint_matrices_from(self.rig.world_matrices(*pose))
+
+    def blended_pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Translation, rotation and scale arrays of every rig slot where the tracks stand now."""
+        pose = self.pose()
+        for layer in self.layers:
+            if layer.weight and layer.tracks:
+                self._apply_layer(layer, pose, {})
+        return pose
+
+    def reskin_from(self, worlds: np.ndarray) -> None:
+        """Give every skin the joint matrices of ``worlds``, ``(N, 4, 4)`` rig-slot world matrices.
+
+        The matrices a skeleton posed by something other than the clips
+        (a ragdoll) is drawn with.
+        """
+        for (skin, _slots, _bind, _mesh), mats in zip(
+                self._skin_plans, self.joint_matrices_from(worlds), strict=True):
+            for mesh in skin.meshes:
+                mesh.set_skin_matrices(mats)
+
+    def joint_matrices_from(self, worlds: np.ndarray) -> list[np.ndarray]:
+        """The ``(J, 4, 4)`` joint-matrix stack of each skin for rig-slot world matrices ``worlds``."""
         identity = np.eye(4)
         out: list[np.ndarray] = []
         for _skin, slots, inverse_bind, mesh_slot in self._skin_plans:

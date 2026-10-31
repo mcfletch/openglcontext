@@ -42,6 +42,7 @@ import pyjoltphysics as pj
 from OpenGLContext.events.framestep import FixedSteps
 from OpenGLContext.physics.engine import Engine, LivePose, Outbox, RawHit
 from OpenGLContext.physics.joltvehicles import JoltVehicles
+from OpenGLContext.physics.joltsoft import JoltRagdollsAndSoftBodies
 from OpenGLContext.physics.poses import vrml_rotation_to_quat
 from OpenGLContext.physics.records import (
     BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step,
@@ -569,7 +570,7 @@ class _IgnoreSet(set[int]):
             self._sent()
 
 
-class JoltEngine(Engine):
+class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     """A Jolt world, stepped by pyjoltphysics on its world thread."""
 
     name = 'jolt'
@@ -663,6 +664,7 @@ class JoltEngine(Engine):
         self._error: BaseException | None = None
         #: The service's vehicles (:mod:`OpenGLContext.physics.joltvehicles`).
         self.vehicle_table = JoltVehicles(self)
+        self._init_soft()
 
     # -- uids ---------------------------------------------------------------
     def jolt_uid(self, uid: int) -> int | None:
@@ -1425,7 +1427,7 @@ class JoltEngine(Engine):
         if operation is None:
             log.warning('unknown physics command %r', command.op)
             return
-        if command.uid and command.op not in ('add',) and command.uid not in self._jolt \
+        if command.uid and command.op not in ('add', 'soft_body') and command.uid not in self._jolt \
                 and command.uid not in self._grounds and command.uid not in self._batches:
             self._done(command.seq)
             return
@@ -1570,6 +1572,7 @@ class JoltEngine(Engine):
         controller = self._controllers.pop(uid, None)
         self.given.pop(uid, None)
         self.vehicle_table.chassis_removed(uid)
+        self._forget_soft(uid)
         for joint in [joint for joint, pair in self._joint_bodies.items() if uid in pair]:
             self._forget_joint(joint)
         jolt = self._unbind(uid)
@@ -1596,11 +1599,9 @@ class JoltEngine(Engine):
 
     def _op_impulse(self, uid: int, impulse: Any, at: Any) -> None:
         jolt = self._jolt[uid]
-        push = np.asarray(impulse, dtype='d')
-        self.world.add_impulses([jolt], push)
-        if at is not None:
-            arm = np.asarray(at, dtype='d') - self._current_pose(uid)[0]
-            self.world.add_torques([jolt], np.cross(arm, push) / self.step_dt)
+        push = np.asarray(impulse, dtype='d').reshape(1, 3)
+        points = None if at is None else np.asarray(at, dtype='d').reshape(1, 3)
+        self.world.add_impulses([jolt], push, points=points)
 
     def _op_torque_impulse(self, uid: int, impulse: Any) -> None:
         self.world.add_torques([self._jolt[uid]], np.asarray(impulse, dtype='d') / self.step_dt)

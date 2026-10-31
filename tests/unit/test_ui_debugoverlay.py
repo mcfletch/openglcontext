@@ -356,6 +356,27 @@ class TestBuiltInProviders:
             physics.close()
         assert rows == {'bodies': 1, 'contacts': 0}
 
+    def test_the_physics_provider_reports_the_ragdolls_and_soft_bodies_and_their_cost(self):
+        from OpenGLContext.physics import Physics, PhysicsDefinition, Proxy
+        from OpenGLContext.physics.ragdolls import RagdollSpec
+        from OpenGLContext.physics.softbodies import SoftBodySpec
+
+        physics = Physics(PhysicsDefinition(mode='inline', engine='jolt'))
+        try:
+            physics.add_static(None, proxy=Proxy.box((9, 1, 9)), translation=(0, -0.5, 0))
+            physics.add_ragdoll(RagdollSpec.humanoid(), mode='powered')
+            physics.add_soft_body(SoftBodySpec.cloth(1, 1, 9, 9), position=(3, 1, 0))
+            for _ in range(10):
+                physics.frame(1 / 60)
+            physics.note_render_cost('soft bodies', 0.001)
+            rows = dict(physics_provider(lambda: physics)())
+        finally:
+            physics.close()
+        assert rows['ragdolls'] == 1 and rows['soft bodies'] == 1
+        assert float(str(rows['soft bodies ms'])) > 0.0
+        assert float(str(rows['soft bodies draw ms'])) == pytest.approx(0.1, abs=1e-3)
+        assert 'ragdolls draw ms' in rows
+
     def test_the_physics_provider_says_nothing_with_no_world(self):
         assert physics_provider(lambda: None)() == []
 

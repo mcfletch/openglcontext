@@ -476,7 +476,11 @@ def physics_provider(world: Callable[[], Any]) -> Provider:
             return []
         counts = getattr(found_world, 'counts', None)
         if counts is not None:
-            return [('bodies', counts.bodies), ('contacts', counts.contacts)]
+            rows = [('bodies', counts.bodies), ('contacts', counts.contacts)]
+            costs = getattr(found_world, 'deformable_costs', None)
+            if costs is not None:
+                rows.extend(_deformable_rows(costs()))
+            return rows
         found: list[tuple[str, Any]] = []
         for name, label in (('bodies', 'bodies'), ('contacts', 'contacts')):
             collection = getattr(found_world, name, None)
@@ -484,6 +488,19 @@ def physics_provider(world: Callable[[], Any]) -> Provider:
                 found.append((label, len(collection)))
         return found
     return rows
+
+
+def _deformable_rows(costs: dict[str, float]) -> Rows:
+    """The ragdolls' and soft bodies' rows: each kind the world holds, its count and its costs."""
+    found: list[tuple[str, Any]] = []
+    for kind in ('ragdolls', 'soft bodies'):
+        count = int(costs.get(kind, 0))
+        if not count:
+            continue
+        found.append((kind, count))
+        found.append(('%s ms' % kind, Fixed(costs.get('%s ms' % kind, 0.0), 3)))
+        found.append(('%s draw ms' % kind, Fixed(costs.get('%s draw ms' % kind, 0.0), 3)))
+    return found
 
 
 def simulation_provider(simulation: Callable[[], Any]) -> Provider:

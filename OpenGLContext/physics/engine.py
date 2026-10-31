@@ -30,6 +30,7 @@ from OpenGLContext.physics.types import EngineInfo, WorldCounts
 if TYPE_CHECKING:
     from OpenGLContext.physics.proxy import Proxy
     from OpenGLContext.physics.vehicles import Surface, VehicleSettings, VehicleState
+    from OpenGLContext.physics.softbodies import SoftBodyFrame
 
 __all__ = ['ENGINES', 'OMI_EXTRA', 'Engine', 'EngineUnavailable', 'LivePose', 'Outbox', 'RawHit',
            'make_engine', 'require_omi']
@@ -97,6 +98,10 @@ class Engine(abc.ABC):
     push_reach: float = 0.0
     #: Whether the engine carries vehicles (:meth:`add_vehicle`).
     vehicles: bool = False
+    #: Whether the engine simulates ragdolls (the ``ragdoll_*`` commands).
+    ragdolls: bool = False
+    #: Whether the engine simulates soft bodies (the ``soft_body``, ``soft_pins`` and ``wind`` commands).
+    soft_bodies: bool = False
 
     def __init__(self, definition: PhysicsDefinition) -> None:
         self.definition = definition
@@ -278,6 +283,15 @@ class Engine(abc.ABC):
                      quaternion: Any) -> tuple[np.ndarray, np.ndarray]:
         """The world box of ``proxy`` at ``position`` turned by ``quaternion``, as the copy holds it."""
         raise NotImplementedError('the %s engine keeps no copy of the bodies' % (self.name,))
+
+    # -- ragdolls and soft bodies -------------------------------------------
+    def soft_body_frame(self, uid: int) -> SoftBodyFrame | None:
+        """Soft body ``uid``'s vertices as the newest step left them; None where the engine has none."""
+        return None
+
+    def world_costs(self) -> dict[str, float]:
+        """Counts and mean milliseconds a tick of the engine's ragdolls and soft bodies; empty without."""
+        return {}
 
     # -- state ------------------------------------------------------------
     def save_state(self) -> bytes:

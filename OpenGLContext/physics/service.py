@@ -37,7 +37,7 @@ from OpenGLContext.events.framestep import FixedSteps
 from OpenGLContext.events.handoff import Updates
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.character import Character, stand_in_proxy
-from OpenGLContext.physics.engine import Engine, make_engine
+from OpenGLContext.physics.engine import Engine, EngineUnavailable, make_engine
 from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
@@ -48,11 +48,13 @@ from OpenGLContext.physics.joints import READINGS, Joint, make_joint
 from OpenGLContext.physics.materials import Materials
 from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_poses
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
+from OpenGLContext.physics.ragdolls import Ragdoll, RagdollMode, RagdollSpec, forward_kinematics
 from OpenGLContext.physics.records import (
     BodyBatch, BodySpec, Command, Motion, PhysicsEvent, Snapshot, Step,
 )
 from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.physics.softbodies import SoftBody, SoftBodyFrame, SoftBodySpec
 from OpenGLContext.physics.stepview import StepHook, StepView
 from OpenGLContext.physics.vehicles import Vehicle, VehicleSettings
 from OpenGLContext.physics.types import (
@@ -165,6 +167,13 @@ class Physics:
         self._zone_ids = itertools.count(1)
         self._vehicles: dict[int, Vehicle] = {}
         self._vehicle_ids = itertools.count(1)
+        self._ragdoll_ids = itertools.count(1)
+        #: The ragdoll each bone belongs to, by the bone's uid.
+        self._ragdoll_of: dict[int, Ragdoll] = {}
+        #: Render-thread seconds spent posing ragdolls and uploading soft bodies, and the
+        #: frames they were spent over, since :meth:`deformable_costs` last read them.
+        self._render_costs: dict[str, float] = {'ragdolls': 0.0, 'soft bodies': 0.0}
+        self._cost_frames = 0
 
     # -- the engine -----------------------------------------------------
     @property
@@ -1007,6 +1016,178 @@ class Physics:
         if self._vehicles.pop(vehicle.uid, None) is not None and not self._closed:
             self._engine.remove_vehicle(vehicle.uid)
 
+    # -- ragdolls and soft bodies -----------------------------------------
+    def _require(self, feature: str) -> None:
+        if not getattr(self._engine, feature):
+            raise EngineUnavailable('%s need the jolt engine; the %s engine has none'
+                                    % (feature.replace('_', ' '), self._engine.name))
+
+    def add_ragdoll(self, spec: RagdollSpec, position: Any = (0.0, 0.0, 0.0),
+                    rotation: Any = (0.0, 0.0, 0.0, 1.0), mode: RagdollMode | str = 'limp',
+                    collision_filter: Any = None) -> Ragdoll:
+        """Put a ragdoll in the world, standing in its rest pose, and return its handle.
+
+        ``position`` and ``rotation`` (a quaternion ``(x, y, z, w)``) place the
+        ragdoll's frame, which the root bone's translation is in. ``mode`` is
+        a :class:`~OpenGLContext.physics.ragdolls.RagdollMode` or its name.
+        ``collision_filter`` is a filter's name or definition, as the ``add_*``
+        calls take one. The bones are bodies (:attr:`Ragdoll.bones`) from the
+        call on; the world holds them from the next tick. Raises
+        :class:`~OpenGLContext.physics.engine.EngineUnavailable` on an engine
+        without ragdolls.
+        """
+        self._require('ragdolls')
+        if not isinstance(spec, RagdollSpec):
+            raise TypeError('a ragdoll is made from a RagdollSpec, not %r' % (spec,))
+        made_mode = RagdollMode.coerce(mode)
+        place = tuple(float(v) for v in vector(position, 'position'))
+        turn = np.asarray(rotation, dtype='d').reshape(4)
+        if not (np.isfinite(turn).all() and np.linalg.norm(turn) > 0.0):
+            raise ValueError('rotation is a quaternion of finite, non-zero length')
+        turn = turn / np.linalg.norm(turn)
+        places, turns = forward_kinematics(spec, position=place, rotation=turn)
+        bones = []
+        for row, bone in enumerate(spec.bones):
+            uid = next(self._uids)
+            proxy = (Proxy.capsule(max(bone.length - 2.0 * bone.radius, 0.0), bone.radius)
+                     if bone.length > 2.0 * bone.radius else Proxy.sphere(bone.radius))
+            body = Body(self, uid, 'dynamic', None, proxy, places[row],
+                        quat_to_vrml_rotation(turns[row]), float(bone.mass),
+                        spec.linear_damping, spec.angular_damping, spec.gravity_factor)
+            self._bodies[uid] = body
+            self._movers.append(body)
+            bones.append(body)
+        ragdoll = Ragdoll(self, next(self._ragdoll_ids), spec, bones, made_mode)
+        for body in bones:
+            self._ragdoll_of[body.uid] = ragdoll
+        if not self._closed:
+            self._send(Command('ragdoll', 0, (
+                ragdoll.id, tuple(body.uid for body in bones), spec, place,
+                tuple(float(v) for v in turn), made_mode,
+                self.filters.index(collision_filter)), next(self._seq)))
+            self._ensure_started()
+        return ragdoll
+
+    @property
+    def ragdolls(self) -> tuple[Ragdoll, ...]:
+        """The ragdolls in the world, in the order they were added."""
+        seen: dict[int, Ragdoll] = {}
+        for ragdoll in self._ragdoll_of.values():
+            seen.setdefault(ragdoll.id, ragdoll)
+        return tuple(seen[key] for key in sorted(seen))
+
+    def ragdoll_of(self, body: Body) -> Ragdoll | None:
+        """The ragdoll ``body`` is a bone of, or None."""
+        return self._ragdoll_of.get(body.uid)
+
+    def _ragdoll_command(self, ragdoll: Ragdoll, op: str, *args: Any) -> None:
+        if ragdoll.alive and not self._closed:
+            self._send(Command(op, 0, (ragdoll.id, *args), next(self._seq)))
+
+    def _remove_ragdoll(self, ragdoll: Ragdoll) -> None:
+        if not ragdoll.alive:
+            return
+        ragdoll.alive = False
+        seq = 0
+        if not self._closed:
+            seq = next(self._seq)
+            self._send(Command('ragdoll_remove', 0, (ragdoll.id,), seq))
+        for body in ragdoll.bones:
+            body.alive = False
+            self._ragdoll_of.pop(body.uid, None)
+            self._forget(body, seq)
+
+    def add_soft_body(self, spec: SoftBodySpec, position: Any = (0.0, 0.0, 0.0),
+                      rotation: Any = (0.0, 0.0, 0.0, 1.0), pins: Any = None,
+                      pin_bodies: Any = None, collision_filter: Any = None) -> SoftBody:
+        """Put a soft body in the world, its vertices placed by ``position`` and ``rotation``.
+
+        ``pins`` is (vertices, points): each vertex is held at its point, a
+        world position, or a point in the frame of the body at the same index
+        of ``pin_bodies`` (one body for all; None for the world).
+        ``collision_filter`` is a filter's name or definition. Raises
+        :class:`~OpenGLContext.physics.engine.EngineUnavailable` on an engine
+        without soft bodies.
+        """
+        self._require('soft_bodies')
+        if not isinstance(spec, SoftBodySpec):
+            raise TypeError('a soft body is made from a SoftBodySpec, not %r' % (spec,))
+        place = tuple(float(v) for v in vector(position, 'position'))
+        turn = np.asarray(rotation, dtype='d').reshape(4)
+        if not (np.isfinite(turn).all() and np.linalg.norm(turn) > 0.0):
+            raise ValueError('rotation is a quaternion of finite, non-zero length')
+        turn = turn / np.linalg.norm(turn)
+        uid = next(self._uids)
+        body = Body(self, uid, 'soft', None, None, np.asarray(place),
+                    quat_to_vrml_rotation(turn), spec.total_mass(), spec.linear_damping, 0.0,
+                    spec.gravity_factor)
+        self._bodies[uid] = body
+        handle = SoftBody(self, body, spec)
+        handle._pose = (np.asarray(place), turn)
+        vertices, points = pins if pins is not None else ((), np.zeros((0, 3)))
+        indices, places, owners = self._pin_rows(handle, vertices, points, pin_bodies)
+        if not self._closed:
+            self._send(Command('soft_body', uid, (
+                spec, place, tuple(float(v) for v in turn), (indices, places, owners),
+                self.filters.index(collision_filter)), next(self._seq)))
+            self._ensure_started()
+        return handle
+
+    def _pin_rows(self, soft: SoftBody, vertices: Any, points: Any,
+                  bodies: Any) -> tuple[np.ndarray, np.ndarray, list[int | None]]:
+        """Pins as the engine takes them: vertex indices, points, and the uid of each pin's body or None."""
+        indices = np.ascontiguousarray(vertices, dtype=np.int64).reshape(-1)
+        if len(indices) and (indices.min() < 0 or indices.max() >= len(soft.spec)):
+            raise ValueError('a pinned vertex is one of the %d the body has' % len(soft.spec))
+        places = np.asarray(points, dtype='d').reshape(len(indices), 3)
+        if not np.isfinite(places).all():
+            raise ValueError('pin points are finite')
+        if bodies is None or isinstance(bodies, Body):
+            owners = [bodies] * len(indices)
+        else:
+            owners = list(bodies)
+            if len(owners) != len(indices):
+                raise ValueError('one body (or None) a pinned vertex')
+        return indices, places, [None if one is None else one.uid for one in owners]
+
+    def _soft_command(self, soft: SoftBody, op: str, *args: Any) -> None:
+        if not soft.alive or self._closed:
+            return
+        if op == 'soft_pins':
+            args = self._pin_rows(soft, *args)
+        self._send(Command(op, soft.uid, args, next(self._seq)))
+
+    def _soft_frame(self, soft: SoftBody) -> SoftBodyFrame | None:
+        return self._engine.soft_body_frame(soft.uid) if soft.alive else None
+
+    def _soft_rest(self, soft: SoftBody) -> np.ndarray:
+        from OpenGLContext.physics.ragdolls import quat_rotate  # noqa: PLC0415 beside its one use
+        place, turn = soft._pose
+        out: np.ndarray = quat_rotate(turn, soft.spec.positions) + place
+        return out
+
+    def note_render_cost(self, kind: str, seconds: float) -> None:
+        """Count render-thread time spent on ``kind`` (``'ragdolls'`` or ``'soft bodies'``) this frame."""
+        self._render_costs[kind] = self._render_costs.get(kind, 0.0) + float(seconds)
+
+    def deformable_costs(self) -> dict[str, float]:
+        """The ragdolls and soft bodies, and what they cost: counts, and milliseconds.
+
+        ``'ragdolls ms'`` and ``'soft bodies ms'`` are the world thread's mean
+        a tick; ``'ragdolls draw ms'`` and ``'soft bodies draw ms'`` the
+        render thread's mean a frame, posing skins and uploading vertices,
+        since the last call. Empty on an engine with neither.
+        """
+        found = dict(self._engine.world_costs())
+        if not found:
+            return found
+        frames = max(self._cost_frames, 1)
+        for kind, spent in self._render_costs.items():
+            found['%s draw ms' % kind] = spent * 1e3 / frames
+            self._render_costs[kind] = 0.0
+        self._cost_frames = 0
+        return found
+
     def remove(self, body: Body) -> None:
         """Take ``body`` out of the world, with its joints and any vehicle on it. Removing twice is harmless.
 
@@ -1015,6 +1196,9 @@ class Physics:
         """
         if not body.alive:
             return
+        ragdoll = self._ragdoll_of.get(body.uid)
+        if ragdoll is not None:
+            raise ValueError('%r is a bone of %r: remove the ragdoll' % (body, ragdoll))
         body.alive = False
         for vehicle in [one for one in self._vehicles.values() if one.chassis is body]:
             vehicle.alive = False
@@ -1231,6 +1415,7 @@ class Physics:
         self._pump_cooked()
         self._raise_worker_error()
         out = self._engine.collect(dt)
+        self._cost_frames += 1
         for character in self._characters:
             character._fresh = False
         if out.snapshot is not None:

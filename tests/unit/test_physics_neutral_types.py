@@ -13,10 +13,12 @@ from OpenGLContext.physics import (
     Body, Character, CharacterCapabilities, CharacterState, CollisionFilter, Joint, Material,
     Physics, PhysicsDefinition, Proxy,
 )
+from OpenGLContext.physics.ragdolls import Ragdoll, RagdollBone, RagdollSpec
 from OpenGLContext.physics.settings import PhysicsDefinition as SettingsDefinition
 from OpenGLContext.physics.vehicles import (
     CarTuning, Vehicle, VehicleSettings, VehicleState, WheelState, car_wheels,
 )
+from OpenGLContext.physics.softbodies import SoftBody, SoftBodyFrame, SoftBodySpec
 from OpenGLContext.physics.zones import Box, Sphere
 
 #: The neutral types are checked against omi_physics' of the same names, through
@@ -201,7 +203,9 @@ def _public_members(cls):
 
 
 @pytest.mark.parametrize('cls', [Physics, Body, Character, Joint, Proxy, PhysicsDefinition, Vehicle,
-                                 VehicleSettings, VehicleState, WheelState, CarTuning])
+                                 VehicleSettings, VehicleState, WheelState, CarTuning,
+                                 Ragdoll, RagdollSpec, RagdollBone, SoftBody, SoftBodySpec,
+                                 SoftBodyFrame])
 def test_no_public_signature_names_an_engine_type(cls):
     for name, member in _public_members(cls):
         function = member.fget if isinstance(member, property) else member
@@ -240,9 +244,12 @@ def _service_attributes(service):
         vehicle = service.add_vehicle(chassis, VehicleSettings.from_tuning(
             CarTuning(), car_wheels(), 1200.0))
         owners.append(vehicle)
+        ragdoll = service.add_ragdoll(RagdollSpec.humanoid(), position=(4, 0, 0))
+        soft = service.add_soft_body(SoftBodySpec.cloth(1, 1, 5, 5), position=(-4, 1, 0))
+        owners += [ragdoll, ragdoll.spec, ragdoll.bones[0], soft, soft.spec]
     service.frame(0.01)
     if service.engine.name == 'jolt':
-        owners.extend([vehicle.state(), vehicle.state().wheels[0]])
+        owners.extend([vehicle.state(), vehicle.state().wheels[0], soft.frame()])
     for owner in owners:
         for name in dir(type(owner)):
             if name.startswith('_'):
