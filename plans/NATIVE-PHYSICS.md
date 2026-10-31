@@ -1992,6 +1992,12 @@ X3D RigidBodyPhysics (from the rigid branch's report):
 | marble-demo | 941 passed, 6 xfailed |
 | marble-editor | 165 passed |
 | openglcontext-forest | 86 passed |
+| openglcontext `tests/unit`, main checkout after the merge (with P6d) | 19,500 passed, 50 skipped, 6 xfailed; serial 30 passed |
+| `verify-everything.py --only openglcontext` (`verify-logs/verify-2026-10-31-133607.log`) | the bulk pass hit its 3,600 s limit at load average 30 to 40 from three other agents' suites; serial 29 passed and 1 failed (`test_x3d_sound_stress`'s mix against the clock); `test_docbuild`'s named-scripts test failed while P6d's tutorials were half merged and passes now. The two `-n 16` runs above stand in for it |
+
+`test_gltf_view_physics_toggle` drives a viewer in a subprocess from `tests/`, which imports
+the main checkout, so the worktree run tested the old walk; after the merge its driver had to
+run the frame hooks the walker is now stepped in (32de3e58, from the P6d work).
 
 A context walking a 40 m floor from a camera 10 m up (GLFW, hidden window): the avatar falls
 and lands with its feet at 0.0 and the camera at 1.6 within 90 frames.
