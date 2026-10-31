@@ -26,7 +26,6 @@ import logging
 import os
 import queue
 import time
-import warnings
 import weakref
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -55,7 +54,7 @@ from OpenGLContext.physics.records import (
     BodyBatch, BodySpec, Command, Motion, PhysicsEvent, Snapshot, Step,
 )
 from OpenGLContext.physics.sources import SourceHandle
-from OpenGLContext.physics.settings import BACKENDS, PhysicsDefinition
+from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.stepview import StepHook, StepView
 from OpenGLContext.physics.types import (
     CharacterCapabilities, EngineInfo, GravityZone, Hit, Material, Poses, WorldCounts,
@@ -72,17 +71,6 @@ _ZERO3 = np.zeros(3)
 SOUND_SPEED = 1.0
 #: The closing speed that plays a material's sound at full gain.
 SOUND_FULL = 6.0
-
-
-#: The deprecated names that have warned, so each warns once a process and a game loop pays nothing more.
-_WARNED: set[str] = set()
-
-
-def _deprecated(name: str, instead: str) -> None:
-    if name not in _WARNED:
-        _WARNED.add(name)
-        warnings.warn('Physics.%s hands over the engine and is going away; %s' % (name, instead),
-                      DeprecationWarning, stacklevel=3)
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,40 +221,11 @@ class Physics:
         """
         return self._engine.counts(self._snapshot)
 
-    @property
-    def world(self) -> Any:
-        """The engine's world, in inline mode only; deprecated.
-
-        Read bodies through their handles and :meth:`poses`, and run tick-exact
-        code with :meth:`on_step`.
-        """
-        _deprecated('world', 'read bodies with physics.poses(bodies) and Body properties')
-        return self._engine_world()
-
     def _engine_world(self) -> Any:
         """The engine's world of an inline service, with each waiting stand-in written."""
         worker = self._inline()
         self._bring_up_all()
         return worker.runtime.world
-
-    #: The compute backends the world can step with, from the definition's ``backend``.
-    BACKENDS = BACKENDS
-
-    @property
-    def backend(self) -> str:
-        """The name of the compute backend the world steps with; deprecated, read :attr:`engine`.
-
-        Assigning one of :attr:`BACKENDS` chooses another from the next step.
-        """
-        _deprecated('backend', 'read physics.engine, or set PhysicsDefinition.backend')
-        return self._engine.info().compute
-
-    @backend.setter
-    def backend(self, name: str) -> None:
-        _deprecated('backend', 'set PhysicsDefinition.backend through set_config')
-        if name not in self.BACKENDS:
-            raise ValueError('backend must be one of %s, not %r' % (', '.join(self.BACKENDS), name))
-        self._send_world('backend', name)
 
     def _inline(self) -> Any:
         """The omi worker, where it steps inline; RuntimeError where it has a thread."""
@@ -275,22 +234,12 @@ class Physics:
         raise RuntimeError('the engine\'s world is read inline only; a world on its own thread '
                            'is read with physics.poses and physics.on_step')
 
-    def slot_of(self, body: Body) -> int:
-        """The row ``body`` has in the arrays of :attr:`world`, inline mode only; deprecated."""
-        _deprecated('slot_of', 'pass Body handles or uids to physics.poses')
-        return self._slot_of(body)
-
     def _slot_of(self, body: Body) -> int:
         """The row ``body`` has in the engine's arrays; KeyError for a body the world does not hold."""
         worker = self._inline()
         self._bring_up_all()
         worker.flush()
         return int(worker.runtime.entry(body.uid).index)
-
-    def body_at(self, slot: int) -> Body | None:
-        """The body in row ``slot`` of the arrays of :attr:`world`, or None; deprecated."""
-        _deprecated('body_at', 'keep the Body handles add_* returns')
-        return self._body_at(slot)
 
     def _body_at(self, slot: int) -> Body | None:
         """The body in row ``slot`` of the engine's arrays, or None for a row no body has."""
@@ -1176,15 +1125,6 @@ class Physics:
         if not self._closed:
             self._send(Command(op, 0, args, next(self._seq)))
 
-    def run(self, function: Callable[[Any], Any]) -> concurrent.futures.Future[Any]:
-        """Call ``function(world)`` on the worker with the engine's world; deprecated.
-
-        The future holds its answer. Use :meth:`on_step` for tick-exact code,
-        :meth:`poses` for reads and the joint calls for joints.
-        """
-        _deprecated('run', 'use physics.on_step, physics.poses and the add_* joint calls')
-        return self._run(function)
-
     def _run(self, function: Callable[[Any], Any]) -> concurrent.futures.Future[Any]:
         """Call ``function(world)`` on the worker; the future holds its answer.
 
@@ -1215,15 +1155,6 @@ class Physics:
         commands only at the start of a tick, so this does nothing there.
         """
         self._engine.flush()
-
-    def index_of(self, body: Body) -> int:
-        """The slot of ``body`` in the arrays of :attr:`world`, inline mode only; deprecated."""
-        _deprecated('index_of', 'pass Body handles or uids to physics.poses')
-        if self._omi.mode != 'inline':
-            raise RuntimeError('physics.index_of is for inline mode; the world is on its own thread')
-        self._bring_up_all()
-        self.flush()
-        return int(self._omi.runtime.entry(body.uid).index)
 
     def drop_remainder(self) -> None:
         """Forget the time carried over toward the next step.

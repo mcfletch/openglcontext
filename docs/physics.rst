@@ -644,12 +644,10 @@ capsule that is placed at it each frame with the velocity it moved at:
    me.remove()
 
 The capsule's size and speeds are a ``CharacterCapabilities``
-(:ref:`character`), kept as ``me.capabilities``. ``me.motion_state`` is a
+(:ref:`character`), kept as ``me.capabilities``. ``me.state`` is a
 ``CharacterState``: ``STANDING``, ``CROUCHING``, ``SLIDING``, ``AIRBORNE``,
-``DOWN``, ``SWIMMING`` or ``FLYING``. ``me.state`` is equal (``==``) to the
-same member; it is the engine's own member, which a game comparing with ``is``
-against the engine's enumeration still finds, and it becomes the
-``CharacterState`` member when that use is gone. ``me.vertical_speed`` is how fast the
+``DOWN``, ``SWIMMING`` or ``FLYING``; ``me.motion_state`` is the same member.
+``me.vertical_speed`` is how fast the
 capsule rises in metres a second (below zero it falls), ``me.height`` its height
 now in metres (less crouched or sliding), ``me.radius`` its radius, and
 ``me.stuck`` whether its last step could not move it out of what it overlaps.
@@ -951,32 +949,10 @@ No call of the service hands a program an engine object. Code written against
 ``on_step`` runs on whichever engine steps the world. The conversions to and
 from ``omi_physics`` are in ``OpenGLContext.physics.omi_adapter``.
 
-These calls hand over the ``omi_physics`` world and warn with a
-``DeprecationWarning``; they go in a later release:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Deprecated
-     - Use
-   * - ``physics.world``
-     - ``physics.poses(bodies)``, ``Body`` properties, ``physics.on_step``,
-       ``physics.counts``
-   * - ``physics.slot_of(body)``, ``index_of``, ``body_at(slot)``
-     - ``Body`` handles and ``uid`` numbers, which ``poses`` takes
-   * - ``physics.run(function)``
-     - ``physics.on_step``, ``physics.post`` and the joint calls
-   * - ``physics.backend``
-     - ``physics.engine.compute``; ``set_config`` with a definition whose
-       ``backend`` differs chooses another
-   * - ``character.controller``
-     - ``vertical_speed``, ``height``, ``radius``, ``stuck``, ``motion_state``,
-       ``grounded``, ``capabilities``
-   * - ``character.state is omi_physics.character.CharacterState.X``
-     - ``character.motion_state is CharacterState.X``, or ``==``
-   * - ``proxy.shape``
-     - ``proxy.kind`` and ``proxy.params``
+``character.state`` and ``character.motion_state`` are the same
+``CharacterState`` member on either engine; compare with ``is`` or ``==``.
+The compute backend is ``physics.engine.compute``, and ``set_config`` with a
+definition whose ``backend`` differs chooses another.
 
 A test that checks what ``omi_physics`` itself holds reads it through
 ``OpenGLContext.testing.physics`` (:ref:`testing-physics`).
@@ -1079,9 +1055,8 @@ What differs from omi_physics, by design of the engine:
   sideways or upwards needs an up vector the controller does not have.
 - ``Hit.triangle`` is the row of the mesh triangle a ray met, and -1 for a
   part that is no mesh triangle.
-- ``physics.world``, ``slot_of``, ``body_at``, ``index_of``, ``run`` and the
-  proxy overlay (``show_proxies``) reach the omi_physics world; on Jolt they
-  raise ``RuntimeError`` or, for the overlay, log a warning.
+- The proxy overlay (``show_proxies``) draws the omi_physics world; on Jolt it
+  logs a warning and draws nothing.
 
 ``physics.save_state()`` returns the bodies' and joints' state as bytes
 (Jolt's ``PhysicsSystem::SaveState``) and ``physics.restore_state(data)`` puts

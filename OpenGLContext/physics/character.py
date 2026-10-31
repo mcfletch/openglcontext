@@ -32,7 +32,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
-import warnings
 
 import numpy as np
 from omi_physics.character import CharacterController
@@ -55,8 +54,6 @@ if TYPE_CHECKING:
 __all__ = ['Character', 'CharacterStep', 'Footstep', 'Landing']
 
 _UP = np.array([0.0, 1.0, 0.0])
-#: Holds an entry once Character.controller has warned, so it warns once a process.
-_WARNED: list[bool] = []
 #: The events a character tells itself; every other name is an event of its stand-in.
 _OWN_EVENTS = frozenset(('landed', 'footstep', 'arrived', 'before-step', 'after-step'))
 #: The field of the capabilities that names each mode's speed.
@@ -238,16 +235,9 @@ class Character:
         return bool(self._controller.crouching)
 
     @property
-    def state(self) -> Any:
-        """What the character is doing: standing, crouching, sliding, airborne, down, swimming, flying.
-
-        Compare it with ``==`` to a :class:`~OpenGLContext.physics.types.CharacterState`
-        member. The value is the engine's own member, equal to the
-        ``CharacterState`` member of the same name, while games still compare
-        it by identity with the engine's enumeration; :attr:`motion_state` is
-        the ``CharacterState`` member itself.
-        """
-        return self._controller.state
+    def state(self) -> CharacterState:
+        """What the character is doing: standing, crouching, sliding, airborne, down, swimming, flying."""
+        return character_state(self._controller.state)
 
     @property
     def motion_state(self) -> CharacterState:
@@ -273,16 +263,6 @@ class Character:
     def stuck(self) -> bool:
         """Whether the capsule could not be moved out of what it overlaps in its last step."""
         return bool(self._controller.stuck)
-
-    @property
-    def controller(self) -> Any:
-        """The engine's controller; deprecated, read the character's own properties."""
-        if not _WARNED:
-            _WARNED.append(True)
-            warnings.warn('Character.controller is the engine\'s controller and is going away; read '
-                          'the Character\'s properties (vertical_speed, height, radius, '
-                          'motion_state, grounded, capabilities)', DeprecationWarning, stacklevel=2)
-        return self._controller
 
     @property
     def landing(self) -> float | None:

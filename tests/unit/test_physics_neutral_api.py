@@ -8,6 +8,7 @@ import pytest
 from OpenGLContext.physics import (
     CharacterCapabilities, CharacterState, Physics, PhysicsDefinition, Proxy, WorldCounts,
 )
+from OpenGLContext.physics.character import Character
 from OpenGLContext.scenegraph.basenodes import Transform
 from OpenGLContext.testing import physics as physics_testing
 
@@ -25,31 +26,6 @@ def physics(request):
     service = make(request.param)
     yield service
     service.close()
-
-
-@pytest.fixture(autouse=True)
-def warn_again(monkeypatch):
-    """Let each deprecated name warn in each test: each warns once a process."""
-    from OpenGLContext.physics import character, proxy, service
-
-    monkeypatch.setattr(service, '_WARNED', set())
-    monkeypatch.setattr(character, '_WARNED', [])
-    monkeypatch.setattr(proxy, '_WARNED', [])
-
-
-@pytest.mark.engines('omi', reason='physics.world is the omi world; on Jolt it raises')
-def test_a_deprecated_name_warns_once(monkeypatch):
-    physics = make('inline')
-    try:
-        with pytest.warns(DeprecationWarning):
-            physics.world  # noqa: B018 the read is what warns
-        import warnings
-
-        with warnings.catch_warnings():
-            warnings.simplefilter('error')
-            physics.world  # noqa: B018 a second read is silent
-    finally:
-        physics.close()
 
 
 def test_materials_equal_engine_materials_with_the_same_values():
@@ -279,14 +255,14 @@ def test_a_character_reads_its_capsule_without_the_controller(physics):
     assert walker.grounded
     assert walker.vertical_speed == pytest.approx(0.0, abs=1e-6)
     assert walker.motion_state is CharacterState.STANDING
-    assert walker.state == CharacterState.STANDING
+    assert walker.state is CharacterState.STANDING
     assert isinstance(walker.capabilities, CharacterCapabilities)
     assert walker.capabilities.radius == pytest.approx(0.4)
     assert walker.jump()
     run(physics, 0.04)
     assert walker.vertical_speed > 0.0
     assert walker.motion_state is CharacterState.AIRBORNE
-    assert walker.state == CharacterState.AIRBORNE
+    assert walker.state is CharacterState.AIRBORNE
     assert walker.stuck is False
 
 
@@ -296,13 +272,6 @@ def test_a_character_takes_engine_capabilities_at_the_boundary(physics):
     walker = physics.add_character(capabilities=OmiCapabilities(radius=0.2))
     assert isinstance(walker.capabilities, CharacterCapabilities)
     assert walker.radius == pytest.approx(0.2)
-
-
-def test_the_controller_is_a_deprecated_alias(physics):
-    walker = physics.add_character()
-    with pytest.warns(DeprecationWarning):
-        controller = walker.controller
-    assert controller is walker._controller
 
 
 # -- joints ----------------------------------------------------------------
@@ -376,34 +345,15 @@ def test_joint_kinds_reject_what_they_cannot_take(physics):
         ball.position  # noqa: B018 a ball has no slide to read
 
 
-# -- deprecated aliases and the test helper ----------------------------------
+# -- the engine's own objects and the test helper ---------------------------
 
-@pytest.mark.engines('omi', reason='physics.world is the omi world; on Jolt it raises')
-@pytest.mark.parametrize('name', ['world', 'backend'])
-def test_the_world_reads_are_deprecated(name):
-    physics = make('inline')
-    try:
-        with pytest.warns(DeprecationWarning):
-            getattr(physics, name)
-    finally:
-        physics.close()
-
-
-@pytest.mark.engines('omi', reason='reads the omi world and its slots')
-def test_slot_reads_and_run_are_deprecated():
-    physics = make('inline')
-    try:
-        body = physics.add_dynamic(None, proxy=Proxy.sphere(0.5))
-        with pytest.warns(DeprecationWarning):
-            slot = physics.slot_of(body)
-        with pytest.warns(DeprecationWarning):
-            assert physics.body_at(slot) is body
-        with pytest.warns(DeprecationWarning):
-            assert physics.index_of(body) == slot
-        with pytest.warns(DeprecationWarning):
-            assert physics.run(lambda world: world.body_count).result() >= 1
-    finally:
-        physics.close()
+@pytest.mark.parametrize('owner, name', [
+    (Physics, 'world'), (Physics, 'backend'), (Physics, 'BACKENDS'), (Physics, 'slot_of'),
+    (Physics, 'body_at'), (Physics, 'index_of'), (Physics, 'run'), (Character, 'controller'),
+    (Proxy, 'shape'),
+])
+def test_no_public_name_hands_over_the_engine(owner, name):
+    assert not hasattr(owner, name)
 
 
 @pytest.mark.engines('omi', reason='reads the omi world and its slots')
@@ -426,12 +376,6 @@ def test_the_test_helper_refuses_a_threaded_world():
             physics_testing.inspect(physics)
     finally:
         physics.close()
-
-
-def test_the_proxy_shape_is_a_deprecated_alias():
-    proxy = Proxy.sphere(0.5)
-    with pytest.warns(DeprecationWarning):
-        assert proxy.shape.radius == 0.5
 
 
 # -- state ------------------------------------------------------------------

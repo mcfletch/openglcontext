@@ -224,14 +224,9 @@ def _service_attributes(service):
     service.frame(0.01)
     for owner in (service, character, body, joint, body.proxy):
         for name in dir(type(owner)):
-            if name.startswith('_') or name in DEPRECATED.get(type(owner).__name__, ()):
+            if name.startswith('_'):
                 continue
             yield owner, name
-
-
-#: The deprecated aliases kept for one step, by the class that has them.
-DEPRECATED = {'Physics': ('world', 'backend', 'slot_of', 'body_at', 'index_of', 'run', 'BACKENDS'),
-              'Character': ('controller', 'state'), 'Proxy': ('shape',)}
 
 
 @pytest.mark.parametrize('mode', ['inline', 'thread'])

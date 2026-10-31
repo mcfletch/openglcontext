@@ -324,10 +324,9 @@ class JoltController:
             self._expect(pj.CharacterState.FLYING, self.native.set_fly(True))
 
     @property
-    def state(self) -> Any:
-        """The state as the omi controller's enumeration has it where omi_physics is installed, else the service's."""
-        neutral = _STATE[self.native_state]
-        return _engine_state(neutral)
+    def state(self) -> CharacterState:
+        """What the character is doing."""
+        return _STATE[self.native_state]
 
     @property
     def swimming(self) -> bool:
@@ -559,15 +558,6 @@ class _IgnoreSet(set[int]):
         if uid in self:
             super().discard(uid)
             self._sent()
-
-
-def _engine_state(state: CharacterState) -> Any:
-    """``state`` as omi_physics' enumeration has it, where omi_physics is installed."""
-    try:
-        from OpenGLContext.physics.omi_adapter import engine_character_state  # noqa: PLC0415 optional
-    except ImportError:
-        return state
-    return engine_character_state(state)
 
 
 class JoltEngine(Engine):
