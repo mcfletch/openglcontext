@@ -2,11 +2,12 @@
 
 Status: **P0 to P3 landed 2026-10-30, P4a the same day, P4 (`engine.py`) 2026-10-31, and P5
 (Jolt the default, pyjoltphysics a requirement, omi_physics the `omi-physics` extra) 2026-10-31; in
-pyjoltphysics, P6a (vehicles) and P6c (ragdolls and soft bodies) 2026-10-31.**
+pyjoltphysics, P6a (vehicles) and P6c (ragdolls and soft bodies) 2026-10-31; P6b (vehicles
+through the service, glisteel on Jolt) 2026-10-31.**
 Decision taken 2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists
 locally (`develop`) with no GitHub remote yet; its workspace registration waits for the remote
-(see "P0 as built" below). Every game suite passes with no engine setting; glisteel names
-`engine='omi'` until P6 gives Jolt vehicles. What deleting the omi engine takes is the list
+(see "P0 as built" below). Every game suite passes with no engine setting; glisteel's car is a
+vehicle of the service (P6b) and glisteel no longer depends on omi_physics. What deleting the omi engine takes is the list
 in "P5 as built" below.
 
 The decision (maintainer): the engine steps its rigid bodies with Jolt Physics through a wrapper
@@ -581,7 +582,7 @@ of C++ and ran correctly in both builds.
 | P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3; done 2026-10-30 but for the tutorials, which wait for P4 (P3 below) |
 | P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4; P4a (the neutral API) done 2026-10-30, P4 2026-10-31 but for the game suites on Jolt, below |
 | P5 | Default `engine='jolt'`; `pyjoltphysics` a hard dependency; omi fallback, `worker.py`, `runtime.py`, `replica.py`, `queries.py` deleted; golden results recorded from omi; docs (`docs/physics.rst`, a page on the world thread, callbacks and determinism); omi_physics marked deprecated | full workspace `verify-everything.py`; preflight for openglcontext and pyjoltphysics | the games run on Jolt with no `engine` setting; marble-demo off direct omi imports; docs merged | 1 to 2 |
-| P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8; P6a (vehicles in pyjoltphysics) and P6c (ragdolls and soft bodies in pyjoltphysics) done 2026-10-31, below; P6b and P6d (the engine layers) not started |
+| P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8; P6a (vehicles in pyjoltphysics) and P6c (ragdolls and soft bodies in pyjoltphysics) done 2026-10-31, below; P6b (vehicles through the service) done 2026-10-31; P6d not started |
 
 P0 to P5: 14 to 19.5 weeks. The games stay on omi until P5: P4 runs them on both engines in CI,
 and a program selects Jolt with one definition field.
@@ -1401,7 +1402,7 @@ lint read another agent's `.claude/worktrees/`, now in its `.gitignore` (715e893
 
 What blocks deleting the omi engine, and what the deletion then is:
 
-1. glisteel's car (`glisteel/omi_vehicle.py`, `car.py`) is omi's `RaycastVehicle`: P6.
+1. glisteel's car (`glisteel/omi_vehicle.py`, `car.py`) is omi's `RaycastVehicle`: P6. Done in P6b.
 2. `PhysicsWalkMixin` (every `Context`) walks an omi world of its own: `buildPhysicsWorld`
    returns `collision_world_from_scene`, `spawnAvatar` scores spots with the omi controller's
    `_push_out`, `watchCollisionGroups` listens to the omi world's contacts for X3D Collision
@@ -1623,6 +1624,85 @@ What P6b's service layer needs:
    is not in `save_state`.
 6. glTF: `VehicleSettings.as_dict` is the shape for an extension or extras on the chassis node;
    OMI has no vehicle extension yet.
+
+### P6b as built (2026-10-31): vehicles through the service, glisteel off omi
+
+Branch `p6b-vehicles` on `openglcontext`; `pyjoltphysics` 44da300; glisteel branch
+`p6b-jolt-car`.
+
+- `physics/vehicles.py`: the engine's own types. `VehicleSettings` (with `Wheel`,
+  `VehicleEngine`, `Transmission`, `Differential`, `AntiRollBar`, `Track`, `Lean`) has
+  pyjoltphysics' field names, `kind` and `cast` as strings, `as_dict`/`from_dict`,
+  `wheelbase`, `steer_lock`; a test holds the field sets equal. `CarTuning`, `CarWheel`,
+  `car_wheels` and `Surface` state a car in the raycast vocabulary;
+  `VehicleSettings.from_tuning` maps it through pyjoltphysics' `from_raycast`.
+  `VehicleState`, `WheelState` and `Impact` are the reads.
+- `Physics.add_vehicle(chassis, settings)` returns a `Vehicle`: `set_input(throttle, steer,
+  brake, handbrake)` (clamped; reverse by negative throttle), `set_surface` (sent only when
+  it changes), `place(position, heading)`, `state()`, `forward_speed`, `speed`, `rpm`,
+  `gear`, `steer_angle`, `wheels`, `grounded`, `impact(among, above)`,
+  `addEventHandler('impact' | 'crash')`, `remove()`. Removing the chassis removes the
+  vehicle; `Physics.vehicles` lists them. The events are `PhysicsEvent(kind='vehicle',
+  phase='impact' | 'crash')` naming the chassis and the body struck, filtered by `other=`
+  and `above=` as contacts are.
+- `physics/joltvehicles.py` (`JoltVehicles`, one per `JoltEngine`): vehicle ids, the input
+  batch, states built once a vehicle a published tick, VEHICLE records converted. The
+  chassis is flagged REPORT, so a car held against a wall reports its persist blows.
+- Input latency. Chosen: the characters' at-tick delivery. Every vehicle's inputs given
+  in a frame go to the world as one `vehicle_inputs` batch before the frame's lockstep
+  ticks (they drive its first tick), once a frame for a free-running world, and after the
+  `before-step` handlers of each tick, so inputs given there drive that tick. glisteel
+  gives its inputs in `before-step`, as it did on omi.
+- The omi engine: no vehicles. `Engine.add_vehicle` raises NotImplementedError naming the
+  jolt engine (as `save_state` does); the omi engine is to be deleted, and its raycast
+  vehicle needed a per-step Python update the service does not have.
+- pyjoltphysics 44da300: `from_raycast`'s tyre curves are friction 1 from no slip
+  (longitudinal and lateral). A curve rising from 0 gave a tyre no grip while it was not
+  slipping: on a crowned road mesh the car rocked in yaw by up to 0.028 rad/s from tick
+  to tick (glisteel's cockpit camera test, 0.026 rad/s against 0.02); now under 0.002.
+  The launch is within 4% of omi's raycast car at 2, 4 and 8 s (6% before), so
+  `engine_force` is unchanged.
+- The neutral-types guard covers pyjoltphysics as well as omi_physics, and `Vehicle`,
+  the settings and the states.
+
+glisteel:
+
+- `glisteel/vehicle.py` (`CarVehicle`) replaces `omi_vehicle.py`: the car's tuning on the
+  engine's vehicle, answering what the race asks (pose, speeds, wheels with
+  compression, steer angle, grounded and slip, `struck` from `Vehicle.impact`,
+  `wheelbase`, `turning_radius`, `surface`). `Car.update` is gone: the world thread
+  applies the forces.
+- `CarSpec.lateral_friction` is 0.9 at every slip angle. At full grip, full lock from
+  17.5 to 22.5 m/s rolled the car (`TestItSlidesRatherThanRolls`); at 0.9 it rolls at
+  most 1 degree from 12.5 to 60 m/s.
+- `physics_definition` names no engine; the pin test became
+  `test_the_service_is_the_engine_s_default`. `omi_physics` is out of glisteel's
+  dependencies and `packaging/requirements-stack.txt`.
+- Tests ported: the standalone loops call `Physics.frame` (reads are the published
+  snapshot, which `step` does not publish); `test_feel.py`'s roll-over tests run on
+  the Jolt service unchanged; the omi-world reads became `physics.counts`,
+  `physics.gravity`, `Body.velocity`, `testing.physics.shape_kind` and contact handlers.
+- Tolerances moved, each with its reason in the test: a mired car on the brake on rough
+  ground stops in 2.7 s from 37.5 m/s (bound 3 s lowered to 2 s; brake and rolling
+  resistance both scale with a load downforce raises 73%); a placed car's position is
+  read two ticks on (atol 0.01 m). The put-back test removes the car hit first: the car is
+  put back on its roof, and Jolt's wheels stand on it.
+- glisteel suite, no engine setting: 1,670 passed, 1 xfailed.
+
+Not done, for a later pass:
+
+- glisteel's tyre-scrub band (0.25 to 3.5 m/s of slip) was measured on omi; on Jolt full
+  lock from 30 m/s slips 0.15 m/s, under the band.
+- `Body.set_velocity` is not read back before the world applies it (positions are).
+- Jolt's tyres limit braking and cornering friction separately (its default tyre impulse
+  callback); omi's shared one budget. A friction circle is a pyjoltphysics callback.
+- Wheel poses are the newest tick's, not interpolated between ticks; `save_state` leaves
+  out the steer angle and holding latch (P6a).
+
+The omi engine's deletion list (P5 as built) loses its first blocker: glisteel imports no
+omi_physics. What still blocks it is items 2 to 5 there (`PhysicsWalkMixin`, X3D
+RigidBodyPhysics, the omi-reference collider tests, pyjoltphysics' live vehicle
+scenarios); with them done the deletion is the list there.
 
 ### P6c as built (2026-10-31): ragdolls and soft bodies in pyjoltphysics
 

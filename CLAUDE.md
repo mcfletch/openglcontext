@@ -308,6 +308,10 @@ OpenGLContext/
 │   │                 # make_engine, EngineUnavailable -- docs/physics.rst#physics-engine
 │   ├── joltengine.py # JoltEngine, the default: the world on pyjoltphysics' native
 │   │                 # thread, lockstep or free-running; JoltController -- docs/physicsthread.rst
+│   ├── vehicles.py   # Vehicle, VehicleSettings, Wheel, VehicleState, CarTuning: a
+│   │                 # dynamic chassis on wheels -- no GL -- docs/physics.rst#physics-vehicles
+│   ├── joltvehicles.py  # The Jolt engine's vehicles: one input batch a frame or
+│   │                 # tick, states from the newest snapshot
 │   ├── x3djolt.py    # X3D's RigidBodyPhysics on a pyjoltphysics world (shapes from
 │   │                 # x3drigid's omi model: needs the omi extra)
 │   ├── omigltf.py    # glTF's OMI_physics_* extensions read into the engine's own

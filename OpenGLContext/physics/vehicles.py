@@ -329,10 +329,10 @@ class VehicleSettings:
           steer_speed * maximum_steer``.
         - ``rolling_resistance``, ``drag`` and ``downforce`` carry over;
           ``holding`` (N) is the brake input ``holding / brake_force``.
-        - The tyres saturate at full grip: longitudinal friction 1 from a
-          slip ratio of 0.05, lateral friction 1 from a slip angle of a tenth
-          of a degree, times each wheel's grip and the surface; the friction
-          of the body under a wheel is not used.
+        - The tyres have friction 1 at every slip ratio and slip angle, times
+          each wheel's grip and the surface: a tyre holds without slipping up
+          to its friction. The friction of the body under a wheel is not
+          used.
         """
         from pyjoltphysics import VehicleSettings as Mapped  # noqa: PLC0415 the mapping is pyjoltphysics'
 

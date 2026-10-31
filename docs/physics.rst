@@ -6,7 +6,7 @@ Physics & Collision
 OpenGLContext simulates rigid bodies in real time beside the scenegraph. The
 simulation applies gravity and drag, resolves collisions between primitive
 shapes and meshes, and supports triggers, gravity zones and joints. Characters
-walk, run, jump and swim on the same collision world. The render tree, culling,
+walk, run, jump and swim on the same collision world, and vehicles drive on it. The render tree, culling,
 shadows and picking work the same with or without it.
 
 The simulation is Jolt Physics 5.6, through the ``pyjoltphysics`` package,
@@ -25,8 +25,10 @@ indented technical notes point at the code.
 A game imports what it needs from ``OpenGLContext.physics``: ``Physics``,
 ``Body``, ``Character``, ``Joint``, ``Proxy``, ``PhysicsDefinition``,
 ``CharacterCapabilities``, ``CharacterState``, ``Material``,
-``CollisionFilter``, ``Poses``, ``EngineInfo``, ``WorldCounts`` and
-``GravityZone``. Each is
+``CollisionFilter``, ``Poses``, ``EngineInfo``, ``WorldCounts``,
+``GravityZone``, and for vehicles ``Vehicle``, ``VehicleSettings``, ``Wheel``,
+``VehicleState``, ``WheelState``, ``CarTuning``, ``CarWheel``, ``car_wheels``
+and ``Surface``. Each is
 OpenGLContext's own class (``OpenGLContext.physics.types``); the service
 converts them to the engine's at its boundary. ``CharacterCapabilities``,
 ``Material`` and ``CollisionFilter`` keep the OMI field names, and an object
@@ -771,6 +773,114 @@ makes is a static body of the service with a ``Body`` handle, so a ray's
 ``Hit.body`` names it and its collisions reach handlers and the session
 journal.
 
+.. _physics-vehicles:
+
+Vehicles
+--------
+
+A vehicle is a dynamic body (the chassis) on wheels. The engine casts each
+wheel at the ground every tick, springs its suspension, and drives, brakes and
+steers through the tyres; the game gives inputs and reads the result.
+
+.. code-block:: python
+
+   from OpenGLContext.physics import CarTuning, Proxy, VehicleSettings, car_wheels
+
+   chassis = physics.add_dynamic(None, Proxy.box((1.85, 0.62, 4.2)), mass=1180.0,
+                                 translation=(0.0, 1.0, 0.0))
+   settings = VehicleSettings.from_tuning(
+       CarTuning(engine_force=20000.0, brake_force=16000.0, base_speed=21.0, drag=0.9),
+       car_wheels(wheelbase=2.55, track=1.7, height=-0.16, radius=0.33), mass=1180.0)
+   car = physics.add_vehicle(chassis, settings)
+   car.set_input(throttle=1.0, steer=0.2)
+   ...
+   car.forward_speed, car.rpm, car.gear       # m/s along the nose, rev/min, -1 reverse
+   for wheel in car.wheels:                  # WheelState: the newest tick's
+       wheel.position, wheel.orientation, wheel.compression, wheel.grounded
+
+``set_input(throttle, steer, brake, handbrake)`` holds the inputs until the
+next call: ``throttle`` -1 to 1 (below 0 the gearbox selects reverse),
+``steer`` -1 to 1 (positive turns left, a positive yaw about +Y), ``brake``
+and ``handbrake`` 0 to 1. Values outside are clamped; a NaN is a ValueError.
+
+When inputs land. Every vehicle's inputs given during a frame reach the
+world's thread in one batch and apply from the frame's first tick; in a
+free-running world (``mode='thread'``) they apply at the next tick the world
+runs after the frame. Inputs given in a ``'before-step'`` handler
+(:ref:`physics-reading`) apply at that tick, so a driver sampled inside the
+fixed step steers every tick at the world rate.
+
+Settings. ``VehicleSettings`` is plain data in SI units and the chassis's own
+frame (-Z forward, +Y up by default): a ``Wheel`` per wheel (mount position,
+radius, suspension travel, stiffness in N/m and damping in N s/m, steered,
+driven, brake and handbrake torques, grip), ``VehicleEngine`` (torque curve
+and rpm range), ``Transmission`` (gears, automatic shifting, clutch),
+``Differential`` and ``AntiRollBar`` records, tyre friction curves (slip
+ratio and slip angle in degrees against friction), the steering lock and its
+fall with speed (``max_steer / (1 + (v / steer_falloff_speed)**2)``), ``drag``
+and ``downforce`` in N at 1 m/s rising with the square of speed,
+``rolling_resistance`` as a fraction of each wheel's load, the idle hold
+(``holding``, a brake input below ``holding_speed``), and ``impact_speed``
+and ``crash_speed`` (2 and 10 m/s). ``kind`` is ``'wheeled'``,
+``'motorcycle'`` (with ``Lean``) or ``'tracked'`` (with two ``Track``
+records). ``as_dict()`` and ``from_dict()`` turn the settings into builtin
+types for a file and back.
+
+``CarTuning`` and ``car_wheels`` state a car in newtons instead: engine and
+brake force at full pedal, the speed constant force gives way to constant
+power (``base_speed``), suspension stiffness in car weights per metre and
+damping as a fraction of critical, so a tuning keeps when the mass changes.
+``VehicleSettings.from_tuning(tuning, wheels, mass, gravity=9.81, **changes)``
+maps it: a one-gear electric drivetrain, open differentials, brake torques
+from the force, and tyres that hold without slipping up to their friction.
+The field-by-field mapping is in the method's docstring. A tyre curve that
+rises from 0 at no slip, as Jolt's defaults do, gives a tyre no grip while it
+is not slipping, and a car on a road mesh then rocks in yaw from tick to tick.
+
+Reads. ``car.state()`` is a ``VehicleState`` of the newest tick: speed,
+forward speed, rpm, gear, steer angle, the inputs that tick applied, a
+``WheelState`` per wheel and the tick's heaviest blow. ``WheelState`` gives
+the wheel's centre and orientation in the world (axle along X, steer and roll
+included), suspension length and compression from full droop (m), steer and
+roll angle (rad), spin (rad/s), load (N), slip ratio, slip angle (rad), the
+sideways speed across the tyre (``slip``, m/s), whether it touches the ground,
+the ``Body`` and material name under it, the surface's grip, and the contact
+point and normal. The properties ``forward_speed``, ``speed``, ``rpm``,
+``gear``, ``steer_angle``, ``wheels`` and ``grounded`` read the same state
+and answer 0 or empty before the first tick. The chassis's pose is
+``car.chassis``'s, drawn between ticks as every body is; read inside a step
+handler, both are the world as that tick left it.
+
+Surfaces. ``car.set_surface(Surface(grip=0.45, rolling=0.25))`` puts every
+wheel on that ground, and ``set_surface(surface, wheel=2)`` one wheel;
+``grip`` multiplies the tyre's friction and ``rolling`` adds to its rolling
+resistance as a fraction of its load. A surface equal to the last one sent is
+not sent again, so a game may set it every tick. ``set_surface(None)`` gives
+the wheels back to the world's surfaces by material.
+
+Blows. ``car.impact(among=None, above=0.0)`` is the heaviest blow the chassis
+took in the newest tick, an ``Impact(body, closing, impulse)`` (m/s and N s),
+or None; ``among`` limits it to a blow against one of those bodies. A blow at
+``impact_speed`` or more is an ``'impact'`` event, and at ``crash_speed`` or
+more a ``'crash'`` event, on the chassis:
+
+.. code-block:: python
+
+   car.addEventHandler('crash', on_crash, other=traffic_bodies, above=12.0)
+
+The handler is given a ``Collision`` whose ``body`` is the chassis, ``other``
+the body struck and ``approach`` the closing speed.
+
+``car.place(position, heading)`` puts the vehicle level at ``position``,
+turned ``heading`` radians about +Y, with its velocities zeroed from the next
+tick. ``car.remove()`` takes the vehicle out and leaves the chassis a body;
+removing the chassis removes the vehicle. ``physics.vehicles`` lists them.
+
+Limits. A wheel casts from its mount, so ground that rises through a wheel
+from above is not found until the chassis rises. The steer angle and the idle
+hold are not part of ``physics.save_state()``. The omi engine has no
+vehicles: ``add_vehicle`` raises NotImplementedError naming the jolt engine.
+
 .. _physics-service-modes:
 
 Modes and settings
@@ -1070,10 +1180,9 @@ The omi engine (deprecated)
 ---------------------------
 
 ``PhysicsDefinition(engine='omi')`` steps the world with ``omi_physics``, the
-NumPy rigid-body engine. It is deprecated and is supported
-only for programs that still name it: glisteel's race drives omi_physics'
-``RaycastVehicle`` until Jolt vehicles land (phase P6 of
-``plans/NATIVE-PHYSICS.md``), and the engine is removed with that phase.
+NumPy rigid-body engine. It is deprecated, is supported only for programs
+that still name it, and has no vehicles. It is removed in phase P6 of
+``plans/NATIVE-PHYSICS.md``.
 omi_physics is not a requirement of OpenGLContext. It is the ``omi-physics`` extra:
 
 .. code-block:: bash
