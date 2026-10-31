@@ -3,10 +3,12 @@
 
 [crowd_demo.py-screen-0001.png Screenshot]
 
-150 copies of one rigged glTF model cross a field. Each one walks, breaks into
-a run, stops, looks about, turns and sets off again, on its own schedule. A
-single `OpenGLContext.character.crowd.Crowd` poses all of them in one pass over
-arrays with a figure axis, and the renderer draws them in one instanced call.
+The script puts 150 copies of one rigged glTF model on a field 26 m wide and
+18.5 m deep. Each figure has its own speed, heading and state. It walks or
+runs, stops and plays an idle clip, turns, and walks again. One
+`OpenGLContext.character.crowd.Crowd` poses all 150 in a single pass over
+arrays with a figure axis, and the renderer draws the bodies in one
+instanced call.
 
 The page follows the order the program runs in: the constants that describe
 the model and the field, the context that builds the scene, the load that
@@ -37,7 +39,7 @@ from OpenGLContext.character.locomotion import ClipMap
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.character.wander import STAND, TURN, WanderingCrowd
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf, sample_model_url
-from OpenGLContext.loaders.resolver import fetch_to_cache
+from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Background, Box, DirectionalLight, Material, Shape, Transform,
     sceneGraph,
@@ -89,16 +91,16 @@ SPEED = (0.55, 1.65)
 
 '''_Which figures to pose_
 
-Posing is the cost of a crowd, and a figure far from the eye does not need a
-new pose every frame. `BANDS` lists distances from the eye in metres, each with
+A figure far from the eye changes little between frames, so it can be posed
+less often. `BANDS` lists distances from the eye in metres, each with
 the poses a second a figure inside it asks for, where 0 means every frame. A
 figure within 8 m is posed every frame, one within 20 m asks for 12 poses a
 second, and anything further asks for 4. The clocks run either way, so a figure
 that skipped a frame is where its clips say it is when its turn comes.
 
 `EVERY_FRAME` is the same table with the scheduler off. `BUDGET` caps the
-figures posed in one frame whatever the rates ask for, taking the figures in
-turn so that none is starved.'''
+figures posed in one frame whatever the rates ask for. When more are due, the
+crowd takes them in turn from where the last frame stopped.'''
 BANDS = ((8.0, 0.0), (20.0, 12.0), (float('inf'), 4.0))
 EVERY_FRAME = ((float('inf'), 0.0),)
 BUDGET = 80
@@ -109,9 +111,9 @@ REPORT_FRAMES = 60
 
 '''_The context_
 
-The eye starts 0.75 m above the ground. The fox stands 0.63 m high, and an eye
-at head height would look down on the field from far above it. The orientation
-pitches the view down by 0.12 radians about x.'''
+The eye starts 0.75 m above the ground. The fox stands 0.63 m high, so the eye
+is just above the bodies. At human head height it would look down on them. The
+orientation pitches the view down by 0.12 radians about x.'''
 
 
 class TestContext(BaseContext):
@@ -123,9 +125,9 @@ class TestContext(BaseContext):
     '''_The scene_
 
     ``OnInit`` builds the scene and starts the load. The ground is a 60 m
-    slab. It receives shadows and casts none: there is nothing under it to
-    shadow, and leaving it out of the shadow cascades leaves their depth passes
-    to the bodies.'''
+    slab that receives shadows and casts none. Nothing is under it, and
+    excluding a slab this wide from the shadow cascades keeps it out of their
+    depth passes.'''
     def OnInit(self):
         BaseContext.OnInit(self)
         ground = Shape(appearance=Appearance(
@@ -143,10 +145,11 @@ class TestContext(BaseContext):
         from the session's entropy stream, so ``OPENGLCONTEXT_SEED=4242 python
         crowd_demo.py`` runs the same field every time.'''
         self.crowd = WanderingCrowd(FIELD, speed=SPEED, scale=SCALE, clips=CLIPS)
-        '''The key light is a low sun over the viewer's shoulder, which puts a
-        body's shadow clear of its own feet. The cool fill from the opposite
-        side lights the flank the sun misses. The ground's `Transform` puts the top face of
-        the slab at y = 0.'''
+        '''The key light shines from behind the viewer at a low angle, which puts a
+        body's shadow clear of its own feet. The fill light comes from the
+        opposite side, is bluer and has a third of the intensity, and lights
+        the flank the key light misses. The ground's `Transform` puts the top
+        face of the slab at y = 0.'''
         children = [
             Background(skyColor=[(0.30, 0.45, 0.72), (0.63, 0.75, 0.90),
                                  (0.84, 0.86, 0.86)],
@@ -162,11 +165,17 @@ class TestContext(BaseContext):
         calls ``OnParsed`` on the render thread with the result when it
         returns. The window opens and draws the empty field meanwhile.
 
+        ``fetch_to_cache`` downloads the file once into the asset cache and
+        returns its path. It takes only a URL that has passed a check, and
+        `checked_url` makes that check for a URL named in code, which must be
+        http or https.
+
         There is one parse. Every figure is built from the parsed document and
         shares its vertex and keyframe data, which a crowd requires, since a
         joint has to mean the same joint in every figure.'''
         self.sceneLoader.submit(
-            lambda: parse_gltf(fetch_to_cache(sample_model_url(MODEL))),
+            lambda: parse_gltf(
+                fetch_to_cache(checked_url(sample_model_url(MODEL)))),
             label=MODEL, on_loaded=self.OnParsed)
         '''PBR ambient light comes from an environment probe, and this scene
         has none. ``gltf_scene_ambient`` supplies a flat fill of 0.25 and the
@@ -223,9 +232,9 @@ class TestContext(BaseContext):
     `s` swaps the distance bands for `EVERY_FRAME`, and `b` applies `BUDGET`
     on top of whichever table is in use. `c` prints the counts without waiting
     for the next report. With the scheduler off every figure is posed every
-    frame, so the report reads 150.0: the same picture for nearly three times
-    the posing. Walking into the field brings the figures around the eye into
-    the 8 m band, and their count rises with it.
+    frame, so the report reads 150.0, against 44.7 in the example report below.
+    Walking into the field brings the figures around the eye into the 8 m band,
+    and the count rises with it.
 
     Each handler calls ``triggerRedraw(1)``, which starts a redraw at once if
     the context is not already drawing.'''
