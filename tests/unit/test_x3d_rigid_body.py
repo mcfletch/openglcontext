@@ -461,6 +461,15 @@ class TestJoints:
         run(graph.getDEF('C'), 1.5)
         assert graph.getDEF('J').angle == pytest.approx(-0.3, abs=0.03)
 
+    def test_a_hinge_holding_body1_to_the_world_reads_the_world_against_it(self):
+        """The bar swings down; the world turns up against it, to maxAngle"""
+        graph = scene((self.HINGE % b'forceOutput="ALL" minAngle="-0.1" maxAngle="0.5"').replace(
+            b'containerField="body2"', b'containerField="body1"'))
+        run(graph.getDEF('C'), 1.5)
+        assert graph.getDEF('J').angle == pytest.approx(0.5, abs=0.03)
+        turn = graph.getDEF('B').orientation
+        assert turn[3] * np.sign(turn[2]) == pytest.approx(-0.5, abs=0.03)
+
     def test_a_ball_joint_between_bodies(self):
         graph = scene(b'''<RigidBodyCollection DEF="C">
           <RigidBody DEF="A" containerField="bodies" fixed="true"/>

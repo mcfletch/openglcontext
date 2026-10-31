@@ -120,6 +120,13 @@ STOP_BOUNCE_SPEED = 0.1
 _STOP_REACH = 0.05
 
 
+def _turned(limits: Optional[tuple[float, float]], sign: float) -> Optional[tuple[float, float]]:
+    """Stops on body2 against body1 as stops on the engine's reading, which is ``sign`` times it"""
+    if limits is None or sign > 0.0:
+        return limits
+    return -limits[1], -limits[0]
+
+
 class _Stop:
     """A joint's stops, which it bounces off by its node's bounce field
 
@@ -171,6 +178,9 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self._stops: list[tuple[_Stop, Any]] = []
         #: Each moving body's mass and inertia diagonal, by world uid.
         self._masses: dict[int, tuple[float, np.ndarray]] = {}
+        #: Each joint's reading of body2 against body1 from the engine's, by the entry's place:
+        #: -1 where body2 is the world, which the engine reads body1 against.
+        self._signs: list[float] = []
 
     def signature(self) -> tuple[Any, ...]:
         """Everything the world is built from, with the world's own settings"""
@@ -221,7 +231,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self._surfaces, self._surfaces_used = [], 0
         self._materials, self._paired = {}, {}
         self._origins, self._frames = {}, []
-        self._stops, self._masses = [], {}
+        self._stops, self._masses, self._signs = [], {}, []
         for node in self._bodies():
             self._add_jolt_body(node)
         for collidable, bounds in members(self.collection.collider):
@@ -347,7 +357,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             # A hinge with no axis holds only its anchor, as a ball does.
             made = pj.Joint.ball(a, b, anchor=_floats(node.anchorPoint))
         elif kind == 'SingleAxisHingeJoint':
-            stops = _limits(float(node.minAngle), float(node.maxAngle))
+            stops = _turned(_limits(float(node.minAngle), float(node.maxAngle)), sign)
             made = pj.Joint.hinge(a, b, anchor=_floats(node.anchorPoint), axis=_floats(node.axis),
                                   limits=stops)
         elif kind == 'DoubleAxisHingeJoint':
@@ -358,7 +368,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             if stiffness > 0.0:
                 suspension = (math.sqrt(stiffness / mass) / (2.0 * math.pi),
                               damping / (2.0 * math.sqrt(stiffness * mass)))
-            stops = _limits(float(node.minAngle1), float(node.maxAngle1))
+            stops = _turned(_limits(float(node.minAngle1), float(node.maxAngle1)), sign)
             made = pj.Joint.two_axis_hinge(
                 a, b, anchor=_floats(node.anchorPoint), axis1=_floats(node.axis1),
                 axis2=_floats(node.axis2), limits1=stops,
@@ -367,7 +377,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                 suspension=suspension)
         elif kind == 'SliderJoint':
             low, high = float(node.minSeparation), float(node.maxSeparation)
-            stops = (min(low, 0.0), max(high, 0.0)) if low <= high else None
+            stops = _turned((min(low, 0.0), max(high, 0.0)) if low <= high else None, sign)
             made = pj.Joint.slider(a, b, axis=_floats(node.axis), limits=stops)
             axis = np.asarray(_floats(node.axis), dtype='d')
             axis = axis / max(float(np.linalg.norm(axis)), 1e-12)
@@ -391,6 +401,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self.joints.append(entry)
         self._joint_ids.append(int(jid))
         self._frames.append(frames)
+        self._signs.append(sign)
         self._joint_settings(entry)
         if stops is not None:
             bounce = {'SingleAxisHingeJoint': 'stopBounce', 'SliderJoint': 'stopBounce',
@@ -757,7 +768,8 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         row = joints.rows.get(jid)
         if row is None:
             return found
-        value, value2 = float(joints.value[row]), float(joints.value2[row])
+        sign = self._signs[place]
+        value, value2 = sign * float(joints.value[row]), sign * float(joints.value2[row])
         names = {'SingleAxisHingeJoint': (('angle', value),),
                  'DoubleAxisHingeJoint': (('hinge1Angle', value), ('hinge2Angle', value2)),
                  'SliderJoint': (('separation', value),)}.get(kind, ())
