@@ -1293,6 +1293,18 @@ workspace root b1e4c65.
   capture of the whole scene holds two chaotic parts, and the deterministic parts are checked by
   numbers.
 
+- pyjoltphysics `test_a_dropped_world_joins_its_threads` (72ed82f). Reproduced in most parallel
+  runs (`-n 16`, GIL and free-threaded builds). The world joins its threads; the test counted
+  `/proc/self/task`, which lists a joined thread until the kernel removes the task, and an
+  earlier test's world freed by the collector mid-test joined its threads then. The test now
+  collects first and waits up to 5 s for the count. Loops under doubled load then turned up three
+  more timing tests (the broad phase rebuild read before the world thread made it, ten thousand
+  posts applied within a tick, ticks counted beside queries); fixed the same way or marked
+  `serial`. 80 runs of both builds under doubled load, and the lifecycle and query modules under
+  ASan, passed.
+- `tests/unit/test_physics_service.py`'s thread-idle test waits for the worker to reach its wait
+  (it publishes the sleeping step first).
+
 Left:
 
 - `stopBounce` on Jolt joints (hinge, slider, double-axis hinge): a per-tick velocity reversal
