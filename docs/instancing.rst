@@ -131,7 +131,7 @@ Seeing it work
 .. figure:: images/demos/instancing_batched.jpg
    :alt: Three fields of spheres, blue, orange and green, above a row of boxes
 
-   ``python tests/tutorials/world/instancing_batched.py`` — 296 shapes drawn in 4 calls. Each
+   ``python tests/tutorials/world/instancing_batched.py``: 296 shapes drawn in 4 calls. Each
    field is built a different way, so the grouping rules can be told apart:
    the blue field shares one ``Sphere`` node across all 96 shapes, the orange
    field gives each shape its own equal ``Sphere``, and the green field shares

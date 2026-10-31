@@ -43,7 +43,7 @@ class TestContext(LandContext):
             model=sample_model_url('Fox'), animations=FOX,
             position=(0, 0.2, 0), parent=self.sg)
         self.follow(self.hero)
-        '''A script that wants to know of each foot, to leave a print or
+        '''A script that acts on each footfall, to leave a print or
         raise dust, listens for ``'footstep'``: the ``Footstep`` it is given
         says which foot, how far through the stride, where, and the name of the
         material under it.'''

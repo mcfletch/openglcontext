@@ -6,7 +6,7 @@
 A camera behind a character inside a room meets the walls: at every corner,
 the place behind the character is on the far side of one. The follow camera
 of :doc:`character_run` sweeps a sphere along its arm, from the point it looks
-at out to where it wants to be, and stands where the sphere first meets
+at out to the arm's full length, and stands where the sphere first meets
 something. Here the fox walks a loop round a brick room's pillar, and the
 camera comes round behind it at each corner, closing in on the wall and
 easing back out once the way is clear.

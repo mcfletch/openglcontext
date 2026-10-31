@@ -105,7 +105,7 @@ class ClipSpec:
     #: Seconds to fade into this role; None takes the map's.
     fade: Optional[float] = None
     #: How fast a one-shot or held role (a jump, a roll, a death) plays, 1.0 as
-    #: authored; None leaves it at its own pace. The looping roles play at the
+    #: authored; None leaves the track's speed as it is. The looping roles play at the
     #: rate their speed gives.
     rate: Optional[float] = None
 
