@@ -1208,12 +1208,12 @@ need the extra:
      - ``physics.debugdraw.PhysicsDebugDraw``; ``physics.show_proxies`` draws
        the service's box and sphere bodies on any engine
        (``physics.debugdraw.ProxyOverlay``)
-   * - The viewer's walk with gravity, ``PhysicsWalkMixin``, which every
-       context has
-     - ``move.physicswalk`` and ``move.physicsplatform.PhysicsViewPlatform``
-       made on a world of its own; ``TerrainWalkMixin`` and
-       ``PhysicsViewPlatform.over(character)`` walk a service character and
-       run on Jolt
+   * - ``PhysicsViewPlatform`` made on an omi_physics world of its own, for
+       code with no service
+     - ``move.physicsplatform.PhysicsViewPlatform(world)``;
+       ``PhysicsWalkMixin``, ``TerrainWalkMixin`` and
+       ``PhysicsViewPlatform.over(character)`` walk a service character on any
+       engine
    * - X3D RigidBodyPhysics on the omi engine
      - ``physics.x3domi``
    * - Helpers over a plain omi_physics world, for code with no service
@@ -1402,10 +1402,12 @@ Walking any scene
 Any interactive context can walk. ``OpenGLContext.move.physicswalk.PhysicsWalkMixin``
 is mixed into ``ViewPlatformMixin``, so any context with a camera can hand that
 camera to an avatar. Every physics import is inside a method, so a context
-that never turns walking on never imports the physics package. The avatar
-walks a world of its own built on omi_physics, which needs the ``omi-physics`` extra
-(:ref:`physics-omi`); a program on Jolt walks a service character and hands
-the camera to ``PhysicsViewPlatform.over(character)`` (:ref:`navigation-follow`).
+that never turns walking on never imports the physics package. The avatar is a
+:ref:`character <physics-characters>` of the context's physics service
+(``context.physics``), on whichever engine it runs, and the camera is a
+``PhysicsViewPlatform.over(character)`` (:ref:`navigation-follow`). The scene's
+shapes are the service's scenery, so a body the program adds lands on the
+same floor the avatar walks, and the avatar pushes it.
 
 .. code-block:: python
 
@@ -1436,15 +1438,28 @@ fly out, and :kbd:`g` again to walk from wherever you are.
    * - ``enablePhysics( on )``
      - Switches between walking and free-fly, leaving the camera where it is.
    * - ``stepPhysics( dt=None )``
-     - Advances the avatar one frame and moves the camera to it. Call it from
-       ``OnIdle``. ``dt`` defaults to the wall-clock time since the last step,
-       clamped so that a stall cannot move the avatar through a wall.
+     - In a context, asks for the next frame: the frame steps the avatar,
+       with the movement mode's input before the world's step and the camera
+       at the avatar's eye after it. A host with no render queue calls it to
+       step the avatar ``dt`` seconds itself, which advances the world;
+       ``dt`` defaults to the wall-clock time since the last step, clamped to
+       ``physicsMaxStep`` (0.05 s) so that a stall cannot move the avatar
+       through a wall.
    * - ``buildPhysicsWorld()``
-     - Returns ``(world, (lo, hi))``, or None if nothing is walkable. The
-       default cooks one static collision mesh from ``self.sg``. Override it
-       for a context that has its own collision world, such as a terrain height
-       field or a level format that ships its own collision; the override does
-       not need ``sg``.
+     - Puts what the avatar walks on into ``context.physics`` and returns its
+       bounds ``(lo, hi)``, or None if nothing is walkable. The default makes
+       the shapes of ``self.sg`` the service's scenery, waits up to
+       ``physicsCookWait`` seconds (30) for their triangles to be cooked, and
+       places the scene's gravity zones. It switches the service on where it
+       is off and turns ``colliders='none'`` into ``'scene'``; with
+       ``colliders='explicit'`` the avatar walks only the bodies the program
+       added. Override it for a context with bodies of its own, such as a
+       terrain height field or a level format that ships its own collision;
+       the override adds them to ``self.physics`` and does not need ``sg``.
+   * - ``forgetPhysicsWorld()``
+     - Takes the avatar out of the world, for a new scene; the next
+       ``enablePhysics(True)`` builds a new one. The viewer calls it when it
+       swaps scenes.
    * - ``characterCapabilities( scale )``
      - Returns the avatar's size and starting speeds. Override it for an avatar
        that is not roughly a person. The active :doc:`movement mode
@@ -1492,10 +1507,9 @@ lands on the ground and strikes the trunks, and the walker pushes it.
 
 It overrides the methods above that make and resolve the avatar:
 
-- ``ensurePhysicsWorld()`` makes the character in the context's physics world
-  and a platform over it, and takes the frame: the movement modes are given the
-  frame before the world is stepped, and the camera is put at the avatar's eye
-  after.
+- ``buildPhysicsWorld()`` answers the height field's bounds, and
+  ``physicsAvatar()`` the walker that holds the free-fly camera on the ground,
+  which becomes the avatar.
 - ``spawnAvatar()`` stands the avatar on the ground below the camera the scene
   placed. Every point of a height field can be stood on, so there is no
   search.
@@ -1535,21 +1549,26 @@ all. ``spawnAvatar()`` tries candidate positions in this order:
 #. The centre of the model's footprint.
 #. Rings further and further out from the centre.
 
-It keeps a candidate only if the avatar lands on the ground without being
-stuck. Each kept candidate is scored by how many of the four horizontal
-directions have room to move. The most open spot wins, and among equals the
-most central. A fully open spot is taken at once. If no spot is walkable, the
-avatar goes to the centre anyway: the camera needs a pose, and the user can
-press :kbd:`g` to fly out.
+At each candidate a ray straight down from above the model finds every
+surface no steeper than the avatar's ``maxSlope`` (``floors_below``). The
+avatar stands on the lowest of them where its standing capsule, lifted half a
+step, overlaps no body and the 1.25 standing heights above are clear
+(``HEADROOM``): the ground floor of a building rather than its roof. A
+candidate with no such floor is dropped. Each kept candidate is scored by how
+many of the four horizontal directions have room to move (``clearance``). The
+most open spot wins, and among equals the most central. A fully open spot is
+taken at once. If no spot is walkable, the avatar goes to the centre anyway:
+the camera needs a pose, and the user can press :kbd:`g` to fly out.
 
 .. rst-class:: technical
 
-The clearance test places the whole capsule an arm's length along each
-direction and pushes it out of any overlap. This finds walls that the
+The clearance test places the standing capsule an arm's length (its radius
+and half a metre at avatar scale 1) along each direction and asks the world
+whether it overlaps a body (``physics.overlap``). This finds walls that the
 avatar's centre line would miss. It is a placement test, not a swept move, so
-it does not detect a barrier thinner than the capsule. Its reach is a fixed
-distance, not scaled to the avatar, so on a small model it reports more
-directions as open than a scaled test would.
+it does not detect a barrier thinner than the arm's length. A ray meets the
+underside of a closed mesh as it meets a floor; the headroom test tells them
+apart only for a solid less than 1.25 standing heights thick.
 
 .. _character:
 

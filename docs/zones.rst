@@ -290,8 +290,10 @@ each of an LOD's levels.
 zones are: given the zones as placed now -- the render pass's ``zones`` each
 frame -- it replaces the world's zone volumes when a zone carrying gravity
 has moved, been edited, come or gone, and leaves volumes the application
-added itself. Walking (``PhysicsWalkMixin``) calls it every step with the
-zones of the pass drawing the context.
+added itself. The physics service keeps its own world's zones the same way
+(``Physics.zones_changed``, which the render pass calls each frame), and
+walking (``PhysicsWalkMixin``) gives it the scene's zones when the avatar is
+made.
 
 .. _zone-bake:
 
