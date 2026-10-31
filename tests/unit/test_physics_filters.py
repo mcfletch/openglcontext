@@ -36,6 +36,14 @@ def wall(physics, **options):
                               **options)
 
 
+def heard(hit):
+    """A hit handler that keeps a body's pairs asked of the contact filter
+
+    Only pairs with a body that has a handler are asked. A handler is held
+    weakly, so it is a module function here rather than a lambda.
+    """
+
+
 BALLS = CollisionFilter(collisionSystems=('ball',))
 SHARDS = CollisionFilter(collisionSystems=('shard',), notCollideWithSystems=('ball',))
 
@@ -70,7 +78,7 @@ def test_a_contact_filter_answering_false_lets_a_ball_through_a_wall(physics):
         return False
 
     barrier = wall(physics)
-    barrier.addEventHandler('hit', function=lambda hit: None)
+    barrier.addEventHandler('hit', function=heard)
     physics.set_contact_filter(through)
     moving = ball(physics, (-2, 0, 0), (5, 0, 0))
     run_for(physics, 1.0)
@@ -84,7 +92,7 @@ def test_a_contact_filter_answering_false_lets_a_ball_through_a_wall(physics):
 
 def test_a_contact_filter_answering_true_solves_the_pair(physics):
     barrier = wall(physics)
-    barrier.addEventHandler('hit', function=lambda hit: None)
+    barrier.addEventHandler('hit', function=heard)
     physics.set_contact_filter(lambda approach: True)
     moving = ball(physics, (-2, 0, 0), (5, 0, 0))
     run_for(physics, 1.0)
@@ -93,7 +101,7 @@ def test_a_contact_filter_answering_true_solves_the_pair(physics):
 
 def test_removing_the_contact_filter_solves_every_pair_again(physics):
     barrier = wall(physics)
-    barrier.addEventHandler('hit', function=lambda hit: None)
+    barrier.addEventHandler('hit', function=heard)
     physics.set_contact_filter(lambda approach: False)
     physics.set_contact_filter(None)
     moving = ball(physics, (-2, 0, 0), (5, 0, 0))
@@ -103,7 +111,7 @@ def test_removing_the_contact_filter_solves_every_pair_again(physics):
 
 def test_a_contact_filter_that_raises_solves_the_pair_and_logs(physics, caplog):
     barrier = wall(physics)
-    barrier.addEventHandler('hit', function=lambda hit: None)
+    barrier.addEventHandler('hit', function=heard)
 
     def broken(approach):
         raise RuntimeError('filter failed')
@@ -122,7 +130,7 @@ def test_a_contact_filter_works_on_the_physics_thread():
     try:
         physics.gravity = (0, 0, 0)
         barrier = wall(physics)
-        barrier.addEventHandler('hit', function=lambda hit: None)
+        barrier.addEventHandler('hit', function=heard)
         physics.set_contact_filter(lambda approach: False)
         moving = ball(physics, (-2, 0, 0), (5, 0, 0))
         deadline = time.monotonic() + 5.0
