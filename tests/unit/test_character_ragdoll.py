@@ -253,6 +253,44 @@ def test_a_settled_figure_skins_once_and_a_removed_one_keeps_its_pose(floor):
     assert len(written) == count
 
 
+def _settled_figure(physics):
+    figure_ = RagdollFigure(physics, Model(figure(skin_radius=0.04)), mode='kinematic')
+    figure_.knock_down()
+    run(physics, figure_, 6.0)
+    assert figure_.settled
+    return figure_
+
+
+def test_a_settled_figure_reads_no_bones_to_draw(floor, monkeypatch):
+    """Its draw costs nothing until a bone wakes: no sleep poll of the bones each frame."""
+    figure_ = _settled_figure(floor)
+    reads = []
+    real = type(floor)._state
+
+    def counted(self, body, *args, **named):
+        reads.append(body)
+        return real(self, body, *args, **named)
+
+    monkeypatch.setattr(type(floor), '_state', counted)
+    monkeypatch.setattr(type(floor), 'poses', lambda *a, **k: reads.append('poses'))
+    run(floor, figure_, 0.5)
+    assert reads == []
+
+
+def test_a_settled_figure_struck_again_is_drawn_again(floor):
+    mixer = figure(skin_radius=0.04)
+    written = []
+    mixer.reskin_from = lambda worlds: written.append(worlds)
+    figure_ = RagdollFigure(floor, Model(mixer), mode='kinematic')
+    figure_.knock_down()
+    run(floor, figure_, 6.0)
+    assert figure_.settled
+    count = len(written)
+    figure_.ragdoll.bone('hips').apply_impulse((0.0, 300.0, 0.0))
+    run(floor, figure_, 0.5)
+    assert len(written) > count + 10
+
+
 def test_the_joints_follow_the_ragdoll_for_what_hangs_on_them(floor):
     mixer = figure(skin_radius=0.04, held=True)
     mixer.play('hold')

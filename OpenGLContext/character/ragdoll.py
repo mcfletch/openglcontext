@@ -317,6 +317,10 @@ class RagdollFigure:
         self._limp_in: float | None = None
         self._drawn: np.ndarray | None = None
         self._drawn_settled = False
+        #: Whether the bones report their waking (:meth:`_listen`), and whether one
+        #: has woken since a draw found them all asleep.
+        self._listening = False
+        self._woken = True
 
     @property
     def placement(self) -> np.ndarray:
@@ -329,7 +333,20 @@ class RagdollFigure:
 
     def set_mode(self, mode: RagdollMode | str, blend: float = 0.0) -> None:
         """Change the ragdoll's mode over ``blend`` seconds; see :meth:`Ragdoll.set_mode`."""
+        if RagdollMode(mode) is not RagdollMode.KINEMATIC:
+            self._listen()
         self.ragdoll.set_mode(mode, blend)
+
+    def _listen(self) -> None:
+        """Have every bone report its waking, so a settled figure's draw reads nothing."""
+        if self._listening or not self.ragdoll.alive:
+            return
+        self._listening = True
+        for bone in self.ragdoll.bones:
+            bone.addEventHandler('wake', function=self._wake)
+
+    def _wake(self, collision: Any) -> None:  # noqa: ARG002 an event handler is given the event
+        self._woken = True
 
     def knock_down(self, impulse: Any = None, point: Any = None, velocity: Any = None,
                    blend: float = 0.3, bone: int | str | None = None) -> None:
@@ -343,6 +360,7 @@ class RagdollFigure:
         shapes the first moments of the fall; after the blend it stops
         following.
         """
+        self._listen()
         if self.ragdoll.mode is RagdollMode.KINEMATIC:
             self.ragdoll.set_mode(RagdollMode.POWERED)
         if velocity is not None:
@@ -385,18 +403,23 @@ class RagdollFigure:
         """Write the ragdoll's bones into the skins and joints; the rig-slot world matrices.
 
         Once the bones are asleep, or the ragdoll is removed, the pose last
-        written stands and is returned without being written again.
+        written stands and is returned without being written again. After a
+        :meth:`knock_down` or a change out of kinematic mode the bones report
+        their waking, so a settled figure reads nothing from the world until
+        one of them wakes; before that, each draw reads whether they sleep.
         """
-        if self._drawn is not None and (not self.ragdoll.alive
-                                        or (self._drawn_settled and self.settled)):
+        if self._drawn is not None and (not self.ragdoll.alive or (self._drawn_settled and (
+                not self._woken if self._listening else self.settled))):
             return self._drawn
         started = time.perf_counter()
-        settled = self.settled
         poses = self.ragdoll.poses()
+        settled = not self.ragdoll.alive or bool(np.all(poses.asleep))
         worlds = self.rig.worlds(poses.position, poses.orientation, self._pose)
         self.mixer.reskin_from(worlds)
         self.mixer.write_joints_from(worlds)
         self._drawn, self._drawn_settled = worlds, settled
+        if settled:
+            self._woken = False
         self.physics.note_render_cost('ragdolls', time.perf_counter() - started)
         return worlds
 
