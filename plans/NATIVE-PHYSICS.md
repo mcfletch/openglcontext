@@ -1391,7 +1391,7 @@ Branch `jolt-default` on `openglcontext` (ec03d475 to the plan commits); `pyjolt
 | glisteel | 1,670 passed, 1 xfailed | needs omi_physics (its car) |
 | openglcontext-forest | 86 passed | 86 passed |
 | pyjoltphysics `tests/differential` | 67 passed (with the vehicle scenarios) | 57 passed |
-| verify-everything | VERIFY | |
+| verify-everything (`verify-logs/verify-2026-10-31-054918.log`) | 24 projects; 23 green, openglcontext 19,611 passed and 1 failed (`character_camera`'s baseline, re-blessed above), serial 29 passed; the script suite then 189 passed, 16 skipped | |
 
 Static gates (`tools/preflight.py openglcontext pyjoltphysics --only lint --only oglc-check
 --only typecheck`): all six pass. The typecheck against `.preflight-venv` found 20 errors in
