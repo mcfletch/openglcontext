@@ -645,33 +645,41 @@ and skips the probe:
 
 .. _ngg-culling:
 
-Back-face culling in a second context
--------------------------------------
+Back faces with a vertex at clip w = 0
+--------------------------------------
 
-Mesa's radeonsi driver culls primitives in the vertex stage (NGG culling) on
-GFX10 and later GPUs. On Mesa 25.2.8 with a Radeon 8060S (gfx1151), that
-culling draws the back faces of a closed mesh in a second GL context while
-the first is open. A context made just after another was released shows it
-in 2 or 3 of every 1,000 window pairs on a machine running the unit suite
-beside it. A solid Cone seen from
-inside then fills the view instead of drawing nothing, and
+Mesa's radeonsi driver culls triangles in the vertex stage (NGG culling) on
+GFX10 and later GPUs, and turns the rasterizer's own face culling off while
+it does. A triangle with a vertex exactly on the plane through the eye (clip
+w = 0) comes out of its face test as infinite or NaN and is drawn whichever
+way it faces. On Mesa 25.2.8 with a Radeon 8060S (gfx1151), a solid Cone
+centred on the viewpoint has its apex and base centre on that plane, so seen
+from inside it fills the view instead of drawing nothing, and
 ``glCullFace(GL_FRONT_AND_BACK)`` does not stop it. ``AMD_DEBUG=nonggc``
-turns the vertex-stage culling off, and the same draws then cull.
+turns the vertex-stage culling off, and the same draws then cull. Moving the
+viewpoint 0.01 units along the view axis culls them as well.
 
-A test suite opens a window per test, so the tests that look at a solid
-shape from inside (``tests/unit/test_primitive_solid.py``) meet it in full
-parallel runs. ``OpenGLContext.testing.drivercull`` draws a solid Cone from
-inside in a second window, with the first open, in a child process before the
-session opens its first window. Where that draw shows the cone, the plugin
-adds ``nonggc`` to ``AMD_DEBUG`` for the session. The driver reads the
-variable as it starts, and the xdist workers and script tests the run starts
-inherit it. Where the draw is black, or the driver is not radeonsi, the
-driver is left as an application runs it. The probe takes about 1.3 seconds.
-``tests/unit/test_driver_culling.py`` draws the second window in the test
-process and fails if its back faces are drawn.
+The driver compiles the culled variant of a shader after its first draw of
+more than 128 vertices, and frames drawn before that variant is ready are
+correct. The tests that look at a solid shape from inside
+(``tests/unit/test_primitive_solid.py``) draw a frame or two each, so they
+failed in a few of every 1,000 runs beside the rest of the suite.
+``OpenGLContext.testing.drivercull`` draws a solid Cone from inside in a
+second window, with the first open, in a child process before the session
+opens its first window; on an affected stack that draw shows the cone on
+every run. Where it does, the plugin adds ``nonggc`` to ``AMD_DEBUG`` for
+the session. The driver reads the variable as it starts, and the xdist
+workers and script tests the run starts inherit it. Where the draw is black,
+or the driver is not radeonsi, the driver is left as an application runs it.
+The probe takes about 1.3 seconds. ``tests/unit/test_driver_culling.py``
+draws the second window in the test process and fails if its back faces are
+drawn.
 
-An application that opens two windows on an affected stack sees the same
-fault. Set ``AMD_DEBUG=nonggc`` in its environment before it starts.
+An application on an affected stack draws the same faces wherever a culled
+triangle has a vertex at clip w = 0, in its first window or any other. Set
+``AMD_DEBUG=nonggc`` in its environment before it starts, at the cost of the
+driver's vertex-stage culling. The Mesa report, with a C program that shows
+the fault without the engine, is ``plans/MESA-NGG-CULLING-W0.md``.
 
 ``OPENGLCONTEXT_NGG_CULLING`` sets the answer for a run on a known stack,
 and skips the probe. The plugin writes the decision back into it, so a child

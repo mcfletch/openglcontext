@@ -1,28 +1,31 @@
-"""Whether this driver culls back faces in a second GL context, and the switch where it does not.
+"""Whether this driver culls a back face with a vertex at clip w = 0, and the switch where it does not.
 
-Mesa's radeonsi driver culls primitives in the vertex stage on GFX10 and later
-(NGG culling). On Mesa 25.2.8 with a Radeon 8060S (gfx1151), that culling draws
-the back faces of a closed mesh in a second GL context while the first is
-open, and in 2 or 3 of every 1,000 contexts made just after another was
-released on a machine running the unit suite beside them. A solid Cone seen
-from inside then fills the view, and so does the same draw with
-``glCullFace(GL_FRONT_AND_BACK)``. The first context draws it correctly.
-``AMD_DEBUG=nonggc`` turns the vertex-stage culling off, and the same draws
-then cull. A program of nothing but ``glfw`` and GL whose vertex shader
-writes ``gl_ClipDistance``, as every engine vertex shader does for X3D's
-ClipPlane (``_clipplane_inc.glsl``), shows the fault on some runs and not
-others.
+Mesa's radeonsi driver culls triangles in the vertex stage on GFX10 and later
+(NGG culling), and while that culling is active it turns the rasterizer's own
+face culling off. Its face test divides by clip w, and a triangle whose
+facing comes out infinite or NaN is passed on for the rasterizer to decide.
+A vertex exactly on the plane through the eye (clip w = 0) gives that, so a
+back-facing triangle with such a vertex is drawn. On Mesa 25.2.8 with a
+Radeon 8060S (gfx1151), a solid Cone seen from inside, centred on the eye,
+has its apex and base centre on that plane and fills the view; it does the
+same under ``glCullFace(GL_FRONT_AND_BACK)``. ``AMD_DEBUG=nonggc`` turns the
+vertex-stage culling off, and the rasterizer then culls those faces. A
+vertex a hundredth of a unit off the plane is culled either way.
+``plans/MESA-NGG-CULLING-W0.md`` is the report written for Mesa, with a
+standalone C program that shows it.
 
-A test suite opens a window per test, and on a busy machine the driver still
-holds the last one's state, so this reaches tests that look at a solid shape
-from inside (``tests/unit/test_primitive_solid.py``) one run in a few.
+The driver starts each shader with this culling off and compiles a culled
+variant once a draw passes 128 vertices. Frames drawn before the variant is
+ready are culled correctly, and the frames after it are not. Whether a test
+drawing a frame or two meets it depends on how soon that variant is ready,
+so ``tests/unit/test_primitive_solid.py`` failed in a few of every 1,000
+runs beside the rest of the suite.
 
-:func:`_probe` draws a solid Cone from inside in a second window while the
-first is open, through the engine's VRML97 pass. That draw shows the fault on
-every run of an affected stack. Run in a child process before the session's
-first window, it answers whether this machine is affected, so the switch goes
-on only where the defect is, and a driver that culls correctly is run as an
-application would run it.
+:func:`_probe` draws the Cone from inside in a second window while the first
+is open, through the engine's VRML97 pass. On the affected stack that draw
+shows the fault on every run. Run in a child process before the session's first window, it answers whether
+this machine is affected, so the switch goes on only where the defect is,
+and a driver that culls correctly is run as an application would run it.
 
 ``OPENGLCONTEXT_NGG_CULLING`` pins the answer: ``on`` leaves the driver's
 culling as it is, ``off`` adds ``nonggc`` to ``AMD_DEBUG``, and ``auto`` (the
@@ -77,7 +80,7 @@ def setting(environ: Optional[MutableMapping[str, str]] = None) -> str:
 
 
 def probe_command() -> Sequence[str]:
-    """The child process that finds out whether a second window misculls"""
+    """The child process that finds out whether this driver misculls"""
     return (sys.executable, '-m', __name__)
 
 
@@ -96,7 +99,7 @@ _MISCULLS: Optional[bool] = None
 
 
 def driver_misculls(run: Optional[Callable[[Sequence[str]], int]] = None) -> bool:
-    """True where this machine's driver draws culled faces in a second window
+    """True where this machine's driver draws the culled faces of :func:`solid_cone_scene`
 
     Asked once per process.  ``run`` takes the command and returns its exit
     status, so the reading of that status can be tested without the driver.
@@ -167,7 +170,11 @@ def settle(environ: Optional[MutableMapping[str, str]] = None,
 
 
 def solid_cone_scene() -> list[Any]:
-    """A viewpoint inside a solid, emissive green Cone: a frame that culls is black"""
+    """A viewpoint inside a solid, emissive green Cone: a frame that culls is black
+
+    The Cone is centred on the viewpoint, so its apex and the centre of its
+    base are at clip w = 0.
+    """
     from OpenGLContext.scenegraph.basenodes import (  # noqa: PLC0415 the scenegraph imports GL
         Appearance, Cone, Group, Material, Shape, Viewpoint,
     )
@@ -180,7 +187,8 @@ def solid_cone_scene() -> list[Any]:
 def second_window_green(frames: int = FRAMES) -> tuple[int, str]:
     """(green at the centre, GL_RENDERER) of a second window's frame of :func:`solid_cone_scene`
 
-    The first window stays open while the second draws.
+    The first window stays open while the second draws: the second window's
+    frames are the ones the affected driver draws with its culled variant.
     """
     from OpenGL.GL import GL_RENDERER, glGetString  # noqa: PLC0415 imported for the child alone
     from OpenGLContext.testing.scenes import drawn_image, scene_context  # noqa: PLC0415 opens windows

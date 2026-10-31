@@ -1,6 +1,7 @@
-"""Back faces culled in a second window, and the driver switch that keeps them culled.
+"""Back faces with a vertex at clip w = 0 culled, and the driver switch that keeps them culled.
 
-On an affected radeonsi stack a second GL context draws the faces it culls
+On an affected radeonsi stack the vertex-stage culling draws a back face
+that has a vertex on the plane through the eye
 (see :mod:`OpenGLContext.testing.drivercull`). The decision to switch the
 driver's vertex-stage culling off is a plain function of the setting and the
 machine, so most of this file needs no GL; the cases at the end draw.
@@ -139,6 +140,10 @@ def test_the_session_settled_before_its_first_window(glfw_run):
 
 
 def test_a_solid_shape_in_a_second_window_culls_its_back_faces(glfw_run):
-    """Seen from inside, a solid Cone's faces are all back faces, so the frame is black"""
+    """Seen from inside, a solid Cone's faces are all back faces, so the frame is black
+
+    Its apex and base centre are at clip w = 0, which the affected driver
+    leaves unculled.
+    """
     green, _renderer = drivercull.second_window_green()
     assert green < 40
