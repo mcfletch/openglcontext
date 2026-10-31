@@ -926,3 +926,61 @@ def test_a_jolt_world_is_made_again_for_its_settings(edit):
     edit(graph)
     collection.advance(FRAME)
     assert collection.system.jolt is not world
+
+
+def test_a_rule_read_from_the_other_body_runs_its_surface_the_other_way():
+    rule = x3drigid.ContactRule(surface_speed=(1.0, 2.0), restitution=0.5)
+    assert rule.reversed() == x3drigid.ContactRule(surface_speed=(-1.0, -2.0), restitution=0.5)
+
+
+def test_a_shape_with_a_mesh_in_it_is_not_cast():
+    from OpenGLContext.physics.proxy import Proxy  # noqa: PLC0415 kept with its use
+    mesh = Proxy.trimesh(np.eye(3), [[0, 1, 2]])
+    assert not x3drigid.mesh_free(mesh)
+    assert not x3drigid.mesh_free(Proxy.compound([(Proxy.box(), (0, 0, 0), (0, 0, 0, 1)),
+                                                  (mesh, (1, 0, 0), (0, 0, 0, 1))]))
+    assert x3drigid.mesh_free(Proxy.compound([(Proxy.box(), (0, 0, 0), (0, 0, 0, 1))]))
+
+
+@pytest.mark.parametrize('name, arguments', [
+    ('build', ()), ('advance', (0.1,)), ('awake', ()), ('_held_index', (None,)),
+    ('_surface', (np.zeros(3), np.ones(3))), ('_park_surfaces', ([],)), ('_joint_values', (None,)),
+])
+def test_an_engine_provides_the_world(name, arguments):
+    system = x3drigid.RigidSystem(prototypes()['RigidBodyCollection']())
+    with pytest.raises(NotImplementedError):
+        getattr(system, name)(*arguments)
+
+
+def test_a_contact_with_the_world_lasts_the_frame_it_is_sent_for():
+    graph = falling(body=b'position="0 0.1 0" useGlobalGravity="false" linearVelocity="0 -1 0"')
+    collection, body = graph.getDEF('C'), graph.getDEF('B')
+    collection.set_contacts = [prototypes()['Contact'](
+        body1=body, geometry1=graph.getDEF('BALL-GEOM'), position=(0, 0, 0),
+        contactNormal=(0, -1, 0), depth=0.0)]
+    collection.advance(FRAME)
+    assert body.linearVelocity[1] > -0.5
+    body.linearVelocity = (0.0, -1.0, 0.0)
+    run(collection, 0.5)
+    assert body.position[1] < -0.3
+
+
+@pytest.mark.parametrize('node, call', [
+    ('RigidBodyCollection', lambda node: (node.step(), node.advance(FRAME), node.awake(),
+                                          setattr(node, 'set_contacts', []))),
+    ('CollisionSensor', lambda node: node.sense()),
+])
+def test_a_node_whose_engine_is_unavailable_logs_once_and_stays_still(node, call, monkeypatch, caplog):
+    from OpenGLContext.physics import x3djolt  # noqa: PLC0415 kept with its use
+    from OpenGLContext.physics.engine import EngineUnavailable  # noqa: PLC0415 kept with its use
+
+    def unavailable(*_arguments):
+        raise EngineUnavailable('the omi engine needs pip install OpenGLContext[omi]')
+
+    monkeypatch.setattr(x3djolt, 'make_rigid_system', unavailable)
+    monkeypatch.setattr(x3djolt, 'make_sensing', unavailable)
+    made = prototypes()[node]()
+    call(made)
+    call(made)
+    assert [record.getMessage() for record in caplog.records].count(
+        'the omi engine needs pip install OpenGLContext[omi]') == 1
