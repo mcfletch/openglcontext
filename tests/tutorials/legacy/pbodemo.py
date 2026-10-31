@@ -10,6 +10,7 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, os.pardir, 'nehe' )
 
 class TestContext( BaseContext ):
     currentImage = 0
@@ -48,7 +49,7 @@ class TestContext( BaseContext ):
                     diffuseColor =(1,1,1)
                 ),
                 texture = ImageTexture(
-                    url = [os.path.join(HERE, "nehe_wall.bmp")]
+                    url = [os.path.join(NEHE, "nehe_wall.bmp")]
                 ),
             ),
         )

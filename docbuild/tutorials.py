@@ -344,6 +344,7 @@ PATHS = [
             'nehe6_timer',
             'nehe6_multi',
             'nehe6_compressed',
+            'nehe6_convolve',
             'glprint',
         ],
     ),

@@ -10,6 +10,7 @@ import sys
 import logging
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, os.pardir, 'nehe' )
 log = logging.getLogger('TestQuery')
 
 glBeginQuery = alternate( glBeginQuery, glBeginQueryARB )
@@ -20,9 +21,9 @@ glGetQueryObjectiv = alternate( glGetQueryObjectiv, glGetQueryObjectivARB )
 glGetQueryObjectuiv = alternate( glGetQueryObjectiv, glGetQueryObjectuivARB )
 
 images = [
-    os.path.join(HERE, "nehe_glass.bmp"),
+    os.path.join(NEHE, "nehe_glass.bmp"),
     os.path.join(HERE, "pimbackground_FR.jpg"),
-    os.path.join(HERE, "nehe_wall.bmp"),
+    os.path.join(NEHE, "nehe_wall.bmp"),
 ]
 
 sizes = [

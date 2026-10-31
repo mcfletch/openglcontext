@@ -14,6 +14,9 @@ from OpenGLContext.arrays import *
 from OpenGL.GL import shaders as gl_shaders
 from OpenGLContext.scenegraph.shaders import *
 from OpenGLContext.scenegraph.basenodes import ImageTexture
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, 'tutorials', 'nehe' )
 
 VERTEX_SHADER = """#version 330 core
 uniform mat4 modelViewProjection;
@@ -114,7 +117,7 @@ class TestContext( BaseContext ):
         self.coordLength = len(indices)
         self.coords = vbo.VBO( coords )
         self.indices = vbo.VBO( indices, target = 'GL_ELEMENT_ARRAY_BUFFER' )
-        self.texture = ImageTexture( url = ["nehe_glass.bmp"] )
+        self.texture = ImageTexture( url = [os.path.join( NEHE, "nehe_glass.bmp" )] )
         self.shader = gl_shaders.compileProgram(
             gl_shaders.compileShader( VERTEX_SHADER, GL_VERTEX_SHADER ),
             gl_shaders.compileShader( FRAGMENT_SHADER, GL_FRAGMENT_SHADER ),

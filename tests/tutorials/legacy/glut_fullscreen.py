@@ -12,6 +12,7 @@ from OpenGL.GLUT import *
 import time
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, os.pardir, 'nehe' )
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -29,7 +30,7 @@ class TestContext( BaseContext ):
         self.texture.renderPost(mode=mode)
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        self.texture = imagetexture.ImageTexture(url = [ os.path.join( HERE, "nehe_wall.bmp" ) ] )
+        self.texture = imagetexture.ImageTexture(url = [ os.path.join( NEHE, "nehe_wall.bmp" ) ] )
         print('Press <f> to switch to full-screen mode')
         self.addEventHandler( 'keypress', name = 'f', function = self.OnFullScreenToggle)
         self.addEventHandler( 'keyboard', name = '<escape>', function = self.OnEscape)

@@ -6,6 +6,9 @@ from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.events.timer import Timer
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, 'tutorials', 'nehe' )
 
 scene = sceneGraph(
     children = [
@@ -25,7 +28,7 @@ scene = sceneGraph(
                     ),
                     appearance = Appearance(
                         texture = ImageTexture(
-                            url = "nehe_glass.bmp",
+                            url = os.path.join( NEHE, "nehe_glass.bmp" ),
                         ),
                     ),
                 )

@@ -36,6 +36,9 @@ except ImportError:
 from OpenGL.GL.ARB.imaging import *
 from OpenGLContext import arrays
 from OpenGLContext.events import systemtime
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+IMAGE = os.path.join( HERE, 'nehe_wall.bmp' )
 
 class TestContext( BaseContext ):
     """There is one new customization point used here: OnInit
@@ -89,7 +92,7 @@ class TestContext( BaseContext ):
             print('Convolved image')
 
         
-    def loadImage( self, imageName = 'nehe_wall.bmp', convolve=True ):
+    def loadImage( self, imageName = IMAGE, convolve=True ):
         """Load an image file as a 2D texture using PIL
 
         This method combines all of the functionality required to

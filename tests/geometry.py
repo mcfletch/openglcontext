@@ -8,11 +8,14 @@ from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.arrays import array, pi
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, 'tutorials', 'nehe' )
 
 images = [
-    "nehe_glass.bmp",
+    os.path.join( NEHE, "nehe_glass.bmp" ),
     "pimbackground_FR.jpg",
-    "nehe_wall.bmp",
+    os.path.join( NEHE, "nehe_wall.bmp" ),
     "marbleface.jpeg",
     "wrls/irradiation.jpg",
     "wrls/yingyang.png",

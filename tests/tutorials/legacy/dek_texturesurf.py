@@ -11,7 +11,7 @@ from OpenGLContext.scenegraph.basenodes import *
 from PIL import Image
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
-IMAGE = os.path.join( HERE, "nehe_wall.bmp" )
+IMAGE = os.path.join( HERE, os.pardir, "nehe", "nehe_wall.bmp" )
 
 ## Control points for the bezier surface
 ctrlpoints = array([

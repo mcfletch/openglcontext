@@ -11,8 +11,9 @@ import sys
 from PIL import Image
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
-IMAGE = os.path.join( HERE, "nehe_wall.bmp" )
-LIGHTMAP = os.path.join( HERE, "lightmap1.jpg" )
+NEHE = os.path.join( HERE, os.pardir, 'nehe' )
+IMAGE = os.path.join( NEHE, "nehe_wall.bmp" )
+LIGHTMAP = os.path.join( NEHE, "lightmap1.jpg" )
 
 multitexture = None
 

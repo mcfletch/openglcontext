@@ -12,6 +12,8 @@ from OpenGLContext.scenegraph import imagetexture
 from OpenGLContext.events import systemtime
 from OpenGL.GL import *
 import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, 'tutorials', 'nehe' )
 from PIL import Image
 
 class TestContext( BaseContext ):
@@ -51,7 +53,7 @@ class TestContext( BaseContext ):
         return 1
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        self.texture = imagetexture.ImageTexture( url = ["nehe_wall.bmp"] )
+        self.texture = imagetexture.ImageTexture( url = [os.path.join( NEHE, "nehe_wall.bmp" )] )
         self.addEventHandler( 'keypress', name='c', function=self.OnCaptureColour )
         self.addEventHandler( 'keypress', name='d', function=self.OnCaptureDepth )
         self.addEventHandler( 'keypress', name='v', function=self.OnViewCapture )
