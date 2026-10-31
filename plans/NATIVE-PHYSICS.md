@@ -2327,7 +2327,21 @@ omi world arrays; `test_a_jolt_world_is_made_again_for_its_settings` covers the 
 `test_the_finer_step_is_taken_at_the_rate_asked_for` (a Jolt world keeps the tick it was
 made with); the `PhysicsDebugDraw` tests; a vehicle-less engine's vehicle test.
 
-RESULTS
+| Suite (main checkout after the merge, no engine setting) | Result |
+|---|---|
+| openglcontext `tests/unit tests/tiles3d -m "not serial"`, `-n 16` (worktree) | 18,496 passed, 56 skipped |
+| openglcontext `-m serial` (worktree) | 29 passed, 1 skipped (no glTF baselines in the worktree's reference images) |
+| `tests/test_all_scripts.py -k "physics or walk or x3d or tiles or navmesh or terrain"` | 36 passed |
+| hill-runner | 662 passed, 1 skipped |
+| twig-bb | 2,421 passed, 1 skipped |
+| marble-demo | 941 passed, 6 xfailed |
+| marble-editor | 165 passed |
+| glisteel | 1,670 passed, 1 xfailed |
+| openglcontext-forest | 86 passed |
+| openglcontext-editor | 1,492 passed |
+| omi_physics (unchanged) | 1,822 passed, 3 xfailed |
+| pyjoltphysics `-m "not serial"` / `-m serial` | 525 passed, 2 skipped / 1 passed; differential 75 passed, 74 and 1 skipped with omi_physics blocked |
+| `tools/preflight.py openglcontext pyjoltphysics omi_physics --rebuild-env`, lint, oglc-check, typecheck | 9 of 9 |
 
 Left:
 
@@ -2337,6 +2351,9 @@ Left:
 - `tickHz` given to `enable` or `set_config` is kept until the world is made again; the
   `physics_stairs_tuning` tutorial's finer step changes nothing on Jolt.
 - The root `uv.lock` needs `uv lock` for the removed extra.
+- `tests/tutorials/core_context/navmesh_demo.py`'s comment still names `from_world()`: the
+  file holds another agent's uncommitted edit, so it was left; the comment should name
+  `from_scene(scene)`.
 
 ## 7. Decisions
 
