@@ -90,6 +90,10 @@ class Engine(abc.ABC):
         self.material_of: Callable[[str], Any] | None = None
         #: Gives the render thread's copy of the bodies, for an engine that queries one; the service sets it.
         self.replica: Callable[[], Any] | None = None
+        #: ``guard(owner, function, *arguments)`` calls a character's code, logging a failure once.
+        self.guard: Callable[..., Any] = _call
+        #: Asked whether a handler of bodies' events runs on the stepping thread; the service sets it.
+        self.wants_events: Callable[[], bool] = _never
 
     # -- stepping -------------------------------------------------------
     @property
@@ -134,6 +138,10 @@ class Engine(abc.ABC):
     @abc.abstractmethod
     def stop(self) -> bool:
         """Stop stepping; whether the thread that stepped has ended."""
+
+    @abc.abstractmethod
+    def callbacks_changed(self) -> None:
+        """A handler, step hook or posted call was added or removed: register what the world needs now."""
 
     @abc.abstractmethod
     def pin(self, on: bool) -> None:
@@ -224,6 +232,14 @@ class Engine(abc.ABC):
 
 def _no_body(uid: int) -> Any:
     return None
+
+
+def _never() -> bool:
+    return False
+
+
+def _call(owner: Any, function: Callable[..., Any], *arguments: Any) -> Any:
+    return function(*arguments)
 
 
 def make_engine(definition: PhysicsDefinition, wake: Callable[[], Any] | None = None) -> Engine:

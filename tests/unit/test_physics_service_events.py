@@ -16,6 +16,8 @@ from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
 
@@ -267,7 +269,7 @@ def test_a_marked_function_runs_on_the_worker_thread_and_may_change_the_world():
         assert listener.heard
         assert listener.threads[0] == physics.worker.thread_id
         assert listener.threads[0] != threading.get_ident()
-        physics.worker.wait_ticks(5)
+        physics_testing.wait_ticks(physics, 5)
         physics.frame(0.016)
         assert body.velocity[1] > 5.0 or body.position[1] > 0.8
     finally:
@@ -356,6 +358,7 @@ def test_a_step_handler_may_change_a_body_between_steps():
     physics.close()
 
 
+@pytest.mark.engines('omi', reason="reads the omi world's slots inside the step")
 def test_a_query_inside_a_step_handler_leaves_the_step_in_charge():
     physics = make(gravity=(0, 0, 0))
     body = physics.add_dynamic(ball(at=(0, 0, 0)), linear_damping=0.0)

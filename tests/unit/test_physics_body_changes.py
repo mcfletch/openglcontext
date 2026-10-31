@@ -13,6 +13,8 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 
 def make(mode):
     service = Physics(PhysicsDefinition(mode=mode, tickHz=120.0, maxCatchUp=1.0,
@@ -34,7 +36,8 @@ def settle(physics, frames=3):
         if physics.definition.mode == 'thread':
             physics.flush()
             time.sleep(1 / 60)
-    physics_testing.run(physics, lambda world: None).result(5.0)
+    physics_testing.settle(physics)
+    physics.frame(0.0)
 
 
 def column(physics, body, name):
@@ -58,10 +61,17 @@ def test_set_mass_changes_the_mass_and_the_inertia_of_the_shape(physics):
     body.set_mass(4.0)
     assert body.mass == 4.0
     settle(physics)
-    assert float(column(physics, body, 'inv_mass')) == pytest.approx(0.25)
+    assert physics_testing.mass(physics, body) == pytest.approx(4.0)
     # A box's inertia about each axis is m (a^2 + b^2) / 12 over the other two sides.
     expected = 4.0 / 12.0 * np.array([2.0 ** 2 + 3.0 ** 2, 1.0 ** 2 + 3.0 ** 2, 1.0 ** 2 + 2.0 ** 2])
-    assert np.allclose(column(physics, body, 'inv_inertia'), 1.0 / expected)
+    if physics.engine.name == 'omi_physics':
+        assert np.allclose(column(physics, body, 'inv_inertia'), 1.0 / expected)
+    else:
+        # Jolt has no inertia to read back: the spin an angular impulse gives is I^-1 L.
+        body.set_angular_velocity((0.0, 0.0, 0.0))
+        body.apply_torque_impulse((1.0, 0.0, 0.0))
+        settle(physics, frames=1)
+        assert body.angular_velocity[0] == pytest.approx(1.0 / expected[0], rel=0.05)
 
 
 def test_an_impulse_after_set_mass_moves_the_body_by_impulse_over_the_new_mass(physics):
@@ -79,10 +89,8 @@ def test_set_material_gives_the_body_the_material_and_its_coefficients(physics):
     assert body.material == 'rubber'
     assert (body.friction, body.restitution) == (0.9, 0.8)
     settle(physics)
-    index = int(column(physics, body, 'collider_material'))
-    found = {}
-    physics_testing.run(physics, lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
-    assert (found['m'].dynamicFriction, found['m'].restitution) == (0.9, 0.8)
+    found = physics_testing.material(physics, body)
+    assert (found.dynamicFriction, found.restitution) == pytest.approx((0.9, 0.8))
 
 
 def test_set_material_takes_a_material_the_application_defined(physics):
@@ -92,10 +100,7 @@ def test_set_material_takes_a_material_the_application_defined(physics):
     assert body.material == 'mud'
     assert body.friction == 0.95
     settle(physics)
-    index = int(column(physics, body, 'collider_material'))
-    found = {}
-    physics_testing.run(physics, lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
-    assert found['m'].staticFriction == 0.95
+    assert physics_testing.material(physics, body).staticFriction == pytest.approx(0.95)
 
 
 def test_set_friction_and_set_restitution_change_one_coefficient_each(physics):
@@ -106,11 +111,9 @@ def test_set_friction_and_set_restitution_change_one_coefficient_each(physics):
     assert body.material == 'wood'                     # the name, and the sound it carries, stay
     assert (body.friction, body.restitution) == (0.1, 0.7)
     settle(physics)
-    index = int(column(physics, body, 'collider_material'))
-    found = {}
-    physics_testing.run(physics, lambda world: found.setdefault('m', world.material_for(index))).result(5.0)
-    material = found['m']
-    assert (material.staticFriction, material.dynamicFriction, material.restitution) == (0.1, 0.1, 0.7)
+    material = physics_testing.material(physics, body)
+    assert (material.staticFriction, material.dynamicFriction, material.restitution) == pytest.approx(
+        (0.1, 0.1, 0.7))
 
 
 def test_the_same_coefficients_share_one_material_in_the_world(physics):
@@ -119,11 +122,9 @@ def test_the_same_coefficients_share_one_material_in_the_world(physics):
         first.set_friction(0.3)
         second.set_friction(0.3)
     settle(physics)
-    count = {}
-    physics_testing.run(physics, lambda world: count.setdefault('n', len(world.materials))).result(5.0)
-    assert int(column(physics, first, 'collider_material')) == int(
-        column(physics, second, 'collider_material'))
-    assert count['n'] <= 2
+    assert physics_testing.material_index(physics, first) == physics_testing.material_index(
+        physics, second)
+    assert physics_testing.material_count(physics) <= 2
 
 
 def test_a_bouncier_material_bounces_higher():

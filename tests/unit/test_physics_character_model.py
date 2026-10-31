@@ -14,6 +14,8 @@ from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from ._character_assets import character_glb
 from ._locomotion_assets import marching, striding, walker_glb, waving
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
 

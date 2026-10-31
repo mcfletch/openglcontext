@@ -5,6 +5,8 @@ import pytest
 from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_pose
 from OpenGLContext.scenegraph.basenodes import Transform
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 
 def test_a_rotation_survives_the_round_trip():
     rotation = quat_to_vrml_rotation(vrml_rotation_to_quat((0, 1, 0, 1.2)))

@@ -196,6 +196,8 @@ class Physics:
         engine.material_of = lambda name: self.materials.get(name).material
         engine.body_of = self._body_of
         engine.framed_characters = lambda: [one for one in self._characters if one.framed]
+        engine.guard = self._guarded
+        engine.wants_events = self.handlers.has_physics_handlers
         engine.after_step.append(self._run_step_hooks)
         engine.wants_steps.append(self._step_hooks_want_steps)
 
@@ -1505,6 +1507,7 @@ class Physics:
         hook = StepHook(function)
         self._step_hooks.append(hook)
         self._ensure_started()
+        self._engine.callbacks_changed()
         return hook
 
     def _run_step_hooks(self, step: Step) -> None:
@@ -1781,6 +1784,7 @@ class Physics:
         handler = Handler(event, function, uids, other_uids, float(filters.get('above', 0.0)))
         self.handlers.add(handler)
         self._report_for(handler)
+        self._engine.callbacks_changed()
         return handler
 
     def _take_sound(self, body: Body) -> None:

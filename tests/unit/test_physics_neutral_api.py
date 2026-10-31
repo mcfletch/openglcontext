@@ -10,6 +10,8 @@ from OpenGLContext.physics import (
 )
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 MODES = ['inline', 'thread']
 
 
@@ -34,6 +36,7 @@ def warn_again(monkeypatch):
     monkeypatch.setattr(proxy, '_WARNED', [])
 
 
+@pytest.mark.engines('omi', reason='physics.world is the omi world; on Jolt it raises')
 def test_a_deprecated_name_warns_once(monkeypatch):
     physics = make('inline')
     try:
@@ -152,13 +155,14 @@ def test_a_gravity_factor_must_be_finite(physics):
 
 # -- the engine ------------------------------------------------------------
 
-def test_the_engine_is_described_and_read_only(physics):
+def test_the_engine_is_described_and_read_only(physics, physics_engine):
     engine = physics.engine
-    assert engine.name == 'omi_physics'
+    name = {'omi': 'omi_physics', 'jolt': 'jolt'}[physics_engine]
+    assert engine.name == name
     assert engine.tick_hz == 100.0
     assert engine.precision == 'double'
     assert engine.version
-    assert str(engine).startswith('omi_physics ')
+    assert str(engine).startswith(name + ' ')
     with pytest.raises(AttributeError):
         physics.engine = None
 
@@ -355,6 +359,7 @@ def test_joint_kinds_reject_what_they_cannot_take(physics):
 
 # -- deprecated aliases and the test helper ----------------------------------
 
+@pytest.mark.engines('omi', reason='physics.world is the omi world; on Jolt it raises')
 @pytest.mark.parametrize('name', ['world', 'backend'])
 def test_the_world_reads_are_deprecated(name):
     physics = make('inline')
@@ -365,6 +370,7 @@ def test_the_world_reads_are_deprecated(name):
         physics.close()
 
 
+@pytest.mark.engines('omi', reason='reads the omi world and its slots')
 def test_slot_reads_and_run_are_deprecated():
     physics = make('inline')
     try:
@@ -381,6 +387,7 @@ def test_slot_reads_and_run_are_deprecated():
         physics.close()
 
 
+@pytest.mark.engines('omi', reason='reads the omi world and its slots')
 def test_the_test_helper_reaches_the_omi_world_and_slots():
     physics = make('inline')
     try:

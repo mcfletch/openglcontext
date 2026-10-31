@@ -11,6 +11,8 @@ from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', reason="counts the omi engine's stand-in writes")
+
 
 @pytest.fixture
 def service():

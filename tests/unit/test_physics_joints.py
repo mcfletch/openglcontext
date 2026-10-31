@@ -12,6 +12,10 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
+from OpenGLContext.testing import physics as physics_testing
+
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 
 def make(**named) -> Physics:
     named.setdefault('mode', 'inline')
@@ -34,8 +38,7 @@ def bar(physics, at, size=(2.0, 0.2, 0.2)):
 
 
 def joints_in_world(physics):
-    physics.flush()
-    return list(physics.worker.runtime.world.joint_constraints)
+    return [None] * physics_testing.joint_count(physics)
 
 
 @pytest.fixture

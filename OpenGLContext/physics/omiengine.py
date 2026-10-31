@@ -116,6 +116,9 @@ class OmiEngine(Engine):
             new.inbox.post(command)
         self.worker = new
 
+    def callbacks_changed(self) -> None:
+        """Nothing: the omi runtime asks for its hooks at every step."""
+
     def pin(self, on: bool) -> None:
         """Nothing: the service holds an omi world inline by switching it to the inline worker."""
 

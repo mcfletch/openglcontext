@@ -26,6 +26,8 @@ from OpenGLContext.physics.gltf_world import collision_world_from_scene
 from OpenGLContext.physics.zones import ZoneRegion
 from OpenGLContext.scenegraph.zone import placed_zones, Zone, ZoneGravity
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 
 # -- worlds to walk in -------------------------------------------------------
 

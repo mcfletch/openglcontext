@@ -13,6 +13,8 @@ from OpenGLContext.scenegraph.zone import Zone, ZoneGravity
 from OpenGLContext.testing.audio import RecordingAudio
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
 
@@ -69,7 +71,7 @@ def test_a_ground_answers_a_ray(physics):
     assert hit.point[1] == pytest.approx(3.0, abs=0.02)
 
 
-def test_a_ground_that_answers_normals_is_asked_for_them(physics):
+def test_a_ground_that_answers_normals_is_asked_for_them(physics, physics_engine):
     class Tilted(Slope):
         asked = 0
 
@@ -82,8 +84,13 @@ def test_a_ground_that_answers_normals_is_asked_for_them(physics):
 
     physics.add_ground(Tilted(), extent=((-50, -50), (50, 50)))
     hit = physics.raycast((10, 20, 0), (0, -1, 0))
-    assert hit.normal == pytest.approx((0.0, 1.0, 0.0))
-    assert Tilted.asked > 0
+    if physics_engine == 'omi':
+        assert hit.normal == pytest.approx((0.0, 1.0, 0.0))
+        assert Tilted.asked > 0
+    else:
+        # Jolt holds the ground as height field tiles sampled from the heights; its
+        # normals are the tiles' triangles', the slope's own.
+        assert hit.normal == pytest.approx(np.array((-0.3, 1.0, 0.0)) / np.hypot(0.3, 1.0), abs=1e-3)
 
 
 def test_a_ground_is_a_static_body_found_by_the_object(physics):
@@ -189,22 +196,16 @@ def test_driving_a_body_that_is_not_kinematic_is_refused(physics):
 def test_a_defined_material_is_used_by_name(physics):
     physics.materials.define('mud', friction=0.9, restitution=0.0)
     body = physics.add_dynamic(ball(), material='mud')
-    physics.worker.flush()
-    runtime = physics.worker.runtime
-    index = runtime.entry(body.uid).index
-    material = runtime.world.material_for(int(runtime.world.collider_material[index]))
+    material = physics_testing.material(physics, body)
     assert material.staticFriction == pytest.approx(0.9) and material.restitution == 0.0
 
 
 def test_a_material_pair_overrides_the_friction_between_the_two(physics):
     physics.materials.define('mud', friction=0.9)
     physics.materials.pair('mud', 'rubber', friction=1.2)
-    physics.add_dynamic(ball(), material='mud')
-    physics.add_dynamic(ball(at=(3, 3, 0)), material='rubber')
-    physics.worker.flush()
-    world = physics.worker.runtime.world
-    assert len(world.pair_friction) == 1
-    assert list(world.pair_friction.values())[0] == (1.2, 1.2)
+    mud = physics.add_dynamic(ball(), material='mud')
+    rubber = physics.add_dynamic(ball(at=(3, 3, 0)), material='rubber')
+    assert physics_testing.pair_friction(physics, mud, rubber) == pytest.approx((1.2, 1.2))
 
 
 def test_every_pair_of_a_grid_of_materials_keeps_its_own_friction(physics):
@@ -216,17 +217,12 @@ def test_every_pair_of_a_grid_of_materials_keeps_its_own_friction(physics):
         physics.materials.pair(marble, surface, friction=friction)
     bodies = {name: physics.add_dynamic(ball(at=(3 * n, 3, 0)), material=name)
               for n, name in enumerate(('steel', 'rubber', 'stone', 'ice'))}
-    physics.worker.flush()
-    world = physics.worker.runtime.world
-
-    def material_of(name):
-        return int(world.collider_material[physics_testing.slot_of(physics, bodies[name])])
-
     for (marble, surface), friction in grips.items():
-        found = world.pair_friction_for(material_of(marble), material_of(surface))
-        assert found == (friction, friction), (marble, surface)
+        found = physics_testing.pair_friction(physics, bodies[marble], bodies[surface])
+        assert found == pytest.approx((friction, friction)), (marble, surface)
 
 
+@pytest.mark.engines('omi', reason="reads the omi world's slots")
 def test_a_body_and_its_slot_in_the_world_name_each_other(physics):
     first = physics.add_dynamic(ball(), proxy='sphere')
     second = physics.add_dynamic(ball(at=(3, 3, 0)), proxy='sphere')
@@ -237,6 +233,7 @@ def test_a_body_and_its_slot_in_the_world_name_each_other(physics):
     assert physics_testing.body_at(physics, physics_testing.slot_of(physics, second)) is second
 
 
+@pytest.mark.engines('omi', reason="reads the omi world's slots")
 def test_a_slot_with_no_body_names_none(physics):
     assert physics_testing.body_at(physics, 0) is None
     assert physics_testing.body_at(physics, 99) is None
@@ -341,6 +338,7 @@ def test_the_same_zones_are_not_sent_twice(physics):
 
 # -- seeing the proxies ------------------------------------------------------------------
 
+@pytest.mark.engines('omi', reason="the overlay draws the omi engine's copy of the world")
 def test_show_proxies_mounts_an_overlay_and_removes_it():
     mounted = []
     service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0),
@@ -352,6 +350,20 @@ def test_show_proxies_mounts_an_overlay_and_removes_it():
     service.show_proxies(False)
     assert mounted[-1][1] is False and mounted[-1][0] is mounted[0][0]
     service.close()
+
+
+@pytest.mark.engines('jolt')
+def test_show_proxies_on_jolt_mounts_nothing_and_says_so(caplog):
+    mounted = []
+    service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0),
+                      mount=lambda node, on: mounted.append((node, on)))
+    try:
+        service.add_dynamic(ball())
+        service.show_proxies(True)
+        assert mounted == []
+        assert 'overlay' in caplog.text
+    finally:
+        service.close()
 
 
 # -- collider sources ------------------------------------------------------------------
@@ -407,7 +419,8 @@ def test_a_source_that_raises_is_logged_once_and_the_frame_goes_on(physics, capl
     assert logged(caplog, 'the source divided by zero') == 1
 
 
-def test_a_character_whose_update_raises_is_logged_once_and_the_frame_goes_on(physics, caplog):
+def test_a_character_whose_update_raises_is_logged_once_and_the_frame_goes_on(
+        physics, caplog, physics_engine):
     physics.add_static(block((20, 1, 20), at=(0, -0.5, 0)))
     first = physics.add_character(position=(0, 0.05, 0))
     second = physics.add_character(position=(3, 0.05, 0))
@@ -416,9 +429,12 @@ def test_a_character_whose_update_raises_is_logged_once_and_the_frame_goes_on(ph
     def broken(dt):
         raise KeyError('the character lost its clip')
 
-    first.step = broken
-    real = second.step
-    second.step = lambda dt: stepped.append(dt) or real(dt)
+    # The omi frame steps each character whole; a Jolt world moves every character in
+    # its tick, and the frame runs each one's code before the tick.
+    name = 'step' if physics_engine == 'omi' else '_before_tick'
+    setattr(first, name, broken)
+    real = getattr(second, name)
+    setattr(second, name, lambda dt: stepped.append(dt) or real(dt))
     physics.frame(0.02)
     physics.frame(0.02)
     assert len(stepped) == 4                  # two 1/120 s steps in each 0.02 s frame

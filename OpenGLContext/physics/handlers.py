@@ -162,6 +162,10 @@ class HandlerTable:
                     break
         return heard
 
+    def has_physics_handlers(self) -> bool:
+        """Whether a live handler of a body's events runs on the physics thread."""
+        return any(h.active and h.physics and h.event not in STEP_EVENTS for h in self._handlers)
+
     def has_step_handlers(self) -> bool:
         """Whether a live ``'before-step'`` or ``'after-step'`` handler is registered."""
         return any(h.active and h.event in STEP_EVENTS for h in self._handlers)

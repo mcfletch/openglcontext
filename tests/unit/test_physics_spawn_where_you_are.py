@@ -17,6 +17,8 @@ from OpenGLContext import quaternion
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 from OpenGLContext.move.viewplatform import ViewPlatform
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 
 def _floor(size=6000.0):
     """A flat floor spanning `size` metres, the way a city's ground reads."""

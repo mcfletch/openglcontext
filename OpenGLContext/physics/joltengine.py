@@ -149,8 +149,12 @@ class GroundTiles:
         self.ring = int(ring)
         self.material = material
         self.filter = filter_index
+        #: Whether strikes on the ground are reported to the service.
+        self.reported = False
         #: The pyjoltphysics uid of each tile held, by tile coordinate.
         self.tiles: dict[tuple[int, int], int] = {}
+        #: Tiles a query asked for, kept until the frame count given.
+        self.asked: dict[tuple[int, int], int] = {}
 
     @property
     def side(self) -> float:
@@ -177,6 +181,13 @@ class GroundTiles:
                      and (j + 1) * side >= z0 and j * side <= z1}
         return found
 
+    def along(self, start: np.ndarray, end: np.ndarray) -> set[tuple[int, int]]:
+        """The tiles under the segment from ``start`` to ``end``, and the ring around each, at most 64 samples."""
+        span = float(np.linalg.norm((end - start)[[0, 2]]))
+        count = min(64, max(2, int(span / self.side) + 2))
+        points = start[None] + (end - start)[None] * np.linspace(0.0, 1.0, count)[:, None]
+        return self.wanted(points)
+
     def batch(self, tile: tuple[int, int], flags: int) -> pj.BodyBatch:
         """The static body of one tile: the function sampled at its grid, its body at its corner."""
         i, j = tile
@@ -196,8 +207,11 @@ class JoltController:
     """A Jolt character as :class:`~OpenGLContext.physics.character.Character` drives a controller.
 
     Inputs become character batches; readings come from the character rows of
-    the newest snapshot the engine has read. ``update`` steps nothing: the
-    world steps every character, in lockstep with the frame.
+    the newest snapshot the engine has read. An input that changes what the
+    character is doing (a knock-down, a slide, a crouch, flight, swimming) is
+    read back at once and held until the world reports the tick that applied
+    it. ``update(dt)`` advances the world by the ticks ``dt`` owes, moving
+    every character: the world thread moves characters inside its ticks.
     """
 
     def __init__(self, engine: JoltEngine, character: pj.Character, capabilities: Any,
@@ -222,8 +236,12 @@ class JoltController:
         self.move_dir = np.zeros(3)
         self.push = np.zeros(3)
         self.pushing = None
-        self.move_speed: float | None = None
+        #: The capabilities under the omi controller's name, which the movement modes read.
+        self.caps = capabilities
+        self._move_speed: float | None = None
         self._mode = 'walk'
+        #: A state an input asked for, held until a snapshot includes the input's batch.
+        self._expected: tuple[int, pj.CharacterState] | None = None
         self._landed_tick = 0
         #: The bodies the character passes through, by service uid; edits reach the world.
         self.ignore = _IgnoreSet(self)
@@ -237,12 +255,16 @@ class JoltController:
             if applied_seq < self._placed[0]:
                 return
             self._placed = None
+        expected = self._expected
+        if expected is not None and applied_seq >= expected[0]:
+            self._expected = expected = None
         self.position = np.array(rows.position[row], dtype='d')
         self.previous = np.array(rows.previous[row], dtype='d')
         self.velocity = np.array(rows.velocity[row], dtype='d')
         self.eye_point = np.array(rows.eye[row], dtype='d')
         self.grounded = bool(rows.grounded[row])
-        self.native_state = pj.CharacterState(int(rows.state[row]))
+        if expected is None:
+            self.native_state = pj.CharacterState(int(rows.state[row]))
         self.height = float(rows.height[row])
         self.slide_progress = float(rows.slide_progress[row])
         self.ground_normal = np.array(rows.ground_normal[row], dtype='d') if self.grounded else None
@@ -281,9 +303,23 @@ class JoltController:
         """Where the eyes are."""
         return self.eye_point.copy()
 
+    @property
+    def move_speed(self) -> float | None:
+        """The speed the moves go at, m/s, or None for the speed of the move's mode."""
+        return self._move_speed
+
+    @move_speed.setter
+    def move_speed(self, speed: float | None) -> None:
+        self._move_speed = speed
+        self.native.set_move(self.move_dir, self._mode, speed)
+
+    def _expect(self, state: pj.CharacterState, seq: int) -> None:
+        self.native_state = state
+        self._expected = (seq, state)
+
     def speed(self) -> float:
-        if self.move_speed is not None:
-            return float(self.move_speed)
+        if self._move_speed is not None:
+            return float(self._move_speed)
         name = {'walk': 'walkSpeed', 'run': 'runSpeed', 'sprint': 'sprintSpeed',
                 'crouch': 'crouchSpeed'}.get(self._mode, 'walkSpeed')
         return float(getattr(self.capabilities, name))
@@ -293,9 +329,8 @@ class JoltController:
         heading = np.asarray(direction, dtype='d')[:3]
         self.move_dir = np.array([heading[0], 0.0, heading[2]])
         self._mode = mode
-        if speed is not None:
-            self.move_speed = speed
-        self.native.set_move(self.move_dir, mode, self.move_speed)
+        self._move_speed = speed
+        self.native.set_move(self.move_dir, mode, speed)
 
     def set_fly_move(self, direction: Any) -> None:
         self.move_dir = np.asarray(direction, dtype='d')[:3].copy()
@@ -317,22 +352,32 @@ class JoltController:
     def set_crouch(self, crouch: bool) -> bool:
         if crouch and not self.capabilities.canCrouch:
             return False
-        self.native.set_crouch(bool(crouch))
+        seq = self.native.set_crouch(bool(crouch))
+        if self.native_state in (pj.CharacterState.STANDING, pj.CharacterState.CROUCHING):
+            self._expect(pj.CharacterState.CROUCHING if crouch else pj.CharacterState.STANDING, seq)
         return bool(crouch)
+
+    @property
+    def flying(self) -> bool:
+        return self.native_state == pj.CharacterState.FLYING
 
     def set_fly(self, flying: bool) -> bool:
         if flying and not self.capabilities.canFly:
             return False
-        self.native.set_fly(bool(flying))
+        seq = self.native.set_fly(bool(flying))
+        self._expect(pj.CharacterState.FLYING if flying else pj.CharacterState.AIRBORNE, seq)
         return bool(flying)
 
     def set_swim(self, swimming: bool, buoyancy: float = 0.9) -> None:
-        self.native.set_swim(bool(swimming), float(buoyancy))
+        seq = self.native.set_swim(bool(swimming), float(buoyancy))
+        if swimming:
+            self._expect(pj.CharacterState.SWIMMING, seq)
 
     def slide(self, duration: float, rise: float = 0.3, steer: bool = False) -> bool:
         if not self.grounded:
             return False
-        self.native.slide(float(duration), float(rise), bool(steer))
+        seq = self.native.slide(float(duration), float(rise), bool(steer))
+        self._expect(pj.CharacterState.SLIDING, seq)
         return True
 
     def extend_slide(self, duration: float) -> bool:
@@ -344,11 +389,11 @@ class JoltController:
     def end_slide(self) -> bool:
         if self.native_state != pj.CharacterState.SLIDING:
             return False
-        self.native.end_slide()
+        self._expect(pj.CharacterState.STANDING, self.native.end_slide())
         return True
 
     def knock_down(self) -> None:
-        self.native.knock_down()
+        self._expect(pj.CharacterState.DOWN, self.native.knock_down())
 
     def get_up(self, start_speed: float | None = None) -> None:
         self.native.get_up(start_speed)
@@ -366,8 +411,9 @@ class JoltController:
     def set_pass_group(self, group: int) -> None:
         self.native.set_pass_group(int(group))
 
-    def update(self, dt: float) -> None:  # noqa: ARG002 the world steps the character
-        """Nothing: the world thread moves the character in the tick the engine runs."""
+    def update(self, dt: float) -> None:
+        """Advance the world by the ticks ``dt`` owes; the world thread moves the character in them."""
+        self.engine.advance(dt)
 
 
 class _IgnoreSet(set[int]):
@@ -464,6 +510,11 @@ class JoltEngine(Engine):
         self._zones: list[Any] = []
         self._joints: dict[int, int] = {}
         self._joint_kinds: dict[int, str] = {}
+        #: The two bodies of each joint, by service uid; ``to`` is 0 for the world.
+        self._joint_bodies: dict[int, tuple[int, int]] = {}
+        #: A motor joint's bodies, its axes in the frame of ``to`` and the turn of
+        #: ``body`` in that frame when it was made: what its angles are read from.
+        self._motors: dict[int, tuple[int, int, np.ndarray, np.ndarray]] = {}
         self._forces: dict[int, np.ndarray] = {}
         self._torques: dict[int, np.ndarray] = {}
         self._posted: list[tuple[Callable[..., Any], tuple[Any, ...]]] = []
@@ -475,7 +526,15 @@ class JoltEngine(Engine):
         self._pass_groups: dict[str, int] = {}
         #: Extra points tiles of a sampled ground are kept around, by name.
         self._foci: dict[str, np.ndarray] = {}
+        self._frames = 0
         self._callbacks_set = False
+        self._events_set = False
+        #: The world thread's identity, once a callback has run on it.
+        self.thread_id: int | None = None
+        #: Pairs the contact filter let through, for unsolved begin events: (a, b, point,
+        #: normal, approach, impulse), pyjoltphysics uids.
+        self._refused: list[tuple[int, int, np.ndarray, np.ndarray, float, float]] = []
+        self._refused_lock = threading.Lock()
         self._switch_interval: float | None = None
         self._local = threading.local()
         self._error: BaseException | None = None
@@ -558,11 +617,32 @@ class JoltEngine(Engine):
         self._restore_switch_interval()
 
     def flush(self) -> None:
-        """Nothing: a Jolt world applies commands at the start of a tick, on its own thread."""
+        """Apply the commands waiting for the world now, without stepping it.
+
+        From the stepping thread itself it does nothing: that thread's
+        commands apply at the next tick.
+        """
+        if not self.on_engine_thread():
+            self.world.flush()
+
+    def _sync(self) -> None:
+        """Before a query: apply what is waiting, so the query meets the bodies just added."""
+        if self.on_engine_thread():
+            return
+        latest = self.world.latest()
+        submitted = int(self.world.submitted_seq)
+        if latest is None or int(latest.applied_seq) < submitted:
+            self.world.flush()
 
     def step(self, dt: float) -> None:
         """Run the ticks ``dt`` owes in lockstep, publishing the result for the next :meth:`collect`."""
         self._run(self._clock.owed(dt))
+
+    def advance(self, dt: float) -> None:
+        """Run the ticks ``dt`` owes for a character its owner steps, and read the characters."""
+        for _ in range(self._clock.owed(dt)):
+            self._run_ticks(1)
+            self._read_characters(self.world.latest())
 
     def collect(self, dt: float) -> Outbox:
         self._check_failed()
@@ -594,15 +674,16 @@ class JoltEngine(Engine):
         characters = [one for one in self.framed_characters() if one.alive]
         if characters:
             previous = None
+            guard = self.guard
             for _ in range(ticks):
                 previous = self.world.latest()
                 for character in characters:
-                    character._before_tick(self.step_dt)
+                    guard(character, character._before_tick, self.step_dt)
                 self._run_ticks(1)
                 snapshot = self.world.latest()
                 self._read_characters(snapshot)
                 for character in characters:
-                    character._after_tick(self.step_dt)
+                    guard(character, character._after_tick, self.step_dt)
             return previous
         if ticks > 1:
             self._run_ticks(ticks - 1)
@@ -623,6 +704,10 @@ class JoltEngine(Engine):
             self._error = error
 
     # -- callbacks on the world thread ---------------------------------------
+    def callbacks_changed(self) -> None:
+        if not self.on_engine_thread():
+            self._update_callbacks()
+
     def _update_callbacks(self) -> None:
         """Register the world-thread callbacks while anything needs them, and only then.
 
@@ -630,6 +715,11 @@ class JoltEngine(Engine):
         the switch interval is 1 ms, so a world-thread callback waits at most
         that long for a render thread running Python.
         """
+        hearing = self.wants_events()
+        if hearing != self._events_set:
+            self._events_set = hearing
+            self.world.set_on_events(self._world_events if hearing else None)
+            self._switch_interval_for(hearing or self._callbacks_set)
         wanted = bool(self._forces or self._torques or self._posted
                       or any(want() for want in self.wants_steps))
         if wanted == self._callbacks_set:
@@ -638,13 +728,25 @@ class JoltEngine(Engine):
         if wanted:
             self.world.set_before_step(self._before)
             self.world.set_after_step(self._after)
-            if self._switch_interval is None:
-                self._switch_interval = sys.getswitchinterval()
-                sys.setswitchinterval(min(self._switch_interval, 0.001))
         else:
             self.world.set_before_step(None)
             self.world.set_after_step(None)
+        self._switch_interval_for(wanted or self._events_set)
+
+    def _switch_interval_for(self, callbacks: bool) -> None:
+        """A 1 ms switch interval while a world-thread callback is registered, the one before otherwise."""
+        if callbacks and self._switch_interval is None:
+            self._switch_interval = sys.getswitchinterval()
+            sys.setswitchinterval(min(self._switch_interval, 0.001))
+        elif not callbacks:
             self._restore_switch_interval()
+
+    def _world_events(self, records: Any, tick: int, time: float) -> None:  # noqa: ARG002 the records carry their ticks
+        """On the world thread after a tick that made records: the physics-thread handlers hear them."""
+        self.thread_id = threading.get_ident()
+        made = self._converted(records)
+        if made:
+            self._tell(made)
 
     def _restore_switch_interval(self) -> None:
         if self._switch_interval is not None:
@@ -755,17 +857,14 @@ class JoltEngine(Engine):
         live = np.where(dynamic, awake, linear.any(axis=1) | angular.any(axis=1))
         step_position = step_orientation = None
         alpha = self.alpha
-        if previous is not None and alpha < 1.0 and live.any():
-            before = previous.rows_of(np.asarray(self._mover_jolt if present.all()
-                                                 else self._mover_jolt[present]))
-            moving = np.flatnonzero(live & (before >= 0))
+        if self.owed and alpha < 1.0 and live.any():
+            uids = self._movers if present.all() else [self._movers[i] for i in np.flatnonzero(present)]
+            moving = np.flatnonzero(live)
+            old_position, old_orientation = self._previous_poses(previous, uids, moving)
             if len(moving):
                 step_position, step_orientation = position.copy(), orientation.copy()
-                old = before[moving]
-                position[moving] = (np.asarray(previous.position[old]) * (1.0 - alpha)
-                                    + position[moving] * alpha)
-                blend = (np.asarray(previous.orientation[old], dtype='d') * (1.0 - alpha)
-                         + orientation[moving] * alpha)
+                position[moving] = old_position * (1.0 - alpha) + position[moving] * alpha
+                blend = old_orientation * (1.0 - alpha) + orientation[moving] * alpha
                 orientation[moving] = blend / np.maximum(
                     np.linalg.norm(blend, axis=1), 1e-12)[:, None]
         last = self._published
@@ -787,6 +886,24 @@ class JoltEngine(Engine):
         self._published_live = live
         return published
 
+    def _previous_poses(self, previous: Any, uids: Sequence[int],
+                        moving: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """The poses of ``uids[moving]`` at the tick before the last: from ``previous``, or as
+        added for a body that snapshot does not hold."""
+        position = np.empty((len(moving), 3))
+        orientation = np.empty((len(moving), 4))
+        rows = None if previous is None else previous.rows
+        for out, index in enumerate(moving.tolist()):
+            uid = uids[index]
+            row = None if rows is None else rows.get(self._jolt.get(uid, 0))
+            if row is not None:
+                position[out] = previous.position[row]
+                orientation[out] = previous.orientation[row]
+            else:
+                placed = self._poses.get(uid, ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+                position[out], orientation[out] = placed
+        return position, orientation
+
     def _joint_readings(self, snapshot: Any) -> dict[int, tuple[float, ...]]:
         if not self._joints:
             return {}
@@ -803,9 +920,29 @@ class JoltEngine(Engine):
                 found[uid] = (value,)
             elif kind == 'wheel':
                 found[uid] = (value, value2)
-            elif kind == 'motor':
-                found[uid] = (value,)
+        for uid, (body, to, axes, start) in self._motors.items():
+            turned = self._turn_in(snapshot, body, to)
+            if turned is not None:
+                delta = _multiply(turned, _conjugate(start))
+                found[uid] = tuple(float(2.0 * math.atan2(np.dot(delta[:3], axis), delta[3]))
+                                   for axis in axes)
         return found
+
+    def _turn_in(self, snapshot: Any, body: int, to: int) -> np.ndarray | None:
+        """The turn of service body ``body`` in the frame of ``to`` (0 for the world), from ``snapshot``."""
+        rows = snapshot.rows
+        jolt = self._jolt.get(body)
+        row = None if jolt is None else rows.get(jolt)
+        if row is None:
+            return None
+        turn = np.asarray(snapshot.orientation[row], dtype='d')
+        if to == 0:
+            return turn
+        other = self._jolt.get(to)
+        frame_row = None if other is None else rows.get(other)
+        if frame_row is None:
+            return None
+        return _multiply(_conjugate(np.asarray(snapshot.orientation[frame_row], dtype='d')), turn)
 
     def _settle_markers(self, snapshot: Any) -> None:
         if not self._markers or snapshot is None:
@@ -821,14 +958,53 @@ class JoltEngine(Engine):
     # -- events ---------------------------------------------------------------
     def _events(self) -> list[PhysicsEvent]:
         records = self.world.drain_events()
+        if len(records):
+            kind = records['kind']
+            contact = kind == pj.EventKind.CONTACT
+            phase = records['phase']
+            begins = int(np.count_nonzero(contact & (phase == pj.EventPhase.BEGIN)))
+            ends = int(np.count_nonzero(contact & (phase == pj.EventPhase.END)))
+            self._contacts = max(0, self._contacts + begins - ends)
+        made = self._converted(records) + self._unsolved()
+        if made and self.on_events and not self._events_set:
+            self._tell(made)
+        return made
+
+    def _tell(self, made: list[PhysicsEvent]) -> None:
+        """Give ``made`` to the physics-thread listeners, as the stepping thread."""
+        was = getattr(self._local, 'inside', False)
+        self._local.inside = True
+        try:
+            for listener in list(self.on_events):
+                try:
+                    listener(made)
+                except Exception:
+                    log.exception('physics hook %r failed', listener)
+        finally:
+            self._local.inside = was
+
+    def _unsolved(self) -> list[PhysicsEvent]:
+        """A begin event, unsolved, for each pair the contact filter let through since the last call."""
+        with self._refused_lock:
+            refused, self._refused = self._refused, []
+        made = []
+        tick = int(self.world.tick)
+        for a, b, point, normal, approach, impulse in refused:
+            first, second = self._svc.get(a), self._svc.get(b)
+            if first is None or second is None:
+                continue
+            made.append(PhysicsEvent('contact', 'begin', first, second, point, normal, approach,
+                                     impulse, 0.0, 0.0, 0.0, tick, tick * self.step_dt,
+                                     solved=False))
+        return made
+
+    def _converted(self, records: Any) -> list[PhysicsEvent]:
+        """The service's events of the event ``records`` it listens for."""
         if not len(records):
             return []
         kind = records['kind']
         phase = records['phase']
         contact = kind == pj.EventKind.CONTACT
-        begins = int(np.count_nonzero(contact & (phase == pj.EventPhase.BEGIN)))
-        ends = int(np.count_nonzero(contact & (phase == pj.EventPhase.END)))
-        self._contacts = max(0, self._contacts + begins - ends)
         if self._report_all:
             wanted = contact.copy()
         else:
@@ -846,16 +1022,6 @@ class JoltEngine(Engine):
             converted = self._convert(record, dt)
             if converted is not None:
                 made.append(converted)
-        if made and self.on_events:
-            self._local.inside = True
-            try:
-                for listener in list(self.on_events):
-                    try:
-                        listener(made)
-                    except Exception:
-                        log.exception('physics hook %r failed', listener)
-            finally:
-                self._local.inside = False
         return made
 
     def _convert(self, record: Any, dt: float) -> PhysicsEvent | None:
@@ -880,6 +1046,9 @@ class JoltEngine(Engine):
             return PhysicsEvent('trigger', _TRIGGER_PHASE[pj.EventPhase(phase)], a, b, point, _ZERO3,
                                 0.0, 0.0, 0.0, 0.0, 0.0, tick, time, reason=reason)
         if kind == pj.EventKind.CHARACTER:
+            # The service's characters meet moving bodies as a kinematic body meets them.
+            if self._kinds.get(b) != 'dynamic':
+                return None
             impulse = self._strike(int(record['b']), normal) if phase == pj.EventPhase.BEGIN else 0.0
             return PhysicsEvent('contact', _PHASE[pj.EventPhase(phase)], a, b, point, normal,
                                 float(record['approach']), impulse, 0.0, 0.0, 0.0, tick, time,
@@ -970,8 +1139,11 @@ class JoltEngine(Engine):
         if not self._grounds:
             return
         foci = self._foci_now(extra)
+        self._frames += 1
         for ground in self._grounds.values():
-            wanted = ground.wanted(foci)
+            ground.asked = {tile: until for tile, until in ground.asked.items()
+                            if until >= self._frames}
+            wanted = ground.wanted(foci) | set(ground.asked)
             gone = [tile for tile in ground.tiles if tile not in wanted]
             new = [tile for tile in sorted(wanted) if tile not in ground.tiles]
             if not gone and not new:
@@ -986,13 +1158,27 @@ class JoltEngine(Engine):
                 for tile, jolt in zip(new, uids.tolist(), strict=True):
                     ground.tiles[tile] = int(jolt)
                     self._svc[int(jolt)] = ground.uid
-                self._reported.set(uids, self._reported.of(
-                    np.asarray([self._jolt_any(ground.uid)], dtype=np.int64))[0])
+                self._reported.set(uids, ground.reported)
             else:
                 self.world.remove_bodies(np.asarray(removed, dtype=np.uint32))
 
-    def _jolt_any(self, uid: int) -> int:
-        return self._jolt.get(uid, 0)
+    #: Frames a tile a query asked for is kept.
+    ASKED_FRAMES = 120
+
+    def _ground_for_query(self, start: Any, end: Any) -> None:
+        """Hold the tiles of each sampled ground under a query's path, so the query meets the ground."""
+        if not self._grounds:
+            return
+        first = np.asarray(start, dtype='d')[:3]
+        last = np.asarray(end, dtype='d')[:3]
+        added = False
+        for ground in self._grounds.values():
+            for tile in ground.along(first, last):
+                if tile not in ground.tiles:
+                    added = True
+                ground.asked[tile] = self._frames + self.ASKED_FRAMES
+        if added:
+            self._stream_ground()
 
     # -- commands ---------------------------------------------------------------
     def submit(self, command: Command) -> None:
@@ -1023,7 +1209,7 @@ class JoltEngine(Engine):
             flags |= pj.BodyFlag.CONTINUOUS
         if report and self._persist:
             flags |= pj.BodyFlag.REPORT
-        if self._filter_contacts and kind in ('dynamic', 'kinematic'):
+        if self._filter_contacts and (report or self._report_all):
             flags |= pj.BodyFlag.FILTER_CONTACTS
         return int(flags)
 
@@ -1136,6 +1322,8 @@ class JoltEngine(Engine):
             return
         controller = self._controllers.pop(uid, None)
         self.given.pop(uid, None)
+        for joint in [joint for joint, pair in self._joint_bodies.items() if uid in pair]:
+            self._forget_joint(joint)
         jolt = self._unbind(uid)
         self._forces.pop(uid, None)
         self._torques.pop(uid, None)
@@ -1176,6 +1364,7 @@ class JoltEngine(Engine):
             self.world.add_forces([self._jolt[uid]], value)
         else:
             self._forces.pop(uid, None)
+        self.callbacks_changed()
 
     def _op_torque(self, uid: int, torque: Any) -> None:
         value = np.asarray(torque, dtype='d')
@@ -1184,6 +1373,7 @@ class JoltEngine(Engine):
             self.world.add_torques([self._jolt[uid]], value)
         else:
             self._torques.pop(uid, None)
+        self.callbacks_changed()
 
     def _op_velocity(self, uid: int, velocity: Any) -> None:
         self.world.set_velocities([self._jolt[uid]], linear=np.asarray(velocity, dtype='d'))
@@ -1261,6 +1451,7 @@ class JoltEngine(Engine):
             return
         with self._posted_lock:
             self._posted.append((function, arguments))
+        self._update_callbacks()
 
     def _op_settle(self, uid: int, marker: threading.Event) -> None:
         self._markers.append((int(self.world.submitted_seq), marker))
@@ -1272,15 +1463,21 @@ class JoltEngine(Engine):
         jolt = self._jolt.get(uid)
         if jolt is None:
             ground = self._grounds.get(uid)
-            if ground is not None and ground.tiles:
-                self._reported.set(list(ground.tiles.values()), on)
+            if ground is not None:
+                ground.reported = on
+                if ground.tiles:
+                    self._reported.set(list(ground.tiles.values()), on)
             return
         self._reported.set([jolt], on)
         if self._persist:
             self.world.set_flags([jolt], pj.BodyFlag.REPORT, on)
+        if self._filter_contacts:
+            self.world.set_flags([jolt], pj.BodyFlag.FILTER_CONTACTS, on)
 
     def _op_report_all(self, uid: int, on: bool) -> None:  # noqa: ARG002 world-wide
         self._report_all = bool(on)
+        if on and self._filter_contacts and self._jolt:
+            self.world.set_flags(list(self._jolt.values()), pj.BodyFlag.FILTER_CONTACTS, True)
 
     def _op_persist(self, uid: int, on: bool) -> None:  # noqa: ARG002 world-wide
         self._persist = bool(on)
@@ -1360,6 +1557,20 @@ class JoltEngine(Engine):
         jid = self.world.add_joint(made)
         self._joints[joint] = int(jid)
         self._joint_kinds[joint] = spec.kind
+        self._joint_bodies[joint] = (uid, int(spec.to))
+        if spec.kind == 'motor':
+            frame = (np.array([0.0, 0.0, 0.0, 1.0]) if spec.to == 0
+                     else self._current_pose(spec.to)[1])
+            axes = np.array([_rotate(_conjugate(frame), np.asarray(axis, dtype='d'))
+                             for axis in spec.axes])
+            turn = _multiply(_conjugate(frame), self._current_pose(uid)[1])
+            self._motors[joint] = (uid, int(spec.to), axes, turn)
+
+    def _forget_joint(self, joint: int) -> None:
+        self._joints.pop(joint, None)
+        self._joint_kinds.pop(joint, None)
+        self._joint_bodies.pop(joint, None)
+        self._motors.pop(joint, None)
 
     def _body_mass(self, uid: int) -> float:
         body = self.body_of(uid)
@@ -1367,7 +1578,7 @@ class JoltEngine(Engine):
 
     def _op_unjoint(self, uid: int, joint: int) -> None:  # noqa: ARG002 named by the joint
         jid = self._joints.pop(joint, None)
-        self._joint_kinds.pop(joint, None)
+        self._forget_joint(joint)
         if jid is not None:
             self.world.remove_joints([jid])
 
@@ -1392,7 +1603,12 @@ class JoltEngine(Engine):
 
     # -- the contact filter -------------------------------------------------------
     def set_contact_filter(self, function: Callable[[Any], Any] | None) -> None:
-        """Ask ``function(approach)`` about each pair of moving bodies as it first touches; None asks nothing."""
+        """Ask ``function(approach)`` about each pair with a body that has a handler, as it first touches.
+
+        None asks nothing. The bodies with handlers carry
+        ``BodyFlag.FILTER_CONTACTS``, and the world asks where either body of
+        a pair carries it.
+        """
         from OpenGLContext.physics.filters import Approach  # noqa: PLC0415 filters import the service's types
 
         self._contact_filter = function
@@ -1401,10 +1617,10 @@ class JoltEngine(Engine):
             return
         if not self._filter_contacts:
             self._filter_contacts = True
-            moving = [jolt for svc, jolt in self._jolt.items()
-                      if self._kinds.get(svc) in ('dynamic', 'kinematic')]
-            if moving:
-                self.world.set_flags(moving, pj.BodyFlag.FILTER_CONTACTS, True)
+            marked = [jolt for jolt in self._jolt.values()
+                      if self._report_all or self._reported.of([jolt])[0]]
+            if marked:
+                self.world.set_flags(marked, pj.BodyFlag.FILTER_CONTACTS, True)
         body_of = self.body_of
         failed: list[bool] = []
 
@@ -1416,12 +1632,12 @@ class JoltEngine(Engine):
             moving = [mass for mass in masses if mass > 0.0]
             reduced = (moving[0] if len(moving) == 1 else
                        (moving[0] * moving[1] / (moving[0] + moving[1])) if moving else 0.0)
+            impulse = reduced * max(float(approach), 0.0)
+            where = np.asarray(point, dtype='d')
+            along = np.asarray(normal, dtype='d')
             self._local.inside = True
             try:
-                answer = function(Approach(one, two, float(approach),
-                                           reduced * max(float(approach), 0.0),
-                                           np.asarray(point, dtype='d'),
-                                           np.asarray(normal, dtype='d')))
+                answer = function(Approach(one, two, float(approach), impulse, where, along))
             except Exception:
                 if not failed:
                     failed.append(True)
@@ -1429,9 +1645,14 @@ class JoltEngine(Engine):
                 return True
             finally:
                 self._local.inside = False
-            return answer is not False
+            if answer is False:
+                with self._refused_lock:
+                    self._refused.append((int(a), int(b), where.copy(), along.copy(),
+                                          float(approach), impulse))
+                return False
+            return True
 
-        self.world.set_contact_filter(verdict)
+        self.world.set_contact_filter(verdict, either=True)
 
     # -- reading on the stepping thread -------------------------------------------
     def live_poses(self, uids: Sequence[int]) -> dict[int, LivePose]:
@@ -1471,7 +1692,8 @@ class JoltEngine(Engine):
 
     def _raw(self, hit: Any) -> RawHit:
         return RawHit(self._svc.get(int(hit.uid)), np.array(hit.point, dtype='d'),
-                      np.array(hit.normal, dtype='d'), float(hit.distance), int(hit.sub_shape))
+                      np.array(hit.normal, dtype='d'), float(hit.distance),
+                      self.world.triangle_of(int(hit.uid), int(hit.sub_shape)))
 
     def raycast(self, origin: Any, direction: Any, max_distance: float,
                 skip: set[int]) -> RawHit | None:
@@ -1479,6 +1701,9 @@ class JoltEngine(Engine):
         length = float(np.linalg.norm(heading))
         if length < 1e-12 or max_distance <= 0.0:
             return None
+        start = np.asarray(origin, dtype='d')
+        self._ground_for_query(start, start + heading / length * float(max_distance))
+        self._sync()
         hit = self.world.raycast(np.asarray(origin, dtype='d'), heading / length,
                                  float(max_distance), filter=self._filter(skip))
         return None if hit is None else self._raw(hit)
@@ -1490,16 +1715,20 @@ class JoltEngine(Engine):
         lengths = np.linalg.norm(headings, axis=1)
         unit = np.divide(headings, lengths[:, None], out=np.zeros_like(headings),
                          where=lengths[:, None] > 1e-12)
+        for start, ahead in zip(starts, unit, strict=True):
+            self._ground_for_query(start, start + ahead * float(max_distance))
+        self._sync()
         hits = self.world.raycast_batch(starts, unit, float(max_distance), filter=self._filter(skip))
         found: list[RawHit | None] = []
         for index in range(len(starts)):
             if not bool(hits.hit[index]):
                 found.append(None)
                 continue
-            found.append(RawHit(self._svc.get(int(hits.uid[index])),
-                                np.array(hits.point[index], dtype='d'),
+            uid = int(hits.uid[index])
+            found.append(RawHit(self._svc.get(uid), np.array(hits.point[index], dtype='d'),
                                 np.array(hits.normal[index], dtype='d'),
-                                float(hits.distance[index]), int(hits.sub_shape[index])))
+                                float(hits.distance[index]),
+                                self.world.triangle_of(uid, int(hits.sub_shape[index]))))
         return found
 
     def sweep_sphere(self, origin: Any, direction: Any, distance: float, radius: float,
@@ -1510,15 +1739,24 @@ class JoltEngine(Engine):
         if length < 1e-12:
             return None
         end = start + heading / length * max(float(distance), 0.0)
-        hit = self.world.sweep_sphere(float(radius), start, end, filter=self._filter(skip))
+        self._ground_for_query(start, end)
+        self._sync()
+        found = self._filter(skip)
+        hit = self.world.sweep_sphere(float(radius), start, end, filter=found)
         if hit is None:
-            return None
+            # A sphere starting inside a solid is met at once, though Jolt's cast reports
+            # only surfaces it reaches.
+            inside = self.world.overlap(pj.Shape.sphere(float(radius)), start, filter=found)
+            return 0.0 if len(inside) else None
         if float(hit.depth) > 0.0 and float(hit.fraction) <= 0.0:
             return 0.0
         return float(hit.fraction) * max(float(distance), 0.0)
 
     def overlap(self, proxy: Proxy, translation: Any, quaternion: Any, skip: set[int],
                 triggers: bool) -> list[int]:
+        at = np.asarray(translation, dtype='d')[:3]
+        self._ground_for_query(at, at)
+        self._sync()
         found = self.world.overlap(_shape_of(proxy, True), np.asarray(translation, dtype='d')[:3],
                                    tuple(float(v) for v in quaternion),
                                    filter=self._filter(skip, triggers))
@@ -1538,6 +1776,24 @@ class JoltEngine(Engine):
 
     def restore_state(self, data: bytes) -> None:
         self.world.restore_state(data)
+
+
+def _conjugate(q: np.ndarray) -> np.ndarray:
+    return np.array([-q[0], -q[1], -q[2], q[3]], dtype='d')
+
+
+def _multiply(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """The quaternion product ``a b``, quaternions ``(x, y, z, w)``."""
+    ax, ay, az, aw = (float(v) for v in a)
+    bx, by, bz, bw = (float(v) for v in b)
+    return np.array([aw * bx + ax * bw + ay * bz - az * by,
+                     aw * by - ax * bz + ay * bw + az * bx,
+                     aw * bz + ax * by - ay * bx + az * bw,
+                     aw * bw - ax * bx - ay * by - az * bz])
+
+
+def _rotate(q: np.ndarray, v: np.ndarray) -> np.ndarray:
+    return _multiply(_multiply(q, np.array([v[0], v[1], v[2], 0.0])), _conjugate(q))[:3]
 
 
 def _capabilities(capabilities: Any) -> pj.CharacterCapabilities:
@@ -1597,7 +1853,9 @@ def _shape_of(proxy: Proxy, dynamic: bool) -> pj.Shape:
         indices = np.asarray(params['indices'], dtype=np.int64).reshape(-1, 3)
         if dynamic:
             return pj.Shape.convex(points)
-        return pj.Shape.mesh(points, np.concatenate([indices, indices[:, ::-1]]))
+        numbers = np.arange(len(indices), dtype=np.uint32)
+        return pj.Shape.mesh(points, np.concatenate([indices, indices[:, ::-1]]),
+                             ids=np.concatenate([numbers, numbers]))
     if kind == 'compound':
         parts = [(_shape_of(part, dynamic), tuple(float(v) for v in position),
                   tuple(float(v) for v in orientation))
@@ -1617,7 +1875,7 @@ def _zone_of(zone: Any) -> pj.GravityZone | None:
     from OpenGLContext.physics.zones import Box, Sphere, ZoneRegion  # noqa: PLC0415 zones import the scenegraph
 
     region = zone.region
-    values: dict[str, Any] = {'gravity': float(zone.strength), 'priority': int(zone.priority),
+    values: dict[str, Any] = {'gravity': float(zone.gravity), 'priority': int(zone.priority),
                               'replace': bool(zone.replace), 'stop': bool(zone.stop)}
     if zone.toward is not None:
         values.update(field=pj.ZoneField.POINT, center=tuple(float(v) for v in zone.toward))

@@ -10,6 +10,8 @@ from omi_physics.world import PhysicsWorld
 from OpenGLContext.physics import queries
 from OpenGLContext.physics.queries import _BISECTIONS, _candidates, _proxy, sweep_sphere
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 
 def every_candidate_every_step(world, origin, direction, distance, radius, skip=()):
     """The sweep as it is defined: each candidate tested at each step, then halved to the touch."""

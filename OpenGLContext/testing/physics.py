@@ -21,8 +21,8 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.body import Body
     from OpenGLContext.physics.service import Physics
 
-__all__ = ['body_at', 'holds', 'idle', 'inspect', 'joint_count', 'mass', 'material', 'run', 'settle',
-           'shape_count', 'shape_kind', 'slot_of', 'step_dt', 'stepping', 'wait_ticks',
+__all__ = ['body_at', 'filter_count', 'holds', 'idle', 'inspect', 'joint_count', 'mass', 'material', 'run', 'settle',
+           'material_count', 'material_index', 'pair_friction', 'shape_count', 'shape_kind', 'slot_of', 'step_dt', 'stepping', 'wait_ticks',
            'world_position']
 
 #: Seconds :func:`settle` and :func:`wait_ticks` wait for a world stepping on its own.
@@ -144,6 +144,51 @@ def material(physics: Physics, body: Body) -> Any:
     found = Material(staticFriction=row.static_friction, dynamicFriction=row.dynamic_friction,
                      restitution=row.restitution)
     return None if found == Material() else found
+
+
+def material_index(physics: Physics, body: Body) -> int:
+    """The engine's index of the material ``body`` has; the engine's default is -1 on omi."""
+    settle(physics)
+    engine: Any = physics._engine
+    if engine.name == 'omi':
+        runtime = engine.runtime
+        return int(runtime.world.collider_material[runtime.entry(body.uid).index])
+    return int(engine.given[body.uid][1])
+
+
+def material_count(physics: Physics) -> int:
+    """How many materials the engine holds."""
+    settle(physics)
+    engine: Any = physics._engine
+    if engine.name == 'omi':
+        return len(engine.runtime.world.materials)
+    return len(engine.world.materials) - 1
+
+
+def pair_friction(physics: Physics, first: Body, second: Body) -> tuple[float, float] | None:
+    """The static and dynamic friction a pair entry gives ``first`` and ``second``; None with none."""
+    settle(physics)
+    engine: Any = physics._engine
+    if engine.name == 'omi':
+        runtime = engine.runtime
+        world = runtime.world
+
+        def index(body: Body) -> int:
+            return int(world.collider_material[runtime.entry(body.uid).index])
+
+        found = world.pair_friction_for(index(first), index(second))
+        return None if found is None else (float(found[0]), float(found[1]))
+    found = engine.world.materials.pairing(engine.given[first.uid][1], engine.given[second.uid][1])
+    return None if found is None else (float(found[0]), float(found[1]))
+
+
+def filter_count(physics: Physics) -> int:
+    """How many collision filters the engine holds."""
+    settle(physics)
+    engine: Any = physics._engine
+    if engine.name == 'omi':
+        return len(engine.runtime.world.filters)
+    return len(engine._filters)
 
 
 def joint_count(physics: Physics) -> int:

@@ -15,6 +15,8 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
 
@@ -177,6 +179,7 @@ def test_queries_from_this_thread_are_safe_while_the_worker_steps():
         service.close()
 
 
+@pytest.mark.engines('omi', reason="counts the omi engine's query proxies")
 def test_a_body_that_has_not_moved_is_not_made_into_a_proxy_again_by_the_next_query(
         physics, monkeypatch):
     from OpenGLContext.physics import queries

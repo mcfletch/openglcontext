@@ -15,6 +15,8 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
 

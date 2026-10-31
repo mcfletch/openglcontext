@@ -13,6 +13,10 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import basenodes, surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
+from OpenGLContext.testing import physics as physics_testing
+
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
 
@@ -251,4 +255,4 @@ def test_a_world_held_inline_waits_for_its_scenery_before_it_steps(physics, monk
     physics.scenery_changed(scene_of(floor), 1)
     physics.frame(0.02)
     assert physics.cooking == 0
-    assert physics.body_for(floor.children[0]).uid in physics.worker.runtime
+    assert physics_testing.holds(physics, physics.body_for(floor.children[0]))

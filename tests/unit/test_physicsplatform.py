@@ -15,6 +15,8 @@ from omi_physics.character import CharacterCapabilities
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
 from OpenGLContext.testing import physics as physics_testing
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 
 def _ground_world():
     """A world with a large static floor at y=0 so the character can stand."""
