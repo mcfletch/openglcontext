@@ -906,6 +906,73 @@ physics section.
 The X3D ``Ragdoll`` node (:ref:`x3d-cloth-ragdoll`) does the same for a glTF
 character a document names. ``oglc-ragdoll`` is the demo.
 
+.. _characters-ragdoll-fall:
+
+A character that falls as a ragdoll
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``CharacterRagdoll`` hands a physics character's body to a ragdoll when it
+falls and back to its animation when it gets up. The ragdoll exists only in
+between; a character on its feet holds none and does no ragdoll arithmetic.
+
+.. code-block:: python
+
+   runner = physics.add_character(model=model, animations='ual', ragdoll=True)
+   ...
+   runner.ragdoll.fall(impulse=(0.0, 0.0, 45.0), bone='leftLowerLeg')   # tripped
+   ...
+   rest = runner.ragdoll.rest()          # where the body lies, and how fast it still moves
+   runner.ragdoll.recover(blend=0.6)     # the capsule stands there, still knocked down
+   ...
+   runner.get_up()                       # when the game's rules say so
+
+``add_character(ragdoll=True)`` builds the bones from the model as fitted to
+the capsule (a ``RagdollRig``, which reads the skin and takes milliseconds);
+``ragdoll=rig`` uses a rig built before, so a game making a character for each
+round builds the rig once (``character.ragdoll.rig``). ``CharacterRagdoll(character,
+rig)`` does the same for a character made without it.
+
+The capsule decides where the character is, and the ragdoll is what is drawn:
+
+- ``fall(impulse, bone, point, velocity)`` knocks the character down and starts
+  a ragdoll in the pose the figure was last drawn in, each bone moving at
+  ``velocity`` (the capsule's velocity by default), struck by ``impulse``
+  (N s) on ``bone`` at its centre of mass or at the world ``point``. The motors
+  hold the pose of the fall for ``powered`` seconds (0.12) and let go over
+  ``limp_blend`` (0.2), and the body tumbles under the world's gravity against
+  every body in the world; characters pass through its bones. Falling again
+  while down strikes the same ragdoll.
+- ``rest()`` returns a ``RagdollRest``: ``feet``, the ground under the pelvis
+  (bodies characters walk through are not ground); ``heading``, from the
+  pelvis to the head in the ``Facing`` convention; ``speed`` of the pelvis
+  (m/s); and ``pelvis``.
+- ``recover(blend, place=True)`` removes the ragdoll, stands the capsule at
+  ``rest().feet`` (with ``place``), which it returns, and draws the figure
+  blending from the body's last pose to the animation's over ``blend``
+  seconds, bone by bone in the world (smoothstep weights). The character stays
+  knocked down until ``Character.get_up``; a get-up clip the locomotion plays
+  while the character is down (the ``down`` role) keeps its time through the
+  fall, so a game times the blend to meet the clip where it rises.
+- ``park()`` removes the ragdoll and ends the blend at once;
+  ``Character.remove`` parks it.
+
+While a ragdoll or a blend draws the figure, ``Character.animate`` calls
+``CharacterRagdoll.draw`` in place of the model's ``update``: the clips
+advance, the character's node follows the body (the pelvis across, the lowest
+bone up, so the model's bounds stay around it), and joint transforms are not
+written. On the first frame of a fall the bones are where the figure was drawn,
+moving at the capsule's speed, and the last frame of a blend is the
+animation's pose, so neither end of the fall moves the figure by more than a
+frame's travel. The bones start at the capsule's last step rather than at the
+drawn place a part step behind it, because the world's bodies are drawn a part
+step behind too.
+
+Costs, measured in the hill runner on the frame the runner trips: the fall
+itself (one ``blended_pose``, the bones' poses, ``add_ragdoll``) takes about
+1.3 ms on the render thread, and the world's first ticks with the new ragdoll
+about 0.4 ms more. The Jolt settings of a spec are made once and kept while
+the spec is unchanged. Each frame of the fall reads the bones in one call.
+
 .. _characters-skinning:
 
 Where the skinning happens

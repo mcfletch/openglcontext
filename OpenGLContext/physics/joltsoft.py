@@ -11,6 +11,7 @@ reach the service's snapshot, interpolated with the rest.
 """
 from __future__ import annotations
 
+import copy
 import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
@@ -36,6 +37,8 @@ _LONG_RANGE = {'none': pj.LongRange.NONE, 'euclidean': pj.LongRange.EUCLIDEAN,
                'geodesic': pj.LongRange.GEODESIC}
 #: A filter index pyjoltphysics reads as "no filter".
 _NO_FILTER = 0
+#: How many specs' pyjoltphysics settings the engine keeps for the next ragdoll made from them.
+_KEPT_SETTINGS = 8
 
 
 def ragdoll_settings(spec: RagdollSpec, filter_index: int = _NO_FILTER,
@@ -111,6 +114,9 @@ class JoltRagdollsAndSoftBodies:
     def _init_soft(self) -> None:
         #: Each ragdoll's pyjoltphysics handle and its bones' service uids, by service ragdoll id.
         self._ragdoll_handles: dict[int, tuple[pj.Ragdoll, tuple[int, ...]]] = {}
+        #: The settings of the latest specs made, each with a copy of its spec as it was and the
+        #: filter index, so a figure that falls again does not have its settings made again.
+        self._ragdoll_made: list[tuple[RagdollSpec, int, pj.RagdollSettings]] = []
         #: Each soft body's pyjoltphysics handle, by service uid.
         self._soft_handles: dict[int, pj.SoftBody] = {}
         #: Each soft body's last frame read, by service uid: ((tick, applied sequence), frame).
@@ -121,11 +127,18 @@ class JoltRagdollsAndSoftBodies:
     # -- ragdolls ---------------------------------------------------------
     def _op_ragdoll(self, uid: int, ident: int, bones: Sequence[int],  # noqa: ARG002 named by the ragdoll
                     spec: RagdollSpec, position: Sequence[float], rotation: Sequence[float],
-                    mode: RagdollMode, filter_index: int) -> None:
-        settings = ragdoll_settings(spec, max(int(filter_index), 0))
+                    mode: RagdollMode, filter_index: int, start: Any = None) -> None:
+        settings = self._settings_of(spec, max(int(filter_index), 0))
         doll = self.world.add_ragdoll(settings, position=tuple(position),
                                       rotation=tuple(rotation), mode=_MODES[mode])
-        places, turns = forward_kinematics(spec, position=position, rotation=rotation)
+        if start is None:
+            places, turns = forward_kinematics(spec, position=position, rotation=rotation)
+        else:
+            # Moved and set going after the add, in the same tick's commands.
+            places, turns, linear, angular = start
+            self.world.set_transforms(doll.bones, places, turns)
+            if linear is not None or angular is not None:
+                self.world.set_velocities(doll.bones, linear, angular)
         for row, (bone_uid, jolt) in enumerate(zip(bones, doll.bones.tolist(), strict=True)):
             self._bind(bone_uid, int(jolt))
             self._kinds[bone_uid] = 'dynamic'
@@ -135,6 +148,16 @@ class JoltRagdollsAndSoftBodies:
         self._dynamic.set(doll.bones)
         self._movers_dirty = True
         self._ragdoll_handles[ident] = (doll, tuple(bones))
+
+    def _settings_of(self, spec: RagdollSpec, filter_index: int) -> pj.RagdollSettings:
+        """The pyjoltphysics settings of ``spec``, made again only when the spec has changed."""
+        for made, index, settings in self._ragdoll_made:
+            if index == filter_index and made == spec:
+                return settings
+        settings = ragdoll_settings(spec, filter_index)
+        self._ragdoll_made.append((copy.deepcopy(spec), filter_index, settings))
+        del self._ragdoll_made[:-_KEPT_SETTINGS]
+        return settings
 
     def _op_ragdoll_mode(self, uid: int, ident: int, mode: RagdollMode,  # noqa: ARG002 named by the ragdoll
                          blend: float) -> None:

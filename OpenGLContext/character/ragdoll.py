@@ -28,18 +28,26 @@ momentum, and the motors fading to limp.
 
 :class:`RagdollBudget` caps how many figures a game keeps simulated, the
 oldest frozen in the pose it reached when a new one comes in.
+
+:class:`CharacterRagdoll` is a physics character's fall: the animated body
+handed to a ragdoll that starts where the figure was drawn, moving as the
+character moved, and handed back to the animation over a blend once the body
+has come to rest. The ragdoll exists only between the two.
 """
 from __future__ import annotations
 
 import copy
+import math
 import time
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from OpenGLContext.character.humanoid import BONE_PARENT
 from OpenGLContext.character.rig import matrix_quaternions
+from OpenGLContext.loaders.gltf.animation import quat_slerp_rows
 from OpenGLContext.physics.ragdolls import (
     HUMANOID_LIMITS, RagdollBone, RagdollMode, RagdollSpec, apply_limits, quat_conjugate,
     quat_multiply, quat_rotate,
@@ -48,11 +56,12 @@ from OpenGLContext.physics.ragdolls import (
 if TYPE_CHECKING:
     from OpenGLContext.character.mixer import AnimationMixer
     from OpenGLContext.character.rig import Rig
+    from OpenGLContext.physics.character import Character
     from OpenGLContext.physics.ragdolls import Ragdoll
     from OpenGLContext.physics.service import Physics
 
-__all__ = ['DEFAULT_BONES', 'ROLES', 'RagdollBudget', 'RagdollFigure', 'RagdollRig',
-           'limits_from_hanim', 'matrix_quaternions']
+__all__ = ['DEFAULT_BONES', 'ROLES', 'CharacterRagdoll', 'RagdollBudget', 'RagdollFigure',
+           'RagdollRest', 'RagdollRig', 'limits_from_hanim', 'matrix_quaternions']
 
 #: The humanoid bones a ragdoll is made of where the model has them, parents first.
 DEFAULT_BONES: tuple[str, ...] = (
@@ -456,6 +465,267 @@ class RagdollBudget:
         return frozen
 
 
+@dataclass(frozen=True)
+class RagdollRest:
+    """Where a fallen body lies.
+
+    ``feet`` is the point on the ground under the pelvis, metres, where a
+    capsule stands to get up; ``heading`` the direction from the pelvis to the
+    head about +Y, radians from +Z (the
+    :class:`~OpenGLContext.character.facing.Facing` convention); ``speed`` the
+    pelvis's speed, metres a second, near 0 for a body at rest; ``pelvis`` its
+    world position.
+    """
+
+    feet: np.ndarray
+    heading: float
+    speed: float
+    pelvis: np.ndarray
+
+
+class CharacterRagdoll:
+    """A physics character's body as a ragdoll from a fall until it is handed back to the animation.
+
+    ``character`` is a :class:`~OpenGLContext.physics.character.Character`
+    wearing a model with a humanoid skeleton; ``rig`` its
+    :class:`RagdollRig`, built from the model as it stands now where None
+    (``build`` are :meth:`RagdollRig.build`'s options). Building a rig reads
+    the skin and costs milliseconds, so a game making a character per round
+    builds it once and passes it to each. The character's :attr:`ragdoll`
+    is this object from the call on.
+
+    The capsule decides where the character is. :meth:`fall` knocks it down
+    and starts a ragdoll in the pose the figure was last drawn in, each bone
+    moving with the capsule's velocity: its motors hold that pose for
+    :attr:`powered` seconds and let go over :attr:`limp_blend`, and the body
+    tumbles under the world's gravity against everything in it except the
+    characters. :meth:`rest` says where it lies. :meth:`recover` removes the
+    ragdoll, stands the capsule where the body lies, still knocked down, and
+    draws the figure blending from the body's last pose to the animation's
+    over ``blend`` seconds; the game ends the knocked-down state with
+    :meth:`Character.get_up <OpenGLContext.physics.character.Character.get_up>`
+    when its rules say so. While a ragdoll or a blend draws the figure the
+    character's node follows the body, joint transforms are not written
+    and the animation's clips still advance, so a get-up clip played while
+    the character is down is at the point its time says when the blend
+    reaches it.
+
+    A character that is not falling or blending holds no ragdoll and does no
+    ragdoll arithmetic.
+    """
+
+    def __init__(self, character: Character, rig: RagdollRig | None = None, *,
+                 powered: float = 0.12, limp_blend: float = 0.2,
+                 collision_filter: Any = None, **build: Any) -> None:
+        model = character.model
+        if model is None:
+            raise ValueError('a character needs a model to fall as a ragdoll')
+        self.character = character
+        if rig is None:
+            build.setdefault('placement', _local_matrix(model.group))
+            rig = RagdollRig.from_model(model, **build)
+        #: The bones the ragdoll is made of, built once.
+        self.rig = rig
+        #: Seconds the motors hold the pose of the fall, and the seconds they let go over.
+        self.powered = float(powered)
+        self.limp_blend = float(limp_blend)
+        #: The collision filter of the bones, or None for the world's default.
+        self.collision_filter = collision_filter
+        #: The ragdoll from :meth:`fall` to :meth:`recover`, or None.
+        self.ragdoll: Ragdoll | None = None
+        self._age = 0.0
+        self._limp = False
+        #: The body's last bone poses and the blend's length and progress, while blending.
+        self._from: tuple[np.ndarray, np.ndarray] | None = None
+        self._blend = 0.0
+        self._blended = 0.0
+        head = 'head' if 'head' in rig.names else rig.names[-1]
+        self._head = rig.names.index(head)
+        character.ragdoll = self
+
+    # -- state ------------------------------------------------------------
+    @property
+    def tumbling(self) -> bool:
+        """Whether a ragdoll draws the figure."""
+        return self.ragdoll is not None
+
+    @property
+    def blending(self) -> bool:
+        """Whether the figure is blending from the body's last pose to the animation."""
+        return self._from is not None
+
+    @property
+    def active(self) -> bool:
+        """Whether a ragdoll or a blend draws the figure, not the animation alone."""
+        return self.ragdoll is not None or self._from is not None
+
+    def placement(self, drawn: bool = True) -> np.ndarray:
+        """The world matrix (row-vector) of the model's root.
+
+        The model's own transform, the turn, and the node at the character's
+        feet as the frame draws them, or with ``drawn`` false as the last step
+        left them; under the body while a ragdoll holds it. The node is taken
+        to be in world coordinates, as
+        :meth:`Physics.add_character <OpenGLContext.physics.service.Physics.add_character>`
+        makes it.
+        """
+        character = self.character
+        matrix: np.ndarray = (_local_matrix(character.model.group)
+                              @ _local_matrix(character.turn_node))
+        node = character.node
+        if node is None:
+            return matrix
+        local = _local_matrix(node).copy()
+        if self.ragdoll is None:
+            local[3, :3] = character.drawn_position if drawn else character.position
+        placed: np.ndarray = matrix @ local
+        return placed
+
+    # -- the fall -----------------------------------------------------------
+    def fall(self, impulse: Any = None, bone: int | str | None = None, point: Any = None,
+             velocity: Any = None) -> Ragdoll:
+        """Knock the character down and hand its body to a ragdoll; returns the ragdoll.
+
+        The bones start in the pose the figure was drawn in, each moving at
+        ``velocity`` (m/s), the capsule's velocity where None. ``impulse``
+        (N s) strikes ``bone`` (an index or name, the root where None) at its
+        centre of mass or at the world ``point``: the blow of what tripped
+        it. A character already falling keeps its ragdoll and takes the blow.
+        """
+        character = self.character
+        if self.ragdoll is not None:
+            if impulse is not None:
+                self.ragdoll.hit(0 if bone is None else bone, impulse, point)
+            return self.ragdoll
+        moving = character.velocity if velocity is None else velocity
+        # The world's bodies are where the last step left them, a part step ahead of where the
+        # frame draws them, so the bones start against the capsule as stepped.
+        pose = character.model.mixer.blended_pose()
+        positions, orientations = self.rig.bone_poses(pose, self.placement(drawn=False))
+        moves, turns = _relative(positions, orientations, list(self.rig.parents))
+        ragdoll = character.physics.add_ragdoll(
+            self.rig.spec, mode='powered', collision_filter=self.collision_filter,
+            pose=(turns, moves), velocity=moving, blocks_characters=False)
+        if impulse is not None:
+            ragdoll.hit(0 if bone is None else bone, impulse, point)
+        self.ragdoll = ragdoll
+        self._from = None
+        self._age = 0.0
+        self._limp = False
+        character.knock_down()
+        return ragdoll
+
+    def rest(self) -> RagdollRest:
+        """Where the fallen body lies now; raises RuntimeError while there is no ragdoll."""
+        ragdoll = self.ragdoll
+        if ragdoll is None:
+            raise RuntimeError('the character has not fallen')
+        return self._rest(ragdoll, ragdoll.poses())
+
+    def _rest(self, ragdoll: Ragdoll, poses: Any) -> RagdollRest:
+        pelvis = poses.position[0].copy()
+        toward = poses.position[self._head] - pelvis
+        heading = math.atan2(float(toward[0]), float(toward[2]))
+        physics = self.character.physics
+        # The ground a capsule stands on: what characters walk through, the bones among them,
+        # is not ground.
+        under = physics.raycast(pelvis + (0.0, _ABOVE, 0.0), (0.0, -1.0, 0.0), _BELOW + _ABOVE,
+                                skip=[self.character.body, *physics.passable])
+        if under is not None:
+            feet = np.asarray(under.point, dtype='d').copy()
+        else:
+            radius = max(bone.radius for bone in self.rig.spec.bones)
+            feet = np.array([pelvis[0], float(poses.position[:, 1].min()) - radius, pelvis[2]])
+        return RagdollRest(feet, heading, float(np.linalg.norm(poses.velocity[0])), pelvis)
+
+    def recover(self, blend: float = 0.4, place: bool = True) -> np.ndarray:
+        """End the ragdoll and blend the figure back to the animation over ``blend`` seconds.
+
+        With ``place`` the capsule stands where the body lies
+        (:attr:`RagdollRest.feet`), which this returns. The character stays
+        knocked down. Raises RuntimeError while there is no ragdoll.
+        """
+        ragdoll = self.ragdoll
+        if ragdoll is None:
+            raise RuntimeError('the character has not fallen')
+        poses = ragdoll.poses()
+        rest = self._rest(ragdoll, poses)
+        ragdoll.remove()
+        self.ragdoll = None
+        if place:
+            self.character.teleport(rest.feet)
+        self._blend = max(0.0, float(blend))
+        self._blended = 0.0
+        self._from = (poses.position.copy(), poses.orientation.copy()) if self._blend else None
+        return rest.feet
+
+    def park(self) -> None:
+        """Remove the ragdoll and end any blend: the animation draws the figure from the next frame."""
+        if self.ragdoll is not None:
+            self.ragdoll.remove()
+            self.ragdoll = None
+        self._from = None
+
+    # -- the frame ----------------------------------------------------------
+    def draw(self, dt: float) -> None:
+        """Advance the clips ``dt`` seconds and draw the figure from the ragdoll or the blend.
+
+        The character calls this once a frame in place of the model's
+        ``update`` while :attr:`active`.
+        """
+        started = time.perf_counter()
+        mixer = self.character.model.mixer
+        mixer.advance(dt)
+        pose = mixer.blended_pose()
+        ragdoll = self.ragdoll
+        if ragdoll is not None:
+            self._age += max(0.0, float(dt))
+            if not self._limp and self._age >= self.powered:
+                ragdoll.set_mode('limp', self.limp_blend)
+                self._limp = True
+            poses = ragdoll.poses()
+            positions, orientations = poses.position, poses.orientation
+            self._follow(positions)
+            placement = self.placement()
+        elif self._from is not None:
+            self._blended += max(0.0, float(dt))
+            share = min(1.0, self._blended / self._blend)
+            weight = share * share * (3.0 - 2.0 * share)
+            placement = self.placement()
+            goal_p, goal_q = self.rig.bone_poses(pose, placement)
+            start_p, start_q = self._from
+            positions = start_p + (goal_p - start_p) * weight
+            orientations = quat_slerp_rows(start_q, goal_q, weight)
+            if share >= 1.0:
+                self._from = None
+        else:
+            return
+        mixer.reskin_from(self.rig.worlds(positions, orientations, pose, placement))
+        self.character.physics.note_render_cost('ragdolls', time.perf_counter() - started)
+
+    def _follow(self, positions: np.ndarray) -> None:
+        """Put the character's node under the body: the pelvis across, its lowest bone up."""
+        node = self.character.node
+        if node is not None:
+            node.translation = (float(positions[0, 0]), float(positions[:, 1].min()),
+                                float(positions[0, 2]))
+
+
+#: How far above the pelvis the ray for the ground under a fallen body starts, and how far below
+#: it the ray looks, metres.
+_ABOVE = 0.5
+_BELOW = 3.0
+
+
+def _local_matrix(node: Any) -> np.ndarray:
+    """A transform node's own matrix (row-vector), identity for a node with none."""
+    if node is None or not hasattr(node, 'localMatrices'):
+        return np.eye(4)
+    forward = node.localMatrices().data[0]
+    # An identity transform has no matrix.
+    return np.eye(4) if forward is None else np.asarray(forward, dtype='d')
+
+
 def limits_from_hanim(lower: Any, upper: Any,
                       axis: Any) -> tuple[tuple[float, float], tuple[float, float]]:
     """A swing-twist joint's (twist, swing) from HAnim's Euler limits about the joint's X, Y, Z.
@@ -555,14 +825,13 @@ def _share_mass(bones: Sequence[RagdollBone], names: Sequence[str], mass: float)
 def _relative(positions: np.ndarray, rotations: np.ndarray,
               parents: Sequence[int]) -> tuple[np.ndarray, np.ndarray]:
     """Each bone's translation and rotation in its parent's frame; the root's in the world."""
-    moves = positions.copy()
-    turns = rotations.copy()
-    for i, parent in enumerate(parents):
-        if parent < 0:
-            continue
-        inverse = quat_conjugate(rotations[parent])
-        moves[i] = quat_rotate(inverse, positions[i] - positions[parent])
-        turns[i] = quat_multiply(inverse, rotations[i])
+    moves = np.array(positions, dtype='d')
+    turns = np.array(rotations, dtype='d')
+    of = np.asarray(parents, dtype=np.intp)
+    child = of >= 0
+    inverse = quat_conjugate(turns[of[child]])
+    moves[child] = quat_rotate(inverse, moves[child] - moves[of[child]])
+    turns[child] = quat_multiply(inverse, turns[child])
     return moves, turns
 
 

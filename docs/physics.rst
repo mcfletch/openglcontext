@@ -653,6 +653,12 @@ blast or a fall at speed throws a whole body. ``nearest_bone(point)`` is the
 index of the bone whose capsule surface is nearest a world point, the bone a
 shot that met a hitbox there lands on: ``doll.hit(doll.nearest_bone(hit.point),
 impulse, hit.point)``.
+``velocity`` (m/s) and ``angular_velocity`` (rad/s about the world axes) start
+the bones moving from the first tick, one vector for all of them or a row a
+bone, in the same commands as the pose. With ``blocks_characters=False`` the
+characters' capsules pass through the bones, as they pass any body added with
+that option; ``physics.passable`` lists those bodies.
+:ref:`characters-ragdoll-fall` builds a character's fall on these.
 
 Each bone is a ``Body`` (``doll.bones``, ``doll.bone('head')``): handlers,
 joints, rays and ``physics.ragdoll_of(body)`` name it as they name any body.

@@ -226,6 +226,71 @@ def test_a_bone_is_removed_with_its_ragdoll(world):
     ragdoll.set_mode('powered')     # a removed ragdoll's commands go nowhere
 
 
+def test_a_ragdoll_starts_in_the_pose_it_is_given_moving_as_it_is_told(world):
+    """A body handed over mid-stride starts where it is drawn, moving as it was."""
+    spec = RagdollSpec.humanoid()
+    lean = (math.sin(0.2), 0.0, 0.0, math.cos(0.2))
+    turns = spec.rest_rotations()
+    turns[0] = lean
+    places, _facing = forward_kinematics(spec, turns, None, position=(1.0, 0.5, 2.0))
+    ragdoll = world.add_ragdoll(spec, position=(1.0, 0.5, 2.0), mode='limp',
+                                pose=(turns, spec.rest_translations()), velocity=(0.0, 0.0, -6.0))
+    assert ragdoll.poses().position == pytest.approx(places)
+    world.frame(1.0 / 60.0)
+    moved = ragdoll.poses(interpolated=False)
+    # Two ticks of 6 m/s along -z, and gravity's few millimetres down.
+    assert moved.position[:, 2] - places[:, 2] == pytest.approx(-0.1, abs=0.01)
+    assert moved.velocity[:, 2] == pytest.approx(-6.0, abs=0.3)
+    assert np.abs(moved.position[:, :2] - places[:, :2]).max() < 0.02
+
+
+def test_a_starting_velocity_is_one_for_all_bones_or_one_a_bone(world):
+    spec = RagdollSpec.humanoid()
+    spins = np.zeros((len(spec), 3))
+    spins[:, 1] = 2.0
+    ragdoll = world.add_ragdoll(spec, position=(0.0, 3.0, 0.0), velocity=np.tile((1.0, 0.0, 0.0),
+                                (len(spec), 1)), angular_velocity=spins, mode='limp')
+    world.frame(1.0 / 60.0)
+    poses = ragdoll.poses(interpolated=False)
+    assert poses.velocity[:, 0] == pytest.approx(1.0, abs=0.05)
+    # Each bone spinning about its own centre: the joints hold some of it back.
+    assert poses.angular_velocity[:, 1].min() > 0.5
+    with pytest.raises(ValueError, match='velocity'):
+        world.add_ragdoll(spec, velocity=np.zeros((3, 3)))
+    with pytest.raises(ValueError, match='rotations'):
+        world.add_ragdoll(spec, pose=(np.zeros((2, 3)), np.zeros((2, 4))))
+
+
+def test_characters_walk_through_the_bones_of_a_ragdoll_that_lets_them(world):
+    walker = world.add_character(position=(0.0, 0.0, 0.0))
+    ragdoll = world.add_ragdoll(RagdollSpec.humanoid(), blocks_characters=False)
+    bones = {body.uid for body in ragdoll.bones}
+    assert bones <= set(walker._controller.ignore)
+    blocking = world.add_ragdoll(RagdollSpec.humanoid(), position=(3.0, 0.0, 0.0))
+    assert not {body.uid for body in blocking.bones} & set(walker._controller.ignore)
+    ragdoll.remove()
+    assert not bones & set(walker._controller.ignore)
+    assert not bones & set(world.passable_slots())
+
+
+def test_the_jolt_settings_of_a_spec_are_made_once_while_it_is_unchanged(world, monkeypatch):
+    from OpenGLContext.physics import joltsoft
+    made = []
+    original = joltsoft.ragdoll_settings
+
+    def counted(spec, *args, **named):
+        made.append(spec)
+        return original(spec, *args, **named)
+    monkeypatch.setattr(joltsoft, 'ragdoll_settings', counted)
+    spec = RagdollSpec.humanoid()
+    for _ in range(3):
+        world.add_ragdoll(spec).remove()
+    assert len(made) == 1
+    spec.bones[2].mass *= 2.0
+    world.add_ragdoll(spec)
+    assert len(made) == 2
+
+
 def test_a_ray_names_the_bone_it_hits(world):
     ragdoll = world.add_ragdoll(RagdollSpec.humanoid(), mode='kinematic')
     run_for(world, 0.1)

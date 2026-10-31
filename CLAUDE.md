@@ -114,8 +114,9 @@ OpenGLContext/
 │   │                 # -- docs/characters.rst#characters-facing
 │   ├── wander.py     # Crowds that walk about on their own: headings, strides,
 │   │                 # run_share between the walk and the run -- no GL
-│   ├── ragdoll.py    # RagdollRig (a rig's bones as a ragdoll, sized from the skin)
-│   │                 # and RagdollFigure (animation to targets, bones to skins)
+│   ├── ragdoll.py    # RagdollRig (a rig's bones as a ragdoll, sized from the skin),
+│   │                 # RagdollFigure (animation to targets, bones to skins) and
+│   │                 # CharacterRagdoll (a character's fall and get-up)
 │   │                 # -- docs/characters.rst#characters-ragdoll
 │   └── hanim.py      # X3D HAnim's arithmetic: names and levels, skin weights,
 │                     # BVH channels, poses, limits -- no GL -- docs/characters.rst#characters-hanim

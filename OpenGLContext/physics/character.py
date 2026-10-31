@@ -44,6 +44,7 @@ from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.types import CharacterCapabilities, CharacterState
 
 if TYPE_CHECKING:
+    from OpenGLContext.character.ragdoll import CharacterRagdoll
     from OpenGLContext.move.pathmover import PathMover
     from OpenGLContext.physics.body import Body
     from OpenGLContext.physics.events import Collision
@@ -104,6 +105,9 @@ class Character:
         self.aim: Any = None
         #: True makes the locomotion play the death clip.
         self.dead = False
+        #: The :class:`~OpenGLContext.character.ragdoll.CharacterRagdoll` the character falls
+        #: as, or None.
+        self.ragdoll: CharacterRagdoll | None = None
         #: The capsule, speeds and limits the character was made with.
         self.capabilities = CharacterCapabilities.coerce(capabilities)
         capabilities = self.capabilities
@@ -127,9 +131,10 @@ class Character:
             for uid in physics.passable_slots():
                 self._controller.ignore.add(uid)
         self._pass_group: str | None = None
-        #: Where the capsule's centre was before and after its latest step, and how far
-        #: from the one toward the other the frame draws it.
-        self._previous = self._controller.position.copy()
+        #: Where the feet were before and after the latest step, and how far from the one
+        #: toward the other the frame draws them. Feet, not the capsule's centre, so a change
+        #: of height (a crouch, a fall, getting up) is not drawn as a move.
+        self._previous = self._controller.base()
         self._stepped = self._previous.copy()
         self._alpha = 1.0
         self._knocks: list[np.ndarray] = []
@@ -208,7 +213,7 @@ class Character:
         """
         step = self._stepped - self._previous
         heading = np.sign(step)
-        undone = np.clip(-(np.asarray(self._controller.position) - self._stepped) * heading,
+        undone = np.clip(-(self._controller.base() - self._stepped) * heading,
                          0.0, np.abs(step))
         return (1.0 - self._alpha) * (step - heading * undone)
 
@@ -428,7 +433,7 @@ class Character:
         found = bool(self._controller.safe_bind(
             np.asarray(feet, dtype='d') + _UP * (self._controller.height / 2.0)))
         self._marked = self._controller.position.copy()
-        self._previous, self._alpha = self._controller.position.copy(), 1.0
+        self._previous, self._alpha = self._controller.base(), 1.0
         self._stepped = self._previous.copy()
         self._place_stand_in(np.zeros(3))
         self._place_node()
@@ -440,6 +445,8 @@ class Character:
             return
         self.pass_group = None
         self.alive = False
+        if self.ragdoll is not None:
+            self.ragdoll.park()
         self.physics._characters.remove(self)
         self.body.remove()
 
@@ -529,8 +536,10 @@ class Character:
         from the last step's start to its end."""
         for _ in range(steps):
             self.step(step)
-        self.animate(dt)
+        # The part step is set first, so a figure posed in the world (a ragdoll's) is posed
+        # against the node where the frame draws it.
         self._alpha = float(alpha)
+        self.animate(dt)
         self._place_node()
 
     def step(self, dt: float) -> None:
@@ -549,7 +558,7 @@ class Character:
         if 'before-step' in self._listeners:
             self._tell('before-step', CharacterStep(self, dt))
         controller = self._controller
-        self._previous, self._alpha = controller.position.copy(), 1.0
+        self._previous, self._alpha = controller.base(), 1.0
         for knock in self._knocks:
             controller.knockback(knock)
         self._knocks.clear()
@@ -566,7 +575,7 @@ class Character:
         """The second half of a step, once the controller has moved: the stand-in, the node, landings."""
         listeners = self._listeners
         controller = self._controller
-        self._stepped = controller.position.copy()
+        self._stepped = controller.base()
         pushing = controller.pushing
         self._place_stand_in(pushing[1] if pushing is not None else controller.velocity)
         self._place_node()
@@ -595,8 +604,6 @@ class Character:
                 slide_progress=float(controller.slide_progress),
                 landing_speed=landed, crouching=bool(controller.crouching),
                 dead=self.dead), dt)
-            if self.model is not None and hasattr(self.model, 'update'):
-                self.model.update(dt)
         if self.facing is not None and dt > 0.0:
             normal = controller.ground_normal if controller.ground_normal is not None else _UP
             pose = self.facing.update(dt, velocity=velocity, aim=self.aim, normal=normal,
@@ -604,6 +611,11 @@ class Character:
             if self.turn_node is not None:
                 self.turn_node.rotation = pose.rotation
         self._last_velocity = velocity.copy()
+        ragdoll = self.ragdoll
+        if ragdoll is not None and ragdoll.active:
+            ragdoll.draw(dt)
+        elif self.locomotion is not None and hasattr(self.model, 'update'):
+            self.model.update(dt)
 
     def _footfall(self, foot: str, phase: float) -> None:
         """A foot landed: tell the handlers, and play the footstep of the ground under it."""
@@ -702,7 +714,8 @@ class Character:
         return middle - half, middle + half
 
     def _place_node(self) -> None:
-        if self.node is not None:
+        """Put the node at the drawn feet, unless a ragdoll holds the body."""
+        if self.node is not None and (self.ragdoll is None or self.ragdoll.ragdoll is None):
             self.node.translation = tuple(float(v) for v in self.drawn_position)
 
     def _tell(self, event: str, argument: Any) -> None:

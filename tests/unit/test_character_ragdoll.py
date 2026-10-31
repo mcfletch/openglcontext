@@ -4,6 +4,7 @@ import math
 import numpy as np
 import pytest
 
+from OpenGLContext.character.locomotion import ClipMap
 from OpenGLContext.character.mixer import AnimationMixer
 from OpenGLContext.character.ragdoll import (
     MASS_SHARES, RagdollBudget, RagdollFigure, RagdollRig, limits_from_hanim, matrix_quaternions,
@@ -14,6 +15,7 @@ from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.ragdolls import forward_kinematics
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.physics.types import CharacterState
 from OpenGLContext.scenegraph.basenodes import Transform
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
@@ -375,3 +377,181 @@ def _axis_angle_quaternion(rotation):
     length = math.sqrt(x * x + y * y + z * z) or 1.0
     s = math.sin(angle / 2.0) / length
     return (x * s, y * s, z * s, math.cos(angle / 2.0))
+
+
+# -- a character's fall: animation to ragdoll and back -------------------------
+
+class Wearable(Model):
+    """What a character wears: Model's skeleton, a group to hang it in, and an update."""
+
+    def __init__(self, mixer):
+        super().__init__(mixer)
+        self.group = Transform()
+
+    def update(self, dt):
+        self.mixer.update(dt)
+
+    def layer(self, *args, **named):
+        return self.mixer.layer(*args, **named)
+
+
+class Drawn:
+    """The world matrices of the rig slots each frame drew, through either path."""
+
+    def __init__(self, character):
+        self.character = character
+        self.frames: list[np.ndarray] = []
+        mixer = character.model.mixer
+        original = mixer.joint_matrices_from
+
+        def record(worlds):
+            self.frames.append(worlds @ character.ragdoll.placement())
+            return original(worlds)
+        mixer.joint_matrices_from = record
+
+    def at(self, name: str, frame: int = -1) -> np.ndarray:
+        rig = self.character.model.mixer.rig
+        return self.frames[frame][rig.slot_of[BONES[name]]][3, :3].copy()
+
+
+@pytest.fixture
+def ground():
+    physics = Physics(PhysicsDefinition(mode='inline', engine='jolt', tickHz=120.0))
+    physics.add_static(None, proxy=Proxy.box((60.0, 1.0, 60.0)), translation=(0, -0.5, 0))
+    yield physics
+    physics.close()
+
+
+def wearer(physics):
+    """A character wearing the skinned figure, with a ragdoll ready, and what it draws."""
+    character = physics.add_character(position=(0.0, 0.0, 0.0), model=Wearable(
+        figure(skin_radius=0.04)), animations=ClipMap(), fit=False, ragdoll=True)
+    return character, Drawn(character)
+
+
+def frames(physics, count, dt=1 / 60):
+    for _ in range(count):
+        physics.frame(dt)
+
+
+def run_ahead(character, physics, speed=5.0, count=20):
+    for _ in range(count):
+        character.set_move((0.0, 0.0, -1.0), 'run', speed=speed)
+        physics.frame(1 / 60)
+
+
+def test_a_character_holds_no_ragdoll_until_it_falls(ground):
+    from OpenGLContext.character.ragdoll import CharacterRagdoll
+    character, drawn = wearer(ground)
+    assert isinstance(character.ragdoll, CharacterRagdoll)
+    assert not character.ragdoll.active
+
+    def untouched(*args, **named):
+        raise AssertionError('a standing character does no ragdoll arithmetic')
+    character.ragdoll.rig.worlds = untouched
+    character.ragdoll.rig.bone_poses = untouched
+    run_ahead(character, ground)
+    assert ground.ragdolls == ()
+    assert len(drawn.frames) >= 20
+
+
+def test_a_fall_starts_the_ragdoll_where_the_figure_was_drawn(ground):
+    character, drawn = wearer(ground)
+    run_ahead(character, ground)
+    head, hips = drawn.at('head'), drawn.at('hips')
+    ragdoll = character.ragdoll.fall()
+    assert ground.ragdolls == (ragdoll,)
+    assert character.state == CharacterState.DOWN
+    ground.frame(1 / 60)
+    # A frame on at the 5 m/s it ran: 83 mm further along -z, within 3 cm.
+    step = np.array([0.0, 0.0, -5.0 / 60])
+    assert drawn.at('head') == pytest.approx(head + step, abs=0.03)
+    assert drawn.at('hips') == pytest.approx(hips + step, abs=0.03)
+
+
+def test_the_fallen_body_carries_the_runners_velocity(ground):
+    character, drawn = wearer(ground)
+    run_ahead(character, ground)
+    start = drawn.at('hips')
+    character.ragdoll.fall()
+    frames(ground, 30)
+    assert drawn.at('hips')[2] < start[2] - 0.8
+    assert drawn.at('head')[1] < 0.8
+
+
+def test_a_blow_knocks_the_body_down_the_way_it_is_struck(ground):
+    character, drawn = wearer(ground)
+    run_ahead(character, ground, count=5)
+    hips, head = drawn.at('hips'), drawn.at('head')
+    character.ragdoll.fall(impulse=(0.0, 0.0, 60.0), bone='chest', velocity=(0.0, 0.0, 0.0))
+    frames(ground, 90)
+    assert drawn.at('hips')[2] > hips[2] + 0.5
+    assert drawn.at('head')[2] > head[2] + 0.5
+    assert drawn.at('head')[1] < 0.3
+
+
+def test_the_ragdoll_is_powered_then_limp(ground):
+    from OpenGLContext.physics.ragdolls import RagdollMode
+    character, _drawn = wearer(ground)
+    driver = character.ragdoll
+    ragdoll = driver.fall()
+    assert ragdoll.mode is RagdollMode.POWERED
+    frames(ground, int(driver.powered * 60) + 2)
+    assert ragdoll.mode is RagdollMode.LIMP
+
+
+def test_recovery_stands_the_capsule_where_the_body_lies_and_blends_back(ground):
+    character, drawn = wearer(ground)
+    driver = character.ragdoll
+    run_ahead(character, ground)
+    driver.fall()
+    frames(ground, 60)
+    rest = driver.rest()
+    hips = drawn.at('hips')
+    assert rest.feet[1] == pytest.approx(0.0, abs=0.02)
+    assert rest.feet[[0, 2]] == pytest.approx(hips[[0, 2]], abs=0.05)
+    bones = character.ragdoll.rig.slots
+    lying = drawn.frames[-1][bones]
+    feet = driver.recover(blend=0.25)
+    assert feet == pytest.approx(rest.feet)
+    assert character.position[[0, 2]] == pytest.approx(rest.feet[[0, 2]], abs=0.02)
+    assert character.state == CharacterState.DOWN        # recovery does not end the fall
+    ground.frame(1 / 60)
+    assert ground.ragdolls == () and driver.blending
+    # The first frame of the blend is within 3 cm of the body as it lay.
+    assert np.abs(drawn.frames[-1][bones, 3, :3] - lying[:, 3, :3]).max() < 0.03
+    frames(ground, 15)
+    assert not driver.active
+    blended = drawn.frames[-1]
+    character.set_move((0.0, 0.0, 0.0))
+    character.get_up()
+    ground.frame(1 / 60)
+    # The last frame of the blend is the animation's pose: the next frame, drawn by the
+    # model alone, is the same within a millimetre.
+    assert np.abs(drawn.frames[-1][:, 3, :3] - blended[:, 3, :3]).max() < 1e-3
+
+
+def test_a_body_lying_on_what_characters_walk_through_gets_up_on_the_ground_below(ground):
+    character, _drawn = wearer(ground)
+    ground.add_static(None, proxy=Proxy.box((3.0, 0.4, 3.0)), translation=(0.0, 0.2, -1.0),
+                      blocks_characters=False)
+    assert len(ground.passable) == 1
+    character.ragdoll.fall(velocity=(0.0, 0.0, -1.0))
+    frames(ground, 60)
+    rest = character.ragdoll.rest()
+    assert rest.pelvis[1] > 0.4                    # on the box
+    assert rest.feet[1] == pytest.approx(0.0, abs=0.02)
+
+def test_removing_the_character_removes_its_ragdoll(ground):
+    character, _drawn = wearer(ground)
+    ragdoll = character.ragdoll.fall()
+    ground.frame(1 / 60)
+    character.remove()
+    assert not ragdoll.alive and ground.ragdolls == ()
+
+
+def test_falling_twice_keeps_one_ragdoll(ground):
+    character, _drawn = wearer(ground)
+    first = character.ragdoll.fall()
+    second = character.ragdoll.fall()
+    assert first is second and len(ground.ragdolls) == 1

@@ -484,16 +484,22 @@ class Physics:
                 self._let_characters_through(uid)
         return body
 
-    def _let_characters_through(self, uid: int) -> None:
-        """Have the controllers of the characters walk through body ``uid``."""
+    def _let_characters_through(self, *uids: int) -> None:
+        """Have the controllers of the characters walk through the bodies ``uids``."""
         if not self._engine.stand_ins:
             for character in self._characters:
-                character._controller.ignore.add(uid)
+                character._controller.ignore.update(uids)
             return
         replica = self._replica
-        if replica is not None and uid in replica:
+        if replica is not None:
+            slots = [replica.index_of(uid) for uid in uids if uid in replica]
             for character in self._characters:
-                character._controller.ignore.add(replica.index_of(uid))
+                character._controller.ignore.update(slots)
+
+    @property
+    def passable(self) -> tuple[Body, ...]:
+        """The bodies characters walk through (``blocks_characters=False``), in the order added."""
+        return tuple(self._bodies[uid] for uid in sorted(self._passable) if uid in self._bodies)
 
     def passable_slots(self) -> list[int]:
         """The slots, in the render thread's copy of the bodies, of the bodies characters walk through.
@@ -796,7 +802,7 @@ class Physics:
                       position: Any = (0.0, 0.0, 0.0), gravity: float | None = None, *,
                       model: Any = None, animations: Any = None, parent: Any = None,
                       fit: bool = True, facing: bool = True,
-                      pass_group: str | None = None) -> Character:
+                      pass_group: str | None = None, ragdoll: Any = None) -> Character:
         """Make a walker standing with its feet at ``position``.
 
         ``capabilities`` is a :class:`~OpenGLContext.physics.types.CharacterCapabilities`
@@ -815,6 +821,12 @@ class Physics:
         clip names to the roles; the model then plays them for what the
         character is doing. Characters given the same ``pass_group`` name walk
         through one another (:attr:`Character.pass_group`).
+
+        ``ragdoll`` lets a character wearing a humanoid model fall as a
+        ragdoll (:class:`~OpenGLContext.character.ragdoll.CharacterRagdoll`,
+        :attr:`Character.ragdoll`): True builds its bones from the model as
+        fitted, a :class:`~OpenGLContext.character.ragdoll.RagdollRig` built
+        before is used as it is.
         """
         caps = CharacterCapabilities.coerce(capabilities)
         pull = float(np.linalg.norm(self._gravity)) if gravity is None else float(gravity)
@@ -842,6 +854,10 @@ class Physics:
                          turn_node=turn)
         self._characters.append(made)
         made.pass_group = pass_group
+        if ragdoll is not None and ragdoll is not False:
+            from OpenGLContext.character.ragdoll import CharacterRagdoll  # noqa: PLC0415 only a character that falls needs it
+
+            CharacterRagdoll(made, None if ragdoll is True else ragdoll)
         return made
 
     @staticmethod
@@ -1032,7 +1048,8 @@ class Physics:
     def add_ragdoll(self, spec: RagdollSpec, position: Any = (0.0, 0.0, 0.0),
                     rotation: Any = (0.0, 0.0, 0.0, 1.0), mode: RagdollMode | str = 'limp',
                     collision_filter: Any = None, pose: Any = None,
-                    queryable: bool = True) -> Ragdoll:
+                    queryable: bool = True, *, velocity: Any = None,
+                    angular_velocity: Any = None, blocks_characters: bool = True) -> Ragdoll:
         """Put a ragdoll in the world, standing in its rest pose or ``pose``, and return its handle.
 
         ``position`` and ``rotation`` (a quaternion ``(x, y, z, w)``) place the
@@ -1042,8 +1059,13 @@ class Physics:
         calls take one. ``pose`` is ``(rotations, translations)`` as
         :meth:`Ragdoll.set_pose` takes them: the bones start there at rest and
         it is the held target, while the joints' limits stay those of the
-        spec's rest pose. With ``queryable`` False rays, sweeps and overlaps
-        pass through the bones (:attr:`Body.queryable`). The bones are bodies
+        spec's rest pose. ``velocity`` (m/s) and ``angular_velocity`` (rad/s,
+        about the world axes) start the bones moving: one vector for every
+        bone or a row a bone, as a body handed over from an animation
+        mid-stride moves. With ``queryable`` False rays, sweeps and overlaps
+        pass through the bones (:attr:`Body.queryable`); with
+        ``blocks_characters`` False the characters' capsules pass through
+        them, as they pass bodies added with that option. The bones are bodies
         (:attr:`Ragdoll.bones`) from the call on; the world holds them from the
         next tick. Raises :class:`~OpenGLContext.physics.engine.EngineUnavailable`
         on an engine without ragdolls.
@@ -1057,10 +1079,14 @@ class Physics:
         if not (np.isfinite(turn).all() and np.linalg.norm(turn) > 0.0):
             raise ValueError('rotation is a quaternion of finite, non-zero length')
         turn = turn / np.linalg.norm(turn)
-        held = None if pose is None else (pose_rows(pose[0], len(spec), 4, 'rotations'),
-                                          pose_rows(pose[1], len(spec), 3, 'translations'))
-        places, turns = forward_kinematics(spec, *(held or (None, None)), position=place,
+        count = len(spec)
+        held = None if pose is None else (pose_rows(pose[0], count, 4, 'rotations'),
+                                          pose_rows(pose[1], count, 3, 'translations'))
+        rotations, translations = (None, None) if held is None else held
+        places, turns = forward_kinematics(spec, rotations, translations, position=place,
                                            rotation=turn)
+        moving = (_bone_rows(velocity, count, 'velocity'),
+                  _bone_rows(angular_velocity, count, 'angular_velocity'))
         bones = []
         for row, bone in enumerate(spec.bones):
             uid = next(self._uids)
@@ -1076,15 +1102,20 @@ class Physics:
         for body in bones:
             self._ragdoll_of[body.uid] = ragdoll
         if not self._closed:
+            # The world builds the bones at rest; a start puts them in the pose and sets them
+            # moving in the same tick's commands.
+            still = held is None and all(rows is None for rows in moving)
+            start = None if still else (places, turns, *moving)
             self._send(Command('ragdoll', 0, (
                 ragdoll.id, tuple(body.uid for body in bones), spec, place,
                 tuple(float(v) for v in turn), made_mode,
-                self.filters.index(collision_filter)), next(self._seq)))
+                self.filters.index(collision_filter), start), next(self._seq)))
             self._ensure_started()
+            if not blocks_characters:
+                uids = [body.uid for body in bones]
+                self._passable.update(uids)
+                self._let_characters_through(*uids)
         if held is not None:
-            # The world builds the bones at rest; they are put in the pose before its next tick.
-            for body, at, facing in zip(bones, places, turns, strict=True):
-                body.set_transform(at, quat_to_vrml_rotation(facing))
             ragdoll.set_pose(held[0], held[1])
         if not queryable:
             for body in bones:
@@ -1111,6 +1142,7 @@ class Physics:
         if not ragdoll.alive:
             return
         ragdoll.alive = False
+        self._unpass(*(body.uid for body in ragdoll.bones))
         seq = 0
         if not self._closed:
             seq = next(self._seq)
@@ -1278,18 +1310,21 @@ class Physics:
         else:
             self._forget(body, seq)
 
-    def _unpass(self, uid: int) -> None:
-        """Have the characters' controllers stop walking through body ``uid``'s slot,
-        before the slot is freed for another body."""
-        if uid in self._passable:
-            replica = self._replica
-            if not self._engine.stand_ins:
-                for character in self._characters:
-                    character._controller.ignore.discard(uid)
-            elif replica is not None and uid in replica:
-                for character in self._characters:
-                    character._controller.ignore.discard(replica.index_of(uid))
-            self._passable.discard(uid)
+    def _unpass(self, *uids: int) -> None:
+        """Have the characters' controllers stop walking through the slots of the bodies
+        ``uids``, before the slots are freed for other bodies."""
+        passed = [uid for uid in uids if uid in self._passable]
+        if not passed:
+            return
+        replica = self._replica
+        if not self._engine.stand_ins:
+            for character in self._characters:
+                character._controller.ignore.difference_update(passed)
+        elif replica is not None:
+            slots = [replica.index_of(uid) for uid in passed if uid in replica]
+            for character in self._characters:
+                character._controller.ignore.difference_update(slots)
+        self._passable.difference_update(passed)
 
     def _forget(self, body: Body, seq: int) -> None:
         """Let go of removed ``body`` in the render thread's tables; ``seq`` is its removal's
@@ -2254,6 +2289,17 @@ def _sampled_heights(ground: Any, extent: Any, margin: float = 0.2) -> tuple[flo
     low, high = float(heights.min()), float(heights.max())
     pad = max(high - low, 1.0) * margin
     return low - pad, high + pad
+
+
+def _bone_rows(values: Any, count: int, name: str) -> np.ndarray | None:
+    """``values``, one vector or a row a bone, as (B, 3) rows; None for None."""
+    if values is None:
+        return None
+    rows = np.asarray(values, dtype='d')
+    if rows.shape not in ((3,), (count, 3)) or not np.isfinite(rows).all():
+        raise ValueError('%s is a finite vector or one a bone (%d, 3), not shape %s'
+                         % (name, count, rows.shape))
+    return np.ascontiguousarray(np.broadcast_to(rows, (count, 3)))
 
 
 def _model_of(model: Any) -> Any:

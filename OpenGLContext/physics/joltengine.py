@@ -33,7 +33,7 @@ import math
 import os
 import sys
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -567,6 +567,18 @@ class _IgnoreSet(set[int]):
     def discard(self, uid: object) -> None:
         if uid in self:
             super().discard(uid)
+            self._sent()
+
+    def update(self, *others: Iterable[int]) -> None:
+        size = len(self)
+        super().update(*others)
+        if len(self) != size:
+            self._sent()
+
+    def difference_update(self, *others: Iterable[Any]) -> None:
+        size = len(self)
+        super().difference_update(*others)
+        if len(self) != size:
             self._sent()
 
 

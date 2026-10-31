@@ -157,6 +157,28 @@ def test_the_node_is_drawn_between_the_last_two_steps():
         physics.close()
 
 
+@pytest.mark.parametrize('change', ['get_up', 'knock_down', 'crouch'])
+def test_a_change_of_height_is_not_drawn_as_a_move_of_the_feet(change):
+    physics = make()
+    try:
+        me = physics.add_character(position=(0, 0.05, 0))
+        for _ in range(60):
+            physics.frame(1 / 60)
+        if change == 'get_up':
+            me.knock_down()
+            for _ in range(30):
+                physics.frame(1 / 60)
+            me.get_up()
+        elif change == 'knock_down':
+            me.knock_down()
+        else:
+            me.set_crouch(True)
+        physics.frame(1 / 120 + 1 / 240)                          # one step and half the next
+        # Standing still, the feet stay on the floor whatever the capsule's height.
+        assert me.drawn_position[1] == pytest.approx(me.position[1], abs=5e-3)
+    finally:
+        physics.close()
+
 def test_a_correction_that_takes_a_step_back_is_drawn_without_the_step():
     physics = make()
     try:

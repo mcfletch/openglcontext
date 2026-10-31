@@ -2179,6 +2179,76 @@ Tests: engine `test_physics_ragdolls` (posed start, queryable, nearest bone, pus
 removal, joints, budget), `test_character_crowd` (palette claim), `test_x3d_shaders` (refused
 stage); each seen failing first. twig-bb `tests/test_corpses.py` (13) and a GL test that the
 fallen body is drawn lying where it stood.
+### Character falls as built (2026-10-31): a character's body as a ragdoll from a fall to its get-up
+
+openglcontext branch `character-tumble`, rebased onto P6e; hill-runner branch `ragdoll-trip`.
+pyjoltphysics is unchanged. P6e's `RagdollFigure.knock_down` is a death for a figure the game
+poses itself; `CharacterRagdoll` is the fall of a physics character, which gets up again.
+
+Engine:
+
+- `Physics.add_ragdoll(..., velocity=, angular_velocity=, blocks_characters=)` beside P6e's
+  `pose=`: the bones start moving from the first tick, and with `blocks_characters=False` the
+  characters' controllers pass through them, in one ignore-set update for all the bones
+  (`_IgnoreSet.update` and `difference_update` send once). A posed or moving start travels with
+  the `ragdoll` command and the Jolt engine applies it as one `set_transforms` and one
+  `set_velocities` after the add, in place of a `place` command for each bone.
+  `Physics.passable` lists the bodies characters walk through.
+- The Jolt engine keeps the pyjoltphysics settings of the last eight specs made, each with a copy
+  of the spec, and makes them again only for a spec that has changed (0.3 ms a ragdoll).
+- `character.ragdoll.CharacterRagdoll` and `RagdollRest`; `Character.ragdoll`;
+  `Physics.add_character(ragdoll=True or a RagdollRig)`. Contract: the capsule is the gameplay
+  authority. `fall(impulse, bone, point, velocity)` knocks it down and starts a powered ragdoll in
+  the last drawn pose (the bones placed against the capsule's last step, since the world's bodies
+  are drawn a part step behind it), each bone at the capsule's velocity; limp after `powered`
+  (0.12 s) over `limp_blend` (0.2 s). `rest()` gives the ground under the pelvis (ignoring
+  passable bodies), the heading and the speed. `recover(blend, place)` removes the ragdoll, stands
+  the capsule at the rest point and blends the figure from the body's last pose to the animation's
+  over `blend` seconds (world-space lerp and slerp by bone, smoothstep); it does not end the
+  knocked-down state. While active, `Character.animate` calls `draw` in place of the model's
+  update and the node follows the body; `Character.remove` parks the ragdoll.
+- `Character._frame` sets the part step before `animate`, and the facing turns before the figure
+  is drawn, so a figure posed in the world is posed against the node where the frame draws it.
+- Defect fixed: `Character._lag` interpolated the capsule's centre, so a change of height (getting
+  up, being knocked down) was drawn for one frame as the feet moving by half the change: the hill
+  runner's node dropped 0.55 m on the frame it rose (on develop, without ragdolls). The drawn place
+  now interpolates the feet (`controller.base()`).
+- `_relative` (pose targets from world poses) is vectorised: 0.46 to 0.04 ms for 19 bones, which
+  `RagdollFigure.update` also pays each frame.
+
+hill-runner: a runner wearing the humanoid model falls as a ragdoll at every hit and crash.
+`game.BLOWS` gives each kind of obstacle a blow (log: 45 N s up the hill on the left shin and
+3 m/s up; crevice: half that on the shin; bough: 35 N s on the head; wall: 70 N s on the chest;
+ceiling as a bough). While tumbling, the rules' distance and lane follow the pelvis (the camera
+and the hill's bodies follow); with `GET_UP_TIME` = 0.68 s of `STUMBLE_TIME` left the runner
+`stand_up`s where the body lies, or short of an obstacle it lies in, and the blend meets the
+`Roll` clip at its lowest point (0.70 s of its 1.47 s at the down role's rate). The rig is built
+by the first `World.spawn` and carried from session to session. A log is a 1 m box, taller than the
+pelvis, so a body tripped by a log comes to rest against or on it; a crevice, which has no body,
+lets it tumble 3.5 to 4 m down the hill at 10.5 m/s.
+
+Costs (hill-runner session with the model, main-thread `thread_time`, other agents running):
+without a trip, `Session.step` median 1.07 ms on develop and 1.08 ms on the branch over four
+600-frame demo runs each, twice. The trip frame: 3.4 to 3.6 ms against 1.0 to 1.4 ms for the
+same frame without a trip; `fall()` itself 1.1 to 2.0 ms (median about 1.3 ms: blended pose
+0.17, bone poses 0.10, `add_ragdoll` 0.4 with the settings kept, the rest commands), and the
+world's first ticks with the new ragdoll about 0.4 ms more. Tumbling frames 0.9 ms, blending
+frames 1.1 to 1.2 ms.
+
+Tests: engine `test_physics_ragdolls` (start pose and velocity, per-bone velocities, characters
+through bones, settings kept), `test_character_ragdoll` (no ragdoll until a fall and no ragdoll
+work, hand-off continuity within 3 cm of a frame's travel, velocity carried, a blow's direction,
+powered then limp, recovery placement and blend continuity within 3 cm at the start and 1 mm at
+the end, passable ground, removal, falling twice), `test_physics_character_steps` (a change of
+height is not drawn as a move); hill-runner `tests/test_ragdoll.py` (state sequence, tumble and
+blend lengths, pelvis continuity at all four changes within a frame's travel plus 0.1 m for each
+kind of obstacle, down the hill on open ground, getting up short of a log, crash, no ragdoll
+work while running, a model-less runner as before). Each was seen failing before its change.
+The hill runner has no image baselines, so there is no capture.
+
+Limits: the hit's blow is the rules' (`game.BLOWS`), not a contact's impulse; the bones take the
+capsule's velocity and not each limb's animated velocity; joint transforms (attachments) stay at
+the animated pose while a ragdoll or a blend draws the figure.
 
 ## 7. Decisions
 
