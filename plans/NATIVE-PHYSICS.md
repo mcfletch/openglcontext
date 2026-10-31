@@ -1226,6 +1226,80 @@ marble-demo's suite passes on both engines (941 tests each); marble-editor's 165
   applied a frame before the chute reads it (Jolt applies a step's commands after its
   callbacks return); a driven body's velocity within float32's 1e-6.
 
+### Follow-ups as built (2026-10-31)
+
+Branch `jolt-followups` on `openglcontext`; `pyjoltphysics` `develop` d178674 to 9d71f83; the
+workspace root b1e4c65.
+
+- Settled worlds. pyjoltphysics counts lockstep ticks without stepping once a world is quiet: no
+  awake body, character, kinematic track or target, motor torque or step callback, and two
+  stepped ticks in a row that applied no batch and made no contact report (the tick after bodies
+  fall asleep reports their contacts' removal, so the third is the first quiet one).
+  `run_ticks(n)` then advances the tick count and time and publishes once on the calling thread;
+  `stats()['quiet_ticks']` counts them. A woken world matches one stepped through every tick
+  bitwise (pyjoltphysics and engine tests). `Snapshot.rows_of` looks uids up in an array indexed
+  by uid (the dict built per snapshot cost 0.5 ms at 11,000 bodies). `JoltEngine._publish`
+  republishes the last snapshot with the new tick where nothing was live, nothing applied and the
+  tick wrote no row. `bench.py` frame cost in ms (Jolt before is this branch's base with
+  pyjoltphysics 5969b84; the machine was shared, so the active cases are the lowest of four
+  runs):
+
+  | Case | omi | Jolt before | Jolt after |
+  |---|---|---|---|
+  | d100s (100 settled boxes) | 0.014 | 0.136 | 0.013 |
+  | d1000s | 0.045 | 0.328 | 0.023 |
+  | d1000s_10k | 0.046 | 0.753 | 0.023 |
+  | d100 (100 boxes awake) | 16.95 | 0.380 | 0.286 |
+  | d1000 | 174.1 | 2.233 | 1.013 |
+  | k30 (30 characters) | 7.31 | 1.054 | 0.920 |
+- Tick rate. Chosen: interpolate. A Jolt frame that owes no tick draws moving bodies between the
+  tick before the newest and the newest at the frame's alpha, as omi's inline worker does; four
+  frames a tick move a body a quarter tick each on both engines. `tickHz` stays the simulation
+  rate; `poses(interpolated=False)`, `step_position` and owner-stepped characters advance by
+  whole ticks (documented on `PhysicsDefinition.tickHz` and in docs/physics.rst).
+- Aliases removed: `Physics.world`, `backend`, `BACKENDS`, `slot_of`, `body_at`, `index_of`,
+  `run`, `Character.controller`, `Proxy.shape`; `Character.state` is a `CharacterState` on both
+  engines, and `omi_adapter.engine_character_state` is gone. A workspace search (games, editors,
+  forest, qt, downstream; working trees included) found no remaining use. The private forms stay
+  for `OpenGLContext.testing.physics`.
+- pyjoltphysics: `ruff format` over four files; `tox -e typecheck` installs the `test` extra.
+  Preflight's typecheck environment installed projects without extras, so pyjoltphysics' typecheck
+  of its tests found no pytest. A typecheck run in `tools/preflight.toml` now names `extras`
+  (`["test"]` for pyjoltphysics) and the environment installs the project with them; verified in a
+  private environment (`mypy src/pyjoltphysics tests`: no issues in 43 files). The shared
+  `.preflight-venv` needs `tools/preflight.py --rebuild-env --only typecheck` once.
+- X3D rigid bodies. No tutorial in `tests/tutorials` and no reference image holds a
+  RigidBodyPhysics scene; the frames measured at P4 are `oglc-x3d-rigidbody`'s, which its unit
+  test checks by numbers on both engines. Per part of that scene, the divergence of a 1 mm nudge
+  to every body against the omi-Jolt difference, at 4 s:
+
+  | Part | nudge, omi | nudge, Jolt | omi against Jolt | Verdict |
+  |---|---|---|---|---|
+  | crate heap (5) | 1.32 m | 0.32 m | 0.80 m | chaotic |
+  | dumbbell | 0.23 m | 0.29 m | 0.27 m | chaotic (balanced on its middle) |
+  | ball bounce | 0.6 mm | 0.7 mm | 0.77 m | deterministic |
+  | door and stop | 2.8 mm | 2.2 mm | 0.70 m | deterministic |
+  | chain (3 links) | 4.0 mm | 3.2 mm | 35 mm at 2 s | deterministic |
+  | piston slider | 1.0 mm | 1.0 mm | 24 mm | deterministic |
+  | cardan shaft | 1.0 mm | 1.0 mm | 0.6 mm | agree |
+  | wheel, statics | equal | equal | 0 | agree |
+
+  The deterministic differences, looked into: the ball meets the floor at 7.84 m/s with the
+  sensor's bounce 0.85; Jolt sends it back at 6.72 m/s (0.857), omi at 5.94 m/s (0.758), so
+  omi's contact restitution under-bounces. The door hits its stop (`stopBounce` 0.4) at about
+  2.5 rad/s; omi returns it at 0.49 rad/s and Jolt at 0.12 rad/s, because `x3djolt` does not
+  apply `stopBounce` (documented in docs/x3d.rst). The chain and piston differences follow
+  the solvers' joint softness and were not traced further. No Jolt reference image was added: a
+  capture of the whole scene holds two chaotic parts, and the deterministic parts are checked by
+  numbers.
+
+Left:
+
+- `stopBounce` on Jolt joints (hinge, slider, double-axis hinge): a per-tick velocity reversal
+  at the limit in `x3djolt`.
+- omi's contact restitution at bounce 0.85 (0.758 measured).
+- Free-running (`thread`) settled worlds: T_d1000s is unchanged by this work.
+
 ## 7. Decisions
 
 Decided 2026-10-30: each recommendation below was accepted as written. On 5 the answer was to
