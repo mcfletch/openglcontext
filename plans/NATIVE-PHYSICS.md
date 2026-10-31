@@ -1341,14 +1341,26 @@ Branch `jolt-default` on `openglcontext`; `pyjoltphysics` `omi-golden` (3842fbc)
   `loaders/tiles3d/physics_colliders.TerrainColliders`, `PhysicsViewPlatform(world)` (raise
   `EngineUnavailable`); `PhysicsWalkMixin.ensurePhysicsWorld` (logs, returns False, the
   camera stays in free flight); `scenegraph/x3drigidbody.py` (`RigidBodyCollection` and
-  `CollisionSensor` log once and stay still); `debugdraw.py` (only the omi engine draws the
-  overlay, as at P4).
+  `CollisionSensor` log once and stay still); `debugdraw.PhysicsDebugDraw` (raises).
+  `nav.navmesh.from_world` reads an omi world's arrays and needs one to be handed it.
+- `show_proxies` draws on either engine: `debugdraw.ProxyOverlay` places a unit box or sphere
+  wireframe per box and sphere body from the service's shapes and `physics.poses`.
 - `tests/unit/test_physics_without_omi.py` runs child interpreters in which importing
   omi_physics raises: the default engine, the `EngineUnavailable` message, a world with a
-  floor, a crate, a walking character and a ray, the 22 engine modules a program on Jolt
+  floor, a crate, a walking character and a ray, the 23 engine modules a program on Jolt
   imports, and the isolated features naming the extra. The `engines` marker skips an engine
   whose package is absent, naming it; omi_physics is installed in this workspace, so the omi
-  engine's tests run here.
+  engine's tests run here. The tests of omi-world parts skip without omi_physics, with the
+  reason: `tests/unit/omi.requires_omi` on tests and modules (the walk mixin, viewpoint
+  walking, X3D rigid bodies and Collision outputs, the collision world, a landscape's omi
+  shape, baked props on a world, the nav mesh from a world), module `importorskip` where omi
+  is the module's reference or subject (`test_physicsplatform`, `test_road_colliders`,
+  `test_heightfield_colliders`, `test_prop_colliders`, `test_physics_debugdraw`,
+  `test_physics_backend`, `test_safe_bind`, `test_physics_spawn_where_you_are`,
+  `test_swim_platform`, the tile collider tests, `test_physics_neutral_types`,
+  `test_physics_worker`, `test_x3d_rigid_body`), and `collect_ignore` for the three modules
+  that import the omi engine's own modules (`test_physics_runtime`, `test_physics_frame_cost`,
+  `test_physics_sweep_steps`). With omi_physics blocked the unit suite passes: 17,129 passed and 972 skipped, and the one failure then (the resting X3D rigid bodies of `test_still_frames`) is marked.
 - Golden results. pyjoltphysics' `tests/differential/omi_golden.json` holds omi_physics'
   answers to the 34 scene comparisons of `test_scenes.py` (rest heights on three grounds,
   slides, rebounds, stack, pyramid, stairs, sensors, the bullet, the 1,000-box bin, the
@@ -1387,14 +1399,15 @@ What blocks deleting the omi engine, and what the deletion then is:
    `CollisionSensor` touches with omi's narrow phase (`collide`); `x3djolt.JoltRigidSystem`
    subclasses `RigidSystem` and converts those shapes. Needs shapes as `Proxy` and the
    sensor's touches from a pyjoltphysics world (or `World.overlap`) before omi goes.
-4. The proxy overlay (`debugdraw.py`) draws omi's world arrays; a neutral overlay draws the
-   service's specs and `physics.poses`.
+4. Tests that use omi_physics as their reference (the collider modules above that ray-cast
+   an omi world or drive omi's `RaycastVehicle` over the colliders) are rewritten onto the
+   service's queries on Jolt, or their omi answers recorded as pyjoltphysics' are.
 5. pyjoltphysics' `test_p3.py`, `test_characters.py` and `test_smoke.py` compared live; their
    omi answers are recorded the way `test_scenes.py`'s are.
 
 The deletion, once 1 to 5 are done, removes: `physics/omiengine.py`, `omi_adapter.py`,
 `runtime.py`, `worker.py`, `replica.py`, `queries.py`, `x3drigid.py`'s omi `RigidSystem` (the
-shape building moves to `Proxy`), `debugdraw.py`'s omi reads, `gltf_world.collision_world_from_scene`
+shape building moves to `Proxy`), `debugdraw.PhysicsDebugDraw`, `nav.navmesh.from_world`, `gltf_world.collision_world_from_scene`
 and `collision_groups`, `props.PropColliders`, `loaders/tiles3d/physics_colliders.py`,
 `zones.gravity_volumes` and `GravityZones`, `PhysicsViewPlatform.__init__`'s world path,
 `engine.require_omi`, `OMI_EXTRA` and the `omi` extra, `'omi'` from `settings.ENGINES` and
@@ -1403,6 +1416,7 @@ and `collision_groups`, `props.PropColliders`, `loaders/tiles3d/physics_collider
 `_bring_up*`, `stand_in_proxy`, `Engine.build_replica`, `proxy_bounds`, `push_reach`,
 `stand_ins`), `OpenGLContext.testing.physics`'s omi readers (`inspect`, `run`, `slot_of`,
 `body_at`), every test marked `engines('omi', ...)` and the `omi` parameter of the others,
+`tests/unit/omi.py` with the tests it marks, the guarded modules and `collect_ignore` above,
 the omi live check in pyjoltphysics' `engines.reference`, and the docs' "The omi engine
 (deprecated)" section.
 
