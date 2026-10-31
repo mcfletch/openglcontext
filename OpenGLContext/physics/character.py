@@ -34,14 +34,12 @@ from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 
 import numpy as np
-from omi_physics.character import CharacterController
 
 from OpenGLContext.character.facing import Facing
 from OpenGLContext.character.locomotion import Locomotion, LocomotionInput
 
 from OpenGLContext.physics.checks import number
 from OpenGLContext.physics.handlers import weak_reference
-from OpenGLContext.physics.omi_adapter import character_state
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.types import CharacterCapabilities, CharacterState
 
@@ -174,7 +172,7 @@ class Character:
         """Whether the character is moving, falling or being told to move, so the frame is not idle."""
         controller = self._controller
         return bool(not controller.grounded
-                    or character_state(controller.state) is not CharacterState.STANDING
+                    or _state(controller.state) is not CharacterState.STANDING
                     or np.any(controller.velocity) or np.any(controller.move_dir)
                     or np.any(controller.push) or controller.landing is not None)
 
@@ -237,12 +235,12 @@ class Character:
     @property
     def state(self) -> CharacterState:
         """What the character is doing: standing, crouching, sliding, airborne, down, swimming, flying."""
-        return character_state(self._controller.state)
+        return _state(self._controller.state)
 
     @property
     def motion_state(self) -> CharacterState:
         """What the character is doing, as a :class:`~OpenGLContext.physics.types.CharacterState` member."""
-        return character_state(self._controller.state)
+        return _state(self._controller.state)
 
     @property
     def vertical_speed(self) -> float:
@@ -693,7 +691,7 @@ class Character:
         """How far the stand-in's box, grown by ``grow`` metres, reaches from its centre: across,
         and up and down."""
         caps = self.capabilities
-        across = caps.radius + CharacterController.PUSH_REACH + grow
+        across = caps.radius + self.physics._engine.push_reach + grow
         return across, 0.5 * max(caps.standHeight - 2.0 * caps.radius, 1e-3) + across
 
     def _stand_in_box(self, centre: Any, grow: float) -> tuple[np.ndarray, np.ndarray]:
@@ -720,6 +718,11 @@ class Character:
                 self.physics.log_handler_failure(function, argument)
         if event in self._listeners:
             self._listeners[event] = kept
+
+
+def _state(state: Any) -> CharacterState:
+    """A controller's ``state``, an enumeration member of the same name, as a :class:`CharacterState`."""
+    return CharacterState[state.name]
 
 
 def stand_in_proxy(capabilities: CharacterCapabilities, reach: float) -> Proxy:

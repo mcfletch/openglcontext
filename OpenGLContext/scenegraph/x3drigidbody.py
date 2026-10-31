@@ -1,9 +1,12 @@
 """X3D's RigidBodyPhysics nodes, on the engine's clock -- docs/x3d.rst
 
-A `RigidBodyCollection` simulates its bodies on omi_physics
-(:class:`~OpenGLContext.physics.x3drigid.RigidSystem`) and a
-`CollisionSensor` reports the touches among its collider's collidables
-(:func:`~OpenGLContext.physics.x3drigid.detect`). Bound to contexts, each
+A `RigidBodyCollection` simulates its bodies on the engine the physics
+definition names (:func:`~OpenGLContext.physics.x3djolt.make_rigid_system`)
+and a `CollisionSensor` reports the touches among its collider's collidables
+(:func:`~OpenGLContext.physics.x3drigid.detect`). Both build their shapes
+with omi_physics' model, so they need the deprecated omi_physics (the ``omi``
+extra); without it a collection or sensor logs that once and stays still.
+Bound to contexts, each
 steps once a frame through the context's render queue, on the engine's clock
 (:class:`~OpenGLContext.scenegraph.x3druntime.EngineTimed`), for as long as
 the context draws the scene the node is in, and a collection asks for frames
@@ -16,19 +19,25 @@ the collection reads.
 """
 from __future__ import annotations
 
+import logging
 import weakref
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from vrml import cache
 from vrml.vrml97 import nodetypes, transformmatrix
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.events.renderqueue import DEFER
-from OpenGLContext.physics import x3drigid
+from OpenGLContext.physics.engine import EngineUnavailable, require_omi
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.x3druntime import EngineTimed
 
+if TYPE_CHECKING:
+    from OpenGLContext.physics import x3drigid
+
 __all__ = ['CollidableOffset', 'CollidableShape', 'CollisionSensor', 'RigidBodyCollection']
+
+log = logging.getLogger(__name__)
 
 
 class _Collidable(nodetypes.Transforming):
@@ -136,8 +145,23 @@ class _Stepped(EngineTimed):
         raise NotImplementedError
 
 
+def _rigid(node: Any) -> Any:
+    """:mod:`OpenGLContext.physics.x3drigid`, or None, logged once for ``node``, without omi_physics."""
+    if node.__dict__.get('_unavailable'):
+        return None
+    try:
+        require_omi('X3D %s' % (type(node).__name__,))
+    except EngineUnavailable as error:
+        node.__dict__['_unavailable'] = True
+        log.warning('%s', error)
+        return None
+    from OpenGLContext.physics import x3drigid  # noqa: PLC0415 omi_physics loads on use
+
+    return x3drigid
+
+
 class RigidBodyCollection(_Stepped, x3d.RigidBodyCollection):
-    """X3D's RigidBodyCollection, simulated on omi_physics
+    """X3D's RigidBodyCollection, simulated on the physics definition's engine
 
     Steps its bodies once a frame to the engine's time; a scene's capture,
     on a fixed-step clock, steps them the same way every run.
@@ -170,6 +194,8 @@ class RigidBodyCollection(_Stepped, x3d.RigidBodyCollection):
         now = self.now()
         last = self.__dict__.get('_steppedAt')
         self.__dict__['_steppedAt'] = now
+        if _rigid(self) is None:
+            return False
         return self.advance(0.0 if last is None else now - last)
 
 
@@ -184,8 +210,11 @@ class CollisionSensor(_Stepped, x3d.CollisionSensor):
 
     def sense(self) -> None:
         """Find the touches as the collidables stand, and send them"""
+        x3drigid = _rigid(self)
+        if x3drigid is None:
+            return
         if not self.enabled or not self.collider:
-            touches: list[x3drigid.Touch] = []
+            touches: list[Any] = []
         else:
             kept = self.__dict__.setdefault('_kept', {})
             touches = x3drigid.detect(self.collider, kept)

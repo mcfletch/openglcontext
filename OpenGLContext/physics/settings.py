@@ -30,8 +30,9 @@ COLLIDERS = ('scene', 'explicit', 'none')
 #: compute past a count of awake bodies; ``numpy`` and ``cpu`` stay on NumPy;
 #: ``gpu`` and ``glcompute`` use GL 4.3 compute on the stepping thread.
 BACKENDS = ('auto', 'numpy', 'cpu', 'gpu', 'glcompute')
-#: The engines that step a world: omi_physics, or Jolt through pyjoltphysics.
-ENGINES = ('omi', 'jolt')
+#: The engines that step a world: Jolt through pyjoltphysics, or omi_physics
+#: (deprecated: the ``omi`` extra, for programs that still name it).
+ENGINES = ('jolt', 'omi')
 
 
 def default_backend() -> str:
@@ -40,12 +41,12 @@ def default_backend() -> str:
 
 
 def default_engine() -> str:
-    """``OPENGLCONTEXT_PHYSICS_ENGINE``, one of :data:`ENGINES`, else ``omi``.
+    """``OPENGLCONTEXT_PHYSICS_ENGINE``, one of :data:`ENGINES`, else ``jolt``.
 
     Read once a process, so a game's whole suite runs on one engine when the
     variable is set for the run.
     """
-    return renderoptions.env_choice_once('OPENGLCONTEXT_PHYSICS_ENGINE', ENGINES, {}, 'omi')
+    return renderoptions.env_choice_once('OPENGLCONTEXT_PHYSICS_ENGINE', ENGINES, {}, 'jolt')
 
 
 class PhysicsDefinition(node.Node):
@@ -64,11 +65,13 @@ class PhysicsDefinition(node.Node):
     mode = field.newField(
         'mode', 'SFString', 1,
         lambda: renderoptions.env_choice('OPENGLCONTEXT_PHYSICS_MODE', MODES, {}, 'thread'))
-    #: The compute backend the world steps with, one of :data:`BACKENDS`
-    #: (env: OPENGLCONTEXT_PHYSICS_BACKEND).
+    #: The omi engine's compute backend, one of :data:`BACKENDS`
+    #: (env: OPENGLCONTEXT_PHYSICS_BACKEND). The Jolt engine reads none.
     backend = field.newField('backend', 'SFString', 1, default_backend)
     #: The engine that steps the world, one of :data:`ENGINES`
-    #: (env: OPENGLCONTEXT_PHYSICS_ENGINE). ``jolt`` needs pyjoltphysics.
+    #: (env: OPENGLCONTEXT_PHYSICS_ENGINE). ``jolt``, the default, is
+    #: pyjoltphysics, which OpenGLContext requires; ``omi`` needs the deprecated
+    #: omi_physics, installed by ``pip install OpenGLContext[omi]``.
     engine = field.newField('engine', 'SFString', 1, default_engine)
     #: The fixed step, in steps a second, in both modes. A frame shorter than a
     #: step draws moving bodies between the last two steps.

@@ -12,13 +12,15 @@ import json
 import sys
 from typing import Any
 
-from omi_physics import model
-
 from OpenGLContext import atomicfiles
+
+#: The OMI ``motion.type`` values a cooked collider takes.
+STATIC = 'static'
+DYNAMIC = 'dynamic'
 
 
 def cook_document(
-    gltf: dict[str, Any], motion_type: str = model.STATIC, mass: float = 1.0
+    gltf: dict[str, Any], motion_type: str = STATIC, mass: float = 1.0
 ) -> tuple[dict[str, Any], int]:
     """Add OMI shapes + colliders to mesh nodes lacking a physics body.
 
@@ -33,7 +35,7 @@ def cook_document(
         if name not in used:
             used.append(name)
 
-    shape_type = 'trimesh' if motion_type == model.STATIC else 'convex'
+    shape_type = 'trimesh' if motion_type == STATIC else 'convex'
     shape_for_mesh: dict[int, int] = {}
 
     def shape_index(mesh: int) -> int:
@@ -51,10 +53,10 @@ def cook_document(
         if 'OMI_physics_body' in node_ext:
             continue
         body: dict[str, Any] = {'collider': {'shape': shape_index(mesh)}}
-        if motion_type != model.STATIC:
+        if motion_type != STATIC:
             body['motion'] = {'type': motion_type, 'mass': mass}
         else:
-            body['motion'] = {'type': model.STATIC}
+            body['motion'] = {'type': STATIC}
         node_ext['OMI_physics_body'] = body
         count += 1
     return gltf, count
@@ -64,8 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('input', help='input .gltf document')
     parser.add_argument('-o', '--output', help='output path (default: overwrite)')
-    parser.add_argument('--motion', choices=[model.STATIC, model.DYNAMIC],
-                        default=model.STATIC, help='body type for cooked colliders')
+    parser.add_argument('--motion', choices=[STATIC, DYNAMIC],
+                        default=STATIC, help='body type for cooked colliders')
     parser.add_argument('--mass', type=float, default=1.0)
     args = parser.parse_args(argv)
 

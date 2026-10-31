@@ -1,7 +1,7 @@
 """``PhysicsViewPlatform`` — a walk-with-gravity camera.
 
-A subclass-free companion to the free-fly :class:`ViewPlatform`: it owns a
-:class:`~omi_physics.character.CharacterController` capsule and turns
+A subclass-free companion to the free-fly :class:`ViewPlatform`: it drives a
+character capsule and turns
 navigation input into desired velocity / jump, then drives a context's camera
 from the solved capsule pose.  It also runs **safe viewpoint binding**
 (depenetration + ground snap) on bind, so a camera placed low or inside geometry
@@ -19,7 +19,7 @@ from typing import Any, ClassVar, Optional
 import numpy as np
 
 from OpenGLContext import quaternion
-from omi_physics.character import CharacterController, CharacterCapabilities
+from OpenGLContext.physics.types import CharacterCapabilities
 
 
 class PhysicsViewPlatform:
@@ -28,15 +28,27 @@ class PhysicsViewPlatform:
                  gravity: float = 9.81, body: bool = False) -> None:
         """Walk a capsule of ``capabilities`` in ``world``, starting at ``position``.
 
+        ``world`` is an omi_physics ``PhysicsWorld``, and the capsule its
+        controller, so this needs the deprecated omi_physics (the ``omi``
+        extra). :meth:`over` drives a character of the physics service on
+        any engine.
+
         ``body`` gives the walker a body in the world: a sensor capsule that
         enters trigger volumes and whose touches with moving bodies are
         reported, without pushing or being pushed (:attr:`body`). Each update
         places that body in the world, so a world stepped on another thread
         is updated on that thread.
         """
+        from OpenGLContext.physics.engine import require_omi  # noqa: PLC0415 the omi world loads on use
+
+        require_omi('PhysicsViewPlatform over its own world')
+        from omi_physics.character import CharacterController  # noqa: PLC0415 the omi world loads on use
+
+        from OpenGLContext.physics.omi_adapter import omi_capabilities  # noqa: PLC0415 the omi world loads on use
+
         self.character = CharacterController(
-            world, capabilities or CharacterCapabilities(), position, gravity=gravity,
-            body=body)
+            world, omi_capabilities(capabilities or CharacterCapabilities()), position,
+            gravity=gravity, body=body)
         self.yaw = yaw
         self.pitch = 0.0
         #: The service character this platform reads, where the physics service steps it.

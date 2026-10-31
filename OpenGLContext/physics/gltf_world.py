@@ -2,21 +2,27 @@
 
 Walks a scenegraph, pulls the world-space triangles out of every mesh, and adds
 them as a static ``trimesh`` collider so a character can walk on and bump into the
-model.  If the document carries OMI physics bodies those are honoured directly
-(via :mod:`omi_physics.omi_gltf`); otherwise the whole model becomes one
-static collision mesh.  Used by the ``oglc-gltf`` viewer's walk-around mode.
+model.  A node that carries an OMI physics body
+(:mod:`OpenGLContext.physics.omigltf`) is met as itself.
+
+:func:`collision_world_from_scene` builds an omi_physics world, the one the
+viewer's walk-around mode (:class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin`)
+steps; it needs the deprecated omi_physics (the ``omi`` extra). The rest of
+the module is the scenegraph walk the physics service's scenery and proxies use.
 """
+from __future__ import annotations
+
 import weakref
 from collections.abc import Callable, Iterator
-from typing import Any, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 import numpy as np
 from vrml.x3d import nodes as x3d
 
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
-
 from OpenGLContext.physics.settings import default_backend
 from OpenGLContext.scenegraph import coordinates
+
+if TYPE_CHECKING:
+    from omi_physics.world import PhysicsWorld
 
 
 def _local_matrix(node: Any) -> np.ndarray:
@@ -297,7 +303,7 @@ def _merged(buckets: dict[tuple[Any, ...], _Bucket]) -> Optional[tuple[np.ndarra
 
 
 #: Each world's X3D Collision groups, by the static body their geometry is.
-_GROUPS: 'weakref.WeakKeyDictionary[PhysicsWorld, dict[int, list[Any]]]' = (
+_GROUPS: weakref.WeakKeyDictionary[PhysicsWorld, dict[int, list[Any]]] = (
     weakref.WeakKeyDictionary())
 
 
@@ -352,6 +358,12 @@ def collision_world_from_scene(
     box-ifies sub-components at or below that world-space size (see
     :func:`extract_trimesh`) to speed up loading of large multi-part scenes.
     """
+    from OpenGLContext.physics.engine import require_omi  # noqa: PLC0415 the omi world loads on use
+
+    require_omi('the walk-around collision world')
+    from omi_physics import model  # noqa: PLC0415 the omi world loads on use
+    from omi_physics.world import PhysicsWorld  # noqa: PLC0415 the omi world loads on use
+
     world = PhysicsWorld(gravity=model.Gravity(gravity=gravity, direction=(0, -1, 0)),
                          default_linear_damping=0.2, default_angular_damping=1.0,
                          backend=default_backend())

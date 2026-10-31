@@ -42,14 +42,12 @@ from OpenGLContext.physics.checks import number, vector
 from OpenGLContext.physics.callbacks import is_physics_callback
 from OpenGLContext.physics.colliders import SceneryTracker
 from OpenGLContext.physics.events import Collision
-from OpenGLContext.physics import queries
 from OpenGLContext.physics.filters import Approach, Filters
 from OpenGLContext.physics.handlers import NAME_OF, STEP_EVENTS, Handler, HandlerTable
 from OpenGLContext.physics.joints import READINGS, Joint, make_joint
 from OpenGLContext.physics.materials import Materials
 from OpenGLContext.physics.poses import quat_to_vrml_rotation, vrml_rotation_to_quat, write_poses
 from OpenGLContext.physics.proxy import DEFAULT_DENSITY, Proxy
-from OpenGLContext.physics.replica import Replica, build
 from OpenGLContext.physics.records import (
     BodyBatch, BodySpec, Command, Motion, PhysicsEvent, Snapshot, Step,
 )
@@ -144,7 +142,7 @@ class Physics:
         self.scenery = SceneryTracker(self)
         #: The spec of each body in the world, to build the replica from when queries need it.
         self._specs: dict[int, BodySpec] = {}
-        self._replica: Replica | None = None
+        self._replica: Any = None
         self._characters: list[Character] = []
         #: The fixed steps the characters owe each frame where the world steps on its own thread.
         self._character_clock = FixedSteps(1.0 / float(definition.tickHz),
@@ -761,13 +759,13 @@ class Physics:
 
     def show_proxies(self, on: bool = True) -> None:
         """Draw the collision shapes, to see what the world collides with; False takes the drawing out."""
-        from OpenGLContext.physics.debugdraw import PROXIES, PhysicsDebugDraw  # noqa: PLC0415 imports the scenegraph
-
         if on and self._overlay is None and self._mount is not None:
             if not self._engine.stand_ins:
                 log.warning('the proxy overlay draws the omi engine\'s copy of the world; '
                             'the %s engine has none', self._engine.name)
                 return
+            from OpenGLContext.physics.debugdraw import PROXIES, PhysicsDebugDraw  # noqa: PLC0415 the omi engine's overlay
+
             self._bring_up_all()
             self._overlay = PhysicsDebugDraw(self._character_replica().world, flags=PROXIES)
             self._overlay.update()
@@ -843,10 +841,10 @@ class Physics:
         """The characters in the world, in the order they were added."""
         return tuple(self._characters)
 
-    def _character_replica(self) -> Replica:
+    def _character_replica(self) -> Any:
         """The render thread's copy of the bodies, made on first use; characters step against it."""
         if self._replica is None:
-            self._replica = build(self._specs, self._snapshot)
+            self._replica = self._engine.build_replica(self._specs, self._snapshot)
         return self._replica
 
     def _register_body(self, kind: str, proxy: Proxy, centre: Any) -> Body:
@@ -1697,7 +1695,7 @@ class Physics:
         quaternion = (np.array([0.0, 0.0, 0.0, 1.0]) if rotation is None
                       else vrml_rotation_to_quat(rotation))
         if self._engine.stand_ins:
-            self._bring_up_within(*queries.proxy_bounds(proxy, translation, quaternion), skip)
+            self._bring_up_within(*self._engine.proxy_bounds(proxy, translation, quaternion), skip)
         found = self._engine.overlap(proxy, translation, quaternion, self._skipped(skip), triggers)
         bodies = [self._body_of(uid) for uid in found]
         return [body for body in bodies if body is not None]

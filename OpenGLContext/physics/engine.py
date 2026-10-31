@@ -5,14 +5,15 @@ handlers and the scene in step with the world. Everything it asks of the world
 goes through an :class:`Engine`: the commands, stepping and publishing, live
 reads on the stepping thread, queries, joint readings, characters and state.
 
-Two engines implement it. ``'omi'``
-(:class:`~OpenGLContext.physics.omiengine.OmiEngine`) steps an omi_physics
-world inline in the frame or on a Python thread. ``'jolt'``
-(:class:`~OpenGLContext.physics.joltengine.JoltEngine`) steps a Jolt world
+Two engines implement it. ``'jolt'``, the default
+(:class:`~OpenGLContext.physics.joltengine.JoltEngine`), steps a Jolt world
 from pyjoltphysics on its native world thread: free-running at the tick rate,
 or in lockstep with the frame, which runs exactly the ticks the frame owes.
-``PhysicsDefinition.engine`` chooses (env: OPENGLCONTEXT_PHYSICS_ENGINE);
-:func:`make_engine` makes the one it names.
+``'omi'`` (:class:`~OpenGLContext.physics.omiengine.OmiEngine`) steps an
+omi_physics world inline in the frame or on a Python thread; omi_physics is
+deprecated and is installed only by the ``omi`` extra, for programs that still
+name it. ``PhysicsDefinition.engine`` chooses (env:
+OPENGLCONTEXT_PHYSICS_ENGINE); :func:`make_engine` makes the one it names.
 """
 from __future__ import annotations
 
@@ -29,10 +30,28 @@ from OpenGLContext.physics.types import EngineInfo, WorldCounts
 if TYPE_CHECKING:
     from OpenGLContext.physics.proxy import Proxy
 
-__all__ = ['ENGINES', 'Engine', 'EngineUnavailable', 'LivePose', 'Outbox', 'RawHit', 'make_engine']
+__all__ = ['ENGINES', 'OMI_EXTRA', 'Engine', 'EngineUnavailable', 'LivePose', 'Outbox', 'RawHit',
+           'make_engine', 'require_omi']
+
+#: What installs omi_physics beside the engine.
+OMI_EXTRA = 'pip install OpenGLContext[omi]'
 
 class EngineUnavailable(RuntimeError):
     """The engine a definition names cannot be made here: its package is not installed."""
+
+
+def require_omi(feature: str) -> None:
+    """Raise :class:`EngineUnavailable` naming ``feature`` where omi_physics cannot be imported.
+
+    The parts of the engine still built on an omi_physics world call this
+    before they make one, so a program without the ``omi`` extra is told
+    which extra to install.
+    """
+    try:
+        import omi_physics  # noqa: F401, PLC0415 asked when a feature is used
+    except ImportError as error:
+        raise EngineUnavailable('%s needs the deprecated omi_physics (%s); install it with %s'
+                                % (feature, error, OMI_EXTRA)) from error
 
 
 class Outbox(NamedTuple):
@@ -72,6 +91,9 @@ class Engine(abc.ABC):
     name: str = ''
     #: Whether a character stands in the world as a kinematic body the service places.
     stand_ins: bool = False
+    #: How far beyond its capsule a character's controller meets the bodies it pushes, in
+    #: metres; the stand-in's box reaches this far.
+    push_reach: float = 0.0
 
     def __init__(self, definition: PhysicsDefinition) -> None:
         self.definition = definition
@@ -222,6 +244,16 @@ class Engine(abc.ABC):
                        gravity: float) -> tuple[Any, Any]:
         """The body and the controller of a new character with its capsule's centre at ``centre``."""
 
+    # -- stand-ins (an engine whose characters step against a copy of the bodies) --
+    def build_replica(self, specs: dict[int, Any], published: Snapshot | None) -> Any:
+        """The render thread's copy of the bodies ``specs`` holds, posed as ``published`` left them."""
+        raise NotImplementedError('the %s engine keeps no copy of the bodies' % (self.name,))
+
+    def proxy_bounds(self, proxy: Proxy, position: Any,
+                     quaternion: Any) -> tuple[np.ndarray, np.ndarray]:
+        """The world box of ``proxy`` at ``position`` turned by ``quaternion``, as the copy holds it."""
+        raise NotImplementedError('the %s engine keeps no copy of the bodies' % (self.name,))
+
     # -- state ------------------------------------------------------------
     def save_state(self) -> bytes:
         """The world's bodies and joints as bytes :meth:`restore_state` reads back."""
@@ -256,12 +288,16 @@ def make_engine(definition: PhysicsDefinition, wake: Callable[[], Any] | None = 
     """
     if definition.engine == 'jolt':
         try:
-            from OpenGLContext.physics.joltengine import JoltEngine  # noqa: PLC0415 pyjoltphysics is optional
+            from OpenGLContext.physics.joltengine import JoltEngine  # noqa: PLC0415 the engine loads on use
         except ImportError as error:
             raise EngineUnavailable(
                 "PhysicsDefinition.engine is 'jolt' and pyjoltphysics cannot be imported (%s); "
-                'install pyjoltphysics or choose the omi engine' % (error,)) from error
+                'OpenGLContext requires pyjoltphysics: install it' % (error,)) from error
         return JoltEngine(definition, wake=wake)
-    from OpenGLContext.physics.omiengine import OmiEngine  # noqa: PLC0415 omi_physics loads with its engine
-
+    try:
+        from OpenGLContext.physics.omiengine import OmiEngine  # noqa: PLC0415 omi_physics loads with its engine
+    except ImportError as error:
+        raise EngineUnavailable(
+            "PhysicsDefinition.engine is 'omi' and omi_physics cannot be imported (%s); "
+            'install it with %s, or choose the jolt engine' % (error, OMI_EXTRA)) from error
     return OmiEngine(definition, wake=wake)

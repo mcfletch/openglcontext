@@ -16,12 +16,16 @@ Tracking the drawn set also bounds the working set: a session that drives across
 a map for an hour costs what one view of it costs.
 `PhysicsWorld.remove_body` frees the slot for the next tile to arrive in; a
 world without that call keeps the body and is told so, once.
+
+The world is an omi_physics ``PhysicsWorld``, which needs the deprecated
+omi_physics (the ``omi`` extra); a physics service streams tile ground through
+its own collider sources (:mod:`OpenGLContext.physics.sources`).
 """
 import logging
 from typing import TYPE_CHECKING, Any
 
-from omi_physics import model
 from OpenGLContext.physics import gltf_world
+from OpenGLContext.physics.engine import require_omi
 
 if TYPE_CHECKING:
     from omi_physics.world import PhysicsWorld
@@ -33,6 +37,7 @@ class TerrainColliders:
     """Static trimesh colliders for the tiles a streamer is drawing."""
 
     def __init__(self, world: "PhysicsWorld", min_hull_size: float = 0.0) -> None:
+        require_omi('TerrainColliders')
         self.world = world
         self.min_hull_size = min_hull_size
         #: Each tile's body index, keyed by the tile, which hashes by identity.
@@ -67,6 +72,8 @@ class TerrainColliders:
         points, indices = extracted
         if len(indices) == 0:
             return
+        from omi_physics import model  # noqa: PLC0415 the omi world loads on use
+
         shape = self.world.add_shape(model.Shape.trimesh(points, indices))
         body = self.world.add_body(
             model.Motion(type=model.STATIC),

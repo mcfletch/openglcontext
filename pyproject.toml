@@ -43,7 +43,6 @@ dependencies = [
     "numpy>=2.0",
     "packaging>=22",
     "omi_audio>=0.4.0a3",
-    "omi_physics>=0.4.0",
     "opengl_extrusions>=1.2.1a1",
     "pillow",
     "PyOpenGL>=4.0.0a7",
@@ -54,6 +53,8 @@ dependencies = [
     "TTFQuery>=2.1.1",
     "simpleparse>=3.0.1a2",
     "pygltflib>=1.16",
+    # The physics service's engine: Jolt Physics on its own native thread.
+    "pyjoltphysics",
 ]
 
 [project.optional-dependencies]
@@ -89,6 +90,11 @@ exr = ["OpenEXR>=3.3"]
 # (omi_audio.device). Re-check when a wheel appears; this is a response to a
 # packaging gap and should not outlive it.
 audio = ["omi_audio[playback]"]
+# The deprecated omi_physics engine, for programs that name
+# PhysicsDefinition(engine='omi'), and the parts of the engine still built on
+# its own world (docs/physics.rst#physics-omi). Not in `all`: removed with the
+# omi engine.
+omi = ["omi_physics>=0.4.0"]
 # accelerate is now part of the core install; kept as an empty set so external
 # setups that still request OpenGLContext[accelerate] don't break.
 accelerate = []

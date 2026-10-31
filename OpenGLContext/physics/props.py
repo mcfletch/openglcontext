@@ -12,7 +12,8 @@ whose props near the focus are static bodies of a physics service::
     physics.add_collider_source(stones, focus=lambda: car.position)
 
 :class:`PropColliders` stands the same bodies up in a plain
-:class:`omi_physics.world.PhysicsWorld`, for code with no service.
+:class:`omi_physics.world.PhysicsWorld`, for code with no service; it needs
+the deprecated omi_physics (the ``omi`` extra).
 
 A prop's body comes from the prop's own measurements rather than from the mesh
 in a tile. Tile geometry is level-of-detail geometry that arrives and leaves as
@@ -27,9 +28,8 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from omi_physics import model
 
-from OpenGLContext.physics.omi_adapter import omi_shape
+from OpenGLContext.physics.engine import require_omi
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.sources import Addition, Changes
 
@@ -157,6 +157,7 @@ class PropColliders:
     def __init__(self, world: PhysicsWorld, props: Sequence[Prop],
                  reach: float = REACH_METRES,
                  settled: float = SETTLED_METRES) -> None:
+        require_omi('PropColliders')
         self.world = world
         self.source = PropSource(props, reach=reach, settled=settled)
         self._bodies: dict[Any, int] = {}
@@ -181,6 +182,10 @@ class PropColliders:
 
     def update(self, position: Sequence[float]) -> None:
         """Hold the props within reach of here, and let go of the rest."""
+        from omi_physics import model  # noqa: PLC0415 the omi world loads on use
+
+        from OpenGLContext.physics.omi_adapter import omi_shape  # noqa: PLC0415 the omi world loads on use
+
         changes = self.source.update(position)
         for key in changes.remove:
             self.world.remove_body(self._bodies.pop(key))

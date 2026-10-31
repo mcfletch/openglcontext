@@ -37,6 +37,7 @@ overrides nothing -- so it can be added to any class that offers:
 See [docs/physics.rst](../../docs/physics.rst) and
 ``plans/PHYSICS-COLLISION.md`` §Phase 5.
 """
+import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -47,14 +48,18 @@ from OpenGLContext.move.modes import (
 )
 
 if TYPE_CHECKING:
-    from omi_physics.character import CharacterCapabilities, CharacterController
+    from omi_physics.character import CharacterController
     from omi_physics.world import PhysicsWorld
+
+    from OpenGLContext.physics.types import CharacterCapabilities
 
     from OpenGLContext.physics.x3dcollision import CollisionReporter
     from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
     from OpenGLContext.physics.zones import GravityZones
 
 __all__ = ['PhysicsWalkMixin', 'yaw_from_orientation']
+
+log = logging.getLogger(__name__)
 
 #: World bounds as ``(lo, hi)`` corner arrays.
 Bounds = tuple[Any, Any]
@@ -169,7 +174,9 @@ class PhysicsWalkMixin(object):
         scenegraph, honouring OMI physics bodies where the document carries
         them.  A context with a world of its own -- a terrain heightfield, a
         level format that ships its collision -- overrides this and never
-        touches ``sg``.
+        touches ``sg``. The default world is an omi_physics world: it raises
+        :class:`~OpenGLContext.physics.engine.EngineUnavailable` where the
+        deprecated omi_physics (the ``omi`` extra) is not installed.
         """
         scene = getattr(self, 'sg', None)
         if scene is None:
@@ -199,7 +206,7 @@ class PhysicsWalkMixin(object):
         radius, eye height, step height) sizes it instead, in the world's own
         units.  Override to make the avatar something else.
         """
-        from omi_physics.character import CharacterCapabilities
+        from OpenGLContext.physics.types import CharacterCapabilities
         avatar = self.navigationAvatar
         if avatar is not None:
             radius, eye, step = (float(value) for value in avatar)
@@ -233,10 +240,21 @@ class PhysicsWalkMixin(object):
             definition.navigation = Navigation(modes=walk_fly_modes(scale))
 
     def ensurePhysicsWorld(self) -> bool:
-        """Build the avatar and its world once.  False if nothing is walkable."""
+        """Build the avatar and its world once.
+
+        False if nothing is walkable, and False, with a warning logged, where
+        :meth:`buildPhysicsWorld` needs the deprecated omi_physics and it is
+        not installed.
+        """
         if self.physicsPlatform is not None:
             return True
-        built = self.buildPhysicsWorld()
+        from OpenGLContext.physics.engine import EngineUnavailable  # noqa: PLC0415 imports the physics package
+
+        try:
+            built = self.buildPhysicsWorld()
+        except EngineUnavailable as error:
+            log.warning('walking is not available: %s', error)
+            return False
         if built is None:
             return False
         world, (lo, hi) = built

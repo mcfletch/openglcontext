@@ -16,8 +16,9 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from omi_physics.character import CharacterController
 
-from OpenGLContext.physics import omi_adapter, queries
+from OpenGLContext.physics import omi_adapter, queries, replica
 from OpenGLContext.physics.engine import Engine, LivePose, Outbox, RawHit
 from OpenGLContext.physics.records import Command, Snapshot
 from OpenGLContext.physics.settings import PhysicsDefinition
@@ -38,6 +39,7 @@ class OmiEngine(Engine):
 
     name = 'omi'
     stand_ins = True
+    push_reach = CharacterController.PUSH_REACH
 
     def __init__(self, definition: PhysicsDefinition, wake: Callable[[], Any] | None = None) -> None:
         super().__init__(definition)
@@ -247,13 +249,19 @@ class OmiEngine(Engine):
         uid = self.worker.runtime.world.handle_of(ref)
         return None if uid is None else self.body_of(int(uid))
 
+    # -- stand-ins ----------------------------------------------------------
+    def build_replica(self, specs: dict[int, Any], published: Snapshot | None) -> Any:
+        return replica.build(specs, published)
+
+    def proxy_bounds(self, proxy: Proxy, position: Any,
+                     quaternion: Any) -> tuple[np.ndarray, np.ndarray]:
+        return queries.proxy_bounds(proxy, position, quaternion)
+
     # -- characters -------------------------------------------------------
     def make_character(self, physics: Any, centre: np.ndarray, capabilities: Any,
                        gravity: float) -> tuple[Any, Any]:
-        from omi_physics.character import CharacterController  # noqa: PLC0415 only a character needs it
-
         replica = physics._character_replica()
-        body = physics._add_standin(centre, capabilities, CharacterController.PUSH_REACH)
+        body = physics._add_standin(centre, capabilities, self.push_reach)
         controller = CharacterController(
             replica.query, omi_adapter.omi_capabilities(capabilities), centre, gravity=gravity,
             ignore=[replica.index_of(body.uid), *physics.passable_slots()])

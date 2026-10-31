@@ -60,9 +60,8 @@ from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 from OpenGLContext.physics.landscape import Landscape, NearbyColliders
 
 if TYPE_CHECKING:
-    from omi_physics.character import CharacterCapabilities
-
     from OpenGLContext.physics.character import Character
+    from OpenGLContext.physics.types import CharacterCapabilities
 
     class _WalkHost:
         """The host-context members the walk mixin relies on, supplied by the

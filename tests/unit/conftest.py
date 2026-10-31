@@ -11,6 +11,7 @@ The environment those memos are read from is the shipped plugin's to restore --
 rather than for this directory.
 """
 
+import importlib
 import os
 import shutil
 import stat
@@ -27,19 +28,27 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
     A module marks itself ``pytestmark = pytest.mark.engines('omi', 'jolt')``;
     a test that reads one engine's own machinery narrows it with its own
-    ``@pytest.mark.engines('omi', reason=...)``. The ``jolt`` parameter is
-    left out where pyjoltphysics is not installed.
+    ``@pytest.mark.engines('omi', reason=...)``. An engine whose package is
+    not installed is skipped, with the package named.
     """
     marker = metafunc.definition.get_closest_marker('engines')
     if marker is None:
         return
-    engines = [name for name in marker.args if name != 'jolt' or _have_jolt()]
-    metafunc.parametrize('physics_engine', engines, indirect=True)
+    metafunc.parametrize('physics_engine', [
+        pytest.param(name, marks=pytest.mark.skipif(
+            not _have(_PACKAGES[name]), reason='%s is not installed' % (_PACKAGES[name],)))
+        for name in marker.args], indirect=True)
 
 
-def _have_jolt() -> bool:
+#: The package each engine steps its worlds with. pyjoltphysics is a requirement
+#: of OpenGLContext; omi_physics is the deprecated ``omi`` extra, installed in
+#: this workspace, so the omi engine's tests run here.
+_PACKAGES = {'jolt': 'pyjoltphysics', 'omi': 'omi_physics'}
+
+
+def _have(package: str) -> bool:
     try:
-        import pyjoltphysics  # noqa: F401, PLC0415 asked once a module is collected
+        importlib.import_module(package)
     except ImportError:
         return False
     return True

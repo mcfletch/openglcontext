@@ -49,7 +49,7 @@ from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.material import Material
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 from OpenGLContext.scenegraph.group import Group
-from omi_physics.character import CharacterCapabilities
+from OpenGLContext.physics.types import CharacterCapabilities
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
 from OpenGLContext.physics.landscape import Landscape, NearbyColliders
 from OpenGLContext.loaders.tiles3d import procedural as P
