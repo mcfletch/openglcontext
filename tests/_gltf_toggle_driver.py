@@ -90,7 +90,11 @@ def main():
         start = np.asarray(ctx.physicsPlatform.character.position, dtype='d').copy()
         ctx.ProcessEvent(key('w', 1))
         for _ in range(40):
+            # As the main loop does: the render queue, OnIdle, then the frame's
+            # own work, which steps the physics service the walker is on.
+            ctx.runRenderQueue()
             ctx.OnIdle()
+            ctx.runFrameHooks()
             time.sleep(0.005)
         moved = np.asarray(ctx.physicsPlatform.character.position, dtype='d') - start
         assert np.linalg.norm(moved[[0, 2]]) > 1e-3, ('holding w moved nothing',
