@@ -1,12 +1,12 @@
 # Native physics: pyjoltphysics
 
-Status: **P0 to P3 landed 2026-10-30, P4a the same day, and P4 (`engine.py`: the service on
-Jolt behind `PhysicsDefinition.engine='jolt'`, omi the default) 2026-10-31.** Decision taken
-2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists locally
-(`develop`) with no GitHub remote yet; its workspace registration waits for the remote (see
-"P0 as built" below). P4's engine suite is green on both engines and the 1,000-box frame is
-under 2 ms; the game suites on Jolt are not yet green, and what they need is P5's list in
-"P4 as built" below.
+Status: **P0 to P3 landed 2026-10-30, P4a the same day, P4 (`engine.py`) 2026-10-31, and P5
+(Jolt the default, pyjoltphysics a requirement, omi_physics the `omi` extra) 2026-10-31.**
+Decision taken 2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists
+locally (`develop`) with no GitHub remote yet; its workspace registration waits for the remote
+(see "P0 as built" below). Every game suite passes with no engine setting; glisteel names
+`engine='omi'` until P6 gives Jolt vehicles. What deleting the omi engine takes is the list
+in "P5 as built" below.
 
 The decision (maintainer): the engine steps its rigid bodies with Jolt Physics through a wrapper
 of our own. Jolt always runs on a background thread owned by the wrapper, never inline and never
@@ -1310,6 +1310,102 @@ Left:
 - omi's contact restitution at bounce 0.85 (0.758 measured).
 - Free-running (`thread`) settled worlds: T_d1000s is unchanged by this work.
 
+### P5 as built (2026-10-31)
+
+Branch `jolt-default` on `openglcontext`; `pyjoltphysics` `omi-golden` (3842fbc); `omi_physics`
+1bbfb1b (deprecation note).
+
+- Default. `PhysicsDefinition.engine` and `OPENGLCONTEXT_PHYSICS_ENGINE` default to `jolt`.
+  `pyjoltphysics` is a requirement of OpenGLContext, with no version floor (it is not on PyPI;
+  `tools/release.py` raises only floors that exist, so the floor is written when pyjoltphysics
+  is first released). `omi_physics>=0.4.0` is the `omi` extra and is not in `all`.
+- `engine.require_omi(feature)` raises `EngineUnavailable` naming `pip install
+  OpenGLContext[omi]`; `make_engine` raises it for `engine='omi'` without omi_physics.
+- Moved off omi_physics (the service path on Jolt imports none of it):
+  - `physics/cooking.py`: the hull, concavity, convex decomposition and hull volume
+    `Proxy.from_mesh` cooks with (omi's `hull` and `cookery`, MIT, same author), with a
+    differential test against `omi_physics.cookery` while it is installed.
+  - `physics/omigltf.py`: the `OMI_physics_*` reader, into `Proxy`, `Material`,
+    `CollisionFilter` and `records.Motion`; the glTF loader and the scenery tracker use it. A
+    `convex` or `trimesh` shape names a glTF mesh; the tracker builds it from the triangles of
+    the node that carries the body.
+  - `materials.PRESETS` (wood, metal, rubber, ice) in place of omi's presets.
+  - `passes/zonelayers.py`: zones near a box by one vectorised overlap test in place of omi's
+    `DynamicAABBTree`.
+  - `character.py` and `service.py` reach the stand-in machinery through the engine
+    (`Engine.build_replica`, `proxy_bounds`, `push_reach`); `bin/physics_cook.py`,
+    `bin/terrain_view.py`, `move/terrainwalk.py` and `PhysicsWalkMixin.characterCapabilities`
+    use the engine's `CharacterCapabilities`.
+- Isolated (import omi_physics on use, and say which extra to install):
+  `gltf_world.collision_world_from_scene` and `collision_groups`, `props.PropColliders`,
+  `loaders/tiles3d/physics_colliders.TerrainColliders`, `PhysicsViewPlatform(world)` (raise
+  `EngineUnavailable`); `PhysicsWalkMixin.ensurePhysicsWorld` (logs, returns False, the
+  camera stays in free flight); `scenegraph/x3drigidbody.py` (`RigidBodyCollection` and
+  `CollisionSensor` log once and stay still); `debugdraw.py` (only the omi engine draws the
+  overlay, as at P4).
+- `tests/unit/test_physics_without_omi.py` runs child interpreters in which importing
+  omi_physics raises: the default engine, the `EngineUnavailable` message, a world with a
+  floor, a crate, a walking character and a ray, the 22 engine modules a program on Jolt
+  imports, and the isolated features naming the extra. The `engines` marker skips an engine
+  whose package is absent, naming it; omi_physics is installed in this workspace, so the omi
+  engine's tests run here.
+- Golden results. pyjoltphysics' `tests/differential/omi_golden.json` holds omi_physics'
+  answers to the 34 scene comparisons of `test_scenes.py` (rest heights on three grounds,
+  slides, rebounds, stack, pyramid, stairs, sensors, the bullet, the 1,000-box bin, the
+  dumbbell), recorded from omi_physics 0.4 with `PYJOLTPHYSICS_RECORD_OMI`.
+  `engines.reference` returns the recorded answer and, where omi_physics is installed, checks it
+  against a live run (0.1% or 0.1 mm; trigger ticks exactly). `test_scenes.py` runs without
+  omi_physics (34 passed with it blocked). `test_p3.py`, `test_characters.py` and
+  `test_smoke.py` still run omi live and are not collected without it.
+- marble-demo imports no omi_physics (one comment names it). glisteel depends on omi_physics
+  itself and names `engine='omi'` in `world.physics_definition`.
+
+| Suite (no engine setting) | Result |
+|---|---|
+| openglcontext `tests/unit -m "not serial"` | 18,555 passed, 56 skipped before the one fix (the replica test narrowed to omi); the touched modules 99 passed after |
+| openglcontext `tests/unit -m serial` | SERIAL |
+| hill-runner | 652 passed, 1 skipped (no VP9 encoder) |
+| twig-bb | 2,407 passed, 1 skipped |
+| marble-demo | 941 passed, 6 xfailed (the game's own design notes) |
+| marble-editor | 165 passed |
+| glisteel | 1,670 passed, 1 xfailed |
+| openglcontext-forest | 86 passed |
+| pyjoltphysics `tests/differential` | 57 passed; 34 with omi_physics blocked |
+
+What blocks deleting the omi engine, and what the deletion then is:
+
+1. glisteel's car (`glisteel/omi_vehicle.py`, `car.py`) is omi's `RaycastVehicle`: P6.
+2. `PhysicsWalkMixin` (every `Context`) walks an omi world of its own: `buildPhysicsWorld`
+   returns `collision_world_from_scene`, `spawnAvatar` scores spots with the omi controller's
+   `_push_out`, `watchCollisionGroups` listens to the omi world's contacts for X3D Collision
+   groups, and `GravityZones` writes the omi world's gravity volumes. Moving it onto the
+   service is `TerrainWalkMixin`'s pattern (a service `Character` and
+   `PhysicsViewPlatform.over`) plus three neutral pieces: a spawn clearance test by
+   `physics.overlap` of the capsule, X3D Collision groups' `collideTime` from the character's
+   touch handlers, and the zone gravity the service already places. Not started in P5 (time).
+3. X3D RigidBodyPhysics: `x3drigid.py` builds shapes as omi `model.Shape` and finds
+   `CollisionSensor` touches with omi's narrow phase (`collide`); `x3djolt.JoltRigidSystem`
+   subclasses `RigidSystem` and converts those shapes. Needs shapes as `Proxy` and the
+   sensor's touches from a pyjoltphysics world (or `World.overlap`) before omi goes.
+4. The proxy overlay (`debugdraw.py`) draws omi's world arrays; a neutral overlay draws the
+   service's specs and `physics.poses`.
+5. pyjoltphysics' `test_p3.py`, `test_characters.py` and `test_smoke.py` compared live; their
+   omi answers are recorded the way `test_scenes.py`'s are.
+
+The deletion, once 1 to 5 are done, removes: `physics/omiengine.py`, `omi_adapter.py`,
+`runtime.py`, `worker.py`, `replica.py`, `queries.py`, `x3drigid.py`'s omi `RigidSystem` (the
+shape building moves to `Proxy`), `debugdraw.py`'s omi reads, `gltf_world.collision_world_from_scene`
+and `collision_groups`, `props.PropColliders`, `loaders/tiles3d/physics_colliders.py`,
+`zones.gravity_volumes` and `GravityZones`, `PhysicsViewPlatform.__init__`'s world path,
+`engine.require_omi`, `OMI_EXTRA` and the `omi` extra, `'omi'` from `settings.ENGINES` and
+`PhysicsDefinition.backend` with `BACKENDS` and `default_backend`, the stand-in machinery in
+`service.py` and `character.py` (`_replica`, `_character_replica`, `_settle_stand_ins`,
+`_bring_up*`, `stand_in_proxy`, `Engine.build_replica`, `proxy_bounds`, `push_reach`,
+`stand_ins`), `OpenGLContext.testing.physics`'s omi readers (`inspect`, `run`, `slot_of`,
+`body_at`), every test marked `engines('omi', ...)` and the `omi` parameter of the others,
+the omi live check in pyjoltphysics' `engines.reference`, and the docs' "The omi engine
+(deprecated)" section.
+
 ## 7. Decisions
 
 Decided 2026-10-30: each recommendation below was accepted as written. On 5 the answer was to
@@ -1320,7 +1416,13 @@ turn the deterministic build on, and on 10 to ship both free-threaded and ordina
 2. Name. Recommended: `pyjoltphysics` for the distribution and the import; `pyjolt` is a web
    framework on PyPI.
 3. The omi fallback. Recommended: dropped at P5; omi survives as golden results for the
-   differential suite.
+   differential suite. As taken at P5 (2026-10-31): Jolt is the default and pyjoltphysics a
+   requirement, and the omi engine stays as the `omi` extra (`OpenGLContext[omi]`), selected
+   only by a program that names `engine='omi'`, because glisteel's race drives omi's
+   `RaycastVehicle` until P6 and deleting the engine first would break it. Nothing falls back:
+   naming `omi` without omi_physics raises `EngineUnavailable` naming the extra. The engine and
+   the parts still built on an omi world are isolated behind `engine.py` and `require_omi`;
+   "P5 as built" lists what blocks the deletion and exactly what it removes.
 4. Precision. Recommended: double precision in every wheel; within noise of single here, 3% in
    the first spike, 0.98 mm resolution at 8 to 16 km in single.
 5. Cross-platform determinism (`CROSS_PLATFORM_DETERMINISTIC`). Recommended: on, if replays or
