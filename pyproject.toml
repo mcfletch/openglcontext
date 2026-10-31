@@ -94,7 +94,7 @@ audio = ["omi_audio[playback]"]
 # PhysicsDefinition(engine='omi'), and the parts of the engine still built on
 # its own world (docs/physics.rst#physics-omi). Not in `all`: removed with the
 # omi engine. `dev` has it, so the omi engine's tests run in CI.
-omi = ["omi_physics>=0.4.0"]
+omi-physics = ["omi_physics>=0.4.0"]
 # accelerate is now part of the core install; kept as an empty set so external
 # setups that still request OpenGLContext[accelerate] don't break.
 accelerate = []
@@ -108,7 +108,7 @@ docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid", "pyyaml"]
 # The development environment builds the documentation too: the workspace
 # syncs each project's dev extra, and a docs extra it skipped would leave
 # `build-docs.py` without sphinxcontrib-mermaid.
-dev = ["OpenGLContext[all,docs,omi]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
+dev = ["OpenGLContext[all,docs,omi-physics]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
 
 [project.scripts]
 oglc-test = "OpenGLContext.bin.gltest:main"

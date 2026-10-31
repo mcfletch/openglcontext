@@ -31,7 +31,7 @@ COLLIDERS = ('scene', 'explicit', 'none')
 #: ``gpu`` and ``glcompute`` use GL 4.3 compute on the stepping thread.
 BACKENDS = ('auto', 'numpy', 'cpu', 'gpu', 'glcompute')
 #: The engines that step a world: Jolt through pyjoltphysics, or omi_physics
-#: (deprecated: the ``omi`` extra, for programs that still name it).
+#: (deprecated: the ``omi-physics`` extra, for programs that still name it).
 ENGINES = ('jolt', 'omi')
 
 
@@ -71,7 +71,7 @@ class PhysicsDefinition(node.Node):
     #: The engine that steps the world, one of :data:`ENGINES`
     #: (env: OPENGLCONTEXT_PHYSICS_ENGINE). ``jolt``, the default, is
     #: pyjoltphysics, which OpenGLContext requires; ``omi`` needs the deprecated
-    #: omi_physics, installed by ``pip install OpenGLContext[omi]``.
+    #: omi_physics, installed by ``pip install OpenGLContext[omi-physics]``.
     engine = field.newField('engine', 'SFString', 1, default_engine)
     #: The fixed step, in steps a second, in both modes. A frame shorter than a
     #: step draws moving bodies between the last two steps.

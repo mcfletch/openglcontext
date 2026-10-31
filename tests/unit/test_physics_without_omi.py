@@ -1,7 +1,7 @@
 """The engine runs on Jolt with omi_physics absent.
 
 ``pip install OpenGLContext`` brings pyjoltphysics and leaves omi_physics to the
-``omi`` extra, so each check runs in a child interpreter where importing
+``omi-physics`` extra, so each check runs in a child interpreter where importing
 ``omi_physics`` raises ``ModuleNotFoundError``, as it does where the extra is
 not installed. The engine's own modules come from this checkout.
 """
@@ -66,7 +66,7 @@ def test_naming_omi_without_omi_physics_says_which_extra_to_install() -> None:
             print('unavailable:', error)
     ''')
     assert out.startswith('unavailable:')
-    assert 'OpenGLContext[omi]' in out
+    assert 'OpenGLContext[omi-physics]' in out
 
 
 def test_a_world_steps_bodies_and_characters() -> None:
@@ -151,7 +151,7 @@ def test_the_features_built_on_an_omi_world_name_the_extra() -> None:
             try:
                 make()
             except EngineUnavailable as error:
-                print('OpenGLContext[omi]' in str(error))
+                print('OpenGLContext[omi-physics]' in str(error))
 
         class Host(PhysicsWalkMixin):
             sg = basenodes.sceneGraph(children=[basenodes.Shape(geometry=basenodes.Box())])
@@ -163,7 +163,7 @@ def test_the_features_built_on_an_omi_world_name_the_extra() -> None:
         print(Host().ensurePhysicsWorld())
         collection = RigidBodyCollection()
         print(collection.step(), collection.step())
-        print(sum('OpenGLContext[omi]' in message for message in heard))
+        print(sum('OpenGLContext[omi-physics]' in message for message in heard))
     ''')
     assert out.split() == ['True', 'True', 'True', 'False', 'False', 'False', '2']
 

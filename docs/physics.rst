@@ -1074,14 +1074,14 @@ NumPy rigid-body engine. It is deprecated and is supported
 only for programs that still name it: glisteel's race drives omi_physics'
 ``RaycastVehicle`` until Jolt vehicles land (phase P6 of
 ``plans/NATIVE-PHYSICS.md``), and the engine is removed with that phase.
-omi_physics is not a requirement of OpenGLContext. It is the ``omi`` extra:
+omi_physics is not a requirement of OpenGLContext. It is the ``omi-physics`` extra:
 
 .. code-block:: bash
 
-   pip install OpenGLContext[omi]
+   pip install OpenGLContext[omi-physics]
 
 A definition naming ``omi`` where omi_physics is not installed raises
-``EngineUnavailable``, whose message names ``OpenGLContext[omi]``.
+``EngineUnavailable``, whose message names ``OpenGLContext[omi-physics]``.
 
 These parts of OpenGLContext still import omi_physics, each on first use, and
 need the extra:
@@ -1114,7 +1114,7 @@ need the extra:
        ``loaders.tiles3d.physics_colliders``
 
 Without the extra, ``PhysicsWalkMixin`` logs a warning naming
-``OpenGLContext[omi]`` and the camera stays in free flight; a
+``OpenGLContext[omi-physics]`` and the camera stays in free flight; a
 ``RigidBodyCollection`` or ``CollisionSensor`` logs the same once and stays
 still; the omi-world helpers raise ``EngineUnavailable`` naming it. The
 service's own cooking (``Proxy.from_node``, ``physics.cooking``) does not
@@ -1296,7 +1296,7 @@ Any interactive context can walk. ``OpenGLContext.move.physicswalk.PhysicsWalkMi
 is mixed into ``ViewPlatformMixin``, so any context with a camera can hand that
 camera to an avatar. Every physics import is inside a method, so a context
 that never turns walking on never imports the physics package. The avatar
-walks a world of its own built on omi_physics, which needs the ``omi`` extra
+walks a world of its own built on omi_physics, which needs the ``omi-physics`` extra
 (:ref:`physics-omi`); a program on Jolt walks a service character and hands
 the camera to ``PhysicsViewPlatform.over(character)`` (:ref:`navigation-follow`).
 
@@ -1895,7 +1895,7 @@ An X3D document's ``RigidBodyCollection`` is a world of its own, stepped once a
 frame on the engine's clock: a Jolt world (``OpenGLContext.physics.x3djolt``),
 or an omi_physics world where ``OPENGLCONTEXT_PHYSICS_ENGINE`` is ``omi``
 (``OpenGLContext.physics.x3drigid``). Both read the collidables through
-x3drigid's shapes, which need the ``omi`` extra (:ref:`physics-omi`).
+x3drigid's shapes, which need the ``omi-physics`` extra (:ref:`physics-omi`).
 Its bodies, their collidables as shapes and compounds, X3D's six joints on the
 joints above, and its ``CollisionCollection``\ s and routed ``Contact`` nodes
 as a pair rule. On Jolt the rule is asked as a pair first touches and at each
@@ -1919,7 +1919,7 @@ draws the body, so each kind is one instanced line draw. It works on either
 engine. Capsules, cylinders, hulls, meshes and compounds are not drawn.
 
 ``PhysicsDebugDraw`` draws more of an omi_physics world that a program owns,
-and needs the ``omi`` extra (:ref:`physics-omi`): a bit-flag
+and needs the ``omi-physics`` extra (:ref:`physics-omi`): a bit-flag
 mask selects collision proxies, broad-phase AABBs, contact points and normals,
 joint connections (from each body to the anchor it carries), and each body's
 velocity, acceleration and angular-velocity vectors. Angular velocity is drawn at

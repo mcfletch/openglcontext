@@ -90,7 +90,7 @@ The packages it is built on
    * - `omi_physics <https://github.com/mcfletch/omi_physics>`__
      - Deprecated. Rigid bodies on the OMI glTF physics model, computed in
        NumPy: the ``omi`` engine and the parts listed in :ref:`physics-omi`.
-       An extra: ``OpenGLContext[omi]``.
+       An extra: ``OpenGLContext[omi-physics]``.
    * - `omi_audio <https://github.com/mcfletch/omi_audio>`__
      - Spatial audio on glTF's ``KHR_audio_emitter`` model: the gain curves,
        the voice pool and the block mixing, in NumPy.

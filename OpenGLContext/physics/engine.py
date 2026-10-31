@@ -11,7 +11,7 @@ from pyjoltphysics on its native world thread: free-running at the tick rate,
 or in lockstep with the frame, which runs exactly the ticks the frame owes.
 ``'omi'`` (:class:`~OpenGLContext.physics.omiengine.OmiEngine`) steps an
 omi_physics world inline in the frame or on a Python thread; omi_physics is
-deprecated and is installed only by the ``omi`` extra, for programs that still
+deprecated and is installed only by the ``omi-physics`` extra, for programs that still
 name it. ``PhysicsDefinition.engine`` chooses (env:
 OPENGLCONTEXT_PHYSICS_ENGINE); :func:`make_engine` makes the one it names.
 """
@@ -34,7 +34,7 @@ __all__ = ['ENGINES', 'OMI_EXTRA', 'Engine', 'EngineUnavailable', 'LivePose', 'O
            'make_engine', 'require_omi']
 
 #: What installs omi_physics beside the engine.
-OMI_EXTRA = 'pip install OpenGLContext[omi]'
+OMI_EXTRA = 'pip install OpenGLContext[omi-physics]'
 
 class EngineUnavailable(RuntimeError):
     """The engine a definition names cannot be made here: its package is not installed."""
@@ -44,7 +44,7 @@ def require_omi(feature: str) -> None:
     """Raise :class:`EngineUnavailable` naming ``feature`` where omi_physics cannot be imported.
 
     The parts of the engine still built on an omi_physics world call this
-    before they make one, so a program without the ``omi`` extra is told
+    before they make one, so a program without the ``omi-physics`` extra is told
     which extra to install.
     """
     try:

@@ -60,7 +60,7 @@ Optional extras add the packages for particular features:
    Basis Universal textures, through ``opengl_basisu``: glTF's
    :ref:`KHR_texture_basisu <gltf-basisu>`, and KTX 2 or ``.basis`` files named
    by X3D's texture nodes, uploaded in the block formats the GPU samples.
-``OpenGLContext[omi]``
+``OpenGLContext[omi-physics]``
    The deprecated omi_physics engine, for a program whose
    ``PhysicsDefinition`` names ``engine='omi'``, and the parts listed in
    :ref:`physics-omi` that still use it. It is removed with Jolt vehicles.

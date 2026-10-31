@@ -1,7 +1,7 @@
 # Native physics: pyjoltphysics
 
 Status: **P0 to P3 landed 2026-10-30, P4a the same day, P4 (`engine.py`) 2026-10-31, and P5
-(Jolt the default, pyjoltphysics a requirement, omi_physics the `omi` extra) 2026-10-31; in
+(Jolt the default, pyjoltphysics a requirement, omi_physics the `omi-physics` extra) 2026-10-31; in
 pyjoltphysics, P6a (vehicles) and P6c (ragdolls and soft bodies) 2026-10-31.**
 Decision taken 2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists
 locally (`develop`) with no GitHub remote yet; its workspace registration waits for the remote
@@ -1320,9 +1320,9 @@ Branch `jolt-default` on `openglcontext` (ec03d475 to the plan commits); `pyjolt
 - Default. `PhysicsDefinition.engine` and `OPENGLCONTEXT_PHYSICS_ENGINE` default to `jolt`.
   `pyjoltphysics` is a requirement of OpenGLContext, with no version floor (it is not on PyPI;
   `tools/release.py` raises only floors that exist, so the floor is written when pyjoltphysics
-  is first released). `omi_physics>=0.4.0` is the `omi` extra and is not in `all`.
+  is first released). `omi_physics>=0.4.0` is the `omi-physics` extra and is not in `all`.
 - `engine.require_omi(feature)` raises `EngineUnavailable` naming `pip install
-  OpenGLContext[omi]`; `make_engine` raises it for `engine='omi'` without omi_physics.
+  OpenGLContext[omi-physics]`; `make_engine` raises it for `engine='omi'` without omi_physics.
 - Moved off omi_physics (the service path on Jolt imports none of it):
   - `physics/cooking.py`: the hull, concavity, convex decomposition and hull volume
     `Proxy.from_mesh` cooks with (omi's `hull` and `cookery`, MIT, same author), with a
@@ -1429,7 +1429,7 @@ The deletion, once 1 to 5 are done, removes: `physics/omiengine.py`, `omi_adapte
 shape building moves to `Proxy`), `debugdraw.PhysicsDebugDraw`, `nav.navmesh.from_world`, `gltf_world.collision_world_from_scene`
 and `collision_groups`, `props.PropColliders`, `loaders/tiles3d/physics_colliders.py`,
 `zones.gravity_volumes` and `GravityZones`, `PhysicsViewPlatform.__init__`'s world path,
-`engine.require_omi`, `OMI_EXTRA` and the `omi` extra, `'omi'` from `settings.ENGINES` and
+`engine.require_omi`, `OMI_EXTRA` and the `omi-physics` extra, `'omi'` from `settings.ENGINES` and
 `PhysicsDefinition.backend` with `BACKENDS` and `default_backend`, the stand-in machinery in
 `service.py` and `character.py` (`_replica`, `_character_replica`, `_settle_stand_ins`,
 `_bring_up*`, `stand_in_proxy`, `Engine.build_replica`, `proxy_bounds`, `push_reach`,
@@ -1824,7 +1824,7 @@ turn the deterministic build on, and on 10 to ship both free-threaded and ordina
    framework on PyPI.
 3. The omi fallback. Recommended: dropped at P5; omi survives as golden results for the
    differential suite. As taken at P5 (2026-10-31): Jolt is the default and pyjoltphysics a
-   requirement, and the omi engine stays as the `omi` extra (`OpenGLContext[omi]`), selected
+   requirement, and the omi engine stays as the `omi-physics` extra (`OpenGLContext[omi-physics]`), selected
    only by a program that names `engine='omi'`, because glisteel's race drives omi's
    `RaycastVehicle` until P6 and deleting the engine first would break it. Nothing falls back:
    naming `omi` without omi_physics raises `EngineUnavailable` naming the extra. The engine and
