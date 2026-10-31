@@ -1,7 +1,8 @@
 # Native physics: pyjoltphysics
 
 Status: **P0 to P3 landed 2026-10-30, P4a the same day, P4 (`engine.py`) 2026-10-31, and P5
-(Jolt the default, pyjoltphysics a requirement, omi_physics the `omi` extra) 2026-10-31.**
+(Jolt the default, pyjoltphysics a requirement, omi_physics the `omi` extra) 2026-10-31; in
+pyjoltphysics, P6a (vehicles) and P6c (ragdolls and soft bodies) 2026-10-31.**
 Decision taken 2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists
 locally (`develop`) with no GitHub remote yet; its workspace registration waits for the remote
 (see "P0 as built" below). Every game suite passes with no engine setting; glisteel names
@@ -580,7 +581,7 @@ of C++ and ran correctly in both builds.
 | P3 | Joints with limits, motors and breaking; materials with combine modes and the pair grid; collision filters; Python contact filter; gravity zones; kinematic tracks; `quadraticDrag` | differential joint, material, filter and zone scenarios; the X3D rigid body tutorials rendered against omi | tolerances met; X3D RigidBodyPhysics tutorials match their omi captures within the visual tolerance | 2 to 3; done 2026-10-30 but for the tutorials, which wait for P4 (P3 below) |
 | P4 | `engine.py` in OpenGLContext behind `PhysicsDefinition.engine='jolt'`; neutral replacements for every leak; service tests parametrised over both engines; telemetry replay through lockstep; state save and restore | OpenGLContext unit suite on both engines; each game's suite with `engine='jolt'`; benchmarks against `framecost/final.txt` | every engine test and every game suite green on both engines; the service frame cost at 1,000 active boxes under 2 ms (174 ms today on omi) | 3 to 4; P4a (the neutral API) done 2026-10-30, P4 2026-10-31 but for the game suites on Jolt, below |
 | P5 | Default `engine='jolt'`; `pyjoltphysics` a hard dependency; omi fallback, `worker.py`, `runtime.py`, `replica.py`, `queries.py` deleted; golden results recorded from omi; docs (`docs/physics.rst`, a page on the world thread, callbacks and determinism); omi_physics marked deprecated | full workspace `verify-everything.py`; preflight for openglcontext and pyjoltphysics | the games run on Jolt with no `engine` setting; marble-demo off direct omi imports; docs merged | 1 to 2 |
-| P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8; P6a (vehicles in pyjoltphysics) done 2026-10-31, below |
+| P6 | Vehicles (glisteel parity, then motorcycles and tracked), ragdolls driven by animation, soft bodies | differential vehicle scenarios against omi's `RaycastVehicle`; glisteel lap times; new tutorials | glisteel drives on Jolt within its handling tests; a ragdoll and a cloth tutorial ship | 4 to 8; P6a (vehicles in pyjoltphysics) and P6c (ragdolls and soft bodies in pyjoltphysics) done 2026-10-31, below; P6b and P6d (the engine layers) not started |
 
 P0 to P5: 14 to 19.5 weeks. The games stay on omi until P5: P4 runs them on both engines in CI,
 and a program selects Jolt with one definition field.
@@ -1622,6 +1623,195 @@ What P6b's service layer needs:
    is not in `save_state`.
 6. glTF: `VehicleSettings.as_dict` is the shape for an extension or extras on the chassis node;
    OMI has no vehicle extension yet.
+
+### P6c as built (2026-10-31): ragdolls and soft bodies in pyjoltphysics
+
+pyjoltphysics `develop` fbe3d97 to 7673332. The library half of the ragdoll and soft-body part of P6;
+the engine layer (P6d) is not started. Soft bodies are Jolt's own soft-body simulation only
+(maintainer's decision: no external cloth, hair or fluid library).
+
+Ragdolls (`src/native/ragdolls.*`, `pyjoltphysics.ragdolls`):
+
+- Jolt's `Ragdoll` from a `RagdollSettings`: bones parents first, each with a rest translation and
+  rotation in its parent joint's frame (the layout of `OpenGLContext.character.Rig` poses:
+  translation (N, 3), rotation (N, 4) xyzw), a shape placed in the joint's frame, a mass, a
+  swing-twist limit (twist about the bone, a swing cone of two half angles), a motor strength (N m)
+  and joint friction. A bone's body frame is its joint's frame, so the snapshot's bone poses are
+  the joint matrices skinning reads. `from_skeleton` builds capsule bones from a skeleton (joint to
+  first child; mass shared by volume); `humanoid()` is an 11-bone figure.
+- Each bone is a body row with a uid assigned at submission, so impulses (now also at a world
+  point: `add_impulses(points=)`, `Ragdoll.hit(bone, impulse, point)`), velocities, events,
+  queries and user joints name bones as bodies. `remove_bodies` refuses a bone;
+  `remove_ragdolls` removes the bodies, ending their pairs with `REMOVED`.
+- Modes: kinematic (bones kinematic, `MoveKinematic` to the target at the end of each tick),
+  powered (swing and twist motors per joint towards the target rotation relative to the parent,
+  torque limited per bone; the root bone pulled to its target by a spring of `root_frequency`
+  carrying the whole ragdoll's mass and weight, limited by `root_force` and `root_torque`), limp
+  (motors off). `set_mode(mode, blend)`: into powered or limp the motors' strength ramps to 1 or 0
+  over the blend; leaving kinematic keeps velocities at full strength (so kinematic to limp with a
+  blend is a death that crumples over the blend); into kinematic the targets move from the bones'
+  current poses to the target over the blend (a get-up).
+- The pose target is a held pose (`set_pose`, `place`) or a clip (`play(times, rotations,
+  translations, loop)`) the world thread evaluates at the end of every tick (slerp and lerp), so
+  no Python runs in the tick. A ragdoll drives its bones only while its target moves; at a still
+  target its bones sleep and a world of still ragdolls idles and counts quiet ticks.
+- Collisions: bone pairs that do not collide are parent and child and those whose shapes overlap
+  in the rest pose (Jolt's `DisableParentChildCollisions` test), or every pair with
+  `self_collision=False`, kept apart by the world's `JointPairFilter`; groups, masks and the
+  filter table decide the rest. `RagdollSettings::Stabilize` is not called: the masses stay as
+  given.
+- Snapshot `ragdolls` (`RagdollRows`): id, mode, strength, self collision, first bone, bone count;
+  per bone uid, float64 position and orientation, one slice a ragdoll.
+
+Soft bodies (`src/native/softbodies.*`, `pyjoltphysics.softbodies`):
+
+- `SoftBodySettings` is vertices with masses (0: fixed), faces, explicit edges with compliances,
+  tetrahedra, and Jolt's material: edge, shear and bend compliance (bend distance or dihedral),
+  volume compliance, pressure, long-range attachments (Euclidean or geodesic, with a stretch
+  allowance), iterations, damping, maximum velocity, friction, restitution, gravity factor,
+  vertex radius, sleeping, double-sided faces, and a body's group, mask, filter, material and
+  flags. Bend constraints default to distance constraints of compliance 0.01 and iterations to
+  `iterations_for(shortest edge)`; without them a fine cloth tears apart in Jolt at 60 Hz
+  (benchmarks, below). Builders: `cloth`, `rope` (edges along a polyline, bend edges across every second vertex),
+  `ball` (an icosphere with pressure), `from_mesh`. The shared settings are built and checked on
+  the calling thread at submission.
+- A soft body is a body row (uid at submission; `remove_bodies`, `activate`, sleep); it meets rigid
+  bodies by the world's filters both ways (cloth carries a dropped box).
+- Pins: a pinned vertex has no mass and is given each tick the velocity that brings it to its
+  target by the end of the step: a world point, or a point in another body's frame at that
+  body's end-of-step pose. Pins change at run time (`SoftBody.pin`, `unpin`); a pin does not pull
+  on its body.
+- Wind: a force per body applied with `AddForce` before every step, which Jolt shares among the
+  free vertices.
+- Snapshot `soft_bodies` (`SoftBodyRows`): uid, float64 origin (the centre of mass, also the body
+  row's position), first vertex, vertex count, version; float32 vertex positions relative to the
+  origin and area-weighted normals. After a tick the soft bodies Jolt moved copy their vertices
+  and normals into a per-body cache stamped with the tick; a snapshot buffer copies a body only
+  when its stamp differs from the one it holds, and rewrites every row when bodies were added or
+  removed. An asleep cloth costs nothing to publish; a renderer uploads a body when `version`
+  changes, straight from the view.
+- Ropes are edges. Jolt 5.6's Cosserat rods (`RodStretchShear`, `RodBendTwist`) give each segment
+  an orientation, for geometry hung on a rod (leaves, a chain's links); not exposed yet.
+
+Tests. omi_physics has no ragdoll, cloth or soft body, so there is no differential scenario; the
+tests hold the behaviour to analytic expectations:
+
+| Test | Expectation |
+|---|---|
+| Limp humanoid tipped onto the floor | at rest (every bone under 0.05 m/s) after 6 s, above the floor, every joint's twist within its limits and swing within twice its larger cone half angle, 0.05 rad slack |
+| Kinematic humanoid playing a 3-key looping clip, placed off the origin | every joint within 1 mm of `forward_kinematics` of the clip at the snapshot's time, five times over two loops |
+| Kinematic held pose and placement | joints within 0.1 mm, orientations within 1e-5 |
+| Powered humanoid struck on an arm and above the head (root spring 4000 N, 1500 N m) | deviation from the pose over 0.15 rad after 0.1 s, under 0.1 rad after 2 s; the limp one struck the same stays over 0.3 rad; the root stays over 0.9 m |
+| Blends | kinematic to limp falls at once at strength 0; powered to limp over 0.5 s reads strength 0.3 to 0.7 at 0.25 s and 0 after; kinematic over 1 s from the lying pose is away from both at 0.5 s and within 1 mm of the target after |
+| Strength per bone | an arm of strength 0 swings free after a blow; every other joint holds within 0.1 rad |
+| Groups and masks | a ragdoll masked off the floor's group falls through it; the other rests on it |
+| Still ragdolls | a powered and a kinematic ragdoll at still targets sleep in 4 s and the world counts quiet ticks; a new head pose wakes both and is reached within 0.05 rad |
+| Cloth 1 m, 11 x 11, pinned at two corners | pins within 0.1 mm; the free edge more than 0.8 m below them; free corners within 1.1 m of their pins; unit normals |
+| Cloth 2 m, 21 x 21, dropped on a 0.5 m sphere, vertex radius 1 cm | no vertex closer to the centre than 0.5 m less the vertex radius; the centre vertex at the top of the sphere plus the radius, within 3 cm; the edges below 0.3 m |
+| Cloths of 32, 40, 60 and 80 vertices a side dropped on a sphere at 60 Hz, default settings | within 3 m of the sphere and every face edge under twice its rest length after 1 s |
+| Pressure ball | its bottom reaches the floor, its centre rises 0.2 m after, it is off the floor 0.2 to 0.5 s after, volume above 60% of rest |
+| Rope 1 m, 20 segments, pinned at one end, released level | swings below 0.9 m under the pin, through to the far side and back; length within 5% |
+| Cloth pinned at four corners | holds a dropped 0.3 m box between 0.3 and 1.0 m |
+| Wind 2 N across a hanging cloth | its mean displacement 0.1 m more than a still one's |
+| Pin to a kinematic body on a track | the pinned vertex within 1 mm of the body; unpinned, it falls |
+| Snapshot versions | a reader's held snapshot keeps its vertices; an asleep cloth's version stops; wind wakes it and the version moves |
+
+Determinism: `tests/test_p6c_lockstep.py`: three ragdolls (limp, powered, kinematic with a clip),
+a cloth on a sphere, a pinned rope and a pressure ball; 30 hits, wind changes and mode blends at
+random wall-clock moments in a free-running 8-thread world at 240 Hz for 600 ticks, replayed with
+`at_tick` in lockstep: the ragdoll and soft-body digests of every tick are identical on 1 and 8 job
+threads, two seeds, GIL and free-threaded builds.
+
+Builds, on the final commit: GIL (3.14.7, the workspace's interpreter with omi_physics on the
+path) 507 passed, 2 skipped, and the `serial` pass 1 passed; free-threaded 3.14t 497 passed, 2
+skipped (no omi_physics there: the vehicle differential scenarios are not collected), `serial`
+1 passed; ASan and UBSan (`tools/asan.sh`) 497 passed, 2 skipped, no sanitizer report. Both test
+files were seen failing at collection against develop before the implementation; within them
+the still-ragdoll, bend, point-impulse and fine-cloth tests were each seen failing before their
+change. ruff, ruff format, mypy (strict, 53 files) and oglc-check clean; `_native.pyi`
+regenerated.
+
+Benchmarks (`benchmarks/ragdolls_cloth.py`, 60 Hz, 3 s after 0.5 s; ten powered ragdolls playing a
+looping clip, ten limp ones falling onto boxes, five 2 m cloths of 32 x 32 vertices draped on
+spheres under wind; the world's own timings, ms a tick, four runs, load average 3 to 4 from other users):
+
+| | 1 job thread | 8 job threads (target 1.5 ms a 60 Hz frame) |
+|---|---|---|
+| 20 ragdolls and 5 cloths of 1,024 vertices, whole tick (lowest, median) | 1.36, 1.36 | 0.42, 0.46 |
+| 20 ragdolls alone | 0.29 | 0.14 |
+| 5 cloths alone | 1.13 | 0.23 |
+
+The first measurement read 0.92 to 1.27 ms at 8 threads, and the cloths' cost rose with the number
+of bodies anywhere in the world (0.16 ms alone, 0.31 ms beside 110 static boxes 1 km away). The
+cause was the cloths blowing apart: a 2 m cloth of 32 to 80 vertices a side, compliance 0 edges and
+no bend constraints, dropped on a sphere at 60 Hz, stretched its edges to 2.6 times their length
+within three ticks of meeting the sphere and reached 1e11 m by 3 s; its bounds then took in every
+body. A 60-line program against Jolt alone (a static sphere, the cloth, `PhysicsSystem::Update`; single
+precision with asserts and the wheel's double-precision deterministic build alike) reproduces it with no
+pyjoltphysics code in the loop: no assert fires, edge compliance up to 1e-3 and dihedral bend
+constraints do not help, distance bend constraints of any compliance up to 0.1 do, and finer
+cloths also need more iterations (40 a side stable at 5, 60 at 10, 80 at 20). pyjoltphysics now
+defaults `bend_compliance` to 0.01 and `iterations` to `iterations_for(shortest edge)`
+(`5 * (0.05 m / edge)^2`, at least 5); the cost no longer depends on the other bodies. Reporting
+it upstream to Jolt is a step for the maintainer.
+
+The existing benchmarks, develop before P6c against P6c, four interleaved runs each, ms a frame
+(`boxes5000`, `characters.py --case chars300_hf` at 60 Hz) or a tick (`vehicles.py`, ten cars),
+(lowest, median):
+
+| | before | after |
+|---|---|---|
+| boxes5000 (1,000 active), 1 thread | 3.05, 3.32 | 3.09, 3.16 |
+| same, 8 threads | 1.58, 1.99 | 1.44, 1.97 |
+| 300 characters on a height field, 1 thread | 1.43, 1.46 | 1.43, 1.43 |
+| same, 8 threads | 0.79, 1.02 | 0.68, 0.73 |
+| 10 cars, 1 thread | 0.039, 0.044 | 0.040, 0.047 |
+| same, 8 threads | 0.057, 0.061 | 0.051, 0.060 |
+
+Within noise. A world without ragdolls or soft bodies pays two empty loops a tick and the
+resize of their snapshot arrays to 0 at each publish.
+
+Limits, as built:
+
+- No differential: omi_physics has neither feature.
+- A powered ragdoll stays up by its root spring; nothing computes balance from the feet.
+- Soft bodies do not collide with each other (Jolt), and their contacts with rigid bodies make no
+  event records. A pin moves its vertex and does not pull on its body.
+- `save_state` holds bodies, constraints and soft-body vertices; ragdoll modes, strengths, pose
+  targets and clips, and soft-body pins and wind, are the world thread's and are not saved.
+- A free-running world keeps ticking while any ragdoll's target moves (a clip plays).
+
+What P6d (the engine layer) needs:
+
+1. `engine.py` and `Physics`: `add_ragdoll(character, settings=None)` returning a handle over
+   `Ragdoll` (mode, blend, hit at a world point from a ray's hit, strength); bone handles as
+   `Body` objects for handlers and joints; `add_soft_body(node or mesh, settings, pins)` returning
+   a handle over `SoftBody` (pin to a `Body`, unpin, wind); removal with the node.
+2. Skeleton to ragdoll builder from a character rig (`OpenGLContext.character.Rig`): choose the
+   bones (a humanoid's pelvis, spine, chest, neck, head, upper and lower limbs, hands and feet as
+   `hanimnames` names them; fingers, twist and helper joints ride their nearest chosen ancestor at
+   their rest offset), radii from the skin (the vertices weighted to each bone, their distance from
+   the bone axis), masses from the capsule volumes and a total, limits from `character.hanim`'s
+   joint limits where the document has them and `RagdollSettings.humanoid`'s otherwise; the result
+   is a `RagdollSettings` via `from_skeleton` plus the bone-to-slot map.
+3. Animation to ragdoll: each frame, the mixer's pose for the chosen slots as `set_pose` (one batch),
+   or a clip sampled once into `play(times, rotations, translations)` for scripted motion; the
+   character's placement as `place`. Hit reaction: `POWERED`, `hit`, then back to the animation.
+   Death: `set_mode(LIMP, blend)`. Get up: `set_mode(KINEMATIC, blend)` to the first frame of the
+   get-up clip, then the mixer resumes from the ragdoll's pose.
+4. Ragdoll to rendering: `RagdollRows.bone_position` and `bone_orientation` for the ragdoll's
+   slice, interpolated between the last two snapshots as bodies are, written as world matrices for
+   the chosen slots (`Rig.world_matrices` takes over for the riding joints) and fed to the skin's
+   joint matrices.
+5. Soft bodies to rendering: a mesh node welded by position for the simulation (glTF splits
+   vertices at UV seams; keep the render-vertex to particle index map), each frame where
+   `version` changed the particles gathered through that map into the vertex buffer with their
+   normals, the node placed at `origin`. Pins to scene bodies through `Body` uids; a wind source
+   (a zone or a scene node) sets `set_wind` per body.
+6. X3D: RigidBodyPhysics and HAnim have no ragdoll or cloth node, so both are engine extension
+   nodes (`Ragdoll` over an `HAnimHumanoid`, `Cloth` over a geometry), read and written.
+7. Tutorials: a ragdoll (a humanoid struck, falling, getting up) and a cloth (a flag in the wind,
+   and a sheet dropped on furniture).
 
 ## 7. Decisions
 
