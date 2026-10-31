@@ -558,14 +558,15 @@ class PBRMesh(x3d.X3DGeometryNode):
             return True
         return self.skin_joints is not None and not self.skin_on_gpu
 
-    def set_vertices(self, positions: Any, normals: Any = None, origin: Any = None) -> None:
-        """Write vertex positions (V, 3), and normals, that a simulation moved, into the arrays.
+    def set_vertices(self, positions: Any, normals: Any = None, origin: Any = None,
+                     tangents: Any = None) -> None:
+        """Write vertex positions (V, 3), normals and tangents (V, 4) that a simulation moved, into the arrays.
 
         The arrays are written in place and keep their size, so the vertex
         buffers are written into rather than made again. ``origin`` is the
         point the positions are relative to (:attr:`origin`), None to leave
         it. Called before the mesh is first drawn, it is what makes the
-        position and normal buffers ones that are written each change.
+        position, normal and tangent buffers ones that are written each change.
         """
         if self.positions is None:
             raise ValueError('a mesh with no positions has no vertices to move')
@@ -574,6 +575,10 @@ class PBRMesh(x3d.X3DGeometryNode):
             if self.normals is None:
                 self.normals = np.zeros_like(self.positions)
             self.normals[...] = np.asarray(normals, dtype=np.float32).reshape(self.normals.shape)
+        if tangents is not None:
+            if self.tangents is None:
+                self.tangents = np.zeros((len(self.positions), 4), dtype=np.float32)
+            self.tangents[...] = np.asarray(tangents, dtype=np.float32).reshape(self.tangents.shape)
         if origin is not None:
             self.origin = np.asarray(origin, dtype='d').reshape(3)
         self._simulated = True

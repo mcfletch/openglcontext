@@ -197,3 +197,80 @@ def test_a_gltf_node_tagged_cloth_loads_as_a_cloth():
 def test_a_material_tagged_cloth_is_not_read():
     from OpenGLContext.scenegraph.softnodes import cloth_hook
     assert cloth_hook(type('C', (), {'at': 'material'})()) is None
+
+
+TURNED = WORLD.replace(b'translation 0 2 0', b'translation 0 2 0 rotation 0 0 1 1.5707963')
+
+
+def test_a_cloth_bound_again_starts_where_it_was_authored():
+    """Vertex 4, authored at (1, 0, 0), is turned a quarter about z and lifted 2 m: (0, 3, 0)"""
+    from OpenGLContext.physics import Physics, PhysicsDefinition
+    flag = Loader.loads(TURNED, 'cloth.x3dv').getDEF('flag')
+    for _ in range(2):
+        physics = Physics(PhysicsDefinition(mode='inline', engine='jolt', tickHz=60.0))
+        try:
+            context = _Context(physics)
+            flag.bind(context)
+            mesh = flag.children[0].geometry
+            world = mesh.positions.astype('d') + mesh.origin
+            assert world[4] == pytest.approx((0.0, 3.0, 0.0), abs=1e-5)
+            assert world[0] == pytest.approx((0.0, 2.0, 0.0), abs=1e-5)
+            for _ in range(60):
+                flag.tick(context)
+                physics.frame(1 / 60)
+            world = mesh.positions.astype('d') + mesh.origin
+            assert world[4] == pytest.approx((0.0, 3.0, 0.0), abs=2e-3)
+            flag.unbindContext(context)
+        finally:
+            physics.close()
+
+
+def _drawn_matrix(chain):
+    """The row-vector matrix a renderer draws the last node of ``chain`` (outermost first) with"""
+    from vrml.vrml97 import nodepath
+    path = nodepath.NodePath([])
+    for item in chain:
+        path = path + item
+    return np.asarray(path.transformMatrix(), dtype='d')
+
+
+def test_a_gltf_cloth_under_a_moved_parent_is_simulated_where_it_is_drawn():
+    """The flag at (0, 2, 0) in a cart at (5, 0, 0) turned a quarter about z stands at (3, 0, 0)"""
+    from OpenGLContext.loaders import gltf
+    from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
+    from OpenGLContext.physics import Physics, PhysicsDefinition
+    flag = SceneNode(name='flag', mesh=_cloth_mesh(), translation=(0.0, 2.0, 0.0),
+                     extras={'OGLC_hook': {'kind': 'cloth', 'pinned': [0, 4]}})
+    cart = SceneNode(name='cart', translation=(5.0, 0.0, 0.0),
+                     rotation=(0.0, 0.0, 0.7071068, 0.7071068), children=[flag])
+    scene = gltf.load_gltf(write_glb(cart))
+    found = []
+    stack = [(scene.group, [])]
+    while stack:
+        item, chain = stack.pop()
+        if isinstance(item, Cloth):
+            found.append((item, chain))
+            continue
+        stack.extend((child, [*chain, item]) for child in getattr(item, 'children', None) or [])
+    (cloth, chain), = found
+    assert tuple(cloth.translation) == pytest.approx((3.0, 0.0, 0.0), abs=1e-5)
+    physics = Physics(PhysicsDefinition(mode='inline', engine='jolt', tickHz=60.0))
+    try:
+        context = _Context(physics)
+        cloth.bind(context)
+        for _ in range(30):
+            cloth.tick(context)
+            physics.frame(1 / 60)
+        soft = cloth.soft_mesh(context)
+        mesh = soft.mesh
+        simulated = soft.soft.frame().positions[soft.index] + soft.soft.frame().origin
+        local = mesh.positions.astype('d') + mesh.origin
+        drawn = np.column_stack([local, np.ones(len(local))]) @ _drawn_matrix([*chain, cloth])
+        assert drawn[:, :3] == pytest.approx(simulated, abs=1e-4)
+        # The pins hold the flag's top corners where the cart carries them.
+        authored = np.asarray(_cloth_mesh().positions, dtype='d')
+        for vertex in (0, 4):
+            x, y, z = authored[vertex]
+            assert drawn[vertex, :3] == pytest.approx((5.0 - (y + 2.0), x, z), abs=2e-3)
+    finally:
+        physics.close()

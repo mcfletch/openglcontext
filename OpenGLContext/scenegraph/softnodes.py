@@ -12,7 +12,10 @@ context draws it (:meth:`Physics.add_soft_mesh
 welded by position and simulated, placed by ``translation`` and ``rotation``,
 with the vertices in ``pinned`` held where they start and a ``wind`` force
 (N) blowing on it. ``pressure`` (Pa m3) holds a closed mesh round. The
-cloth's vertices are world positions: put a Cloth in no Transform.
+cloth's vertices are world positions: put a Cloth in no Transform. Each
+soft body is made from the geometry's authored vertices, so a Cloth bound
+again (its scene shown again, or drawn in a second context) starts where it
+was authored.
 
 A ``Ragdoll`` draws the glTF character its ``url`` names and gives its
 skeleton a ragdoll (:class:`~OpenGLContext.character.ragdoll.RagdollFigure`),
@@ -140,8 +143,9 @@ class Cloth(_Bound, grouping.Grouping, nodetypes.Grouping, nodetypes.Children, n
         pins = None
         if len(self.pinned):
             from OpenGLContext.physics.ragdolls import quat_rotate  # noqa: PLC0415 beside its use
+            from OpenGLContext.physics.softmesh import rest_pose  # noqa: PLC0415 beside its use
             vertices = np.asarray(self.pinned, dtype=np.intp)
-            points = quat_rotate(turn, np.asarray(mesh.positions, dtype='d')[vertices]) + place
+            points = quat_rotate(turn, rest_pose(mesh)[0][vertices]) + place
             pins = (vertices, points)
         made = context.physics.add_soft_mesh(
             mesh, place, turn, pins=pins, mass=float(self.mass),
@@ -284,8 +288,11 @@ def cloth_hook(ctx: Any) -> Any:
 
     The parameters are the Cloth's fields: the numbers above, ``pinned`` (a
     list of the mesh's vertex indices) and ``wind`` (three numbers, N). The
-    node's placement becomes the cloth's ``translation`` and ``rotation``. A
-    tag on a material is not read.
+    node's place in the document becomes the cloth's ``translation`` and
+    ``rotation``. A node under moved parents has its Cloth in a
+    ``MatrixTransform`` undoing theirs, so the cloth is drawn where it is
+    simulated; a scale on the node or its parents is not applied. A tag on a
+    material is not read.
     """
     if ctx.at != 'node':
         return None
@@ -301,14 +308,22 @@ def cloth_hook(ctx: Any) -> Any:
                             if isinstance(v, int) and v >= 0]
     if 'wind' in ctx.params:
         fields['wind'] = values.vector(ctx.params['wind'], (0.0, 0.0, 0.0), 'cloth wind')
-    matrix = np.eye(4) if ctx.local_matrix is None else np.asarray(ctx.local_matrix, dtype='d')
+    local = np.eye(4) if ctx.local_matrix is None else np.asarray(ctx.local_matrix, dtype='d')
+    world = local if ctx.world_matrix is None else np.asarray(ctx.world_matrix, dtype='d')
     from OpenGLContext.character.ragdoll import matrix_quaternions  # noqa: PLC0415 beside its use
-    x, y, z, w = (float(v) for v in matrix_quaternions(matrix[None, :3, :3])[0])
+    # Each row of a row-vector matrix is an axis; their lengths are the scale, left out.
+    turn = world[:3, :3] / np.maximum(np.linalg.norm(world[:3, :3], axis=1, keepdims=True), 1e-12)
+    x, y, z, w = (float(v) for v in matrix_quaternions(turn[None])[0])
     angle = 2.0 * float(np.arccos(np.clip(w, -1.0, 1.0)))
     axis = (x, y, z) if (x or y or z) else (0.0, 0.0, 1.0)
-    cloth = Cloth(children=list(ctx.children), translation=tuple(matrix[3, :3]),
+    cloth = Cloth(children=list(ctx.children), translation=tuple(world[3, :3]),
                   rotation=(*axis, angle), **fields)
-    return cloth, True
+    # The parents' placement: the node's world matrix is its local one, then theirs.
+    parents = np.linalg.solve(local, world)
+    if np.allclose(parents, np.eye(4), atol=1e-9):
+        return cloth, True
+    from OpenGLContext.scenegraph.transform import MatrixTransform  # noqa: PLC0415 beside its use
+    return MatrixTransform(localMatrix=np.linalg.inv(parents), children=[cloth]), True
 
 
 components.register(Cloth, Ragdoll)

@@ -6,7 +6,7 @@ from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.softbodies import SoftBodySpec
-from OpenGLContext.physics.softmesh import weld
+from OpenGLContext.physics.softmesh import transport_tangents, weld
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 
@@ -118,6 +118,82 @@ def test_pins_name_the_meshs_own_vertices():
         assert np.array_equal(mesh.positions, frozen)
     finally:
         physics.close()
+
+
+def tangent_cloth(side: int = 21) -> PBRMesh:
+    """A 2 m cloth with texture coordinates and tangents along +x, as a normal-mapped one has"""
+    grid = SoftBodySpec.cloth(2.0, 2.0, side, side)
+    positions = np.asarray(grid.positions, dtype='d')
+    return PBRMesh(positions=positions, normals=np.tile([0.0, 1.0, 0.0], (len(positions), 1)),
+                   texcoords=positions[:, [0, 2]] + 0.5,
+                   tangents=np.tile([1.0, 0.0, 0.0, -1.0], (len(positions), 1)),
+                   indices=grid.faces.ravel())
+
+
+def test_a_draped_cloths_tangents_turn_with_its_normals():
+    physics = make()
+    try:
+        physics.add_static(None, proxy=Proxy.box((0.6, 0.6, 0.6)), translation=(0.0, 0.3, 0.0))
+        mesh = tangent_cloth()
+        physics.add_soft_mesh(mesh, position=(0.0, 1.2, 0.0), rotation=(0.0, 0.0, 0.0, 1.0))
+        run_for(physics, 4.0)
+        normals = np.asarray(mesh.normals, dtype='d')
+        normals /= np.linalg.norm(normals, axis=1, keepdims=True)
+        assert (np.abs(normals[:, 1]) < 0.7).sum() > 100          # the cloth has folded
+        tangents = np.asarray(mesh.tangents, dtype='d')
+        assert np.abs(np.sum(tangents[:, :3] * normals, axis=1)).max() < 1e-3
+        assert np.linalg.norm(tangents[:, :3], axis=1) == pytest.approx(1.0, abs=1e-4)
+        assert np.array_equal(tangents[:, 3], np.full(len(tangents), -1.0))
+        # Over the top of the box the cloth lies flat, and the tangent is the rest one.
+        flat = normals[:, 1] > 0.9999
+        assert flat.any() and np.allclose(tangents[flat, :3], (1.0, 0.0, 0.0), atol=0.02)
+    finally:
+        physics.close()
+
+
+def test_a_tangent_turns_by_the_least_rotation_of_its_normal():
+    up, tangent = (0.0, 1.0, 0.0), (1.0, 0.0, 0.0, 1.0)
+    quarter = transport_tangents([up], [(1.0, 0.0, 0.0)], [tangent])
+    assert quarter == pytest.approx(np.array([[0.0, -1.0, 0.0, 1.0]]), abs=1e-12)
+    unturned = transport_tangents([up], [(0.0, 0.0, 1.0)], [tangent])
+    assert unturned == pytest.approx(np.array([[1.0, 0.0, 0.0, 1.0]]), abs=1e-12)
+    # Turned right over, or with nothing square to the normal left, a tangent is still made.
+    for normal, given in (((0.0, -1.0, 0.0), tangent), ((0.0, -1.0, 0.0), (0.0, 1.0, 0.0, -1.0)),
+                          ((0.0, 2.0, 0.0), (0.0, 1.0, 0.0, 1.0))):
+        found = transport_tangents([up], [normal], [given])[0]
+        assert abs(float(np.dot(found[:3], normal))) < 1e-12
+        assert float(np.linalg.norm(found[:3])) == pytest.approx(1.0)
+        assert found[3] == given[3]
+
+
+def test_a_rotated_cloths_tangents_start_rotated():
+    physics = make()
+    try:
+        mesh = tangent_cloth(side=5)
+        quarter = (0.0, 0.0, float(np.sin(np.pi / 4)), float(np.cos(np.pi / 4)))
+        physics.add_soft_mesh(mesh, position=(0.0, 3.0, 0.0), rotation=quarter)
+        assert np.allclose(mesh.normals, (-1.0, 0.0, 0.0), atol=1e-6)
+        assert np.allclose(mesh.tangents, (0.0, 1.0, 0.0, -1.0), atol=1e-6)
+    finally:
+        physics.close()
+
+
+def test_a_mesh_simulated_again_starts_from_its_authored_rest_pose():
+    """A mesh's first soft body writes its arrays; the next is made from the authored vertices"""
+    quarter = (0.0, 0.0, float(np.sin(np.pi / 4)), float(np.cos(np.pi / 4)))
+    mesh = tangent_cloth(side=5)
+    authored = np.array(mesh.positions, dtype='d')
+    for _ in range(2):
+        physics = make()
+        try:
+            soft = physics.add_soft_mesh(mesh, position=(0.0, 3.0, 0.0), rotation=quarter)
+            world = mesh.positions.astype('d') + mesh.origin
+            turned = np.column_stack([-authored[:, 1], authored[:, 0], authored[:, 2]])
+            assert world == pytest.approx(turned + (0.0, 3.0, 0.0), abs=1e-5)
+            run_for(physics, 0.5)
+            soft.remove()
+        finally:
+            physics.close()
 
 
 def test_what_is_not_a_triangle_mesh_is_refused():
