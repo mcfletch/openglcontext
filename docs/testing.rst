@@ -987,8 +987,9 @@ A test of what the engine holds reads it through
 ``OpenGLContext.physics``. ``settle``, ``holds``, ``shape_kind``,
 ``shape_count``, ``mass``, ``material``, ``material_index``,
 ``material_count``, ``pair_friction``, ``filter_count``, ``joint_count``,
-``step_dt``, ``world_position``, ``wait_ticks``, ``ticks``, ``idle`` and
-``stepping`` answer on either engine. A unit test runs on both by its
+``step_dt``, ``world_position``, ``wait_ticks``, ``ticks``, ``idle``,
+``stepping`` and ``event_backlog`` (the events the engine holds that the
+service has not taken, and those it dropped) answer on either engine. A unit test runs on both by its
 module's ``pytestmark = pytest.mark.engines('omi', 'jolt')``, which
 ``tests/unit/conftest.py`` turns into one run on each engine; a test that
 reads one engine's own machinery narrows it with

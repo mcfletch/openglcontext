@@ -163,6 +163,17 @@ def test_sleep_and_wake_are_events_of_a_body(world):
     assert 'wake' in [h.phase for h in listener.heard]
 
 
+def test_the_engine_holds_no_events_once_a_frame_has_delivered_them(world):
+    physics, _floor = world
+    listener = Listener()
+    body = physics.add_dynamic(ball())
+    for event in ('hit', 'touching'):
+        body.addEventHandler(event, function=listener.OnHit, above=-1.0)
+    run_for(physics, 2.0)
+    assert len(listener.heard) > 10
+    assert physics_testing.event_backlog(physics) == (0, 0)
+
+
 def test_a_handler_is_held_weakly(world):
     physics, _floor = world
     listener = Listener()

@@ -3,7 +3,7 @@
 A test that checks what the engine itself holds (its shapes, masses,
 materials, joints, step) reads it here. :func:`settle`, :func:`holds`,
 :func:`shape_kind`, :func:`mass`, :func:`material`, :func:`joint_count`,
-:func:`step_dt`, :func:`world_position` and :func:`wait_ticks` answer on
+:func:`step_dt`, :func:`world_position`, :func:`event_backlog` and :func:`wait_ticks` answer on
 either engine; :func:`inspect`, :func:`slot_of`, :func:`body_at` and
 :func:`run` reach the omi_physics world and go away with it. A game reads
 bodies through :class:`~OpenGLContext.physics.body.Body` handles and
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.body import Body
     from OpenGLContext.physics.service import Physics
 
-__all__ = ['body_at', 'filter_count', 'holds', 'idle', 'inspect', 'joint_count', 'mass', 'material', 'run', 'settle',
+__all__ = ['body_at', 'event_backlog', 'filter_count', 'holds', 'idle', 'inspect', 'joint_count', 'mass', 'material', 'run', 'settle',
            'material_count', 'material_index', 'pair_friction', 'shape_count', 'shape_kind', 'slot_of', 'step_dt', 'stepping', 'ticks', 'wait_ticks',
            'world_position']
 
@@ -206,6 +206,17 @@ def joint_count(physics: Physics) -> int:
     if engine.name == 'omi':
         return len(engine.runtime.joints)
     return len(engine._joints)
+
+
+def event_backlog(physics: Physics) -> tuple[int, int]:
+    """The contact and state events the engine holds that the service has not taken, and how
+    many it has dropped for want of room."""
+    engine: Any = physics._engine
+    if engine.name == 'omi':
+        log = engine.runtime.world.contact_log
+        return len(log), int(log.dropped)
+    stats = engine.world.stats()
+    return int(stats['events_held']), int(stats['events_dropped'])
 
 
 def step_dt(physics: Physics) -> float:
