@@ -1,15 +1,33 @@
 #VRML V2.0 utf8
 
-SimpleBackground { color 0,0,1 }
-DEF Omni01 PointLight {
-  intensity 1
-	ambientIntensity .5
-  color 1 1 1
-  location 1 3 0
-  on TRUE
-  radius 11.1
+DEF Back SimpleBackground { color 0,0,1 }
+
+DEF LightOrient OrientationInterpolator {
+	key [ 0 .333333 .666666 1.0 ]
+	keyValue [
+ 		0 1 0 0 
+		0 1 0 2.094
+		0 1 0 4.189
+		0 1 0 0
+	]
 }
-NavigationInfo { headlight FALSE }
+
+DEF LightPosition Transform {
+  children [
+    DEF Omni01 PointLight {
+      intensity 1
+      ambientIntensity .5
+      color 1 1 1
+      location 1 3 0
+      on TRUE
+      radius 11.1
+    }
+  ]
+}
+NavigationInfo { 
+  headlight FALSE
+  type "FLY"
+}
 DEF Timer TimeSensor {
 	cycleInterval 5
 	enabled TRUE
@@ -50,4 +68,4 @@ ROUTE Box01.rotation TO Box02.rotation
 ROUTE Timer.fraction_changed TO OI.set_fraction
 ROUTE OI.value_changed TO Box01.set_rotation
 
-
+ROUTE LightOrient.value_changed TO LightPosition.set_rotation

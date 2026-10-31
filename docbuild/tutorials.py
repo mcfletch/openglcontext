@@ -152,6 +152,7 @@ PATHS = [
             'using_npc',
             'navmesh_demo',
             'using_vrml97',
+            'timesensorobject',
             'using_obj',
         ],
     ),
