@@ -2025,7 +2025,7 @@ remain.
 
 ### P6d as built (2026-10-31): ragdolls and soft bodies through the service
 
-openglcontext branch `p6d-ragdoll-cloth` (three commits on develop after P6b); pyjoltphysics
+openglcontext 74b9a599 to 3474d538 (branch `p6d-ragdoll-cloth`); pyjoltphysics
 893e48c and 3321231; pyopengl 070eeda3.
 
 Service and engine:
@@ -2112,7 +2112,7 @@ doctests 12 (scratch venv without omi_physics). pyopengl `tests/gl` and `acceler
 passed, 301 skipped.
 Game suites against the branch (`-m "not serial"`): twig-bb 2,407 passed, 1 skipped;
 hill-runner 652 passed, 1 skipped; marble-demo 941 passed, 6 xfailed; marble-editor 165 passed;
-openglcontext-forest 86 passed; glisteel GLISTEEL_COUNT.
+openglcontext-forest 86 passed; glisteel 1,670 passed, 1 xfailed (against develop after the merge). The walk toggle test (`test_gltf_view_physics_toggle[walk]`) failed on develop after P5b: its driver called `OnIdle` and not `runFrameHooks`, which steps the physics service; the driver now runs the frame hooks as the main loop does. Tutorial baselines blessed in reference-images 665815d.
 
 ## 7. Decisions
 
