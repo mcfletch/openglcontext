@@ -408,8 +408,8 @@ unloads the ones it no longer needs:
 The source is a path or an ``http(s)://`` URL; remote tiles are cached on
 disk (``cache_dir=``). ``max_sse`` is the screen-space error, in pixels, a
 tile may show before a finer one is fetched, and ``memory_budget`` is the
-resident tile memory in bytes. Pass ``physics_world=`` to make the loaded
-tiles colliders. Call ``terrain.shutdown()`` when you are done with it, to
+resident tile memory in bytes. Pass ``physics=context.physics`` to add each
+loaded tile to that physics service as a static body. Call ``terrain.shutdown()`` when you are done with it, to
 stop its worker threads, and ``terrain.dispose()`` with the context it was
 drawn in current, to delete the GL objects of its ground, trees and ground
 cover where the context goes on drawing another world.

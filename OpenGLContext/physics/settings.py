@@ -49,8 +49,8 @@ def check_engine(name: str) -> str:
 def default_engine() -> str:
     """``OPENGLCONTEXT_PHYSICS_ENGINE``, one of :data:`ENGINES`, else ``jolt``.
 
-    Read once a process, so a game's whole suite runs on one engine when the
-    variable is set for the run.
+    Read once a process: a change to the variable after the first call has no
+    effect.
     """
     return renderoptions.env_choice_once('OPENGLCONTEXT_PHYSICS_ENGINE', ENGINES, {}, 'jolt')
 

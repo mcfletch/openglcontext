@@ -485,7 +485,7 @@ Mount the result and update it from the camera each frame:
 
    from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
    terrain = TilesTerrain("world/tileset.json", max_sse=16.0,
-                          physics_world=world)          # physics_world optional
+                          physics=context.physics)      # physics optional
    # in your render/idle callback, before the pass runs:
    terrain.update_for_camera(eye_xyz, viewport_height, view_projection=vp_matrix)
 
