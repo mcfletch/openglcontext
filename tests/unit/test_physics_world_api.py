@@ -338,30 +338,42 @@ def test_the_same_zones_are_not_sent_twice(physics):
 
 # -- seeing the proxies ------------------------------------------------------------------
 
-@pytest.mark.engines('omi', reason="the overlay draws the omi engine's copy of the world")
-def test_show_proxies_mounts_an_overlay_and_removes_it():
-    mounted = []
-    service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0),
-                      mount=lambda node, on: mounted.append((node, on)))
-    service.add_dynamic(ball())
-    service.show_proxies(True)
-    assert mounted and mounted[0][1] is True
-    service.frame(0.02)
-    service.show_proxies(False)
-    assert mounted[-1][1] is False and mounted[-1][0] is mounted[0][0]
-    service.close()
-
-
-@pytest.mark.engines('jolt')
-def test_show_proxies_on_jolt_mounts_nothing_and_says_so(caplog):
+def test_show_proxies_mounts_an_overlay_of_the_bodies_and_removes_it():
     mounted = []
     service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0),
                       mount=lambda node, on: mounted.append((node, on)))
     try:
-        service.add_dynamic(ball())
+        falling = service.add_dynamic(None, Proxy.sphere(0.5), translation=(0.0, 5.0, 0.0))
+        floor = service.add_static(None, Proxy.box((8.0, 1.0, 8.0)), translation=(0.0, -0.5, 0.0))
         service.show_proxies(True)
-        assert mounted == []
-        assert 'overlay' in caplog.text
+        assert mounted and mounted[0][1] is True
+        for _ in range(10):
+            service.frame(0.02)
+        placed = service._overlay.placed
+        assert set(placed) == {falling.uid, floor.uid}
+        assert tuple(placed[floor.uid].scale) == pytest.approx((8.0, 1.0, 8.0))
+        assert tuple(placed[falling.uid].scale) == pytest.approx((0.5, 0.5, 0.5))
+        assert tuple(placed[falling.uid].translation) == pytest.approx(
+            tuple(falling.position), abs=1e-4)
+        assert placed[falling.uid].translation[1] < 5.0
+        service.remove(falling)
+        service.frame(0.02)
+        assert set(service._overlay.placed) == {floor.uid}
+        service.show_proxies(False)
+        assert mounted[-1][1] is False and mounted[-1][0] is mounted[0][0]
+    finally:
+        service.close()
+
+
+def test_the_overlay_leaves_out_shapes_it_has_no_wireframe_for():
+    mounted = []
+    service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0),
+                      mount=lambda node, on: mounted.append((node, on)))
+    try:
+        service.add_dynamic(None, Proxy.capsule(1.0, 0.3), translation=(0.0, 2.0, 0.0))
+        service.show_proxies(True)
+        service.frame(0.02)
+        assert service._overlay.placed == {}
     finally:
         service.close()
 

@@ -9,19 +9,26 @@ ways, making spin visible).  Sleep state is colour-coded.
 The overlay is an ``IndexedLineSet`` (per-vertex colour), so it renders through
 the same path in both the legacy and shader profiles.  Enable features with the
 ``PhysicsDebug`` bit flags.
+
+:class:`ProxyOverlay` draws the box and sphere bodies of a physics service on
+any engine, from the service's own shapes and poses; it is what
+``Physics.show_proxies`` mounts. :class:`PhysicsDebugDraw` reads an
+omi_physics world's arrays and needs the deprecated omi_physics (the ``omi``
+extra).
 """
+from __future__ import annotations
+
 from typing import Any, Optional, TYPE_CHECKING
 import numpy as np
 
+from OpenGLContext.physics.cooking import convex_hull
 from OpenGLContext.scenegraph import basenodes as _basenodes
-from omi_physics.body import (make_proxy, SphereProxy, BoxProxy, CapsuleProxy, ConvexProxy,
-                   TriangleMeshProxy, Proxy)
-from omi_physics.body import CompoundProxy, CylinderProxy
-from omi_physics.jointrows import RowJoint
-from omi_physics import hull
 
 if TYPE_CHECKING:
+    from omi_physics.body import BoxProxy, CapsuleProxy, CylinderProxy, Proxy, TriangleMeshProxy
     from omi_physics.world import PhysicsWorld
+
+    from OpenGLContext.physics.service import Physics
 
 # basenodes registers its node classes at runtime, so it carries no static
 # attributes; access it through an ``Any`` alias.
@@ -51,11 +58,66 @@ C_ANGULAR = (1.0, 0.2, 1.0)
 C_JOINT = (1.0, 1.0, 0.3)
 
 
-class PhysicsDebugDraw:
-    """Builds/updates an ``IndexedLineSet`` overlay from a :class:`PhysicsWorld`."""
+class ProxyOverlay:
+    """The box and sphere bodies of a physics service as wireframes, placed where the bodies are.
 
-    def __init__(self, world: "PhysicsWorld", flags: int = PROXIES | CONTACTS,
+    Every box shares one unit box wireframe and every sphere one unit sphere,
+    each scaled by its body's ``Transform``, so the instancing pass draws each
+    kind in one line draw. :meth:`update` places the bodies the service holds
+    and drops the ones it no longer does. Other shapes are left out.
+    """
+
+    def __init__(self, physics: Physics) -> None:
+        self.physics = physics
+        #: The ``Transform`` drawn for each body, by uid.
+        self.placed: dict[int, Any] = {}
+        self._wires: dict[str, Any] = {}
+        self._group = basenodes.Group(children=[])
+        self.root = basenodes.Group(children=[self._group])
+
+    def _wire(self, kind: str) -> Any:
+        wire = self._wires.get(kind)
+        if wire is None:
+            wire = self._wires[kind] = _unit_box_wire() if kind == 'box' else _unit_sphere_wire()
+        return wire
+
+    def update(self) -> None:
+        """Place each box and sphere body where the frame draws it."""
+        from OpenGLContext.physics.poses import quat_to_vrml_rotation, write_pose  # noqa: PLC0415 poses import the scenegraph
+
+        physics = self.physics
+        specs = physics._specs
+        shown = [uid for uid, spec in specs.items() if spec.proxy.kind in ('box', 'sphere')]
+        gone = [uid for uid in self.placed if uid not in specs]
+        changed = bool(gone)
+        for uid in gone:
+            del self.placed[uid]
+        if shown:
+            poses = physics.poses(shown)
+            for row, uid in enumerate(shown):
+                transform = self.placed.get(uid)
+                if transform is None:
+                    proxy = specs[uid].proxy
+                    size = (proxy.params['size'] if proxy.kind == 'box'
+                            else (proxy.params['radius'],) * 3)
+                    transform = self.placed[uid] = basenodes.Transform(
+                        scale=tuple(float(v) for v in size),
+                        children=[basenodes.Shape(geometry=self._wire(proxy.kind))])
+                    changed = True
+                write_pose(transform, poses.position[row],
+                           np.asarray(quat_to_vrml_rotation(poses.orientation[row]), dtype='d'))
+        if changed:
+            self._group.children = list(self.placed.values())
+
+
+class PhysicsDebugDraw:
+    """Builds/updates an ``IndexedLineSet`` overlay from an omi_physics :class:`PhysicsWorld`."""
+
+    def __init__(self, world: PhysicsWorld, flags: int = PROXIES | CONTACTS,
                  vector_scale: float = 0.25) -> None:
+        from OpenGLContext.physics.engine import require_omi  # noqa: PLC0415 the omi world loads on use
+
+        require_omi('PhysicsDebugDraw')
         self.world = world
         self.flags = flags
         self.vector_scale = vector_scale
@@ -191,6 +253,8 @@ class PhysicsDebugDraw:
     def _body_lines(self, i: int, pts: list, cols: list, idx: list,
                     g: Optional[np.ndarray]) -> None:
         """Add AABB, velocity, acceleration, and spin lines for body ``i``."""
+        from omi_physics.body import make_proxy  # noqa: PLC0415 the omi world loads on use
+
         w = self.world
         shape_idx = w.collider_shape[i] if w.collider_shape[i] >= 0 else w.trigger_shape[i]
         pos = w.position[i]
@@ -213,6 +277,8 @@ class PhysicsDebugDraw:
 
     def _joint_lines(self, jc: Any, pts: list, cols: list, idx: list) -> None:
         """Draw a line between the two anchors of joint constraint ``jc``."""
+        from omi_physics.jointrows import RowJoint  # noqa: PLC0415 the omi world loads on use
+
         w = self.world
         a = getattr(jc, 'a', None)
         b = getattr(jc, 'b', None)
@@ -297,6 +363,8 @@ def _box_corners(proxy: BoxProxy) -> list[np.ndarray]:
 
 def proxy_corners(proxy: Proxy) -> list[np.ndarray]:
     """Representative world-space corner points for ``proxy`` (its AABB corners for round shapes)."""
+    from omi_physics.body import BoxProxy, ConvexProxy  # noqa: PLC0415 the omi world loads on use
+
     if isinstance(proxy, BoxProxy):
         return _box_corners(proxy)
     if isinstance(proxy, ConvexProxy):
@@ -310,7 +378,11 @@ def proxy_corners(proxy: Proxy) -> list[np.ndarray]:
 
 
 def proxy_edges(proxy: Proxy) -> list[_Edge]:
-    """Wireframe edges tessellating ``proxy`` for the debug overlay."""
+    """Wireframe edges tessellating an omi ``proxy`` for the debug overlay."""
+    from omi_physics.body import (  # noqa: PLC0415 the omi world loads on use
+        BoxProxy, CapsuleProxy, CompoundProxy, ConvexProxy, CylinderProxy, SphereProxy,
+        TriangleMeshProxy)
+
     if isinstance(proxy, BoxProxy):
         c = _box_corners(proxy)
         e = [(0, 1), (0, 2), (0, 4), (3, 1), (3, 2), (3, 7), (5, 1), (5, 4),
@@ -380,7 +452,7 @@ def _cylinder_edges(proxy: CylinderProxy) -> list[_Edge]:
 
 def _hull_edges(points: np.ndarray) -> list[_Edge]:
     """Unique edges of the convex hull of ``points``."""
-    verts, faces = hull.convex_hull(points)
+    verts, faces = convex_hull(points)
     seen: set = set()
     edges: list[_Edge] = []
     for f in faces:

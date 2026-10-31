@@ -280,7 +280,7 @@ the bounds. ``Proxy`` (``OpenGLContext.physics.proxy``) is a ``kind`` and its
 lengths in metres. ``proxy.kind`` names the shape and ``proxy.params`` holds
 its values by those names, read-only. A proxy is shared by every body made with it and the world
 holds its shape once, so a hundred crates cost one box. ``show_proxies(True)``
-draws each body's proxy as a green wireframe over the scene and
+draws each box and sphere body as a green wireframe over the scene and
 ``show_proxies(False)`` takes it out; see :ref:`physics-debug`.
 
 ``Proxy.from_mesh(points, indices, strategy, dynamic)`` cooks a proxy from a
@@ -1057,8 +1057,6 @@ What differs from omi_physics, by design of the engine:
   sideways or upwards needs an up vector the controller does not have.
 - ``Hit.triangle`` is the row of the mesh triangle a ray met, and -1 for a
   part that is no mesh triangle.
-- The proxy overlay (``show_proxies``) draws the omi engine's copy of the
-  world; on Jolt it logs a warning and draws nothing.
 
 ``physics.save_state()`` returns the bodies' and joints' state as bytes
 (Jolt's ``PhysicsSystem::SaveState``) and ``physics.restore_state(data)`` puts
@@ -1097,8 +1095,10 @@ need the extra:
    * - The omi engine
      - ``physics.omiengine``, ``physics.omi_adapter``, ``physics.runtime``,
        ``physics.worker``, ``physics.replica``, ``physics.queries``
-   * - The proxy overlay, ``physics.show_proxies``
-     - ``physics.debugdraw`` (it draws the omi engine's copy of the world)
+   * - The full debug overlay of an omi world (AABBs, contacts, velocities, joints)
+     - ``physics.debugdraw.PhysicsDebugDraw``; ``physics.show_proxies`` draws
+       the service's box and sphere bodies on any engine
+       (``physics.debugdraw.ProxyOverlay``)
    * - The viewer's walk with gravity, ``PhysicsWalkMixin``, which every
        context has
      - ``move.physicswalk`` and ``move.physicsplatform.PhysicsViewPlatform``
@@ -1911,13 +1911,15 @@ first friction coefficient or a routed contact's, a body that may rest
 The debug overlay
 -----------------
 
-``physics.show_proxies(True)`` draws each body's collision proxy as a green
+``physics.show_proxies(True)`` draws each box and sphere body as a green
 wireframe over the scene, and ``show_proxies(False)`` takes it out. The overlay
-is ``OpenGLContext.physics.debugdraw.PhysicsDebugDraw`` over the omi engine's
-render-thread copy of the world; it follows the bodies as they move. On Jolt
-it logs a warning and draws nothing.
+is ``OpenGLContext.physics.debugdraw.ProxyOverlay``: one unit box and one unit
+sphere wireframe, scaled to each body by a ``Transform`` placed where the frame
+draws the body, so each kind is one instanced line draw. It works on either
+engine. Capsules, cylinders, hulls, meshes and compounds are not drawn.
 
-``PhysicsDebugDraw`` can draw more of a world that a program owns: a bit-flag
+``PhysicsDebugDraw`` draws more of an omi_physics world that a program owns,
+and needs the ``omi`` extra (:ref:`physics-omi`): a bit-flag
 mask selects collision proxies, broad-phase AABBs, contact points and normals,
 joint connections (from each body to the anchor it carries), and each body's
 velocity, acceleration and angular-velocity vectors. Angular velocity is drawn at

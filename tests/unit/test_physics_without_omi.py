@@ -102,6 +102,7 @@ ENGINE_MODULES = (
     'OpenGLContext.physics.gltf_world',
     'OpenGLContext.physics.props',
     'OpenGLContext.physics.cooking',
+    'OpenGLContext.physics.debugdraw',
     'OpenGLContext.physics.omigltf',
     'OpenGLContext.physics.landscape',
     'OpenGLContext.physics.road',

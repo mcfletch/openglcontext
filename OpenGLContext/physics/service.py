@@ -758,16 +758,14 @@ class Physics:
         return True
 
     def show_proxies(self, on: bool = True) -> None:
-        """Draw the collision shapes, to see what the world collides with; False takes the drawing out."""
+        """Draw the box and sphere bodies as wireframes where they are, to see what the world
+        collides with; False takes the drawing out."""
         if on and self._overlay is None and self._mount is not None:
-            if not self._engine.stand_ins:
-                log.warning('the proxy overlay draws the omi engine\'s copy of the world; '
-                            'the %s engine has none', self._engine.name)
-                return
-            from OpenGLContext.physics.debugdraw import PROXIES, PhysicsDebugDraw  # noqa: PLC0415 the omi engine's overlay
+            from OpenGLContext.physics.debugdraw import ProxyOverlay  # noqa: PLC0415 imports the scenegraph
 
-            self._bring_up_all()
-            self._overlay = PhysicsDebugDraw(self._character_replica().world, flags=PROXIES)
+            if self._engine.stand_ins:
+                self._bring_up_all()
+            self._overlay = ProxyOverlay(self)
             self._overlay.update()
             self._mount(self._overlay.root, True)
         elif not on and self._overlay is not None:
@@ -1200,9 +1198,9 @@ class Physics:
             self._snapshot = out.snapshot
             if self._replica is not None:
                 self._replica.sync(out.snapshot)
-                if self._overlay is not None:
-                    self._overlay.update()
             self._write_poses(out.snapshot)
+            if self._overlay is not None:
+                self._overlay.update()
             moving = out.snapshot.awake & (out.snapshot.dynamic | (
                 np.abs(out.snapshot.linear_velocity).sum(axis=1) > 0.0))
             self._awake = bool(moving.any())

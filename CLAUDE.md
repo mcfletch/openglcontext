@@ -340,8 +340,8 @@ OpenGLContext/
 │   ├── heightfield.py, road.py, props.py  # Colliders for ground chunks, road
 │   │                 # sections and props near a focus
 │   ├── gltf_world.py # A scene's triangles and glTF OMI bodies as a world
-│   ├── debugdraw.py  # The proxy, contact and velocity overlay (show_proxies),
-│   │                 # over the omi engine's copy of the world
+│   ├── debugdraw.py  # ProxyOverlay: the box and sphere bodies as wireframes
+│   │                 # (show_proxies, any engine); PhysicsDebugDraw over an omi world
 │   ├── events.py     # Collision: one collision as a body's handler is given it
 │   ├── poses.py      # Quaternions to axis-angle, and a pose written onto a Transform
 │   ├── joints.py     # Joint, JointSpec, JointTable: hinges, balls, sliders and
