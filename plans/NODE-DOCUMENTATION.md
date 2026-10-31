@@ -1,7 +1,8 @@
 # Node documentation: where a node is used, and a world for each
 
 **Status:** 🟡 Part 1 (the usage index and its section on the API pages) is
-built; part 2 (the sample worlds) and the glTF links are open. The tutorial
+built; part 2 (the sample worlds) is built for the 54 nodes of VRML97 and open
+for the rest of X3D; the page figures and the glTF links are open. The tutorial
 paths' hand-written `index.rst` (background text ahead of the first script) is
 in [SPHINX-DOCS.md](SPHINX-DOCS.md#a-paths-introduction).
 
@@ -88,28 +89,31 @@ answers to in a document is its `__name__`).
 
 ### Layout
 
-`docs/samples/nodes/<Component>/<Name>.x3d` and `<Name>.wrl` where VRML97 has the
-node. One small file each: the node under test, a light and background that make
+`docs/samples/nodes/<Name>.x3d` and `<Name>.wrl` where VRML97 has the node, with the
+files they name in `docs/samples/nodes/assets`. One small file each: the node under test, a light and background that make
 it visible, one viewpoint, and a `META` entry saying which fields the sample
 exercises. Nodes VRML97 lacks have no `.wrl`, and the page says X3D only.
 
-The pair comes from one source so they cannot differ: a Python builder per sample
-constructs the scene with the node classes and `vrml.x3d.files.dumps` emits both
-files (its XML encoding for `.x3d`, its VRML97 encoding for `.wrl`). The
-committed files are the output; a test re-emits and compares.
+The `.x3d` is written by hand, with comments saying what it shows, and the
+`.wrl` is converted from it by `python -m docbuild.nodesamples --write`
+(`vrml.x3d.files.dumps`, ClassicVRML at version 2.0), so the pair cannot differ.
+What a sample says about itself is `meta` in its `head`: `title`, `description`,
+`sample:frames` (the frames drawn before the reference render) and
+`sample:interactive`. A sample of a VRML97 node uses only VRML97 fields, so that
+the conversion is complete.
 
 ### Reference render
 
-Each sample is drawn as a settled still (`oglc-view`, `docs/capturing.rst`) by the
-path `oglc-x3d-regression` uses, into
-`tests/reference_images/x3d_samples/<Component>.<Name>.png` with its JSON sidecar
-(renderer, date, camera). A sample whose point is behaviour names the moment to
-draw in its builder: the time a `TimeSensor` has run to, or the frame after a
-source event is fired, so the render shows the result of the circuit and not its
-starting state. `tools/doc_images.py` gets one manifest group generating an entry
-per sample with the `baseline` producer, so the page figure, size, JPEG quality
-and licence tag follow the rest of the set. The samples are ours and BSD, so
-`ATTRIBUTION.md` gains nothing.
+`oglc-x3d-regression --samples` draws each sample as a settled still, by the path
+the corpus run uses, and compares it with
+`tests/reference_images/x3d_samples/Samples.<Node>.png` (the record beside it
+holds the renderer, date and size). A sample whose point is behaviour names the
+frames to draw in `sample:frames`, so the render shows the result of the circuit
+and not its starting state: a TimeSensor starting at 0 with a four second cycle
+is at a quarter of it after 59 frames. `tools/doc_images.py` gets one manifest
+group generating an entry per sample with the `baseline` producer, so the page
+figure, size, JPEG quality and licence tag follow the rest of the set. The
+samples are ours and BSD, so `ATTRIBUTION.md` gains nothing.
 
 ### On the page
 
@@ -128,20 +132,24 @@ render and the source.
 
 ### Test
 
-- every node in the registry has a sample, or an entry in `NO_SAMPLE` with the
-  reason (an abstract type, a node that only exists inside another's field);
-- every sample loads in a plain `Context` without a warning;
-- the `.x3d` and `.wrl` parse to the same field values;
-- the render equals the reference within the suite's tolerance (the comparison
-  `tests/test_all_scripts.py` makes), and a sample with no reference is reported
-  as having none.
+`tests/unit/test_nodesamples.py`:
 
-Sensors, interpolators, sound, scripting and event utilities need a sample most
-of all, and each is a small working circuit rather than a lone node: a
-`TimeSensor` driving a `PositionInterpolator` into a `Transform`, a
-`TouchSensor` routed to a `TimeSensor`. The test loads the sample and, for a
-circuit, fires its source event and checks the routed field changed, which is
-what the sample demonstrates; the reference render is taken after that.
+- every node of VRML97 has a sample (the rest of X3D, when its samples are
+  written, joins the list or is named with the reason it has none);
+- every sample loads without a fault, is titled for its node and holds it;
+- the `.wrl` is what the `.x3d` converts to and parses to the same world;
+- each circuit does what its description says: a TimeSensor is run to the moment
+  of the reference render, a pointing sensor is pressed and dragged, an
+  environmental sensor is told the viewer is in its box, and the routed field is
+  read.
+
+The render comparison is `oglc-x3d-regression --samples`, which exits 1 where a
+render differs from its baseline.
+
+The circuits caught one fault in the samples while they were written: an
+OrientationInterpolator with keys a whole turn apart does not turn, because the
+shorter arc between a rotation and itself is nothing. The samples use a key for
+each quarter turn.
 
 ### Size of the work
 
@@ -158,8 +166,8 @@ engine's components).
    count.
 2. [x] `class_sections` in `directdocs` (PyOpenGL repository) and the section on
    node classes' API pages.
-3. [ ] Sample builders, the VRML97 54 first, the load and circuit tests, the
-   reference renders and the manifest group.
+3. [x] Samples for the 54 nodes of VRML97, the load and circuit tests and the
+   reference renders; [ ] the manifest group for the page figures.
 4. [ ] The sample on the node's page: source in both syntaxes and the render.
 5. [ ] The `x3d-sample` directive and X_ITE in the built site, for the
    interactive samples.

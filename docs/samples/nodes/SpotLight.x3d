@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="SpotLight"/>
+    <meta name="description" content="Light from one place in a cone: direction is the axis, cutOffAngle where the cone ends and beamWidth where the light starts to fade towards it."/>
+  </head>
+  <Scene>
+    <Viewpoint position="3 4 6" orientation="-0.7914 0.5821 0.1868 0.7705"/>
+    <NavigationInfo headlight="false"/>
+    <SpotLight location="0 4 0" direction="0 -1 0" cutOffAngle="0.5" beamWidth="0.3" radius="12" color="1 0.95 0.8" intensity="1.5"/>
+    <Transform translation="0 -1.1 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.6 0.55 0.5"/></Appearance>
+        <Box size="10 0.2 10"/>
+      </Shape>
+    </Transform>
+    <Shape>
+      <Appearance><Material diffuseColor="0.8 0.4 0.3"/></Appearance>
+      <Box size="1.2 1.2 1.2"/>
+    </Shape>
+  </Scene>
+</X3D>

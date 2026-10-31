@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Background"/>
+    <meta name="description" content="The sky and ground behind the world: skyColor blends through the colours at the skyAngle angles from straight up, and groundColor the same from straight down."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1.2 9" orientation="-1 0 0 0.05"/>
+    <!-- Angles are from the zenith for the sky and from the nadir for the ground, in radians. -->
+    <Background skyColor="0.1 0.2 0.6, 0.45 0.65 0.95, 0.95 0.9 0.8"
+        skyAngle="1.2 1.5708"
+        groundColor="0.15 0.2 0.1, 0.35 0.3 0.2"
+        groundAngle="1.5708"/>
+    <Shape>
+      <Appearance><Material diffuseColor="0.75 0.35 0.25"/></Appearance>
+      <Box size="2 2 2"/>
+    </Shape>
+  </Scene>
+</X3D>

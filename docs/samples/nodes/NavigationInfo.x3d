@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="NavigationInfo"/>
+    <meta name="description" content="How the viewer moves and what it carries: type lists the ways of navigating in order of preference, speed and avatarSize set the pace and the body, and headlight the lamp on the viewer."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1.6 7" orientation="0 1 0 0"/>
+    <!-- Walk first, then fly if walking is unavailable; two units a second; a body 1.6 high that can step up 0.75. -->
+    <NavigationInfo type='"WALK" "FLY" "ANY"' speed="2" avatarSize="0.25 1.6 0.75" headlight="true" visibilityLimit="40"/>
+    <Transform translation="0 -1.1 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.6 0.55 0.5"/></Appearance>
+        <Box size="10 0.2 10"/>
+      </Shape>
+    </Transform>
+    <Transform translation="-2.5 0 -2"><Shape><Appearance><Material diffuseColor="0.8 0.4 0.3"/></Appearance><Box size="1.4 1.4 1.4"/></Shape></Transform>
+    <Transform translation="0 0 -4"><Shape><Appearance><Material diffuseColor="0.3 0.55 0.85"/></Appearance><Cone bottomRadius="0.9" height="1.8"/></Shape></Transform>
+    <Transform translation="2.5 0 -2"><Shape><Appearance><Material diffuseColor="0.4 0.75 0.4"/></Appearance><Cylinder radius="0.7" height="1.6"/></Shape></Transform>
+  </Scene>
+</X3D>

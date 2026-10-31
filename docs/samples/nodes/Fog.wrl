@@ -1,0 +1,65 @@
+#VRML V2.0 utf8
+# META "title" "Fog"
+# META "description" "Blends distant surfaces into color: nothing is fogged inside visibilityRange of zero distance, and everything beyond visibilityRange is the fog colour; LINEAR fades between."
+
+Viewpoint {
+  orientation -1 -0 -0 0.0555
+  position 0 1.2 6
+}
+Background {
+  groundColor [ 0.7 0.75 0.8 ]
+  skyColor [ 0.7 0.75 0.8 ]
+}
+Fog {
+  color 0.7 0.75 0.8
+  visibilityRange 22
+}
+Group {
+  children [
+    Transform {
+      translation -1.6 0 0
+      children [
+        DEF Pillar Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.8 0.35 0.25
+            }
+          }
+          geometry Box {
+            size 1 2 1
+          }
+        }
+      ]
+    }
+    Transform {
+      translation 1.6 0 -4
+      children [
+        USE Pillar
+      ]
+    }
+    Transform {
+      translation -1.6 0 -8
+      children [
+        USE Pillar
+      ]
+    }
+    Transform {
+      translation 1.6 0 -12
+      children [
+        USE Pillar
+      ]
+    }
+    Transform {
+      translation -1.6 0 -16
+      children [
+        USE Pillar
+      ]
+    }
+    Transform {
+      translation 1.6 0 -20
+      children [
+        USE Pillar
+      ]
+    }
+  ]
+}

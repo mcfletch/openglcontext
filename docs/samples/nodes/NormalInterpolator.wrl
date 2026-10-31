@@ -1,0 +1,71 @@
+#VRML V2.0 utf8
+# META "title" "NormalInterpolator"
+# META "description" "Turns a whole list of normals: keyValue holds a list of unit vectors for each key, and the interpolator blends them along great circles as set_fraction passes the key fractions."
+# META "sample:frames" "59"
+
+Viewpoint {
+  orientation -1 -0 -0 0.0768
+  position 0 0.5 6.5
+}
+NavigationInfo {
+  headlight FALSE
+  type [ "EXAMINE" "ANY" ]
+}
+DirectionalLight {
+  direction -1 0 -0.3
+  intensity 1.2
+}
+DEF Clock TimeSensor {
+  cycleInterval 4
+  loop TRUE
+}
+DEF Tilt NormalInterpolator {
+  key [ 0 0.5 1 ]
+  keyValue [ 0 0 1, 0 0 1, 0 0 1, 0 0 1, 1 0 0, 1 0 0, 1 0 0, 1 0 0, 0 0 1, 0 0 1, 0 0 1, 0 0 1 ]
+}
+Transform {
+  translation -2.2 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.75 0.75 0.85
+        }
+      }
+      geometry IndexedFaceSet {
+        coordIndex [ 0 1 2 3 -1 ]
+        solid FALSE
+        coord Coordinate {
+          point [ -1 -1 0, 1 -1 0, 1 1 0, -1 1 0 ]
+        }
+        normal Normal {
+          vector [ 0 0 1, 0 0 1, 0 0 1, 0 0 1 ]
+        }
+      }
+    }
+  ]
+}
+Transform {
+  translation 2.2 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.75 0.75 0.85
+        }
+      }
+      geometry IndexedFaceSet {
+        coordIndex [ 0 1 2 3 -1 ]
+        solid FALSE
+        coord Coordinate {
+          point [ -1 -1 0, 1 -1 0, 1 1 0, -1 1 0 ]
+        }
+        normal DEF Facing Normal {
+          vector [ 0 0 1, 0 0 1, 0 0 1, 0 0 1 ]
+        }
+      }
+    }
+  ]
+}
+ROUTE Clock.fraction_changed TO Tilt.set_fraction
+ROUTE Tilt.value_changed TO Facing.set_vector

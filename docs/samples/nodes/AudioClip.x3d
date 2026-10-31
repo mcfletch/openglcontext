@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="AudioClip"/>
+    <meta name="description" content="A sound file for a Sound node to play: url names it, loop repeats it, and startTime, stopTime and pitch control when and how fast."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="3 2.5 6" orientation="-0.5557 0.821 0.1312 0.56"/>
+    <!-- The clip starts when the document loads and repeats, at a pitch half a step up. -->
+    <Sound location="0 0.5 0" minFront="2" maxFront="12">
+      <AudioClip url='"assets/tone.wav"' description="A 440 hertz tone" loop="true" startTime="1" pitch="1.0595"/>
+    </Sound>
+    <Transform translation="0 0.5 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.4 0.7 0.85"/></Appearance>
+        <Sphere radius="0.4"/>
+      </Shape>
+    </Transform>
+    <Transform translation="0 -1.1 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.6 0.55 0.5"/></Appearance>
+        <Box size="10 0.2 10"/>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

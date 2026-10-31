@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="TouchSensor"/>
+    <meta name="description" content="Senses a pointer over and on the shapes in its group: isOver is true while the pointer is on them, isActive while the button is down, and touchTime is the time of a click."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <!-- Click the box: touchTime starts a one second turn. -->
+    <Group>
+      <TouchSensor DEF="Button"/>
+      <Transform DEF="Block">
+        <Shape>
+          <Appearance><Material diffuseColor="0.85 0.45 0.2"/></Appearance>
+          <Box size="1.6 1.6 1.6"/>
+        </Shape>
+      </Transform>
+    </Group>
+    <TimeSensor DEF="Clock" cycleInterval="1"/>
+    <OrientationInterpolator DEF="Turn" key="0 0.25 0.5 0.75 1"
+        keyValue="0 1 0 0, 0 1 0 1.5708, 0 1 0 3.1416, 0 1 0 4.7124, 0 1 0 6.2832"/>
+    <ROUTE fromNode="Button" fromField="touchTime" toNode="Clock" toField="set_startTime"/>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Turn" toField="set_fraction"/>
+    <ROUTE fromNode="Turn" fromField="value_changed" toNode="Block" toField="set_rotation"/>
+  </Scene>
+</X3D>

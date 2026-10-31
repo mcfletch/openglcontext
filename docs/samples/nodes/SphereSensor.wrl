@@ -1,0 +1,28 @@
+#VRML V2.0 utf8
+# META "title" "SphereSensor"
+# META "description" "Turns a drag on its shapes into a rotation about the centre of a sphere: rotation_changed is the turn so far, and offset the turn they were left at."
+# META "sample:interactive" "true"
+
+Viewpoint {
+  orientation 0 1 0 0
+  position 0 0 6
+}
+DEF Globe Transform {
+  children [
+    DEF Turn SphereSensor { }
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.9 0.9 0.9
+        }
+        texture ImageTexture {
+          url [ "assets/checker.png" ]
+        }
+      }
+      geometry Sphere {
+        radius 1.5
+      }
+    }
+  ]
+}
+ROUTE Turn.rotation_changed TO Globe.set_rotation

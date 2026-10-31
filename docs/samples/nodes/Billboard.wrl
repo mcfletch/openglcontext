@@ -1,0 +1,48 @@
+#VRML V2.0 utf8
+# META "title" "Billboard"
+# META "description" "Turns about axisOfRotation to face the viewer; here beside a plain panel turned the same way, which stays edge-on."
+# META "sample:interactive" "true"
+
+Viewpoint {
+  orientation -1 -0 -0 0.2111
+  position 0 1.5 7
+}
+Transform {
+  rotation 0 1 0 1.2217
+  children [
+    Transform {
+      translation -1.6 0 0
+      children [
+        Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.7 0.3 0.3
+            }
+          }
+          geometry Box {
+            size 2 1.2 0.08
+          }
+        }
+      ]
+    }
+    Transform {
+      translation 1.6 0 0
+      children [
+        Billboard {
+          children [
+            Shape {
+              appearance Appearance {
+                material Material {
+                  diffuseColor 0.3 0.6 0.8
+                }
+              }
+              geometry Box {
+                size 2 1.2 0.08
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

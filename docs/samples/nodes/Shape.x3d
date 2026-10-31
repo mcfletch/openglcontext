@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Shape"/>
+    <meta name="description" content="Joins a geometry to an appearance; a shape with no appearance is drawn unlit and white."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1.5 7" orientation="-1 -0 -0 0.2111"/>
+    <!-- No appearance: the geometry is drawn white and unlit. -->
+    <Transform translation="-2 0 0">
+      <Shape>
+        <Sphere/>
+      </Shape>
+    </Transform>
+    <Transform translation="2 0 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.85 0.35 0.2" specularColor="0.8 0.8 0.8" shininess="0.4"/></Appearance>
+        <Sphere/>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

@@ -1,0 +1,20 @@
+#VRML V2.0 utf8
+# META "title" "Color"
+# META "description" "Colours for the points or faces of a geometry node; with colorPerVertex true each point carries its own and the colours blend across a face."
+
+Viewpoint {
+  orientation 0 1 0 0
+  position 0 0 5
+}
+Shape {
+  geometry IndexedFaceSet {
+    coordIndex [ 0 1 2 3 -1 ]
+    solid FALSE
+    color Color {
+      color [ 1 0.1 0.1, 0.1 1 0.1, 0.1 0.2 1, 1 0.9 0.1 ]
+    }
+    coord Coordinate {
+      point [ -1.5 -1.2 0, 1.5 -1.2 0, 1.5 1.2 0, -1.5 1.2 0 ]
+    }
+  }
+}

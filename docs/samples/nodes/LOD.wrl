@@ -1,0 +1,40 @@
+#VRML V2.0 utf8
+# META "title" "LOD"
+# META "description" "Draws one child by the distance from the viewer to center: the first inside the first range, the second to the next, and the last beyond."
+# META "sample:interactive" "true"
+
+Viewpoint {
+  orientation -1 -0 -0 0.1526
+  position 0 1 6.5
+}
+LOD {
+  range [ 4 9 ]
+  level [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.8 0.3 0.2
+        }
+      }
+      geometry Box { }
+    }
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.25 0.6 0.85
+          shininess 0.5
+          specularColor 0.8 0.8 0.8
+        }
+      }
+      geometry Sphere { }
+    }
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.4 0.75 0.3
+        }
+      }
+      geometry Cone { }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Color"/>
+    <meta name="description" content="Colours for the points or faces of a geometry node; with colorPerVertex true each point carries its own and the colours blend across a face."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 0 5" orientation="0 1 0 0"/>
+    <Shape>
+      <!-- No material: the colours are the surface's own and it is drawn unlit. -->
+      <IndexedFaceSet coordIndex="0 1 2 3 -1" colorPerVertex="true" solid="false">
+        <Coordinate point="-1.5 -1.2 0, 1.5 -1.2 0, 1.5 1.2 0, -1.5 1.2 0"/>
+        <Color color="1 0.1 0.1, 0.1 1 0.1, 0.1 0.2 1, 1 0.9 0.1"/>
+      </IndexedFaceSet>
+    </Shape>
+  </Scene>
+</X3D>

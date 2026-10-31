@@ -1,0 +1,16 @@
+#VRML V2.0 utf8
+# META "title" "PixelTexture"
+# META "description" "An image written in the document: width, height, the number of components, then one number per pixel, row by row from the bottom left."
+
+Viewpoint {
+  orientation -0.6008 0.7867 0.1418 0.583
+  position 1.8 1.5 3.6
+}
+Shape {
+  appearance Appearance {
+    texture PixelTexture {
+      image 2 2 3 16724016 16764976 3199072 3170559
+    }
+  }
+  geometry Box { }
+}

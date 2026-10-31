@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="PixelTexture"/>
+    <meta name="description" content="An image written in the document: width, height, the number of components, then one number per pixel, row by row from the bottom left."/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <Shape>
+      <Appearance>
+        <!-- Three components (colour), 2 by 2: red, yellow on the bottom row; green, blue above. -->
+        <PixelTexture image="2 2 3 0xFF3030 0xFFD030 0x30D060 0x3060FF"/>
+      </Appearance>
+      <Box size="2 2 2"/>
+    </Shape>
+  </Scene>
+</X3D>

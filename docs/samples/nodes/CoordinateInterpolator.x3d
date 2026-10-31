@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="CoordinateInterpolator"/>
+    <meta name="description" content="Moves a whole list of points: keyValue holds a list for each key, and the interpolator blends them as set_fraction passes the key fractions. Here the apex of a pyramid goes down and up."/>
+    <meta name="sample:frames" content="59"/>
+  </head>
+  <Scene>
+    <Viewpoint position="2.8 2.6 4.4" orientation="-0.5301 0.8337 0.1544 0.6721"/>
+    <TimeSensor DEF="Clock" cycleInterval="4" loop="true"/>
+    <!-- Each key is five points. The base stays and the apex, the last point, is at 1.6 and then at 0.4. -->
+    <CoordinateInterpolator DEF="Squash" key="0 0.5 1"
+        keyValue="-1 0 -1, 1 0 -1, 1 0 1, -1 0 1, 0 1.6 0,
+                  -1 0 -1, 1 0 -1, 1 0 1, -1 0 1, 0 0.4 0,
+                  -1 0 -1, 1 0 -1, 1 0 1, -1 0 1, 0 1.6 0"/>
+    <Shape>
+      <Appearance><Material diffuseColor="0.8 0.6 0.25"/></Appearance>
+      <IndexedFaceSet coordIndex="0 3 2 1 -1, 3 2 4 -1, 2 1 4 -1, 1 0 4 -1, 0 3 4 -1" creaseAngle="0">
+        <Coordinate DEF="Apex" point="-1 0 -1, 1 0 -1, 1 0 1, -1 0 1, 0 1.6 0"/>
+      </IndexedFaceSet>
+    </Shape>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Squash" toField="set_fraction"/>
+    <ROUTE fromNode="Squash" fromField="value_changed" toNode="Apex" toField="set_point"/>
+  </Scene>
+</X3D>

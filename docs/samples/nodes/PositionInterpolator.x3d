@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="PositionInterpolator"/>
+    <meta name="description" content="Moves a position along the keyValue points as set_fraction passes the key fractions, in a straight line between each pair."/>
+    <meta name="sample:frames" content="59"/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1 8" orientation="-1 -0 -0 0.025"/>
+    <TimeSensor DEF="Clock" cycleInterval="4" loop="true"/>
+    <PositionInterpolator DEF="Path" key="0 0.5 1" keyValue="-3 0 0, 0 2 0, 3 0 0"/>
+    <!-- The path, drawn as lines through the same three points. -->
+    <Shape>
+      <Appearance><Material emissiveColor="0.6 0.6 0.6"/></Appearance>
+      <IndexedLineSet coordIndex="0 1 2 -1"><Coordinate point="-3 0 0, 0 2 0, 3 0 0"/></IndexedLineSet>
+    </Shape>
+    <!-- A quarter of the way through the cycle the ball is half way up the first leg. -->
+    <Transform DEF="Ball">
+      <Shape>
+        <Appearance><Material diffuseColor="0.85 0.4 0.25" specularColor="0.8 0.8 0.8" shininess="0.5"/></Appearance>
+        <Sphere radius="0.4"/>
+      </Shape>
+    </Transform>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Path" toField="set_fraction"/>
+    <ROUTE fromNode="Path" fromField="value_changed" toNode="Ball" toField="set_translation"/>
+  </Scene>
+</X3D>

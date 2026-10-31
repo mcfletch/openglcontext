@@ -1,0 +1,25 @@
+#VRML V2.0 utf8
+# META "title" "Text"
+# META "description" "Flat text from a string: one line for each string given, laid out by the fontStyle."
+
+Viewpoint {
+  orientation 0 1 0 0
+  position 0 0 6
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.95 0.8 0.3
+      emissiveColor 0.3 0.25 0.05
+    }
+  }
+  geometry Text {
+    string [ "OpenGLContext" "draws text" ]
+    fontStyle FontStyle {
+      family [ "SANS" ]
+      justify [ "MIDDLE" "MIDDLE" ]
+      size 0.8
+      spacing 1.2
+    }
+  }
+}

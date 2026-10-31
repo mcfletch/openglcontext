@@ -1,0 +1,48 @@
+#VRML V2.0 utf8
+# META "title" "OrientationInterpolator"
+# META "description" "Turns a rotation through the keyValue rotations as set_fraction passes the key fractions, along the shorter arc between each pair."
+# META "sample:frames" "59"
+
+Viewpoint {
+  orientation -1 -0 -0 0.0768
+  position 0 0.5 6.5
+}
+DEF Clock TimeSensor {
+  cycleInterval 4
+  loop TRUE
+}
+DEF Tumble OrientationInterpolator {
+  key [ 0 0.5 1 ]
+  keyValue [ 1 0 0 0, 1 1 0 2.0944, 1 0 0 0 ]
+}
+DEF Rotor Transform {
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.3 0.55 0.85
+        }
+      }
+      geometry Box {
+        size 2.4 0.25 0.25
+      }
+    }
+    Transform {
+      translation 1.2 0 0
+      children [
+        Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.9 0.85 0.3
+            }
+          }
+          geometry Sphere {
+            radius 0.35
+          }
+        }
+      ]
+    }
+  ]
+}
+ROUTE Clock.fraction_changed TO Tumble.set_fraction
+ROUTE Tumble.value_changed TO Rotor.set_rotation

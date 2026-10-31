@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Pedestal"/>
+    <meta name="description" content="A small world that the Inline sample draws inside its own."/>
+  </head>
+  <Scene>
+    <Shape>
+      <Appearance>
+        <Material diffuseColor="0.55 0.5 0.7"/>
+      </Appearance>
+      <Cylinder radius="1" height="0.4"/>
+    </Shape>
+    <Transform translation="0 0.9 0">
+      <Shape>
+        <Appearance>
+          <Material diffuseColor="0.9 0.7 0.2"/>
+        </Appearance>
+        <Cone bottomRadius="0.6" height="1.4"/>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="SphereSensor"/>
+    <meta name="description" content="Turns a drag on its shapes into a rotation about the centre of a sphere: rotation_changed is the turn so far, and offset the turn they were left at."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 0 6" orientation="0 1 0 0"/>
+    <!-- Drag the sphere to turn it; the checker shows which way it faces. -->
+    <Transform DEF="Globe">
+      <SphereSensor DEF="Turn"/>
+      <Shape>
+        <Appearance>
+          <Material diffuseColor="0.9 0.9 0.9"/>
+          <ImageTexture url='"assets/checker.png"'/>
+        </Appearance>
+        <Sphere radius="1.5"/>
+      </Shape>
+    </Transform>
+    <ROUTE fromNode="Turn" fromField="rotation_changed" toNode="Globe" toField="set_rotation"/>
+  </Scene>
+</X3D>

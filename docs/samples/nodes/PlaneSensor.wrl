@@ -1,0 +1,45 @@
+#VRML V2.0 utf8
+# META "title" "PlaneSensor"
+# META "description" "Turns a drag on its shapes into a position in a plane: translation_changed is where the drag has taken them, kept between minPosition and maxPosition, and offset is where they were left."
+# META "sample:interactive" "true"
+
+Viewpoint {
+  orientation -1 -0 -0 0.1326
+  position 0 1.2 9
+}
+Transform {
+  translation 0 -0.45 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.5 0.5 0.55
+        }
+      }
+      geometry Box {
+        size 6.8 0.1 0.4
+      }
+    }
+  ]
+}
+DEF Slider Transform {
+  children [
+    DEF Drag PlaneSensor {
+      maxPosition 3 0
+      minPosition -3 0
+    }
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.85 0.4 0.25
+          shininess 0.5
+          specularColor 0.8 0.8 0.8
+        }
+      }
+      geometry Sphere {
+        radius 0.4
+      }
+    }
+  ]
+}
+ROUTE Drag.translation_changed TO Slider.set_translation

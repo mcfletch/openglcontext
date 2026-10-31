@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Extrusion"/>
+    <meta name="description" content="A cross-section swept along a spine: crossSection is the outline in x-z, spine the path, and scale changes the outline at each spine point."/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.5 2.2 5.5" orientation="-0.6257 0.7682 0.1355 0.5496"/>
+    <Shape>
+      <Appearance><Material diffuseColor="0.75 0.5 0.25" specularColor="0.6 0.6 0.6" shininess="0.3"/></Appearance>
+      <!-- A square swept along a quarter circle, narrowing as it goes. -->
+      <Extrusion beginCap="true" endCap="true" creaseAngle="0.5"
+          crossSection="0.5 0.5, 0.5 -0.5, -0.5 -0.5, -0.5 0.5, 0.5 0.5"
+          spine="0 -1 0, -0.068 -0.482 0, -0.268 0 0, -0.586 0.414 0, -1 0.732 0, -1.482 0.932 0, -2 1 0"
+          scale="1 1, 0.95 0.95, 0.85 0.85, 0.75 0.75, 0.6 0.6, 0.5 0.5, 0.4 0.4"/>
+    </Shape>
+  </Scene>
+</X3D>

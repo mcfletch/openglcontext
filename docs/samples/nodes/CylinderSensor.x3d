@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="CylinderSensor"/>
+    <meta name="description" content="Turns a drag on its shapes into a rotation about an axis: rotation_changed is the turn about the y axis, kept between minAngle and maxAngle, and diskAngle sets how steep a drag must be to turn rather than tilt."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="2 3.2 4.5" orientation="-0.7782 0.6059 0.1651 0.6738"/>
+    <!-- A knob: drag round it to turn it. The bar shows which way it points. -->
+    <Transform DEF="Knob">
+      <CylinderSensor DEF="Dial" diskAngle="0.2618"/>
+      <Shape>
+        <Appearance><Material diffuseColor="0.4 0.5 0.8"/></Appearance>
+        <Cylinder radius="1.2" height="0.5"/>
+      </Shape>
+      <Transform translation="0.6 0.3 0">
+        <Shape>
+          <Appearance><Material diffuseColor="0.9 0.8 0.25"/></Appearance>
+          <Box size="1.1 0.12 0.18"/>
+        </Shape>
+      </Transform>
+    </Transform>
+    <ROUTE fromNode="Dial" fromField="rotation_changed" toNode="Knob" toField="set_rotation"/>
+  </Scene>
+</X3D>

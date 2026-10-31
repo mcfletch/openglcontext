@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Material"/>
+    <meta name="description" content="The colour, shine, glow and transparency of a surface: three spheres that differ in one setting each."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1.5 8" orientation="-1 0 0 0.1853"/>
+    <!-- diffuseColor is the colour under light; shininess narrows the highlight specularColor makes. -->
+    <Transform translation="-2.5 0 0">
+      <Shape>
+        <Appearance>
+          <Material diffuseColor="0.7 0.1 0.1" specularColor="1 1 1" shininess="0.8"/>
+        </Appearance>
+        <Sphere/>
+      </Shape>
+    </Transform>
+    <!-- emissiveColor is light the surface gives off, whatever lights the scene has. -->
+    <Shape>
+      <Appearance>
+        <Material diffuseColor="0.1 0.1 0.1" emissiveColor="0.1 0.7 0.3"/>
+      </Appearance>
+      <Sphere/>
+    </Shape>
+    <!-- transparency 0 is opaque and 1 is invisible. -->
+    <Transform translation="2.5 0 0">
+      <Shape>
+        <Appearance>
+          <Material diffuseColor="0.2 0.4 0.9" transparency="0.6"/>
+        </Appearance>
+        <Sphere/>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

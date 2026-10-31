@@ -36,6 +36,9 @@ Key documentation files:
 - `docs/profiles.rst` - Core vs. compatibility contexts, and declaring the one a program needs
 - `docs/loading.rst` - Loading each format from Python, and the background load pool
 - `docs/capturing.rst` - Screenshots, settled still captures, and video recording
+- `docs/samples/nodes/` - A sample world for each node (`<Node>.x3d` by hand, `<Node>.wrl`
+  converted from it by `python -m docbuild.nodesamples --write`), with its reference
+  render in `tests/reference_images/x3d_samples`; `docs/x3d.rst#x3d-node-samples`
 - `docs/tutorials/` - The code walkthroughs, a directory per path, written from
   `tests/tutorials/<path>/*.py`
   A path opens with `tests/tutorials/<path>/index.rst` where that file exists

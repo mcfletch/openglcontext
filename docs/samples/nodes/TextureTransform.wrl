@@ -1,0 +1,63 @@
+#VRML V2.0 utf8
+# META "title" "TextureTransform"
+# META "description" "Moves, turns and scales a texture over a surface; the same image on three boxes, plain, scaled to repeat and turned."
+
+Viewpoint {
+  orientation -1 -0 -0 0.1747
+  position 0 1.5 8.5
+}
+Transform {
+  rotation 0 1 0 0.5
+  translation -2.6 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        texture ImageTexture {
+          url [ "assets/checker.png" ]
+        }
+      }
+      geometry Box {
+        size 1.8 1.8 1.8
+      }
+    }
+  ]
+}
+Transform {
+  rotation 0 1 0 0.5
+  children [
+    Shape {
+      appearance Appearance {
+        texture ImageTexture {
+          url [ "assets/checker.png" ]
+        }
+        textureTransform TextureTransform {
+          scale 3 3
+        }
+      }
+      geometry Box {
+        size 1.8 1.8 1.8
+      }
+    }
+  ]
+}
+Transform {
+  rotation 0 1 0 0.5
+  translation 2.6 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        texture ImageTexture {
+          url [ "assets/checker.png" ]
+        }
+        textureTransform TextureTransform {
+          center 0.5 0.5
+          rotation 0.7854
+          translation 0.1 0
+        }
+      }
+      geometry Box {
+        size 1.8 1.8 1.8
+      }
+    }
+  ]
+}

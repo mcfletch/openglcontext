@@ -1,0 +1,34 @@
+#VRML V2.0 utf8
+# META "title" "Script"
+# META "description" "A program run by events: its fields declare the events it takes and sends, and url holds the program. This engine reads the node and its routes and does not run the program."
+
+Viewpoint {
+  orientation -0.6008 0.7867 0.1418 0.583
+  position 1.8 1.5 3.6
+}
+DEF Clock TimeSensor {
+  cycleInterval 4
+  loop TRUE
+}
+Shape {
+  appearance Appearance {
+    material DEF Skin Material {
+      diffuseColor 0.2 0.4 0.9
+    }
+  }
+  geometry Box {
+    size 1.8 1.8 1.8
+  }
+}
+DEF Tint Script {
+  eventOut SFColor colour
+  eventIn SFFloat fraction
+  url [ "javascript:
+      // Blue at the start of a cycle and red at the end.
+      function fraction(value) {
+        colour = new SFColor(value, 0.2, 1 - value);
+      }
+      " ]
+}
+ROUTE Clock.fraction_changed TO Tint.fraction
+ROUTE Tint.colour TO Skin.set_diffuseColor

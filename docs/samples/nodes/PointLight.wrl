@@ -1,0 +1,74 @@
+#VRML V2.0 utf8
+# META "title" "PointLight"
+# META "description" "Light from one place that spreads in every direction and weakens with distance: location is the place, radius where it ends, and attenuation how it falls off."
+
+Viewpoint {
+  orientation -0.7634 0.6302 0.1417 0.5731
+  position 2.5 3 6.5
+}
+NavigationInfo {
+  headlight FALSE
+  type [ "EXAMINE" "ANY" ]
+}
+PointLight {
+  attenuation 1 0 0.08
+  color 1 0.85 0.6
+  intensity 1.2
+  location 0 1.8 1.2
+  radius 8
+}
+Transform {
+  translation 0 1.8 1.2
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          emissiveColor 1 0.9 0.7
+        }
+      }
+      geometry Sphere {
+        radius 0.12
+      }
+    }
+  ]
+}
+Transform {
+  translation 0 -1.1 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.6 0.55 0.5
+        }
+      }
+      geometry Box {
+        size 10 0.2 10
+      }
+    }
+  ]
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.8 0.4 0.3
+    }
+  }
+  geometry Box {
+    size 1.4 1.4 1.4
+  }
+}
+Transform {
+  translation 2.2 -0.35 0.6
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.3 0.55 0.85
+        }
+      }
+      geometry Sphere {
+        radius 0.75
+      }
+    }
+  ]
+}

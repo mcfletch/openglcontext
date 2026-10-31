@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="ProximitySensor"/>
+    <meta name="description" content="Senses the viewer inside a box: isActive is true while the viewer is in the box set by center and size, with enterTime and exitTime, and position_changed and orientation_changed follow the viewer there."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 3.5 9" orientation="-1 -0 -0 0.3709"/>
+    <!-- The sensor's box, drawn as lines: step into it and the light goes on. -->
+    <ProximitySensor DEF="Zone" center="0 1 0" size="6 2 6"/>
+    <Shape>
+      <Appearance><Material emissiveColor="0.5 0.7 0.5"/></Appearance>
+      <IndexedLineSet coordIndex="0 1 2 3 0 -1, 4 5 6 7 4 -1, 0 4 -1, 1 5 -1, 2 6 -1, 3 7 -1">
+        <Coordinate point="-3 0 -3, 3 0 -3, 3 0 3, -3 0 3, -3 2 -3, 3 2 -3, 3 2 3, -3 2 3"/>
+      </IndexedLineSet>
+    </Shape>
+    <Shape>
+      <Appearance>
+        <Material DEF="Lamp" diffuseColor="0.3 0.3 0.1"/>
+      </Appearance>
+      <Sphere radius="0.5"/>
+    </Shape>
+    <ColorInterpolator DEF="On" key="0 1" keyValue="0.3 0.3 0.1, 1 0.9 0.2"/>
+    <TimeSensor DEF="Glow" cycleInterval="0.5"/>
+    <ROUTE fromNode="Zone" fromField="enterTime" toNode="Glow" toField="set_startTime"/>
+    <ROUTE fromNode="Glow" fromField="fraction_changed" toNode="On" toField="set_fraction"/>
+    <ROUTE fromNode="On" fromField="value_changed" toNode="Lamp" toField="set_emissiveColor"/>
+  </Scene>
+</X3D>

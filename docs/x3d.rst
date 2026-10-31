@@ -2190,6 +2190,10 @@ count, and 0 draws without.
        where none is named)
    * - ``--corpus DIR``
      - the corpus directory (pyvrml97's where not given)
+   * - ``--samples [DIR]``
+     - draw the node samples (``docs/samples/nodes``) instead of the corpus,
+       at 640x480, against ``tests/reference_images/x3d_samples``; see
+       :ref:`x3d-node-samples`
    * - ``--only PART``
      - draw only the documents whose name contains ``PART`` (repeatable)
    * - ``--bless [PART ...]``
@@ -2225,6 +2229,44 @@ count, and 0 draws without.
    * - ``--tolerance PCT``, ``--diff-threshold N``
      - the percent of pixels that may differ (2), and by how much in a
        channel a pixel must (8)
+
+.. _x3d-node-samples:
+
+Node samples
+------------
+
+Each node of VRML97 has a sample world in ``docs/samples/nodes``: ``<Node>.x3d``,
+a small X3D XML document written by hand with comments saying what it shows, and
+``<Node>.wrl``, the same world in VRML97 syntax, converted from the ``.x3d`` by
+``python -m docbuild.nodesamples --write`` so the two cannot differ. Files a
+sample names (an image, a sound, a movie, a document to inline) are in
+``docs/samples/nodes/assets``.
+
+A sample says what it shows in the ``head`` of its document:
+
+``title``, ``description``
+   the node, and a sentence on what its fields do.
+``sample:frames``
+   the frames drawn, on the capture clock, before the reference render is
+   read. A sample driven by a TimeSensor starting at 0 with a cycle of 4
+   seconds is at a quarter of its cycle after 59 frames (the clock runs at 60
+   frames a second).
+``sample:interactive``
+   ``true`` where the sample is for a reader to operate, such as a click or a
+   drag.
+
+``oglc-x3d-regression --samples`` draws every sample in a process of its own and
+compares it with the baseline in ``tests/reference_images/x3d_samples``, with the
+options of the corpus run; ``--only Box`` draws one, and ``--bless`` makes what
+was drawn the baselines. A sample has no X_ITE or Web3D render beside it.
+
+``tests/unit/test_nodesamples.py`` holds the samples to what they claim: every
+VRML97 node has one; each loads without a fault and holds its node; each
+``.wrl`` is what its ``.x3d`` converts to and parses to the same world; and each
+circuit of sensors and interpolators does what its description says. A
+TimeSensor is run to the moment of the reference render and the routed field
+read, and a pointing or environmental sensor is told what a pointer or a
+viewer does and the field it routes to is read.
 
 Writing
 -------

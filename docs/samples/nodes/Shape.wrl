@@ -1,0 +1,31 @@
+#VRML V2.0 utf8
+# META "title" "Shape"
+# META "description" "Joins a geometry to an appearance; a shape with no appearance is drawn unlit and white."
+
+Viewpoint {
+  orientation -1 -0 -0 0.2111
+  position 0 1.5 7
+}
+Transform {
+  translation -2 0 0
+  children [
+    Shape {
+      geometry Sphere { }
+    }
+  ]
+}
+Transform {
+  translation 2 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.85 0.35 0.2
+          shininess 0.4
+          specularColor 0.8 0.8 0.8
+        }
+      }
+      geometry Sphere { }
+    }
+  ]
+}

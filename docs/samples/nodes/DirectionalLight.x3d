@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="DirectionalLight"/>
+    <meta name="description" content="Light from one direction, the same everywhere in the scene: direction is the way it travels, intensity its strength and color its colour."/>
+  </head>
+  <Scene>
+    <Viewpoint position="2.5 3 6.5" orientation="-0.7634 0.6302 0.1417 0.5731"/>
+    <!-- The headlight is off, so the directional light is the only light. -->
+    <NavigationInfo headlight="false"/>
+    <DirectionalLight direction="-1 -1.2 -0.6" color="1 0.95 0.85" intensity="1"/>
+    <Transform translation="0 -1.1 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.6 0.55 0.5"/></Appearance>
+        <Box size="10 0.2 10"/>
+      </Shape>
+    </Transform>
+    <Shape>
+      <Appearance><Material diffuseColor="0.8 0.4 0.3"/></Appearance>
+      <Box size="1.4 1.4 1.4"/>
+    </Shape>
+    <Transform translation="2 -0.35 0.6">
+      <Shape>
+        <Appearance><Material diffuseColor="0.3 0.55 0.85"/></Appearance>
+        <Sphere radius="0.75"/>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

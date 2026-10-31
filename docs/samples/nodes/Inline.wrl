@@ -1,0 +1,20 @@
+#VRML V2.0 utf8
+# META "title" "Inline"
+# META "description" "Draws another document at this place in the world; url names it and is read when the world loads."
+
+Viewpoint {
+  orientation -0.5337 0.8377 0.1156 0.5061
+  position 2.5 2.2 5.5
+}
+Inline {
+  url [ "assets/pedestal.x3d" ]
+}
+Transform {
+  scale 0.6 0.6 0.6
+  translation 2.5 0 0
+  children [
+    Inline {
+      url [ "assets/pedestal.x3d" ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="NormalInterpolator"/>
+    <meta name="description" content="Turns a whole list of normals: keyValue holds a list of unit vectors for each key, and the interpolator blends them along great circles as set_fraction passes the key fractions."/>
+    <meta name="sample:frames" content="59"/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 0.5 6.5" orientation="-1 -0 -0 0.0768"/>
+    <NavigationInfo headlight="false"/>
+    <DirectionalLight direction="-1 0 -0.3" intensity="1.2"/>
+    <TimeSensor DEF="Clock" cycleInterval="4" loop="true"/>
+    <!-- Four normals a key, one for each corner of the sheet: all facing the viewer, then all facing the light. -->
+    <NormalInterpolator DEF="Tilt" key="0 0.5 1"
+        keyValue="0 0 1, 0 0 1, 0 0 1, 0 0 1,
+                  1 0 0, 1 0 0, 1 0 0, 1 0 0,
+                  0 0 1, 0 0 1, 0 0 1, 0 0 1"/>
+    <!-- The sheet on the left keeps its own normals and shows the lighting without the interpolator. -->
+    <Transform translation="-2.2 0 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.75 0.75 0.85"/></Appearance>
+        <IndexedFaceSet coordIndex="0 1 2 3 -1" normalPerVertex="true" solid="false">
+          <Coordinate point="-1 -1 0, 1 -1 0, 1 1 0, -1 1 0"/>
+          <Normal vector="0 0 1, 0 0 1, 0 0 1, 0 0 1"/>
+        </IndexedFaceSet>
+      </Shape>
+    </Transform>
+    <Transform translation="2.2 0 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.75 0.75 0.85"/></Appearance>
+        <IndexedFaceSet coordIndex="0 1 2 3 -1" normalPerVertex="true" solid="false">
+          <Coordinate point="-1 -1 0, 1 -1 0, 1 1 0, -1 1 0"/>
+          <Normal DEF="Facing" vector="0 0 1, 0 0 1, 0 0 1, 0 0 1"/>
+        </IndexedFaceSet>
+      </Shape>
+    </Transform>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Tilt" toField="set_fraction"/>
+    <ROUTE fromNode="Tilt" fromField="value_changed" toNode="Facing" toField="set_vector"/>
+  </Scene>
+</X3D>

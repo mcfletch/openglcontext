@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="MovieTexture"/>
+    <meta name="description" content="A movie played over a surface: url names the file, loop repeats it, and startTime and speed control when and how fast it plays."/>
+    <meta name="sample:frames" content="89"/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 0 5" orientation="0 1 0 0"/>
+    <Shape>
+      <Appearance>
+        <MovieTexture url='"assets/clip.mp4"' loop="true" startTime="1"/>
+      </Appearance>
+      <Box size="2.6 1.95 0.2"/>
+    </Shape>
+  </Scene>
+</X3D>

@@ -1,0 +1,20 @@
+#VRML V2.0 utf8
+# META "title" "WorldInfo"
+# META "description" "A title and notes for the document, shown by a browser in its menus; they draw nothing."
+
+Viewpoint {
+  orientation -0.6008 0.7867 0.1418 0.583
+  position 1.8 1.5 3.6
+}
+WorldInfo {
+  info [ "Written by hand for the node samples." "The title above names the world in a browser menu." ]
+  title "A box"
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.45 0.6 0.85
+    }
+  }
+  geometry Box { }
+}

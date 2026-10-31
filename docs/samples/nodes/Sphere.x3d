@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Sphere"/>
+    <meta name="description" content="A sphere centred on the origin; radius is the distance from the origin to its surface."/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <Shape>
+      <Appearance>
+        <Material diffuseColor="0.2 0.5 0.8" specularColor="0.8 0.8 0.8" shininess="0.4"/>
+      </Appearance>
+      <Sphere radius="1.2"/>
+    </Shape>
+  </Scene>
+</X3D>

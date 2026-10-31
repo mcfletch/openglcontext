@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Cylinder"/>
+    <meta name="description" content="A cylinder centred on the origin with its axis along y; top, side and bottom choose which surfaces are drawn."/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <Shape>
+      <Appearance>
+        <Material diffuseColor="0.3 0.65 0.35"/>
+      </Appearance>
+      <!-- top="false" leaves the cylinder open, so the inside shows. -->
+      <Cylinder radius="0.9" height="2" top="false"/>
+    </Shape>
+  </Scene>
+</X3D>

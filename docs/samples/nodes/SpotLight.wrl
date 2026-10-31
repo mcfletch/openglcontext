@@ -1,0 +1,46 @@
+#VRML V2.0 utf8
+# META "title" "SpotLight"
+# META "description" "Light from one place in a cone: direction is the axis, cutOffAngle where the cone ends and beamWidth where the light starts to fade towards it."
+
+Viewpoint {
+  orientation -0.7914 0.5821 0.1868 0.7705
+  position 3 4 6
+}
+NavigationInfo {
+  headlight FALSE
+  type [ "EXAMINE" "ANY" ]
+}
+SpotLight {
+  beamWidth 0.3
+  color 1 0.95 0.8
+  cutOffAngle 0.5
+  direction 0 -1 0
+  intensity 1.5
+  location 0 4 0
+  radius 12
+}
+Transform {
+  translation 0 -1.1 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.6 0.55 0.5
+        }
+      }
+      geometry Box {
+        size 10 0.2 10
+      }
+    }
+  ]
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.8 0.4 0.3
+    }
+  }
+  geometry Box {
+    size 1.2 1.2 1.2
+  }
+}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="FontStyle"/>
+    <meta name="description" content="How a Text node is set: family and style choose the face, size the height of a line, justify where the text sits about its origin, and spacing the gap between lines."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 -1 10" orientation="1 -0 -0 0.0997"/>
+    <Shape>
+      <Appearance><Material diffuseColor="0.6 0.85 0.95" emissiveColor="0.1 0.2 0.25"/></Appearance>
+      <Text string='"SERIF, BOLD, size 0.7"'>
+        <FontStyle family='"SERIF"' style="BOLD" size="0.7" justify='"MIDDLE"'/>
+      </Text>
+    </Shape>
+    <Transform translation="0 -1.2 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.95 0.7 0.7" emissiveColor="0.25 0.1 0.1"/></Appearance>
+        <Text string='"SANS, ITALIC, size 0.5"'>
+          <FontStyle family='"SANS"' style="ITALIC" size="0.5" justify='"MIDDLE"'/>
+        </Text>
+      </Shape>
+    </Transform>
+    <Transform translation="0 -2.2 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.7 0.95 0.7" emissiveColor="0.1 0.25 0.1"/></Appearance>
+        <Text string='"TYPEWRITER, size 0.5"'>
+          <FontStyle family='"TYPEWRITER"' size="0.5" justify='"MIDDLE"'/>
+        </Text>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

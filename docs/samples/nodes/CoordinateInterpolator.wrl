@@ -1,0 +1,32 @@
+#VRML V2.0 utf8
+# META "title" "CoordinateInterpolator"
+# META "description" "Moves a whole list of points: keyValue holds a list for each key, and the interpolator blends them as set_fraction passes the key fractions. Here the apex of a pyramid goes down and up."
+# META "sample:frames" "59"
+
+Viewpoint {
+  orientation -0.5301 0.8337 0.1544 0.6721
+  position 2.8 2.6 4.4
+}
+DEF Clock TimeSensor {
+  cycleInterval 4
+  loop TRUE
+}
+DEF Squash CoordinateInterpolator {
+  key [ 0 0.5 1 ]
+  keyValue [ -1 0 -1, 1 0 -1, 1 0 1, -1 0 1, 0 1.6 0, -1 0 -1, 1 0 -1, 1 0 1, -1 0 1, 0 0.4 0, -1 0 -1, 1 0 -1, 1 0 1, -1 0 1, 0 1.6 0 ]
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.8 0.6 0.25
+    }
+  }
+  geometry IndexedFaceSet {
+    coordIndex [ 0 3 2 1 -1 3 2 4 -1 2 1 4 -1 1 0 4 -1 0 3 4 -1 ]
+    coord DEF Apex Coordinate {
+      point [ -1 0 -1, 1 0 -1, 1 0 1, -1 0 1, 0 1.6 0 ]
+    }
+  }
+}
+ROUTE Clock.fraction_changed TO Squash.set_fraction
+ROUTE Squash.value_changed TO Apex.set_point

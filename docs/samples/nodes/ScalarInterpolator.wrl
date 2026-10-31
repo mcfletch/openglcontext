@@ -1,0 +1,29 @@
+#VRML V2.0 utf8
+# META "title" "ScalarInterpolator"
+# META "description" "Blends a single number through the keyValue numbers as set_fraction passes the key fractions; here it fades a box in and out through its transparency."
+# META "sample:frames" "59"
+
+Viewpoint {
+  orientation -0.6008 0.7867 0.1418 0.583
+  position 1.8 1.5 3.6
+}
+DEF Clock TimeSensor {
+  cycleInterval 4
+  loop TRUE
+}
+DEF Fade ScalarInterpolator {
+  key [ 0 0.5 1 ]
+  keyValue [ 0 0.8 0 ]
+}
+Shape {
+  appearance Appearance {
+    material DEF Skin Material {
+      diffuseColor 0.3 0.7 0.5
+    }
+  }
+  geometry Box {
+    size 1.8 1.8 1.8
+  }
+}
+ROUTE Clock.fraction_changed TO Fade.set_fraction
+ROUTE Fade.value_changed TO Skin.set_transparency

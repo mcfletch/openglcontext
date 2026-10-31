@@ -1,0 +1,41 @@
+#VRML V2.0 utf8
+# META "title" "Viewpoint"
+# META "description" "A place to look from: position and orientation place the viewer, fieldOfView sets the width of the view, and description names it in a browser menu."
+# META "sample:interactive" "true"
+
+DEF Front Viewpoint {
+  description "Front, from the side"
+  fieldOfView 0.8
+  orientation -0.4129 0.9036 0.1144 0.5949
+  position 3 1.5 5
+}
+DEF Above Viewpoint {
+  description "From above"
+  orientation -1 0 0 1.5696
+  position 0 8 0.01
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.8 0.5 0.2
+    }
+  }
+  geometry Box {
+    size 2 1 1
+  }
+}
+Transform {
+  translation 0 -0.75 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.3 0.6 0.4
+        }
+      }
+      geometry Box {
+        size 6 0.5 6
+      }
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+#VRML V2.0 utf8
+# META "title" "DirectionalLight"
+# META "description" "Light from one direction, the same everywhere in the scene: direction is the way it travels, intensity its strength and color its colour."
+
+Viewpoint {
+  orientation -0.7634 0.6302 0.1417 0.5731
+  position 2.5 3 6.5
+}
+NavigationInfo {
+  headlight FALSE
+  type [ "EXAMINE" "ANY" ]
+}
+DirectionalLight {
+  color 1 0.95 0.85
+  direction -1 -1.2 -0.6
+}
+Transform {
+  translation 0 -1.1 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.6 0.55 0.5
+        }
+      }
+      geometry Box {
+        size 10 0.2 10
+      }
+    }
+  ]
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.8 0.4 0.3
+    }
+  }
+  geometry Box {
+    size 1.4 1.4 1.4
+  }
+}
+Transform {
+  translation 2 -0.35 0.6
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.3 0.55 0.85
+        }
+      }
+      geometry Sphere {
+        radius 0.75
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+#VRML V2.0 utf8
+# META "title" "Material"
+# META "description" "The colour, shine, glow and transparency of a surface: three spheres that differ in one setting each."
+
+Viewpoint {
+  orientation -1 0 0 0.1853
+  position 0 1.5 8
+}
+Transform {
+  translation -2.5 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.7 0.1 0.1
+          shininess 0.8
+          specularColor 1 1 1
+        }
+      }
+      geometry Sphere { }
+    }
+  ]
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.1 0.1 0.1
+      emissiveColor 0.1 0.7 0.3
+    }
+  }
+  geometry Sphere { }
+}
+Transform {
+  translation 2.5 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.2 0.4 0.9
+          transparency 0.6
+        }
+      }
+      geometry Sphere { }
+    }
+  ]
+}
