@@ -1,15 +1,14 @@
 # Native physics: pyjoltphysics
 
-Status: **P0 to P3 landed 2026-10-30, P4a the same day, P4 (`engine.py`) 2026-10-31, and P5
-(Jolt the default, pyjoltphysics a requirement, omi_physics the `omi-physics` extra) 2026-10-31; in
-pyjoltphysics, P6a (vehicles) and P6c (ragdolls and soft bodies) 2026-10-31; P6b (vehicles
-through the service, glisteel on Jolt) 2026-10-31; P5b (walking and X3D rigid bodies off
-omi_physics) 2026-10-31; P6d (ragdolls and soft bodies through the service) 2026-10-31.**
-Decision taken 2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists
-locally (`develop`) with no GitHub remote yet; its workspace registration waits for the remote
-(see "P0 as built" below). Every game suite passes with no engine setting; glisteel's car is a
-vehicle of the service (P6b) and glisteel no longer depends on omi_physics. What deleting the omi engine takes is the list
-in "P5 as built" below, as "P5b as built" leaves it.
+Status: **P0 to P3 and P4a landed 2026-10-30. P4 (`engine.py`), P5 (Jolt the default,
+pyjoltphysics a requirement), P6a to P6e (vehicles, ragdolls, soft bodies, deaths as ragdolls),
+P5b (walking and X3D rigid bodies), Character falls and P5c (the omi engine deleted) landed
+2026-10-31.** Decision taken 2026-10-26; design spiked the same day. The `pyjoltphysics`
+repository is on GitHub (`mcfletch/pyjoltphysics`, branch `develop`), and root commit ccdb196
+registers it in the workspace. It is not on PyPI yet, so OpenGLContext's CI builds it from that
+repository. OpenGLContext steps its physics with Jolt only: `engine='omi'` raises ValueError,
+and no game or editor depends on omi_physics. The 2026-10-31 review's findings and their fixes
+are under "Review follow-ups".
 
 The decision (maintainer): the engine steps its rigid bodies with Jolt Physics through a wrapper
 of our own. Jolt always runs on a background thread owned by the wrapper, never inline and never
@@ -49,7 +48,7 @@ Python 3.14.7. Scripts and raw results are in
 | 30 characters, 10,000 posts | 4.23 | 0.97 | 0.29 | |
 | 30 characters, heightfield | 1.10 | 1.28 | 0.31 | |
 | 100 chains of 12 links | 227.3 | 2.02 | 2.64 | 0.78 |
-| 100,000 scattered rays | about 122,000 | 156 | 54.2 | |
+| 100,000 scattered rays | about 122,000 (estimated; no run recorded) | 156 | 54.2 | |
 
 That spike's own module (`native/jph/jphspike.cpp`) was compiled without optimisation: Jolt's
 `Distribution` build type sets `-O3` for the Jolt target only, so the binding code ran at `-O0`.
@@ -431,9 +430,9 @@ characters are integers. No call hands Python a pointer into Jolt.
 | `replica.py` (render-thread copy of the world for queries) | deleted; queries go to the world under its shared lock |
 | `queries.py` (sweep and overlap over omi worlds) | deleted |
 | `character.py` controller stepping, stand-in placement, the deferred stand-in machinery in `service.py` | deleted; `Character` keeps facing, locomotion, animation, footsteps and handlers over a native character row |
-| `records.py` | `Snapshot` and `Command` go; `PhysicsEvent`, `Step` and `BodySpec` (with neutral types) stay |
+| `records.py` | `Snapshot` and `Command` go; `PhysicsEvent`, `Step` and `BodySpec` (with neutral types) stay. As built, all five stay: `engine.py` and `joltengine.py` take `Command` records and publish `Snapshot`s |
 | `body.py`, `joints.py` (`Joint` handle), `events.py`, `handlers.py`, `callbacks.py`, `filters.py`, `materials.py`, `zones.py`, `colliders.py` (scenery tracker), `proxy.py` (cooking), `sources.py`, `x3drigid.py`, `x3dcollision.py`, `gltf_world.py`, `debugdraw.py`, `landscape.py`, `road.py`, `props.py` | stay, with the omi types replaced as below; `JointTable` is deleted |
-| `PhysicsDefinition.mode` (`inline`, `thread`, `process`) | removed; `engine` (`'omi'` or `'jolt'`) during P4, removed after P5 |
+| `PhysicsDefinition.mode` (`inline`, `thread`, `process`) | removed; `engine` (`'omi'` or `'jolt'`) during P4, removed after P5. As built, `mode` stays with `MODES = ('thread', 'inline')`, and `engine` stays with `ENGINES = ('jolt',)` |
 
 What reaches omi_physics through the public API today, and the neutral replacement:
 
@@ -565,7 +564,8 @@ Where the repository departs from the layout above:
 - `tools/release.py` reads only setuptools' `attr` version; the root patch teaches it
   scikit-build-core's regex provider, with two tests.
 - The root registration (submodule, uv source, preflight and release entries,
-  `verify-everything.py`, CLAUDE.md) is a patch waiting for the GitHub remote. It does not list
+  `verify-everything.py`, CLAUDE.md) is a patch waiting for the GitHub remote (landed as root
+  commit ccdb196 once the remote existed). It does not list
   the project under `[tool.opengl-dev.pre-release]`, since a pre-release checkout has no
   preflight gates and P0 is done when preflight runs them.
 
@@ -700,6 +700,10 @@ Differential suite (`tests/differential/`, marker `differential`, 38 tests, all 
 | 5 cm ball at 300 m/s, 5 cm wall | stops at -0.06 m | passes to 13 m | Jolt right: omi has no CCD |
 | 1,000 boxes in a 10 m bin, rest height mean and spread | 1.266 m, 0.717 m | 1.296 m, 0.740 m | 3% and 10% |
 | Dumbbell compound rest | 0.5 m, level | same | 1 cm, 1 degree |
+
+The omi column records what the run printed. `test_scenes.py` asserts only part of it: for the
+stack it checks omi's top height and not that omi's stack is asleep, and for the kinematic sensor
+it accepts omi reporting no events or an enter and an exit.
 
 Benchmarks (this machine, best of 3, the machine carrying other load during the 5,000-box runs):
 
@@ -1201,6 +1205,7 @@ What P5 needs:
   with `worker.py`, `runtime.py`, `replica.py` and `queries.py`.
 - The X3D rigid body tutorials compared against their own Jolt captures rather than omi's.
 - `pyjoltphysics` registration (GitHub remote, wheels) before it becomes a hard dependency.
+  The remote and the registration landed (root ccdb196); PyPI wheels wait for its first release.
 
 ### P5: marble-demo on Jolt (2026-10-31)
 
@@ -1753,7 +1758,8 @@ Soft bodies (`src/native/softbodies.*`, `pyjoltphysics.softbodies`):
   vertex radius, sleeping, double-sided faces, and a body's group, mask, filter, material and
   flags. Bend constraints default to distance constraints of compliance 0.01 and iterations to
   `iterations_for(shortest edge)`; without them a fine cloth tears apart in Jolt at 60 Hz
-  (benchmarks, below). Builders: `cloth`, `rope` (edges along a polyline, bend edges across every second vertex),
+  (benchmarks, below). Builders: `cloth`, `rope` (edges along a polyline; a finite `bend_compliance` adds bend edges across every second
+  vertex, and the default `math.inf` adds none),
   `ball` (an icosphere with pressure), `from_mesh`. The shared settings are built and checked on
   the calling thread at submission.
 - A soft body is a body row (uid at submission; `remove_bodies`, `activate`, sleep); it meets rigid
@@ -1779,7 +1785,7 @@ tests hold the behaviour to analytic expectations:
 
 | Test | Expectation |
 |---|---|
-| Limp humanoid tipped onto the floor | at rest (every bone under 0.05 m/s) after 6 s, above the floor, every joint's twist within its limits and swing within twice its larger cone half angle, 0.05 rad slack |
+| Limp humanoid tipped onto the floor | at rest (every bone under 0.05 m/s) after 6 s, above the floor, every joint's twist within its limits and swing within its bend plus its larger cone half angle, 0.05 rad slack |
 | Kinematic humanoid playing a 3-key looping clip, placed off the origin | every joint within 1 mm of `forward_kinematics` of the clip at the snapshot's time, five times over two loops |
 | Kinematic held pose and placement | joints within 0.1 mm, orientations within 1e-5 |
 | Powered humanoid struck on an arm and above the head (root spring 4000 N, 1500 N m) | deviation from the pose over 0.15 rad after 0.1 s, under 0.1 rad after 2 s; the limp one struck the same stays over 0.3 rad; the root stays over 0.9 m |
@@ -2266,7 +2272,8 @@ the animated pose while a ragdoll or a blend draws the figure.
 
 openglcontext branch `p5c-omi-removal`; pyjoltphysics c929894; twig-bb 527eeba;
 openglcontext-editor 0613426; glisteel 00ad36a; glisteel-editor ddfdeac; marble-demo 231f815.
-The root `uv.lock` is not regenerated (it still lists the `omi-physics` extra).
+The root `uv.lock` is not regenerated (it still lists the `omi-physics` extra). It was
+regenerated later the same day, and no longer lists the extra.
 
 Deleted from OpenGLContext: `physics/omiengine.py`, `omi_adapter.py`, `runtime.py`,
 `worker.py`, `replica.py`, `queries.py`, `x3domi.py`; `engine.require_omi`, `OMI_EXTRA`, the
@@ -2351,7 +2358,8 @@ Left:
   `crouchSpeed`.
 - `tickHz` given to `enable` or `set_config` is kept until the world is made again; the
   `physics_stairs_tuning` tutorial's finer step changes nothing on Jolt.
-- The root `uv.lock` needs `uv lock` for the removed extra.
+- The root `uv.lock` needs `uv lock` for the removed extra (done 2026-10-31; it is gitignored,
+  so each checkout regenerates its own).
 - `tests/tutorials/core_context/navmesh_demo.py`'s comment still names `from_world()`: the
   file holds another agent's uncommitted edit, so it was left; the comment should name
   `from_scene(scene)`.
@@ -2452,3 +2460,64 @@ commit.
   takes effect, but it worked through a lambda collected at once. The handler is now a
   module function. 6e8d9a29.
 
+- H15 (pyjoltphysics required with no floor and not on PyPI): CI builds it from the develop
+  branch of its repository, with a comment to remove the step once it is on PyPI, in
+  openglcontext's `test.yml` and `documentation.yml` (db18fc5f) and in marble-demo (9d92721) and
+  marble-editor (6209b27), which install OpenGLContext from git. twig-bb, glisteel,
+  glisteel-editor, hill-runner, the forest and openglcontext-editor install OpenGLContext
+  3.0.0a8 from PyPI, which requires omi_physics and not pyjoltphysics, so their workflows are
+  unchanged; release.py releases pyjoltphysics before any OpenGLContext that requires it. The
+  floor is not written here. `release.floor_problems` reports a sibling required with no floor
+  (an extras requirement takes the floor another requirement of the project names), checked
+  against every workspace project, and `--apply` refuses it. On the workspace today it reports
+  openglcontext's `pyjoltphysics`, pyvrml97's `PyDispatcher`, glisteel-editor's
+  `OpenGLContext-editor` and `glisteel`, and marble-editor's `openglcontext-marble-demo`.
+  Root 1b04342.
+- M18 (the reference_images gitlink is on no remote branch): `release.check_ready` refuses a
+  project whose HEAD records a submodule commit no remote-tracking branch of that submodule's
+  checkout contains (`unpushed_gitlinks`). It reports openglcontext's `tests/reference_images`
+  at 63c8194, so reference_images has to be pushed before openglcontext can be released.
+  Root 1b04342.
+- M22 (the radeonsi NGG workaround reaches test sessions only): the maintainer's decision is to
+  document it for applications. docs/backends.rst, "Known driver defects", gives the symptom,
+  the stack, `AMD_DEBUG=nonggc` and the Mesa report; docs/testing.rst and the drivercull
+  docstring say the switch is for test sessions. c6ba48dc.
+- M23 (a dry run fetches every repository): `--no-fetch` skips `git fetch origin` in the
+  repositories and submodules; the module docstring, the help text and the root CLAUDE.md say a
+  run fetches and writes, commits and pushes nothing without `--apply`. Root 1b04342.
+- M25 (`TilesTerrain(physics_world=)` in the docs): tiles3d.rst and loading.rst name
+  `physics=context.physics`. No other deleted physics name is left in docs, docstrings or
+  tutorials; settings.default_engine's docstring no longer speaks of several engines. a05199ab.
+- M26 (Ctrl-C ended the main loop as a closed window): `WindowSystem.mainLoop` lets
+  KeyboardInterrupt propagate after the journals close and the window is released, and
+  `Context.ContextMainLoop` turns it into exit status 130 with no traceback. Test:
+  `tests/unit/test_mainloop_interrupt.py`; docs/embedding.rst. A KeyboardInterrupt inside a
+  draw still goes to `OnQuit` (context.py), which ends the process with status 0, since a draw
+  run from a toolkit's C callback cannot raise to the loop. a4e48ad5.
+- M27 and L34 (plan claims the code contradicts): the status summary states the state after
+  P5c; the registration bullets of P0 and P4 say it landed (root ccdb196); the spike's omi ray
+  figure is marked as an estimate; the P1b table says which omi cells `test_scenes.py` asserts;
+  section 4's rows for `records.py` and `PhysicsDefinition.mode` say what stayed; the rope
+  builder adds bend edges only with a finite `bend_compliance`; the limp humanoid's swing bound
+  is its bend plus its larger cone half angle, as `test_ragdolls.py` asserts; the uv.lock lines
+  say it was regenerated.
+- L28 (drivercull narrated past failures and a disproved second-context cause): the docstring,
+  docs/testing.rst and the `OPENGLCONTEXT_NGG_CULLING` comment in test_render_options.py state
+  the clip w = 0 fault and its rate in the present. c6ba48dc.
+- L31 (release.py read only `__version__`): a version file's `VERSION = '...'`, which
+  scikit-build-core's default regex reads, is read and rewritten where no `__version__` is.
+  Root 1b04342.
+- L32 (physics=/audio= coercion unlike navigation's): `contextdefinition.settings_node` takes a
+  mapping for all three fields and a bool for physics and audio; `navigation=True` raises
+  ValueError naming `navigation=None`. docs/physics.rst. f95ed556.
+- L26 licence half: license.txt lists cooking.py and massprops.py, copied from omi_physics (MIT,
+  same author), among its exceptions. 1a1f7548.
+- L36 (prose on added lines, openglcontext's share): the perception verbs in locomotion.py,
+  physics_stairs_thread.py, character_camera.py and character_footsteps.py name the mechanism,
+  and the em dashes in gltf.rst and instancing.rst are gone. `scan.py --base origin/develop`
+  reports nothing on openglcontext. f9eaf160.
+- L35 (commit messages): not rewritten, since history is not rewritten. Ten openglcontext
+  commits carry `Co-Authored-By` trailers (ae89ba96, c9a7259a, 67f551f2, 5bf1b012, 21da4787,
+  5b76b5d3, 76c218e8, fe492c85, c47dfaf1, bb7193e4); 67 subjects run over 72 characters; 24
+  openglcontext and 11 pyjoltphysics commits have no bullets; 79d2bf50 mixes the
+  ContextDefinition coercion (L32), the main-loop change (M26) and tutorial edits.
