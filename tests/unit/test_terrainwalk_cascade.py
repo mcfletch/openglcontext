@@ -11,7 +11,7 @@ import pytest
 from OpenGLContext import context as context_module
 from OpenGLContext.scenegraph.terrain import HeightField
 
-from ._terrain_host import Clock
+from ._terrain_host import SINGLE, Clock
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def test_do_event_cascade_chains_to_host_then_clamps_to_ground(clock, host_casca
     assert host_cascade == [walker]                      # host cascade ran
     assert result == 'host-changed'                      # and its result propagates
     # viewer seated on the terrain at eye height, not left at y=999
-    assert walker.platform.position[1] == pytest.approx(5.0 + walker.eye_height, abs=0.02)
+    assert walker.platform.position[1] == pytest.approx(5.0 + walker.eye_height, abs=SINGLE)
 
 
 def test_the_cascade_runs_and_clamps_nothing_without_a_platform(clock, host_cascade):

@@ -23,6 +23,9 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph.terrain import HeightField
 
 FRAME = 1.0 / 60.0
+#: How far a place the physics world reports may be from the exact one, in metres: Jolt
+#: hands positions back in single precision, two units in the last place at 20 m.
+SINGLE = 1e-5
 
 
 class Clock:

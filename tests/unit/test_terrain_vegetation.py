@@ -17,7 +17,7 @@ from OpenGLContext.scenegraph.vegetation.clumps import _decimate_ribbons
 from OpenGLContext.scenegraph.instancedgl import SHADER_DIR
 from OpenGLContext.loaders.tiles3d.vegetation import poisson_thin
 
-from ._terrain_host import Clock
+from ._terrain_host import SINGLE, Clock
 
 
 def ramp_field(R=5, E=4.0, relief=10.0):
@@ -328,7 +328,7 @@ def test_clamp_snaps_to_ground(clock):
     w.init_walk(hf)
     w.collide_and_clamp()
     expect = hf.height_at(10.0, -3.0) + w.eye_height
-    assert w.platform.position[1] == pytest.approx(expect, abs=0.02)
+    assert w.platform.position[1] == pytest.approx(expect, abs=SINGLE)
 
 
 # --- packaging -----------------------------------------------------------------

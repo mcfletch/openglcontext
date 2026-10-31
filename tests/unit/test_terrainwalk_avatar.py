@@ -20,7 +20,7 @@ from OpenGLContext.move import modes as movemodes
 from OpenGLContext.scenegraph.terrain import HeightField
 
 from ._terrain_host import (
-    FRAME, Clock, eye, flat_field, press, ramp_field, run, walking,
+    FRAME, SINGLE, Clock, eye, flat_field, press, ramp_field, run, walking,
 )
 
 
@@ -85,7 +85,7 @@ class TestTheAvatarInTheWorld:
         trunk = np.array([[0.0, 0.0, -6.0]], 'f')
         host = walking(clock, colliders=trunk, radii=np.array([0.5], 'f'))
         assert host.physics.raycast((10.0, 50.0, 10.0), (0, -1, 0)).body is host._tw_landscape.body  # noqa: SLF001 the landscape the mix-in keeps, which it does not expose
-        assert host.physics.raycast((0.0, 5.5, -3.0), (0, 0, -1)).point[2] == pytest.approx(-5.5, abs=0.02)
+        assert host.physics.raycast((0.0, 5.5, -3.0), (0, 0, -1)).point[2] == pytest.approx(-5.5, abs=SINGLE)
 
     def test_a_context_whose_physics_is_switched_off_walks_all_the_same(self, clock):
         """Walking is the physics service, so binding a landscape switches it on."""
@@ -95,7 +95,7 @@ class TestTheAvatarInTheWorld:
         press(host, 'w')
         run(host, clock, 1.0)
         assert host.physics.definition.enabled
-        assert eye(host)[1] == pytest.approx(5.0 + host.eye_height, abs=2e-3)
+        assert eye(host)[1] == pytest.approx(5.0 + host.eye_height, abs=SINGLE)
         assert eye(host)[2] < -1.0
 
     def test_a_ground_that_is_slow_to_sample_is_read_ahead_of_the_walker(self, clock):
@@ -143,7 +143,7 @@ class TestWalking:
     def test_the_walker_stands_at_eye_height_on_the_ground(self, clock):
         host = walking(clock, field=flat_field(height=5.0))
         run(host, clock, 0.2)
-        assert eye(host)[1] == pytest.approx(5.0 + host.eye_height, abs=2e-3)
+        assert eye(host)[1] == pytest.approx(5.0 + host.eye_height, abs=SINGLE)
 
     def test_holding_forward_walks(self, clock):
         host = walking(clock)
@@ -169,8 +169,11 @@ class TestWalking:
         press(host, 'w')
         run(host, clock, 1.0)
         x, y, z = eye(host)
-        assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
-                                  abs=0.02)
+        # The capsule's round bottom rests on the slope uphill of the feet, r (1/cos - 1)
+        # above the ground under them; Jolt quantises a height field's samples, 1e-4 m here.
+        lift = host.player_radius * (1.0 / math.cos(math.atan(20.0 / 200.0)) - 1.0)
+        assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height + lift,  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
+                                  abs=3e-4)
 
     def test_retuning_the_mode_retunes_the_walk(self, clock):
         """What the settings screen edits is what the avatar moves at.
@@ -218,7 +221,7 @@ class TestObstacles:
         press(host, 'w')
         run(host, clock, 2.5)
         x, _y, z = eye(host)
-        assert math.hypot(x - 0.0, z + 6.0) >= 0.5 + host.player_radius - 0.02
+        assert math.hypot(x - 0.0, z + 6.0) >= 0.5 + host.player_radius - SINGLE
         assert z > -6.0
 
     def test_open_ground_is_not_obstructed(self, clock):
@@ -271,15 +274,16 @@ class TestMounds:
         run(host, clock, 0.5)
         x, y, z = eye(host)
         assert math.hypot(x, z + 6.0) < 3.0
+        # The rock is flat triangles under the round top it is made from, 7.4e-4 m below it here.
         assert y - host.eye_height == pytest.approx(
-            0.1 + 0.3 * math.sqrt(1.0 - (math.hypot(x, z + 6.0) / 3.0) ** 2), abs=0.02)
+            0.1 + 0.3 * math.sqrt(1.0 - (math.hypot(x, z + 6.0) / 3.0) ** 2), abs=1e-3)
 
     def test_a_rock_too_tall_to_step_onto_is_a_wall(self, clock):
         host = self.host_walking_at(clock, self.mound(rim=0.9, top=1.4))
         run(host, clock, 6.0)
         x, y, z = eye(host)
-        assert math.hypot(x, z + 6.0) >= 1.5 + host.player_radius - 0.03
-        assert y - host.eye_height == pytest.approx(0.0, abs=2e-3)
+        assert math.hypot(x, z + 6.0) >= 1.5 + host.player_radius - SINGLE
+        assert y - host.eye_height == pytest.approx(0.0, abs=SINGLE)
 
     def test_a_walker_whose_feet_are_above_the_rock_is_not_stopped_by_it(self, clock):
         host = walking(clock, field=flat_field(height=0.0))
@@ -290,13 +294,14 @@ class TestMounds:
         # A character's teleport finds its floor in the tick that applies it.
         run(host, clock, 0.05)
         assert tuple(walker.position[::2]) == pytest.approx((0.0, -6.0), abs=1e-3)
-        assert walker.position[1] == pytest.approx(1.4, abs=0.02)
+        # The top of the rock's mesh is 3e-5 m under its peak.
+        assert walker.position[1] == pytest.approx(1.4, abs=1e-4)
 
     def test_a_rock_is_a_body_of_the_world_while_the_walker_is_near_it(self, clock):
         host = walking(clock, field=flat_field(height=0.0))
         host.add_collider_source(self.mound(rim=0.1, top=0.4, at=(0.0, 0.0, -10.0)))
         run(host, clock, 0.2)
-        assert host.physics.raycast((0.0, 5.0, -10.0), (0, -1, 0)).point[1] == pytest.approx(0.4, abs=0.02)
+        assert host.physics.raycast((0.0, 5.0, -10.0), (0, -1, 0)).point[1] == pytest.approx(0.4, abs=SINGLE)
 
     def test_a_source_is_asked_where_the_walker_is_and_how_far_it_reaches(self, clock):
         asked = []
@@ -336,7 +341,7 @@ class TestFlying:
         press(host, 'c')
         run(host, clock, 2.0)
         surface = 0.3 + 0.5 * math.sqrt(1.0 - (2.0 / 3.0) ** 2)      # the dome, 2 m from its middle
-        assert eye(host)[1] - host.eye_height == pytest.approx(surface, abs=0.02)
+        assert eye(host)[1] - host.eye_height == pytest.approx(surface, abs=SINGLE)
 
 
 class TestJumping:
@@ -350,7 +355,7 @@ class TestJumping:
         run(host, clock, 2.0)
         x, y, z = eye(host)
         assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
-                                  abs=2e-3)
+                                  abs=SINGLE)
 
 
 # -- living beside the free-fly camera ----------------------------------------
@@ -369,7 +374,7 @@ class TestFreeFly:
         host = clock.host((3.0, 999.0, -2.0))
         host.init_walk(flat_field(height=5.0))
         host.collide_and_clamp()
-        assert eye(host)[1] == pytest.approx(5.0 + host.eye_height, abs=2e-3)
+        assert eye(host)[1] == pytest.approx(5.0 + host.eye_height, abs=SINGLE)
 
     def test_handing_the_camera_back_and_taking_it_again(self, clock):
         host = walking(clock)
@@ -383,7 +388,7 @@ class TestFreeFly:
         x, y, z = eye(host)
         assert (x, z) == pytest.approx((10.0, 10.0), abs=1e-3)
         assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
-                                  abs=2e-3)
+                                  abs=SINGLE)
 
     def test_the_avatar_is_not_stepped_while_the_camera_is_free(self, clock):
         host = walking(clock)
@@ -447,7 +452,7 @@ def test_a_host_made_with_a_different_height_field_walks_that_one(clock):
     host.init_walk(HeightField(np.ones((8, 8)), 200.0, 9.0))
     host.setupPhysics(enable=True)
     run(host, clock, 0.3)
-    assert eye(host)[1] == pytest.approx(9.0 + host.eye_height, abs=2e-3)
+    assert eye(host)[1] == pytest.approx(9.0 + host.eye_height, abs=SINGLE)
     assert host.physics.raycast((10.0, 50.0, 10.0), (0, -1, 0)).point[1] == pytest.approx(9.0, abs=0.01)
 
 
