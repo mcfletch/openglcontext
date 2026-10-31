@@ -23,8 +23,6 @@ Run:  python tests/lod_demo.py
 import math
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
 from OpenGL.GL import (
     glPolygonMode, GL_FRONT_AND_BACK, GL_LINE, GL_FILL,
 )
@@ -135,4 +133,7 @@ class TestContext(BaseContext):
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'windowsystem': 'glfw',
+        'renderer': 'pbr',
+    })

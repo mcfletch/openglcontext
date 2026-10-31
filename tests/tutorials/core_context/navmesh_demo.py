@@ -52,12 +52,6 @@ The usual keys walk around, though the view starts overhead because that
 is where a navmesh reads.
 '''
 import os
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-# The fox is a glTF model with its surfaces described the way the PBR
-# renderer reads them, so that is the renderer to draw it with.
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
-
 import numpy as np
 
 from OpenGLContext.character.locomotion import ClipMap

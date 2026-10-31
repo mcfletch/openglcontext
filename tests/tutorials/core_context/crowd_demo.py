@@ -30,8 +30,6 @@ shader belongs to that pass, and only figures the shader skins keep their
 rest-pose vertices on the card. Identical vertices are what let 150 bodies
 collapse into one instanced draw.'''
 import os
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
 import numpy as np
 
@@ -300,4 +298,7 @@ class TestContext(BaseContext):
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'windowsystem': 'glfw',
+        'renderer': 'pbr',
+    })

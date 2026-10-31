@@ -550,6 +550,19 @@ class ContextDefinition( node.Node ):
     def __init__( self, **named: Any ) -> None:
         forwarded = {name: named.pop( name ) for name in
                      ('movementModes', 'movementMode') if name in named}
+        from OpenGLContext.move import navigationdefinition
+        for key, cls in (
+            ('physics',physicssettings.PhysicsDefinition),
+            ('audio',audiosettings.AudioSettings,),
+            ('navigation',navigationdefinition.Navigation)
+        ):
+            if key not in named:
+                continue
+            tmp = named[key]
+            if isinstance(tmp, bool) and key != 'navigation':
+                named[key] = cls(enabled=tmp)
+            elif isinstance(tmp, dict):
+                named[key] = cls(**tmp)
         # Zero-argument super, so an instance of this class still finds its own
         # base after the module has been reloaded: the two-argument form looks
         # the class up as a module global, which a reload has rebound to a

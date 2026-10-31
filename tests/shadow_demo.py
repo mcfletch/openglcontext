@@ -19,9 +19,6 @@ Runs with shadow mapping on (core profile). Override via the environment:
 import os
 from math import sin, cos, pi
 
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
-
 from OpenGLContext.context import Context as BaseContext
 
 from OpenGLContext.scenegraph.basenodes import (

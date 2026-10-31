@@ -9,7 +9,10 @@ DEF Omni01 PointLight {
   on TRUE
   radius 11.1
 }
-NavigationInfo { headlight FALSE }
+NavigationInfo { 
+  headlight FALSE
+  type "FLY"
+}
 DEF Box01 Transform {
 	translation -2 0 0
   children [

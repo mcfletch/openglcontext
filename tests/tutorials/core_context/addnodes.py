@@ -77,5 +77,6 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop(definition={
-        'renderer':'vrml97',
+        'renderer':'pbr',
+        'fullscreen': True,
     })

@@ -45,10 +45,6 @@ marker 66 m across the ground:
 
     move   marker 0 from (-50.12, 18.00) to (-46.00, -48.00)
 '''
-import os
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
 from functools import partial
 
 import numpy as np

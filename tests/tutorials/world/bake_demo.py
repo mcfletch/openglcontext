@@ -32,14 +32,7 @@ written file is left on disk at the path the report names, for opening in any
 other glTF viewer.
 '''
 import os
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-# A loaded document wears PBR materials, and only the metallic/roughness pass
-# has anything to say to one; without it every surface here draws flat white.
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
-
 import tempfile
-
 import numpy as np
 
 from OpenGLContext import testingcontext

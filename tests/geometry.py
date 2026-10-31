@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 '''Tests rendering of the Box geometry object
+
 '''
 #import OpenGL
 #OpenGL.FULL_LOGGING = True
@@ -50,7 +51,7 @@ class TestContext( BaseContext ):
         )
         self.appearance = Appearance(
             material = Material(
-                diffuseColor =(1,0,0),
+                diffuseColor =(.75,.75,.75),
                 specularColor = (.5,.5,.5),
             ),
             texture = ImageTexture(
@@ -140,7 +141,6 @@ class TestContext( BaseContext ):
         self.time.start ()
     def OnTimerFraction( self, event ):
         self.sg.rotation = array([0,1,0,event.fraction()*pi*2],'f')
-        self.appearance.material.diffuseColor = [event.fraction()]*3
         self.triggerRedraw( False )
     def OnImageSwitch( self, _event=None ):
         """Choose a new mapped texture"""

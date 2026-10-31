@@ -5,7 +5,7 @@
 
 Most of the time you will not want to hand-build your scene from primitive
 objects or calculate the positions of vertices in meshes with a calculator.
-Tools such as `Blender<https://www.blender.org/>`_ are freely available,
+Tools such as `Blender <https://www.blender.org/>`__ are freely available,
 provide extensive tutorials and pre-made worlds, and can export into the
 glTF format that OpenGLContext supports.
 
@@ -16,7 +16,7 @@ import math
 from OpenGLContext.context import Context as BaseContext
 '''OpenGLContext includes a small index of glTF files that are maintained
 on GitHub by Khronos (stewards of glTF) as demonstrations and test vectors. These are what
-configures the `oglc-gltf-demo` command. The :func:`sample_model_url` function
+configures the `oglc-gltf-demo` command. The :py:func:`OpenGLContext.loaders.gltf.sample_model_url` function
 looks up the URL in that index by name.
 '''
 from OpenGLContext.loaders.gltf import sample_model_url

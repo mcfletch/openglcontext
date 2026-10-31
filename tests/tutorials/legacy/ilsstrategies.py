@@ -25,24 +25,24 @@ class TestContext( BaseContext ):
         if mode.visible:
             self.render_geom()
     def render_geom( self ):
-            try:
-                if self.USE_VBO:
-                    self.geometry.bind()
-                glDisable( GL_LIGHTING )
-                glColor3f( 0.,1.,0. )
-                glEnableClientState( GL_VERTEX_ARRAY )
-                glVertexPointerf( self.geometry )
-                glMultiDrawArrays(
-                    GL_LINE_STRIP,
-                    self.start_indices,
-                    self.lengths,
-                    50000
-                )
-            finally:
-                glDisableClientState( GL_VERTEX_ARRAY )
-                glEnable( GL_LIGHTING )
-                if self.USE_VBO:
-                    self.geometry.unbind()
+        try:
+            if self.USE_VBO:
+                self.geometry.bind()
+            glDisable( GL_LIGHTING )
+            glColor3f( 0.,1.,0. )
+            glEnableClientState( GL_VERTEX_ARRAY )
+            glVertexPointerf( self.geometry )
+            glMultiDrawArrays(
+                GL_LINE_STRIP,
+                self.start_indices,
+                self.lengths,
+                50000
+            )
+        finally:
+            glDisableClientState( GL_VERTEX_ARRAY )
+            glEnable( GL_LIGHTING )
+            if self.USE_VBO:
+                self.geometry.unbind()
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

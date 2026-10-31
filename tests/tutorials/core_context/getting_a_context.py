@@ -11,6 +11,10 @@ most 3D worlds, including navigation, and geometry renderering. It defaults
 to a modern Physically Based Renderer that requires a modern OpenGL 3.3+ 
 driver. Most machines produced after about 2014 should be able to provide
 this kind of context.
+
+.. note::
+
+    Physically Based Render (PBR) is what most 
 '''
 from OpenGLContext.context import Context as BaseContext 
 '''
@@ -39,7 +43,7 @@ class TestContext(BaseContext):
         engine. That is, you setup a graph of nodes that will be processed
         by the engine to update the scene on each rendering pass. The
         root node is *always* a OpenGLContext.scenegraph.scenegraph.sceneGraph 
-        and has a "children" field which hold all the nodes in the scene.'''
+        and has a "children" field which holds all the nodes in the scene.'''
         '''The scenegraph rendered by the engine is modelled on the X3D (VRML)
         scenegraph nodes as provided by the PyVRML97 project. X3D is a large
         standard with a lot of functionality included.'''

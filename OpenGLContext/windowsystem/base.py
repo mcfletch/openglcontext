@@ -310,8 +310,11 @@ class WindowSystem(abc.ABC):
         context.deferRedraw = True
         trace = context.loopTrace or LoopTrace()
         try:
-            while self.running():
-                self.loopIteration(trace)
+            try:
+                while self.running():
+                    self.loopIteration(trace)
+            except KeyboardInterrupt:
+                pass
         finally:
             context.closeJournals('mainloop-ended')
             self.release()

@@ -211,6 +211,19 @@ class TestTheDefinitionField:
         definition = ContextDefinition(navigation=None)
         assert not definition.navigation
 
+    def test_a_definition_naming_other_fields_keeps_the_default_navigation(self):
+        definition = ContextDefinition(profile='compatibility')
+        assert [mode.name for mode in definition.navigation.modes] == ['examine']
+
+    def test_a_mapping_is_the_fields_of_a_navigation(self):
+        definition = ContextDefinition(navigation={'modes': ['fly']})
+        assert [mode.name for mode in definition.navigation.modes] == ['fly']
+
+    def test_physics_and_audio_take_a_bool_for_enabled(self):
+        definition = ContextDefinition(physics=False, audio=False)
+        assert not definition.physics.enabled
+        assert not definition.audio.enabled
+
     def test_it_is_not_offered_as_a_rendering_setting(self):
         assert 'navigation' not in ContextDefinition.UI_HINTS
 

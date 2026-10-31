@@ -745,8 +745,8 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         from OpenGLContext import contextdefinition
 
-        declared = definition is None
-        if declared:
+        passed = definition is not None
+        if not passed:
             definition = cls.contextDefinition
             if definition is not None:
                 definition = definition.copy()
@@ -768,12 +768,12 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                 # which fails at the first fixed-function call it was asked for.
                 definition.version = contextdefinition.version_for_profile(
                     definition.profile)
-        if declared and cls.profile and not _fieldIsSet(definition, 'profile'):
+        if not passed and cls.profile and not _fieldIsSet(definition, 'profile'):
             definition.profile = cls.profile
             if not _fieldIsSet(definition, 'version'):
                 definition.version = contextdefinition.version_for_profile(cls.profile)
         callerNamedOne = 'windowsystem' in named or (
-            not declared and _fieldIsSet(definition, 'windowsystem'))
+            passed and _fieldIsSet(definition, 'windowsystem'))
         if cls.windowSystemName and not callerNamedOne:
             # Over the class's own declaration, but under what the caller
             # passed: a program that asked for PygameContext meant pygame,
