@@ -9,7 +9,6 @@ mirrored boxes inside-out, breaking symmetry.
 
 import pytest
 
-pytest.importorskip("pygltflib")
 import numpy as np
 from pygltflib import (
     GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,

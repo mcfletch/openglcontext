@@ -20,7 +20,7 @@ from OpenGLContext.scenegraph.text import shadertext
 from OpenGLContext.ui.draw import OverlayRenderer
 from OpenGLContext.ui.geometry import Rect
 
-Image = pytest.importorskip("PIL.Image")
+from PIL import Image
 
 WIDTH = HEIGHT = 64
 

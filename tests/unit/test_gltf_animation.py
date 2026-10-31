@@ -9,7 +9,7 @@ import math
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.loaders.gltf import animation as ga
 

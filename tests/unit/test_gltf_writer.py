@@ -289,7 +289,7 @@ def _quad_with(material):
 # --- textures -----------------------------------------------------------------
 
 def _image(color=(255, 0, 0, 255), size=(4, 4)):
-    Image = pytest.importorskip('PIL.Image')
+    from PIL import Image
     return Image.new('RGBA', size, color)
 
 
@@ -453,7 +453,7 @@ class TestAnotherParserAgrees:
     """Our own reader accepting the output proves too little on its own."""
 
     def test_pygltflib_reads_what_we_write(self):
-        pygltflib = pytest.importorskip('pygltflib')
+        import pygltflib
         g = pygltflib.GLTF2.load_from_bytes(write_glb(_quad()))
         assert g.asset.version == '2.0'
         assert len(g.meshes) == 1

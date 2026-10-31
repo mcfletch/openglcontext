@@ -11,8 +11,8 @@ import io
 
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
-Image = pytest.importorskip("PIL.Image")
+import pygltflib
+from PIL import Image
 from pygltflib import (
     GLTF2, Material, PbrMetallicRoughness, TextureInfo,
     Image as GLTFImage, Texture, BufferView, Buffer,

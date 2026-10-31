@@ -8,7 +8,7 @@ the Khronos Duck Draco variant and checks its counts against the uncompressed Du
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 DracoPy = pytest.importorskip("DracoPy")
 
 from pygltflib import (

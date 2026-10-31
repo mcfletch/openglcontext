@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.character import attachment as at
 from OpenGLContext.character.humanoid import Humanoid

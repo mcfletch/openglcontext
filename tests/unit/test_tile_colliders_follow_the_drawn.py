@@ -16,7 +16,6 @@ import weakref
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset

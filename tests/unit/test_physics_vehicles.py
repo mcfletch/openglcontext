@@ -14,7 +14,7 @@ from OpenGLContext.physics.vehicles import (
     car_wheels,
 )
 
-pj = pytest.importorskip('pyjoltphysics')
+import pyjoltphysics as pj
 
 MASS = 1180.0
 TICK_HZ = 120.0

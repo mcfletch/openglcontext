@@ -11,7 +11,6 @@ import sys
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext import contactsheet
 from OpenGLContext.bin import character_sheet as sheet_tool

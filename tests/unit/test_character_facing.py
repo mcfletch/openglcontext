@@ -204,7 +204,6 @@ class TestFitting:
 
 class TestModelBounds:
     def test_the_bounds_are_those_of_the_models_vertices(self):
-        pytest.importorskip('pygltflib')
         from OpenGLContext.character import CharacterModel
 
         from ._character_assets import character_glb
@@ -212,7 +211,6 @@ class TestModelBounds:
         assert (low[1], high[1]) == (-1.0, 1.0)
 
     def test_a_model_with_no_triangles_has_none(self):
-        pytest.importorskip('pygltflib')
         from OpenGLContext.character import CharacterModel
 
         from ._character_assets import skeleton_glb

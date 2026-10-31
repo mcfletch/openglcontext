@@ -7,7 +7,7 @@ loader parsing ``skins`` / ``JOINTS_0`` / ``WEIGHTS_0`` / ``inverseBindMatrices`
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 from pygltflib import (
     GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
     Buffer, Skin, Animation as GAnimation, AnimationChannel, AnimationSampler,

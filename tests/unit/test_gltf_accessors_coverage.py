@@ -7,7 +7,7 @@ sparse accessor with no bufferView -- all pure numpy, no GL, no network.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 from pygltflib import (
     Accessor, BufferView, Buffer, Sparse, AccessorSparseIndices,
     AccessorSparseValues,

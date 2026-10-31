@@ -6,8 +6,6 @@ import tempfile
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
-pytest.importorskip("PIL")
 
 from PIL import Image
 

@@ -6,7 +6,6 @@ read where the network allows.
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.gltf import GLTFWriter, SceneNode, load_gltf, load_gltf_url
 from OpenGLContext.loaders.gltf.writer import _pack_glb

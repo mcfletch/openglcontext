@@ -200,7 +200,6 @@ def _png(colour):
 
 def _basis_document(ktx2, fallback=None, required=True):
     """A triangle whose base colour is a KHR_texture_basisu texture, with ``fallback`` PNG bytes"""
-    pytest.importorskip('pygltflib')
     from OpenGLContext.loaders.gltf.writer import _pack_glb  # noqa: PLC0415 the GLB packer the glTF suites use
     positions = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], np.float32)
     uvs = np.array([[0, 0], [1, 0], [0, 1]], np.float32)
@@ -302,7 +301,6 @@ def test_gltf_without_the_transcoder_or_a_fallback(caplog):
 @pytest.mark.usefixtures('fresh_textures')
 def test_gltf_basis_texture_as_pixels():
     """What reads a texture as a picture (a sky, a specular-glossiness map) gets level 0"""
-    pytest.importorskip('pygltflib')
     from OpenGLContext.loaders.gltf import loader, textures  # noqa: PLC0415 pygltflib is optional
     from OpenGLContext.loaders.resolver import Resolver  # noqa: PLC0415 as above
     shared = loader.parse_gltf(_basis_document(fixture('uastc_rgba.ktx2')))
@@ -313,7 +311,6 @@ def test_gltf_basis_texture_as_pixels():
 @needs_transcoder
 @pytest.mark.usefixtures('fresh_textures')
 def test_gltf_writer_keeps_a_basis_texture_as_ktx2():
-    pytest.importorskip('pygltflib')
     from OpenGLContext.loaders.gltf import GLTFWriter, SceneNode  # noqa: PLC0415 pygltflib is optional
     from OpenGLContext.scenegraph.basenodes import Appearance  # noqa: PLC0415 as above
     from OpenGLContext.scenegraph.imagedata import ImageDataTexture  # noqa: PLC0415 as above

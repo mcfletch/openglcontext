@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip('pyjoltphysics')
 
 CHECKOUT = Path(__file__).resolve().parents[2]
 

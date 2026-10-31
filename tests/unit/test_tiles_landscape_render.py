@@ -9,7 +9,6 @@ import sys
 
 import pytest
 
-pytest.importorskip("pygltflib")
 pytest.importorskip("glfw")
 
 from OpenGLContext.testing.paths import tests_root

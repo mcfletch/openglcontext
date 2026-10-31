@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from OpenGL import GL as gl
 
-PIL = pytest.importorskip('PIL.Image')
+from PIL import Image as PIL
 
 from OpenGLContext import texture
 

@@ -11,7 +11,7 @@ import os
 import numpy as np
 import pytest
 
-PIL = pytest.importorskip("PIL")
+import PIL
 
 from OpenGLContext import renderoptions
 from OpenGLContext.passes import ibl

@@ -87,7 +87,6 @@ class TestTheStreamingTerrainNode:
     """The node this exists for: it swaps its children every frame."""
 
     def test_its_visible_tiles_reach_the_observer(self, tmp_path) -> None:
-        pytest.importorskip('pygltflib')
 
         path = build_terrain_tileset(str(tmp_path), extent=512, levels=2,
                                      tile_res=9)

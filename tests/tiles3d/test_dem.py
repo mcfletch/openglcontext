@@ -9,7 +9,6 @@ import json
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d import dem
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
@@ -36,7 +35,7 @@ def test_height_clamps_outside_the_raster():
 
 
 def test_dem_bakes_a_loadable_tileset(tmp_path):
-    Image = pytest.importorskip("PIL.Image")
+    from PIL import Image
     # Synthetic DEM: a bright ridge across a dark field.
     a = np.zeros((64, 64), "uint8")
     a[:, 28:36] = 255

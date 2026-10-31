@@ -11,7 +11,6 @@ import os
 import numpy
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset

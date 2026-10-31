@@ -9,7 +9,7 @@ additive layer on top.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.character.crowd import Crowd
 from OpenGLContext.character.model import CharacterModel

@@ -11,7 +11,7 @@ import os
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.testing.paths import tests_root
 

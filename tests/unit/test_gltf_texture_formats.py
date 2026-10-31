@@ -9,9 +9,8 @@ import io
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
-Image = pytest.importorskip("PIL.Image")
-features = pytest.importorskip("PIL.features")
+from PIL import Image
+from PIL import features
 
 from OpenGLContext.loaders.gltf import EncodedImage, GLTFWriter, SceneNode, load_gltf
 from OpenGLContext.loaders.gltf import textures as gtextures

@@ -10,7 +10,7 @@ import types
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.character.mixer import AnimationMixer
 from OpenGLContext.loaders.gltf import animation as ga

@@ -6,7 +6,7 @@ give it a model and read the mixer.
 """
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.character import CharacterModel
 from OpenGLContext.character.locomotion import (
@@ -85,10 +85,6 @@ class TestClipMap:
 class TestTheLibraryVocabulary:
     def test_every_clip_hill_runner_plays_has_a_role(self):
         assert set(HILL_RUNNER_CLIPS) <= set(ClipMap.ual().clips())
-
-    def test_the_names_hill_runner_declares_resolve(self):
-        cues = pytest.importorskip('openglcontext_hill_runner.cues')
-        assert set(cues.CLIPS) <= set(ClipMap.ual().clips())
 
     def test_every_role_it_names_is_a_clip_of_the_library(self):
         assert set(ClipMap.ual().clips()) <= set(UAL_NAMES)

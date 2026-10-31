@@ -7,7 +7,7 @@ and, failing both, from the joint names themselves.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.character import humanoid as hm
 from OpenGLContext.loaders import gltf

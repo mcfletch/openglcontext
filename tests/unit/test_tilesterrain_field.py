@@ -13,7 +13,6 @@ import threading
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.scenegraph.terrain import HeightField, LayerRule, control_map
 from OpenGLContext.scenegraph.terrain.splat import SplatTerrain

@@ -9,7 +9,6 @@ import math
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
 from OpenGLContext.physics.service import Physics

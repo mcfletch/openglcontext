@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("glfw")
-PIL = pytest.importorskip("PIL.Image")
+from PIL import Image as PIL
 
 from OpenGL.GL import (
     GL_ALPHA, GL_BLEND, GL_BLUE, GL_COLOR_BUFFER_BIT, GL_DEPTH_TEST, GL_GREEN,

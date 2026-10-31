@@ -149,7 +149,7 @@ class TestTheManifestAndTheTreeAgree:
         the panel at the picture's own width so a wide display does not scale a
         render up into a blur. A stale pair moves the page as it loads.
         """
-        Image = pytest.importorskip('PIL.Image')
+        from PIL import Image
         wrong = []
         for entry in entries():
             path = os.path.join(DOCS, entry['out'])

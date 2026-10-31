@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-pytest.importorskip('pygltflib')
 
 from OpenGLContext.bin import cover_demo
 from OpenGLContext.bin.cover_demo import (

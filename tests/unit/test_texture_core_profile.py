@@ -16,7 +16,7 @@ import pytest
 from OpenGL import GL as gl
 
 pytest.importorskip("glfw")
-PIL = pytest.importorskip("PIL.Image")
+from PIL import Image as PIL
 
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext import texture

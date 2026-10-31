@@ -1,7 +1,7 @@
 """`oglc-gait`: the stride of a model's locomotion clips, printed."""
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.bin.gait import main
 

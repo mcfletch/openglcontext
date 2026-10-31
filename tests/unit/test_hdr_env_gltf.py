@@ -12,7 +12,6 @@ import sys
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from tests.unit.viewcapture import view_frame
 from OpenGLContext.loaders.resolver import fetch_to_cache
