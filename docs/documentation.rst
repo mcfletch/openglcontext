@@ -297,6 +297,10 @@ Getting started
   - Introduction to Shaders and the NeHe translations, for writing OpenGL
     directly
 
+  - Low-Level and Legacy OpenGL: the fixed-function drawing calls, pixel
+    transfers, state queries, GLU tessellation, extensions, and text through
+    GLUT, pygame, WGL and wxPython
+
 - :doc:`Structural Overview <structure>` -- the packages the engine is built
   on and the packages inside it, each with the page that describes it.
 
@@ -625,7 +629,7 @@ holds many examples. These show particular techniques:
     <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/polygontessellator.py>`__
 
   - `Usage sample
-    <https://github.com/mcfletch/openglcontext/blob/main/tests/glu_tess.py>`__
+    <https://github.com/mcfletch/openglcontext/blob/main/tests/tutorials/legacy/glu_tess.py>`__
 
 - `Sorting transparent polygons by depth
   <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/polygonsort.py>`__

@@ -1,22 +1,26 @@
 #! /usr/bin/env python
-"""Add teapots to the scene at runtime, staying fast via instancing.
+'''=Adding Nodes at Runtime=
 
-Every teapot shares one ``Teapot`` geometry node but carries its own coloured
-``Material``.  Under the PBR pass (selected by the two environment variables
-below) they collapse into a single ``glDrawElementsInstanced`` -- each instance
-indexes its own colour in the group's material array -- so the frame cost stays
-flat as the count climbs instead of growing with one draw call per teapot.
+A scene is a tree of nodes, and the tree can be changed while the world is
+running. This tutorial adds a teapot to a group every tenth of a second, and
+adds another each time the `a` key is pressed. Past 128 teapots it empties the
+group and starts again.
 
-PBR pass selection is a whole-process decision (see passes/renderpass.py) and
-must be set before the first render; glfw is required for a core context.
-"""
-import os
-
-from OpenGLContext.scenegraph.basenodes import *
+Every teapot shares one `Teapot` geometry node and has a `Material` of its own.
+The PBR render pass collapses shapes that share geometry into a single
+instanced draw, each instance reading its colour from the group's material
+array, so the cost of a frame stays close to flat as the count climbs instead
+of growing with one draw call per teapot.
+'''
 import random
+
 from OpenGLContext.events.timer import Timer
+from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.viewer import ViewerContext as BaseContext
 
+'''The scene starts with a group holding one teapot. The `DEF` name is how
+a scene loaded from a file would name the group; here the context reaches it
+through `children[0]`.'''
 scene = sceneGraph(
     children = [
         Group(
@@ -29,6 +33,9 @@ scene = sceneGraph(
         ),
     ],
 )
+'''`ViewerContext` is a `Context` with the viewer's navigation. The
+handlers are registered in `OnInit`: the `a` key adds a teapot, and a repeating
+`Timer` calls the same handler every 0.1 seconds.'''
 class TestContext( BaseContext ):
     def OnInit( self ):
         self.sg = scene
@@ -40,7 +47,9 @@ class TestContext( BaseContext ):
         self.teapot = Teapot( size=.2)
         
     def OnAdd( self, _event ):
-        """Add a new box to the scene"""
+        '''Each call appends a `Transform` holding a `Shape` at a random
+        position, sharing `self.teapot` and with a random colour. Appending to
+        the `children` list is all the scene needs to be told.'''
         children = self.sg.children[0].children
         if len(children) > 128:
             children[:] = []
@@ -65,8 +74,6 @@ class TestContext( BaseContext ):
                     ),
                 ],
             ))
-            #self.sg.children[0].children = children
-        
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop(definition={

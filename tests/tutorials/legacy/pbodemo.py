@@ -8,6 +8,8 @@ from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 class TestContext( BaseContext ):
     currentImage = 0
@@ -46,7 +48,7 @@ class TestContext( BaseContext ):
                     diffuseColor =(1,1,1)
                 ),
                 texture = ImageTexture(
-                    url = ["nehe_wall.bmp"]
+                    url = [os.path.join(HERE, "nehe_wall.bmp")]
                 ),
             ),
         )

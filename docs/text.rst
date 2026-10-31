@@ -309,7 +309,7 @@ Further reading
 
 - :doc:`tutorials/nehe/glprint` - bitmap text through WGL, after NeHe tutorial
   #13 (``tests/tutorials/nehe/glprint.py``)
-- ``tests/glutbitmapcharacter.py`` - GLUT bitmap characters
+- :doc:`tutorials/legacy/glutbitmapcharacter` - GLUT bitmap characters
 - :doc:`tessellation` - how the polygonal glyphs are tessellated
 - the :py:mod:`OpenGLContext.scenegraph.text <OpenGLContext.scenegraph.text>`
   package reference

@@ -9,6 +9,10 @@ from OpenGL.GL import *
 from OpenGLContext import texture
 import sys
 from PIL import Image
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+IMAGE = os.path.join( HERE, "nehe_wall.bmp" )
+LIGHTMAP = os.path.join( HERE, "lightmap1.jpg" )
 
 multitexture = None
 
@@ -22,10 +26,10 @@ class TestContext( BaseContext ):
         if not multitexture:
             print('GL_ARB_multitexture not supported!')
             sys.exit(1)
-        self.image = self.loadImage ("nehe_wall.bmp")
-        self.lightmap = self.loadLightMap( "lightmap1.jpg" )
+        self.image = self.loadImage ()
+        self.lightmap = self.loadLightMap()
         
-    def loadImage( self, imageName = "nehe_wall.bmp" ):
+    def loadImage( self, imageName = IMAGE ):
         """Load an image from a file using PIL.
         This is closer to what you really want to do than the
         original port's crammed-together stuff that set global
@@ -35,7 +39,7 @@ class TestContext( BaseContext ):
         """
         multitexture.glActiveTextureARB(multitexture.GL_TEXTURE0_ARB)
         return texture.Texture( Image.open(imageName) )
-    def loadLightMap( self, imageName = "lightmap1.jpg" ):
+    def loadLightMap( self, imageName = LIGHTMAP ):
         """Load an image from a file using PIL as a lightmap (greyscale)
         """
         multitexture.glActiveTextureARB(multitexture.GL_TEXTURE1_ARB) 

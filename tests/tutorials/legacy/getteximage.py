@@ -5,6 +5,7 @@ from OpenGLContext.scenegraph import imagetexture
 
 from OpenGL.GL import *
 import os
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -43,11 +44,7 @@ class TestContext( BaseContext ):
         (in order to make the change visible).
 ''')
         self.mmtexture = imagetexture.MMImageTexture(
-            url = os.path.join(
-                os.path.dirname( __file__ ),
-                'resources',
-                'oblongimage.png',
-            ),
+            url = os.path.join( HERE, 'oblongimage.png' ),
         )
         self.addEventHandler(
             'keypress', name = 's', function = self.OnUseStrings

@@ -8,6 +8,8 @@ from OpenGL.GL.ARB.occlusion_query import *
 from OpenGL.extensions import alternate
 import sys
 import logging
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger('TestQuery')
 
 glBeginQuery = alternate( glBeginQuery, glBeginQueryARB )
@@ -18,9 +20,9 @@ glGetQueryObjectiv = alternate( glGetQueryObjectiv, glGetQueryObjectivARB )
 glGetQueryObjectuiv = alternate( glGetQueryObjectiv, glGetQueryObjectuivARB )
 
 images = [
-    "nehe_glass.bmp",
-    "pimbackground_FR.jpg",
-    "nehe_wall.bmp",
+    os.path.join(HERE, "nehe_glass.bmp"),
+    os.path.join(HERE, "pimbackground_FR.jpg"),
+    os.path.join(HERE, "nehe_wall.bmp"),
 ]
 
 sizes = [

@@ -37,7 +37,7 @@ class TestContext( BaseContext ):
             appearance = Appearance(
             ),
         )
-        vertex = shaders.compileShader( '''
+        vertex = shaders.compileShader( """
             attribute vec2 coord;
             attribute vec2 tex;
             varying vec2 texcoord;
@@ -47,8 +47,8 @@ class TestContext( BaseContext ):
                 );
                 texcoord = tex;
             }
-        ''', GL_VERTEX_SHADER)
-        fragment = shaders.compileShader('''
+        """, GL_VERTEX_SHADER)
+        fragment = shaders.compileShader("""
             // render transparency map as texture of given colour
             uniform sampler2D atlas;
             uniform vec3 color;
@@ -68,7 +68,7 @@ class TestContext( BaseContext ):
                     tex_color.r
                 );
             }
-        ''', GL_FRAGMENT_SHADER)
+        """, GL_FRAGMENT_SHADER)
         self.shader = shaders.compileProgram( vertex, fragment )
         self.coord__loc = glGetAttribLocation( self.shader, 'coord' )
         self.tex__loc = glGetAttribLocation( self.shader, 'tex' )

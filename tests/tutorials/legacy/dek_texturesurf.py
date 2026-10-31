@@ -9,6 +9,9 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph.basenodes import *
 from PIL import Image
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+IMAGE = os.path.join( HERE, "nehe_wall.bmp" )
 
 ## Control points for the bezier surface
 ctrlpoints = array([
@@ -89,7 +92,7 @@ class TestContext( BaseContext ):
             location = (10,0,10),
         )
         
-    def loadImage( self, imageName = "nehe_wall.bmp" ):
+    def loadImage( self, imageName = IMAGE ):
         """Load an image from a file using PIL.
         This is closer to what you really want to do than the
         original port's crammed-together stuff that set global

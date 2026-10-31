@@ -12,10 +12,13 @@ RGB image).
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from PIL import Image
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+IMAGE = os.path.join( HERE, 'gldrawpixels.png' )
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
-    def loadImage( self, imageName = 'gldrawpixels.png' ):
+    def loadImage( self, imageName = IMAGE ):
         """Load an image from a file using PIL.
         This is closer to what you really want to do than the
         original port's crammed-together stuff that set global

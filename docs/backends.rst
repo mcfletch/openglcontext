@@ -120,7 +120,7 @@ A view inside an interface
      - Linux (X11 and Wayland, through GTK3), Windows, macOS
      - wxPython 4 (Phoenix) or newer.  ``context.window`` is a
        ``wx.glcanvas.GLCanvas``, made inside the ``parent`` given.  See
-       ``tests/wx_with_controls.py`` and :ref:`the note on GTK3 <wx-gtk3>`.
+       :doc:`tutorials/legacy/wx_with_controls` and :ref:`the note on GTK3 <wx-gtk3>`.
    * - ``qt``
      - Linux (X11, and Wayland where the Qt build's platform plugin provides a
        drawable GL surface; otherwise ``QT_QPA_PLATFORM=xcb`` runs it through
