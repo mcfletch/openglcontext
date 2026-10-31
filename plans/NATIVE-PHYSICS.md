@@ -1382,6 +1382,7 @@ Branch `jolt-default` on `openglcontext` (ec03d475 to the plan commits); `pyjolt
 | openglcontext `tests/unit -m "not serial"` | 18,574 passed, 56 skipped | 17,129 passed, 972 skipped (before the last mark) |
 | openglcontext `tests/unit -m serial` | 29 passed | |
 | openglcontext `tests/test_all_scripts.py -k physics` | 20 passed | |
+| openglcontext script tests of characters, physics, walking, terrain, X3D | 37 passed, 1 skipped after `character_camera`'s baseline was re-blessed for Jolt (the fox stood 28% of pixels away; the capture is the same on every run); reference-images 514a14c | |
 | hill-runner | 652 passed, 1 skipped (no VP9 encoder) | 651 passed, 1 failed: `test_spill`'s coin height, which missed one scatter seed in five; hill-runner 0816176 asserts the rise for every seed |
 | twig-bb | 2,407 passed, 1 skipped | 2,407 passed, 1 skipped |
 | marble-demo | 941 passed, 6 xfailed (the game's own design notes) | same |
@@ -1408,10 +1409,14 @@ What blocks deleting the omi engine, and what the deletion then is:
    `PhysicsViewPlatform.over`) plus three neutral pieces: a spawn clearance test by
    `physics.overlap` of the capsule, X3D Collision groups' `collideTime` from the character's
    touch handlers, and the zone gravity the service already places. Not started in P5 (time).
-3. X3D RigidBodyPhysics: `x3drigid.py` builds shapes as omi `model.Shape` and finds
-   `CollisionSensor` touches with omi's narrow phase (`collide`); `x3djolt.JoltRigidSystem`
-   subclasses `RigidSystem` and converts those shapes. Needs shapes as `Proxy` and the
-   sensor's touches from a pyjoltphysics world (or `World.overlap`) before omi goes.
+3. X3D RigidBodyPhysics: `x3drigid.py` builds shapes as omi `model.Shape`, contact rules as
+   `model.ContactParameters`, a body's default inertia with `omi_physics.massprops.
+   inertia_diagonal`, bounds with `body.world_aabb`, and finds `CollisionSensor` touches with
+   omi's narrow phase (`collide`); `x3djolt.JoltRigidSystem` subclasses `RigidSystem` and
+   converts those shapes. Before omi goes: shapes as `Proxy` (with a `Proxy` bounds and
+   inertia), the contact rule as the engine's own record, the module's omi imports moved into
+   the omi `RigidSystem`, and the sensor's touches from a pyjoltphysics world
+   (`World.overlap` or contact records).
 4. Tests that use omi_physics as their reference (the collider modules above that ray-cast
    an omi world or drive omi's `RaycastVehicle` over the colliders) are rewritten onto the
    service's queries on Jolt, or their omi answers recorded as pyjoltphysics' are.
