@@ -1959,7 +1959,8 @@ X3D RigidBodyPhysics (from the rigid branch's report):
 - `x3drigid.py` holds no omi code: shapes are `Proxy` in a `ShapePart`, contact parameters a
   `ContactRule`, `RigidSystem` the base both engines share. `physics/massprops.py` gives a
   `Proxy`'s volume, centroid, inertia and bounds, with differential tests against omi's
-  `inertia_diagonal` and `world_aabb` (9 shape cases). The omi engine's rigid system is
+  `inertia_diagonal` and `world_aabb` (9 shape cases; since the review follow-ups the capsule's
+  inertia is held by a slice-by-slice integration instead, since omi weighs a capsule as its cylinder). The omi engine's rigid system is
   `physics/x3domi.py` (`OmiRigidSystem`, `OmiSensing`); `x3djolt.make_rigid_system` and
   `make_sensing` choose by engine.
 - `CollisionSensor` on Jolt (`JoltSensing`): the collidables are bodies in an unstepped
@@ -2393,3 +2394,61 @@ turn the deterministic build on, and on 10 to ship both free-threaded and ordina
     threads); a non-waiting variant that returns nothing mid-step can follow if a game needs it.
 12. Default job threads. Recommended: 4, or the core count less two where smaller (opinion);
     1 job thread doubles `Update` and the query waits.
+
+## Review follow-ups
+
+The 2026-10-31 critical review's findings, as handled. Each entry names the finding, then the
+commit.
+
+- H11 (a mass change rebuilt the X3D world, moving hinge stops by the angle turned): mass and
+  inertia go to the body in place with `set_motion`; every rebuild makes each joint again where
+  it stands, keeping its first frames and its readings. Test: `TestChangesMidRun` in
+  `test_x3d_rigid_body.py` (mass twice, centre of mass, a world setting, a motor joint).
+  7a7ba350.
+- M8 (run-time stops and collider bounce and friction ignored): a joint whose stops or
+  suspension change is made again where it stands, its readings carried on; the collider's
+  bounce and friction redefine the bodies' materials through the new
+  `MaterialTable.redefine` (pyjoltphysics ffbf53b). docs/x3d.rst says what is read every
+  frame. A stop moved past where its joint stands holds the joint there, as Jolt clamps a new
+  joint's limits to bracket its starting place. 7a7ba350.
+- H12 (a Cloth bound again was transformed twice): `softmesh.rest_pose` records the authored
+  vertices before the first write, and every soft body and the Cloth's pins are made from
+  them. cd4ebb1b, docs 63d5f352.
+- H13 (the glTF cloth hook placed the body by the local matrix under moved parents): the
+  Cloth takes the node's world matrix in its document, inside a `MatrixTransform` undoing the
+  parents; the test compares the drawn vertices, through the renderer's own path matrix, with
+  the simulated ones. A scale on the node is not applied, and a glTF loaded under an outer
+  Transform is outside the Cloth's contract as an X3D Cloth in a Transform is. cd4ebb1b, docs 63d5f352.
+- M10 (soft-mesh tangents left at the rest pose): `softmesh.transport_tangents` turns each
+  tangent by its normal's least rotation on each write, square to the normal; `PBRMesh.set_vertices`
+  takes tangents. cd4ebb1b, docs 63d5f352.
+- M9 (a floor inside a Collision group read as a collision): the probe capsule is wider than
+  the walker and no taller, and the walker's ground (`Character.ground`, new) is left out.
+  4fb1a08b.
+- L23 (capsule mass properties as a cylinder): the half spheres' volume and inertia; a
+  capsule(1.5, 0.4) at 3 kg now has volume 1.022 m3 and axial inertia 0.2274 kg m2, from 0.754 and
+  0.240. `test_physics_massprops` integrates the capsule and the frustum slice by slice;
+  omi_physics' own `massprops` keeps the cylinder (its table no longer holds the capsule's
+  inertia here). 2b319a7b.
+- L20 (ground-following tolerances widened to 0.02 and 2e-3): measured at 1e-9, the flat
+  cases miss by at most 4.1e-6 m (single-precision positions), so they hold to 1e-5. The slope
+  case adds the capsule's lift on a slope, r (1/cos - 1) = 1.25e-3 m, and holds to 3e-4 of it
+  (1.05e-4 measured, the height field's quantisation). The rock cases hold to 1e-3 (7.4e-4
+  measured, flat triangles under a round top) and 1e-4 (2.8e-5). fe4c1cc7.
+- L21 (importorskip of hard dependencies and of a game): 95 importorskip calls of pygltflib,
+  pillow, numpy and pyjoltphysics in 73 test files are plain imports; the hill-runner clip
+  check moved to hill-runner's `test_cues` (hill-runner 41b2290). `tomllib` keeps its importorskip,
+  since Python 3.10 is supported and has none. 26e9138c.
+- L5 (two ragdoll tests failed when run alone): `tests/unit/_ragdoll_assets.py`, imported
+  relatively; `test_display_check_shared` no longer puts tests/unit on `sys.path`. 7ec6243a.
+- L24 (pyopengl's VBO reference test passed with the accelerators off): it asserts the VBO is
+  `OpenGL_accelerate.vbo`'s and skips where the accelerators are switched off; it fails where
+  the accelerated module does not load. pyopengl 9f7f9aed.
+- L30 (no test pinned pyopengl-video's DeprecationWarning-free import): every packed
+  structure in the package names `_layout_`, and `vpl.api` imports under
+  `-W error::DeprecationWarning`; both fail with one `_layout_` removed. pyopengl-video d5129e3.
+- Suspicion, `test_physics_filters.py` handlers collected at once: verified with a mutant.
+  Without the `addEventHandler` calls three contact-filter tests fail, so the registration
+  takes effect, but it worked through a lambda collected at once. The handler is now a
+  module function. 6e8d9a29.
+
