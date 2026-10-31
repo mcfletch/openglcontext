@@ -295,6 +295,7 @@ PATHS = [
             'shader_11',
             'shader_12',
             'shader_instanced',
+            'shader_instanced_mapped',
         ],
     ),
     TutorialPath(
@@ -365,6 +366,7 @@ PATHS = [
             'gldrawelements_list',
             'gldrawelements_string',
             'glinterleavedarrays',
+            'shader_2_c_void_p',
             'line_stipple',
             'dek_surf',
             'dek_texturesurf',
