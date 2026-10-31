@@ -183,9 +183,12 @@ world is applied at once, so one handler body works in either place:
 Assigning to ``node.translation`` does not move a body: the world owns the
 pose and the next frame writes its own. ``set_transform`` is how a body is
 moved. Reading answers the last state the world published, which is at most one
-step old: ``body.position``, ``rotation`` (an axis and an angle), ``velocity``,
-``angular_velocity``, ``speed`` and ``asleep``. A write made but not yet
-applied is what ``position`` reads back after ``set_transform``.
+step old: ``body.position``, ``rotation`` (an axis and an angle),
+``orientation`` (the same turn as a quaternion ``(x, y, z, w)``), ``matrix``
+(the 4x4 row-vector world matrix, so a point ``p`` of the body is at
+``(p, 1) @ body.matrix`` and ``matrix[2, :3]`` is its +z axis in the world),
+``velocity``, ``angular_velocity``, ``speed`` and ``asleep``. A write made but
+not yet applied is what ``position`` reads back after ``set_transform``.
 
 ``set_mass(kg)`` gives a dynamic body a new mass and the inertia its shape has
 at that mass; ``body.mass`` answers it at once. ``set_material`` gives any body

@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from OpenGLContext.physics.checks import number, vector
+from OpenGLContext.physics.massprops import rotation_matrix
+from OpenGLContext.physics.poses import vrml_rotation_to_quat
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.types import Material
 
@@ -80,6 +82,24 @@ class Body:
     def rotation(self) -> np.ndarray:
         """How the body is turned, as an axis and an angle in radians: ``(x, y, z, angle)``."""
         return self.physics._state(self).axis_angle
+
+    @property
+    def orientation(self) -> np.ndarray:
+        """How the body is turned, as a unit quaternion ``(x, y, z, w)``."""
+        return vrml_rotation_to_quat(self.physics._state(self).axis_angle)
+
+    @property
+    def matrix(self) -> np.ndarray:
+        """The body's 4x4 row-vector world matrix: a point ``p`` of the body is at ``(p, 1) @ matrix``.
+
+        The upper 3x3 is the turn, with the body's own axes as its rows; the
+        last row holds :attr:`position`.
+        """
+        state = self.physics._state(self)
+        matrix = np.eye(4)
+        matrix[:3, :3] = rotation_matrix(vrml_rotation_to_quat(state.axis_angle)).T
+        matrix[3, :3] = state.position
+        return matrix
 
     @property
     def step_position(self) -> np.ndarray:

@@ -245,6 +245,33 @@ def test_set_transform_turns_a_body(physics):
     assert node.rotation[3] == pytest.approx(np.pi / 2, abs=0.02)
 
 
+def test_orientation_is_the_rotation_as_a_quaternion(physics):
+    physics.gravity = (0, 0, 0)
+    body = physics.add_dynamic(block((1, 2, 3)))
+    body.set_transform(rotation=(0, 1, 0, np.pi / 2))
+    physics.frame(0.02)
+    half = np.sqrt(0.5)
+    assert body.orientation == pytest.approx((0.0, half, 0.0, half), abs=1e-6)
+
+
+def test_matrix_places_a_point_of_the_body_in_the_world(physics):
+    """Row-vector: the body's local +x, turned a quarter about +y, points along -z."""
+    physics.gravity = (0, 0, 0)
+    body = physics.add_dynamic(block((1, 2, 3)))
+    body.set_transform(translation=(4, 5, 6), rotation=(0, 1, 0, np.pi / 2))
+    physics.frame(0.02)
+    matrix = body.matrix
+    assert matrix.shape == (4, 4)
+    assert np.array([1.0, 0.0, 0.0, 1.0]) @ matrix == pytest.approx((4, 5, 5, 1), abs=1e-6)
+    assert matrix[3, :3] == pytest.approx(body.position)
+
+
+def test_an_unturned_body_has_the_identity_orientation(physics):
+    body = physics.add_static(block((1, 1, 1)))
+    assert body.orientation == pytest.approx((0, 0, 0, 1))
+    assert body.matrix[:3, :3] == pytest.approx(np.eye(3))
+
+
 def test_a_write_to_the_node_does_not_move_a_dynamic_body(physics):
     node = ball(at=(0, 5, 0))
     physics.add_dynamic(node)
