@@ -31,7 +31,7 @@ import numpy as np
 import pyjoltphysics as pj
 
 from OpenGLContext.physics import x3drigid
-from OpenGLContext.physics.joltengine import _shape_of, axis_angles, default_threads
+from OpenGLContext.physics.joltengine import _shape_of, _vec3, axis_angles, default_threads
 from OpenGLContext.physics.omi_adapter import proxy_from_shape
 from OpenGLContext.physics.settings import default_engine
 from OpenGLContext.physics.x3drigid import (
@@ -145,7 +145,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         if self.jolt is not None:
             self.jolt.stop()
         self._step = x3drigid.ACCURATE_STEP if self.collection.preferAccuracy else x3drigid.STEP
-        gravity = tuple(float(v) for v in self.collection.gravity)
+        gravity = _vec3(self.collection.gravity)
         self.jolt = world = pj.World(pj.WorldSettings(
             tick_hz=1.0 / self._step, gravity=gravity, threads=default_threads(),
             penetration_slop=x3drigid.MIN_SURFACE_THICKNESS))
@@ -367,7 +367,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         """Apply what was sent to the bodies, and the settings read every frame"""
         world = self.jolt
         assert world is not None
-        gravity = tuple(float(v) for v in self.collection.gravity)
+        gravity = _vec3(self.collection.gravity)
         if gravity != self._gravity:
             world.set_gravity(gravity)
             self._gravity = gravity
@@ -392,7 +392,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         for collidable, uid in self.free.items():
             placed, facing = pose_of(collidable)
             row = None if snapshot is None else snapshot.rows.get(uid)
-            if row is None or np.any(np.asarray(snapshot.position[row]) != placed):
+            if snapshot is None or row is None or np.any(np.asarray(snapshot.position[row]) != placed):
                 world.set_transforms([uid], np.asarray(placed, dtype='d')[None],
                                      np.asarray(facing, dtype='d')[None])
         for joint in self.joints:

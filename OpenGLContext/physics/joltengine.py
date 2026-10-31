@@ -34,7 +34,7 @@ import os
 import sys
 import threading
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pyjoltphysics as pj
@@ -54,6 +54,12 @@ if TYPE_CHECKING:
     from OpenGLContext.physics.proxy import Proxy
 
 __all__ = ['GroundTiles', 'JoltController', 'JoltEngine', 'axis_angles']
+
+
+def _vec3(values: Any) -> tuple[float, float, float]:
+    """Three coordinates, from a sequence or an array, as the floats pyjoltphysics takes."""
+    x, y, z = values[0], values[1], values[2]
+    return (float(x), float(y), float(z))
 
 log = logging.getLogger(__name__)
 
@@ -352,7 +358,7 @@ class JoltController:
     @move_speed.setter
     def move_speed(self, speed: float | None) -> None:
         self._move_speed = speed
-        self.native.set_move(self.move_dir, self._mode, speed)
+        self.native.set_move(_vec3(self.move_dir), self._mode, speed)
 
     def _retuned(self) -> float | None:
         """The mode's speed where the capabilities were retuned since the character was made, else None."""
@@ -375,11 +381,12 @@ class JoltController:
         self.move_dir = np.array([heading[0], 0.0, heading[2]])
         self._mode = mode
         self._move_speed = speed
-        self.native.set_move(self.move_dir, mode, speed if speed is not None else self._retuned())
+        self.native.set_move(_vec3(self.move_dir), mode,
+                             speed if speed is not None else self._retuned())
 
     def set_fly_move(self, direction: Any) -> None:
         self.move_dir = np.asarray(direction, dtype='d')[:3].copy()
-        self.native.set_fly_move(self.move_dir)
+        self.native.set_fly_move(_vec3(self.move_dir))
 
     def jump(self) -> bool:
         if not self.capabilities.canJump or self.native_state in (
@@ -545,9 +552,9 @@ class _IgnoreSet(set[int]):
 
     def _sent(self) -> None:
         engine = self._controller.engine
+        found = (engine.jolt_uid(uid) for uid in self)
         engine.world.set_character_ignore(
-            self._controller.native.id, [engine.jolt_uid(uid) for uid in self
-                                         if engine.jolt_uid(uid) is not None])
+            self._controller.native.id, [jolt for jolt in found if jolt is not None])
 
     def add(self, uid: int) -> None:
         if uid not in self:
@@ -571,7 +578,7 @@ class JoltEngine(Engine):
         self._wake = wake
         self._tick_hz = float(definition.tickHz)
         self._max_catch_up = float(definition.maxCatchUp)
-        gravity = tuple(float(v) for v in definition.gravity)
+        gravity = _vec3(definition.gravity)
         self.world = pj.World(pj.WorldSettings(
             tick_hz=self._tick_hz, max_catch_up=self._max_catch_up, gravity=gravity,
             threads=default_threads(), penetration_slop=PENETRATION_SLOP))
@@ -1228,7 +1235,7 @@ class JoltEngine(Engine):
             return 0.0
         snapshot = self.world.latest()
         row = None if snapshot is None else snapshot.rows.get(jolt)
-        if row is None:
+        if snapshot is None or row is None:
             return 0.0
         closing = -float(np.dot(np.asarray(snapshot.linear_velocity[row], dtype='d'), normal))
         body = self.body_of(uid)
@@ -1318,7 +1325,7 @@ class JoltEngine(Engine):
         reach = 2.0 * half + max(float(below), 0.0)
         self._ground_for_query(start, start - np.array([0.0, reach, 0.0]))
         self._sync()
-        hit = self.world.raycast(start, (0.0, -1.0, 0.0), reach,
+        hit = self.world.raycast(_vec3(start), (0.0, -1.0, 0.0), reach,
                                  filter=pj.QueryFilter(exclude=[own], characters=False))
         return None if hit is None else float(hit.point[1])
 
@@ -1565,7 +1572,7 @@ class JoltEngine(Engine):
         jolt = self._jolt[uid]
         snapshot = self.world.latest()
         row = None if snapshot is None else snapshot.rows.get(jolt)
-        if row is None:
+        if snapshot is None or row is None:
             position, orientation = self._poses.get(uid, ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
             return np.asarray(position, dtype='d'), np.asarray(orientation, dtype='d')
         return (np.array(snapshot.position[row], dtype='d'),
@@ -1616,7 +1623,7 @@ class JoltEngine(Engine):
         self.world.set_transforms([self._jolt[uid]], position[None], orientation[None])
 
     def _op_gravity(self, uid: int, vector: Any) -> None:  # noqa: ARG002 gravity belongs to the world
-        self.world.set_gravity(tuple(float(v) for v in vector))
+        self.world.set_gravity(_vec3(vector))
 
     def _op_gravity_factor(self, uid: int, factor: float) -> None:
         self.world.set_motion([self._jolt[uid]], gravity_factor=float(factor))
@@ -1927,7 +1934,7 @@ class JoltEngine(Engine):
         start = np.asarray(origin, dtype='d')
         self._ground_for_query(start, start + heading / length * float(max_distance))
         self._sync()
-        hit = self.world.raycast(np.asarray(origin, dtype='d'), heading / length,
+        hit = self.world.raycast(_vec3(origin), _vec3(heading / length),
                                  float(max_distance), filter=self._filter(skip))
         return None if hit is None else self._raw(hit)
 
@@ -1965,11 +1972,11 @@ class JoltEngine(Engine):
         self._ground_for_query(start, end)
         self._sync()
         found = self._filter(skip)
-        hit = self.world.sweep_sphere(float(radius), start, end, filter=found)
+        hit = self.world.sweep_sphere(float(radius), _vec3(start), _vec3(end), filter=found)
         if hit is None:
             # A sphere starting inside a solid is met at once, though Jolt's cast reports
             # only surfaces it reaches.
-            inside = self.world.overlap(pj.Shape.sphere(float(radius)), start, filter=found)
+            inside = self.world.overlap(pj.Shape.sphere(float(radius)), _vec3(start), filter=found)
             return 0.0 if len(inside) else None
         if float(hit.depth) > 0.0 and float(hit.fraction) <= 0.0:
             return 0.0
@@ -1980,7 +1987,7 @@ class JoltEngine(Engine):
         at = np.asarray(translation, dtype='d')[:3]
         self._ground_for_query(at, at)
         self._sync()
-        found = self.world.overlap(_shape_of(proxy, True), np.asarray(translation, dtype='d')[:3],
+        found = self.world.overlap(_shape_of(proxy, True), _vec3(at),
                                    tuple(float(v) for v in quaternion),
                                    filter=self._filter(skip, triggers))
         uids = []
@@ -2045,7 +2052,7 @@ def _concat(batches: list[pj.BodyBatch]) -> pj.BodyBatch:
     first = batches[0]
     return pj.BodyBatch(
         positions=np.concatenate([np.asarray(one.positions) for one in batches]),
-        shape=[one.shape for one in batches], motion=pj.MotionType.STATIC,
+        shape=[cast(pj.Shape, one.shape) for one in batches], motion=pj.MotionType.STATIC,
         material=first.material, filter=first.filter, flags=first.flags)
 
 
