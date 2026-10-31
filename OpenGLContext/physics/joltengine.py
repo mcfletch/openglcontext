@@ -66,6 +66,10 @@ RETIRED_KEPT = 4096
 CCD_BELOW = 0.1
 #: Metres a resting body may sink into what it rests on before the solver separates them.
 PENETRATION_SLOP = 0.005
+#: Metres below its feet a new character looks for the ground it stands on.
+SEAT_SEARCH = 0.05
+#: Metres the edges of a box that does not move are rounded by.
+STATIC_ROUNDING = 0.001
 #: The OMI combine modes, by the names the service's materials use.
 _COMBINE = {'average': pj.Combine.AVERAGE, 'minimum': pj.Combine.MINIMUM,
             'multiply': pj.Combine.MULTIPLY, 'maximum': pj.Combine.MAXIMUM}
@@ -218,8 +222,10 @@ class JoltController:
     """
 
     def __init__(self, engine: JoltEngine, character: pj.Character, capabilities: Any,
-                 centre: np.ndarray) -> None:
+                 centre: np.ndarray, gravity: float = 9.81) -> None:
         self.engine = engine
+        #: The character's own gravity, m/s2 downward.
+        self.gravity = float(gravity)
         self.native = character
         self.capabilities = capabilities
         #: The capabilities the native character was made with.
@@ -363,14 +369,30 @@ class JoltController:
         if not self.capabilities.canJump or self.native_state in (
                 pj.CharacterState.DOWN, pj.CharacterState.FLYING):
             return False
-        self.native.jump()
+        seq = self.native.jump()
+        if self.grounded:
+            # Read back at once: the launch speed the world gives the jump.
+            launch = math.sqrt(2.0 * max(self.gravity, 0.0) * float(self.capabilities.jumpHeight))
+            self.velocity = np.array([self.velocity[0], launch, self.velocity[2]])
+            self.grounded = False
+            self._expect(pj.CharacterState.AIRBORNE, seq)
         return True
 
     def apply_impulse(self, velocity: Any) -> None:
-        self.native.apply_impulse(tuple(float(v) for v in velocity))
+        given = np.asarray(velocity, dtype='d')[:3]
+        seq = self.native.apply_impulse(tuple(float(v) for v in given))
+        self.velocity = given.copy()
+        if given[1] > 0.0:
+            self.grounded = False
+            self._expect(pj.CharacterState.AIRBORNE, seq)
 
     def knockback(self, impulse: Any) -> None:
-        self.native.knockback(tuple(float(v) for v in impulse))
+        given = np.asarray(impulse, dtype='d')[:3]
+        seq = self.native.knockback(tuple(float(v) for v in given))
+        self.velocity = self.velocity + given / max(float(self.capabilities.mass), 1e-9)
+        if given[1] > 0.0:
+            self.grounded = False
+            self._expect(pj.CharacterState.AIRBORNE, seq)
 
     def set_crouch(self, crouch: bool) -> bool:
         if crouch and not self.capabilities.canCrouch:
@@ -421,13 +443,29 @@ class JoltController:
     def get_up(self, start_speed: float | None = None) -> None:
         self.native.get_up(start_speed)
 
+    #: Metres below the feet a teleport looks for a floor to stand on.
+    SEARCH = 4.0
+
     def safe_bind(self, centre: Any) -> bool:
-        """Teleport the capsule's centre to ``centre``, seated on a floor within reach below."""
+        """Teleport the capsule's centre to ``centre``, standing on the floor under it.
+
+        The floor is the first surface a ray meets down the capsule's axis from
+        its top to :attr:`SEARCH` metres below its feet: a capsule whose feet
+        are inside a floor is raised onto it, and one above a floor drops onto
+        it, as the omi controller's teleport does. With no floor in reach it
+        stays where it is put.
+        """
         at = np.asarray(centre, dtype='d')[:3].copy()
+        half = self.height / 2.0
+        top = self.engine.floor_under(at, half, self.native.id, below=self.SEARCH)
+        if top is not None:
+            at[1] = top + half
         seq = self.native.teleport(tuple(float(v) for v in at))
         self._placed = (seq, at)
         self.position = at
         self.previous = at.copy()
+        self.eye_point = at + np.array(
+            [0.0, float(self.capabilities.eyeHeight) - float(self.capabilities.standHeight) / 2.0, 0.0])
         self.velocity = np.zeros(3)
         return True
 
@@ -662,12 +700,20 @@ class JoltEngine(Engine):
             self._running = True
 
     def stop(self) -> bool:
-        self.world.stop()
-        self._running = False
+        """Stop a free-running world; a world in lockstep runs no tick it is not asked for.
+
+        From the stepping thread (a handler pausing the game inside a tick) a
+        lockstep run in progress finishes its ticks.
+        """
+        if self._running:
+            self.world.stop()
+            self._running = False
         return True
 
     def close(self) -> None:
-        self.stop()
+        if not self.on_engine_thread():
+            self.world.stop()
+        self._running = False
         self._restore_switch_interval()
 
     def flush(self) -> None:
@@ -708,8 +754,11 @@ class JoltEngine(Engine):
                 self._running = False
             ticks = self._clock.owed(dt)
             self.owed, self.alpha = ticks, self._clock.alpha
-            if not ticks and self._posted:
-                self._run_posted()
+            if not ticks:
+                # A frame that owes no tick applies what is waiting, as an inline omi world does.
+                if self._posted:
+                    self._run_posted()
+                self._sync()
             previous = self._run(ticks)
         else:
             self.owed, self.alpha = 0, 1.0
@@ -1109,8 +1158,8 @@ class JoltEngine(Engine):
                                 float(record['approach']), impulse, 0.0, 0.0, 0.0, tick, time,
                                 reason=reason)
         return PhysicsEvent('contact', _PHASE[pj.EventPhase(phase)], a, b, point, normal,
-                            float(record['approach']), float(record['impulse']), 0.0, 0.0, 0.0,
-                            tick, time, reason=reason)
+                            float(record['approach']), float(record['impulse']), 0.0, 0.0,
+                            float(record['depth']), tick, time, reason=reason)
 
     def _strike(self, jolt: int, normal: np.ndarray) -> float:
         """The momentum a dynamic body brings onto a character, along ``normal`` (character to body).
@@ -1150,10 +1199,18 @@ class JoltEngine(Engine):
         centre = self._above_ground(np.asarray(centre, dtype='d'), float(capabilities.standHeight))
         self._stream_ground(extra=centre[None])
         native = self.world.add_character(tuple(float(v) for v in centre), caps, gravity=gravity)
+        # Seated in the tick that adds it, so a character made standing on the ground is
+        # grounded from its first tick, as the omi controller is from its first step.
+        seated = native.teleport(tuple(float(v) for v in centre), SEAT_SEARCH)
         body = physics._register_body('kinematic', stand_in_proxy(capabilities, 0.0), centre)
         self._bind(body.uid, native.id)
         self._kinds[body.uid] = 'character'
-        controller = JoltController(self, native, capabilities, centre)
+        controller = JoltController(self, native, capabilities, centre, gravity)
+        half = float(capabilities.standHeight) / 2.0
+        floor = self.floor_under(np.asarray(centre, dtype='d'), half, native.id, below=SEAT_SEARCH)
+        if floor is not None and abs(float(centre[1]) - half - floor) <= SEAT_SEARCH:
+            controller.grounded = True
+            controller._expect(pj.CharacterState.STANDING, seated)
         self._controllers[body.uid] = controller
         return body, controller
 
@@ -1192,6 +1249,22 @@ class JoltEngine(Engine):
             if ground is not None and feet < ground - 0.05 and controller._placed is None:
                 controller.place((controller.position[0], ground + controller.height / 2.0,
                                   controller.position[2]))
+
+    def floor_under(self, centre: np.ndarray, half: float, own: int,
+                    below: float = 0.0) -> float | None:
+        """The top of what is under a capsule's axis at ``centre``, from its top to ``below`` metres
+        under its feet; None for nothing.
+
+        Read with a ray down from the capsule's top, passing over character
+        ``own``, the characters' capsules and triggers.
+        """
+        start = np.array([centre[0], centre[1] + half, centre[2]], dtype='d')
+        reach = 2.0 * half + max(float(below), 0.0)
+        self._ground_for_query(start, start - np.array([0.0, reach, 0.0]))
+        self._sync()
+        hit = self.world.raycast(start, (0.0, -1.0, 0.0), reach,
+                                 filter=pj.QueryFilter(exclude=[own], characters=False))
+        return None if hit is None else float(hit.point[1])
 
     def pass_group_id(self, name: str | None) -> int:
         """The native pass group of the characters given the name ``name``; 0 for none."""
@@ -1748,22 +1821,20 @@ class JoltEngine(Engine):
 
     # -- reading on the stepping thread -------------------------------------------
     def live_poses(self, uids: Sequence[int]) -> dict[int, LivePose]:
-        snapshot = self.world.latest()
+        """The bodies of ``uids`` as Jolt holds them now: inside a tick, after its batches."""
+        known = [(uid, self._jolt[uid]) for uid in uids if uid in self._jolt]
+        if not known:
+            return {}
+        state = self.world.bodies_state(np.array([jolt for _uid, jolt in known], dtype=np.uint32))
         found: dict[int, LivePose] = {}
-        if snapshot is None:
-            return found
-        rows = snapshot.rows
-        for uid in uids:
-            jolt = self._jolt.get(uid)
-            row = None if jolt is None else rows.get(jolt)
-            if row is None:
+        for row, (uid, _jolt) in enumerate(known):
+            if not bool(state.found[row]):
                 continue
-            found[uid] = LivePose(np.array(snapshot.position[row], dtype='d'),
-                                  np.array(snapshot.orientation[row], dtype='d'),
-                                  np.array(snapshot.linear_velocity[row], dtype='d'),
-                                  np.array(snapshot.angular_velocity[row], dtype='d'),
-                                  not bool(snapshot.awake[row])
-                                  and self._kinds.get(uid) == 'dynamic')
+            found[uid] = LivePose(np.array(state.position[row], dtype='d'),
+                                  np.array(state.orientation[row], dtype='d'),
+                                  np.array(state.linear_velocity[row], dtype='d'),
+                                  np.array(state.angular_velocity[row], dtype='d'),
+                                  not bool(state.awake[row]) and self._kinds.get(uid) == 'dynamic')
         return found
 
     def joint_reading(self, joint: Any, published: Snapshot | None) -> tuple[float, ...]:
@@ -1889,13 +1960,21 @@ def _rotate(q: np.ndarray, v: np.ndarray) -> np.ndarray:
 
 
 def _capabilities(capabilities: Any) -> pj.CharacterCapabilities:
-    """pyjoltphysics' capabilities with the service's values, field by field."""
+    """pyjoltphysics' capabilities with the service's values, field by field.
+
+    A capsule is at least its own diameter tall: a crouch height under twice
+    the radius is raised to it, and the standing height to the crouch height.
+    """
     fields = {name: getattr(capabilities, name) for name in (
         'walkSpeed', 'runSpeed', 'sprintSpeed', 'crouchSpeed', 'canSprint', 'canCrouch', 'canJump',
         'canFly', 'flySpeed', 'swimSpeed', 'swimDrag', 'jumpHeight', 'jumpFollowsSlope',
         'stepHeight', 'maxSlope', 'eyeHeight', 'standHeight', 'crouchHeight', 'radius',
         'airControl', 'pushFriction', 'terminalVelocity', 'suppressOverVoid', 'coyoteTime',
         'jumpBuffer', 'mass', 'pushMass', 'pushSpeed') if hasattr(capabilities, name)}
+    radius = float(fields.get('radius', 0.3))
+    crouch = max(float(fields.get('crouchHeight', 1.0)), 2.0 * radius)
+    fields['crouchHeight'] = crouch
+    fields['standHeight'] = max(float(fields.get('standHeight', 1.8)), crouch)
     return pj.CharacterCapabilities(**fields)
 
 
@@ -1911,16 +1990,20 @@ def _concat(batches: list[pj.BodyBatch]) -> pj.BodyBatch:
 
 
 def _shape_of(proxy: Proxy, dynamic: bool) -> pj.Shape:
-    """The pyjoltphysics shape of ``proxy``.
+    """The pyjoltphysics shape of ``proxy``, for a dynamic body where ``dynamic``.
 
     A triangle mesh collides from both faces, as the omi engine's does, so each
     triangle is listed in both windings. A moving body cannot be a mesh in
-    Jolt: a dynamic mesh is held as the hull of its points.
+    Jolt: a dynamic mesh is held as the hull of its points. A box of a body
+    that is not dynamic is rounded by :data:`STATIC_ROUNDING`.
     """
     params = proxy.params
     kind = proxy.kind
     if kind == 'box':
-        return pj.Shape.box(tuple(float(v) for v in params['size']))
+        # A box that does not move keeps its edges as drawn; Jolt's default 5 cm
+        # rounding would make the lip of a step a ramp for a fast body.
+        return pj.Shape.box(tuple(float(v) for v in params['size']),
+                            rounding=None if dynamic else STATIC_ROUNDING)
     if kind == 'sphere':
         return pj.Shape.sphere(float(params['radius']))
     if kind == 'capsule':
