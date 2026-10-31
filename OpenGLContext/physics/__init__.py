@@ -15,8 +15,9 @@ and the deprecated omi engine's :mod:`~OpenGLContext.physics.omi_adapter`). The 
 
 * :mod:`~OpenGLContext.physics.service` -- the service: adding, removing,
   queries, events, the frame.
-* :mod:`~OpenGLContext.physics.body`, :mod:`~OpenGLContext.physics.character`
-  and :mod:`~OpenGLContext.physics.joints` -- the handles it returns.
+* :mod:`~OpenGLContext.physics.body`, :mod:`~OpenGLContext.physics.character`,
+  :mod:`~OpenGLContext.physics.joints` and :mod:`~OpenGLContext.physics.vehicles`
+  -- the handles it returns, and a vehicle's settings and state.
 * :mod:`~OpenGLContext.physics.proxy` and :mod:`~OpenGLContext.physics.cooking`
   -- collision shapes, cooked from nodes and triangles.
 * :mod:`~OpenGLContext.physics.types` -- materials, collision filters,
@@ -49,6 +50,10 @@ if TYPE_CHECKING:
         CharacterCapabilities, CharacterState, CollisionFilter, EngineInfo, GravityZone, Material,
         Poses, WorldCounts,
     )
+    from OpenGLContext.physics.vehicles import (
+        CarTuning, CarWheel, Surface, Vehicle, VehicleSettings, VehicleState, Wheel, WheelState,
+        car_wheels,
+    )
 
 #: Each exported name and the module it is defined in.
 _HOMES = {
@@ -66,11 +71,21 @@ _HOMES = {
     'Poses': 'OpenGLContext.physics.types',
     'Proxy': 'OpenGLContext.physics.proxy',
     'WorldCounts': 'OpenGLContext.physics.types',
+    'CarTuning': 'OpenGLContext.physics.vehicles',
+    'CarWheel': 'OpenGLContext.physics.vehicles',
+    'Surface': 'OpenGLContext.physics.vehicles',
+    'Vehicle': 'OpenGLContext.physics.vehicles',
+    'VehicleSettings': 'OpenGLContext.physics.vehicles',
+    'VehicleState': 'OpenGLContext.physics.vehicles',
+    'Wheel': 'OpenGLContext.physics.vehicles',
+    'WheelState': 'OpenGLContext.physics.vehicles',
+    'car_wheels': 'OpenGLContext.physics.vehicles',
 }
 
-__all__ = ['Body', 'Character', 'CharacterCapabilities', 'CharacterState', 'CollisionFilter',
-           'EngineInfo', 'GravityZone', 'Joint', 'Material', 'Physics', 'PhysicsDefinition', 'Poses',
-           'Proxy', 'WorldCounts']
+__all__ = ['Body', 'CarTuning', 'CarWheel', 'Character', 'CharacterCapabilities', 'CharacterState',
+           'CollisionFilter', 'EngineInfo', 'GravityZone', 'Joint', 'Material', 'Physics',
+           'PhysicsDefinition', 'Poses', 'Proxy', 'Surface', 'Vehicle', 'VehicleSettings',
+           'VehicleState', 'Wheel', 'WheelState', 'WorldCounts', 'car_wheels']
 
 
 def __getattr__(name: str) -> Any:

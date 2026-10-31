@@ -28,6 +28,8 @@ EVENTS: dict[str, tuple[str, str]] = {
     'exit': ('trigger', 'exit'),
     'sleep': ('state', 'sleep'),
     'wake': ('state', 'wake'),
+    'impact': ('vehicle', 'impact'),
+    'crash': ('vehicle', 'crash'),
 }
 #: The event name of each (kind, phase) record.
 NAME_OF: dict[tuple[str, str], str] = {pair: name for name, pair in EVENTS.items()}
@@ -93,8 +95,9 @@ class Handler:
             return False
         if self.other is not None and other not in self.other:
             return False
-        return not (event.kind == 'contact' and event.phase in ('begin', 'persist')
-                    and not event.approach > self.above)
+        gated = event.kind == 'vehicle' or (event.kind == 'contact'
+                                            and event.phase in ('begin', 'persist'))
+        return not (gated and not event.approach > self.above)
 
 
 class HandlerTable:

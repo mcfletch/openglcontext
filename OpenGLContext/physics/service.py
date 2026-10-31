@@ -54,6 +54,7 @@ from OpenGLContext.physics.records import (
 from OpenGLContext.physics.sources import SourceHandle
 from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.physics.stepview import StepHook, StepView
+from OpenGLContext.physics.vehicles import Vehicle, VehicleSettings
 from OpenGLContext.physics.types import (
     CharacterCapabilities, EngineInfo, GravityZone, Hit, Material, Poses, WorldCounts,
 )
@@ -162,6 +163,8 @@ class Physics:
         #: The functions :meth:`on_step` registered, called after each step.
         self._step_hooks: list[StepHook] = []
         self._zone_ids = itertools.count(1)
+        self._vehicles: dict[int, Vehicle] = {}
+        self._vehicle_ids = itertools.count(1)
 
     # -- the engine -----------------------------------------------------
     @property
@@ -971,8 +974,41 @@ class Physics:
         """
         return make_joint(self, 'motor', body, to, axes=axes, torques=torques, collide=collide)
 
+    # -- vehicles ---------------------------------------------------------
+    def add_vehicle(self, chassis: Body, settings: VehicleSettings) -> Vehicle:
+        """Put the dynamic body ``chassis`` on wheels; returns its :class:`~OpenGLContext.physics.vehicles.Vehicle`.
+
+        ``settings`` is a :class:`~OpenGLContext.physics.vehicles.VehicleSettings`
+        in the chassis's own frame. The engine casts the wheels and drives
+        the tyres every tick; :meth:`Vehicle.set_input
+        <OpenGLContext.physics.vehicles.Vehicle.set_input>` drives it.
+        Removing the chassis removes the vehicle. An engine without vehicles
+        raises NotImplementedError.
+        """
+        if not isinstance(settings, VehicleSettings):
+            raise TypeError('settings must be VehicleSettings, not %r' % (type(settings).__name__,))
+        if not isinstance(chassis, Body) or chassis.kind != 'dynamic' or not chassis.alive:
+            raise ValueError("a vehicle's chassis is a dynamic body in the world, not %r" % (chassis,))
+        if chassis._pending:
+            raise ValueError('the chassis %r is waiting for its shape to be cooked' % (chassis,))
+        vid = next(self._vehicle_ids)
+        self._engine.add_vehicle(vid, chassis.uid, settings)
+        made = Vehicle(self, vid, chassis, settings)
+        self._vehicles[vid] = made
+        return made
+
+    @property
+    def vehicles(self) -> tuple[Vehicle, ...]:
+        """The vehicles in the world, in the order they were added."""
+        return tuple(self._vehicles.values())
+
+    def _remove_vehicle(self, vehicle: Vehicle) -> None:
+        """Take ``vehicle`` out of the world; :meth:`Vehicle.remove` calls this."""
+        if self._vehicles.pop(vehicle.uid, None) is not None and not self._closed:
+            self._engine.remove_vehicle(vehicle.uid)
+
     def remove(self, body: Body) -> None:
-        """Take ``body`` out of the world, with its joints. Removing twice is harmless.
+        """Take ``body`` out of the world, with its joints and any vehicle on it. Removing twice is harmless.
 
         From a physics callback the world drops the body at once and the
         service's own tables let go of it in the next :meth:`frame`.
@@ -980,6 +1016,9 @@ class Physics:
         if not body.alive:
             return
         body.alive = False
+        for vehicle in [one for one in self._vehicles.values() if one.chassis is body]:
+            vehicle.alive = False
+            self._vehicles.pop(vehicle.uid, None)
         on_worker = self._engine.on_engine_thread()
         if on_worker:
             self.render.call(self._unpass, body.uid)

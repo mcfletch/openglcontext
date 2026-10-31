@@ -41,6 +41,7 @@ import pyjoltphysics as pj
 
 from OpenGLContext.events.framestep import FixedSteps
 from OpenGLContext.physics.engine import Engine, LivePose, Outbox, RawHit
+from OpenGLContext.physics.joltvehicles import JoltVehicles
 from OpenGLContext.physics.poses import vrml_rotation_to_quat
 from OpenGLContext.physics.records import (
     BodyBatch, BodySpec, Command, PhysicsEvent, Snapshot, Step,
@@ -52,6 +53,7 @@ from OpenGLContext.physics.types import (
 
 if TYPE_CHECKING:
     from OpenGLContext.physics.proxy import Proxy
+    from OpenGLContext.physics.vehicles import Surface, VehicleSettings, VehicleState
 
 __all__ = ['GroundTiles', 'JoltController', 'JoltEngine', 'axis_angles']
 
@@ -572,6 +574,7 @@ class JoltEngine(Engine):
 
     name = 'jolt'
     stand_ins = False
+    vehicles = True
 
     def __init__(self, definition: PhysicsDefinition, wake: Callable[[], Any] | None = None) -> None:
         super().__init__(definition)
@@ -658,6 +661,8 @@ class JoltEngine(Engine):
         self._switch_interval: float | None = None
         self._local = threading.local()
         self._error: BaseException | None = None
+        #: The service's vehicles (:mod:`OpenGLContext.physics.joltvehicles`).
+        self.vehicle_table = JoltVehicles(self)
 
     # -- uids ---------------------------------------------------------------
     def jolt_uid(self, uid: int) -> int | None:
@@ -809,6 +814,7 @@ class JoltEngine(Engine):
                     previous = self._tick_before
         else:
             self.owed, self.alpha = 0, 1.0
+            self.vehicle_table.send()
             self.start()
         snapshot = self.world.latest()
         events = self._events()
@@ -843,6 +849,7 @@ class JoltEngine(Engine):
         return previous
 
     def _run_ticks(self, count: int) -> None:
+        self.vehicle_table.send()
         try:
             self.world.run_ticks(count)
         except pj.WorldError as error:
@@ -916,6 +923,7 @@ class JoltEngine(Engine):
                     hook(step)
                 except Exception:
                     log.exception('physics hook %r failed', hook)
+            self.vehicle_table.send()
         finally:
             self._local.inside = False
 
@@ -1181,6 +1189,7 @@ class JoltEngine(Engine):
         wanted |= kind == pj.EventKind.TRIGGER
         if self._state_events:
             wanted |= kind == pj.EventKind.STATE
+        wanted |= kind == pj.EventKind.VEHICLE
         wanted |= (kind == pj.EventKind.CHARACTER) & (
             (phase == pj.EventPhase.BEGIN) | (phase == pj.EventPhase.END))
         made: list[PhysicsEvent] = []
@@ -1193,6 +1202,8 @@ class JoltEngine(Engine):
 
     def _convert(self, record: Any, dt: float) -> PhysicsEvent | None:
         kind = int(record['kind'])
+        if kind == pj.EventKind.VEHICLE:
+            return self.vehicle_table.event(record, dt)
         a = self._svc.get(int(record['a']))
         tick = int(record['tick'])
         time = tick * dt
@@ -1464,6 +1475,10 @@ class JoltEngine(Engine):
             found = self._materials[key] = self._define(made)
         return found
 
+    def material_rows(self) -> dict[Any, int]:
+        """The world's material row of each material used: keyed ``('name', name)`` or by its values."""
+        return dict(self._materials)
+
     def _define(self, material: Material) -> int:
         return self.world.materials.define(
             static_friction=float(material.staticFriction),
@@ -1554,6 +1569,7 @@ class JoltEngine(Engine):
             return
         controller = self._controllers.pop(uid, None)
         self.given.pop(uid, None)
+        self.vehicle_table.chassis_removed(uid)
         for joint in [joint for joint, pair in self._joint_bodies.items() if uid in pair]:
             self._forget_joint(joint)
         jolt = self._unbind(uid)
@@ -2001,6 +2017,22 @@ class JoltEngine(Engine):
         return uids
 
     # -- state ----------------------------------------------------------------------
+    # -- vehicles -------------------------------------------------------------
+    def add_vehicle(self, vid: int, chassis: int, settings: VehicleSettings) -> None:
+        self.vehicle_table.add(vid, chassis, settings)
+
+    def remove_vehicle(self, vid: int) -> None:
+        self.vehicle_table.remove(vid)
+
+    def vehicle_input(self, vid: int, values: tuple[float, float, float, float]) -> None:
+        self.vehicle_table.input(vid, values)
+
+    def vehicle_surface(self, vid: int, wheel: int | None, surface: Surface | None) -> None:
+        self.vehicle_table.surface(vid, wheel, surface)
+
+    def vehicle_state(self, vid: int) -> VehicleState | None:
+        return self.vehicle_table.state(vid)
+
     def save_state(self) -> bytes:
         return self.world.save_state()
 

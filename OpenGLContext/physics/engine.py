@@ -29,6 +29,7 @@ from OpenGLContext.physics.types import EngineInfo, WorldCounts
 
 if TYPE_CHECKING:
     from OpenGLContext.physics.proxy import Proxy
+    from OpenGLContext.physics.vehicles import Surface, VehicleSettings, VehicleState
 
 __all__ = ['ENGINES', 'OMI_EXTRA', 'Engine', 'EngineUnavailable', 'LivePose', 'Outbox', 'RawHit',
            'make_engine', 'require_omi']
@@ -94,6 +95,8 @@ class Engine(abc.ABC):
     #: How far beyond its capsule a character's controller meets the bodies it pushes, in
     #: metres; the stand-in's box reaches this far.
     push_reach: float = 0.0
+    #: Whether the engine carries vehicles (:meth:`add_vehicle`).
+    vehicles: bool = False
 
     def __init__(self, definition: PhysicsDefinition) -> None:
         self.definition = definition
@@ -243,6 +246,28 @@ class Engine(abc.ABC):
     def make_character(self, physics: Any, centre: np.ndarray, capabilities: Any,
                        gravity: float) -> tuple[Any, Any]:
         """The body and the controller of a new character with its capsule's centre at ``centre``."""
+
+    # -- vehicles ---------------------------------------------------------
+    def add_vehicle(self, vid: int, chassis: int, settings: VehicleSettings) -> None:
+        """Make vehicle ``vid`` on the dynamic body of uid ``chassis``, after the commands sent before it."""
+        raise NotImplementedError('the %s engine has no vehicles; vehicles need the jolt engine'
+                                  % (self.name,))
+
+    def remove_vehicle(self, vid: int) -> None:
+        """Take vehicle ``vid`` out of the world; its chassis stays a body."""
+        raise NotImplementedError('the %s engine has no vehicles' % (self.name,))
+
+    def vehicle_input(self, vid: int, values: tuple[float, float, float, float]) -> None:
+        """Hold vehicle ``vid``'s (throttle, steer, brake, handbrake) for the next tick, from any thread."""
+        raise NotImplementedError('the %s engine has no vehicles' % (self.name,))
+
+    def vehicle_surface(self, vid: int, wheel: int | None, surface: Surface | None) -> None:
+        """The ground under one wheel of vehicle ``vid`` (all for None); None gives them to the materials."""
+        raise NotImplementedError('the %s engine has no vehicles' % (self.name,))
+
+    def vehicle_state(self, vid: int) -> VehicleState | None:
+        """Vehicle ``vid`` as the newest tick left it; None before the world has stepped it."""
+        return None
 
     # -- stand-ins (an engine whose characters step against a copy of the bodies) --
     def build_replica(self, specs: dict[int, Any], published: Snapshot | None) -> Any:

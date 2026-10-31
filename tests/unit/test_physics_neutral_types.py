@@ -14,6 +14,9 @@ from OpenGLContext.physics import (
     Physics, PhysicsDefinition, Proxy,
 )
 from OpenGLContext.physics.settings import PhysicsDefinition as SettingsDefinition
+from OpenGLContext.physics.vehicles import (
+    CarTuning, Vehicle, VehicleSettings, VehicleState, WheelState, car_wheels,
+)
 from OpenGLContext.physics.zones import Box, Sphere
 
 #: The neutral types are checked against omi_physics' of the same names, through
@@ -165,14 +168,18 @@ def test_zone_regions_are_the_packages_own():
 
 # -- the contract: no engine type in the public API ------------------------
 
+#: The packages of the engines underneath, none of whose types the API names.
+ENGINE_PACKAGES = ('omi_physics', 'pyjoltphysics')
+
+
 def _is_omi(value):
     if isinstance(value, types.ModuleType):
-        return value.__name__.startswith('omi_physics')
+        return value.__name__.startswith(ENGINE_PACKAGES)
     module = getattr(type(value), '__module__', '') or ''
-    if module.startswith('omi_physics'):
+    if module.startswith(ENGINE_PACKAGES):
         return True
     if isinstance(value, type):
-        return (value.__module__ or '').startswith('omi_physics')
+        return (value.__module__ or '').startswith(ENGINE_PACKAGES)
     return False
 
 
@@ -180,7 +187,7 @@ def _mentions_omi(annotation):
     if annotation is inspect.Parameter.empty:
         return False
     if isinstance(annotation, str):
-        return 'omi' in annotation
+        return 'omi' in annotation or 'pyjolt' in annotation or 'pj.' in annotation
     if _is_omi(annotation):
         return True
     return any(_mentions_omi(arg) for arg in typing.get_args(annotation))
@@ -193,7 +200,8 @@ def _public_members(cls):
         yield name, value
 
 
-@pytest.mark.parametrize('cls', [Physics, Body, Character, Joint, Proxy, PhysicsDefinition])
+@pytest.mark.parametrize('cls', [Physics, Body, Character, Joint, Proxy, PhysicsDefinition, Vehicle,
+                                 VehicleSettings, VehicleState, WheelState, CarTuning])
 def test_no_public_signature_names_an_engine_type(cls):
     for name, member in _public_members(cls):
         function = member.fget if isinstance(member, property) else member
@@ -225,8 +233,17 @@ def _service_attributes(service):
     character = service.add_character(position=(0, 0, 0))
     body = service.add_dynamic(None, proxy=Proxy.sphere(0.5), translation=(0, 2, 0))
     joint = service.add_ball(body, anchor=(0, 3, 0))
+    owners = [service, character, body, joint, body.proxy]
+    if service.engine.name == 'jolt':
+        chassis = service.add_dynamic(None, proxy=Proxy.box((1.8, 0.6, 4.2)), mass=1200.0,
+                                      translation=(10, 1, 0))
+        vehicle = service.add_vehicle(chassis, VehicleSettings.from_tuning(
+            CarTuning(), car_wheels(), 1200.0))
+        owners.append(vehicle)
     service.frame(0.01)
-    for owner in (service, character, body, joint, body.proxy):
+    if service.engine.name == 'jolt':
+        owners.extend([vehicle.state(), vehicle.state().wheels[0]])
+    for owner in owners:
         for name in dir(type(owner)):
             if name.startswith('_'):
                 continue
