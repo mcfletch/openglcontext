@@ -21,8 +21,9 @@ What Jolt does with the X3D fields (docs/x3d.rst lists them all):
   thickness are Jolt's own; a body that may rest (``autoDisable``) rests by
   Jolt's sleep rule, at the collection's ``disableLinearSpeed`` and
   ``disableTime``;
-- a joint that meets its stop is sent back at its ``stopBounce`` times the
-  speed it met it at (:data:`STOP_BOUNCE_SPEED` and up);
+- a joint about to meet its stop, or just stopped by it, is sent back at its
+  ``stopBounce`` times the speed it met it at (:data:`STOP_BOUNCE_SPEED` and
+  up);
 - a slider's force pushes its second body along the axis, and the first back,
   as a force each step.
 """

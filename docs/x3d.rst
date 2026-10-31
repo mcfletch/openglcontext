@@ -971,9 +971,11 @@ Jolt honours these as described above:
 - ``stopBounce`` (``SingleAxisHingeJoint``, ``SliderJoint``) and
   ``stop1Bounce`` (``DoubleAxisHingeJoint``) - a joint that meets its stop
   faster than 0.1 rad/s (or m/s) leaves it at ``stopBounce`` times that
-  speed. Jolt's stops stop a joint dead; after the step that meets the stop,
-  the bodies' velocities are set to send it back, the change shared between
-  the two bodies by how hard each is to move along the axis.
+  speed. Jolt's stops stop a joint dead, so the bounce is set on the bodies'
+  velocities: after a step that leaves the joint less than a step's travel
+  from its stop, or that the stop ended, the change shared between the two
+  bodies by how hard each is to move along the axis. A joint turns back up
+  to one step's travel short of its stop.
 - ``desiredAngularVelocity1`` and ``2`` with ``maxTorque1`` and ``2`` - a
   motor of at most that torque; a ``maxTorque`` of 0 is no motor.
 - ``suspensionForce`` and ``suspensionErrorCorrection`` - a spring of the
