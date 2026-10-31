@@ -3,12 +3,13 @@
 Status: **P0 to P3 landed 2026-10-30, P4a the same day, P4 (`engine.py`) 2026-10-31, and P5
 (Jolt the default, pyjoltphysics a requirement, omi_physics the `omi-physics` extra) 2026-10-31; in
 pyjoltphysics, P6a (vehicles) and P6c (ragdolls and soft bodies) 2026-10-31; P6b (vehicles
-through the service, glisteel on Jolt) 2026-10-31.**
+through the service, glisteel on Jolt) 2026-10-31; P5b (walking and X3D rigid bodies off
+omi_physics) 2026-10-31.**
 Decision taken 2026-10-26; design spiked the same day. The `pyjoltphysics` repository exists
 locally (`develop`) with no GitHub remote yet; its workspace registration waits for the remote
 (see "P0 as built" below). Every game suite passes with no engine setting; glisteel's car is a
 vehicle of the service (P6b) and glisteel no longer depends on omi_physics. What deleting the omi engine takes is the list
-in "P5 as built" below.
+in "P5 as built" below, as "P5b as built" leaves it.
 
 The decision (maintainer): the engine steps its rigid bodies with Jolt Physics through a wrapper
 of our own. Jolt always runs on a background thread owned by the wrapper, never inline and never
@@ -1892,6 +1893,135 @@ What P6d (the engine layer) needs:
    nodes (`Ragdoll` over an `HAnimHumanoid`, `Cloth` over a geometry), read and written.
 7. Tutorials: a ragdoll (a humanoid struck, falling, getting up) and a cloth (a flag in the wind,
    and a sheet dropped on furniture).
+
+### P5b as built (2026-10-31): walking and X3D rigid bodies off omi_physics
+
+Branch `p5b-walk-x3d` on `openglcontext`, from "PhysicsWalkMixin on the physics service" to
+this section, with the X3D rigid body work of branch `p5b-x3drigid` ("physics.massprops: a
+proxy's bounds and inertia" to "docs/x3d.rst: where a joint on Jolt turns back off its stop")
+rebased onto it. pyjoltphysics is unchanged. Blockers 2 and 3 of "P5 as built" are done;
+blocker 1 went with P6b.
+
+Walking (`PhysicsWalkMixin`, every `Context`). The plan's three pieces, taken as recommended:
+
+- The avatar is a `Character` of `context.physics` and the camera a
+  `PhysicsViewPlatform.over(character)`, `TerrainWalkMixin`'s pattern, now the base mixin's.
+  `buildPhysicsWorld()` puts what the avatar walks on into the service and returns its bounds
+  `(lo, hi)` or None (it returned an omi world and the bounds): the default feeds `sg` to the
+  scenery tracker (`scenery_changed`), waits up to `physicsCookWait` (30 s) for the cooking,
+  places the scene's gravity zones (`zones_changed(scene_zones(sg))`), switches the service on
+  and turns `colliders='none'` into `'scene'`. `physicsAvatar()` makes the character (gravity
+  `physicsGravity` times the scale, owner-stepped until walking). `gltf_world.scene_bounds`
+  is the bounds.
+- The frame. A host with a render queue: the movement mode's input runs first in the frame,
+  the service steps the framed avatar, the camera goes to its eye after
+  (`_walkHook`, `_walkInput`, `_walkCamera`, moved up from `TerrainWalkMixin`); `framed`
+  follows walking. A host without one calls `stepPhysics(dt)`, which steps the
+  owner-stepped avatar (advancing the world) as before; in a context `stepPhysics()` asks
+  for a frame.
+- Spawn. A candidate counts where `floors_below` (rays straight down from above the bounds,
+  continued below each surface, at most 16) finds a floor no steeper than `maxSlope` whose
+  standing capsule, lifted half a step, overlaps nothing (`physics.overlap`) and has 1.25
+  standing heights clear above (`HEADROOM`): the lowest such floor, so the ground floor of a
+  building. `clearance` counts the four directions where the capsule an arm's length out
+  overlaps nothing (its reach now scales with the avatar). Rays meet a closed mesh's underside
+  as a floor, with the normal turned to the ray, on both engines; the headroom test tells them
+  apart for solids thinner than 1.25 standing heights. Whether an avatar placed at a viewpoint
+  flies is `physicsHasFloor()` (a floor within a standing height below its feet), since a Jolt
+  character's `grounded` is known only after a tick.
+- X3D Collision groups' `collideTime`. A Jolt character's capsule against static bodies makes
+  no contact event (measured: no `hit` on either the character or the wall), so the character's
+  touch handlers cannot carry it. `x3dcollision.collision_group_bodies` finds the scenery bodies
+  inside enabled groups; `CollisionReporter.update` overlaps the capsule, a tenth of its radius
+  and 3 cm (`SKIN`; Jolt stops a character 0.02 m short) wider, with them once a step, and sends
+  `isActive TRUE` and `collideTime` for a body begun, `isActive FALSE` when a group has no
+  touched body left.
+- Zone gravity: the service's own (`Physics.zones_changed`, fed by the render pass each frame);
+  the mixin's `gravityZones` and `followZoneGravity` are gone.
+- `forgetPhysicsWorld()` removes the avatar; the scene viewer calls it on a new scene (it set
+  `physicsPlatform = None` and left the omi world to the collector).
+- Feel: the same `CharacterCapabilities` (speeds, jump 1.2, step 0.4, stand 1.8, radius 0.3 at
+  scale 1; NavigationInfo avatarSize as before), gravity 9.81 times the scale, the same
+  `physicsMaxStep` clamp and movement modes. Stepping, sliding and slope limits are the engine's
+  character (Jolt's `CharacterVirtual` port on the default engine). The walker now meets the
+  service's dynamic bodies and pushes them.
+
+Contract changes the 13 test modules follow: hosts give `physics`; `buildPhysicsWorld` returns
+bounds; `_clearance(character, radius)` is `clearance(physics, centre, capabilities, skip)`;
+`watchCollisionGroups()` takes no arguments; `CollisionReporter(groups, walker)` is keyed by
+`Body` and driven by `update(now)` (`heard(event, now)` is gone); `onPhysicsModeChanged` does
+the framing, so an override calls up. `test_physicswalk`, `test_physics_spawn_where_you_are`,
+`test_x3d_collision_outputs` and `test_viewpoint_walking` run on both engines with omi_physics
+optional; `test_physics_without_omi.py` walks a scene with omi_physics blocked.
+
+X3D RigidBodyPhysics (from the rigid branch's report):
+
+- `x3drigid.py` holds no omi code: shapes are `Proxy` in a `ShapePart`, contact parameters a
+  `ContactRule`, `RigidSystem` the base both engines share. `physics/massprops.py` gives a
+  `Proxy`'s volume, centroid, inertia and bounds, with differential tests against omi's
+  `inertia_diagonal` and `world_aabb` (9 shape cases). The omi engine's rigid system is
+  `physics/x3domi.py` (`OmiRigidSystem`, `OmiSensing`); `x3djolt.make_rigid_system` and
+  `make_sensing` choose by engine.
+- `CollisionSensor` on Jolt (`JoltSensing`): the collidables are bodies in an unstepped
+  pyjoltphysics world; each collidable's shape is swept 0.1 mm where it stands
+  (`World.sweep`); one `Contact` per touching pair, at the deepest point; two triangle-mesh
+  collidables are not tested against each other.
+- `stopBounce`: Jolt 5.6 has no restitution on hinge or slider limits. `x3djolt` reverses the
+  velocity: a joint about to pass its stop within the next step, or just stopped by it, leaves
+  at bounce times its speed, from 0.1 rad/s (m/s), split between the bodies by how hard each
+  is to move along the axis (`stopBounce` on hinge and slider, `stop1Bounce` on the
+  double-axis hinge). The demo's door returns at 0.99 rad/s from 2.47 (bounce 0.4; it was
+  0.12; omi 0.49), turning back at 1.586 rad against a stop at 1.6.
+- `minBounceSpeed` is the world's least bounce speed (Jolt holds one per world); the
+  collection's `disableLinearSpeed` and `disableTime` set Jolt's sleep speed and time.
+- Fixed on the way: a double-axis hinge motor with `maxTorque` 0 held at infinite torque; a
+  joint whose body2 is NULL read body2 against body1 with the sign flipped on Jolt;
+  `omi_adapter.omi_shape` hung on a compound (its lock is reentrant).
+- Kept and not read on Jolt (listed in docs/x3d.rst): iterations, errorCorrection,
+  constantForceMix, maxCorrectionSpeed, contactSurfaceThickness, the softness fields, the
+  second friction coefficient, frictionDirection, surfaceSpeed, slipFactors,
+  stopErrorCorrection, stop1ConstantForceMix, useFiniteRotation, disableAngularSpeed.
+
+| Suite (no engine setting, omi_physics installed) | Result |
+|---|---|
+| openglcontext `tests/unit -m "not serial"`, `-n 16` | 19,345 passed, 65 skipped, 6 xfailed; 1 failed, `test_pbr_performance::test_cached_is_not_slower` (cached 43.7 ms against 31.9 uncached in a run with the machine's load average near 40; passes alone three times), which compares wall-clock medians and is now `serial` |
+| openglcontext `tests/unit -m serial` | 30 passed |
+| `tests/test_all_scripts.py -k` physics, walk, terrain, character, x3d, rigid, forest, heightfield, navigation, viewpoint, tiles, collision, view, gltf (worktree on `PYTHONPATH`) | 40 passed, 1 skipped; `x3d_demo` and `x3d_geospatial` reached the 30 s script timeout at load average 41 and pass alone (2 passed, 50 s); neither walks nor holds rigid bodies |
+| hill-runner | 652 passed, 1 skipped (no VP9 encoder) |
+| twig-bb | 2,407 passed, 1 skipped |
+| marble-demo | 941 passed, 6 xfailed |
+| marble-editor | 165 passed |
+| openglcontext-forest | 86 passed |
+
+A context walking a 40 m floor from a camera 10 m up (GLFW, hidden window): the avatar falls
+and lands with its feet at 0.0 and the camera at 1.6 within 90 frames.
+
+Static gates on every changed file, by hand (`tools/editcheck.py` checks nothing outside
+the main checkouts): ruff, oglc-check, mypy against `.preflight-venv`, all clean.
+
+What imports omi_physics in OpenGLContext now (import statements; mentions in docstrings
+left out):
+
+| Module | Why | Leaves with |
+|---|---|---|
+| `physics/omiengine.py`, `omi_adapter.py`, `runtime.py`, `worker.py`, `replica.py`, `queries.py` | the omi engine | the omi engine |
+| `physics/x3domi.py` | X3D RigidBodyPhysics on the omi engine (`x3djolt` imports it only for `engine='omi'`) | the omi engine |
+| `physics/engine.py` | `require_omi` and `make_engine` probe for it | the omi engine |
+| `physics/debugdraw.py` | `PhysicsDebugDraw` over an omi world | the omi engine |
+| `physics/gltf_world.py` | `collision_world_from_scene` (no engine caller left: tests only) | the omi engine |
+| `physics/props.py` | `PropColliders` over an omi world | the omi engine |
+| `loaders/tiles3d/physics_colliders.py` | `TerrainColliders` over an omi world (`tests/tiles_walk.py`, `tests/tiles3d/test_navigation.py`) | the omi engine |
+| `move/physicsplatform.py` | `PhysicsViewPlatform(world)`, the omi world path (the same two tile tests) | the omi engine |
+
+With P6b, glisteel imports no omi_physics and names no engine, so no game needs any of these.
+The deletion list of "P5 as built" now reads: `physics/omiengine.py`, `omi_adapter.py`,
+`runtime.py`, `worker.py`, `replica.py`, `queries.py`, `x3domi.py` (`x3djolt`'s
+`engine == 'omi'` branches with it), `debugdraw.PhysicsDebugDraw`, `nav.navmesh.from_world`,
+`gltf_world.collision_world_from_scene` and `collision_groups`, `props.PropColliders`,
+`loaders/tiles3d/physics_colliders.py`, `zones.gravity_volumes` and `GravityZones`,
+`PhysicsViewPlatform.__init__`'s world path, and the rest of that list as written. Blockers
+4 (tests with omi as their reference) and 5 (pyjoltphysics' vehicle scenarios against omi live)
+remain.
 
 ## 7. Decisions
 
