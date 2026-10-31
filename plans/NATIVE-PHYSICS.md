@@ -1228,7 +1228,7 @@ marble-demo's suite passes on both engines (941 tests each); marble-editor's 165
 
 ### Follow-ups as built (2026-10-31)
 
-Branch `jolt-followups` on `openglcontext`; `pyjoltphysics` `develop` d178674 to 9d71f83; the
+Branch `jolt-followups` on `openglcontext`; `pyjoltphysics` `develop` d178674 to 72ed82f; the
 workspace root b1e4c65.
 
 - Settled worlds. pyjoltphysics counts lockstep ticks without stepping once a world is quiet: no
@@ -1302,8 +1302,6 @@ workspace root b1e4c65.
   posts applied within a tick, ticks counted beside queries); fixed the same way or marked
   `serial`. 80 runs of both builds under doubled load, and the lifecycle and query modules under
   ASan, passed.
-- `tests/unit/test_physics_service.py`'s thread-idle test waits for the worker to reach its wait
-  (it publishes the sleeping step first).
 
 Left:
 
