@@ -125,7 +125,7 @@ def test_a_cloth_with_no_shape_says_so(caplog):
 def test_a_bound_ragdoll_draws_its_character_and_changes_mode(monkeypatch):
     from OpenGLContext.character import model as model_module
     from OpenGLContext.physics import Physics, PhysicsDefinition
-    from test_character_ragdoll import BONES, figure
+    from ._ragdoll_assets import BONES, figure
 
     class Model:
         def __init__(self):

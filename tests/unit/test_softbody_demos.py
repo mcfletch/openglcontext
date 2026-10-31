@@ -71,7 +71,7 @@ def test_dropping_the_drape_makes_a_new_one(cloth_yard):
 
 
 def test_the_ragdoll_yard_strikes_knocks_down_and_gets_up():
-    from test_character_ragdoll import BONES, figure
+    from ._ragdoll_assets import BONES, figure
 
     class Model:
         def __init__(self):
