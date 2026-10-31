@@ -526,6 +526,74 @@ class TestTheIndex:
         assert '   physics_getting_started\n   using_physics' in page
 
 
+class TestAPathIntroductionWrittenByHand:
+    """``tests/tutorials/<path>/index.rst`` is the path's page in place of the
+    generated one, for the background a reader wants before the first script."""
+
+    INTRODUCTION = (
+        'Shader Background\n'
+        '=================\n\n'
+        'Vertices go in; pixels come out.  See :doc:`shader_1` first.\n'
+    )
+
+    @pytest.fixture
+    def shaders(self):
+        return tutorials.TutorialPath(
+            'Shaders', 'The shader path.', 'shaders', ['shader_1', 'shader_2']
+        )
+
+    def test_it_is_the_page_in_place_of_the_description(self, shaders):
+        page = tutorials.render_path(
+            shaders, ['shaders/shader_1'], introduction=self.INTRODUCTION
+        )
+        assert 'Vertices go in; pixels come out.' in page
+        assert 'The shader path.' not in page
+
+    def test_the_page_keeps_the_label_other_pages_link_to(self, shaders):
+        page = tutorials.render_path(
+            shaders, ['shaders/shader_1'], introduction=self.INTRODUCTION
+        )
+        assert page.startswith('.. _tutorials-shaders:\n\nShader Background')
+
+    def test_a_label_the_page_declares_is_not_declared_again(self, shaders):
+        page = tutorials.render_path(
+            shaders,
+            [],
+            introduction='.. _tutorials-shaders:\n\nTitle\n=====\n\nText.\n',
+        )
+        assert page.count('.. _tutorials-shaders:') == 1
+
+    def test_the_tutorials_are_listed_after_it_when_it_lists_none(self, shaders):
+        page = tutorials.render_path(
+            shaders, ['shaders/shader_1'], introduction=self.INTRODUCTION
+        )
+        assert page.rstrip().endswith('.. toctree::\n   :maxdepth: 1\n\n   shader_1')
+
+    def test_a_list_the_page_makes_is_the_list(self, shaders):
+        """Its author chose the order and the headings round it."""
+        written = (
+            'Title\n=====\n\nText.\n\n.. toctree::\n\n   shader_2\n   shader_1\n'
+        )
+        page = tutorials.render_path(
+            shaders, ['shaders/shader_1', 'shaders/shader_2'], introduction=written
+        )
+        assert page.count('.. toctree::') == 1
+        assert page.index('shader_2') < page.index('shader_1')
+
+    def test_a_link_to_a_tutorial_is_found_wherever_the_tutorial_is(self, shaders):
+        page = tutorials.render_path(
+            shaders,
+            ['shaders/shader_1'],
+            introduction=self.INTRODUCTION,
+            pages={'shader_1': 'tutorials/shaders/shader_1'},
+        )
+        assert ':doc:`/tutorials/shaders/shader_1`' in page
+
+    def test_a_path_without_one_is_described_as_before(self, shaders):
+        page = tutorials.render_path(shaders, ['shaders/shader_1'])
+        assert 'The shader path.' in page
+
+
 class TestWritingThemAll:
     @pytest.fixture
     def source(self, tmp_path):
@@ -545,6 +613,29 @@ class TestWritingThemAll:
         assert (output / 'shaders' / 'shader_1.rst').is_file()
         assert (output / 'shaders' / 'index.rst').is_file()
         assert (output / 'index.rst').is_file()
+
+    def test_an_index_beside_the_scripts_is_the_path_s_page(self, source, tmp_path):
+        (source / 'shaders' / 'index.rst').write_text(
+            'Background\n==========\n\nBefore you start.\n', encoding='utf8'
+        )
+        output = tmp_path / 'out'
+        tutorials.write(
+            output=str(output),
+            source=str(source),
+            paths=[tutorials.TutorialPath('Shaders', 'x', 'shaders', ['shader_1'])],
+        )
+        page = (output / 'shaders' / 'index.rst').read_text(encoding='utf8')
+        assert 'Before you start.' in page
+        assert '   shader_1' in page
+
+    def test_a_script_named_index_is_refused(self, source, tmp_path):
+        """Its page would be the path's page."""
+        with pytest.raises(ValueError, match='index'):
+            tutorials.write(
+                output=str(tmp_path / 'out'),
+                source=str(source),
+                paths=[tutorials.TutorialPath('Shaders', 'x', 'shaders', ['index'])],
+            )
 
     def test_a_page_says_where_its_script_is(self, source, tmp_path):
         output = tmp_path / 'out'

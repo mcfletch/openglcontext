@@ -12,6 +12,13 @@ The paths -- which scripts, in which order, under which heading -- are
 :data:`PATHS`.  Each path is a directory: its scripts, and the files they
 open, are in ``tests/tutorials/<directory>``, and its pages are written to
 ``docs/tutorials/<directory>`` beside the screenshots they show.
+
+A path can open with background of its own: ``tests/tutorials/<directory>/index.rst``
+is that path's page in place of the generated one, so a reader meets the
+ideas before the first script.  It is written like the commentary -- a
+``:doc:`` target naming a tutorial finds it wherever its path puts it -- and
+the list of the path's tutorials follows it unless it makes a ``toctree`` of
+its own.
 """
 
 from __future__ import annotations
@@ -63,6 +70,13 @@ COMMENTARY = re.compile(
 COLLAPSE = '#collapse'
 
 UNDERLINES = '=-~^"'
+
+#: A path's introduction, written by hand, in its directory under
+#: ``tests/tutorials``.  It is the path's ``index`` page.
+INTRODUCTION = 'index.rst'
+
+#: A ``toctree`` directive at the start of a line.
+TOCTREE = re.compile(r'^[ \t]*\.\. toctree::', re.MULTILINE)
 
 
 @dataclasses.dataclass
@@ -520,20 +534,41 @@ def _listed(path: TutorialPath, written: Iterable[str]) -> list[str]:
     ]
 
 
-def render_path(path: TutorialPath, written: Iterable[str]) -> str:
+def _toctree(path: TutorialPath, written: Iterable[str]) -> str:
+    return '.. toctree::\n   :maxdepth: 1\n\n%s' % (
+        '\n'.join('   %s' % (name,) for name in _listed(path, written)),
+    )
+
+
+def render_path(
+    path: TutorialPath,
+    written: Iterable[str],
+    introduction: str | None = None,
+    pages: Mapping[str, str] | None = None,
+) -> str:
     """The page of one path: what it covers, and the toctree of its tutorials.
 
     ``written`` names the pages written from scripts, as ``directory/name``.
+    ``introduction`` is the text of the path's hand-written ``index.rst``,
+    which is the page in place of the description; the toctree follows it
+    unless it holds one.  ``pages`` is as for :func:`render`.
     """
-    return '\n\n'.join(
-        [
-            '.. _tutorials-%s:' % (path.directory,),
-            heading(markup.escape(path.title), 0),
-            markup.wrap(' '.join(path.description.split())),
-            '.. toctree::\n   :maxdepth: 1\n\n%s'
-            % ('\n'.join('   %s' % (name,) for name in _listed(path, written)),),
-        ]
-    ) + '\n'
+    label = '.. _tutorials-%s:' % (path.directory,)
+    if introduction is None:
+        return '\n\n'.join(
+            [
+                label,
+                heading(markup.escape(path.title), 0),
+                markup.wrap(' '.join(path.description.split())),
+                _toctree(path, written),
+            ]
+        ) + '\n'
+    text = resolve_links(introduction.replace('\r\n', '\n'), pages or {}).strip('\n')
+    out = [] if label in text else [label]
+    out.append(text)
+    if not TOCTREE.search(text):
+        out.append(_toctree(path, written))
+    return '\n\n'.join(out) + '\n'
 
 
 def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
@@ -577,12 +612,19 @@ def write(
 
     Returns the pages written from scripts, as ``directory/name``.  Each page
     carries a label named for its script, so two scripts of one name are
-    refused.
+    refused, and so is a script named ``index``, whose page would be its
+    path's.  A path whose directory under ``source`` holds an ``index.rst``
+    has that for its page.
     """
     paths = list(paths)
     pages: dict[str, str] = {}
     for path in paths:
         for name in path.scripts:
+            if name == 'index':
+                raise ValueError(
+                    'tutorial script %s/index would be written over the page of '
+                    'its path' % (path.directory,)
+                )
             page = 'tutorials/%s/%s' % (path.directory, name)
             other = pages.setdefault(name, page)
             if other != page:
@@ -603,9 +645,21 @@ def write(
                 os.path.join(directory, '%s.rst' % (name,)), render(tutorial, pages)
             )
             written.append('%s/%s' % (path.directory, name))
-        _replace(os.path.join(directory, 'index.rst'), render_path(path, written))
+        _replace(
+            os.path.join(directory, 'index.rst'),
+            render_path(path, written, _introduction(path, source), pages),
+        )
     _replace(os.path.join(output, 'index.rst'), render_index(paths, written))
     return written
+
+
+def _introduction(path: TutorialPath, source: str) -> str | None:
+    """The text of the path's hand-written ``index.rst``, or None where it has none."""
+    where = os.path.join(source, path.directory, INTRODUCTION)
+    if not os.path.isfile(where):
+        return None
+    with open(where, encoding='utf8') as handle:
+        return handle.read()
 
 
 def _replace(path: str, text: str) -> None:

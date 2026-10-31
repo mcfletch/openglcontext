@@ -38,6 +38,9 @@ Key documentation files:
 - `docs/capturing.rst` - Screenshots, settled still captures, and video recording
 - `docs/tutorials/` - The code walkthroughs, a directory per path, written from
   `tests/tutorials/<path>/*.py`
+  A path opens with `tests/tutorials/<path>/index.rst` where that file exists
+  (background for the reader, in place of the generated description); the list
+  of the path's tutorials follows it unless it makes a `toctree` of its own
 
 Two directories beside them are **generated and not in version control**:
 `docs/tutorials/**/*.rst` from the `'''`-string commentary in `tests/tutorials`, and

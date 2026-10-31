@@ -62,6 +62,17 @@ highlighting; it is `docs/_ext/oglc_tutorials.py`, registered in
 reads it. `tests/unit/test_docbuild.py` builds a generated page with Sphinx and
 checks the columns the code comes out at.
 
+## A path's introduction
+
+`tests/tutorials/<path>/index.rst`, where it exists, is the path's `index` page
+in place of the generated description and list. It gives a reader the
+background a path assumes before the first script. It is read like the
+commentary: a `:doc:` target naming a tutorial finds it wherever its path puts
+it. The `tutorials-<path>` label is added when the file does not declare it, and
+the generated `toctree` follows the text unless the file makes one of its own,
+so a page cannot be left out of the navigation by writing an introduction. A
+script called `index` is refused, since its page would be the path's.
+
 ## What moved, and what the URLs do
 
 Every page keeps its name: `docs/pbr.html` was published at
