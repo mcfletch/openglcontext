@@ -110,6 +110,9 @@ def _distanceBetween(first: Point, second: Point) -> float:
 #: be treated as part of the scene, as a multiple of its radius.  Generous: what
 #: this is for is rejecting the far plane, which is an order of magnitude out.
 EXAMINE_PICK_REACH = 1.5
+#: The exit status of a program :meth:`Context.ContextMainLoop` ran when Ctrl-C
+#: ended it: 128 plus SIGINT's number, as a shell reports an interrupted program.
+INTERRUPTED_EXIT_STATUS = 130
 from OpenGLContext.contextconfig import ContextConfigMixin
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
@@ -1646,13 +1649,21 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         (:meth:`OpenGLContext.windowsystem.WindowSystem.run`), since a toolkit
         that needs an application object before it can make a window has to
         make that first.
+
+        Ctrl-C (``KeyboardInterrupt``) ends the program with exit status 130,
+        the shell's status for an interrupted program, and no traceback.
+        :meth:`MainLoop` lets the interrupt propagate, for a program that
+        handles it itself.
         """
         definition = named.get('definition', args[0] if args else None)
         fields = {key: value for key, value in named.items()
                   if key not in ('definition', 'parent')}
         chosen = cls.chooseWindowSystem(cls.resolveDefinition(definition, **fields))
-        return _windowsystem.load(chosen).run(
-            cast('type[Context]', cls), *args, **named)
+        try:
+            return _windowsystem.load(chosen).run(
+                cast('type[Context]', cls), *args, **named)
+        except KeyboardInterrupt:
+            raise SystemExit(INTERRUPTED_EXIT_STATUS) from None
 
     def MainLoop(self) -> Any:
         """Run the window system's loop until the window is closed

@@ -303,6 +303,9 @@ class WindowSystem(abc.ABC):
 
         One render per pass whatever arrived, so a burst of input -- a drag,
         say -- coalesces into a single frame instead of one per event.
+
+        An exception from a pass, ``KeyboardInterrupt`` included, closes the
+        journals and releases the window, then propagates to the caller.
         """
         from OpenGLContext.looptrace import LoopTrace
 
@@ -310,11 +313,8 @@ class WindowSystem(abc.ABC):
         context.deferRedraw = True
         trace = context.loopTrace or LoopTrace()
         try:
-            try:
-                while self.running():
-                    self.loopIteration(trace)
-            except KeyboardInterrupt:
-                pass
+            while self.running():
+                self.loopIteration(trace)
         finally:
             context.closeJournals('mainloop-ended')
             self.release()
