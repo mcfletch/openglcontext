@@ -588,6 +588,10 @@ def test_a_thread_service_asks_for_frames_only_while_something_moves():
             time.sleep(0.05)
             asked = service.frame(0.016)
         assert not asked
+        # The world thread goes idle once it has published the step that left
+        # everything asleep; the frame reads that step a moment before.
+        while not physics_testing.idle(service) and time.monotonic() < deadline:
+            time.sleep(0.01)
         assert physics_testing.idle(service)
     finally:
         service.close()

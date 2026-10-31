@@ -1199,6 +1199,33 @@ What P5 needs:
 - The X3D rigid body tutorials compared against their own Jolt captures rather than omi's.
 - `pyjoltphysics` registration (GitHub remote, wheels) before it becomes a hard dependency.
 
+### P5: marble-demo on Jolt (2026-10-31)
+
+marble-demo's suite passes on both engines (941 tests each); marble-editor's 165 do.
+
+- Tests that read the omi world: contacts through the marble's `hit`/`touching` handlers
+  (`tests/contactlog.py` in marble-demo), body counts through `physics.counts`, materials and
+  pair friction through `testing.physics`, the contact log through the new
+  `testing.physics.event_backlog` (pyjoltphysics `stats()['events_held']`), the engine's
+  inertia through the spin an angular impulse gives.
+- Seams. A marble rolling across the seam between two static tile bodies was kicked up on
+  Jolt (3.2 m/s at 28 m/s, 0.5 at 10): the speculative contact with the next tile's edge.
+  Jolt's enhanced internal edge removal works within one body pair. pyjoltphysics' `seams.cpp`
+  collides a moving `SMOOTH_EDGES` body with a static body together with the static bodies
+  beside it through one `InternalEdgeRemovingCollector`, keeps the pair's own hits, and turns
+  an edge hit lying on a seam with a coplanar face of another body to that face's normal; the
+  Jolt engine gives every dynamic body `SMOOTH_EDGES`. Through the service the kick is under
+  0.01 m/s at 10 to 28 m/s. This was the lip bounce, the updraft gap and the rockfall spreads
+  and crash rule. A floor of one mesh per surface also removed the kick on Jolt, but scattered
+  the marble on omi (its triangles' own edges); a compound per surface was slow on omi.
+- Persist impulses. pyjoltphysics' persist records carried impulse 0, so the controller's crash
+  rule never fired while a sweeping arm kept pushing the marble; they now carry the impulse
+  `EstimateCollisionResponse` gives for the tick.
+- Numbers: the gauntlet's best moment is found at 0.1 s steps (2.2 s on Jolt, 0.5 s on omi,
+  each within 1.3 times the clear lane); the pegs chute is tested with the arrival speed
+  applied a frame before the chute reads it (Jolt applies a step's commands after its
+  callbacks return); a driven body's velocity within float32's 1e-6.
+
 ## 7. Decisions
 
 Decided 2026-10-30: each recommendation below was accepted as written. On 5 the answer was to

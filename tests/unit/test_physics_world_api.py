@@ -545,3 +545,21 @@ def test_a_source_with_no_focus_follows_the_first_character(physics):
 def test_a_source_with_no_focus_and_no_character_is_refused(physics):
     with pytest.raises(ValueError, match='focus'):
         physics.add_collider_source(Stones())
+
+
+@pytest.mark.parametrize('speed', [10.0, 20.0, 28.0])
+def test_a_ball_rolls_across_static_boxes_laid_flush_as_across_one_floor(speed):
+    """Ten 4 m tiles, each a body of its own: no seam lifts the ball off the floor."""
+    physics = make()
+    for n in range(10):
+        physics.add_static(block((4, 1, 4), at=(0, -0.5, 4.0 * n)), Proxy.box((4, 1, 4)))
+    body = physics.add_dynamic(ball(at=(0, 0.5, 0)), Proxy.sphere(0.5), mass=3.0)
+    body.set_velocity((0.0, 0.0, speed))
+    highest = 0.0
+
+    def watch():
+        nonlocal highest
+        highest = max(highest, float(body.velocity[1]))
+
+    run_for(physics, 30.0 / speed, frame=0.01, setup=watch)
+    assert highest < 0.05, 'a seam threw the ball up at %.2f m/s' % highest

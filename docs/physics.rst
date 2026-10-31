@@ -1023,6 +1023,13 @@ that applied it. A teleport, and a body added, removed or moved, take effect at
 the next tick; queries apply waiting commands first, so a body added a moment
 ago is hit by a ray.
 
+A dynamic body has Jolt's enhanced internal edge removal, carried across the
+seams between static bodies: a ball rolling from one static box onto another
+laid flush beside it meets no edge between them, as on omi_physics, so a floor
+of tiles each a body of its own is one surface. The ``impulse`` of a contact on
+a ``'touching'`` step is the impulse estimated to stop the two closing in that
+step, as Jolt reports no solver impulse.
+
 What differs from omi_physics, by design of the engine:
 
 - The tick rate is fixed when the world is made; ``enable(tick_frequency=)``

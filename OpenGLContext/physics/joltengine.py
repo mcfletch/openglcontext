@@ -1420,6 +1420,10 @@ class JoltEngine(Engine):
             flags |= pj.BodyFlag.SENSOR
         if kind == 'dynamic' and extent < CCD_BELOW:
             flags |= pj.BodyFlag.CONTINUOUS
+        if kind == 'dynamic':
+            # A dynamic body rolls across the seam between static bodies laid
+            # flush as across one surface, as it does on omi_physics.
+            flags |= pj.BodyFlag.SMOOTH_EDGES
         if report and self._persist:
             flags |= pj.BodyFlag.REPORT
         if self._filter_contacts and (report or self._report_all):
