@@ -16,16 +16,19 @@ standalone C program that shows it.
 
 The driver starts each shader with this culling off and compiles a culled
 variant once a draw passes 128 vertices. Frames drawn before the variant is
-ready are culled correctly, and the frames after it are not. Whether a test
-drawing a frame or two meets it depends on how soon that variant is ready,
-so ``tests/unit/test_primitive_solid.py`` failed in a few of every 1,000
-runs beside the rest of the suite.
+ready are culled correctly, and the frames after it are not. A test that
+draws a frame or two meets the fault only when the variant is ready that
+soon, which beside the rest of a suite is a few runs in every 1,000.
 
 :func:`_probe` draws the Cone from inside in a second window while the first
 is open, through the engine's VRML97 pass. On the affected stack that draw
-shows the fault on every run. Run in a child process before the session's first window, it answers whether
-this machine is affected, so the switch goes on only where the defect is,
-and a driver that culls correctly is run as an application would run it.
+shows the fault on every run. Run in a child process before the session's
+first window, it answers whether this machine is affected, so the switch
+goes on only where the defect is, and a driver that culls correctly is run
+as an application would run it.
+
+The switch is for test sessions. An application on an affected stack sets
+``AMD_DEBUG=nonggc`` itself (docs/backends.rst, "Known driver defects").
 
 ``OPENGLCONTEXT_NGG_CULLING`` pins the answer: ``on`` leaves the driver's
 culling as it is, ``off`` adds ``nonggc`` to ``AMD_DEBUG``, and ``auto`` (the

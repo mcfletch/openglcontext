@@ -662,8 +662,8 @@ viewpoint 0.01 units along the view axis culls them as well.
 The driver compiles the culled variant of a shader after its first draw of
 more than 128 vertices, and frames drawn before that variant is ready are
 correct. The tests that look at a solid shape from inside
-(``tests/unit/test_primitive_solid.py``) draw a frame or two each, so they
-failed in a few of every 1,000 runs beside the rest of the suite.
+(``tests/unit/test_primitive_solid.py``) draw a frame or two each, so beside
+the rest of the suite they meet the fault in a few of every 1,000 runs.
 ``OpenGLContext.testing.drivercull`` draws a solid Cone from inside in a
 second window, with the first open, in a child process before the session
 opens its first window; on an affected stack that draw shows the cone on
@@ -675,11 +675,12 @@ The probe takes about 1.3 seconds. ``tests/unit/test_driver_culling.py``
 draws the second window in the test process and fails if its back faces are
 drawn.
 
-An application on an affected stack draws the same faces wherever a culled
-triangle has a vertex at clip w = 0, in its first window or any other. Set
-``AMD_DEBUG=nonggc`` in its environment before it starts, at the cost of the
-driver's vertex-stage culling. The Mesa report, with a C program that shows
-the fault without the engine, is ``plans/MESA-NGG-CULLING-W0.md``.
+The plugin's switch applies to test sessions only. An application on an
+affected stack draws the same faces wherever a culled triangle has a vertex
+at clip w = 0, in its first window or any other. Set ``AMD_DEBUG=nonggc`` in
+its environment before it starts, at the cost of the driver's vertex-stage
+culling (:ref:`radeonsi-back-faces`). The Mesa report, with a C program that
+shows the fault without the engine, is ``plans/MESA-NGG-CULLING-W0.md``.
 
 ``OPENGLCONTEXT_NGG_CULLING`` sets the answer for a run on a known stack,
 and skips the probe. The plugin writes the decision back into it, so a child
