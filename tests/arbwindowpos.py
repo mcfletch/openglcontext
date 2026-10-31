@@ -40,7 +40,9 @@ class TestContext( BaseContext ):
     def OnInit( self, ):
         """Initialisation"""
         print("""You should see two bitmap images traversing the screen
-    diagonally.  If the GL.ARB.window_pos extension is not available
+    diagonally over a blue background, each a black square with
+    "Hello From Alpha-ville!" in blue (the background showing through)
+    and a scrawled "regular image stuff" in red.  If the GL.ARB.window_pos extension is not available
     then you will exit immediately.
     """)
         self.width, self.height, self.data = self.loadImage()
@@ -82,6 +84,10 @@ class TestContext( BaseContext ):
         # we aren't affected by the matrices (which is the point)
         glTranslate( 100,0,0 )
         if mode.visible and not mode.transparent:
+            # "Hello From Alpha-ville!" is the image's transparent pixels, so
+            # it shows only as the colour behind the image.
+            glClearColor(0.0, 0.0, 1.0, 1.0)
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             format = GL_RGBA
             type = GL_UNSIGNED_BYTE
             glEnable(GL_ALPHA_TEST)
