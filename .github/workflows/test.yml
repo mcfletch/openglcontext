@@ -71,9 +71,14 @@ jobs:
         #
         # setuptools and wheel because the packaging test builds a wheel with
         # --no-build-isolation, which builds in this environment.
+        #
+        # pyjoltphysics is not on PyPI yet. It is built from the develop branch
+        # of its repository, with the Jolt submodule, which pip clones
+        # recursively for a git requirement. Remove the `pyjoltphysics @ git+...`
+        # requirement once pyjoltphysics is on PyPI.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --pre -e .[dev]
+          python -m pip install --pre "pyjoltphysics @ git+https://github.com/mcfletch/pyjoltphysics.git@develop" -e .[dev]
           python -m pip install 'setuptools>=77' wheel
 
       - name: Report the renderer under test
