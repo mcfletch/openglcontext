@@ -859,10 +859,49 @@ in metres with Y up. ``RagdollFigure.update(dt)`` advances the mixer
 (``AnimationMixer.advance``) and, while ``following``, sends the blended pose
 (``AnimationMixer.blended_pose``) as the ragdoll's target in one batch.
 ``draw()`` reads every bone in one ``physics.poses`` call and writes the skin
-matrices (``AnimationMixer.reskin_from``). A joint's ``Transform`` is not
-written while a ragdoll drives the figure, so something hung on a joint
-stays at the animated pose. The model's own ``update`` is not called while
-a figure drives it.
+matrices (``AnimationMixer.reskin_from``) and the ``Transform`` of each joint
+the clips drive (``AnimationMixer.write_joints_from``), so a weapon hung on a
+hand follows the ragdoll. The model's own ``update`` is not called while a
+figure drives it. The ragdoll starts standing in the animation's pose at the
+moment the figure is made.
+
+A death is ``knock_down``:
+
+.. code-block:: python
+
+   figure = RagdollFigure(physics, model, rig=shared_rig.placed(world_matrix),
+                          mode='kinematic', queryable=False)
+   figure.knock_down(impulse=direction * 110.0, point=hit.point,   # N s
+                     velocity=running_velocity, blend=0.25)       # m/s, s
+
+It switches a kinematic ragdoll to powered, adds ``velocity`` to every bone,
+puts ``impulse`` on the bone nearest ``point`` (or ``bone``, or the root),
+and fades the motors to limp over ``blend`` seconds while the figure still
+follows its animation, so a death clip shapes the start of the fall. After
+the blend the figure stops following; ``update`` then costs nothing and
+holds the pose the riding joints (fingers, toes) were in. ``settled`` is
+true once every bone is asleep; a settled figure, or one whose ragdoll was
+removed, keeps the pose it last drew and ``draw`` writes nothing more.
+
+``RagdollRig.placed(matrix)`` is the rig for another figure of the same
+document, its bones and spec shared, so a cast builds the rig once per
+build. A figure in a :class:`~OpenGLContext.character.crowd.Crowd` is taken
+out of it (``crowd.remove(model)``) while a ragdoll drives it, and put back
+afterwards; ``Crowd.remove`` hands the meshes' joint palettes back from the
+crowd's compute shader, so the matrices ``draw`` writes are the ones drawn.
+
+``RagdollBudget(limit)`` caps how many figures stay simulated.
+``admit(figure)`` counts one in and freezes the oldest past the limit
+(``figure.remove()``: out of the world, holding its last pose), returning
+those frozen; ``release(figure)`` stops counting one its owner removed;
+lowering ``limit`` freezes the oldest at once, and a limit of 0 freezes
+each figure as it is admitted. A ragdoll costs the world thread its bones
+in each tick and the render thread one bulk read and one skin write a
+frame until it settles: ten falling at once measured 0.002 to 0.014 ms a
+tick of world-thread ragdoll time, 0.35 to 0.8 ms a frame of physics step
+and 0.8 to 1.2 ms a frame of drawing after their 0.25 s blend (5.9 ms a
+frame during it), in ``physics.deformable_costs()`` and the overlay's
+physics section.
 
 The X3D ``Ragdoll`` node (:ref:`x3d-cloth-ragdoll`) does the same for a glTF
 character a document names. ``oglc-ragdoll`` is the demo.

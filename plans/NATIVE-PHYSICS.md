@@ -2114,6 +2114,66 @@ Game suites against the branch (`-m "not serial"`): twig-bb 2,407 passed, 1 skip
 hill-runner 652 passed, 1 skipped; marble-demo 941 passed, 6 xfailed; marble-editor 165 passed;
 openglcontext-forest 86 passed; glisteel 1,670 passed, 1 xfailed (against develop after the merge). The walk toggle test (`test_gltf_view_physics_toggle[walk]`) failed on develop after P5b: its driver called `OnIdle` and not `runFrameHooks`, which steps the physics service; the driver now runs the frame hooks as the main loop does. Tutorial baselines blessed in reference-images 665815d.
 
+### P6e as built (2026-10-31): deaths as ragdolls, and twig-bb's corpses
+
+openglcontext branch `corpse-ragdolls`; twig-bb `develop`.
+
+twig-bb's figures are skeletal glTF with VRM humanoid bones (`CHARACTER-RIG.md`, two builds,
+19-bone ragdolls with the bridged neck and shoulders); the game has no MD3 or other
+tag-segmented model, so a segmented ragdoll has no user and was not built. `RagdollRig` takes
+the figures as they are.
+
+Engine:
+
+- `Physics.add_ragdoll(pose=, queryable=)`: bones start at rest in the pose (teleported before
+  the first tick; the limits stay the spec's rest pose's); `Body.queryable`: rays, sweeps and
+  overlaps pass through a body that still collides (`Physics._skipped` adds them).
+- `Ragdoll.push(velocity)` (each bone's mass times it), `Ragdoll.nearest_bone(point)` (nearest
+  capsule surface), `ragdolls.pose_rows`.
+- `RagdollFigure` starts in the animation's pose; `knock_down(impulse, point, velocity, blend,
+  bone)`: powered at once, the push and the hit, limp over the blend while following, then not
+  following; `settled`; a settled or removed figure keeps its last pose and draws nothing new;
+  `update` does nothing while not following. `draw` writes the clip-driven joints
+  (`AnimationMixer.write_joints_from`), so attachments follow: the P6d limit is gone for joints a
+  clip drives (an undriven joint's rest is read back from its Transform, so it is not written).
+- `RagdollRig.placed(matrix)`: one rig per build, shared. `RagdollRig.worlds` composes each
+  rider's offset from its bone once per pose object.
+- `RagdollBudget(limit)`: `admit` freezes the oldest past the limit (removed, last pose held).
+- `Crowd.remove` ends a compute shader's palette claim (`PBRMesh.release_skin_palette`): a figure
+  taken out of a crowd drew the palette range the shader last wrote, whatever was set on it.
+- `rig.matrix_quaternions`, vectorised (Shepperd); `character.ragdoll` re-exports it.
+- Found on the way: `x3dshaders._compile` left the GL_INVALID_ENUM of a refused stage pending
+  when error checking was off, and the next checked call (`glUniform1i`) raised it
+  (`test_a_context_with_no_tessellation_draws_the_material` under `-n 8`); the flags are read now.
+
+twig-bb (`twig_bb.corpses`): a bot's `Death` makes its figure a `RagdollFigure` out of its crowd at
+the rules' position and the body's facing, not queryable, its walker removed (a respawn places a
+new one). `killing_blow` reads the tick's events: hitscan rounds from the killer give the weapon's
+new `impulse` field (pistol 45, shotgun 18 a pellet, rifle 110 N s) each along the `Fired`
+direction at the last round's point; a burst throws the body as it throws the living (projectile
+`knockback` times falloff, away from the centre); lava and falls give nothing. The walker's
+velocity is added. `MatchSetup.ragdolls` (default 6, play screen "Ragdoll bodies", saved) and
+`--ragdolls N` set the budget; 0, a figure without a humanoid and an engine without ragdolls play
+the death clip. A corpse lasts while its owner is dead (1.5 s for a bot; the figure is the
+combatant's own) and a respawn ends it and returns the figure to its crowd. The player has no
+drawn body, so no player ragdoll. Hit detection is unchanged: the dead are not staged, and corpse
+bones are not queryable.
+
+Frame cost, ten corpses struck at once on a floor (twig-bb figures, inline 60 Hz, meshes skinned
+on the GPU side, load average 24 to 29 from other users): the overlay's `ragdolls ms` (world
+thread) 0.014 ms a tick in the first 0.5 s, 0.002 to 0.007 after; physics step 0.35 to 0.79 ms a
+frame; `ragdolls draw ms` 5.9 ms a frame during the 0.25 s blend, 0.8 to 1.2 ms after (10.7 and
+4 to 6.6 ms before the rider-offset cache and the idle `update`).
+
+Limits: a corpse ends at its owner's respawn; corpses outliving it need a second figure per
+combatant. Lying ragdolls take several seconds to sleep (4 of 10 asleep at 4 s).
+
+Tests: engine `test_physics_ragdolls` (posed start, queryable, nearest bone, push),
+`test_character_ragdoll` (posed start with a shared rig, knock-down, momentum, settle and
+removal, joints, budget), `test_character_crowd` (palette claim), `test_x3d_shaders` (refused
+stage); each seen failing first. twig-bb `tests/test_corpses.py` (13) and a GL test that the
+fallen body is drawn lying where it stood.
+
 ## 7. Decisions
 
 Decided 2026-10-30: each recommendation below was accepted as written. On 5 the answer was to

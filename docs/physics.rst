@@ -645,8 +645,21 @@ rotation (B, 4) and translation (B, 3) in its parent's frame) or a clip
 thread every tick; ``place(position, rotation)`` moves the ragdoll's frame.
 ``set_strength`` sets each bone's torque limit, so one arm can swing free.
 
+``add_ragdoll(..., pose=(rotations, translations))`` puts the bones in that
+pose at rest from the first tick, with the pose as the held target; the
+joints' limits stay those of the spec's rest pose. ``push(velocity)`` adds a
+velocity (m/s) to every bone, an impulse of each bone's mass times it, as a
+blast or a fall at speed throws a whole body. ``nearest_bone(point)`` is the
+index of the bone whose capsule surface is nearest a world point, the bone a
+shot that met a hitbox there lands on: ``doll.hit(doll.nearest_bone(hit.point),
+impulse, hit.point)``.
+
 Each bone is a ``Body`` (``doll.bones``, ``doll.bone('head')``): handlers,
 joints, rays and ``physics.ragdoll_of(body)`` name it as they name any body.
+``add_ragdoll(..., queryable=False)`` makes rays, sweeps and overlaps pass
+through the bones while they still collide, as a corpse's bones should for a
+game whose shots and sight lines meet only the living; ``Body.queryable`` is
+the same switch on any body.
 A bone is removed with its ragdoll (``doll.remove()``);
 ``physics.remove(bone)`` raises ``ValueError``. Limits: balance is the root
 spring and nothing computes it from the feet; a ragdoll's mode, targets and
