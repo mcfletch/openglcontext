@@ -1000,9 +1000,13 @@ class JoltEngine(Engine):
         step_position = step_orientation = None
         alpha = self.alpha
         if self.owed and alpha < 1.0 and live.any():
-            uids = self._movers if present.all() else [self._movers[i] for i in np.flatnonzero(present)]
+            if present.all():
+                uids, jolt = self._movers, self._mover_jolt
+            else:
+                kept = np.flatnonzero(present)
+                uids, jolt = [self._movers[i] for i in kept.tolist()], self._mover_jolt[kept]
             moving = np.flatnonzero(live)
-            old_position, old_orientation = self._previous_poses(previous, uids, moving)
+            old_position, old_orientation = self._previous_poses(previous, jolt, uids, moving)
             if len(moving):
                 step_position, step_orientation = position.copy(), orientation.copy()
                 position[moving] = old_position * (1.0 - alpha) + position[moving] * alpha
@@ -1028,22 +1032,23 @@ class JoltEngine(Engine):
         self._published_live = live
         return published
 
-    def _previous_poses(self, previous: Any, uids: Sequence[int],
+    def _previous_poses(self, previous: Any, jolt: np.ndarray, uids: Sequence[int],
                         moving: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """The poses of ``uids[moving]`` at the tick before the last: from ``previous``, or as
-        added for a body that snapshot does not hold."""
+        """The poses of the rows ``moving`` at the tick before the last: from ``previous``, or as
+        added for a body that snapshot does not hold. ``jolt`` and ``uids`` name each row."""
         position = np.empty((len(moving), 3))
         orientation = np.empty((len(moving), 4))
-        rows = None if previous is None else previous.rows
-        for out, index in enumerate(moving.tolist()):
-            uid = uids[index]
-            row = None if rows is None else rows.get(self._jolt.get(uid, 0))
-            if row is not None:
-                position[out] = previous.position[row]
-                orientation[out] = previous.orientation[row]
-            else:
-                placed = self._poses.get(uid, ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
-                position[out], orientation[out] = placed
+        found = np.zeros(len(moving), dtype=bool)
+        if previous is not None:
+            rows = previous.rows_of(jolt[moving])
+            found = rows >= 0
+            take = rows[found]
+            position[found] = previous.position[take]
+            orientation[found] = previous.orientation[take]
+        for out in np.flatnonzero(~found).tolist():
+            placed = self._poses.get(uids[int(moving[out])],
+                                     ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+            position[out], orientation[out] = placed
         return position, orientation
 
     def _joint_readings(self, snapshot: Any) -> dict[int, tuple[float, ...]]:
