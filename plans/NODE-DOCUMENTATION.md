@@ -13,14 +13,16 @@ This plan gives each scenegraph node's API page the same, and one more:
 1. a *Where this node is used* section on the node's API page, linking to
    Python, VRML97, X3D XML and ClassicVRML files that instantiate it;
 2. a small sample world for each node, in X3D XML and VRML97 syntax, shown on the
-   page, with a test that it loads;
+   page with its reference render, and a test that it loads and draws as the
+   reference does;
 3. a way to link from a node to files a reader cannot read as text (glTF
-   binary, binary X3D).
+   binary).
 
 Decided: the section goes on the API pages only (no separate node reference);
 the index covers the projects in this workspace, since nothing else uses the
 nodes yet; every node with behaviour (sensors, interpolators and the like) gets
-a sample, and a sample's job is to load.
+a sample, every sample has a reference render, and a live X_ITE view is added only
+to a sample that is interactive.
 
 ## What there is to build on
 
@@ -96,29 +98,50 @@ constructs the scene with the node classes and `vrml.x3d.files.dumps` emits both
 files (its XML encoding for `.x3d`, its VRML97 encoding for `.wrl`). The
 committed files are the output; a test re-emits and compares.
 
+### Reference render
+
+Each sample is drawn as a settled still (`oglc-view`, `docs/capturing.rst`) by the
+path `oglc-x3d-regression` uses, into
+`tests/reference_images/x3d_samples/<Component>.<Name>.png` with its JSON sidecar
+(renderer, date, camera). A sample whose point is behaviour names the moment to
+draw in its builder: the time a `TimeSensor` has run to, or the frame after a
+source event is fired, so the render shows the result of the circuit and not its
+starting state. `tools/doc_images.py` gets one manifest group generating an entry
+per sample with the `baseline` producer, so the page figure, size, JPEG quality
+and licence tag follow the rest of the set. The samples are ours and BSD, so
+`ATTRIBUTION.md` gains nothing.
+
 ### On the page
 
-The section for a node shows its sample's source in both syntaxes. An X3D sample
-is also embedded in the page as a live view: X_ITE, the JavaScript X3D browser
-the regression references are drawn by (MIT, version-pinned and digest-checked in
-`scripts/x3d_xite_references.py`), is added to the built site's `_static`, and a
-`x3d-sample` directive writes `<x3d-canvas src="…">` for the sample. The
-reader's browser renders it. Engine-only nodes (the `OpenGLContext` component)
-have no view in another browser, so their page shows the source and says so.
+The section for a node shows its sample's source in both syntaxes beside the
+reference render.
+
+A sample that is interactive (a `TouchSensor` to click, a `PlaneSensor` to drag,
+a navigation mode, a Billboard to orbit round) is also embedded as a live view.
+X_ITE, the JavaScript X3D browser the regression references are drawn by (MIT,
+version-pinned and digest-checked in `scripts/x3d_xite_references.py`), is added
+to the built site's `_static`, and an `x3d-sample` directive writes
+`<x3d-canvas src="…">` for the sample. The sample's builder marks it
+`interactive`; no other sample loads X_ITE. Engine-only nodes (the
+`OpenGLContext` component) have no view in another browser, so the page shows the
+render and the source.
 
 ### Test
 
 - every node in the registry has a sample, or an entry in `NO_SAMPLE` with the
   reason (an abstract type, a node that only exists inside another's field);
 - every sample loads in a plain `Context` without a warning;
-- the `.x3d` and `.wrl` parse to the same field values.
+- the `.x3d` and `.wrl` parse to the same field values;
+- the render equals the reference within the suite's tolerance (the comparison
+  `tests/test_all_scripts.py` makes), and a sample with no reference is reported
+  as having none.
 
 Sensors, interpolators, sound, scripting and event utilities need a sample most
 of all, and each is a small working circuit rather than a lone node: a
 `TimeSensor` driving a `PositionInterpolator` into a `Transform`, a
 `TouchSensor` routed to a `TimeSensor`. The test loads the sample and, for a
 circuit, fires its source event and checks the routed field changed, which is
-what the sample demonstrates.
+what the sample demonstrates; the reference render is taken after that.
 
 ### Size of the work
 
@@ -135,7 +158,10 @@ engine's components).
    count.
 2. [x] `class_sections` in `directdocs` (PyOpenGL repository) and the section on
    node classes' API pages.
-3. [ ] Sample builders, the VRML97 54 first, the load and circuit tests.
-4. [ ] The `x3d-sample` directive and X_ITE in the built site.
-5. [ ] glTF extension table and binary-encoding siblings.
-6. [ ] Remaining components in batches, each with its tests.
+3. [ ] Sample builders, the VRML97 54 first, the load and circuit tests, the
+   reference renders and the manifest group.
+4. [ ] The sample on the node's page: source in both syntaxes and the render.
+5. [ ] The `x3d-sample` directive and X_ITE in the built site, for the
+   interactive samples.
+6. [ ] The glTF extension table.
+7. [ ] Remaining components in batches, each with its tests and renders.
