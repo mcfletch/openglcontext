@@ -604,11 +604,14 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         return found
 
     def _bounce(self, approach: list[tuple[_Stop, float, float]]) -> None:
-        """Send back each joint a step brought onto its stop, at its bounce times the speed it met it at
+        """Send back each joint about to meet its stop, or just stopped by it, at its bounce
 
-        Jolt's limits stop a joint dead; the bounce is set on the bodies'
-        velocities for the next step, shared between them by how hard each is
-        to move along the axis.
+        A joint whose next step would carry it past its stop is sent back at
+        its bounce times the speed it has. Jolt's stops stop a joint dead, so
+        one the step stopped is sent back at its bounce times the speed it had
+        before the step. The change is set on the bodies' velocities for the
+        next step, shared between them by how hard each is to move along the
+        axis.
         """
         world = self.jolt
         assert world is not None
@@ -620,17 +623,29 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             row = rows.get(stop.jid)
             if row is None:
                 continue
-            reading, toward = float(snapshot.joints.value[row]), stop.sign * before
-            low, high = stop.limits
-            if not ((toward > STOP_BOUNCE_SPEED and reading >= high - _STOP_REACH)
-                    or (toward < -STOP_BOUNCE_SPEED and reading <= low + _STOP_REACH)):
-                continue
+            reading = float(snapshot.joints.value[row])
             after, axis = self._stop_rate(stop, snapshot)
-            wanted = -bounce * before
-            # Already going back at least as fast: the step did not meet the stop.
-            if (wanted - after) * before >= 0.0:
+            speed = self._stop_speed(stop, reading, after, before)
+            if speed is None:
                 continue
-            self._send_back(stop, snapshot, axis, wanted - after)
+            wanted = -bounce * speed
+            # A joint already going back at least as fast as the bounce is left be.
+            if (wanted - after) * speed < 0.0:
+                self._send_back(stop, snapshot, axis, wanted - after)
+
+    def _stop_speed(self, stop: _Stop, reading: float, after: float, before: float) -> Optional[float]:
+        """The speed a joint meets its stop at, body2 against body1; None where it meets none"""
+        low, high = stop.limits
+        coming, came = stop.sign * after, stop.sign * before
+        if coming > STOP_BOUNCE_SPEED and reading + coming * self._step >= high:
+            return after
+        if coming < -STOP_BOUNCE_SPEED and reading + coming * self._step <= low:
+            return after
+        stopped = abs(after) <= 0.5 * abs(before)
+        if stopped and ((came > STOP_BOUNCE_SPEED and reading >= high - _STOP_REACH)
+                        or (came < -STOP_BOUNCE_SPEED and reading <= low + _STOP_REACH)):
+            return before
+        return None
 
     def _send_back(self, stop: _Stop, snapshot: pj.Snapshot, axis: np.ndarray, change: float) -> None:
         """Change how fast body2 moves against body1 along ``axis`` by ``change``"""
