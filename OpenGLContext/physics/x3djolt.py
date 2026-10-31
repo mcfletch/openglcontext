@@ -15,9 +15,10 @@ Where the two differ:
 - a pair meets with the collider's bounce and first friction coefficient, as
   each body's material, and a contact sent to ``set_contacts`` makes its pair
   meet with those too;
-- a body's inertia is its shapes', scaled to its mass;
+- the products of inertia off the diagonal are not used, as on omi;
 - the collection's iterations, error correction, force mixing and surface
-  thickness, and the bodies' sleep speeds, are Jolt's own;
+  thickness are Jolt's own; a body that may rest (``autoDisable``) rests by
+  Jolt's sleep speeds and time rather than its own;
 - a slider's force pushes its second body along the axis, and the first back,
   as a force each step.
 """
@@ -34,9 +35,9 @@ from OpenGLContext.physics.joltengine import _shape_of, axis_angles, default_thr
 from OpenGLContext.physics.omi_adapter import proxy_from_shape
 from OpenGLContext.physics.settings import default_engine
 from OpenGLContext.physics.x3drigid import (
-    _BODY_OUTPUTS, _CARRIED, _LEVEL, JOINT_OUTPUTS, _Body, _carry, _floats, _inner_collidables,
-    _Joint, _kept, _kind, _same, _suspension, collidable_parts, members, pose_of, quaternion,
-    single_shape,
+    _BODY_OUTPUTS, _CARRIED, _LEVEL, _PARKED, _SURFACE, JOINT_OUTPUTS, _Body, _carry, _floats,
+    _inner_collidables, _Joint, _kept, _kind, _same, _suspension, _turn_onto, collidable_parts,
+    members, pose_of, quaternion, single_shape,
 )
 
 __all__ = ['JoltRigidSystem', 'make_rigid_system']
@@ -55,6 +56,50 @@ def _matrix(turn: np.ndarray) -> np.ndarray:
         [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
         [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+
+
+def _multiply(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """The quaternion turning by ``b`` then by ``a``, each ``(x, y, z, w)``."""
+    ax, ay, az, aw = (float(v) for v in a)
+    bx, by, bz, bw = (float(v) for v in b)
+    return np.array([aw * bx + ax * bw + ay * bz - az * by,
+                     aw * by - ax * bz + ay * bw + az * bx,
+                     aw * bz + ax * by - ay * bx + az * bw,
+                     aw * bw - ax * bx - ay * by - az * bz])
+
+
+def _conjugate(turn: np.ndarray) -> np.ndarray:
+    return np.array([-turn[0], -turn[1], -turn[2], turn[3]], dtype='d')
+
+
+def _unit(values: Any) -> np.ndarray:
+    vector = np.asarray(values, dtype='d')
+    length = float(np.linalg.norm(vector))
+    return vector / length if length > 1e-12 else vector
+
+
+def _vector(values: Any, default: tuple[float, float, float]) -> np.ndarray:
+    """A field's 3-vector, or ``default`` for a joint without that field."""
+    return np.asarray(default if values is None else _floats(values), dtype='d')
+
+
+class _Frames:
+    """Where a joint's anchor and axes sit on each of its bodies, from the poses it was made at.
+
+    ``ends`` are the world uids of X3D's body1 and body2 (0 for the world);
+    each local value is in that body's frame, or the world's for an end of 0.
+    """
+
+    def __init__(self, ends: tuple[int, int], poses: dict[int, tuple[np.ndarray, np.ndarray]],
+                 anchor: Any, axes: tuple[Any, Any], motor_axes: list[Any]) -> None:
+        self.ends = ends
+        self.start = [poses.get(end, (np.zeros(3), np.array([0.0, 0.0, 0.0, 1.0])))
+                      for end in ends]
+        point = _vector(anchor, (0.0, 0.0, 0.0))
+        self.anchors = [_matrix(turn).T @ (point - position) for position, turn in self.start]
+        self.axes = [_matrix(turn).T @ _unit(_vector(axis, (0.0, 1.0, 0.0)))
+                     for (_position, turn), axis in zip(self.start, axes, strict=True)]
+        self.motor_axes = [_unit(_vector(axis, (0.0, 0.0, 0.0))) for axis in motor_axes]
 
 
 def _limits(low: float, high: float) -> Optional[tuple[float, float]]:
@@ -82,6 +127,10 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         #: frame, and its node, whose sliderForce pushes along the axis.
         self._sliders: list[tuple[int, int, np.ndarray, Any]] = []
         self._paired: dict[tuple[int, int], tuple[float, float]] = {}
+        #: Each body's pose as it was added, by world uid, which its joints are measured from.
+        self._origins: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        #: Each joint's anchor and axes on its bodies, by the entry's place.
+        self._frames: list[_Frames] = []
 
     def signature(self) -> tuple[Any, ...]:
         return (*super().signature(), bool(self.collection.preferAccuracy))
@@ -107,6 +156,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         self._sliders = []
         self._surfaces, self._surfaces_used = [], 0
         self._materials, self._paired = {}, {}
+        self._origins, self._frames = {}, []
         for node in self._bodies():
             self._add_jolt_body(node)
         for collidable, bounds in members(self.collection.collider):
@@ -116,6 +166,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             if node:
                 self._add_jolt_joint(node, by_node)
         world.set_contact_filter(self._verdict, recheck=True)
+        world.flush()
 
     def _define_material(self) -> int:
         """A material of the collider's bounce and first friction coefficient, one for each body."""
@@ -166,14 +217,21 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                                          mass=max(float(node.mass), 1e-9), group=0, mask=0,
                                          **values)
         else:
-            made = _shape_of(proxy_from_shape(shape), moving)
+            made = self.jolt.add_shape(_shape_of(proxy_from_shape(shape), moving))
+            # Jolt turns a body about its shapes' centre; the X3D body turns about its
+            # centre of mass, which is the body's origin here.
+            centre = self.jolt.shape_info(made).center_of_mass if moving else (0.0, 0.0, 0.0)
             batch = pj.BodyBatch.of_shape(
                 origin[None], made, motion=pj.MotionType.DYNAMIC if moving else pj.MotionType.STATIC,
-                mass=max(float(node.mass), 1e-9) if moving else 1.0, **values)
+                mass=max(float(node.mass), 1e-9) if moving else 1.0,
+                center_of_mass=tuple(-float(v) for v in centre), **values)
         (uid,), _seq = self.jolt.add_bodies(batch)
         entry.index = int(uid)
+        entry.moved = True
         self._materials[int(uid)] = material
+        self._origins[int(uid)] = (origin, turn)
         if moving:
+            self.jolt.set_motion([uid], inertia=np.diag(self._inertia(node, shape)))
             self.jolt.set_velocities([uid], np.asarray(node.linearVelocity, dtype='d'),
                                      np.asarray(node.angularVelocity, dtype='d'))
         entry.sent = {name: _kept(getattr(node, name)) for name in _BODY_OUTPUTS}
@@ -216,6 +274,11 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                 return
         if ends == [0, 0]:
             return
+        frames = _Frames((ends[0], ends[1]), self._origins, getattr(node, 'anchorPoint', None),
+                         (getattr(node, 'axis1', getattr(node, 'axis', None)),
+                          getattr(node, 'axis2', getattr(node, 'axis', None))),
+                         [getattr(node, 'motor%dAxis' % (number + 1), (0.0, 0.0, 0.0))
+                          for number in range(3)])
         # pyjoltphysics reads a joint as its first body against its second; X3D reads
         # body2 against body1.
         b, a = ends
@@ -224,6 +287,9 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         kind = _kind(node)
         made: Optional[pj.Joint] = None
         if kind == 'BallJoint':
+            made = pj.Joint.ball(a, b, anchor=_floats(node.anchorPoint))
+        elif kind == 'SingleAxisHingeJoint' and not np.any(_floats(node.axis)):
+            # A hinge with no axis holds only its anchor, as a ball does.
             made = pj.Joint.ball(a, b, anchor=_floats(node.anchorPoint))
         elif kind == 'SingleAxisHingeJoint':
             made = pj.Joint.hinge(a, b, anchor=_floats(node.anchorPoint), axis=_floats(node.axis),
@@ -268,6 +334,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         entry = _Joint(node, None, kind)
         self.joints.append(entry)
         self._joint_ids.append(int(jid))
+        self._frames.append(frames)
         self._joint_settings(entry)
 
     @staticmethod
@@ -337,9 +404,10 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         assert world is not None
         if node.fixed:
             return
+        rests = bool(node.autoDisable or self.collection.autoDisable)
         settings = (x3drigid._key(node.forces), x3drigid._key(node.torques),
                     node.useGlobalGravity, node.autoDamp, float(node.linearDampingFactor),
-                    float(node.angularDampingFactor))
+                    float(node.angularDampingFactor), rests)
         if settings == entry.settings:
             return
         entry.settings = settings
@@ -355,6 +423,7 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                          angular_damping=(x3drigid._damping(node.angularDampingFactor)
                                           if damped else 0.0),
                          gravity_factor=1.0 if node.useGlobalGravity else 0.0)
+        world.set_flags([entry.index], pj.BodyFlag.NO_SLEEP, not rests)
 
     def _read_contacts(self) -> None:
         """The pairs the `Contact` nodes sent since the last frame name"""
@@ -376,11 +445,48 @@ class JoltRigidSystem(x3drigid.RigidSystem):
                 if found is None and geometry:
                     found = self._held_index(geometry)
                 ends.append(found)
-            if ends[0] is not None and ends[1] is not None and ends[0] != ends[1]:
-                routed[(int(ends[0]), int(ends[1]))] = parameters = x3drigid.contact_parameters(contact)
-                self._pair(int(ends[0]), int(ends[1]), parameters)
+            if ends[0] is None and ends[1] is None:
+                continue
+            if ends[0] is None or ends[1] is None:
+                # A side that names nothing is the world: a surface through the
+                # contact, solid on the far side of it from the body.
+                normal = np.asarray(contact.contactNormal, dtype='d')
+                surface = self._surface(np.asarray(contact.position, dtype='d'),
+                                        normal if ends[1] is None else -normal)
+                ends = [surface if end is None else end for end in ends]
+            one, other = (int(end) for end in ends if end is not None)
+            if one != other:
+                routed[(one, other)] = parameters = x3drigid.contact_parameters(contact)
+                self._pair(one, other, parameters)
         self.contacts = []
         self._routed = routed
+        if self.jolt is not None:
+            for uid in self._surfaces[self._surfaces_used:]:
+                self.jolt.set_transforms([uid], _PARKED[None], np.array([[0.0, 0.0, 0.0, 1.0]]))
+        self._surfaces_used = 0
+
+    def _surface(self, point: np.ndarray, into: np.ndarray) -> int:
+        """A static body whose face passes through `point`, solid along `into`, for this frame"""
+        world = self.jolt
+        assert world is not None
+        length = float(np.linalg.norm(into))
+        into = into / length if length > 1e-12 else np.array([0.0, -1.0, 0.0])
+        if self._surfaces_used < len(self._surfaces):
+            uid = self._surfaces[self._surfaces_used]
+        else:
+            material = self._define_material()
+            (made,), _seq = world.add_bodies(pj.BodyBatch.boxes(
+                _PARKED[None], size=(2 * _SURFACE,) * 3, motion=pj.MotionType.STATIC,
+                material=material, flags=pj.BodyFlag.FILTER_CONTACTS))
+            uid = int(made)
+            self._surfaces.append(uid)
+            self._materials[uid] = material
+            self.held[uid] = set()
+        self._surfaces_used += 1
+        # The box's +y face is turned to face away from the solid.
+        world.set_transforms([uid], (point + into * _SURFACE)[None],
+                             np.asarray(_turn_onto((0.0, 1.0, 0.0), -into), dtype='d')[None])
+        return uid
 
     def _pair(self, one: int, other: int, parameters: Any) -> None:
         """Have the bodies ``one`` and ``other`` meet with a contact's bounce and friction."""
@@ -486,12 +592,46 @@ class JoltRigidSystem(x3drigid.RigidSystem):
             self._send_joint(joint)
 
     def _joint_values(self, entry: _Joint) -> dict[str, Any]:
-        """The outputs a joint offers that the world's joint rows give, with their rates"""
+        """Every output a joint offers, as the bodies stand"""
         found: dict[str, Any] = {}
         snapshot = None if self.jolt is None else self.jolt.latest()
         if snapshot is None:
             return found
-        jid = self._joint_ids[self.joints.index(entry)]
+        place = self.joints.index(entry)
+        jid, frames = self._joint_ids[place], self._frames[place]
+        poses = []
+        for end, start in zip(frames.ends, frames.start, strict=True):
+            row = snapshot.rows.get(end) if end else None
+            if row is None:
+                poses.append((start, np.zeros(3)) if end else
+                             ((np.zeros(3), np.array([0.0, 0.0, 0.0, 1.0])), np.zeros(3)))
+            else:
+                poses.append(((np.asarray(snapshot.position[row], dtype='d'),
+                               np.asarray(snapshot.orientation[row], dtype='d')),
+                              np.asarray(snapshot.angular_velocity[row], dtype='d')))
+        (first, spin1), (second, spin2) = poses
+        kind = entry.kind
+        if kind in ('BallJoint', 'SingleAxisHingeJoint', 'DoubleAxisHingeJoint', 'UniversalJoint'):
+            found['body1AnchorPoint'] = first[0] + _matrix(first[1]) @ frames.anchors[0]
+            found['body2AnchorPoint'] = second[0] + _matrix(second[1]) @ frames.anchors[1]
+        if kind in ('DoubleAxisHingeJoint', 'UniversalJoint'):
+            found['body1Axis'] = _matrix(first[1]) @ frames.axes[0]
+            found['body2Axis'] = _matrix(second[1]) @ frames.axes[1]
+        if kind == 'MotorJoint':
+            # The turn of body2 against body1 since the joint was made, in the world's frame.
+            turned = [_multiply(pose[1], _conjugate(np.asarray(start[1], dtype='d')))
+                      for pose, start in zip((first, second), frames.start, strict=True)]
+            drift = _multiply(turned[1], _conjugate(turned[0]))
+            if drift[3] < 0.0:
+                drift = -drift
+            for number in range(min(max(int(entry.node.enabledAxes), 0), 3)):
+                axis = _matrix(first[1]) @ (_matrix(frames.start[0][1]).T
+                                            @ frames.motor_axes[number])
+                angle = 2.0 * math.atan2(float(np.dot(drift[:3], axis)), float(drift[3]))
+                found['motor%dAngle' % (number + 1)] = (
+                    math.remainder(angle, 2.0 * math.pi) if entry.node.autoCalc
+                    else float(getattr(entry.node, 'axis%dAngle' % (number + 1))))
+                found['motor%dAngleRate' % (number + 1)] = float(np.dot(spin2 - spin1, axis))
         joints = snapshot.joints
         row = joints.rows.get(jid)
         if row is None:
@@ -499,18 +639,18 @@ class JoltRigidSystem(x3drigid.RigidSystem):
         value, value2 = float(joints.value[row]), float(joints.value2[row])
         names = {'SingleAxisHingeJoint': (('angle', value),),
                  'DoubleAxisHingeJoint': (('hinge1Angle', value), ('hinge2Angle', value2)),
-                 'SliderJoint': (('separation', value),)}.get(entry.kind, ())
+                 'SliderJoint': (('separation', value),)}.get(kind, ())
         last = self._angles.setdefault(jid, {})
         now = float(snapshot.time)
         then = last.get('time')
         for name, reading in names:
             found[name] = reading
+            found[name + 'Rate'] = 0.0
             if name in last and then is not None and now > then:
                 change = reading - last[name]
-                if entry.kind != 'SliderJoint':
+                if kind != 'SliderJoint':
                     change = (change + math.pi) % (2.0 * math.pi) - math.pi
                 found[name + 'Rate'] = change / (now - then)
             last[name] = reading
         last['time'] = now
-        return {name: value for name, value in found.items()
-                if name in JOINT_OUTPUTS.get(entry.kind, ())}
+        return found

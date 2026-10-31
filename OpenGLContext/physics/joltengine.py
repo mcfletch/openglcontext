@@ -311,11 +311,16 @@ class JoltController:
         self.native.apply_impulse(tuple(float(v) for v in self.velocity))
 
     def place(self, centre: Any) -> None:
-        """Put the capsule's centre at ``centre`` as it is, with no search for a floor."""
+        """Put the capsule's centre at ``centre`` as it is, with no search for a floor; a flier flies on."""
         at = np.asarray(centre, dtype='d')[:3].copy()
+        flying = self.flying
         seq = self.native.teleport(tuple(float(v) for v in at), 0.0)
         self._placed = (seq, at)
-        self.position = at
+        self.eye_point = self.eye_point + (at - self.position)
+        # In place: a platform holding the controller's position array sees the move.
+        self.position[:] = at
+        if flying:
+            self._expect(pj.CharacterState.FLYING, self.native.set_fly(True))
 
     @property
     def state(self) -> Any:

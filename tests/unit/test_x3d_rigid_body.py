@@ -1,4 +1,4 @@
-"""X3D's RigidBodyPhysics: bodies, collidables, collisions and joints on omi_physics.
+"""X3D's RigidBodyPhysics: bodies, collidables, collisions and joints, on each physics engine.
 
 Documents are read as a user's are and their collections stepped by hand
 (`RigidBodyCollection.advance`), so nothing here needs a window.
@@ -13,6 +13,8 @@ from OpenGLContext.loaders.x3d import prototypes
 from OpenGLContext.physics import x3drigid
 
 FRAME = 1.0 / 60.0
+
+pytestmark = pytest.mark.engines('omi', 'jolt')
 
 BALL = b'''<Group>
   <CollidableShape DEF="BALL-GEOM"><Shape containerField="shape"><Sphere radius="0.1"/></Shape>
@@ -628,6 +630,7 @@ def _world_facts(system):
             tuple(sorted(str(shape.type) for shape in world.shapes)))
 
 
+@pytest.mark.engines('omi', reason='reads the omi world the collection builds')
 def test_a_collections_world_follows_what_it_is_built_from(check_memo_inputs):
     graph = scene(BALL + b'''<CollidableShape DEF="OTHER"><Shape containerField="shape">
         <Box size="0.2 0.2 0.2"/></Shape></CollidableShape>
@@ -683,6 +686,7 @@ def test_a_frame_costs_what_the_collection_holds(check_scaling):
     check_scaling(prepare, n=50, most=6.0)
 
 
+@pytest.mark.engines('omi', reason='reads the omi world the collection builds')
 def test_a_bodys_settings_follow_its_fields(check_memo_inputs):
     graph = falling()
     collection, body = graph.getDEF('C'), graph.getDEF('B')

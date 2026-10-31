@@ -23,6 +23,8 @@ from ._terrain_host import (
     FRAME, Clock, eye, flat_field, press, ramp_field, run, walking,
 )
 
+pytestmark = pytest.mark.engines('omi', 'jolt')
+
 
 @pytest.fixture
 def clock():

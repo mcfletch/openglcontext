@@ -1018,6 +1018,14 @@ class RigidSystem:
                 setattr(entry.node, name, value)
                 entry.sent[name] = flat
 
+    def joint_values(self, entry: _Joint) -> dict[str, Any]:
+        """Every output the joint `entry` offers, by field name, as the bodies stand
+
+        The values are what the joint's ``forceOutput`` would send; a rate
+        is measured from the last call where the engine has no reading of it.
+        """
+        return self._joint_values(entry)
+
     def _joint_values(self, entry: _Joint) -> dict[str, Any]:
         """Every output a joint offers, as the bodies stand"""
         world, joint, kind, node = self.world, entry.joint, entry.kind, entry.node

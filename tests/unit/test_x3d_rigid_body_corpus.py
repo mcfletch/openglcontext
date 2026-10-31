@@ -20,8 +20,9 @@ from OpenGLContext.scenegraph.x3drigidbody import CollisionSensor, RigidBodyColl
 FRAME = 1.0 / 60.0
 FOLDER = os.path.join(corpus.examples('Basic'), 'RigidBodyPhysics')
 
-pytestmark = pytest.mark.skipif(not os.path.isdir(FOLDER),
-                                reason='the Basic example archive has not been fetched')
+pytestmark = [pytest.mark.engines('omi', 'jolt'),
+              pytest.mark.skipif(not os.path.isdir(FOLDER),
+                                 reason='the Basic example archive has not been fetched')]
 
 
 def nodes_of(root):
@@ -106,12 +107,13 @@ def test_the_slider_carries_its_body_along_its_axis(name):
 def test_the_chain_swings_and_holds_together(name, anchors):
     scene, _ = simulate(name, 2.0)
     collection = next(each for each in nodes_of(scene) if isinstance(each, RigidBodyCollection))
-    world = collection.system.world
-    built = sorted(collection.system.joints, key=lambda found: float(found.node.anchorPoint[0]))
+    system = collection.system
+    built = sorted(system.joints, key=lambda found: float(found.node.anchorPoint[0]))
     assert [tuple(found.node.anchorPoint) for found in built] == [
         pytest.approx(anchor) for anchor in anchors]
     for found in built:
-        assert np.linalg.norm(found.joint.anchor_a(world) - found.joint.anchor_b(world)) < 0.02
+        values = system.joint_values(found)
+        assert np.linalg.norm(values['body1AnchorPoint'] - values['body2AnchorPoint']) < 0.02
     assert scene.getDEF('BODY-3').position[1] < -0.1
 
 
@@ -119,10 +121,9 @@ def test_the_universal_joint_turns_the_second_bar():
     scene, _ = simulate('UniversalJointExample.x3d', 2.0)
     assert np.linalg.norm(scene.getDEF('BODY-2').angularVelocity) > 0.01
     collection = next(each for each in nodes_of(scene) if isinstance(each, RigidBodyCollection))
-    world = collection.system.world
-    joint = collection.system.joints[0].joint
-    assert abs(float(np.dot(joint.axis1(world), joint.axis2(world)))) < 0.01
-    assert np.linalg.norm(joint.anchor_a(world) - joint.anchor_b(world)) < 0.01
+    values = collection.system.joint_values(collection.system.joints[0])
+    assert abs(float(np.dot(values['body1Axis'], values['body2Axis']))) < 0.01
+    assert np.linalg.norm(values['body1AnchorPoint'] - values['body2AnchorPoint']) < 0.01
 
 
 def test_the_car_waits_for_the_script_that_enables_it():
