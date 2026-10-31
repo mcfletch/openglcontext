@@ -1312,8 +1312,9 @@ Left:
 
 ### P5 as built (2026-10-31)
 
-Branch `jolt-default` on `openglcontext`; `pyjoltphysics` `omi-golden` (3842fbc); `omi_physics`
-1bbfb1b (deprecation note).
+Branch `jolt-default` on `openglcontext` (ec03d475 to the plan commits); `pyjoltphysics`
+3842fbc and 6972715 (recorded omi answers) and 715e893; `omi_physics` 1bbfb1b (deprecation note);
+`hill-runner` 0816176.
 
 - Default. `PhysicsDefinition.engine` and `OPENGLCONTEXT_PHYSICS_ENGINE` default to `jolt`.
   `pyjoltphysics` is a requirement of OpenGLContext, with no version floor (it is not on PyPI;
@@ -1362,27 +1363,39 @@ Branch `jolt-default` on `openglcontext`; `pyjoltphysics` `omi-golden` (3842fbc)
   that import the omi engine's own modules (`test_physics_runtime`, `test_physics_frame_cost`,
   `test_physics_sweep_steps`). With omi_physics blocked the unit suite passes: 17,129 passed and 972 skipped, and the one failure then (the resting X3D rigid bodies of `test_still_frames`) is marked.
 - Golden results. pyjoltphysics' `tests/differential/omi_golden.json` holds omi_physics'
-  answers to the 34 scene comparisons of `test_scenes.py` (rest heights on three grounds,
-  slides, rebounds, stack, pyramid, stairs, sensors, the bullet, the 1,000-box bin, the
-  dumbbell), recorded from omi_physics 0.4 with `PYJOLTPHYSICS_RECORD_OMI`.
-  `engines.reference` returns the recorded answer and, where omi_physics is installed, checks it
-  against a live run (0.1% or 0.1 mm; trigger ticks exactly). `test_scenes.py` runs without
-  omi_physics (34 passed with it blocked). `test_p3.py`, `test_characters.py` and
-  `test_smoke.py` still run omi live and are not collected without it.
+  answers to 55 comparisons, recorded from omi_physics 0.4 with `PYJOLTPHYSICS_RECORD_OMI`:
+  `test_scenes.py` (rest heights on three grounds, slides, rebounds, stack, pyramid, stairs,
+  sensors, the bullet, the 1,000-box bin, the dumbbell), `test_smoke.py`, `test_characters.py`
+  (each scene's whole track: feet and grounded per tick) and `test_p3.py` (pendulum, chain,
+  hinge stop, motor, slider and distance, the pair friction grid, averaged friction,
+  restitution, filter pairs, gravity zones, the kinematic pose function). The recorded values
+  are the ones in the tables of "P1b", "P2" and "P3 as built". `engines.reference` returns the
+  recorded answer and, where omi_physics is installed, checks it against a live run (0.1% or
+  0.1 mm; trigger ticks and pair sets exactly); `test_reference.py` tests that. With
+  omi_physics blocked 57 differential tests pass; only the vehicle scenarios (P6a) still run
+  omi live and are not collected without it.
 - marble-demo imports no omi_physics (one comment names it). glisteel depends on omi_physics
   itself and names `engine='omi'` in `world.physics_definition`.
 
-| Suite (no engine setting) | Result |
-|---|---|
-| openglcontext `tests/unit -m "not serial"` | 18,555 passed, 56 skipped before the one fix (the replica test narrowed to omi); the touched modules 99 passed after |
-| openglcontext `tests/unit -m serial` | SERIAL |
-| hill-runner | 652 passed, 1 skipped (no VP9 encoder) |
-| twig-bb | 2,407 passed, 1 skipped |
-| marble-demo | 941 passed, 6 xfailed (the game's own design notes) |
-| marble-editor | 165 passed |
-| glisteel | 1,670 passed, 1 xfailed |
-| openglcontext-forest | 86 passed |
-| pyjoltphysics `tests/differential` | 57 passed; 34 with omi_physics blocked |
+| Suite (no engine setting) | omi_physics installed | omi_physics blocked |
+|---|---|---|
+| openglcontext `tests/unit -m "not serial"` | 18,574 passed, 56 skipped | 17,129 passed, 972 skipped (before the last mark) |
+| openglcontext `tests/unit -m serial` | 29 passed | |
+| openglcontext `tests/test_all_scripts.py -k physics` | 20 passed | |
+| hill-runner | 652 passed, 1 skipped (no VP9 encoder) | 651 passed, 1 failed: `test_spill`'s coin height, which missed one scatter seed in five; hill-runner 0816176 asserts the rise for every seed |
+| twig-bb | 2,407 passed, 1 skipped | 2,407 passed, 1 skipped |
+| marble-demo | 941 passed, 6 xfailed (the game's own design notes) | same |
+| marble-editor | 165 passed | 165 passed |
+| glisteel | 1,670 passed, 1 xfailed | needs omi_physics (its car) |
+| openglcontext-forest | 86 passed | 86 passed |
+| pyjoltphysics `tests/differential` | 67 passed (with the vehicle scenarios) | 57 passed |
+| verify-everything | VERIFY | |
+
+Static gates (`tools/preflight.py openglcontext pyjoltphysics --only lint --only oglc-check
+--only typecheck`): all six pass. The typecheck against `.preflight-venv` found 20 errors in
+`joltengine.py` and `x3djolt.py` from P4 (ndarrays where pyjoltphysics declares
+`Sequence[float]`, unguarded `Snapshot | None`), fixed with `joltengine._vec3`; pyjoltphysics'
+lint read another agent's `.claude/worktrees/`, now in its `.gitignore` (715e893).
 
 What blocks deleting the omi engine, and what the deletion then is:
 
@@ -1402,8 +1415,8 @@ What blocks deleting the omi engine, and what the deletion then is:
 4. Tests that use omi_physics as their reference (the collider modules above that ray-cast
    an omi world or drive omi's `RaycastVehicle` over the colliders) are rewritten onto the
    service's queries on Jolt, or their omi answers recorded as pyjoltphysics' are.
-5. pyjoltphysics' `test_p3.py`, `test_characters.py` and `test_smoke.py` compared live; their
-   omi answers are recorded the way `test_scenes.py`'s are.
+5. pyjoltphysics' vehicle scenarios (`test_vehicles.py`, `vehicles.py`) compare live with
+   omi's `RaycastVehicle`; their answers are recorded the way the others' are.
 
 The deletion, once 1 to 5 are done, removes: `physics/omiengine.py`, `omi_adapter.py`,
 `runtime.py`, `worker.py`, `replica.py`, `queries.py`, `x3drigid.py`'s omi `RigidSystem` (the

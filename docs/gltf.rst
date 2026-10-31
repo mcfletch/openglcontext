@@ -634,10 +634,12 @@ extensions' own field names. The physics bodies are made by the context's
      - :ref:`Codec extensions <codecs>`
    * - ``OMI_physics_shape``
      - Read: box, sphere, capsule, cylinder; a ``convex`` or ``trimesh`` shape
-       is made from the triangles of the node carrying the body
+       is made from the triangles of the node carrying the body. ``physics-cook``
+       writes ``convex`` and ``trimesh`` shapes
      - ``physics.omigltf``, :doc:`docs <physics>`
    * - ``OMI_physics_body``
-     - Read: motion, collider, trigger, physics materials, collision filters
+     - Read: motion, collider, trigger, physics materials, collision filters.
+       ``physics-cook`` writes colliders
      - ``physics.omigltf``
    * - ``OMI_physics_gravity``
      - Read: global and per-node gravity
