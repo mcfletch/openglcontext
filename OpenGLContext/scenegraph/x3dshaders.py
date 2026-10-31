@@ -398,6 +398,10 @@ _STATES = contextresources.ContextNames(
     '_x3dShaderStates', delete_program, names=lambda state: list(state.names()))
 
 
+#: More error flags than an implementation keeps (one per kind of error, at most).
+_ERROR_FLAGS = 16
+
+
 def _compile(stage: str, text: str) -> int:
     kind = GL_STAGES[stage]
     try:
@@ -405,6 +409,11 @@ def _compile(stage: str, text: str) -> int:
     except gl_error.GLError as err:
         raise RuntimeError('this context has no %s stage' % (stage.lower(),)) from err
     if not shader:
+        # Without error checking the refusal is a pending GL_INVALID_ENUM, which
+        # the next checked call would otherwise report as its own.
+        for _flag in range(_ERROR_FLAGS):
+            if GL.glGetError() == GL.GL_NO_ERROR:
+                break
         raise RuntimeError('this context has no %s stage' % (stage.lower(),))
     GL.glShaderSource(shader, text)
     GL.glCompileShader(shader)
