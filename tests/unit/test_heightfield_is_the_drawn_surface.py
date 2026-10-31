@@ -24,7 +24,6 @@ produces: the triangles out of ``mesh()``, and a ray fired into a physics world.
 import numpy as np
 import pytest
 
-from omi_physics.raycast import raycast
 from OpenGLContext.physics.heightfield import HeightFieldColliders
 from tests.unit._streamed import Streamed
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
@@ -145,6 +144,8 @@ class TestTheColliderIsTheDrawnSurface:
     @pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
     def test_a_ray_lands_where_the_sampler_says_the_ground_is(self) -> None:
         """What the walker stands on and what a wheel rolls over are one surface."""
+        from omi_physics.raycast import raycast  # noqa: PLC0415 the omi engine's world, the deprecated omi extra
+
         field = _field(res=17)
         ground = Streamed(HeightFieldColliders(field, reach=EXTENT))
         ground.update((0.0, 0.0, 0.0))

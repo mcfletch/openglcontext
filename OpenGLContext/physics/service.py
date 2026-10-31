@@ -7,10 +7,10 @@ scenegraph. The application adds bodies and reads and changes them through
     body = physics.add_dynamic(ball, translation=(0, 4.5, -2), mass=2.0)
     body.apply_impulse((0, 0, 3))
 
-The world is stepped by an engine (:mod:`OpenGLContext.physics.engine`):
-omi_physics on a thread of its own or inline in the frame hook, or Jolt on
-pyjoltphysics' world thread, free-running or in lockstep with the frame
-(``PhysicsDefinition.engine``). Changes travel to it as plain-data
+The world is stepped by an engine (:mod:`OpenGLContext.physics.engine`): Jolt,
+the default, on pyjoltphysics' world thread, free-running or in lockstep with
+the frame, or the deprecated omi_physics (the ``omi`` extra) on a thread of its
+own or inline in the frame hook (``PhysicsDefinition.engine``). Changes travel to it as plain-data
 commands; results come back once a frame in :meth:`Physics.frame`, which writes
 poses onto the nodes, delivers events to their handlers and applies the scene
 changes handlers queued from the worker. A ``Physics`` holds no GL and needs no

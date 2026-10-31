@@ -9,24 +9,29 @@ this package::
     from OpenGLContext.physics import CharacterCapabilities, Material, Proxy
 
 They are loaded on first use, so importing the package imports neither the
-service nor the engine that steps the world. No name here is the engine's: the
-service converts its own values to the engine's in
-:mod:`~OpenGLContext.physics.omi_adapter`. The modules:
+service nor the engine that steps the world. No name here is an engine's: each
+engine converts the service's values to its own (:mod:`~OpenGLContext.physics.joltengine`,
+and the deprecated omi engine's :mod:`~OpenGLContext.physics.omi_adapter`). The modules:
 
 * :mod:`~OpenGLContext.physics.service` -- the service: adding, removing,
   queries, events, the frame.
 * :mod:`~OpenGLContext.physics.body`, :mod:`~OpenGLContext.physics.character`
   and :mod:`~OpenGLContext.physics.joints` -- the handles it returns.
-* :mod:`~OpenGLContext.physics.proxy` -- collision shapes, cooked from nodes.
+* :mod:`~OpenGLContext.physics.proxy` and :mod:`~OpenGLContext.physics.cooking`
+  -- collision shapes, cooked from nodes and triangles.
 * :mod:`~OpenGLContext.physics.types` -- materials, collision filters,
   characters' capabilities and state, poses, the world's counts and the
   engine's description.
-* :mod:`~OpenGLContext.physics.worker` and :mod:`~OpenGLContext.physics.runtime`
-  -- where and how the world is stepped.
-* :mod:`~OpenGLContext.physics.debugdraw` -- an instanced wireframe overlay of the
-  world's proxies, contacts and velocities.
-* :mod:`~OpenGLContext.physics.gltf_world` -- a loaded glTF scenegraph as a
-  collision world.
+* :mod:`~OpenGLContext.physics.engine` -- the interface the service steps a
+  world through, and :func:`~OpenGLContext.physics.engine.make_engine`;
+  :mod:`~OpenGLContext.physics.joltengine` is the default engine, and
+  :mod:`~OpenGLContext.physics.omiengine` the deprecated omi engine (the
+  ``omi`` extra) with its :mod:`~OpenGLContext.physics.worker` and
+  :mod:`~OpenGLContext.physics.runtime`.
+* :mod:`~OpenGLContext.physics.debugdraw` -- the wireframe overlay of the
+  bodies' proxies.
+* :mod:`~OpenGLContext.physics.omigltf` and :mod:`~OpenGLContext.physics.gltf_world`
+  -- glTF's OMI physics bodies, and a loaded scenegraph's triangles.
 """
 from __future__ import annotations
 

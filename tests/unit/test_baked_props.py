@@ -12,11 +12,11 @@ import json
 
 import numpy as np
 import pytest
-from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.loaders.tiles3d.props import baked_props
 from OpenGLContext.physics.props import PropColliders, PropSource
 from OpenGLContext.scenegraph.props import Prop, props_from_table, props_table
+from tests.unit.omi import requires_omi
 
 STONES = [Prop('granite', (float(i), 0.5 * i, -2.0 * i), yaw=0.1 * i,
                scale=1.0 + 0.01 * i, radius=0.3 + 0.001 * i,
@@ -80,7 +80,10 @@ class TestWhatAWorldCarries:
 
 
 class TestStandingThemUp:
+    @requires_omi
     def test_the_colliders_are_built_from_the_world(self, tmp_path):
+        from omi_physics.world import PhysicsWorld  # noqa: PLC0415 the omi engine's world, the deprecated omi extra
+
         (tmp_path / 'stones.npz').write_bytes(props_table(STONES))
         extras = {'stones': {'table': 'stones.npz', 'count': len(STONES)}}
         colliders = PropColliders.baked(PhysicsWorld(), extras, 'stones',

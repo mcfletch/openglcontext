@@ -25,8 +25,10 @@ from OpenGLContext.passes import renderpass
 from OpenGLContext.physics.gltf_world import collision_world_from_scene
 from OpenGLContext.physics.zones import ZoneRegion
 from OpenGLContext.scenegraph.zone import placed_zones, Zone, ZoneGravity
+from tests.unit.omi import requires_omi
 
-pytestmark = pytest.mark.engines('omi', 'jolt')
+#: PhysicsWalkMixin walks an omi_physics world of its own; omi_physics is the omi extra.
+pytestmark = [pytest.mark.engines('omi', 'jolt'), requires_omi]
 
 
 # -- worlds to walk in -------------------------------------------------------

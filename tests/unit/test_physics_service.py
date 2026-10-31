@@ -9,8 +9,8 @@ import time
 
 import numpy as np
 import pytest
-from omi_physics import model
 
+from OpenGLContext.physics.materials import PRESETS
 from OpenGLContext.physics.callbacks import physics_callback
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.service import Physics
@@ -159,7 +159,7 @@ def test_friction_and_restitution_keywords_make_a_material(physics):
 def test_a_material_name_is_a_preset(physics):
     body = physics.add_dynamic(ball(), material='rubber')
     assert physics_testing.material(physics, body).restitution == pytest.approx(
-        model.MATERIAL_PRESETS['rubber'].restitution)
+        PRESETS['rubber'].restitution)
 
 
 def test_a_bouncier_ball_rises_higher(physics):

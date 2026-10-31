@@ -494,7 +494,7 @@ class TestMakeAvatar:
         return Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0))
 
     def capabilities(self):
-        from omi_physics.character import CharacterCapabilities
+        from OpenGLContext.physics.types import CharacterCapabilities
 
         return CharacterCapabilities(eyeHeight=1.7, stepHeight=0.7, maxSlope=75.0)
 

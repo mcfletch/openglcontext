@@ -2,12 +2,17 @@
 branches (duplicate tile, empty extraction, unknown tile) using a real PhysicsWorld.
 """
 import numpy as np
+import pytest
 
-from omi_physics.world import PhysicsWorld
-from omi_physics import model
 
 from OpenGLContext.loaders.tiles3d import physics_colliders
 from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+PhysicsWorld = pytest.importorskip('omi_physics.world', reason=REASON_OMI).PhysicsWorld
+model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
 
 
 def _world():

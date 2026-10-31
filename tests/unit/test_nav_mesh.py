@@ -16,10 +16,9 @@ import math
 
 import numpy as np
 import pytest
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.nav import navmesh
+from tests.unit.omi import requires_omi
 
 
 def grid(size=6, spacing=1.0, height=0.0, hole=()):
@@ -381,7 +380,11 @@ class TestSomewhereToGo:
 class TestBuildingItFromAWorld:
     """The seam a game actually uses: a physics world in, a navmesh out."""
 
+    @requires_omi
     def test_a_world_with_a_floor_gives_a_navmesh(self):
+        from omi_physics import model  # noqa: PLC0415 the omi engine's world, the deprecated omi extra
+        from omi_physics.world import PhysicsWorld  # noqa: PLC0415 the omi engine's world, the deprecated omi extra
+
         world = PhysicsWorld(gravity=model.Gravity(gravity=9.81,
                                                    direction=(0, -1, 0)))
         points, triangles = grid()
@@ -390,7 +393,11 @@ class TestBuildingItFromAWorld:
                        collider=model.Collider(shape=shape), position=(0, 0, 0))
         assert len(navmesh.from_world(world)) > 0
 
+    @requires_omi
     def test_a_world_with_nothing_static_gives_an_empty_one(self):
+        from omi_physics import model  # noqa: PLC0415 the omi engine's world, the deprecated omi extra
+        from omi_physics.world import PhysicsWorld  # noqa: PLC0415 the omi engine's world, the deprecated omi extra
+
         world = PhysicsWorld(gravity=model.Gravity(gravity=9.81,
                                                    direction=(0, -1, 0)))
         assert len(navmesh.from_world(world)) == 0

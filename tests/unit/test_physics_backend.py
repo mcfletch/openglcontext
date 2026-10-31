@@ -2,10 +2,14 @@
 import logging
 
 import pytest
-from omi_physics import world
 
 from OpenGLContext.physics.service import Physics
 from OpenGLContext.physics.settings import PhysicsDefinition
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+world = pytest.importorskip('omi_physics.world', reason=REASON_OMI)
 
 pytestmark = pytest.mark.engines('omi', reason="chooses the omi engine's compute backend")
 

@@ -14,6 +14,10 @@ from OpenGLContext.physics import gltf_world
 from OpenGLContext.physics.x3dcollision import CollisionReporter
 from OpenGLContext.scenegraph.basenodes import Collision, Shape, Transform
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from tests.unit.omi import requires_omi
+
+#: The walk's world is an omi_physics world; omi_physics is the omi extra.
+pytestmark = requires_omi
 
 
 def wall(x=0.0):

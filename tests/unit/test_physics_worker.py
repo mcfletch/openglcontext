@@ -8,8 +8,12 @@ import pytest
 from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.records import Motion, BodySpec, Command
 from OpenGLContext.physics.settings import PhysicsDefinition
-from OpenGLContext.physics.worker import InlineWorker, ThreadWorker
 from OpenGLContext.testing import physics as physics_testing
+
+#: The omi engine's workers import omi_physics, the deprecated omi extra.
+worker = pytest.importorskip('OpenGLContext.physics.worker',
+                             reason='omi_physics (the omi extra) is not installed')
+InlineWorker, ThreadWorker = worker.InlineWorker, worker.ThreadWorker
 
 pytestmark = pytest.mark.engines('omi', reason="tests the omi engine's workers")
 

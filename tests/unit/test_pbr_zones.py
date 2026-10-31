@@ -18,8 +18,6 @@ import pytest
 
 from OpenGLContext.testing.plugin import skip_if_child_had_no_context
 from PIL import Image
-from omi_physics import model
-from omi_physics.gravity import GravityVolume, InfiniteRegion
 
 from OpenGLContext.passes.shaderpass import SHADER_DIR
 from OpenGLContext.passes.zonepass import ZonesMixin
@@ -35,6 +33,7 @@ from OpenGLContext.passes import pbrpass
 from OpenGLContext.passes.zonelayers import environment_layers, MAX_ZONE_LAYERS
 from OpenGLContext.passes.zoneprobes import ATTEMPTS, FACES_PER_FRAME
 from OpenGLContext.physics.gltf_world import collision_world_from_scene
+from tests.unit.omi import requires_omi
 from OpenGLContext.physics.zones import gravity_volumes, GravityZones, scene_zones
 from OpenGLContext.scenegraph import zones
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
@@ -384,6 +383,7 @@ class TestAudio:
 
 
 class TestGravity:
+    @requires_omi
     def test_a_zone_is_a_gravity_volume_over_its_shape(self):
         turned = Transform(translation=(0, 10, 0), rotation=(0, 0, 1, np.pi), children=[
             Zone(size=(4, 4, 4), priority=3, settings=[
@@ -401,7 +401,11 @@ class TestGravity:
             Switch(choice=[shown, hidden], whichChoice=0)]))
         assert [placed.zone for placed in found] == [shown]
 
+    @requires_omi
     def test_a_world_follows_zones_placed_again(self):
+        from omi_physics import model  # noqa: PLC0415 the omi world's own types
+        from omi_physics.gravity import GravityVolume, InfiniteRegion  # noqa: PLC0415 the omi world's own types
+
         zone = Zone(size=(4, 4, 4), settings=[ZoneGravity()])
         world, _bounds = collision_world_from_scene(Transform(children=[zone]))
         own = world.add_gravity_volume(GravityVolume(model.Gravity(), InfiniteRegion()))
@@ -414,6 +418,7 @@ class TestGravity:
         assert keeper.follow(scene_zones(Transform(children=[])))
         assert world.gravity_volumes == [own]
 
+    @requires_omi
     def test_a_collision_world_carries_the_volumes(self):
         scene = Transform(children=[Zone(size=(4, 4, 4), settings=[ZoneGravity()])])
         world, _bounds = collision_world_from_scene(scene)

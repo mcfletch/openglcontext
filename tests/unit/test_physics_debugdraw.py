@@ -11,11 +11,7 @@ colouring, and the standalone wireframe generators.
 import numpy as np
 import pytest
 
-from omi_physics import body as _body
-from omi_physics import model
-from omi_physics.joints import PointConstraint, DistanceConstraint
 
-from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.physics import debugdraw
 from OpenGLContext.physics.debugdraw import (
@@ -23,6 +19,15 @@ from OpenGLContext.physics.debugdraw import (
     ANGULAR, JOINTS, ALL, C_CONTACT, C_AABB, C_VELOCITY, C_JOINT,
     box_edges_aabb, proxy_corners, proxy_edges, _unit_box_wire, _unit_sphere_wire,
 )
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+_body = pytest.importorskip('omi_physics.body', reason=REASON_OMI)
+model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
+PointConstraint = pytest.importorskip('omi_physics.joints', reason=REASON_OMI).PointConstraint
+DistanceConstraint = pytest.importorskip('omi_physics.joints', reason=REASON_OMI).DistanceConstraint
+PhysicsWorld = pytest.importorskip('omi_physics.world', reason=REASON_OMI).PhysicsWorld
 
 
 

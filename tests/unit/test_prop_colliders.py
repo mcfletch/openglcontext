@@ -12,13 +12,17 @@ moment the tile behind it swaps.
 """
 import numpy as np
 import pytest
-from omi_physics.world import PhysicsWorld
-from omi_physics import model
 
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.props import PropColliders, PropSource
 from OpenGLContext.scenegraph.props import Prop
 from tests.unit._streamed import Streamed
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+PhysicsWorld = pytest.importorskip('omi_physics.world', reason=REASON_OMI).PhysicsWorld
+model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
 
 pytestmark = pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
 

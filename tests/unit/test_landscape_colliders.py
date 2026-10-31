@@ -20,7 +20,7 @@ from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.terrain import HeightField
-from OpenGLContext.physics.omi_adapter import omi_shape
+from tests.unit.omi import requires_omi
 
 LOOK = PhysicalMaterial(baseColor=(0.5, 0.5, 0.5))
 
@@ -217,7 +217,10 @@ class TestSampledGround:
         x, z = rng.uniform(-200, 200, 500), rng.uniform(-200, 200, 500)
         assert cached.sample(x, z) == pytest.approx(ground.sample(x, z), abs=2e-3)
 
+    @requires_omi
     def test_the_ground_of_a_landscape_is_given_the_normals_of_the_tiles(self, physics):
+        from OpenGLContext.physics.omi_adapter import omi_shape  # noqa: PLC0415 the omi engine's shape
+
         landscape = Landscape(physics, CountingGround())
         assert omi_shape(landscape.body.proxy).surface._normal is not None  # noqa: SLF001 the surface the shape holds, which it does not expose
 

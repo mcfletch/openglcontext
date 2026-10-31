@@ -13,9 +13,13 @@ from OpenGLContext.physics import (
     Body, Character, CharacterCapabilities, CharacterState, CollisionFilter, Joint, Material,
     Physics, PhysicsDefinition, Proxy,
 )
-from OpenGLContext.physics import omi_adapter
 from OpenGLContext.physics.settings import PhysicsDefinition as SettingsDefinition
 from OpenGLContext.physics.zones import Box, Sphere
+
+#: The neutral types are checked against omi_physics' of the same names, through
+#: the omi engine's adapter; omi_physics is the deprecated omi extra.
+omi_adapter = pytest.importorskip('OpenGLContext.physics.omi_adapter',
+                                  reason='omi_physics (the omi extra) is not installed')
 
 
 # -- the types are the package's own --------------------------------------
@@ -252,3 +256,11 @@ def test_the_test_inspection_helper_is_not_public():
     assert 'inspect' not in physics_package.__all__
     with pytest.raises(AttributeError):
         physics_package.inspect  # noqa: B018 the attribute access is the test
+
+
+def test_the_presets_are_omi_physics_presets():
+    """materials.PRESETS states omi_physics' preset materials, so a world keeps them without it."""
+    from OpenGLContext.physics.materials import PRESETS
+
+    model = pytest.importorskip('omi_physics.model', reason='omi_physics is the reference')
+    assert PRESETS == {name: Material.coerce(found) for name, found in model.MATERIAL_PRESETS.items()}

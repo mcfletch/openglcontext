@@ -29,7 +29,7 @@ def physics(request):
 
 
 def test_materials_equal_engine_materials_with_the_same_values():
-    from omi_physics import model
+    model = pytest.importorskip('omi_physics.model', reason='omi_physics (the omi extra) is not installed')
 
     from OpenGLContext.physics import CollisionFilter, Material
 
@@ -267,7 +267,8 @@ def test_a_character_reads_its_capsule_without_the_controller(physics):
 
 
 def test_a_character_takes_engine_capabilities_at_the_boundary(physics):
-    from omi_physics.character import CharacterCapabilities as OmiCapabilities
+    OmiCapabilities = pytest.importorskip(  # noqa: N806 the class, under the name it is compared by
+        'omi_physics.character', reason='omi_physics (the omi extra) is not installed').CharacterCapabilities
 
     walker = physics.add_character(capabilities=OmiCapabilities(radius=0.2))
     assert isinstance(walker.capabilities, CharacterCapabilities)

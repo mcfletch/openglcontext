@@ -10,13 +10,19 @@ only ever touches four of them at a time.
 import numpy as np
 import pytest
 
-from omi_physics.raycast import raycast
-from omi_physics import model
-from omi_physics.vehicle import RaycastVehicle, VehicleTuning, car_wheels
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.heightfield import HeightFieldColliders
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from tests.unit._streamed import Streamed
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+raycast = pytest.importorskip('omi_physics.raycast', reason=REASON_OMI).raycast
+model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
+RaycastVehicle = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).RaycastVehicle
+VehicleTuning = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).VehicleTuning
+car_wheels = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).car_wheels
 
 pytestmark = pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
 

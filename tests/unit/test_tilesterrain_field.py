@@ -12,7 +12,6 @@ import threading
 
 import numpy as np
 import pytest
-from omi_physics.raycast import raycast
 
 pytest.importorskip("pygltflib")
 
@@ -143,6 +142,8 @@ class TestWhatAGameDoesWithIt:
 
     @pytest.mark.engines('omi', reason='reads the omi world the colliders are made in')
     def test_colliders_can_be_built_from_it(self, tmp_path) -> None:
+        from omi_physics.raycast import raycast  # noqa: PLC0415 the omi engine's world, the deprecated omi extra
+
         terrain = TilesTerrain(_world(tmp_path), workers=1)
         try:
             ground = Streamed(HeightFieldColliders(terrain.field, reach=200.0))

@@ -16,6 +16,7 @@ from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.scenes import scene_context
 from OpenGLContext.testing.stillframe import check_still_frame
 from tests.unit.test_failing_layers import _mirror_room
+from tests.unit.omi import requires_omi
 
 
 @pytest.fixture(autouse=True)
@@ -213,6 +214,7 @@ def _rigid_bodies():
                         + b'''</RigidBodyCollection></Scene></X3D>''', 'falling.x3d')
 
 
+@requires_omi
 def test_resting_rigid_bodies_ask_nothing_new_of_gl():
     """Bodies come to rest, and the frames stepping them make and fill nothing"""
     scene = _rigid_bodies()

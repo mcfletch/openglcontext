@@ -12,13 +12,19 @@ from those, the collider is one surface at one resolution, everywhere, always.
 import numpy as np
 import pytest
 
-from omi_physics.raycast import raycast
-from omi_physics import model
-from omi_physics.vehicle import car_wheels, RaycastVehicle, VehicleTuning
 from OpenGLContext.physics.body import Body
 from OpenGLContext.physics.road import RoadColliders
 from OpenGLContext.scenegraph.road import RoadProfile
 from tests.unit._streamed import Streamed
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+raycast = pytest.importorskip('omi_physics.raycast', reason=REASON_OMI).raycast
+model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
+car_wheels = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).car_wheels
+RaycastVehicle = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).RaycastVehicle
+VehicleTuning = pytest.importorskip('omi_physics.vehicle', reason=REASON_OMI).VehicleTuning
 
 pytestmark = pytest.mark.engines('omi', reason="reads the omi world the colliders are made in, and drives omi's raycast vehicle on it")
 

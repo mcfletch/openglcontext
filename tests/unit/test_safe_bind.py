@@ -2,9 +2,14 @@
 import numpy as np
 import pytest
 
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
-from omi_physics.character import CharacterController, CharacterCapabilities
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
+PhysicsWorld = pytest.importorskip('omi_physics.world', reason=REASON_OMI).PhysicsWorld
+CharacterController = pytest.importorskip('omi_physics.character', reason=REASON_OMI).CharacterController
+CharacterCapabilities = pytest.importorskip('omi_physics.character', reason=REASON_OMI).CharacterCapabilities
 
 
 def add_box(world, size, center):

@@ -16,6 +16,7 @@ from OpenGLContext.physics.gltf_world import (
     _mesh_positions_indices, _local_matrix,
 )
 from OpenGLContext.scenegraph.instancedshape import InstancedShape, placement_matrices
+from tests.unit.omi import requires_omi
 
 
 def _quad_ifs(z=0.0):
@@ -125,6 +126,7 @@ def test_extract_returns_none_for_a_scene_without_meshes():
     assert extract_trimesh(basenodes.Group()) is None
 
 
+@requires_omi
 def test_collision_world_builds_a_static_trimesh_body():
     """collision_world_from_scene adds one static body and returns the bounds."""
     root = Transform(children=[_shape(_quad_ifs())])
@@ -136,6 +138,7 @@ def test_collision_world_builds_a_static_trimesh_body():
     assert np.allclose(hi, (1.5, 0.5, 1.5))
 
 
+@requires_omi
 def test_collision_world_empty_scene_has_no_body_and_no_bounds():
     world, bounds = collision_world_from_scene(basenodes.Group())
     assert world.body_count == 0

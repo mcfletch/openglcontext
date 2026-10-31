@@ -10,12 +10,16 @@ avatar at the camera and lets gravity bring it down to whatever is underneath.
 import numpy as np
 import pytest
 
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext import quaternion
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 from OpenGLContext.move.viewplatform import ViewPlatform
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+model = pytest.importorskip('omi_physics.model', reason=REASON_OMI)
+PhysicsWorld = pytest.importorskip('omi_physics.world', reason=REASON_OMI).PhysicsWorld
 
 pytestmark = pytest.mark.engines('omi', 'jolt')
 

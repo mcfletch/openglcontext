@@ -15,6 +15,10 @@ from OpenGLContext.scenegraph.basenodes import NavigationInfo, Viewpoint, sceneG
 
 from tests.unit.test_physicswalk import _Host, _quad
 from tests.unit.test_viewpoint_transition import _Path
+from tests.unit.omi import requires_omi
+
+#: PhysicsWalkMixin walks an omi_physics world of its own; omi_physics is the omi extra.
+pytestmark = requires_omi
 
 #: A turn about x by this much looks 0.5 radians below the horizon.
 LOOKING_DOWN = (1, 0, 0, -0.5)

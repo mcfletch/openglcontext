@@ -15,7 +15,6 @@ import weakref
 
 import numpy as np
 import pytest
-from omi_physics.world import PhysicsWorld
 
 pytest.importorskip("pygltflib")
 
@@ -23,6 +22,11 @@ from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
 from OpenGLContext.physics import gltf_world
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
+
+#: These tests check a part of the engine built on an omi_physics world, or use
+#: omi_physics as their reference; it is the deprecated omi extra.
+REASON_OMI = 'omi_physics (the omi extra) is not installed'
+PhysicsWorld = pytest.importorskip('omi_physics.world', reason=REASON_OMI).PhysicsWorld
 
 
 class _Tile:

@@ -54,6 +54,13 @@ def _have(package: str) -> bool:
     return True
 
 
+#: The modules that test the omi engine's own modules (its runtime, workers,
+#: replica and queries) import them at the top; they are not collected where
+#: omi_physics, the deprecated omi extra, is not installed.
+collect_ignore = [] if _have('omi_physics') else [
+    'test_physics_frame_cost.py', 'test_physics_runtime.py', 'test_physics_sweep_steps.py']
+
+
 @pytest.fixture(autouse=True)
 def physics_engine(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str | None:
     """The physics engine a test marked ``engines`` steps its worlds with, as the definition's default.

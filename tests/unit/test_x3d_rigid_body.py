@@ -10,7 +10,10 @@ import pytest
 
 from OpenGLContext.loaders.loader import Loader
 from OpenGLContext.loaders.x3d import prototypes
-from OpenGLContext.physics import x3drigid
+
+#: X3D's rigid bodies build their shapes with omi_physics' model, the deprecated omi extra.
+x3drigid = pytest.importorskip('OpenGLContext.physics.x3drigid',
+                               reason='omi_physics (the omi extra) is not installed')
 
 FRAME = 1.0 / 60.0
 
