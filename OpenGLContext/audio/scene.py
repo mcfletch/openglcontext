@@ -1,18 +1,15 @@
-"""Giving a context an ear, and driving the scene's sounds once a frame.
+"""One :mod:`omi_audio` engine per context, updated from the scene once a frame.
 
-This is the whole of the seam between the render loop and :mod:`omi_audio`.  The
-render pass already collects every :class:`~vrml.vrml97.nodetypes.Auditory` node
-path and already knows where the camera is; :func:`update` turns those two facts
-into sound.
+The render pass collects the :class:`~vrml.vrml97.nodetypes.Auditory` node paths
+and knows where the camera is.  :func:`update` takes both: it places the
+listener at the camera and drives each sound.
 
-**Silence costs nothing.**  A context gets no engine, and therefore opens no
-device and starts no audio thread, until a frame is drawn with something audible
-in it.  A scene with no sounds -- which is most test scenes and every existing
-OpenGLContext demo -- is untouched by any of this.
+A context has no engine until a frame is drawn with something audible in it.
+Until then no device is opened and no audio thread runs, so a scene with no
+sounds, which is most test scenes and demos, never reaches this code.
 
-The engine hangs off the context rather than being a global, because two windows
-are two listeners, and it is held weakly so closing a window does not leak a
-device.
+Each context has its own engine because each window has its own listener.  The
+engine is held weakly, so closing a window releases its device.
 """
 
 from __future__ import annotations
@@ -65,8 +62,7 @@ def enabled(context: Any) -> bool:
 def engine_for(context: Any) -> Optional[AudioEngine]:
     """The engine for ``context``, opened on first ask.
 
-    Returns None where the context's definition has audio switched off, which is
-    the one case a caller has to handle -- and handling it is doing nothing.
+    Returns None where the context's definition has audio switched off.
     """
     if not enabled(context):
         return None
@@ -120,8 +116,7 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
     """Keep ``context``'s sounds in step with its camera, for one frame.
 
     ``paths`` are the render pass's collected ``Auditory`` node paths.  An empty
-    sequence returns immediately **without opening a device**, which is what
-    makes sound free for a scene that has none.  X3D's sound nodes on them are
+    sequence returns immediately without opening a device.  X3D's sound nodes on them are
     played through the engine's processing graph
     (:class:`~OpenGLContext.audio.x3dgraph.SoundGraph`), the others as voices.
 
@@ -152,11 +147,9 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
         return 0
     if now is None:
         now = systemtime.systemTime()
-    # The *player's* volume, read every frame: the settings screen writes the
-    # field, and a volume slider that only takes effect on the next launch is a
-    # volume slider nobody uses.  The application's own `master_gain` is left
-    # alone -- writing over it here would make an application's mix level last
-    # exactly one frame.
+    # The player's volume is read every frame so the settings screen's slider
+    # takes effect at once.  The application's `master_gain` is left alone:
+    # writing it here would replace the application's mix level every frame.
     engine.volume = settings_for(context).volume
     platform = _view_platform(context)
     if platform is not None:

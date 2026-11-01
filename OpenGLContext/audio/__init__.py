@@ -39,9 +39,8 @@ reads ``KHR_audio_emitter`` blocks into through
 :mod:`OpenGLContext.loaders.gltf.scene`, and X3D's Sound component
 (:mod:`OpenGLContext.scenegraph.x3dsound`).
 
-Sound is **optional and never fatal**.  ``miniaudio`` may be absent and a device
-may fail to open; both end in one warning and a silent run, so a machine with no
-sound card is simply a machine with no sound.
+Sound is optional.  A missing ``miniaudio`` or a device that fails to open logs
+one warning and the program runs silent.
 
 See ``docs/audio.rst`` for the data-flow diagrams and a worked example.
 """

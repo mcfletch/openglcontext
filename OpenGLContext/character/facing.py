@@ -4,7 +4,7 @@ A third-person character's node needs a yaw that follows where it goes, a tilt
 that follows the ground under it, a lean into a turn, and a scale and offset
 that put a model of any size inside its collision capsule with its feet on the
 capsule's base. :class:`Facing` holds the first three and :func:`fit_to_height`
-works out the last, with no GL and no scenegraph.
+works out the last, with no GL and no scenegraph::
 
     facing = Facing(turn_rate=math.radians(540), lean=0.02)
     ...

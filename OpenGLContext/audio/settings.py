@@ -6,20 +6,19 @@ the movement modes are: sound has more than one knob, they belong together, and
 a node gets validation, defaults, serialisation and a generated settings page
 from the field system rather than from a parallel layer.
 
-**Whose volume is whose** is the distinction worth understanding here, because
-getting it wrong makes a volume control appear not to work:
+Two volumes apply to a scene:
 
 :attr:`AudioSettings.volume`
-    The **player's** volume -- what the slider on the settings screen moves, what
-    a volume key should write, and what is saved with the rest of the player's
-    settings.  The engine reads it every frame, so moving it is heard at once.
+    The player's volume: what the settings screen's slider moves, what a volume
+    key should write, and what is saved with the rest of the player's settings.
+    The engine reads it every frame, so a change is heard at once.
 :attr:`~omi_audio.engine.AudioEngine.master_gain`
-    The **application's** mix level -- how loud this scene was authored to be.
-    An application sets it once and the player never sees it.
+    The application's mix level: how loud the scene was authored to be.  An
+    application sets it once and the player never sees it.
 
-The two multiply.  Writing one over the other every frame -- which is the
-tempting shortcut -- makes whichever loses last exactly one frame, and the
-symptom is a volume key that prints a new number and changes nothing.
+The engine multiplies the two.  An application that writes one over the other
+every frame discards the other's value on the next frame, and a volume key then
+prints a new number and changes nothing.
 """
 
 from __future__ import annotations
@@ -37,16 +36,15 @@ class AudioSettings(node.Node):
     PROTO = 'AudioSettings'
 
     #: Whether the scene's sounds are played at all.  Off opens no device and
-    #: starts no audio thread, which is what a capture run, a benchmark or a
-    #: machine with no sound card wants.  A scene with nothing audible in it
-    #: costs nothing either way; see :mod:`OpenGLContext.audio.scene`.
+    #: starts no audio thread, for a capture run, a benchmark or a machine with
+    #: no sound card.  A scene with nothing audible opens no device whether this
+    #: is on or off; see :mod:`OpenGLContext.audio.scene`.
     enabled = field.newField(
         'enabled', 'SFBool', 1,
         lambda: renderoptions.env_flag('OPENGLCONTEXT_AUDIO', True))
-    #: The player's volume: 0 silent, 1 as the application intended.  Linear
-    #: rather than decibels because that is what ``KHR_audio_emitter`` gains
-    #: are, and mixing the two units in one chain is how a volume control ends
-    #: up feeling wrong at one end of its travel.
+    #: The player's volume: 0 silent, 1 as the application intended.  Linear,
+    #: as ``KHR_audio_emitter`` gains are, so the two multiply with no unit
+    #: conversion.
     volume = field.newField(
         'volume', 'SFFloat', 1,
         lambda: renderoptions.env_number('OPENGLCONTEXT_AUDIO_VOLUME', 1.0))

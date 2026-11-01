@@ -5,7 +5,7 @@ what it is doing. :class:`Locomotion` turns those into clips on a
 :class:`~OpenGLContext.character.model.CharacterModel`: idle, walk, run and
 sprint blended by speed, each looping clip played at the rate that keeps its
 feet on the ground, the jump, fall, landing, slide, swim and knock-down clips
-when the character is doing those, and a footstep when a foot lands.
+when the character is doing those, and a footstep when a foot lands::
 
     clips = ClipMap.ual()                           # a shipped vocabulary
     clips = ClipMap.guess(model)                    # roles found by name
