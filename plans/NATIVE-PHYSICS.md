@@ -2526,7 +2526,7 @@ commit.
   ContextDefinition coercion (L32), the main-loop change (M26) and tutorial edits.
 
 The findings that touch the Jolt engine layer (`joltengine.py`, `service.py`, `handlers.py`,
-`joints.py`, `body.py`, `stepview.py`) landed in one commit, ENGINE-COMMIT below.
+`joints.py`, `body.py`, `stepview.py`) landed in dd23bb5c, with the free-threaded locks and the emptied rows in the commit after it.
 
 - C7, C8: `JoltEngine.lock`, an `RLock` held by `submit` around each command, by the frame's
   publish, by `_push_forces` and by the vehicle table. A posted function runs outside it. A
@@ -2628,3 +2628,7 @@ The findings that touch the Jolt engine layer (`joltengine.py`, `service.py`, `h
   there with the GIL off. The first run found `tuple(dict.values())` is not atomic without the
   GIL: the service's vehicle table takes `_vehicles_lock`, and the engine copies its tables under
   its lock (`JoltEngine._copied`).
+- The engine unit suite on the rebased branch: 18,409 passed, 56 skipped, both serial passes
+  (30 passed). One failure, `test_x3d_picking.py::test_a_group_that_is_not_pickable_hides_its_shapes`,
+  was GLFW failing to make a window ("EGL failed to allocate resources") at load 35; the file
+  passed 3 of 3 runs alone.
