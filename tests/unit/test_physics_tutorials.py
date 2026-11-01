@@ -119,11 +119,29 @@ def is_red(material):
 
 # -- 2. the ball changes colour when it hits something -----------------------------------
 
-def test_the_ball_turns_red_at_its_first_hard_hit_and_not_before(gl_context):
+def colour_of(material):
+    return tuple(round(float(v), 3) for v in tuple(material.baseColor)[:3])
+
+
+def test_the_ball_steps_through_the_colours_at_each_hard_hit_and_not_before(gl_context):
     with running('physics', 'physics_stairs_colour') as run:
         run.seconds(0.2)                                       # still on the landing
-        assert not is_red(run.context.skin)
-        assert run.until(lambda: is_red(run.context.skin), seconds=5.0)
+        start = colour_of(run.context.skin)
+        COLOURS = sys.modules['physics_stairs_colour'].COLOURS
+        assert start not in [tuple(round(v, 3) for v in c) for c in COLOURS]
+        seen = []
+
+        def collect():
+            now = colour_of(run.context.skin)
+            if now != start and (not seen or seen[-1] != now):
+                seen.append(now)
+            return len(seen) >= 4
+
+        assert run.until(collect, seconds=10.0)
+        palette = [tuple(round(v, 3) for v in c) for c in COLOURS]
+        assert seen[0] == palette[0]
+        assert seen == palette[: len(seen)]                    # each hit moves to the next colour
+        assert run.context.impacts >= len(seen)
 
 
 @pytest.mark.parametrize('mode', ['inline', 'thread'])
@@ -222,7 +240,8 @@ def test_the_ball_thuds_where_it_lands_at_a_gain_that_follows_its_speed(gl_conte
             assert play.source is run.module.THUD
             assert 0.0 < play.gain <= 1.0
             assert 0.0 <= play.at[1] <= 3.0
-        assert is_red(run.context.skin)                         # the colour of the tutorial before it
+        palette = [tuple(round(v, 3) for v in c) for c in sys.modules['physics_stairs_colour'].COLOURS]
+        assert colour_of(run.context.skin) in palette           # the colours of the tutorial before it
 
 
 def test_a_sound_on_the_material_plays_without_a_handler(gl_context):

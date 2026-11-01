@@ -6,7 +6,7 @@
 A handler normally runs on the render thread, after the frame's physics is
 done. A handler marked ``@Context.physics_callback`` runs on the thread that
 steps the world, right after the step that caused the event, with the world as
-that step left it. The ball turns red as before; the difference is the thread
+that step left it. The ball turns red at its first hard hit; the difference is the thread
 the handler runs on and how it reaches the scene.
 '''
 from physics_stairs import TestContext as Rolling
