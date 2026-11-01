@@ -2659,6 +2659,18 @@ Games (M14 to M17, L15 to L19, L36's game files):
   (0.188 against 0.30). glisteel 122c581. Found while measuring: brake 1 with full lock from
   25 m/s lifts the inside wheels within 0.3 s and rolls the car at 1.3 s on flat tarmac; not
   handled here.
+- M17's rollover (brake or handbrake with the lock rolled glisteel's Jolt car): the tyres'
+  sideways grip, 0.9 of `grip` (1.71 g), was above the 1.52 g the car tips at, and full lock
+  from 20 to 27.5 m/s asks about 1.4 g of the car's weight with downforce counted. Inputs
+  at once rolled it in that band in 29 of 1,350 drives (10 to 60 m/s, brake 0 to 1, lock 0.5
+  to 1, handbrake on and off, at once or wound on); omi_physics' car leant at most 1.5
+  degrees. `CarSpec.lateral_friction` is 0.75 (1.43 g): most lean 1.4 degrees over the
+  same grid; 0.8 rolls, and at 0.7 the autopilot put 6 m off the line does not settle.
+  Launch and braking are unchanged; cornering at steer 0.5, 0.3 and 1.0 is 0.691, 0.548
+  and 1.800 g against omi's 0.720, 0.546 and 1.837. Anti-roll bars made it worse and a
+  0.15 m lower centre of mass cost the launch 10%; no pyjoltphysics change (the outside
+  wheels brake with 4 kN of 19 kN of grip, so a shared tyre budget leaves 98% of their
+  sideways grip). glisteel's `plans/CAR-ROLLS-OVER.md` has the table. glisteel a102fca.
 - L15 (hill-runner's chase tolerance widened with no reason): the wander test measures
   0.0055 m at most over all 2,400 frames, first 2 s included, so the original 0.05 bound over
   every frame is restored. The look point's distance holds to 0.1 m, with the 0.08 m lead the
