@@ -47,7 +47,7 @@ back a gain, so the node itself holds no geometry.
 | `omi_audio/device.py` | Where blocks go — `miniaudio`, or silence |
 | `omi_audio/engine.py` | The one object an application holds |
 
-OpenGLContext's own, and the whole of what makes the two meet:
+The OpenGLContext side, which connects the engine to the scenegraph:
 
 | Module | Answers |
 |---|---|
@@ -57,50 +57,48 @@ OpenGLContext's own, and the whole of what makes the two meet:
 
 ## Decisions worth keeping
 
-- **The engine is a package of its own.** numpy is its only hard dependency and
+- The engine is a package of its own - numpy is its only hard dependency and
   a scenegraph is not among them, so it is testable and usable without a
-  renderer — the same shape `omi_physics` has. What crosses back into
-  OpenGLContext is the nodes and the per-context engine, and nothing else.
-- **`miniaudio`, and only `miniaudio`.** MIT, and every decoder it bundles is
-  MIT or public domain, where the convenient wrappers (`libsndfile`, PyAV,
-  `pydub`-via-ffmpeg) are LGPL or worse. One package covers `.wav`, `.mp3`,
-  `.ogg` and `.flac`, and it resamples and re-channels *while* decoding.
-  **Optional** because it publishes no `manylinux_aarch64` wheel; the reason is
-  recorded beside the `omi_audio[playback]` extra in both projects'
-  `pyproject.toml` so it is not tidied into `dependencies`.
-- **Silence is a backend.** Package absent, device won't open, or the backend
-  falling back to its own null output — all three end in one warning and a
-  `NullDevice`. `open_device()` cannot raise. Both silent paths are tested,
+  renderer, the same shape `omi_physics` has. What crosses back into
+  OpenGLContext is the nodes and the per-context engine.
+- `miniaudio` is the one decoder - it is MIT, and every decoder it bundles is
+  MIT or public domain, where the wrappers around `libsndfile`, PyAV and
+  `pydub`-via-ffmpeg are LGPL or worse. One package covers `.wav`, `.mp3`,
+  `.ogg` and `.flac`, and it resamples and re-channels while decoding.
+  It is optional because it publishes no `manylinux_aarch64` wheel; the reason
+  is recorded beside the `omi_audio[playback]` extra in both projects'
+  `pyproject.toml`, so the extra is not moved into `dependencies`.
+- Silence is a backend - a missing package, a device that will not open and a
+  backend that falls back to its own null output all end in one warning and a
+  `NullDevice`. `open_device()` does not raise. Both silent paths are tested,
   including one that forces the import to fail.
-- **Mono clips.** A stereo source has already decided where it sits in the
-  stereo field, and a sound that has decided cannot be panned to where it
-  actually is. Stereo files are mixed down as they decode.
-- **The mixer never allocates, blocks, decodes, resolves or logs.** A fixed
+- Clips are mono - a stereo source has a position in the stereo field already,
+  and a sound that has one cannot be panned to where it is in the scene. Stereo
+  files are mixed down as they decode.
+- The mixer does not allocate, block, decode, resolve or log - it has a fixed
   pool, pre-allocated buffers, numpy `out=` everywhere, and a lock taken only by
   the control thread. One test asserts that twenty blocks of a full pool
   allocate nothing measurable.
-- **`play()` returns a handle, not a slot.** A stolen voice's old owner would
-  otherwise steer somebody else's explosion — silent, intermittent and very hard
-  to find. The handle carries a generation and goes inert.
-- **A document's `uri` is the loader's business, never the audio library's.** A
-  scene file comes from a third party, and interpreting one of its strings means
-  deciding what `../../etc/passwd`, `file://`, a UNC path and an `http:` URL are
-  allowed to mean. `omi_audio` therefore never resolves, opens or interprets a
-  `uri`: `AudioLibrary` calls back into `loaders/gltf/scene.py`, which uses the
-  same size-capped, same-origin `Resolver` every texture and buffer goes
-  through. That is also what makes audio *inside* the document work — a `.glb`'s
-  `bufferView` and a `data:` URI are bytes the loader already holds, and the
-  library takes bytes.
-- **Two volumes, and they multiply.** `AudioSettings.volume` is the player's;
-  `AudioEngine.master_gain` is the application's. Writing one over the other
-  every frame makes whichever loses last exactly one frame, and the symptom is a
-  volume key that prints a new number and changes nothing.
-- **Sound is driven from `FlatPass.beginFrame`, not `Render`.** `Render` is
-  overridden per profile; a per-frame duty hooked into it is hooked into one
-  profile. `tests/unit/test_audio_pass_wiring.py` holds every concrete pass to
-  it by name.
-- **Silence costs nothing.** No device is opened and no thread starts until a
-  frame is drawn with an audible node in it.
+- `play()` returns a handle, not a slot - with a slot, the old owner of a
+  stolen voice would steer somebody else's explosion, intermittently and with
+  no error. The handle carries a generation and goes inert.
+- A document's `uri` is the loader's to resolve - a scene file comes from a
+  third party, and interpreting one of its strings means deciding what
+  `../../etc/passwd`, `file://`, a UNC path and an `http:` URL are allowed to
+  mean. `omi_audio` never resolves, opens or interprets a `uri`: `AudioLibrary`
+  calls back into `loaders/gltf/scene.py`, which uses the same size-capped,
+  same-origin `Resolver` every texture and buffer goes through. Audio inside the
+  document works the same way, since a `.glb`'s `bufferView` and a `data:` URI
+  are bytes the loader already holds and the library takes bytes.
+- Two volumes multiply - `AudioSettings.volume` is the player's and
+  `AudioEngine.master_gain` is the application's, and each is written by its
+  owner. A program that copies one into the other every frame overwrites the
+  earlier value on the next frame, so the volume key has no effect.
+- Sound is driven from `FlatPass.beginFrame` - `Render` is overridden per
+  profile, and a per-frame duty hooked into it runs in one profile only.
+  `tests/unit/test_audio_pass_wiring.py` checks every concrete pass by name.
+- A scene with nothing audible opens no device and starts no audio thread; both
+  wait for the first frame drawn with an audible node in it.
 
 ## Tests
 
