@@ -11,8 +11,10 @@ splits a cloud at the median of its widest axis, at most three levels deep and
 eight pieces, until each piece's concavity is under 0.3. Both run in NumPy on
 the calling thread; the service cooks scenery on a worker thread.
 
-The hull and decomposition are those of omi_physics' ``hull`` and ``cookery``
-modules (MIT, Mike C. Fletcher).
+The hull and decomposition are copied from omi_physics' ``hull.py`` and
+``cookery.py``, the same author's code under the MIT licence (Copyright (c) 2026
+Mike C. Fletcher); license.txt lists them among its exceptions. The two copies
+build the same hulls.
 """
 from __future__ import annotations
 

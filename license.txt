@@ -77,7 +77,8 @@ Exceptions are as follows:
 
 	The convex hull and decomposition in
 	OpenGLContext/physics/cooking.py are copied from omi_physics'
-	hull and cookery modules, and the mass-property formulas in
+	hull.py and cookery.py, the same author's code, and the
+	mass-property formulas in
 	OpenGLContext/physics/massprops.py from its massprops module,
 	under the MIT licence, whose text is given above:
 
