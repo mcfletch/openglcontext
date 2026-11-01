@@ -314,3 +314,39 @@ def test_a_removed_member_leaves_its_slot_to_the_next_body(physics):
     for _ in range(round(3.0 / TICK)):
         me.step(TICK)
     assert float(me.position[0]) < 0.0
+
+
+
+@pytest.mark.parametrize('fps', [60.0, 144.0])
+@pytest.mark.parametrize('asked', ['between frames', 'after a step'])
+def test_the_feet_stay_on_the_ground_through_the_frames_a_slide_starts_and_ends_in(
+        physics, fps, asked):
+    """A slide or a stand asked for between frames, or by an ``after-step`` handler, changes the
+    capsule's height at the next tick: until then the feet are read where they stand, whether or
+    not the frame owes a tick."""
+    me = physics.add_character(position=(0, 0.05, 0))
+    me.set_move((1, 0, 0), 'run')
+    for _ in range(int(fps)):
+        physics.frame(1.0 / fps)
+    steps = [0]
+
+    def toggle():
+        if me.state == CharacterState.SLIDING:
+            me.end_slide()
+        else:
+            me.slide(0.8, 0.3, steer=True)
+
+    def after(step):
+        steps[0] += 1
+        if steps[0] % 5 == 0:
+            toggle()
+
+    if asked == 'after a step':
+        me.addEventHandler('after-step', function=after)
+    feet = []
+    for frame in range(int(fps)):
+        if asked == 'between frames' and frame % 7 == 3:
+            toggle()
+        physics.frame(1.0 / fps)
+        feet.append((float(me.position[1]), float(me.drawn_position[1])))
+    assert max(abs(y) for pair in feet for y in pair) < 0.02

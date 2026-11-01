@@ -320,6 +320,12 @@ class JoltController:
             self._expected = expected = None
         self.position = np.array(rows.position[row], dtype='d')
         self.previous = np.array(rows.previous[row], dtype='d')
+        if expected is not None:
+            # The row's capsule is still the height it was before the input; its feet are where
+            # they are, so the centre is read at the height the input asked for.
+            shift = (self.height - self._exact(float(rows.height[row]))) / 2.0
+            self.position[1] += shift
+            self.previous[1] += shift
         self.velocity = np.array(rows.velocity[row], dtype='d')
         self.eye_point = np.array(rows.eye[row], dtype='d')
         self.grounded = bool(rows.grounded[row])
