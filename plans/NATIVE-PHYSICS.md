@@ -2632,3 +2632,55 @@ The findings that touch the Jolt engine layer (`joltengine.py`, `service.py`, `h
   (30 passed). One failure, `test_x3d_picking.py::test_a_group_that_is_not_pickable_hides_its_shapes`,
   was GLFW failing to make a window ("EGL failed to allocate resources") at load 35; the file
   passed 3 of 3 runs alone.
+
+Games (M14 to M17, L15 to L19, L36's game files):
+
+- M14 (a dead bot's body kept turning toward its last aim): `move_bodies` gives the dead no
+  facing, so the body keeps the rotation the corpse was placed with. twig-bb bb8d294.
+- M15 (a corpse out of sight stayed at y=-10000): a dead bot's body is written back to where
+  it fell when it is in sight again, and only when it differs. twig-bb bb8d294.
+- M16 (marble-demo swallowed step errors): marble-demo loads the testing plugin, and
+  `test_step_errors` makes `advance` raise (marble-demo f51be4c, another agent). Verified: the
+  marble-demo suite passes with it, 946 passed.
+- M17 (glisteel's scrub band tuned on omi): measured on the Jolt car as the soundtrack reads it
+  (mean of the four wheels' slip): a clean lap peaks at 0.137 m/s, an autopilot at 1.8 times
+  its grip at 0.197, turning in at full lock from 30 m/s at 0.585, lock to lock at 30 m/s runs
+  at 0.426 (90th percentile). A held full lock at 30 m/s settles at 0.15 with a slip angle of
+  0.005 rad: the lock is 0.052 rad there and the tyres hold. The band is 0.2 to 0.8;
+  `TestADrivenCarIsHeard` drives a `Car` and reads the `Soundtrack`, and failed on the old band
+  (0.188 against 0.30). glisteel 122c581. Found while measuring: brake 1 with full lock from
+  25 m/s lifts the inside wheels within 0.3 s and rolls the car at 1.3 s on flat tarmac; not
+  handled here.
+- L15 (hill-runner's chase tolerance widened with no reason): the wander test measures
+  0.0055 m at most over all 2,400 frames, first 2 s included, so the original 0.05 bound over
+  every frame is restored. The look point's distance holds to 0.1 m, with the 0.08 m lead the
+  follow camera's glide leaves at 10 m/s stated in the test. hill-runner 798db19.
+- L16 (twig-bb "nothing is dynamic", corpse cost): the docstrings and README say the corpses'
+  ragdolls are the dynamic bodies, with the cost measured at load 0.2: six corpses 2.8 to
+  3.3 ms a frame in the first quarter second, 0.9 ms to 1 s, 0.6 ms from 1 to 5 s. The bones do
+  sleep, 2 to 4.5 s after the fall, and the physics then costs what the empty world does. The
+  1.37 ms suspicion was the settling time plus `RagdollFigure.draw` polling 19 bones' sleep each
+  frame (20 to 35 us a corpse). The figure now listens for its bones' `wake` events after
+  `knock_down`, so six settled corpses cost 0.02 ms a frame against 0.12 before. 2c49d4a8,
+  twig-bb aa3fa3f. Inline stays: the characters step in the frame for determinism, and half the
+  falling cost is the skinning on the render thread, which a worker thread would not move.
+- L17 (stale omi references): marble-demo 0f14fab, hill-runner 798db19, glisteel 122c581,
+  twig-bb aa3fa3f. The twig-bb step lurch was measured on the Jolt character: walking onto an
+  18-unit step no frame moves more than the 12.7 cm due, so the README item is removed and
+  PROJECT-PLAN B1 is closed with the numbers.
+- L18 (marble-demo pose reads per mechanism): `BoardScene.shared_poses`, entered by
+  `BuildResult.before_step`, makes one `physics.poses` read for all of a step's mechanisms; a
+  `check_scaling` count test holds it (2 against 8 mechanisms read 1 and 1). Outside it every
+  call reads the world, since a teleport with the clock standing must be seen. marble-demo
+  f1159fe, 41c0365.
+- L19 (no orientation or matrix on Body): `Body.orientation` (x, y, z, w) and `Body.matrix`
+  (4x4 row-vector), docs/physics.rst. c685ba6e. glisteel's `CarVehicle` reads them (d01b40c).
+  twig-bb's corpse placement converts a scene Transform's values, not a Body's, and now uses
+  pyvrml97's `transformMatrix` (3646c6d).
+- L36 (twig-bb prose): projectiles' bold leaders and "wants", the listener test's perception,
+  test_viewer's history and "can honestly do" are rewritten. twig-bb 4b73ee0. The ai-isms scan
+  over twig-bb, hill-runner, marble-demo and glisteel against origin/develop finds 0.
+- Suites with deprecation warnings as errors: twig-bb 2,424 passed, 1 skipped (Crunch samples
+  absent); glisteel 1,672 passed, 1 xfailed; hill-runner 662 passed, 1 skipped (no VP9 encoder);
+  marble-demo 946 passed, 6 xfailed; marble-editor 165 passed; openglcontext-forest 86 passed.
+  Engine unit suite on the branch: 18,356 passed, 56 skipped; serial 29 passed, 1 skipped.
