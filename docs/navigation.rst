@@ -556,15 +556,25 @@ none of the options below follows the target at the offset and does not need
        the last ``advance``
    * - ``smooth_time``
      - seconds the look point takes to glide to the target; critically damped,
-       so it does not overshoot and takes the same time at any frame rate
+       so it does not overshoot and takes the same time at any frame rate. A
+       target moving steadily is followed ``smooth_time`` seconds of its
+       velocity behind at any frame rate, which a ``look_ahead`` of the same
+       length cancels
    * - ``sweep``, ``avoid_radius``, ``min_arm``, ``arm_ease``
      - keeps the arm out of the scenery; see below
    * - ``max_step``
      - the furthest in metres the camera moves in one frame
 
 ``hold()`` freezes the camera on the current target until ``release()``, and
-``snap()`` puts it on the target at once, with no glide and no step limit, for a
-teleport. ``camera.eye`` and ``camera.look`` are the pose of the current frame.
+``snap()`` puts it on the target at once, with no step limit, for a teleport: the
+glide starts where it settles behind a target moving at the target's velocity, so
+a camera snapped onto a runner holds its place from the first frame.
+``camera.eye`` and ``camera.look`` are the pose of the current frame.
+
+``target(position, velocity=None, subject=None)`` takes the point to follow.
+``subject`` is the point the camera has to keep in view where the target is a
+point ahead of it, as a chase camera's look point leads a runner; left out, it is
+the target.
 
 Keeping out of the scenery
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -572,12 +582,14 @@ Keeping out of the scenery
 ``sweep(origin, direction, distance, radius)`` answers how far a sphere of
 ``radius`` metres goes from ``origin`` along the unit ``direction`` before it
 meets something, or None if it goes the whole ``distance``. Each frame the
-camera calls it from the look point toward the place the offset gives. When it
-reports a hit, the arm from the look point to the camera shortens to that
-distance at once, no shorter than ``min_arm`` metres (0.5 by default); when the
-way is clear again the arm grows back at ``arm_ease`` (4 a second, exponential).
-A wall behind the target brings the camera in, and the camera stays
-``avoid_radius`` metres clear of it.
+camera calls it along the arm from the look point toward the place the offset
+gives, starting where the arm passes the subject: what lies between the subject
+and a look point ahead of it does not pull the camera in. When it reports a hit,
+the arm shortens to that point at once, and the camera stays at least
+``min_arm`` metres (0.5 by default) further out along the arm than the subject;
+when the way is clear again the arm grows back at ``arm_ease`` (4 a second,
+exponential). A wall behind the target brings the camera in, and the camera
+stays ``avoid_radius`` metres clear of it.
 
 ``max_step`` does not hold back a camera the sweep pulls in, since a camera kept
 behind a wall for a few frames would show the inside of it. It limits every
@@ -647,7 +659,7 @@ where it goes. ``shift`` runs at ``runSpeed``, ``ctrl`` sprints at
 to 1, holds a forward move without a key, for a runner whose keys only steer. The
 mode's bindings are listed on the key-binding page with the other modes'.
 
-The camera sweeps a sphere from the look point to where it should stand, through
+The camera sweeps a sphere from the character to where it should stand, through
 ``physics.sweep_sphere`` with the character skipped, so scenery and land
 between the character and the camera shorten the arm instead of hiding the
 character. The input is read before the world is stepped and the camera placed

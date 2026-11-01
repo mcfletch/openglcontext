@@ -345,6 +345,31 @@ class TestSmoothFollowing:
         cam.snap()
         assert _frame(cam)[0] == pytest.approx(100.0)
 
+    def test_snapped_onto_a_moving_target_it_holds_its_place_from_the_first_frame(self):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0), look_ahead=0.15,
+                           smooth_time=0.15)
+        place = 0.0
+        cam.target((place, 0.0, 0.0), velocity=(24.0, 0.0, 0.0))
+        cam.snap()
+        for _ in range(30):
+            assert cam.look[0] == pytest.approx(place, abs=1e-6)
+            place += 24.0 / 60.0
+            cam.target((place, 0.0, 0.0), velocity=(24.0, 0.0, 0.0))
+            _frame(cam)
+
+    @pytest.mark.parametrize('fps', [30.0, 60.0, 144.0])
+    def test_looking_ahead_by_the_glide_time_looks_at_a_steadily_moving_target(self, fps):
+        cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0), look_ahead=0.25,
+                           smooth_time=0.25)
+        place = 0.0
+        cam.target((place, 0.0, 0.0), velocity=(10.0, 0.0, 0.0))
+        _frame(cam, dt=0.0)
+        for _ in range(int(fps * 2)):
+            place += 10.0 / fps
+            cam.target((place, 0.0, 0.0), velocity=(10.0, 0.0, 0.0))
+            _frame(cam, dt=1.0 / fps)
+        assert cam.look[0] == pytest.approx(place, abs=0.01)
+
     def test_a_stopped_clock_leaves_the_camera_where_it_is(self):
         cam = FollowCamera(_FakePlatform(), offset=(0.0, 0.0, 0.0), smooth_time=0.5)
         cam.target((0.0, 0.0, 0.0))
@@ -380,6 +405,28 @@ class TestAvoidingTheWorld:
                 sign = -1.0
             if sign < 0 and z <= start:
                 return arms, steps
+
+    def test_what_lies_between_the_subject_and_the_look_point_does_not_pull_the_camera_in(self):
+        # A log across the path 2 m ahead of the runner, between it and the point looked at 3 m
+        # ahead: the camera stays where it stands, behind the runner.
+        cam = self._camera(wall_z=-2.0, min_arm=2.0)
+        cam.target((0.0, 0.0, -3.0), subject=(0.0, 0.0, 0.0))
+        eye = _frame(cam)
+        assert eye[2] == pytest.approx(5.0)
+
+    def test_the_camera_stays_behind_the_subject_by_the_shortest_arm(self):
+        # A wall right behind the runner: the camera comes in to it, and no nearer the runner than
+        # the shortest arm.
+        cam = self._camera(wall_z=0.5, min_arm=1.5)
+        cam.target((0.0, 0.0, -3.0), subject=(0.0, 0.0, 0.0))
+        eye = _frame(cam)
+        assert eye[2] == pytest.approx(1.5)
+
+    def test_by_default_the_subject_is_the_target_and_not_the_point_looked_ahead_to(self):
+        cam = self._camera(wall_z=-2.0, min_arm=1.0, look_ahead=0.3)
+        cam.target((0.0, 0.0, 0.0), velocity=(0.0, 0.0, -10.0))
+        eye = _frame(cam)
+        assert eye[2] == pytest.approx(5.0)
 
     def test_the_arm_comes_in_to_the_hit_and_out_again(self):
         cam = self._camera(wall_z=6.0)

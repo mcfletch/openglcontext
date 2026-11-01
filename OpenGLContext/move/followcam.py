@@ -30,10 +30,14 @@ between :meth:`target` and :meth:`apply`:
 * **Keeping out of the scenery.** Given a ``sweep(origin, direction,
   distance, radius)`` that answers the distance to the first thing a sphere
   of ``radius`` meets going from ``origin`` along ``direction``, or None, the
-  arm from the look point to the camera shortens to that distance at once
-  and eases back out at ``arm_ease`` per second. The arm is never shorter
-  than ``min_arm`` metres. A physics service's ``sweep_sphere`` is such a
-  function, and so is any ray cast against a collision mesh.
+  arm from the look point to the camera shortens to what the sphere meets
+  between the camera and the subject (the target, or the ``subject`` given
+  to :meth:`target`) at once, and eases back out at ``arm_ease`` per second.
+  The sweep starts where the arm passes the subject, so what lies between the
+  subject and a look point ahead of it does not pull the camera in, and the
+  camera stays at least ``min_arm`` metres further out along the arm than
+  the subject. A physics service's ``sweep_sphere`` is such a function, and
+  so is any ray cast against a collision mesh.
 * **A game's own rule.** :meth:`constrain` adds ``rule(eye, look)`` returning
   the ``(eye, look)`` to use, applied in the order added and before the sweep.
 
@@ -152,6 +156,7 @@ class FollowCamera:
         self.max_step = None if max_step is None else float(max_step)
         self._distance_scale = 1.0
         self._target = np.zeros(3)
+        self._subject: Optional[np.ndarray] = None
         self._held_target: Optional[np.ndarray] = None
         self._rules: list[Rule] = []
         self._given_velocity: Optional[np.ndarray] = None
@@ -163,16 +168,20 @@ class FollowCamera:
         self._pose: Optional[tuple[np.ndarray, np.ndarray]] = None
         self._solved = False
 
-    def target(self, position: Any, velocity: Any = None) -> None:
+    def target(self, position: Any, velocity: Any = None, subject: Any = None) -> None:
         """Record the live point to follow, and optionally how fast it moves.
 
         Always updates the live target; while holding, :meth:`apply` simply
         ignores it, so on :meth:`release` the camera snaps to the most recent
         live target rather than a stale one. ``velocity`` is what ``look_ahead``
         looks along; left out, it is worked out from how far the target moved
-        since the last :meth:`advance`.
+        since the last :meth:`advance`. ``subject`` is the point the camera
+        has to keep in view, where the target is a point ahead of it, such as
+        a chase camera's look point ahead of a runner; left out, it is the
+        target. The sweep keeps the arm clear from the camera to the subject.
         """
         self._target = np.asarray(position, dtype='d')[:3]
+        self._subject = None if subject is None else np.asarray(subject, dtype='d')[:3]
         self._given_velocity = (None if velocity is None
                                 else np.asarray(velocity, dtype='d')[:3])
         self._solved = False
@@ -217,7 +226,10 @@ class FollowCamera:
     def snap(self) -> None:
         """Forget where the camera was, so the next frame puts it on the target.
 
-        What a teleport needs: no glide, no step limit and no eased arm.
+        What a teleport needs: no step limit and no eased arm, and the glide
+        started where it settles behind the target at the target's velocity,
+        so a camera snapped onto a moving target holds its place from the
+        first frame.
         """
         self._glide = None
         self._glide_velocity = np.zeros(3)
@@ -277,12 +289,13 @@ class FollowCamera:
     def _solve(self, dt: float) -> tuple[np.ndarray, np.ndarray]:
         """Work out the eye and look point for a step of ``dt`` seconds."""
         target = self.active_target
-        aim = target + self._velocity_of(target, dt) * self.look_ahead
-        look = self._glided(aim, dt)
+        velocity = self._velocity_of(target, dt)
+        look = self._glided(target + velocity * self.look_ahead, velocity, dt)
         eye = look + self.offset * self._distance_scale
         for rule in self._rules:
             eye, look = (np.asarray(part, dtype='d') for part in rule(eye, look))
-        eye, pulled_in = self._clear_of_scenery(eye, look, dt)
+        subject = target if self._subject is None or self._held_target is not None else self._subject
+        eye, pulled_in = self._clear_of_scenery(eye, look, subject, dt)
         if self._pose is not None and self.max_step is not None and not pulled_in:
             step = eye - self._pose[0]
             length = float(np.linalg.norm(step))
@@ -303,27 +316,38 @@ class FollowCamera:
             self._velocity = (target - self._last_target) / dt
         return self._velocity
 
-    def _glided(self, aim: np.ndarray, dt: float) -> np.ndarray:
-        """Where the look point has glided to, toward ``aim``.
+    def _glided(self, aim: np.ndarray, velocity: np.ndarray, dt: float) -> np.ndarray:
+        """Where the look point has glided to, toward ``aim``, which moves at ``velocity``.
 
-        The critically damped spring of Game Programming Gems 4, which is
-        exact for a constant target and settles in about ``smooth_time``.
+        A critically damped spring, solved exactly for an aim moving at a
+        constant velocity through the step: it settles ``smooth_time``
+        seconds of the velocity behind the aim, the same at any frame rate,
+        which ``look_ahead`` of the same length cancels, and it comes to rest
+        on an aim that stops in about ``smooth_time``. The first frame, and the
+        first after :meth:`snap`, starts the glide settled.
         """
-        if self.smooth_time <= 0.0 or self._glide is None:
+        if self.smooth_time <= 0.0:
             self._glide, self._glide_velocity = aim.copy(), np.zeros(3)
             return self._glide
+        velocity = np.asarray(velocity, dtype='d')
+        settled = aim - velocity * self.smooth_time
+        if self._glide is None:
+            self._glide, self._glide_velocity = settled, velocity.copy()
+            return self._glide
         omega = 2.0 / self.smooth_time
-        x = omega * dt
-        damping = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x)
-        change = self._glide - aim
-        carried = (self._glide_velocity + omega * change) * dt
-        self._glide_velocity = (self._glide_velocity - omega * carried) * damping
-        self._glide = aim + (change + carried) * damping
+        # The glide's distance from where it settles, measured at the step's start (the aim a
+        # step of the velocity back), and how fast that distance changes.
+        apart = self._glide - (settled - velocity * dt)
+        closing = self._glide_velocity - velocity
+        carried = (closing + omega * apart) * dt
+        decay = math.exp(-omega * dt)
+        self._glide = settled + (apart + carried) * decay
+        self._glide_velocity = velocity + (closing - omega * carried) * decay
         return self._glide
 
-    def _clear_of_scenery(self, eye: np.ndarray, look: np.ndarray, dt: float
-                          ) -> tuple[np.ndarray, bool]:
-        """The eye with the arm shortened to the first thing it meets.
+    def _clear_of_scenery(self, eye: np.ndarray, look: np.ndarray, subject: np.ndarray,
+                          dt: float) -> tuple[np.ndarray, bool]:
+        """The eye with the arm shortened to the first thing it meets behind ``subject``.
 
         Also whether the arm was pulled in by something this frame.
         """
@@ -331,9 +355,11 @@ class FollowCamera:
         length = float(np.linalg.norm(arm))
         if self.sweep is None or length <= 1e-9:
             return eye, False
-        hit = self.sweep(look, arm / length, length, self.avoid_radius)
+        direction = arm / length
+        passes = min(max(float(np.dot(subject - look, direction)), 0.0), length)
+        hit = self.sweep(look + direction * passes, direction, length - passes, self.avoid_radius)
         wanted = 1.0 if hit is None else min(1.0, max(
-            hit, min(self.min_arm, length)) / length)
+            passes + hit, min(passes + self.min_arm, length)) / length)
         pulled_in = wanted < self._squeeze
         if pulled_in:
             self._squeeze = wanted
