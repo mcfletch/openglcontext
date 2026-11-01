@@ -2511,7 +2511,8 @@ commit.
   mapping for all three fields and a bool for physics and audio; `navigation=True` raises
   ValueError naming `navigation=None`. docs/physics.rst. f95ed556.
 - L26 licence half: license.txt lists cooking.py and massprops.py, copied from omi_physics (MIT,
-  same author), among its exceptions. 1a1f7548.
+  same author), among its exceptions, and cooking.py's docstring names hull.py and cookery.py.
+  1a1f7548, ba1484c6.
 - L36 (prose on added lines, openglcontext's share): the perception verbs in locomotion.py,
   physics_stairs_thread.py, character_camera.py and character_footsteps.py name the mechanism,
   and the em dashes in gltf.rst and instancing.rst are gone. `scan.py --base origin/develop`
