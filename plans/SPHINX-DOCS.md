@@ -62,6 +62,20 @@ highlighting; it is `docs/_ext/oglc_tutorials.py`, registered in
 reads it. `tests/unit/test_docbuild.py` builds a generated page with Sphinx and
 checks the columns the code comes out at.
 
+The code links the modules, classes and functions the script imports.
+`docbuild/codelinks.py` reads the script's import statements, `tutorials.render`
+writes them at the head of the page as a `tutorial-imports` directive, and the
+HTML writer for a `tutorial-code` block (`docs/_ext/oglc_tutorials.py`) links
+them once the highlighter has run. In `from x.y.z import q` each of `x`, `x.y`
+and `x.y.z` links to its own page, with the dots between them left as text, and
+`q` links to `x.y.z.q`, as does each later use of `q` that is not an attribute of
+something else. A name is looked up as written in the Python domain and the
+intersphinx inventories, then under the module the imported object reports as its
+own, so a name one package re-exports links to the page of the module that defines
+it. A name with no page is left as the highlighter wrote it. `from m import *`
+binds the public names `m` exports. `tests/unit/test_codelinks.py` and
+`tests/unit/test_tutorial_extension.py` hold it.
+
 ## A path's introduction
 
 `tests/tutorials/<path>/index.rst`, where it exists, is the path's `index` page

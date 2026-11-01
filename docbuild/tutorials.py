@@ -19,6 +19,9 @@ ideas before the first script.  It is written like the commentary -- a
 ``:doc:`` target naming a tutorial finds it wherever its path puts it -- and
 the list of the path's tutorials follows it unless it makes a ``toctree`` of
 its own.
+
+The modules, classes and functions a script imports are links in its code, to
+the pages that document them (:mod:`docbuild.codelinks`).
 """
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ import sys
 import tokenize
 from collections.abc import Iterable, Mapping
 
-from docbuild import markup
+from docbuild import codelinks, markup
 
 __all__ = [
     'Tutorial',
@@ -97,6 +100,9 @@ class Tutorial:
     #: Where the script is under ``tests/``, without ``.py``, for the page to
     #: say (``tutorials/shaders/shader_1``).
     script: str = ''
+    #: The names the script's import statements bind, which the page's code
+    #: links to the pages that document them.
+    imports: codelinks.Imports = dataclasses.field(default_factory=codelinks.Imports)
 
     def __post_init__(self) -> None:
         self.script = self.script or self.name
@@ -452,6 +458,7 @@ def parse(path: str, script: str = '') -> Tutorial:
         source=path,
         pieces=pieces,
         script=script,
+        imports=codelinks.imports(text),
     )
 
 
@@ -525,6 +532,11 @@ def render(tutorial: Tutorial, pages: Mapping[str, str] | None = None) -> str:
         '.. _tutorial-%s:' % (tutorial.name,),
         heading(markup.escape(tutorial.title), 0),
     ]
+    if tutorial.imports:
+        out.append(
+            '.. tutorial-imports::\n\n%s'
+            % (indent(codelinks.declare(tutorial.imports)),)
+        )
     titled = False
     started = False
     for piece in tutorial.pieces:
