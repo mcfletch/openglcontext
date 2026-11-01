@@ -237,9 +237,11 @@ class Navigation(node.Node):
     """The movement modes a context has, its views, and who switches them.
 
     ``modes`` are the ways the perspective camera can move; ``mode`` the one
-    selected at start (empty for the first selectable); ``current`` the one in
-    force, written by the navigation manager; ``modeSwitching`` how the *user*
-    may change it -- the application always can, through
+    selected at start (empty for the first selectable), which a navigation
+    declares among its modes where ``modes`` does not list it, so
+    ``Navigation(mode='fly')`` declares the fly mode alone; ``current`` the
+    one in force, written by the navigation manager; ``modeSwitching`` how the
+    *user* may change it -- the application always can, through
     ``context.getNavigation().select(name)`` and ``cycle()``, and a mode the
     world imposes (swimming) applies regardless.  ``views`` is a
     :class:`Views`, or NULL for one full-window perspective view.
@@ -260,6 +262,8 @@ class Navigation(node.Node):
         if 'modes' in named:
             named['modes'] = _resolvedModes(named['modes'])
         super().__init__(**named)
+        if self.mode and self.mode not in (mode.name for mode in self.modes):
+            self.modes = [*self.modes, movementMode(self.mode)]
         _checkSwitching(self.modeSwitching, 'A movement mode')
 
     def scaled(self, scale: float) -> Navigation:

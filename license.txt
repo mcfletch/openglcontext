@@ -75,6 +75,15 @@ Exceptions are as follows:
 	copies none of gl-rock's code.  gl-rock is released under the
 	MIT licence, whose text is given above.
 
+	The convex hull and decomposition in
+	OpenGLContext/physics/cooking.py are copied from omi_physics'
+	hull.py and cookery.py, the same author's code, and the
+	mass-property formulas in
+	OpenGLContext/physics/massprops.py from its massprops module,
+	under the MIT licence, whose text is given above:
+
+		Copyright (c) 2026 Mike C. Fletcher
+
 Dependency copyright notices (note that all dependencies mentioned 
 here are optional, but depending on the OpenGLContext version may
 be included in the OpenGLContext distribution):

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Collision"/>
+    <meta name="description" content="A group the viewer can collide with; proxy stands in for the children when the collision is tested, and collide false lets the viewer walk through."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <Collision collide="true">
+      <!-- The proxy is never drawn: the viewer is tested against this box, not against the sphere. -->
+      <Shape containerField="proxy">
+        <Box size="2.2 2.2 2.2"/>
+      </Shape>
+      <Shape>
+        <Appearance><Material diffuseColor="0.75 0.4 0.6" specularColor="0.7 0.7 0.7" shininess="0.4"/></Appearance>
+        <Sphere radius="1.1"/>
+      </Shape>
+    </Collision>
+  </Scene>
+</X3D>

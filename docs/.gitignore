@@ -1,6 +1,7 @@
-# Written by build-docs.py: the module pages from the installed packages, and
-# the tutorials from the commentary in tests/tutorials.  Regenerated on every build.
+# Written by build-docs.py: the module pages from the installed packages, the
+# renders of the node samples, and the tutorials from the commentary in tests/tutorials.  Regenerated on every build.
 /api/
+/images/samples/
 /tutorials/**/*.rst
 /_build/
 

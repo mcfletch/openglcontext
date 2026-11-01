@@ -5,54 +5,58 @@
 
 A row of balls dropped from the same height with restitution rising from 0
 (dead) on the left to 1 (nearly lossless) on the right.  Watch the rebound
-heights increase across the row — a direct read-out of the ``restitution``
-material property and its combine mode.
+heights increase across the row: a direct read-out of the ``restitution``
+keyword of ``add_dynamic``.
 '''
-
-from OpenGLContext.events import systemtime
 from OpenGLContext.context import Context as BaseContext
+from OpenGLContext.scenegraph import surfaces
+from OpenGLContext.scenegraph.basenodes import (
+    Background, DirectionalLight, sceneGraph,
+)
+from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 
-from omi_physics import model
-from OpenGLContext.physics import debugdraw
-from OpenGLContext.physics.demo import DemoScene, disable_vsync
+BALLS = 6
+RADIUS = 0.7
 
 
 class TestContext(BaseContext):
-    initialPosition = (0, 4, 16)
+    initialPosition = (0, 5, 22)
 
     def OnInit(self):
-        disable_vsync()
+        self.balls = []
         self.build()
         print(__doc__)
         self.addEventHandler('keypress', name='r', function=self.on_reset)
-        self._last = systemtime.systemTime()
 
     def on_reset(self, event):
         self.build()
-        self.triggerRedraw(1)
 
     def build(self):
-        self.scene = DemoScene(debug_flags=debugdraw.PROXIES)
-        self.scene.add_box(size=(24, 1, 6), position=(0, -0.5, 0),
-                           color=(0.5, 0.5, 0.55), dynamic=False, material='wood')
-        n = 6
-        for k in range(n):
-            e = k / (n - 1)
-            mat = self.scene.raw_material(model.Material(
-                restitution=e, staticFriction=0.4, dynamicFriction=0.4))
-            self.scene.add_sphere(radius=0.7, position=(-9 + k * 3.6, 8, 0),
-                                  color=(0.3 + 0.6 * e, 0.5, 0.9 - 0.6 * e),
-                                  material=mat)
-        self.scene.advance(0.0)
-        self.sg = self.scene.scene_graph()
-
-    def OnIdle(self, *arguments):
-        now = systemtime.systemTime()
-        active = self.scene.advance(min(now - self._last, 0.05))
-        self._last = now
-        if active:
-            self.triggerRedraw(1)
-        return 1
+        '''A body outlives the scene it was drawn in, so the old balls are
+        removed from the world as the new scene is made.  The floor is a shape
+        of the scene, so it is static.'''
+        for body in self.balls:
+            body.remove()
+        slab = surfaces.pbr_material(surfaces.sandstone(256))
+        self.sg = sceneGraph(children=[
+            Background(skyColor=[(0.55, 0.62, 0.72)]),
+            DirectionalLight(direction=(-0.4, -1.0, -0.6), intensity=2.0),
+            surfaces.shape(surfaces.block((24, 1, 6), repeat=3.0), slab,
+                           translation=(0, -0.5, 0)),
+        ])
+        self.balls = []
+        for k in range(BALLS):
+            e = k / (BALLS - 1)
+            skin = PhysicalMaterial(baseColor=(0.3 + 0.6 * e, 0.5, 0.9 - 0.6 * e),
+                                    metallic=0.1, roughness=0.3)
+            node = surfaces.shape(surfaces.sphere(RADIUS), skin)
+            self.sg.children.append(node)
+            '''``restitution`` is the fraction of its closing speed a body
+            keeps from a bounce.  It is combined with the floor's, so a ball of
+            0 on a floor of 0.2 is nearly dead.'''
+            self.balls.append(self.physics.add_dynamic(
+                node, translation=(-9 + k * 3.6, 8, 0), restitution=e, friction=0.4))
+        self.physics.show_proxies(True)
 
 
 if __name__ == '__main__':

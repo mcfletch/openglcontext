@@ -8,9 +8,15 @@ node path it resolves, the axis-constrained drag and the write back into the
 NURBS surface -- is exercised in a real GL context rather than mocked.
 
 The steps run one per frame from ``OnIdle``, each waiting for the pick to answer
-the step before it, so nothing here depends on wall-clock timing.
+the step before it, so nothing here depends on wall-clock timing.  Pick
+readback is asynchronous and lands however many frames the GPU takes, so a
+step that waits on a pick delivers the picks in flight before it looks.
 
-Usage:  _molehill_edit_driver.py <net> <point> <axis> <distance>
+Usage:  _molehill_edit_driver.py <net> <point> <axis> <distance> [behind]
+
+``behind`` runs the drag on a GPU that has not finished any frame's readback
+by the frame after it: the selection pass's non-blocking drain finds no fence
+signalled, as on a loaded machine.
 """
 import os
 import sys
@@ -21,6 +27,7 @@ os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '60')
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 
 import types
+from typing import Any
 
 import numpy as np
 
@@ -35,6 +42,7 @@ from molehill_edit import TestContext as BaseContext
 
 NET, POINT, AXIS = (int(value) for value in sys.argv[1:4])
 DISTANCE = float(sys.argv[4])
+BEHIND = sys.argv[5:6] == ['behind']
 
 #: How many frames a step may wait for the pick before the run is called off.
 PATIENCE = 15
@@ -49,13 +57,13 @@ GRAB_AT = 0.85
 class DriverContext(BaseContext):
     """The editing demo, with a hand on its mouse."""
 
-    def OnInit(self):
+    def OnInit(self) -> None:
         super(DriverContext, self).OnInit()
         self.script = [self._select, self._grab, self._drag, self._report]
         self._waited = 0
-        self._started = None
+        self._started: np.ndarray = np.zeros(3)
 
-    def _pixel(self, point):
+    def _pixel(self, point: Any) -> tuple[float, float]:
         """Where a point in the scene group's coordinates is drawn, in pixels.
 
         The scene is scaled and turned before it is drawn, so a control point's
@@ -71,15 +79,16 @@ class DriverContext(BaseContext):
             viewport=(0, 0, width, height))
         return tuple(projected(view, root)[:2])
 
-    def _post(self, *records):
+    def _post(self, *records: dict[str, Any]) -> None:
         for record in records:
             event = synthetic.build(record)
+            assert event is not None, record
             event.context = self
             self.addPickEvent(event)
         self.triggerPick()
 
     # -- the steps ---------------------------------------------------------
-    def _select(self):
+    def _select(self) -> bool:
         x, y = self._pixel(self.nets[NET].point(POINT))
         self._post({'type': 'mousebutton', 'button': 0, 'state': 1,
                     'x': x, 'y': y},
@@ -87,7 +96,7 @@ class DriverContext(BaseContext):
                     'x': x, 'y': y})
         return True
 
-    def _grab(self):
+    def _grab(self) -> bool:
         if self.selection is None:
             return False
         print('SELECTED %d' % (self.selection[1],), flush=True)
@@ -98,7 +107,7 @@ class DriverContext(BaseContext):
                     'x': x, 'y': y})
         return True
 
-    def _drag(self):
+    def _drag(self) -> bool:
         if self.gizmo.dragging is None:
             return False
         print('GRABBED %d' % (self.gizmo.dragging,), flush=True)
@@ -110,7 +119,7 @@ class DriverContext(BaseContext):
                     'x': x, 'y': y})
         return True
 
-    def _report(self):
+    def _report(self) -> bool:
         moved = self.nets[NET].point(POINT)
         if np.allclose(moved, self._started):
             return False
@@ -125,8 +134,12 @@ class DriverContext(BaseContext):
         print('DONE', flush=True)
         return True
 
-    def OnIdle(self, *arguments):
+    def OnIdle(self, *arguments: Any) -> int:
         if self.script:
+            # The last frame's picks resolve when the GPU finishes them, which
+            # a busy machine puts any number of frames off; deliver them now so
+            # the step reads the answer to the step before it.
+            self.flushPendingPicks()
             if self.script[0]():
                 self.script.pop(0)
                 self._waited = 0
@@ -140,5 +153,14 @@ class DriverContext(BaseContext):
         return 0
 
 
+def _drain_none(self: Any, mode: Any) -> None:
+    """Deliver nothing, as on a GPU whose readback fences have not signalled."""
+    if self._async_batches:
+        self._askForDelivery(mode)
+
+
 if __name__ == "__main__":
+    if BEHIND:
+        from OpenGLContext.passes.asyncpick import _AsyncPickMixin
+        _AsyncPickMixin.drainAsyncPicks = _drain_none  # type: ignore[method-assign]  # the slow GPU is this run's subject
     DriverContext.ContextMainLoop()

@@ -575,6 +575,23 @@ class TestAnimationControl:
         assert inst._player is player
         assert player.evaluated == [0.0]                 # first frame shown at once
 
+    def test_the_model_clips_and_the_context_animations_are_kept_apart(self):
+        inst = _inst()
+        inst.options = _config(animate=True, anim_time=None)
+        inst.triggerRedraw = lambda _n=1: None
+        clip = types.SimpleNamespace(name='clip')
+        scene = types.SimpleNamespace(
+            animations=[clip], player=lambda _index, **_named: _Player())
+        inst.setupAnimation(scene)
+        inst._animationPlaying = True                    # what OnInit sets from options.animate
+        steps = []
+        inst.animate(steps.append)
+        inst._frameAnimations()
+        inst._frameAnimations()
+        assert len(steps) == 2 and steps[0] == 0.0       # the first frame steps by nought
+        assert inst._animations == [clip]
+        assert inst.advanceAnimation() is True
+
     def test_advance_animation_ticks_the_clock(self):
         inst = _inst()
         inst.options = _config(anim_time=None)

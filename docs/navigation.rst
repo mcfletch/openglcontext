@@ -42,6 +42,9 @@ The navigation declaration
   replaced by the node its registration makes, so ``'fly'`` and
   ``modes.FlyMode(name='fly')`` declare the same thing.
 - ``mode`` - the mode selected at start; empty for the first selectable one.
+  A name that ``modes`` does not list is declared with the others, so
+  ``Navigation(mode='fly')`` is a navigation with the one fly mode, and a name
+  no mode is registered under raises ``KeyError``.
 - ``current`` - the mode in force, written by the navigation manager each
   frame. It is an ``SFNode``, so a HUD, a settings screen or an animation
   state machine can watch it instead of polling.
@@ -473,8 +476,9 @@ The shipped viewers
      - declared, so the overlay demo has modes to show
    * - ``oglc-forest`` (the forest demo)
      - first-person, walk, fly
-     - yes. The modes move an avatar standing on a height field; see
-       :ref:`Terrain <terrain-heightfield>`
+     - yes. The modes move a character standing on a height field in the
+       context's physics world, among the trunks and rocks that are bodies
+       there; see :ref:`Terrain <terrain-heightfield>`
 
 ``OpenGLContext.move.modes.walk_fly_modes(scale=1.0)`` returns the walk and
 fly modes. ``oglc-view`` and any application embedding the :ref:`viewing
@@ -508,6 +512,242 @@ The mode objects are kept and only their speeds change, so the mode in force,
 the bound keys and anything watching ``navigation.current`` are unaffected. The
 speed sliders on the settings screen widen to match. Modes a host application
 declared itself are not scaled.
+
+.. _navigation-follow:
+
+A camera that follows a target
+------------------------------
+
+``OpenGLContext.move.followcam.FollowCamera`` keeps a ``ViewPlatform`` at an
+offset from a moving target, looking at it. It takes no user input; a game
+sets the target and steps the camera once a frame:
+
+.. code-block:: python
+
+   from OpenGLContext.move.followcam import FollowCamera
+
+   def sweep(origin, direction, distance, radius):
+       hit = level.cast_sphere(origin, direction, distance, radius)   # the game's query
+       return None if hit is None else hit.distance
+
+   camera = FollowCamera(context.platform, offset=(0.0, 3.0, 6.0),
+                         look_ahead=0.3, smooth_time=0.25, sweep=sweep)
+   ...
+   camera.target(character.position, velocity=character.velocity)
+   camera.advance(dt, speed=character.speed)
+   camera.apply()
+
+``advance`` takes the frame's time step and the target's speed. A camera with
+none of the options below follows the target at the offset and does not need
+``advance`` at all.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 78
+
+   * - option
+     - effect
+   * - ``pull_back``, ``pull_back_speed``, ``pull_back_rate``
+     - the offset grows by the fraction ``pull_back`` at ``pull_back_speed``
+       metres a second, easing at ``pull_back_rate`` a second
+   * - ``look_ahead``
+     - seconds of the target's velocity the look point is moved along; the
+       velocity is the one given to ``target``, or the target's movement since
+       the last ``advance``
+   * - ``smooth_time``
+     - seconds the look point takes to glide to the target; critically damped,
+       so it does not overshoot and takes the same time at any frame rate. A
+       target moving steadily is followed ``smooth_time`` seconds of its
+       velocity behind at any frame rate, which a ``look_ahead`` of the same
+       length cancels
+   * - ``sweep``, ``avoid_radius``, ``min_arm``, ``arm_ease``
+     - keeps the arm out of the scenery; see below
+   * - ``max_step``
+     - the furthest in metres the camera moves in one frame
+
+``hold()`` freezes the camera on the current target until ``release()``, and
+``snap()`` puts it on the target at once, with no step limit, for a teleport: the
+glide starts where it settles behind a target moving at the target's velocity, so
+a camera snapped onto a runner holds its place from the first frame.
+``camera.eye`` and ``camera.look`` are the pose of the current frame.
+
+``target(position, velocity=None, subject=None)`` takes the point to follow.
+``subject`` is the point the camera has to keep in view where the target is a
+point ahead of it, as a chase camera's look point leads a runner; left out, it is
+the target.
+
+Keeping out of the scenery
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``sweep(origin, direction, distance, radius)`` answers how far a sphere of
+``radius`` metres goes from ``origin`` along the unit ``direction`` before it
+meets something, or None if it goes the whole ``distance``. Each frame the
+camera calls it along the arm from the look point toward the place the offset
+gives, starting where the arm passes the subject: what lies between the subject
+and a look point ahead of it does not pull the camera in. When it reports a hit,
+the arm shortens to that point at once, and the camera stays at least
+``min_arm`` metres (0.5 by default) further out along the arm than the subject;
+when the way is clear again the arm grows back at ``arm_ease`` (4 a second,
+exponential). A wall behind the target brings the camera in, and the camera
+stays ``avoid_radius`` metres clear of it.
+
+``max_step`` does not hold back a camera the sweep pulls in, since a camera kept
+behind a wall for a few frames would show the inside of it. It limits every
+other movement, so a target that jumps is followed at that many metres a frame.
+
+A rule of the game's own is added with ``constrain``:
+
+.. code-block:: python
+
+   def step_aside(eye, look):
+       return eye + (1.1, 0.0, 0.0), look
+
+   rule = camera.constrain(step_aside)
+   camera.unconstrain(rule)
+
+Rules return the ``(eye, look)`` to use, run in the order added, and run before
+the sweep, so the sweep has the last word on where the camera is.
+
+.. _navigation-follow-character:
+
+A character seen from behind
+----------------------------
+
+``context.follow(character)`` shows a physics character (:ref:`physics-characters`)
+from behind and gives it the keys that move it:
+
+.. code-block:: python
+
+   hero = self.physics.add_character(model='hero.glb', animations='ual')
+   self.follow(hero)
+
+The call makes a ``FollowMode`` (``OpenGLContext.move.thirdperson``) and binds
+the context's camera to a ``FollowCamera`` that stands behind the character. It
+returns the ``FollowController`` that holds the two; ``context.unfollow()``
+gives the keys back to the context's navigation. The options are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 78
+
+   * - option
+     - effect
+   * - ``distance``
+     - metres the camera stands behind the look point (4.5)
+   * - ``height``
+     - metres above the character's feet the camera looks at (1.7)
+   * - ``mode``
+     - a ``FollowMode`` of your own, in place of the default
+   * - ``slide_time``
+     - seconds a slide lasts (0.8)
+   * - ``yaw``
+     - the way the camera looks to begin with, in radians from -Z toward +X (0)
+   * - ``swing``
+     - seconds the camera takes to come round behind the way the character
+       moves, the short way round; 0 leaves the yaw to the turn keys (0)
+   * - the options of ``FollowCamera``
+     - ``look_ahead`` (0.1 s here), ``smooth_time`` (0.12 s), ``pull_back``,
+       ``avoid_radius`` (0.3 m), ``min_arm`` (0.5 m), ``arm_ease`` and
+       ``max_step``
+
+``FollowMode`` is a ``WalkMode`` whose moves are relative to the camera: forward
+(``w``, up) is the way the camera looks, flattened to the ground, and
+``a`` and ``d`` step to the sides of it. The turn keys (``q`` and ``e``, left and
+right) swing the camera round the character, and the character turns toward
+where it goes. ``shift`` runs at ``runSpeed``, ``ctrl`` sprints at
+``sprintSpeed`` (9 m/s), space jumps and ``c`` slides. ``autoForward``, from 0
+to 1, holds a forward move without a key, for a runner whose keys only steer. The
+mode's bindings are listed on the key-binding page with the other modes'.
+
+The camera sweeps a sphere from the character to where it should stand, through
+``physics.sweep_sphere`` with the character skipped, so scenery and land
+between the character and the camera shorten the arm instead of hiding the
+character. The input is read before the world is stepped and the camera placed
+after, so the camera is never a frame behind the character.
+``follower.platform.camera.constrain(rule)`` adds a rule of the game's own,
+``rule(eye, look)`` returning the eye and look point to use, applied before the
+sweep. :doc:`tutorials/character/character_camera` follows a fox round a brick
+room with ``swing``, the sweep's settings and a rule that keeps the eye under
+the tops of the walls. The sweep meets bodies, so scenery made from the scene's
+shapes is met once its triangles are cooked, a frame or two after the scene is
+set.
+
+Following takes the camera from the context's free-fly navigator
+(``context.movementManager``), so the two never both move it, and
+``context.unfollow()`` gives it back.
+
+.. _navigation-eyes:
+
+A character seen through its eyes
+---------------------------------
+
+``context.follow(character, view='eyes')`` is the first-person view: the camera
+is at the character's eyes, and the keys of the walk and fly modes
+(``walk_fly_modes``) move it. It returns an ``EyesController``
+(``OpenGLContext.move.firstperson``), a ``FollowController`` over a
+``PhysicsViewPlatform``:
+
+.. code-block:: python
+
+   hero = self.physics.add_character(position=(-8, 0.3, 6))
+   walker = self.follow(hero, view='eyes', yaw=0.0)
+   walker.navigation.select('fly')               # off the ground; 'walk' drops it
+
+``yaw`` is the heading the camera starts at, in radians about +Y, 0 looking
+along -Z. ``modes`` is a list of movement modes in place of walk and fly, the
+first in force. Selecting a mode puts the character in that mode's state
+(``MovementMode.applyTo``): the fly mode switches the character's flying on, the
+walk mode off. ``w`` and ``s`` walk, ``a`` and ``d`` step to the sides, ``q``
+and ``e`` turn, ``shift`` runs and space jumps.
+:doc:`tutorials/physics/physics_navigate` walks a level with it.
+
+.. _navigation-pathmover:
+
+Running along a course
+----------------------
+
+A game with a course rather than open land wants a character to follow a line
+and hop between parallel lanes of it. A physics character does this with
+``hero.run_along(course, speed=, lane=)`` and ``hero.hop_to(offset)``
+(:ref:`characters-locomotion`, :doc:`tutorials/character/character_trail`),
+which drive a ``PathMover`` at each step; ``speed`` may be a function of the
+seconds since the run began, and ``hero.speed`` and ``hero.lane`` read and set
+the run. ``OpenGLContext.move.pathmover.PathMover``
+gives, each frame, the horizontal velocity for a character at a given position
+on a :class:`~OpenGLContext.scenegraph.roadcourse.RoadCourse`:
+
+.. code-block:: python
+
+   from OpenGLContext.move.pathmover import PathMover
+
+   mover = PathMover(course, speed=10.0)
+   ...
+   step = mover.update(character.position, dt)
+   character.set_move(step.direction, speed=step.speed)
+   ...
+   mover.hop_to(2.0, over=0.16)             # one lane to the right
+
+``update`` returns a ``PathStep`` with the ``velocity``, its ``direction`` and
+``speed``, the character's ``station`` along the course and its
+``lateral_error``, the metres it is to the right of the centreline. The
+velocity is ``speed`` metres a second along the course's tangent at the
+character's station, plus a sideways velocity: the rate the lane itself is
+moving at during a hop, and a correction of the character's offset from the
+lane. A character pushed off its lane is steered back at ``steer_gain`` (12 a
+second, and never faster than one frame's worth). The velocity has no vertical
+part; the controller keeps the character on the land and does the jumping.
+
+A lane is a distance in metres to the right of the centreline, the right being
+``cross(tangent, up)`` (``+x`` on a course running toward ``-z``). A hop moves
+the lane to a new offset with a smoothstep over ``over`` seconds (0.16 by
+default); a hop begun during another starts from where the first had reached.
+``mover.lane`` is the offset steered toward now and ``mover.hopping`` says
+whether a hop is under way. On a bent course a character at 10 m/s stays within
+5 cm of its lane at 120 steps a second.
+
+An open course ends: past its last point ``mover.finished`` is true and the
+velocity is zero until ``mover.reset()``. A closed course goes round without
+end. ``speed`` may be changed at any time.
 
 Settings screens
 ----------------

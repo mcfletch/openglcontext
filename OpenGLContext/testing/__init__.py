@@ -33,6 +33,10 @@ from OpenGLContext.testing.event_injector import (
     EventInjectionMixin,
     EventSender,
 )
+from OpenGLContext.testing.audio import (
+    Call,
+    RecordingAudio,
+)
 from OpenGLContext.testing.report_generator import (
     TestReportGenerator,
     generate_report,
@@ -61,6 +65,9 @@ __all__ = [
     'EventInjector',
     'EventInjectionMixin',
     'EventSender',
+    # Sound
+    'Call',
+    'RecordingAudio',
     # Report generation
     'TestReportGenerator',
     'generate_report',

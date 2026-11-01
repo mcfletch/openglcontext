@@ -278,6 +278,10 @@ class WindowSystem(abc.ABC):
                 context.pumpKeyRepeats()
             with trace.phase('idle'):
                 context.OnIdle()
+            with trace.phase('frame'):
+                # After OnIdle, so the inputs it set move the world this frame,
+                # and before the draw, which shows the poses the step wrote.
+                context.runFrameHooks()
             if self.pollsEvents:
                 # Bounded by drawPollTimeout, so this phase can go up but never
                 # far up: a large 'wait' is a quiet loop, never a stalled one.
@@ -299,6 +303,9 @@ class WindowSystem(abc.ABC):
 
         One render per pass whatever arrived, so a burst of input -- a drag,
         say -- coalesces into a single frame instead of one per event.
+
+        An exception from a pass, ``KeyboardInterrupt`` included, closes the
+        journals and releases the window, then propagates to the caller.
         """
         from OpenGLContext.looptrace import LoopTrace
 

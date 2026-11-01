@@ -1,0 +1,45 @@
+#VRML V2.0 utf8
+# META "title" "Transform"
+# META "description" "Moves, turns and scales its children as a group; translation, rotation, scale and center set the move, and the order they apply in is scale, then rotation about center, then translation."
+
+Viewpoint {
+  orientation -1 -0 -0 0.2709
+  position 0 2.5 9
+}
+Transform {
+  translation -3.5 0 0
+  children [
+    DEF Block Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.8 0.55 0.2
+        }
+      }
+      geometry Box {
+        size 1.5 1 1
+      }
+    }
+  ]
+}
+Transform {
+  rotation 0 1 0 0.7854
+  translation -1 0.5 0
+  children [
+    USE Block
+  ]
+}
+Transform {
+  scale 0.5 3 2
+  translation 1.5 0.5 0
+  children [
+    USE Block
+  ]
+}
+Transform {
+  center -0.75 0 0
+  rotation 0 0 1 0.7
+  translation 4 0 0
+  children [
+    USE Block
+  ]
+}

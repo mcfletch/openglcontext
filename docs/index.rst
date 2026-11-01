@@ -212,7 +212,10 @@ Features
 - **Simulation**
 
   - :doc:`Physics and collision <physics>`: rigid bodies on the OMI glTF model,
-    gravity zones, triggers, joints and a character controller
+    gravity zones, triggers, joints and a character controller, stepped by Jolt
+
+  - :doc:`The physics world thread <physicsthread>`: commands, snapshots,
+    callbacks on the world thread, lockstep replay and free-threaded builds
 
   - :doc:`Navigation mesh <navmesh>` generated from the collision mesh, with
     routes pulled taut through its portals
@@ -360,6 +363,7 @@ Documentation
    navigation
    navmesh
    physics
+   physicsthread
    audio
    audio-internals
    overlayui

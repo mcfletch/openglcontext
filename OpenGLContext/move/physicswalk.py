@@ -20,10 +20,14 @@ be a trap: fly out, and resume walking from wherever you got to.
 **Mixing it in elsewhere.**  It is self-contained -- it inherits nothing and
 overrides nothing -- so it can be added to any class that offers:
 
+``physics``
+    The context's physics service
+    (:class:`~OpenGLContext.physics.service.Physics`), which the avatar is a
+    :class:`~OpenGLContext.physics.character.Character` of.
 ``sg``
     The scenegraph, if :meth:`~PhysicsWalkMixin.buildPhysicsWorld` is left to
-    cook the collision world from it.  A host with a world of its own overrides
-    that method instead and needs no ``sg`` at all.
+    make the scene's shapes the world's scenery.  A host with bodies of its own
+    overrides that method instead and needs no ``sg`` at all.
 ``platform`` / ``getViewPlatform()``
     The free-fly camera the avatar takes over from and hands back to.
 ``movementManager``
@@ -33,10 +37,16 @@ overrides nothing -- so it can be added to any class that offers:
     in force.
 ``addEventHandler``, ``triggerRedraw``, ``getNavigation``, ``updateNavigation``
     The event and navigation plumbing every ``Context`` has.
+``renderQueue``
+    Optional.  Where a host has one, the service steps the avatar in the
+    frame: the declared mode sets its move before the world steps and the
+    camera goes to its eye after.  A host without one calls
+    :meth:`~PhysicsWalkMixin.stepPhysics` itself.
 
 See [docs/physics.rst](../../docs/physics.rst) and
 ``plans/PHYSICS-COLLISION.md`` §Phase 5.
 """
+import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -47,14 +57,17 @@ from OpenGLContext.move.modes import (
 )
 
 if TYPE_CHECKING:
-    from omi_physics.character import CharacterCapabilities, CharacterController
-    from omi_physics.world import PhysicsWorld
-
-    from OpenGLContext.physics.x3dcollision import CollisionReporter
+    from OpenGLContext.events.framestep import FrameStep
     from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
-    from OpenGLContext.physics.zones import GravityZones
+    from OpenGLContext.physics.character import Character
+    from OpenGLContext.physics.service import Physics
+    from OpenGLContext.physics.types import CharacterCapabilities
+    from OpenGLContext.physics.x3dcollision import CollisionReporter
 
-__all__ = ['PhysicsWalkMixin', 'yaw_from_orientation']
+__all__ = ['FLOORS', 'HEADROOM', 'PASS', 'PhysicsWalkMixin', 'clearance', 'floor_below', 'floors_below',
+           'yaw_from_orientation']
+
+log = logging.getLogger(__name__)
 
 #: World bounds as ``(lo, hi)`` corner arrays.
 Bounds = tuple[Any, Any]
@@ -74,23 +87,90 @@ def yaw_from_orientation(orientation: Sequence[float]) -> float:
     return float(np.arctan2(-forward[0], -forward[2]))
 
 
-def _clearance(character: 'CharacterController', radius: float) -> int:
+def _capsule(capabilities: 'CharacterCapabilities') -> Any:
+    """The avatar's standing capsule as a :class:`~OpenGLContext.physics.proxy.Proxy`."""
+    from OpenGLContext.physics.proxy import Proxy  # noqa: PLC0415 every physics import waits for walking
+
+    radius = float(capabilities.radius)
+    return Proxy.capsule(max(float(capabilities.standHeight) - 2.0 * radius, 0.0), radius)
+
+
+def floor_below(physics: 'Physics', centre: Sequence[float],
+                capabilities: 'CharacterCapabilities', skip: Any = None) -> Optional[float]:
+    """The height of the floor under a capsule centred at ``centre``, or None.
+
+    The floor is the first surface a ray meets straight down from the
+    capsule's centre within one standing height below its feet, and it counts
+    only where it is no steeper than ``capabilities.maxSlope`` degrees.
+    ``skip`` is the avatar's own body.
+    """
+    half = 0.5 * float(capabilities.standHeight)
+    reach = half + float(capabilities.standHeight)
+    hit = physics.raycast(tuple(float(v) for v in centre[:3]), (0.0, -1.0, 0.0), reach, skip=skip)
+    if hit is None:
+        return None
+    steepest = np.cos(np.radians(float(capabilities.maxSlope)))
+    if float(hit.normal[1]) < steepest - 1e-6:
+        return None
+    return float(hit.point[1])
+
+
+def floors_below(physics: 'Physics', x: float, z: float, top: float, bottom: float,
+                 capabilities: 'CharacterCapabilities', skip: Any = None) -> list[float]:
+    """The heights of the floors under ``(x, z)`` between ``top`` and ``bottom``, highest first.
+
+    Each is a surface a ray straight down meets that is no steeper than
+    ``capabilities.maxSlope`` degrees.  The ray goes on below each surface it
+    meets, so the floors of every storey are found; a mesh's underside faces
+    away from it and lets it through.  At most :data:`FLOORS` surfaces are met.
+    """
+    steepest = np.cos(np.radians(float(capabilities.maxSlope)))
+    found: list[float] = []
+    start = float(top)
+    for _ in range(FLOORS):
+        if start <= bottom:
+            break
+        hit = physics.raycast((float(x), start, float(z)), (0.0, -1.0, 0.0),
+                              start - float(bottom), skip=skip)
+        if hit is None:
+            break
+        height = float(hit.point[1])
+        if float(hit.normal[1]) >= steepest - 1e-6 and float(hit.distance) > 0.0:
+            found.append(height)
+        start = min(height, start) - PASS
+    return found
+
+
+#: The most surfaces :func:`floors_below` meets on one line.
+FLOORS = 16
+#: How far below a surface :func:`floors_below` looks on from, metres.
+PASS = 1e-3
+#: The clear height over a floor :meth:`PhysicsWalkMixin.spawnAvatar` stands
+#: the avatar on, in standing heights.  A ray meets the underside of a closed
+#: mesh as it meets a floor; the clear height over it tells the two apart for
+#: a solid thinner than this.
+HEADROOM = 1.25
+
+
+def clearance(physics: 'Physics', centre: Sequence[float],
+              capabilities: 'CharacterCapabilities', skip: Any = None) -> int:
     """How many of the four horizontal directions the avatar has room to go.
 
-    The whole capsule is placed an arm's length along each direction and
-    depenetrated; the direction counts only if it stayed appreciably out there.
-    Testing the volume rather than the point is what catches a wall the avatar
-    would walk into but whose face its centre line misses, so it does not spawn
-    facing one.  It is a placement test and not a swept move, so a barrier
-    thinner than the capsule is transparent to it.
+    The standing capsule, lifted half a step off the floor, is placed an arm's
+    length (its radius and half a metre at scale 1) along each direction and
+    counts where it overlaps no body.  Testing the volume rather than the point
+    catches a wall the avatar would walk into but whose face its centre line
+    misses, so it does not spawn facing one.  It is a placement test, so a
+    barrier thinner than the capsule's arm's length is passed over.
     """
-    base = character.position
-    reach = radius + 0.5
+    capsule = _capsule(capabilities)
+    radius = float(capabilities.radius)
+    base = np.asarray(centre, dtype='d')[:3] + (0.0, 0.5 * float(capabilities.stepHeight), 0.0)
+    reach = radius + 0.5 * float(capabilities.standHeight) / 1.8
     clear = 0
     for direction in ((1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1)):
-        offset = np.asarray(direction, dtype='d')
-        resolved, _ = character._push_out(base + offset * reach)
-        if float(np.dot(resolved - base, offset)) > 0.5 * reach:
+        probe = base + np.asarray(direction, dtype='d') * reach
+        if not physics.overlap(capsule, tuple(float(v) for v in probe), skip=skip):
             clear += 1
     return clear
 
@@ -102,9 +182,6 @@ class PhysicsWalkMixin(object):
     #: Built lazily, on the first :meth:`enablePhysics`, and kept afterwards so
     #: toggling back to walking resumes rather than respawns.
     physicsPlatform: Optional['PhysicsViewPlatform'] = None
-    #: The world's zone gravity volumes, kept where the render pass places the
-    #: zones; built with the world.
-    gravityZones: Optional['GravityZones'] = None
     #: Whether the avatar, rather than the free-fly camera, owns the view.
     physicsWalking: bool = False
     #: Downward acceleration at avatar scale 1, in scene units per second squared.
@@ -125,12 +202,19 @@ class PhysicsWalkMixin(object):
     #: from outside: the camera there is off in space over nothing, and the
     #: spawn's search for a floor is the only sensible answer.
     physicsDropIn: bool = False
+    #: The seconds :meth:`ensurePhysicsWorld` waits for the scene's shapes to
+    #: be cooked into scenery before it stands the avatar among them.
+    physicsCookWait: float = 30.0
 
     #: The navigator that owns the camera while walking is off, remembered by
     #: :meth:`setupPhysics` so it can be handed the camera back.
     _freeManager: Any = None
     #: When the avatar was last stepped.
     _physicsLast: float = 0.0
+    #: Whether the render queue steps the avatar (:meth:`_walkHook`).
+    _walkHooked: bool = False
+    #: The frame's time step for the declared modes, while the render queue steps the avatar.
+    _walkSteps: Optional['FrameStep'] = None
 
     if TYPE_CHECKING:
         # Supplied by the context this is mixed into; see the module docstring.
@@ -138,6 +222,7 @@ class PhysicsWalkMixin(object):
         platform: Any
         movementManager: Any
         contextDefinition: Any
+        physics: 'Physics'
 
         def getViewPlatform(self) -> Any: ...
         def addEventHandler(self, eventType: str, *arguments: Any,
@@ -162,23 +247,46 @@ class PhysicsWalkMixin(object):
         return self.enablePhysics(True) if enable else False
 
     # -- the world the avatar walks in ------------------------------------
-    def buildPhysicsWorld(self) -> Optional[tuple['PhysicsWorld', Bounds]]:
-        """The collision world and its bounds, or None if nothing is walkable.
+    def buildPhysicsWorld(self) -> Optional[Bounds]:
+        """Put what the avatar walks on into :attr:`physics`; its bounds, or None.
 
-        The default cooks one static collision mesh out of this context's
-        scenegraph, honouring OMI physics bodies where the document carries
-        them.  A context with a world of its own -- a terrain heightfield, a
-        level format that ships its collision -- overrides this and never
-        touches ``sg``.
+        The default makes the scenegraph's shapes the physics service's
+        scenery, a static body each (honouring OMI physics bodies and X3D
+        ``Collision`` groups as the scenery does), waits up to
+        :attr:`physicsCookWait` seconds for their triangles to be cooked, and
+        answers the corners ``(low, high)`` of the scene's triangles.  The
+        service is switched on where it was off, and a definition whose
+        ``colliders`` is ``none`` becomes ``scene``; one of ``explicit``
+        keeps the bodies the application added and no others.  The zones
+        carrying gravity are placed in the world, as the render pass places
+        them each frame afterwards.
+
+        A context with bodies of its own -- a terrain height field, a level
+        format that ships its collision -- overrides this, adds them to
+        :attr:`physics` and answers their bounds, and never touches ``sg``.
         """
         scene = getattr(self, 'sg', None)
         if scene is None:
             return None
-        from OpenGLContext.physics.gltf_world import collision_world_from_scene
-        world, bounds = collision_world_from_scene(scene)
+        from OpenGLContext.physics.gltf_world import scene_bounds  # noqa: PLC0415 every physics import waits for walking
+
+        bounds = scene_bounds(scene)
         if bounds is None:
             return None
-        return world, bounds
+        physics = self.physics
+        definition = physics.definition
+        if definition.colliders == 'none' or not definition.enabled:
+            physics.set_config(definition.replaced(
+                enabled=True,
+                colliders='scene' if definition.colliders == 'none' else definition.colliders))
+        physics.scenery_changed(scene, object())
+        if not physics.wait_cooked(self.physicsCookWait):
+            log.warning('the scene is still being cooked after %.0f s; walking starts without it',
+                        self.physicsCookWait)
+        from OpenGLContext.physics.zones import scene_zones  # noqa: PLC0415 every physics import waits for walking
+
+        physics.zones_changed(scene_zones(scene))
+        return bounds
 
     @staticmethod
     def physicsAvatarScale(lo: Any, hi: Any) -> float:
@@ -199,7 +307,7 @@ class PhysicsWalkMixin(object):
         radius, eye height, step height) sizes it instead, in the world's own
         units.  Override to make the avatar something else.
         """
-        from omi_physics.character import CharacterCapabilities
+        from OpenGLContext.physics.types import CharacterCapabilities
         avatar = self.navigationAvatar
         if avatar is not None:
             radius, eye, step = (float(value) for value in avatar)
@@ -232,33 +340,61 @@ class PhysicsWalkMixin(object):
         else:
             definition.navigation = Navigation(modes=walk_fly_modes(scale))
 
+    def physicsAvatar(self, capabilities: 'CharacterCapabilities', scale: float,
+                      lo: Any, hi: Any) -> 'Character':
+        """The avatar's :class:`~OpenGLContext.physics.character.Character` in :attr:`physics`.
+
+        Made standing at the middle of the floor of the box ``lo`` to ``hi``,
+        falling at :attr:`physicsGravity` times ``scale``, and stepped by its
+        owner until walking starts (:meth:`onPhysicsModeChanged`).
+        """
+        middle = ((lo[0] + hi[0]) / 2.0, float(lo[1]), (lo[2] + hi[2]) / 2.0)
+        avatar = self.physics.add_character(
+            capabilities=capabilities, position=middle, gravity=self.physicsGravity * scale)
+        avatar.framed = False
+        return avatar
+
     def ensurePhysicsWorld(self) -> bool:
-        """Build the avatar and its world once.  False if nothing is walkable."""
+        """Build the avatar and its world once.
+
+        False if nothing is walkable, and False, with a warning logged, where
+        the physics engine is not available.
+        """
         if self.physicsPlatform is not None:
             return True
-        built = self.buildPhysicsWorld()
-        if built is None:
+        from OpenGLContext.physics.engine import EngineUnavailable  # noqa: PLC0415 imports the physics package
+
+        try:
+            bounds = self.buildPhysicsWorld()
+        except EngineUnavailable as error:
+            log.warning('walking is not available: %s', error)
             return False
-        world, (lo, hi) = built
+        if bounds is None:
+            return False
+        lo, hi = bounds
         scale = self.physicsAvatarScale(lo, hi)
         capabilities = self.characterCapabilities(scale)
         from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
-        from OpenGLContext.physics.gltf_world import collision_groups
-        groups = collision_groups(world)
-        # A world with X3D Collision groups gives the avatar a body, whose
-        # touches with the groups' geometry are their collideTime.
-        self.physicsPlatform = PhysicsViewPlatform(
-            world, capabilities, yaw=self.physicsYaw,
-            gravity=self.physicsGravity * scale, body=bool(groups))
-        if groups:
-            self.watchCollisionGroups(world, groups)
-        from OpenGLContext.physics.zones import GravityZones
-        self.gravityZones = GravityZones(world)
+        avatar = self.physicsAvatar(capabilities, scale, lo, hi)
+        self.physicsPlatform = PhysicsViewPlatform.over(avatar, yaw=self.physicsYaw)
+        self.watchCollisionGroups()
         self.applyMovementModes(scale)
         self.spawnAvatar(lo, hi, capabilities, self.physicsSpawnViewpoints())
         self._physicsLast = self.physicsNow()
+        self._walkHook()
         self.physicsPlatform.apply(self)
         return True
+
+    def forgetPhysicsWorld(self) -> None:
+        """Take the avatar out of the world, for a scene that replaces the one it walked.
+
+        The next :meth:`enablePhysics` builds a new one.
+        """
+        platform = self.physicsPlatform
+        self.physicsPlatform = None
+        self.physicsCollisionReporter = None
+        if platform is not None and platform.managed is not None:
+            platform.managed.remove()
 
     #: The bound NavigationInfo's avatarSize (radius, eye height, step height),
     #: set by :func:`OpenGLContext.move.navigationinfo.apply`; None for none.
@@ -266,15 +402,31 @@ class PhysicsWalkMixin(object):
     #: Sends the X3D Collision groups' events from the avatar's touches, or None.
     physicsCollisionReporter: Optional['CollisionReporter'] = None
 
-    def watchCollisionGroups(self, world: 'PhysicsWorld', groups: Any) -> None:
-        """Send the Collision groups' collideTime and isActive as the avatar touches them"""
-        from OpenGLContext.events import systemtime
-        from OpenGLContext.physics.x3dcollision import CollisionReporter
-        assert self.physicsPlatform is not None, 'the avatar is built first'
-        reporter = CollisionReporter(groups, self.physicsPlatform.character.body)
-        self.physicsCollisionReporter = reporter
-        world.add_contact_listener(
-            lambda event: reporter.heard(event, systemtime.systemTime()))
+    def watchCollisionGroups(self) -> None:
+        """Send the Collision groups' collideTime and isActive as the avatar touches them
+
+        Where the scenery holds bodies inside enabled X3D ``Collision`` groups,
+        :attr:`physicsCollisionReporter` is made for them; each step then asks
+        which of them the avatar's capsule touches (:meth:`reportCollisions`).
+        """
+        from OpenGLContext.physics.x3dcollision import CollisionReporter, collision_group_bodies  # noqa: PLC0415 every physics import waits for walking
+
+        scene = getattr(self, 'sg', None)
+        platform = self.physicsPlatform
+        if scene is None or platform is None or platform.managed is None:
+            return
+        groups = collision_group_bodies(self.physics, scene)
+        self.physicsCollisionReporter = (
+            CollisionReporter(groups, platform.managed) if groups else None)
+
+    def reportCollisions(self) -> None:
+        """Tell the Collision groups the avatar touches now, at the scene's time."""
+        reporter = self.physicsCollisionReporter
+        if reporter is None:
+            return
+        from OpenGLContext.events import systemtime  # noqa: PLC0415 every physics import waits for walking
+
+        reporter.update(systemtime.systemTime())
 
     # -- switching --------------------------------------------------------
     def enablePhysics(self, on: bool = True) -> bool:
@@ -324,7 +476,15 @@ class PhysicsWalkMixin(object):
         self.enablePhysics(not self.physicsWalking)
 
     def onPhysicsModeChanged(self) -> None:
-        """Called after walking is switched on or off.  A hook; does nothing here."""
+        """Have the service step the avatar in the frame while the context walks.
+
+        Only where the render queue steps the avatar (:meth:`_walkHook`); a
+        host that calls :meth:`stepPhysics` steps it itself.  In free-fly the
+        avatar stays where it was left.
+        """
+        platform = self.physicsPlatform
+        if platform is not None and platform.managed is not None:
+            platform.managed.framed = bool(self.physicsWalking and self._walkHooked)
 
     def getNavigationPlatform(self) -> Any:
         """What the declared movement modes drive.
@@ -395,11 +555,16 @@ class PhysicsWalkMixin(object):
         find a legal place to stand in the meantime.
 
         The middle of a world is often solid -- a statue, thick walls -- so
-        several footprint positions are tried and scored by how open they are,
-        preferring the most open and, among equals, the most central.  Authored
-        viewpoints are tried first, projected straight down to the floor: they
-        are elevated as often as not, so only their *heading* is borrowed
-        (:meth:`moveAvatarToViewpoint` is how you actually go to one).
+        several footprint positions are tried.  At each, the avatar stands on
+        the lowest floor no steeper than its slope limit (:func:`floors_below`)
+        where its capsule overlaps nothing and :data:`HEADROOM` standing
+        heights over it are clear, the ground floor of a building rather than
+        its roof; among the positions with one, the most open
+        (:func:`clearance`) wins and, among equals, the most central.  Authored viewpoints are tried first, projected
+        straight down to the floor: they are elevated as often as not, so only
+        their *heading* is borrowed (:meth:`moveAvatarToViewpoint` is how you
+        actually go to one).  With no position counting, the avatar stands at
+        the middle.
         """
         platform = self.physicsPlatform
         if platform is None:
@@ -418,31 +583,52 @@ class PhysicsWalkMixin(object):
                 for fz in np.linspace(-fraction, fraction, 5):
                     candidates.append((cx + fx * (hi[0] - lo[0]),
                                        cz + fz * (hi[2] - lo[2])))
-        y = lo[1] + capabilities.standHeight
-        best: Any = None                    # ((clearance, -distance), x, z)
+        physics = self.physics
+        skip = platform.body
+        half = 0.5 * float(capabilities.standHeight)
+        capsule = _capsule(capabilities)
+        lift = 0.5 * float(capabilities.stepHeight)
+        headroom = HEADROOM * float(capabilities.standHeight)
+        top = float(hi[1]) + float(capabilities.standHeight)
+        bottom = float(lo[1]) - float(capabilities.standHeight)
+        best: Any = None                    # ((clearance, -distance), x, floor, z)
         for x, z in candidates:
-            platform.bind((x, y, z))
-            character = platform.character
-            if not character.grounded or character.stuck or character.flying:
+            standing = [floor for floor in floors_below(physics, x, z, top, bottom,
+                                                        capabilities, skip=skip)
+                        if not physics.overlap(capsule, (x, floor + half + lift, z), skip=skip)
+                        and physics.raycast((x, floor + PASS, z), (0.0, 1.0, 0.0), headroom,
+                                            skip=skip) is None]
+            if not standing:
                 continue
-            clear = _clearance(character, capabilities.radius)
+            floor = standing[-1]            # the lowest storey
+            centre = (x, floor + half, z)
+            clear = clearance(physics, centre, capabilities, skip=skip)
             score = (clear, -((x - cx) ** 2 + (z - cz) ** 2))
             if best is None or score > best[0]:
-                best = (score, x, z)
+                best = (score, x, floor, z)
             if clear == 4:                  # fully open: good enough
-                return
+                break
         if best is not None:
-            platform.bind((best[1], y, best[2]))
+            platform.bind((best[1], best[2] + half, best[3]))
         else:
-            platform.bind((cx, y, cz))
+            platform.bind((cx, float(lo[1]) + float(capabilities.standHeight), cz))
+
+    def physicsHasFloor(self) -> bool:
+        """Whether the avatar has a floor under it it can stand on (:func:`floor_below`)."""
+        platform = self.physicsPlatform
+        if platform is None or platform.managed is None:
+            return False
+        avatar = platform.managed
+        return floor_below(self.physics, avatar.position + (0.0, 0.5 * avatar.height, 0.0),
+                           avatar.capabilities, skip=avatar.body) is not None
 
     def moveAvatarToViewpoint(self, viewpoint: Any) -> None:
         """Put the avatar where a ``Viewpoint`` looks from, facing where it faces.
 
-        Safe-bound, so a viewpoint sunk into geometry pushes out rather than
-        wedging; and an elevated one starts the avatar flying, because there is
-        nothing under an aerial camera to stand on and falling out of the shot
-        is not what asking for that view meant.
+        Seated on the floor under it, so a viewpoint below standing height
+        stands the avatar up; and an elevated one starts the avatar flying,
+        because there is nothing under an aerial camera to stand on and falling
+        out of the shot is not what asking for that view meant.
         """
         platform = self.physicsPlatform
         if platform is None:
@@ -450,7 +636,7 @@ class PhysicsWalkMixin(object):
         platform.yaw = yaw_from_orientation(viewpoint.orientation)
         platform.pitch = 0.0
         platform.bind_eye(tuple(viewpoint.position))
-        platform.set_fly(not platform.character.grounded)
+        platform.set_fly(not self.physicsHasFloor())
 
     def OnViewpointBound(self, viewpoint: Any) -> None:
         """Stand the avatar where a newly bound viewpoint put the camera
@@ -470,7 +656,7 @@ class PhysicsWalkMixin(object):
     def syncAvatarToCamera(self, heading: bool = True,
                            eye: Optional[Sequence[float]] = None,
                            pitch: bool = False) -> None:
-        """Seat the avatar at the current free-fly camera pose, safe-bound.
+        """Seat the avatar at the current free-fly camera pose, on the floor under it.
 
         Flying is left on when there is nothing underfoot, so a camera in mid
         air does not drop the moment the avatar takes over; a caller that means
@@ -494,7 +680,7 @@ class PhysicsWalkMixin(object):
         platform.pitch = self.pitchFromPlatform() if pitch else 0.0
         platform.bind_eye(tuple(self.platform.position[:3]) if eye is None
                           else tuple(eye))
-        platform.set_fly(not platform.character.grounded)
+        platform.set_fly(not self.physicsHasFloor())
         self._physicsLast = self.physicsNow()
 
     def yawFromPlatform(self) -> float:
@@ -508,48 +694,81 @@ class PhysicsWalkMixin(object):
         return float(-np.arcsin(np.clip(forward[1], -1.0, 1.0)))
 
     # -- the frame --------------------------------------------------------
+    def _walkHook(self) -> None:
+        """Take the frame where the host has a render queue: input before the world steps, the camera after.
+
+        The render queue runs these around the physics service's own frame,
+        which was registered when :attr:`physics` was first asked for.
+        """
+        if self._walkHooked:
+            return
+        queue = getattr(self, 'renderQueue', None)
+        if queue is None:
+            return
+        from OpenGLContext.events.framestep import FrameStep  # noqa: PLC0415 every physics import waits for walking
+
+        self._walkHooked = True
+        self._walkSteps = FrameStep(longest=float(self.physicsMaxStep))
+        queue.on_frame(self._walkInput, first=True)
+        queue.on_frame(self._walkCamera)
+        self.onPhysicsModeChanged()
+
+    def _walkMovesToAViewpoint(self) -> bool:
+        from OpenGLContext.passes import viewpointbinding  # noqa: PLC0415 cycle: passes import move
+
+        return viewpointbinding.in_transition(self)
+
+    def _walkInput(self) -> None:
+        """Give the declared movement mode the frame, so the avatar's move is set before it steps."""
+        from OpenGLContext.events import systemtime  # noqa: PLC0415 every physics import waits for walking
+
+        assert self._walkSteps is not None, 'made with the hook'
+        dt = self._walkSteps.step(systemtime.systemTime())
+        if (not self.physicsWalking or self.physicsPlatform is None
+                or self._walkMovesToAViewpoint()):
+            return
+        self.updateNavigation(dt)
+
+    def _walkCamera(self) -> None:
+        """Put the camera at the avatar's eye once the world has stepped it."""
+        if (not self.physicsWalking or self.physicsPlatform is None
+                or self._walkMovesToAViewpoint()):
+            return
+        self.resolvePhysicsStep()
+        self.reportCollisions()
+        self.physicsPlatform.apply(self)
+
     def stepPhysics(self, dt: Optional[float] = None) -> None:
         """Advance the avatar one frame and put the camera where it ended up.
 
-        ``dt`` defaults to the wall-clock since the last step, clamped to
-        :attr:`physicsMaxStep`. While the camera is in transition to a newly
+        For a host without a render queue, which steps the avatar itself: the
+        avatar takes ``dt`` seconds, advancing the world with it.  ``dt``
+        defaults to the wall-clock since the last step, clamped to
+        :attr:`physicsMaxStep`.  Where the render queue steps the avatar, this
+        asks for the next frame.  While the camera is in transition to a newly
         bound viewpoint the avatar is not stepped: it stands where the
         transition ends (:meth:`OnViewpointBound`).
         """
         platform = self.physicsPlatform
         if platform is None:
             return
+        if self._walkHooked:
+            self.triggerRedraw(1)
+            return
         now = self.physicsNow()
-        from OpenGLContext.passes import viewpointbinding  # noqa: PLC0415 cycle: passes import move
-        if viewpointbinding.in_transition(self):
+        if self._walkMovesToAViewpoint():
             # The transition is moving the camera to where the avatar stands
             self._physicsLast = now
             return
         if dt is None:
             dt = min(now - self._physicsLast, self.physicsMaxStep)
         self._physicsLast = now
-        self.followZoneGravity()
         self.updateNavigation(dt)
         platform.update(dt)
         self.resolvePhysicsStep()
+        self.reportCollisions()
         platform.apply(self)
         self.triggerRedraw(1)
-
-    def followZoneGravity(self) -> None:
-        """Put the world's zone gravity where the render pass placed the zones.
-
-        The pass drawing this context places every zone once a frame; a zone
-        that moved, or whose gravity was edited, is followed from the next
-        step. Before the first frame, and where no pass draws this context,
-        the world keeps the volumes it was built with.
-        """
-        keeper = self.gravityZones
-        if keeper is None:
-            return
-        from OpenGLContext.passes import renderpass
-        zones = getattr(renderpass.current_pass(), 'zones', None)
-        if zones is not None:
-            keeper.follow(zones)
 
     def resolvePhysicsStep(self) -> None:
         """Correct the avatar's pose once the character has solved its own step.

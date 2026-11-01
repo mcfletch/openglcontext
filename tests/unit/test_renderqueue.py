@@ -141,3 +141,67 @@ class TestBeforeEachRun:
         queue.call(lambda: None)
         queue.run()
         assert runs == [0, 1]
+
+
+def test_a_function_added_first_runs_before_those_already_added():
+    queue = RenderQueue()
+    order = []
+    queue.before_run(lambda: order.append('late'))
+    queue.before_run(lambda: order.append('early'), first=True)
+    queue.run()
+    assert order == ['early', 'late']
+
+
+def test_a_function_removed_from_before_run_is_no_longer_called():
+    queue = RenderQueue()
+    called = []
+
+    def hook():
+        called.append(1)
+
+    queue.before_run(hook)
+    queue.run()
+    queue.remove_before_run(hook)
+    queue.remove_before_run(hook)
+    queue.run()
+    assert called == [1]
+
+
+class TestTheFramesWork:
+    def test_frame_calls_what_on_frame_registered_and_run_does_not(self):
+        queue = RenderQueue()
+        order = []
+        queue.on_frame(lambda: order.append('camera'))
+        queue.on_frame(lambda: order.append('input'), first=True)
+        queue.run()
+        assert order == []
+        queue.frame()
+        assert order == ['input', 'camera']
+
+    def test_a_function_removed_from_the_frame_is_no_longer_called(self):
+        queue = RenderQueue()
+        called = []
+
+        def hook():
+            called.append(1)
+
+        queue.on_frame(hook)
+        queue.frame()
+        queue.remove_on_frame(hook)
+        queue.remove_on_frame(hook)
+        queue.frame()
+        assert called == [1]
+
+    def test_a_function_may_remove_itself_while_the_frame_runs(self):
+        queue = RenderQueue()
+        called = []
+
+        def once():
+            called.append('once')
+            queue.remove_on_frame(once)
+
+        queue.on_frame(once)
+        queue.on_frame(lambda: called.append('after'))
+        queue.frame()
+        queue.frame()
+        assert called == ['once', 'after', 'after']

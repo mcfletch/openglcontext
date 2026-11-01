@@ -1,0 +1,29 @@
+#VRML V2.0 utf8
+# META "title" "ColorInterpolator"
+# META "description" "Blends a colour through the keyValue colours as set_fraction passes the key fractions; the blend is made in HSV, so it passes through the hues between."
+# META "sample:frames" "59"
+
+Viewpoint {
+  orientation -0.6008 0.7867 0.1418 0.583
+  position 1.8 1.5 3.6
+}
+DEF Clock TimeSensor {
+  cycleInterval 4
+  loop TRUE
+}
+DEF Shift ColorInterpolator {
+  key [ 0 0.5 1 ]
+  keyValue [ 1 0.15 0.1, 0.15 0.9 0.2, 0.15 0.2 1 ]
+}
+Shape {
+  appearance Appearance {
+    material DEF Skin Material {
+      diffuseColor 1 0.15 0.1
+    }
+  }
+  geometry Sphere {
+    radius 1.2
+  }
+}
+ROUTE Clock.fraction_changed TO Shift.set_fraction
+ROUTE Shift.value_changed TO Skin.set_diffuseColor

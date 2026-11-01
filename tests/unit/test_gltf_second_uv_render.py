@@ -9,8 +9,7 @@ import io
 
 import pytest
 
-pytest.importorskip("pygltflib")
-PIL = pytest.importorskip("PIL")
+import PIL
 import numpy as np
 from PIL import Image
 from pygltflib import (

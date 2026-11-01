@@ -10,8 +10,8 @@ import struct
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
-PIL = pytest.importorskip("PIL")
+import pygltflib
+import PIL
 from PIL import Image
 from pygltflib import (
     GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,

@@ -58,7 +58,10 @@ if TYPE_CHECKING:
     from OpenGLContext.framecounter import FrameCounter
     from OpenGLContext.events.renderqueue import RenderQueue
     from OpenGLContext.loaders.sceneloader import SceneLoader
+    from OpenGLContext.audio.manager import Audio
+    from OpenGLContext.events.animations import Animated, Animations
     from OpenGLContext.looptrace import LoopTrace
+    from OpenGLContext.physics.service import Physics
     from OpenGLContext.multiview.views import View, ViewLayout
     from OpenGLContext.stalltrace import StallJournal
     from OpenGLContext.telemetry.record import ReplaySession, SessionRecording
@@ -107,6 +110,9 @@ def _distanceBetween(first: Point, second: Point) -> float:
 #: be treated as part of the scene, as a multiple of its radius.  Generous: what
 #: this is for is rejecting the far plane, which is an order of magnitude out.
 EXAMINE_PICK_REACH = 1.5
+#: The exit status of a program :meth:`Context.ContextMainLoop` ran when Ctrl-C
+#: ended it: 128 plus SIGINT's number, as a shell reports an interrupted program.
+INTERRUPTED_EXIT_STATUS = 130
 from OpenGLContext.contextconfig import ContextConfigMixin
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
@@ -116,6 +122,7 @@ from OpenGLContext.ui.screen import ScreenMixin
 from OpenGLContext.vrmlcontext import VRMLSceneMixin
 from OpenGLContext import windowsystem as _windowsystem
 from OpenGLContext.events.loadwait import DEFAULT_LIMIT, LoadWait
+from OpenGLContext.physics.callbacks import physics_callback as _physics_callback
 
 if TYPE_CHECKING:
     from OpenGLContext.windowsystem import WindowSystem
@@ -360,6 +367,15 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: the choice to the definition, and thence to
     #: :func:`OpenGLContext.windowsystem.choose`.
     windowSystemName: ClassVar[str | None] = None
+    #: Whether the frame steps the physics service (:attr:`physics`) by the time
+    #: it took. A game that steps its world on a clock of its own, or only while
+    #: it is not paused, sets this false and calls
+    #: :meth:`~OpenGLContext.physics.service.Physics.frame` itself.
+    stepsPhysics: ClassVar[bool] = True
+    #: The identity of the thread that draws this context, set when its window
+    #: opens; the physics and audio services belong to it whichever thread
+    #: first asks for them. None before then, which names the asking thread.
+    _renderThread: int | None = None
 
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration
@@ -732,8 +748,8 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         from OpenGLContext import contextdefinition
 
-        declared = definition is None
-        if declared:
+        passed = definition is not None
+        if not passed:
             definition = cls.contextDefinition
             if definition is not None:
                 definition = definition.copy()
@@ -755,12 +771,12 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                 # which fails at the first fixed-function call it was asked for.
                 definition.version = contextdefinition.version_for_profile(
                     definition.profile)
-        if declared and cls.profile and not _fieldIsSet(definition, 'profile'):
+        if not passed and cls.profile and not _fieldIsSet(definition, 'profile'):
             definition.profile = cls.profile
             if not _fieldIsSet(definition, 'version'):
                 definition.version = contextdefinition.version_for_profile(cls.profile)
         callerNamedOne = 'windowsystem' in named or (
-            not declared and _fieldIsSet(definition, 'windowsystem'))
+            passed and _fieldIsSet(definition, 'windowsystem'))
         if cls.windowSystemName and not callerNamedOne:
             # Over the class's own declaration, but under what the caller
             # passed: a program that asked for PygameContext meant pygame,
@@ -1020,6 +1036,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if threading:
             contextThread = threading.current_thread()
             contextThread.name = "GUIThread"
+            self._renderThread = threading.get_ident()
         self.setupScenegraphLock()
         self.setupRedrawRequest()
 
@@ -1152,6 +1169,205 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                 renderoptions.env_number_once('OPENGLCONTEXT_LOAD_WAIT', DEFAULT_LIMIT))
         return wait.pending(loading, time.monotonic())
 
+    @property
+    def physics(self) -> Physics:
+        """The rigid-body world of this context, made on first use.
+
+        It steps itself, on a thread of its own or in the frame, and is closed
+        with the window. A context that never mentions it makes none. See
+        :class:`~OpenGLContext.physics.service.Physics`.
+        """
+        found = self.__dict__.get('_physics')
+        if found is None:
+            found = self.__dict__['_physics'] = self._makePhysics()
+        return cast('Physics', found)
+
+    def _makePhysics(self) -> Physics:
+        """Make the physics service and have the render queue frame it.
+
+        A capture or a recorded session runs the world inline, so the world is
+        a function of the clock and of what the game commanded, and a recorded
+        session writes the events its handlers hear to the journal.
+        """
+        from OpenGLContext.events.framestep import FrameStep
+        from OpenGLContext.physics.service import Physics
+        from OpenGLContext.physics.settings import definition_for
+
+        definition = definition_for(self)
+        if ((self._captureClock is not None or self.telemetry is not None)
+                and definition.mode != 'inline'):
+            definition = definition.replaced(mode='inline')
+        request = getattr(self, 'redrawRequest', None)
+        service = Physics(definition, wake=None if request is None else request.set,
+                          mark=self.mark, recording=lambda: self.telemetry is not None,
+                          audio=lambda: self.audio, mount=self._mountOverlay,
+                          render_thread=self._renderThread, scene=self.getSceneGraph)
+        service.pin_inline(self._captureClock is not None or self.telemetry is not None)
+        self.__dict__['_physicsSteps'] = FrameStep(longest=float(definition.maxCatchUp))
+        queue = getattr(self, 'renderQueue', None)
+        if queue is not None:
+            queue.on_frame(self._framePhysics)
+        return service
+
+    def _mountOverlay(self, node: Any, on: bool) -> None:
+        """Put ``node`` into the scene this context draws, once, or take it out.
+
+        A node mounted in a scene the context no longer draws is moved to the
+        one it draws now.
+        """
+        mounted = self.__dict__.setdefault('_overlayScenes', weakref.WeakKeyDictionary())
+        scene = self.getSceneGraph() if on else None
+        previous = mounted.get(node)
+        if previous is not None and previous is scene and node in scene.children:
+            return
+        mounted.pop(node, None)
+        if previous is not None and node in previous.children:
+            previous.children.remove(node)
+        if scene is not None:
+            scene.children.append(node)
+            mounted[node] = scene
+
+    def _framePhysics(self) -> None:
+        """Give the physics service its share of the frame, after ``OnIdle`` and before the draw."""
+        service = self.__dict__.get('_physics')
+        if service is None or not self.stepsPhysics:
+            return
+        from OpenGLContext.events import systemtime  # noqa: PLC0415 only a context with physics reads the clock
+
+        steps = self.__dict__['_physicsSteps']
+        try:
+            moving = service.frame(steps.step(systemtime.systemTime()))
+        except Exception as error:  # noqa: BLE001 the frame is drawn whatever physics did
+            signature = (type(error), str(error))
+            if self.__dict__.get('_physicsFailure') != signature:
+                self.__dict__['_physicsFailure'] = signature
+                log.exception('the physics frame failed')
+            return
+        if moving:
+            self.triggerRedraw(1)
+
+    @property
+    def audio(self) -> Audio:
+        """The sounds of this context, made on first use.
+
+        ``context.audio.play('thud.ogg')`` plays a sound from any thread. The
+        player's switch, volume and voice budget are ``contextDefinition.audio``.
+        See :class:`~OpenGLContext.audio.manager.Audio`.
+        """
+        found = self.__dict__.get('_audio')
+        if found is None:
+            found = self.__dict__['_audio'] = self._makeAudio()
+        return cast('Audio', found)
+
+    def _makeAudio(self) -> Audio:
+        from OpenGLContext.audio.manager import Audio
+
+        service = Audio(self, render_thread=self._renderThread)
+        queue = getattr(self, 'renderQueue', None)
+        if queue is not None:
+            queue.on_frame(self._frameAudio)
+        return service
+
+    def _frameAudio(self) -> None:
+        service = self.__dict__.get('_audio')
+        if service is not None:
+            service.frame()
+
+    def animate(self, thing: Any) -> Animated:
+        """Step ``thing`` once a frame on the engine clock, and draw while it runs.
+
+        ``thing`` is an object with ``update(dt)``, such as a
+        :class:`~OpenGLContext.character.model.CharacterModel`, or a function of
+        the step in seconds. Returns the
+        :class:`~OpenGLContext.events.animations.Animated` whose ``stop()``
+        ends it. See :class:`~OpenGLContext.events.animations.Animations`.
+        """
+        return self._scheduler().animate(thing)
+
+    def after(self, seconds: float, function: Callable[[], Any]) -> Animated:
+        """Call ``function()`` once ``seconds`` of the engine clock have passed.
+
+        Returns the :class:`~OpenGLContext.events.animations.Animated` whose
+        ``stop()`` cancels the call.
+        """
+        return self._scheduler().after(seconds, function)
+
+    def _scheduler(self) -> Animations:
+        """The context's :class:`~OpenGLContext.events.animations.Animations`, made on first use."""
+        found = self.__dict__.get('_animating')
+        if found is None:
+            from OpenGLContext.events.animations import Animations  # noqa: PLC0415 only an animated context needs it
+
+            found = self.__dict__['_animating'] = Animations()
+            queue = getattr(self, 'renderQueue', None)
+            if queue is not None:
+                queue.on_frame(self._frameAnimations)
+        return cast('Animations', found)
+
+    def _frameAnimations(self) -> None:
+        """Step what :meth:`animate` was given, after ``OnIdle`` and before the draw."""
+        from OpenGLContext.events import systemtime  # noqa: PLC0415 only an animated context reads the clock
+
+        if self.__dict__['_animating'].frame(systemtime.systemTime()):
+            self.triggerRedraw(1)
+
+    def follow(self, character: Any, **options: Any) -> Any:
+        """Show ``character`` from behind, and have the movement keys move it.
+
+        The keys of a :class:`~OpenGLContext.move.thirdperson.FollowMode` move the
+        character relative to the camera, whose turn keys swing it round, and the
+        camera follows and keeps out of the scenery. ``distance`` and ``height``
+        place it, ``swing`` is the seconds it takes to come round behind the way
+        the character goes (0, the default, leaves that to the turn keys),
+        ``mode`` is a ``FollowMode`` of your own, and the other options
+        are the settings of :class:`~OpenGLContext.move.followcam.FollowCamera`.
+        Returns the :class:`~OpenGLContext.move.thirdperson.FollowController`.
+
+        ``view='eyes'`` puts the camera at the character's eyes instead, and
+        the keys of the walk and fly modes move it; ``yaw`` is the heading it
+        starts at and ``modes`` replaces those modes. That returns an
+        :class:`~OpenGLContext.move.firstperson.EyesController`. Either takes
+        the camera from the free-fly navigator, and :meth:`unfollow` gives it back.
+        """
+        view = options.pop('view', 'behind')
+        follower: Any
+        if view == 'behind':
+            from OpenGLContext.move.thirdperson import FollowController  # noqa: PLC0415 only a context that follows needs it
+
+            self.unfollow()
+            follower = FollowController(self, character, **options)
+        elif view == 'eyes':
+            from OpenGLContext.move.firstperson import EyesController  # noqa: PLC0415 only a context that follows needs it
+
+            self.unfollow()
+            follower = EyesController(self, character, **options)
+        else:
+            raise ValueError("view is 'behind' or 'eyes', not %r" % (view,))
+        self.__dict__['_follower'] = follower
+        follower.start()
+        return follower
+
+    def unfollow(self) -> None:
+        """Stop following a character; the movement keys go back to the navigation."""
+        follower = self.__dict__.pop('_follower', None)
+        if follower is not None:
+            follower.stop()
+
+    def closeServices(self) -> None:
+        """Stop the physics worker and close the audio, where a context made them."""
+        self.unfollow()
+        queue = getattr(self, 'renderQueue', None)
+        service = self.__dict__.pop('_physics', None)
+        if service is not None:
+            service.close()
+            if queue is not None:
+                queue.remove_on_frame(self._framePhysics)
+        sounds = self.__dict__.pop('_audio', None)
+        if sounds is not None:
+            sounds.close()
+            if queue is not None:
+                queue.remove_on_frame(self._frameAudio)
+
     def runRenderQueue(self) -> int:
         """Make the calls other threads have queued on :attr:`renderQueue`
 
@@ -1161,6 +1377,18 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         queue = getattr(self, 'renderQueue', None)
         return queue.run() if queue is not None else 0
+
+    def runFrameHooks(self) -> None:
+        """Do the frame's own work: physics, audio, animations and following cameras.
+
+        Called by the main loop once an iteration, on the render thread, after
+        :meth:`OnIdle` and before the draw, so an input :meth:`OnIdle` sets
+        moves the world in the same frame and the draw shows the poses that
+        step wrote. See :meth:`~OpenGLContext.events.renderqueue.RenderQueue.frame`.
+        """
+        queue = getattr(self, 'renderQueue', None)
+        if queue is not None:
+            queue.frame()
 
     def mark(self, name: str, /, **fields: Any) -> None:
         """Note something this application knows and the engine cannot
@@ -1245,7 +1473,9 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         from OpenGLContext import telemetry
 
         self.stopTelemetry()
-        return telemetry.start(self, path, **named)
+        session = telemetry.start(self, path, **named)
+        self._pinPhysics()
+        return session
 
     def stopTelemetry(self, reason: str = 'stopped') -> None:
         """Finish any recording or replay in progress"""
@@ -1256,6 +1486,13 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             except Exception:
                 log.debug('could not close the session recording', exc_info=True)
             self.telemetry = None
+            self._pinPhysics()
+
+    def _pinPhysics(self) -> None:
+        """Hold an existing physics world inline while a capture or a session record runs."""
+        service = self.__dict__.get('_physics')
+        if service is not None:
+            service.pin_inline(self._captureClock is not None or self.telemetry is not None)
 
     def tracePhase(self, name: str) -> AbstractContextManager[None]:
         """Charge the wrapped block to a named phase of the loop iteration
@@ -1420,13 +1657,21 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         (:meth:`OpenGLContext.windowsystem.WindowSystem.run`), since a toolkit
         that needs an application object before it can make a window has to
         make that first.
+
+        Ctrl-C (``KeyboardInterrupt``) ends the program with exit status 130,
+        the shell's status for an interrupted program, and no traceback.
+        :meth:`MainLoop` lets the interrupt propagate, for a program that
+        handles it itself.
         """
         definition = named.get('definition', args[0] if args else None)
         fields = {key: value for key, value in named.items()
                   if key not in ('definition', 'parent')}
         chosen = cls.chooseWindowSystem(cls.resolveDefinition(definition, **fields))
-        return _windowsystem.load(chosen).run(
-            cast('type[Context]', cls), *args, **named)
+        try:
+            return _windowsystem.load(chosen).run(
+                cast('type[Context]', cls), *args, **named)
+        except KeyboardInterrupt:
+            raise SystemExit(INTERRUPTED_EXIT_STATUS) from None
 
     def MainLoop(self) -> Any:
         """Run the window system's loop until the window is closed
@@ -1711,6 +1956,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         loader = getattr(self, 'sceneLoader', None)
         if loader is not None:
             loader.close()
+        self.closeServices()
         self.windowsystem.release()
 
     def pumpWindowEvents(self) -> bool:
@@ -2171,6 +2417,11 @@ class Context(OverlayStackMixin, ViewPlatformMixin, EventHandlerMixin,
     ``navigation`` says which modes it has.  It draws the window's one view;
     :class:`MultiViewContext` adds the views a navigation declares.
     """
+
+    #: Marks a handler method as one that runs on the physics thread:
+    #: ``@Context.physics_callback`` above its ``def``. A class body that
+    #: subclasses Context already has the name in scope, so this needs no import.
+    physics_callback = staticmethod(_physics_callback)
 
     def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
         """Send one key transition the window system did not report

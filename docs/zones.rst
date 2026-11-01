@@ -279,19 +279,17 @@ A ``ZoneGravity`` is an ``OMI_physics_gravity`` volume over the zone's shape:
 ``type`` ``directional`` (along ``direction``) or ``point`` (towards
 ``center``), both in the zone's own frame, with ``gravity`` in metres per
 second squared and ``replace`` and ``stop`` as the extension defines them.
-:func:`~OpenGLContext.physics.gltf_world.collision_world_from_scene` adds a
-volume for every such zone to the physics world it builds, and
-:func:`OpenGLContext.physics.zones.gravity_volumes` gives them to a world
-built another way. Both place the zones as the scene is when they are
-called, following the children a node draws: a ``Switch``'s chosen node and
-each of an LOD's levels.
+:func:`OpenGLContext.physics.zones.gravity_zones` turns placed zones into the
+service's ``GravityZone`` records, and
+:func:`~OpenGLContext.physics.zones.scene_zones` places the zones of a scene as
+it is when called, following the children a node draws: a ``Switch``'s chosen
+node and each of an LOD's levels.
 
-``GravityZones(world).follow(zones)`` keeps a world's zone volumes where the
-zones are: given the zones as placed now -- the render pass's ``zones`` each
-frame -- it replaces the world's zone volumes when a zone carrying gravity
-has moved, been edited, come or gone, and leaves volumes the application
-added itself. Walking (``PhysicsWalkMixin``) calls it every step with the
-zones of the pass drawing the context.
+``Physics.zones_changed(zones)``, which the render pass calls each frame with
+the zones as placed now, replaces the world's zone gravity when a zone carrying
+gravity has moved, been edited, come or gone, and leaves zones the application
+added itself (``add_gravity_zone``). Walking (``PhysicsWalkMixin``) gives it
+the scene's zones when the avatar is made.
 
 .. _zone-bake:
 

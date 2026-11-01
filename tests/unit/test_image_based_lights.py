@@ -6,7 +6,6 @@ import json
 import numpy as np
 import pytest
 
-pytest.importorskip('pygltflib')
 from PIL import Image
 
 from OpenGLContext.loaders.gltf import loader, textures

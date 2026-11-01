@@ -1,17 +1,22 @@
-"""Walking a landscape: an avatar on a height field, blocked by trunks, with
+"""Walking a landscape: an avatar on a height field, blocked by trunks and rocks, with
 camera-following content streamed as it moves.
 
 This is the terrain form of
-:class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin`, and it is the same
-capability with a different ground.  The avatar, the declared
-:class:`~OpenGLContext.move.modes.MovementMode` nodes and the keys that drive
-them are the ones every other program here uses -- so a landscape is walked with
-the same controls, the same settings screen and the same key-binding page as a
-glTF model or an arena map.  What differs is where the ground and the obstacles
-come from: a :class:`~OpenGLContext.scenegraph.terrain.HeightField` and a field
-of cylinders, resolved analytically, rather than a cooked collision mesh.  A
-landscape spanning kilometres would be millions of triangles as a mesh, and the
-height field answers the same question exactly and in constant time.
+:class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin`. The avatar, the
+declared :class:`~OpenGLContext.move.modes.MovementMode` nodes and the keys that
+drive them are the ones every other program here uses, so a landscape is walked
+with the same controls, the same settings screen and the same key-binding page as
+a glTF model or an arena map.
+
+The ground, the trunks and the rocks are bodies in the context's
+:attr:`~OpenGLContext.context.Context.physics` world
+(:class:`~OpenGLContext.physics.landscape.Landscape`): the ground is the height
+field the terrain node draws, answered from the field itself instead of from a
+mesh, the trunks are cylinders standing on it, and the rocks are made as the
+walker nears them and dropped as it leaves. The avatar is a
+:class:`~OpenGLContext.physics.character.Character` in that world, stepped by the
+service in the frame, so a rigid body added to the context lands on the ground,
+rolls against the trunks and is pushed by the walker.
 
 Mouse-look is the mode a landscape starts in; ``m`` cycles to the walk and fly
 modes, ``f`` flies, and ``g`` hands the camera back to the free-fly navigator.
@@ -22,41 +27,56 @@ Usage::
         def OnInit(self):
             ...
             self.init_walk(height_field, collider_pos=trunks, collider_radius=trunk_r)
+            self.add_collider_source(rocks.mounds_near)
             self.setupPhysics(enable=True)
             self.add_stream(10.0, self._refresh_grass)
 
-Without :meth:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin.setupPhysics`
-the free-fly navigator keeps the camera and the mix-in only holds it down: the
-viewer is snapped to the height field and pushed out of any collider it walked
-into, in :meth:`DoEventCascade` -- not ``OnDraw`` -- because the navigation step
-is applied *inside* ``OnDraw`` before the render, and clamping before that step
-lets a held key walk the camera straight through the ground.
+A standing walker asks for no frame: the service asks for one while the
+character moves, falls or has a move held, and the pose of the view is compared
+in :meth:`~TerrainWalkMixin.OnIdle` for the pointer turning it.
+
+Without :meth:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin.setupPhysics` the
+free-fly navigator keeps the camera and the mix-in only holds it down: the viewer
+is seated on the height field and pushed out of any collider it walked into, in
+:meth:`DoEventCascade` -- not ``OnDraw`` -- because the navigation step is applied
+*inside* ``OnDraw`` before the render, and clamping before that step lets a held
+key walk the camera straight through the ground.
 
 See [docs/terrain.rst](../../docs/terrain.rst#heightfield) and
 [docs/navigation.rst](../../docs/navigation.rst).
 """
+from __future__ import annotations
+
 import math
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
+from OpenGLContext.physics.landscape import Landscape, NearbyColliders
 
 if TYPE_CHECKING:
-    from omi_physics.character import CharacterCapabilities
+    from OpenGLContext.physics.character import Character
+    from OpenGLContext.physics.types import CharacterCapabilities
 
     class _WalkHost:
         """The host-context members the walk mixin relies on, supplied by the
-        composed interactive Context (its view platform and event/redraw hooks)."""
+        composed interactive Context (its view platform, physics and event hooks)."""
 
         platform: Any
+        physics: Any
+        renderQueue: Any
 
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def DoEventCascade(self) -> Any: ...
         def OnIdle(self, *arguments: Any) -> Any: ...
 else:
     _WalkHost = object
+
+#: What a collider source answers: ``(positions, radii)``, or with ``rims`` and
+#: ``tops`` as well for domes.
+ColliderAnswer = Callable[[float, float, float], tuple[Any, ...]]
 
 
 class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
@@ -65,97 +85,90 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
     Class attributes (override on the subclass as needed):
 
     :cvar eye_height: camera height above the ground, world units.
-    :cvar player_radius: body radius added to each collider radius.
-    :cvar collide_broadphase: half-width of the box pre-filter before the collision
-        sqrt (should exceed the largest collider radius + player_radius).
+    :cvar player_radius: the avatar's radius.
+    :cvar step_height: the tallest step the avatar climbs, in metres.
+    :cvar max_slope: the steepest ground the avatar stands on, in degrees.
+    :cvar collider_reach: how far from the avatar, in metres, the rocks of a
+        collider source are bodies in the world.
     """
     eye_height = 1.7
     player_radius = 0.25
-    collide_broadphase = 3.0
+    #: The tallest step the walker climbs, in metres: a rock whose surface rises this
+    #: much or less above the walker's feet is walked onto, and a taller one is a wall.
+    step_height = 0.5
+    #: The steepest ground the walker stands on, in degrees. A mountainside is walked,
+    #: not slid down.
+    max_slope = 75.0
+    #: How far from the walker, in metres, the rocks a source answers for are bodies
+    #: in the world. A body thrown further off than this meets the ground and the
+    #: trunks but not the rocks.
+    collider_reach = 24.0
+    #: The longest stretch of a free-fly camera's move seated at once, in metres. A
+    #: move longer than a trunk is wide is seated in pieces, or it would step over
+    #: the trunk: the end of it is clear on both sides.
+    collide_substep = 0.35
+    #: The most pieces a free-fly move is seated in; a faster move may pass a trunk.
+    collide_max_substeps = 8
+    #: How far from a point the rocks under it are asked for, in metres.
+    _SUPPORT_REACH = 3.0
+
+    #: The height field the walker is bound to.
+    _tw_hf: Any = None
+    #: The ground and trunks of that field as bodies.
+    _tw_landscape: Landscape | None = None
+    #: The walker in the physics world, once made.
+    _tw_character: Character | None = None
+    #: The callables the colliders that come and go are asked of, for the rocks the
+    #: avatar stands on.
+    _tw_sources: Sequence[ColliderAnswer] = ()
+    #: What the free-fly camera was last held down at, so a parked one is not seated
+    #: again and a move is seated from where the last one ended.
+    _tw_clamped: tuple[float, ...] | None = None
 
     def init_walk(self, height_field: Any, collider_pos: Any = None,
                   collider_radius: Any = None) -> None:
         """Bind the walker to a height field and (optional) cylinder colliders.
 
-        :param height_field: a :class:`HeightField` giving ground height.
+        The field becomes the ground of the context's physics world and each
+        collider a cylinder standing on it. The world makes no static body of
+        the scene's own shapes: the walker's colliders are the ones it is given.
+        Walking is the physics service's, so the service is switched on.
+
+        :param height_field: a ground, such as a :class:`HeightField`, that
+            answers ``sample(x, z)`` for arrays of metres.
         :param collider_pos: (N, 3) collider (trunk) world positions, or None.
-        :param collider_radius: (N,) collider radii (player_radius is added), or None
-            for a uniform player-radius collider.
+            A trunk stands on the ground under its x and z; its y is not read.
+        :param collider_radius: (N,) collider radii in metres, or None for posts of
+            the thinnest radius. The avatar's own radius is its capsule's.
         """
+        if self._tw_landscape is not None:
+            self._tw_landscape.remove()
+        physics = self.physics
+        if physics.definition.colliders == 'scene' or not physics.definition.enabled:
+            physics.set_config(physics.definition.replaced(colliders='explicit', enabled=True))
         self._tw_hf = height_field
-        self._tw_cpos = None if collider_pos is None else np.asarray(collider_pos, np.float32)
-        self._tw_crad = None if collider_radius is None else np.asarray(collider_radius, np.float32)
-        self._tw_streams: list[list] = []
-        self._tw_pose: Optional[tuple[float, ...]] = None
-        self._tw_build_grid()
-
-    def _tw_build_grid(self) -> None:
-        """Bucket the colliders into a uniform (x, z) hash grid for the collision
-        broadphase, so :meth:`_push_out` tests a handful of nearby colliders instead
-        of the whole field every substep.
-
-        The cell is at least the broadphase box half-width *and* the largest
-        collider's reach (its radius plus the player radius). At that size any
-        collider able to overlap the player at a query point lies in the point's own
-        cell or one of its eight neighbours, so a 3x3 lookup misses nothing and the
-        resolution result is identical to a full scan.
-
-        Sets ``_tw_grid`` to a dict mapping ``(cell_x, cell_z)`` to an ascending
-        array of collider indices, or ``None`` when there are no colliders.
-        """
-        self._tw_grid: Optional[dict[tuple, np.ndarray]] = None
-        self._tw_cell = 0.0
-        cpos = self._tw_cpos
-        if cpos is None or not len(cpos):
-            return
-        reach = self.player_radius
-        if self._tw_crad is not None and len(self._tw_crad):
-            reach += float(self._tw_crad.max())
-        cell = max(float(self.collide_broadphase), reach, 1e-6)
-        cx = np.floor(cpos[:, 0] / cell).astype(np.int64)
-        cz = np.floor(cpos[:, 2] / cell).astype(np.int64)
-        grid: dict[tuple, list[int]] = {}
-        for idx, key in enumerate(zip(cx.tolist(), cz.tolist(), strict=True)):
-            grid.setdefault(key, []).append(idx)
-        self._tw_grid = {k: np.asarray(v, np.intp) for k, v in grid.items()}
-        self._tw_cell = cell
+        self._tw_streams: list[list[Any]] = []
+        self._tw_pose: tuple[float, ...] | None = None
+        self._tw_clamped = None
+        self._tw_landscape = Landscape(physics, height_field, collider_pos, collider_radius)
+        self._tw_landscape.follow(self._tw_focus)
+        if self.physicsPlatform is not None:
+            self.standAvatarOnTerrain()
 
     def add_stream(self, step: float, fn: Callable[[float, float], Any],
-                   turn: Optional[float] = None) -> None:
+                   turn: float | None = None) -> None:
         """Call ``fn(x, z)`` whenever the viewer has moved ``step`` world units (L1),
         or (if ``turn`` is given) turned ``turn`` radians, since that streamer last
         fired. Fires once immediately on the first frame. Use ``turn`` for fields that
         depend on the *facing* (e.g. a view-frustum cull), not just the position."""
         self._tw_streams.append([float(step), None if turn is None else float(turn), None, fn])
 
-    #: Substep length for swept collision. A single move step must never exceed the
-    #: thinnest collider diameter or a fast walk tunnels straight through it, so the
-    #: displacement is split into steps no longer than this before resolving trunks.
-    collide_substep = 0.35
-    #: The tallest step the walker climbs, in metres: a mound whose surface rises this much or
-    #: less above the walker's feet is walked onto, and a taller one is a wall.
-    step_height = 0.5
-    #: Sources of colliders that come and go; see :meth:`add_collider_source`.
-    _tw_sources: Sequence[Callable[[float, float, float], tuple[Any, ...]]] = ()
-    #: Cap on swept substeps per frame, so a very fast fly doesn't run the collision
-    #: pass hundreds of times (beyond this a step may tunnel; acceptable at that speed).
-    collide_max_substeps = 8
-    #: Where the last resolved step ended, which is what the next one is swept
-    #: from.  None until something has walked, and again after a flight, since
-    #: there is no walked path to sweep along.
-    _tw_prev: Optional[tuple[float, float]] = None
-
-    def _tw_xz(self) -> tuple[float, float]:
-        p = self.platform.position
-        return float(p[0]), float(p[2])
-
-    def add_collider_source(self, source: Callable[[float, float, float],
-                                                    tuple[Any, ...]]) -> None:
+    def add_collider_source(self, source: ColliderAnswer) -> Any:
         """Add colliders that come and go as the walker moves, such as streamed rocks.
 
         ``source(x, z, reach)`` answers ``(positions, radii)``, an ``(N, 3)`` array and an
-        ``(N,)`` array in the form of ``init_walk``'s, for the colliders within ``reach``
-        metres of ``(x, z)``: cylinders the walker is pushed out of at any height.
+        ``(N,)`` array, for the colliders within ``reach`` metres of ``(x, z)``: cylinders
+        standing on their positions, which the walker is pushed out of at any height.
 
         It may answer ``(positions, radii, rims, tops)`` instead, with two more ``(N,)``
         arrays, for mounds the walker can climb. Each is a dome over a circle of its radius
@@ -164,20 +177,33 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         :attr:`step_height` above the walker's feet, stands on the surface, and is pushed out
         of the mound where it rises more.
 
-        It is asked at every collision step, so it should answer from what it has kept. It
-        may be called from the thread the avatar steps on.
+        The colliders within :attr:`collider_reach` metres of the walker are bodies in
+        the world (:class:`~OpenGLContext.physics.landscape.NearbyColliders`), and are
+        dropped as the walker leaves them. The source is asked once the walker has moved a
+        couple of metres, so it should answer from what it has kept, and it may be called
+        from the thread the world is stepped on.
+
+        Returns the :class:`~OpenGLContext.physics.sources.SourceHandle`, whose ``remove()``
+        takes the source and its bodies out.
         """
         self._tw_sources = [*self._tw_sources, source]
+        return self.physics.add_collider_source(
+            NearbyColliders(source, reach=self.collider_reach), focus=self._tw_focus)
 
-    def _tw_feet(self) -> float:
-        """The height of the walker's feet: the avatar's where there is one, the camera's
-        less :attr:`eye_height` where the free-fly camera is being held down."""
-        platform = getattr(self, 'physicsPlatform', None)
-        character = None if platform is None else getattr(platform, 'character', None)
-        if character is not None:
-            return float(character.position[1]) - float(character.height) * 0.5
-        return float(self.platform.position[1]) - float(self.eye_height)
+    def _tw_focus(self) -> Sequence[float] | np.ndarray:
+        """Where the colliders that come and go are kept about: the walker, else the camera."""
+        walker = self._tw_character
+        if walker is not None and walker.alive:
+            return walker.position
+        if self.platform is None:
+            return (0.0, 0.0, 0.0)
+        return tuple(float(v) for v in self.platform.position[:3])
 
+    def _tw_xz(self) -> tuple[float, float]:
+        p = self.platform.position
+        return float(p[0]), float(p[2])
+
+    # -- what is underfoot, apart from the ground ----------------------------
     @staticmethod
     def _mound_surface(distance: Any, positions: Any, radii: Any, rims: Any, tops: Any) -> Any:
         """The height of each mound's surface at ``distance`` from its middle: its rim at
@@ -193,7 +219,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         """The highest mound surface under ``(x, z)``, or -inf where there is none."""
         best = -math.inf
         for source in self._tw_sources:
-            answer = source(x, z, self.collide_broadphase)
+            answer = source(x, z, self._SUPPORT_REACH)
             if len(answer) < 4 or not len(answer[0]):
                 continue
             positions, radii, rims, tops = answer[:4]
@@ -202,185 +228,60 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
             best = max(best, float(self._mound_surface(distance, positions, radii, rims, tops).max()))
         return best
 
-    def _push_from_mounds(self, x: float, z: float, positions: Any, radii: Any, rims: Any,
-                          tops: Any) -> tuple[float, float]:
-        """Push (x, z) out of the mound it cannot climb: the one whose surface, at the
-        nearest point of the walker's body, rises more than :attr:`step_height` above the
-        feet, taking the deepest."""
-        positions = np.asarray(positions, np.float32)
-        if not len(positions):
-            return x, z
-        dx = x - positions[:, 0]
-        dz = z - positions[:, 2]
-        bp = self.collide_broadphase
-        near = (np.abs(dx) < bp) & (np.abs(dz) < bp)
-        if not np.any(near):
-            return x, z
-        dx, dz = dx[near], dz[near]
-        radius = np.asarray(radii, np.float32)[near]
-        distance = np.hypot(dx, dz)
-        surface = self._mound_surface(np.maximum(distance - self.player_radius, 0.0), positions[near],
-                                      radius, np.asarray(rims)[near], np.asarray(tops)[near])
-        blocked = surface - self._tw_feet() > self.step_height
-        if not blocked.any():
-            return x, z
-        depth = np.where(blocked, radius + self.player_radius - distance, -np.inf)
-        k = int(np.argmax(depth))
-        if distance[k] < 1e-4:
-            return x + float(radius[k] + self.player_radius), z
-        push = depth[k] / distance[k]
-        return x + float(dx[k] * push), z + float(dz[k] * push)
+    def _tw_ground(self, x: float, z: float) -> float:
+        """The height of the ground under ``(x, z)``, the mounds on it counted."""
+        return max(float(self._tw_hf.height_at(x, z)), self._tw_support(x, z))
 
-    def _push_from(self, x: float, z: float, positions: Any, radii: Any) -> tuple[float, float]:
-        """Push (x, z) out of the deepest of these colliders it lies inside."""
-        positions = np.asarray(positions, np.float32)
-        if not len(positions):
-            return x, z
-        dx = x - positions[:, 0]
-        dz = z - positions[:, 2]
-        bp = self.collide_broadphase
-        near = (np.abs(dx) < bp) & (np.abs(dz) < bp)
-        if not np.any(near):
-            return x, z
-        dx, dz = dx[near], dz[near]
-        r = np.asarray(radii, np.float32)[near] + self.player_radius
-        d2 = dx * dx + dz * dz
-        k = int(np.argmax(r * r - d2))
-        if r[k] * r[k] > d2[k]:
-            d = math.sqrt(d2[k])
-            if d < 1e-4:
-                x += r[k]
-            else:
-                push = (r[k] - d) / d
-                x += dx[k] * push
-                z += dz[k] * push
-        return x, z
-
-    def _push_out(self, x: float, z: float) -> tuple[float, float]:
-        """Push (x, z) out of the deepest collider it lies inside (one resolve).
-
-        The fixed colliders first, then each source of colliders that come and go.
-        """
-        x, z = self._push_out_fixed(x, z)
-        for source in self._tw_sources:
-            answer = source(x, z, self.collide_broadphase)
-            if len(answer) >= 4:
-                x, z = self._push_from_mounds(x, z, *answer[:4])
-            else:
-                x, z = self._push_from(x, z, *answer[:2])
-        return x, z
-
-    def _push_out_fixed(self, x: float, z: float) -> tuple[float, float]:
-        """Push (x, z) out of the deepest fixed collider it lies inside."""
-        cpos = self._tw_cpos
-        grid = self._tw_grid
-        if cpos is None or not len(cpos) or grid is None:
-            return x, z
-        cell = self._tw_cell
-        gx = int(math.floor(x / cell))
-        gz = int(math.floor(z / cell))
-        cand = [grid[key]
-                for a in (gx - 1, gx, gx + 1) for b in (gz - 1, gz, gz + 1)
-                if (key := (a, b)) in grid]
-        if not cand:                              # player outside every occupied cell
-            return x, z
-        # Ascending order matches a full ``np.where`` scan, so the deepest-penetration
-        # argmax below breaks ties on the same collider a whole-field scan would pick.
-        idx = np.sort(np.concatenate(cand))
-        dx = x - cpos[idx, 0]
-        dz = z - cpos[idx, 2]
-        bp = self.collide_broadphase
-        near = (np.abs(dx) < bp) & (np.abs(dz) < bp)
-        if not np.any(near):
-            return x, z
-        i = idx[near]
-        dx = dx[near]
-        dz = dz[near]
-        if self._tw_crad is not None:
-            r = self._tw_crad[i] + self.player_radius
-        else:
-            r = np.full(len(i), self.player_radius, np.float32)
-        d2 = dx * dx + dz * dz
-        k = int(np.argmax(r * r - d2))            # deepest penetration
-        if r[k] * r[k] > d2[k]:
-            d = math.sqrt(d2[k])
-            if d < 1e-4:                          # dead-centre: push direction undefined
-                x += r[k]                         # eject along +x by the full radius
-            else:
-                push = (r[k] - d) / d
-                x += dx[k] * push
-                z += dz[k] * push
-        return x, z
-
-    def _tw_sweep(self, x: float, z: float) -> tuple[float, float]:
-        """Resolve the move from the last resolved spot to ``(x, z)``.
-
-        Swept in substeps no longer than :attr:`collide_substep`, because a
-        single resolve at the end of a fast step walks straight through a trunk
-        thinner than the step: the end point is clear on both sides of it.
-        """
-        prev = self._tw_prev
-        if prev is None:
-            x, z = self._push_out(x, z)
-        else:
-            px, pz = prev
-            ddx = x - px
-            ddz = z - pz
-            dist = math.hypot(ddx, ddz)
-            n = min(self.collide_max_substeps, max(1, int(math.ceil(dist / self.collide_substep))))
-            sx = ddx / n
-            sz = ddz / n
-            x, z = px, pz
-            for _ in range(n):
-                x += sx
-                z += sz
-                x, z = self._push_out(x, z)
-        self._tw_prev = (x, z)
-        return x, z
-
+    # -- the free-fly camera -------------------------------------------------
     def collide_and_clamp(self) -> None:
-        """Hold the free-fly camera down on the terrain, out of the trunks.
+        """Hold the free-fly camera down on the terrain, out of the trunks and rocks.
 
         For the navigator that writes ``context.platform`` directly.  While the
-        avatar owns the camera it resolves its own step against the same ground
-        (:meth:`resolveTerrain`), and a second clamp here would overwrite the
-        height it had just solved -- flattening a jump and grounding a flight.
+        avatar owns the camera it is stepped against the same world (by the
+        physics service), and a second clamp here would overwrite the pose it had
+        just solved.  The avatar is put where the camera is, its feet on the
+        ground and out of anything it overlaps, and the camera goes to its eye.
+
+        A move is seated from where the last one ended, in pieces no longer than
+        :attr:`collide_substep`, because a move that crosses a trunk narrower than
+        itself ends clear of it on the far side.
         """
-        if self.physicsWalking or self.platform is None \
-                or getattr(self, '_tw_hf', None) is None:
+        if self.physicsWalking or self.platform is None or self._tw_hf is None:
             return
-        x, z = self._tw_sweep(*self._tw_xz())
-        ground = max(float(self._tw_hf.height_at(x, z)), self._tw_support(x, z))
-        self.platform.setPosition((x, ground + self.eye_height, z))
+        position = tuple(float(v) for v in self.platform.position[:3])
+        previous = self._tw_clamped
+        if position == previous:
+            return
+        walker = self._tw_walker()
+        x, z = position[0], position[2]
+        if previous is None:
+            pieces, along = 1, (0.0, 0.0)
+        else:
+            along = (x - previous[0], z - previous[2])
+            pieces = min(self.collide_max_substeps,
+                         max(1, math.ceil(math.hypot(*along) / self.collide_substep)))
+            x, z = previous[0], previous[2]
+        for _ in range(pieces):
+            x += along[0] / pieces
+            z += along[1] / pieces
+            walker.teleport((x, self._tw_ground(x, z), z))
+            x, z = float(walker.position[0]), float(walker.position[2])
+        self.platform.setPosition(tuple(float(v) for v in walker.eye))
+        self._tw_clamped = tuple(float(v) for v in self.platform.position[:3])
 
     def DoEventCascade(self) -> Any:
         changed = super(TerrainWalkMixin, self).DoEventCascade()
         self.collide_and_clamp()
         return changed
 
-    # -- the avatar, and the ground it is not allowed through ----------------
-    def buildPhysicsWorld(self) -> Optional[tuple[Any, tuple[Any, Any]]]:
-        """An empty collision world over the height field's square.
+    # -- the avatar, and the world it is in -------------------------------------
+    def walkBounds(self) -> tuple[np.ndarray, np.ndarray]:
+        """The corners ``(low, high)`` of the box the height field fills, in metres."""
+        from OpenGLContext.physics.landscape import ground_figures  # noqa: PLC0415 imported with the landscape it measures
 
-        The ground and the trunks are analytic, and answering "how high is the
-        terrain here" from a height field is exact and costs the same wherever
-        you stand; cooking a landscape into a collision mesh would be millions
-        of triangles for a worse answer.  So the character controller is given
-        a world with nothing in it and the surface is resolved in
-        :meth:`resolveTerrain`, which is where the trunks are resolved too.
-
-        The bounds are the height field's own extent and relief, which is what
-        the avatar and the spawn are sized and placed against.
-        """
-        field = getattr(self, '_tw_hf', None)
-        if field is None:
-            return None
-        from omi_physics.world import PhysicsWorld
-        half = float(field.extent) / 2.0
-        heights = np.asarray(field.grid, 'd') * float(field.relief)
-        low = np.array([-half, float(heights.min()), -half])
-        high = np.array([half, float(heights.max()), half])
-        return PhysicsWorld(), (low, high)
+        extent, (low, high), _ = ground_figures(self._tw_hf)
+        (x0, z0), (x1, z1) = extent if extent is not None else ((0.0, 0.0), (0.0, 0.0))
+        return np.array([x0, low, z0]), np.array([x1, high, z1])
 
     @staticmethod
     def physicsAvatarScale(low: Any, high: Any) -> float:
@@ -393,16 +294,17 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         """
         return 1.0
 
-    def characterCapabilities(self, scale: float = 1.0) -> 'CharacterCapabilities':
+    def characterCapabilities(self, scale: float = 1.0) -> CharacterCapabilities:
         """The avatar's dimensions and speeds, sized by this mix-in's own knobs.
 
         :attr:`eye_height` and :attr:`player_radius` are what a terrain scene
         is written against -- the camera height it framed its content for, and
-        the body the collider radii were measured for -- so they, rather than
+        the body its colliders were measured for -- so they, rather than
         the physics defaults, decide the avatar's eye and girth.  The rest of
         the body keeps its proportions about them: the top of the head stays
         the same distance above the eyes, and a crouch is never taller than a
-        stand.
+        stand.  :attr:`step_height` and :attr:`max_slope` are the steps it
+        climbs and the ground it stands on.
         """
         capabilities = super(TerrainWalkMixin, self).characterCapabilities(scale)
         head = capabilities.standHeight - capabilities.eyeHeight
@@ -411,6 +313,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         capabilities.crouchHeight = min(capabilities.crouchHeight,
                                         capabilities.standHeight)
         capabilities.radius = float(self.player_radius)
+        capabilities.stepHeight = float(self.step_height)
+        capabilities.maxSlope = float(self.max_slope)
         return capabilities
 
     def applyMovementModes(self, scale: float) -> None:
@@ -433,8 +337,44 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
             definition.navigation = Navigation(
                 modes=walk_fly_modes(scale, first_person=True))
 
+    def _tw_walker(self) -> Character:
+        """The avatar's character, made at the camera's position on first use.
+
+        The service steps it only while the context is walking.
+        """
+        walker = self._tw_character
+        if walker is None or not walker.alive:
+            x, z = self._tw_xz()
+            walker = self._tw_character = self.physics.add_character(
+                capabilities=self.characterCapabilities(self.physicsAvatarScale(None, None)),
+                position=(x, float(self._tw_hf.height_at(x, z)), z))
+            walker.framed = False
+        return walker
+
+    def buildPhysicsWorld(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """The bounds of the height field, whose ground and trunks :meth:`init_walk` put in the world.
+
+        None until a height field is bound and the context has a camera.
+        """
+        if self._tw_hf is None or self.platform is None:
+            return None
+        return self.walkBounds()
+
+    def physicsAvatar(self, capabilities: CharacterCapabilities, scale: float,
+                      lo: Any, hi: Any) -> Character:
+        """The walker the free-fly camera is held down by, which becomes the avatar."""
+        return self._tw_walker()
+
+    def watchCollisionGroups(self) -> None:
+        """Nothing: the walker's world is the landscape, and the scene's shapes are not bodies in it."""
+
+    def onPhysicsModeChanged(self) -> None:
+        """Seat the free-fly camera afresh after a switch, as well as framing the avatar."""
+        self._tw_clamped = None
+        super(TerrainWalkMixin, self).onPhysicsModeChanged()
+
     def spawnAvatar(self, low: Any, high: Any,
-                    capabilities: 'CharacterCapabilities',
+                    capabilities: CharacterCapabilities,
                     viewpoints: Sequence[Any] = ()) -> None:
         """Stand the avatar on the terrain under wherever the camera is.
 
@@ -445,18 +385,13 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         answer is the ground under it.
         """
         platform = self.physicsPlatform
-        if platform is None or getattr(self, '_tw_hf', None) is None:
+        if platform is None or self._tw_hf is None:
             return
         platform.yaw = self.yawFromPlatform()
-        x, z = self._tw_xz()
-        # ``bind`` places the capsule's *centre*, so feet on the ground is half
-        # a body above it.
-        platform.bind((x, self._tw_hf.height_at(x, z) + capabilities.standHeight * 0.5,
-                       z))
-        self.standAvatarOnTerrain()
+        self.standAvatarOnTerrain(self._tw_xz())
 
     def syncAvatarToCamera(self, heading: bool = True,
-                           eye: Optional[Sequence[float]] = None,
+                           eye: Sequence[float] | None = None,
                            pitch: bool = False) -> None:
         """Seat the avatar on the terrain under the free-fly camera.
 
@@ -475,70 +410,56 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         if heading:
             platform.yaw = self.yawFromPlatform()
         platform.pitch = self.pitchFromPlatform() if pitch else 0.0
-        platform.bind_eye(tuple(self.platform.position[:3]) if eye is None
-                          else tuple(eye))
-        self.standAvatarOnTerrain()
-        self._physicsLast = self.physicsNow()
+        where = tuple(self.platform.position[:3]) if eye is None else tuple(eye)
+        self.standAvatarOnTerrain((float(where[0]), float(where[2])))
 
-    def standAvatarOnTerrain(self) -> None:
-        """Put the avatar's feet on the terrain, wherever it is standing.
+    def standAvatarOnTerrain(self, at: tuple[float, float] | None = None) -> None:
+        """Put the avatar's feet on the terrain, at ``at`` or wherever it is standing.
 
-        A *placement* rather than a step: it moves the avatar down onto the
-        ground as well as up out of it, which is what "walk from here" has to
-        mean when here is a camera that was flying over the canopy.  The
-        per-frame resolve (:meth:`resolveTerrain`) is a floor instead, so a jump
-        rises and an arrival from the air falls.
+        A *placement*: it moves the avatar down onto the ground as well as up
+        out of it, which is what "walk from here" has to mean when here is a
+        camera that was flying over the canopy. The avatar is put out of any
+        trunk or rock it was placed in, and the ground is found again where it
+        ended up.
         """
         platform = self.physicsPlatform
-        field = getattr(self, '_tw_hf', None)
-        if platform is None or field is None:
+        if platform is None or self._tw_hf is None:
             return
-        character = platform.character
-        x, z = self._push_out(float(character.position[0]),
-                              float(character.position[2]))
-        character.position[:] = (
-            x, max(float(field.height_at(x, z)), self._tw_support(x, z))
-            + float(character.height) * 0.5, z)
-        character.vy = 0.0
-        character.grounded = True
-        self._tw_prev = (x, z)
+        walker = platform.managed
+        x, z = at if at is not None else (float(walker.position[0]), float(walker.position[2]))
+        for _ in range(2):
+            walker.teleport((x, self._tw_ground(x, z), z))
+            x, z = float(walker.position[0]), float(walker.position[2])
 
     def resolvePhysicsStep(self) -> None:
-        """The ground and the trunks, resolved after the character's own step."""
+        """The ground as a floor under a flying avatar, after the world has stepped it."""
         self.resolveTerrain()
 
     def resolveTerrain(self) -> None:
-        """Put the avatar on the height field and out of the trunks.
+        """Keep a flying avatar above the ground.
 
-        The surface is a **floor**, not a rail: the avatar is lifted to it when
-        it is at or below it and left alone above, so a jump rises and an
-        arrival from the air falls.  Landing zeroes what is left of the fall and
-        reports the avatar grounded, which is what lets it jump again.
-
-        Trunks are resolved for a walker and not for a flier -- flying is noclip
-        in every mode that offers it, and a flight through the canopy that
-        bounced off trunks would be unusable.
+        Flying is noclip in every mode that offers it, so the world's ground and
+        trunks do not stop a flier, and a flight through the canopy is not
+        bounced off trunks. The ground is still a floor: the avatar is lifted to
+        it when it is at or below it, with the rocks standing on it counted.
         """
         platform = self.physicsPlatform
-        field = getattr(self, '_tw_hf', None)
-        if platform is None or field is None:
+        if platform is None or self._tw_hf is None:
             return
-        character = platform.character
-        x, z = float(character.position[0]), float(character.position[2])
-        if character.flying:
-            self._tw_prev = (x, z)            # nothing swept: it went over them
-        else:
-            x, z = self._tw_sweep(x, z)
-        half = float(character.height) * 0.5
-        ground = max(float(field.height_at(x, z)), self._tw_support(x, z))
-        y = float(character.position[1])
-        if y - half <= ground:
-            y = ground + half
-            if character.vy < 0.0:
-                character.vy = 0.0
-            if not character.flying:
-                character.grounded = True
-        character.position[:] = (x, y, z)
+        controller = platform.character
+        if not controller.flying:
+            return
+        x, z = float(controller.position[0]), float(controller.position[2])
+        half = float(controller.height) * 0.5
+        ground = self._tw_ground(x, z)
+        if controller.position[1] - half <= ground:
+            place = getattr(controller, 'place', None)
+            if place is not None:           # a Jolt character is moved by a command
+                place((x, ground + half, z))
+            else:
+                controller.position[1] = ground + half
+            if controller.vy < 0.0:
+                controller.vy = 0.0
 
     def _tw_forward(self) -> tuple[float, float]:
         """Horizontal unit forward vector ``(fx, fz)`` from the platform orientation."""
@@ -560,11 +481,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         return (float(p[0]), float(p[1]), float(p[2])) + tuple(float(v) for v in self.platform.quaternion.internal)
 
     def OnIdle(self, *arguments: Any) -> Any:
-        if self.platform is not None and getattr(self, '_tw_hf', None) is not None:
-            # The avatar first, so the streamers below and the frame they feed
-            # see where the walker has got to rather than where it was.
-            if self.physicsWalking:
-                self.stepPhysics()
+        if self.platform is not None and self._tw_hf is not None:
             x, z = self._tw_xz()
             yaw = self._tw_yaw()
             for st in self._tw_streams:
@@ -575,10 +492,9 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
                 if moved or turned:
                     st[2] = (x, z, yaw)
                     fn(x, z)
-            # With no avatar to step, redraw only when the view actually changed:
-            # a parked free-fly camera in a static scene must not spin the GPU at
-            # full rate.  A walking one is a simulation and is drawn every frame,
-            # because gravity moves it whether or not anyone touched a key.
+            # Ask for a frame only when the view changed: the service asks for
+            # one while the avatar moves, and a parked camera in a static scene
+            # must not spin the GPU at full rate.
             pose = self._tw_pose_sig()
             if pose != self._tw_pose:
                 self._tw_pose = pose

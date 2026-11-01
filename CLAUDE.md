@@ -36,8 +36,14 @@ Key documentation files:
 - `docs/profiles.rst` - Core vs. compatibility contexts, and declaring the one a program needs
 - `docs/loading.rst` - Loading each format from Python, and the background load pool
 - `docs/capturing.rst` - Screenshots, settled still captures, and video recording
+- `docs/samples/nodes/` - A sample world for each node (`<Node>.x3d` by hand, `<Node>.wrl`
+  converted from it by `python -m docbuild.nodesamples --write`), with its reference
+  render in `tests/reference_images/x3d_samples`; `docs/x3d.rst#x3d-node-samples`
 - `docs/tutorials/` - The code walkthroughs, a directory per path, written from
   `tests/tutorials/<path>/*.py`
+  A path opens with `tests/tutorials/<path>/index.rst` where that file exists
+  (background for the reader, in place of the generated description); the list
+  of the path's tutorials follows it unless it makes a `toctree` of its own
 
 Two directories beside them are **generated and not in version control**:
 `docs/tutorials/**/*.rst` from the `'''`-string commentary in `tests/tutorials`, and
@@ -46,7 +52,11 @@ from and of the ones built on it. `python build-docs.py` writes both and runs
 Sphinx; `--stage DIR` puts a copy somewhere to look at and `--publish` puts it
 on `gh-pages`. The module pages need PyOpenGL's `directdocs` package, which is
 in the PyOpenGL *repository*: `DIRECTDOCS=../pyopengl` or `--directdocs` says
-where. `docbuild/` holds this project's half of it.
+where. `docbuild/` holds this project's half of it. The class of a scenegraph
+node ends with *Where this node is used*: the files in the workspace's projects
+(Python importing the node from the engine, X3D XML, ClassicVRML and VRML97)
+that instantiate it, found by `docbuild/nodeusage.py`; the engine's own
+packages, `tests/unit` and `website` are not read.
 
 ## Project Plans
 
@@ -75,6 +85,11 @@ OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
 │   ├── acoustics.py  # X3D's AcousticProperties: surfaces between a sound and
 │   │                 # the listener, and the room's reverb -- no GL -- docs/x3d.rst
+│   ├── manager.py    # Audio: sounds played by call (play, load, volume,
+│   │                 # muffle) from any thread, started on the render thread
+│   │                 # -- no GL -- docs/audio.rst#audio-play
+│   ├── sounds.py     # Clips made in code (tones, impacts, rumbles) and how
+│   │                 # far a sound carries (positional) -- no GL -- docs/audio.rst#audio-synth
 │   ├── x3dgraph.py   # A scene's X3D sound nodes as one engine's processing
 │   │                 # graph, kept in step once a frame -- no GL
 │   └── vehicle.py    # A road vehicle's motor, tyres, wind and impacts as
@@ -84,10 +99,28 @@ OpenGLContext/
 │   │                 # not a command
 │   ├── x3d_geospatial_demo.py  # The valley tests/tutorials/world/x3d_geospatial.py opens,
 │   │                 # as an X3D Geospatial document; scenery, not a command
-│   └── x3d_sound_stress.py  # oglc-x3d-sound-stress: a document of many
-│                     # sounds, and the frame and block time playing it costs
-│                     # -- docs/audio.rst#audio-stress
+│   ├── x3d_sound_stress.py  # oglc-x3d-sound-stress: a document of many
+│   │                 # sounds, and the frame and block time playing it costs
+│   │                 # -- docs/audio.rst#audio-stress
+│   ├── cloth_demo.py # oglc-cloth: a banner, a drape and a sheet -- docs/physics.rst#physics-softbodies
+│   ├── ragdoll_demo.py  # oglc-ragdoll: a figure knocked down and stood up
+│   └── gait.py       # oglc-gait: the ground speed and foot landings of a
+│                     # model's locomotion clips -- docs/characters.rst#characters-gait-measure
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
+│   ├── locomotion.py # ClipMap (roles to clips), Locomotion: a character's
+│   │                 # speed and state as clips, rates and footsteps -- no GL
+│   │                 # -- docs/characters.rst#characters-locomotion
+│   ├── gaitmeasure.py  # A clip's ground speed and foot landings, measured
+│   │                 # from its pose -- no GL -- docs/characters.rst#characters-gait-measure
+│   ├── facing.py     # Heading, ground tilt and lean of a character's node,
+│   │                 # and the fit of a model to its capsule -- no GL
+│   │                 # -- docs/characters.rst#characters-facing
+│   ├── wander.py     # Crowds that walk about on their own: headings, strides,
+│   │                 # run_share between the walk and the run -- no GL
+│   ├── ragdoll.py    # RagdollRig (a rig's bones as a ragdoll, sized from the skin),
+│   │                 # RagdollFigure (animation to targets, bones to skins) and
+│   │                 # CharacterRagdoll (a character's fall and get-up)
+│   │                 # -- docs/characters.rst#characters-ragdoll
 │   └── hanim.py      # X3D HAnim's arithmetic: names and levels, skin weights,
 │                     # BVH channels, poses, limits -- no GL -- docs/characters.rst#characters-hanim
 ├── contentpacks/     # Data an application fetches rather than ships: the
@@ -113,8 +146,13 @@ OpenGLContext/
 │   │                 # counts frames -- no GL
 │   ├── framestep.py  # A simulation's time step each frame, from the clock:
 │   │                 # the longest step and a frame cap -- no GL
+│   ├── animations.py # What Context.animate steps once a frame and
+│   │                 # Context.after calls later -- no GL -- docs/eventmodel.rst
 │   ├── renderqueue.py  # Calls background threads queue to be made on the
 │   │                 # render thread before OnIdle -- docs/loading.rst#render-queue
+│   ├── handoff.py    # Inbox (commands from any thread to a service's worker)
+│   │                 # and Updates (the worker's scene changes, applied once a
+│   │                 # frame) -- no GL -- docs/eventmodel.rst
 │   └── wheel.py      # Rotation reports into whole notches, for the backends
 │                     # whose toolkit states a detent size
 ├── loaders/          # File formats into the scenegraph -- docs/loading.rst, gltf.rst, vrml97.rst
@@ -179,11 +217,22 @@ OpenGLContext/
 │                     # tileprocess.py: worker processes that make them --
 │                     # docs/tiles3d.rst#tiles3d-processes)
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
+│   ├── thirdperson.py  # context.follow: FollowMode (keys relative to the
+│   │                 # camera), the camera behind a character and out of walls
+│   │                 # -- docs/navigation.rst#navigation-follow
+│   ├── firstperson.py  # context.follow(view='eyes'): the camera at a
+│   │                 # character's eyes, walked by the walk and fly modes
+│   │                 # -- docs/navigation.rst#navigation-eyes
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
 │   │                 # modes and views a definition declares -- no GL
 │   ├── navigationinfo.py  # A scene's bound NavigationInfo: its headlight
 │   │                 # and the movement mode its type asks for -- no GL
 │   ├── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
+│   ├── followcam.py  # FollowCamera: look-ahead, damped following, an arm that
+│   │                 # keeps out of the scenery -- no GL -- docs/navigation.rst#navigation-follow
+│   ├── pathmover.py  # PathMover: the velocity that runs a character along a
+│   │                 # RoadCourse and hops between its lanes -- no GL
+│   │                 # -- docs/navigation.rst#navigation-pathmover
 │   └── terrainfollow.py  # A WALK document's viewer kept on the ground under
 │                     # gravity -- no GL -- docs/x3d.rst
 ├── multiview/        # Several views of one scene -- docs/multiview.rst
@@ -271,14 +320,67 @@ OpenGLContext/
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
-├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
+├── physics/          # The physics service every context hosts, and what it needs -- docs/physics.rst
+│   ├── service.py    # Physics: add_static/dynamic/kinematic/trigger, add_ground,
+│   │                 # add_character, queries, events, zones; context.physics -- no GL
+│   ├── body.py       # Body, the handle of one body: reads, commands, handlers
+│   ├── checks.py     # number and vector: physical inputs made finite floats, or
+│   │                 # a ValueError naming the argument
+│   ├── character.py  # Character: a walker's facing, locomotion, footsteps and handlers
+│   │                 # over the engine's controller
+│   ├── engine.py     # Engine, the interface the service drives a world through;
+│   │                 # make_engine, EngineUnavailable -- docs/physics.rst#physics-engine
+│   ├── joltengine.py # JoltEngine, the engine: the world on pyjoltphysics' native
+│   │                 # thread, lockstep or free-running; JoltController -- docs/physicsthread.rst
+│   ├── vehicles.py   # Vehicle, VehicleSettings, Wheel, VehicleState, CarTuning: a
+│   │                 # dynamic chassis on wheels -- no GL -- docs/physics.rst#physics-vehicles
+│   ├── joltvehicles.py  # The Jolt engine's vehicles: one input batch a frame or
+│   │                 # tick, states from the newest snapshot
+│   ├── joltsoft.py   # The Jolt engine's ragdoll and soft-body commands and frames
+│   ├── ragdolls.py   # RagdollSpec, RagdollBone, RagdollMode, Ragdoll: the engine-neutral
+│   │                 # ragdoll and its handle -- docs/physics.rst#physics-ragdolls
+│   ├── softbodies.py # SoftBodySpec, SoftBody, SoftBodyFrame: cloth, ropes, pressure
+│   │                 # balls -- docs/physics.rst#physics-softbodies
+│   ├── softmesh.py   # SoftMesh: a mesh welded and simulated as a soft body, its
+│   │                 # vertices written back by version -- no GL
+│   ├── x3djolt.py    # X3D's RigidBodyPhysics on a pyjoltphysics world, a
+│   │                 # CollisionSensor's touches by Jolt's narrow phase; the
+│   │                 # engine's choice (make_rigid_system, make_sensing) -- docs/x3d.rst
+│   ├── massprops.py  # A Proxy's volume, centroid, inertia and bounds -- no GL
+│   ├── omigltf.py    # glTF's OMI_physics_* extensions read into the engine's own
+│   │                 # types (Proxy, Material, CollisionFilter) -- docs/physics.rst#model
+│   ├── cooking.py    # Hulls, convex pieces and their volumes: what Proxy.from_mesh
+│   │                 # cooks triangles into -- no GL
+│   ├── types.py      # Material, CollisionFilter, CharacterCapabilities, CharacterState,
+│   │                 # EngineInfo, Poses, GravityZone, Hit: the engine-neutral types
+│   ├── stepview.py   # StepView: what on_step code reads and posts on the world thread
+│   ├── handlers.py   # Handler and HandlerTable: who hears which event, held weakly
+│   ├── callbacks.py  # physics_callback: marks a function that runs on the physics thread
+│   ├── records.py    # Command, BodySpec, PhysicsEvent, Step, Snapshot: the plain data
+│   │                 # that crosses between the render thread and the engine
+│   ├── proxy.py      # Proxy: the collision shape of a node, cooked or by hand
+│   ├── materials.py  # Materials: presets, defined materials, pair friction, sounds
+│   ├── sources.py    # Collider sources: bodies made as a focus nears them
+│   ├── colliders.py  # Scenery: the shapes of a scene as static bodies, cooked off the frame
+│   ├── settings.py   # PhysicsDefinition: the node ContextDefinition.physics holds
+│   ├── eventmanager.py  # 'physics-hit' and the other events as context event types
+│   ├── zones.py      # Gravity zones: Box and Sphere regions, a Zone node's gravity
+│   ├── landscape.py  # A HeightField as ground, trunks and rocks as bodies
+│   ├── heightfield.py, road.py, props.py  # Colliders for ground chunks, road
+│   │                 # sections and props near a focus
+│   ├── gltf_world.py # A scene's triangles and glTF OMI bodies, for scenery
+│   ├── debugdraw.py  # ProxyOverlay: the box and sphere bodies as wireframes
+│   │                 # (show_proxies)
+│   ├── events.py     # Collision: one collision as a body's handler is given it
+│   ├── poses.py      # Quaternions to axis-angle, and a pose written onto a Transform
+│   ├── joints.py     # Joint, JointSpec, JointTable: hinges, balls, sliders and
+│   │                 # distances made by the service -- docs/physics.rst#physics-joints
+│   ├── filters.py    # Collision filters by system, and the contact filter asked
+│   │                 # as two bodies meet -- docs/physics.rst#physics-presolve
 │   ├── x3dcollision.py  # X3D Collision groups' collideTime and isActive from
 │   │                 # the walker's touches -- no GL
-│   ├── x3drigid.py   # X3D's RigidBodyPhysics: a collection as an omi_physics
-│   │                 # world, a sensor's touches, the joints -- no GL
-│   └── events.py     # Collision subscriptions: a callback per body, delivered
-│                     # once a frame, and a trigger's occupancy
-│                     # -- docs/physics.rst#physics-collisions
+│   └── x3drigid.py   # X3D's RigidBodyPhysics read from the nodes: collidables
+│                     # as Proxy, ContactRule, RigidSystem the engines' base -- no GL
 ├── resources/        # Generated Python modules holding icons and shader text
 ├── py.typed          # The engine's declarations are real -- docs/typing.rst
 ├── scenegraph/       # VRML97-style nodes
@@ -313,6 +415,8 @@ OpenGLContext/
 │   │                 # graph node -- no GL -- docs/x3d.rst#x3d-sound
 │   ├── x3dsensors.py # X3D's environmental sensors told each frame what they
 │   │                 # sense: the viewer, a target, the views -- no GL
+│   ├── softnodes.py  # The engine's Cloth and Ragdoll nodes (OpenGLContext
+│   │                 # component) and the glTF cloth hook -- docs/x3d.rst#x3d-cloth-ragdoll
 │   ├── x3drigidbody.py  # X3D's RigidBodyCollection and CollisionSensor on the
 │   │                 # engine clock; collidables drawn where they are
 │   ├── layering.py   # X3D's Layering and Layout nodes: LayerSet, Layer,
@@ -423,6 +527,8 @@ OpenGLContext/
 ├── shaders/          # GLSL sources (.vert/.frag plus shared _*.glsl includes)
 ├── telemetry/        # A whole session to one file, and back -- docs/telemetry.rst
 ├── testing/          # The shipped test machinery conftest.py imports
+│   └── audio.py      # RecordingAudio: an Audio that plays nothing and records
+│                     # its calls -- docs/testing.rst#audio-testing-calls
 ├── tests/            # A second test root -- being moved to tests/unit/ (C1)
 ├── ui/               # Overlay UI: panels, widgets, skin -- docs/overlayui.rst
 │   ├── overlay.py    # OverlayStack + OverlayStackMixin (a base of Context):

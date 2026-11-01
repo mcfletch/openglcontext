@@ -24,9 +24,8 @@ produces: the triangles out of ``mesh()``, and a ray fired into a physics world.
 import numpy as np
 import pytest
 
-from omi_physics.raycast import raycast
-from omi_physics.world import PhysicsWorld
 from OpenGLContext.physics.heightfield import HeightFieldColliders
+from tests.unit._streamed import Streamed
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
 
@@ -145,14 +144,12 @@ class TestTheColliderIsTheDrawnSurface:
     def test_a_ray_lands_where_the_sampler_says_the_ground_is(self) -> None:
         """What the walker stands on and what a wheel rolls over are one surface."""
         field = _field(res=17)
-        world = PhysicsWorld()
-        ground = HeightFieldColliders(world, field, reach=EXTENT)
+        ground = Streamed(HeightFieldColliders(field, reach=EXTENT))
         ground.update((0.0, 0.0, 0.0))
         for x, z in _spots(count=60, seed=7, margin=1.0):
-            hit = raycast(world, (x, 400.0, z), (0.0, -1.0, 0.0), max_distance=900.0)
+            hit = ground.physics.raycast((x, 400.0, z), (0.0, -1.0, 0.0), 900.0)
             assert hit is not None, 'no ground under (%.2f, %.2f)' % (x, z)
-            assert float(hit.point[1]) == pytest.approx(
-                float(field.sample(x, z)), abs=1e-3)
+            assert float(hit.point[1]) == pytest.approx(float(field.sample(x, z)), abs=1e-3)
 
 
 class TestWhatStandsOnIt:

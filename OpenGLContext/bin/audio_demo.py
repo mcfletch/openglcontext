@@ -26,27 +26,31 @@ import argparse
 import math
 import sys
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
-from omi_audio import model, synth
-from omi_audio.clip import DEFAULT_SAMPLE_RATE, Clip
+from omi_audio.clip import DEFAULT_SAMPLE_RATE
 
-from OpenGLContext.events.framestep import FrameStep
-from OpenGLContext.physics.demo import DemoScene
-from OpenGLContext.scenegraph import surfaces
-from OpenGLContext.scenegraph.basenodes import (
-    Appearance, AudioEmitter, AudioSource, Box, DirectionalLight, Shape, Sphere,
-    Transform,
-)
-from OpenGLContext.scenegraph.zone import Zone, ZoneAudio, ZoneReverb
+from OpenGLContext.audio import sounds
+from OpenGLContext.audio.manager import Audio
 from OpenGLContext.context import Context as BaseContext
-from OpenGLContext.audio import scene as audioscene
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events import systemtime
+from OpenGLContext.events.framestep import FrameStep
+from OpenGLContext.physics.body import Body
+from OpenGLContext.physics.events import Collision
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.scenegraph import surfaces
+from OpenGLContext.scenegraph.basenodes import (
+    Appearance, AudioEmitter, AudioSource, Box, DirectionalLight, Group, Shape,
+    SimpleBackground, Sphere, Transform, sceneGraph,
+)
+from OpenGLContext.scenegraph.zone import Zone, ZoneAudio, ZoneReverb
 
-__all__ = ['AudioYard', 'Finishes', 'main']
+__all__ = ['AudioYard', 'Finishes', 'definition', 'main']
 
 #: Where the balls sit and are dropped from, in metres.
 BALL_SPOTS = [(-2.0, 0.0), (-1.0, 0.6), (0.0, -0.4), (1.0, 0.5), (2.0, -0.2)]
@@ -79,6 +83,9 @@ AREA_LEVEL = 0.6
 CAVE_REVERB = 0.5
 CAVE_DECAY = 2.5
 
+#: The sky's colour.
+BACKGROUND = (0.15, 0.16, 0.2)
+
 #: How loud the whole demo plays. It runs at whatever volume the machine is at,
 #: so it sits well below full scale; ``+`` and ``-`` move it.
 MASTER_GAIN = 0.4
@@ -105,72 +112,76 @@ def _marker(material: Any, geometry: Any) -> Any:
     return Shape(appearance=Appearance(material=material), geometry=geometry)
 
 
-def _dress(body: Any, material: Any) -> Any:
-    """Put ``material`` on a physics body's shape; return the body."""
-    body.transform.children[0].appearance = Appearance(material=material)
-    return body
+def definition() -> PhysicsDefinition:
+    """The world the yard runs in, for the context's ``ContextDefinition.physics``.
+
+    Every body is added by name, so the shapes drawn as markers and zones are
+    not bodies too (``colliders='explicit'``).
+    """
+    return PhysicsDefinition(colliders='explicit')
 
 
-def _bell_clip(sample_rate: int) -> Clip:
+def _bell_clip(sample_rate: int) -> sounds.Clip:
     """A struck bell: a bright tone that dies away over two seconds."""
-    ringing = synth.tone(520.0, 2.0, sample_rate=sample_rate, amplitude=0.7,
-                         harmonics=5)
+    ringing = sounds.tone(520.0, 2.0, sample_rate=sample_rate, amplitude=0.7,
+                          harmonics=5)
     samples = np.asarray(ringing.samples, dtype=np.float32)
     decay = np.exp(-2.5 * np.arange(samples.size) / sample_rate).astype(np.float32)
-    return Clip(samples * decay, sample_rate, name='bell')
+    return sounds.Clip(samples * decay, sample_rate, name='bell')
 
 
 class AudioYard:
     """The demo's scenegraph, rigid-body physics and sounds.
 
     The scene holds five rigid-body balls dropped onto a floor, a bell, a
-    spinning motor and two zones (a cave and a stream). :meth:`step` advances
-    the physics and the motor and plays a thud for each ball impact. This class
+    spinning motor and two zones (a cave and a stream). ``physics`` steps the
+    balls and calls the handler registered for them at each blow, which plays
+    a thud through ``audio``; :meth:`update` spins the motor. This class
     creates no GL objects and no window, so a test can drive it directly.
 
-    The context builds one, puts :meth:`scene` in front of the camera, takes
-    each frame's time step from :attr:`frames`, calls :meth:`step` with it and
-    forwards key presses to :meth:`drop`, :meth:`ring`, :meth:`fire`,
-    :meth:`toggle_motor`, :meth:`toggle_muffle` and :meth:`change_volume`.
-    Every method accepts a missing engine, which is what a machine with sound
-    switched off has. The two areas are zones in :meth:`scene`, whose gains
-    and reverb the render pass sets from where the camera is.
+    The context builds one over its own ``physics`` and ``audio``, puts
+    :meth:`scene` in front of the camera, calls :meth:`update` with each
+    frame's time step from :attr:`frames` and forwards key presses to
+    :meth:`drop`, :meth:`ring`, :meth:`fire`, :meth:`toggle_motor`,
+    :meth:`toggle_muffle` and :meth:`change_volume`. With sound switched off
+    ``audio`` hands back voices that play nothing. The two areas are zones in
+    :meth:`scene`, whose gains and reverb the render pass sets from where the
+    camera is.
     """
 
-    def __init__(self, sample_rate: int = DEFAULT_SAMPLE_RATE) -> None:
+    def __init__(self, physics: Physics, audio: Audio,
+                 sample_rate: int = DEFAULT_SAMPLE_RATE) -> None:
+        self.physics = physics
+        self.audio = audio
         self.finish = Finishes()
         #: The time step of each frame.
         self.frames = FrameStep(longest=0.1)
-        self.physics = DemoScene(debug_flags=0)
-        _dress(self.physics.add_box(size=(60.0, 1.0, 60.0), position=(0.0, -0.5, 0.0),
-                                    dynamic=False), self.finish.floor)
+        #: Everything the physics bodies draw.
+        self.root = Group(children=[])
+        self.floor = self._body(
+            Box(size=(60.0, 1.0, 60.0)), self.finish.floor, (0.0, -0.5, 0.0), Proxy.box((60.0, 1.0, 60.0)))
         self.balls = [
-            _dress(self.physics.add_sphere(radius=BALL_RADIUS,
-                                           position=(x, BALL_RADIUS, z)),
-                   self.finish.balls[number % len(self.finish.balls)])
+            self._body(Sphere(radius=BALL_RADIUS), self.finish.balls[number % len(self.finish.balls)],
+                       (x, BALL_RADIUS, z), Proxy.sphere(BALL_RADIUS), dynamic=True)
             for number, (x, z) in enumerate(BALL_SPOTS)]
-        #: Blows the balls took since the last frame, from every physics step
-        #: of it. A pair of balls meeting is one entry, not two.
-        self.blows: list[Any] = []
-        self.physics.manager.events.subscribe(
-            self.blows.append, body=self.balls, above=IMPACT_FLOOR)
+        #: One handler for every ball: a pair of balls meeting is one thud, not two.
+        physics.addEventHandler('hit', function=self._blow, above=IMPACT_FLOOR)
 
-        self.thud = synth.rumble(0.3, sample_rate=sample_rate, decay=16.0,
-                                 cutoff=320.0, pitch=95.0, pitch_end=50.0,
-                                 tone=0.5, drive=2.0, seed=3)
-        self.shot = synth.rumble(0.45, sample_rate=sample_rate, decay=12.0,
-                                 cutoff=1100.0, pitch=78.0, pitch_end=44.0,
-                                 tone=0.26, drive=3.0, seed=11)
+        self.thud = sounds.rumble(0.3, sample_rate=sample_rate, decay=16.0,
+                                  cutoff=320.0, pitch=95.0, pitch_end=50.0,
+                                  tone=0.5, drive=2.0, seed=3)
+        self.shot = sounds.rumble(0.45, sample_rate=sample_rate, decay=12.0,
+                                  cutoff=1100.0, pitch=78.0, pitch_end=44.0,
+                                  tone=0.26, drive=3.0, seed=11)
         #: Where a thud comes from: placed, and heard across the yard.
-        self.placed = model.AudioEmitter(positional=model.PositionalProperties(
-            refDistance=3.0, rolloffFactor=0.8))
+        self.placed = sounds.positional(near=3.0, rolloff=0.8)
 
         self.bell = AudioSource(autoplay=False, priority=0.6)
         self.bell.useClip(_bell_clip(sample_rate))
 
         self.motor = AudioSource(loop=True, gain=0.0)
-        self.motor.useClip(synth.tone(110.0, 1.0, sample_rate=sample_rate,
-                                      amplitude=0.5, fade=0.0, harmonics=7))
+        self.motor.useClip(sounds.tone(110.0, 1.0, sample_rate=sample_rate,
+                                       amplitude=0.5, fade=0.0, harmonics=7))
         self.rotor = Transform(rotation=(0.0, 1.0, 0.0, 0.0), children=[
             _marker(self.finish.rotor, Box(size=(2.4, 0.15, 0.3))),
         ])
@@ -179,16 +190,25 @@ class AudioYard:
         self._angle = 0.0
 
         self.cave = AudioSource(loop=True, gain=AREA_LEVEL)
-        self.cave.useClip(synth.rumble(2.0, sample_rate=sample_rate, decay=0.0,
-                                       attack=0.0, cutoff=250.0, pitch=55.0,
-                                       pitch_end=55.0, tone=0.4, seed=5))
+        self.cave.useClip(sounds.rumble(2.0, sample_rate=sample_rate, decay=0.0,
+                                        attack=0.0, cutoff=250.0, pitch=55.0,
+                                        pitch_end=55.0, tone=0.4, seed=5))
         self.stream = AudioSource(loop=True, gain=AREA_LEVEL)
-        self.stream.useClip(synth.noise(2.0, sample_rate=sample_rate,
-                                        amplitude=0.3, seed=7, fade=0.0))
+        self.stream.useClip(sounds.noise(2.0, sample_rate=sample_rate,
+                                         amplitude=0.3, seed=7, fade=0.0))
         #: The areas' sounds, one global emitter each, heard only inside
         #: their zones.
         self.cave_sound = AudioEmitter(type='global', sources=[self.cave])
         self.stream_sound = AudioEmitter(type='global', sources=[self.stream])
+
+    def _body(self, geometry: Any, material: Any, position: Sequence[float], shape: Proxy,
+              dynamic: bool = False) -> Body:
+        """A drawn ``geometry`` of ``material`` at ``position`` that is also a body of ``shape``."""
+        node = Transform(translation=tuple(position), children=[_marker(material, geometry)])
+        self.root.children.append(node)
+        if dynamic:
+            return self.physics.add_dynamic(node, proxy=shape, mass=1.0, material='rubber')
+        return self.physics.add_static(node, proxy=shape, material='wood')
 
     def _area(self, centre: Sequence[float], material: Any,
               settings: Sequence[Any]) -> Any:
@@ -203,7 +223,8 @@ class AudioYard:
 
     def scene(self) -> Any:
         """The scenegraph: a light, the physics bodies, every sound's marker and the zones."""
-        extra: list[Any] = [
+        return sceneGraph(children=[
+            self.root,
             DirectionalLight(direction=(-0.3, -1.0, -0.5), intensity=0.9),
             Transform(translation=BELL_POSITION, children=[
                 _marker(self.finish.bell, Sphere(radius=0.5)),
@@ -221,32 +242,22 @@ class AudioYard:
                 ZoneAudio(emitters=[self.stream_sound])]),
             self.cave_sound,
             self.stream_sound,
-        ]
-        return self.physics.scene_graph(extra=extra)
+            SimpleBackground(color=BACKGROUND),
+        ])
 
-    def step(self, dt: float, engine: Any) -> int:
-        """Advance the yard by ``dt`` seconds; return how many collision sounds it started."""
-        started = self._collide(dt, engine)
-        self._spin(dt)
-        return started
+    def _blow(self, hit: Collision) -> None:
+        """Thud where a ball was struck, louder the harder the blow."""
+        if hit.body in self.balls or hit.other in self.balls:
+            self.audio.play(self.thud, at=tuple(float(v) for v in hit.point),
+                            gain=min(1.0, hit.speed / IMPACT_FULL), priority=0.3,
+                            emitter=self.placed)
 
-    def _collide(self, dt: float, engine: Any) -> int:
-        """Step the physics and thud for every blow a ball took."""
-        self.physics.advance(dt)
-        blows = self.blows[:]
-        self.blows.clear()
-        if engine is None:
-            return 0
-        started = 0
-        for blow in blows:
-            handle = engine.play(self.thud, emitter=self.placed, position=blow.point,
-                                 gain=min(1.0, blow.approach / IMPACT_FULL),
-                                 priority=0.3)
-            started += handle is not None
-        return started
+    def update(self, dt: float) -> bool:
+        """Ease the motor towards its target speed for ``dt`` seconds; its sound follows.
 
-    def _spin(self, dt: float) -> None:
-        """Ease the motor towards its target speed; its sound follows."""
+        Returns whether the motor is running or still running down, which is
+        whether the frame needs drawing again.
+        """
         target = MOTOR_TOP if self.motor_on else 0.0
         change = MOTOR_ACCELERATION * dt
         self.speed += max(-change, min(change, target - self.speed))
@@ -255,50 +266,44 @@ class AudioYard:
         fraction = self.speed / MOTOR_TOP
         self.motor.gain = MOTOR_LEVEL * fraction
         self.motor.playbackRate = 0.6 + 1.4 * fraction
+        return self.motor_on or self.speed > 0.0
 
     def drop(self) -> None:
         """Lift every ball to its drop height and let go."""
-        world = self.physics.world
         for ball, (x, z), height in zip(self.balls, BALL_SPOTS, DROP_HEIGHTS):
-            world.place_body(ball.index, position=(x, height, z))
-            world.linear_velocity[ball.index] = 0.0
-            world.angular_velocity[ball.index] = 0.0
-            world.wake(ball.index)
+            ball.set_transform(translation=(x, height, z))
+            ball.set_velocity((0.0, 0.0, 0.0))
+            ball.set_angular_velocity((0.0, 0.0, 0.0))
+            ball.wake()
 
     def ring(self) -> None:
         """Strike the bell; it sounds on the next frame."""
         self.bell.play()
 
-    def fire(self, engine: Any) -> Optional[Any]:
+    def fire(self) -> Any:
         """Fire the player's own weapon: centred, since it has no direction."""
-        if engine is None:
-            return None
-        return engine.play(self.shot, gain=0.7, priority=0.7)
+        return self.audio.play(self.shot, gain=0.7, priority=0.7)
 
     def toggle_motor(self) -> None:
         """Start the motor, or let it run down."""
         self.motor_on = not self.motor_on
 
-    @staticmethod
-    def toggle_muffle(engine: Any) -> float:
+    def toggle_muffle(self) -> float:
         """Muffle everything, as underwater, or stop; return the muffle now in force."""
-        if engine is None:
-            return 0.0
-        engine.muffle = 0.0 if engine.muffle else 1.0
-        return float(engine.muffle)
+        self.audio.muffle = 0.0 if self.audio.muffle else 1.0
+        return float(self.audio.muffle)
 
-    @staticmethod
-    def change_volume(audio: Any, delta: float) -> float:
-        """Move the player's volume on ``audio`` by ``delta``, kept within 0 to 1; return it.
+    def change_volume(self, delta: float) -> float:
+        """Move the player's volume by ``delta``, kept within 0 to 1; return it.
 
-        ``audio`` is the context's audio settings (``contextDefinition.audio``),
-        whose ``volume`` the F10 settings screen shows.
+        This is the number the F10 settings screen shows.
         """
-        audio.volume = min(1.0, max(0.0, float(audio.volume) + delta))
-        return float(audio.volume)
+        self.audio.volume = min(1.0, max(0.0, float(self.audio.volume) + delta))
+        return float(self.audio.volume)
+
 
 class AudioDemoContext(BaseContext):
-    """The yard in a window: keys in, the time step out."""
+    """The yard in a window: keys in, the motor's time step out."""
 
     #: The yard is dressed in metallic/roughness materials.
     renderer = 'pbr'
@@ -307,40 +312,47 @@ class AudioDemoContext(BaseContext):
 
     def OnInit(self) -> None:
         super().OnInit()
-        self.yard = AudioYard()
+        self.yard = AudioYard(self.physics, self.audio)
         self.sg = self.yard.scene()
-        engine = audioscene.engine_for(self)
-        if engine is not None:
-            engine.master_gain = MASTER_GAIN
+        self.audio.mix = MASTER_GAIN
         yard = self.yard
-        for key, handler in (
-                ('b', yard.drop), ('g', yard.ring),
-                (' ', lambda: yard.fire(audioscene.existing_engine(self))),
-                ('r', yard.toggle_motor),
-                ('m', lambda: yard.toggle_muffle(audioscene.existing_engine(self))),
-                ('+', lambda: self.volume(0.1)), ('=', lambda: self.volume(0.1)),
-                ('-', lambda: self.volume(-0.1))):
-            self.addEventHandler('keypress', name=key,
-                                    function=lambda event, handler=handler: handler())
+        self.keys = {
+            'b': yard.drop, 'g': yard.ring, ' ': yard.fire,
+            'r': yard.toggle_motor, 'm': yard.toggle_muffle,
+            '+': lambda: self.volume(0.1), '=': lambda: self.volume(0.1),
+            '-': lambda: self.volume(-0.1)}
+        for key in self.keys:
+            self.addEventHandler('keypress', name=key, function=self.OnKey)
         yard.frames.step(systemtime.systemTime())
+        self.renderQueue.on_frame(self.OnFrame)
         print(__doc__, flush=True)
-        print(audioscene.describe(self), flush=True)
+        print(self.audio.describe(), flush=True)
 
-    def OnIdle(self, *arguments: Any) -> int:
+    def OnFrame(self) -> None:
+        """Turn the motor before each frame, and have the frame drawn while it moves."""
         dt = self.yard.frames.step(systemtime.systemTime())
-        self.yard.step(dt, audioscene.existing_engine(self))
-        self.triggerRedraw(1)
-        return 1
+        if self.yard.update(dt):
+            self.triggerRedraw(1)
+
+    def OnKey(self, event: Any) -> None:
+        """Run the action of the key pressed.
+
+        A handler is held by weak reference, so each key shares this method of
+        the context, which lives as long as the window does, and looks its action
+        up in ``keys``.
+        """
+        self.keys[event.name]()
 
     def volume(self, delta: float) -> None:
-        level = self.yard.change_volume(self.contextDefinition.audio, delta)
+        level = self.yard.change_volume(delta)
         print('volume %.2f' % (level,), flush=True)
+
 
 def main() -> int:                              # pragma: no cover - needs a window
     """Open the yard in a window."""
     argparse.ArgumentParser(description=(__doc__ or '').splitlines()[0]).parse_args()
     AudioDemoContext.ContextMainLoop(definition=ContextDefinition(
-        title='OpenGLContext sound', size=(1024, 720)))
+        title='OpenGLContext sound', size=(1024, 720), physics=definition()))
     return 0
 
 

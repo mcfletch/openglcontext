@@ -10,7 +10,6 @@ import json
 import pytest
 import numpy as np
 
-pytest.importorskip('pygltflib')
 
 from OpenGLContext.loaders.gltf import loader
 from OpenGLContext.loaders.gltf.writer import (

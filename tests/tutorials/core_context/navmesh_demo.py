@@ -22,24 +22,23 @@ What is on screen, from the floor up:
    each wall and straight everywhere else.
  * *blue and orange spheres* -- where the route starts and where it is
    going.
- * *the fox* -- walking the cyan line.  It plays its walk clip on the way,
-   its idle clip on arrival, and after fifteen seconds standing still it
-   picks somewhere else on the mesh and sets off again.
+ * *the fox* -- a physics character walking the cyan line.  It plays its
+   walk clip on the way, its idle clip on arrival, and after fifteen seconds
+   standing still it picks somewhere else on the mesh and sets off again.
 
-Following a route and turning to face it are
-:doc:`Walking an NPC along a route <using_npc>`; this page is what the
+Following a route is :doc:`Walking an NPC along a route <using_npc>`:
+``run_along`` walks the pulled points, and the character's clip map shows
+the walk while it moves and the idle once it stops.  This page is what the
 route is made of.  The model is `Fox` from the Khronos sample catalogue
 (CC-BY 4.0, by PixelMannen and tomkranis).
 
-Running out of route is arriving, and that is where
-``play(IDLE, loop=True, fade=0.3)`` goes: the idle clip replaces the walk
-on the same layer, blended over a third of a second, so the legs stop when
-the body does.  The same place records ``rest_until``, the time the fox
-may choose again.  It is a time to compare the clock against rather than a
-counter ticking down, which is what keeps a paused game paused and a
-session replayed at another frame rate the same session.  Once the clock
-passes it, `NavMesh.random_point` picks somewhere on the mesh and the
-route is planned from where the fox stands to there.
+Running out of route is arriving, which the character tells its
+``'arrived'`` handlers.  The handler here asks ``self.after(REST, ...)`` to
+choose again fifteen seconds on.  The delay counts the engine clock's frame
+steps, so a paused game stays paused and a capture on a fixed clock chooses on
+the same frame every run.  When it is up, `NavMesh.random_point` picks
+somewhere on the mesh and the route is planned from where the fox stands to
+there.
 
 Press `g` to send the fox to the next of four goals, `r` to pick a random
 point on the mesh, and `c` to print the numbers again.  Every re-path
@@ -52,20 +51,13 @@ prints how many cells the corridor runs through and what the pull saved:
 The usual keys walk around, though the view starts overhead because that
 is where a navmesh reads.
 '''
-import math
 import os
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-# The fox is a glTF model with its surfaces described the way the PBR
-# renderer reads them, so that is the renderer to draw it with.
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
-
 import numpy as np
 
-from OpenGLContext.character.model import CharacterModel
-from OpenGLContext.events.systemtime import systemTime
+from OpenGLContext.character.locomotion import ClipMap
 from OpenGLContext.loaders.gltf import sample_model_url
 from OpenGLContext.nav import navmesh
+from OpenGLContext.physics import CharacterCapabilities
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Color, Coordinate, DirectionalLight, IndexedFaceSet,
     IndexedLineSet, Material, Shape, Sphere, Transform,
@@ -103,19 +95,17 @@ GOALS = [
     (8.0, 0.0, 8.0),
 ]
 
-#: The walker, and the two clips it plays: one for moving, one for standing
-#: still.  ``model.clips`` is where the names come from for a file whose
-#: names you do not already know -- this one calls its idle ``Survey``.
+#: The walker, and its clips by role: the walk for moving, ``Survey`` for
+#: standing still.  ``model.clips`` is where the names come from for a file
+#: whose names you do not already know.  The speeds are the ones
+#: :doc:`Walking an NPC along a route <using_npc>` works out for a fox the
+#: height of this capsule.
 MODEL = 'Fox'
-WALK, IDLE = 'Walk', 'Survey'
+CLIPS = ClipMap(idle='Survey', walk=('Walk', 1.4), run=('Run', 2.4))
+BODY = CharacterCapabilities(standHeight=1.1, crouchHeight=0.7, radius=0.35)
 
-#: The Fox is authored around a hundred units long, so it is scaled to about
-#: two metres for a room measured in metres.
-MODEL_SCALE = 0.02
-
-#: Metres a second, and how close counts as having reached a waypoint.
-SPEED = 2.5
-ARRIVED = 0.3
+#: Metres a second.
+SPEED = 1.6
 
 #: Seconds the fox stands at a goal before choosing another.
 REST = 15.0
@@ -192,13 +182,15 @@ def _marker(colour, position):
 
     The colour is carried by the emission rather than by the lighting: a
     small sphere under a sky's worth of ambient light reads as white
-    whatever its base colour is.
+    whatever its base colour is.  A marker is drawn and not collided with:
+    ``collide = False`` keeps the shape out of the physics world, which would
+    otherwise make it a static body for the fox to walk into.
     """
     material = Material(diffuseColor=tuple(part * 0.25 for part in colour),
                         emissiveColor=colour)
-    return Transform(translation=(position[0], 0.35, position[2]),
-                     children=[Shape(geometry=Sphere(radius=0.3),
-                                     appearance=Appearance(material=material))])
+    ball = Shape(geometry=Sphere(radius=0.3), appearance=Appearance(material=material))
+    ball.collide = False
+    return Transform(translation=(position[0], 0.35, position[2]), children=[ball])
 
 
 class TestContext(BaseContext):
@@ -220,19 +212,7 @@ class TestContext(BaseContext):
         self.goal = 0
         self.target = GOALS[0]
         self._last = None
-        # The walker: where it stands, the route left to walk, and the time it
-        # may choose a new goal at.  `rest_until` is None while it is walking.
-        self.position = np.array(START, dtype='d')
-        self.route = []
-        self.rest_until = None
-        self._clock = systemTime()
-        # The fox is read in the background; it walks once it has arrived.
-        self.model = None
-        self.figure = Transform(
-            scale=(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE),
-            children=[],
-        )
-        self.sceneLoader.load(sample_model_url(MODEL), on_loaded=self.OnLoaded)
+        self._resting = None
 
         shared = Coordinate(point=points)
         children = [
@@ -252,8 +232,15 @@ class TestContext(BaseContext):
         self.goal_marker = _marker((0.95, 0.45, 0.1), self.target)
         self.start_marker = _marker((0.2, 0.45, 0.95), START)
         children.extend([centre_shape, path_shape,
-                         self.start_marker, self.goal_marker, self.figure])
+                         self.start_marker, self.goal_marker])
         self.sg = Transform(children=children)
+        # The floor and walls are shapes in the scene, so they are what the
+        # fox stands on and is stopped by.
+        self.hero = self.physics.add_character(
+            capabilities=BODY, model=sample_model_url(MODEL), animations=CLIPS,
+            position=START, parent=self.sg)
+        self.hero.addEventHandler('arrived', self.OnArrived)
+        self.repath()
 
         self.addEventHandler('keypress', name='g', function=self.OnNextGoal)
         self.addEventHandler('keypress', name='r', function=self.OnRandomGoal)
@@ -263,13 +250,6 @@ class TestContext(BaseContext):
               '(max slope %.1f degrees, clearance %.1f m)'
               % (len(self.mesh), self.triangles, navmesh.DEFAULT_MAX_SLOPE,
                  CLEARANCE))
-
-    def OnLoaded(self, request):
-        """The fox has arrived: put it in the scene and send it to its goal."""
-        self.model = CharacterModel.from_scene(request.result)
-        self.figure.children = [self.model.group]
-        self._clock = systemTime()
-        self.repath()
 
     def _cells(self):
         """Every walkable cell as a wireframe triangle over the floor."""
@@ -290,16 +270,17 @@ class TestContext(BaseContext):
         fixed point, which is what a game asks for: the question is always
         "from here to there".
         """
-        if self.model is None:
-            return
-        start = tuple(self.position)
+        if self._resting is not None:
+            self._resting.stop()
+            self._resting = None
+        start = tuple(float(v) for v in self.hero.position)
         cells = self.mesh.corridor(start, self.target)
         if not cells:
             print('goal (%.1f, %.1f) is off the mesh, or nothing leads to it'
                   % (self.target[0], self.target[2]))
             # Nothing to walk, so the fox stays where it is and asks again
             # when its rest is up.
-            self.rest_until = systemTime() + REST
+            self._resting = self.after(REST, self.OnRandomGoal)
             return
         route = [start] + [tuple(centre) for centre in self.mesh.centres[cells]]
         route.append(self.target)
@@ -310,9 +291,9 @@ class TestContext(BaseContext):
         self.start_marker.translation = (start[0], 0.35, start[2])
         # The pulled line is the route the fox walks: the corridor and the
         # centre line are drawn to be compared against it, not followed.
-        self.route = list(pulled)
-        self.rest_until = None
-        self.model.play(WALK, loop=True, fade=0.3)
+        if len(pulled) >= 2:
+            self.hero.run_along([tuple(point) for point in pulled], speed=SPEED,
+                                mode='walk')
         self._report(route, pulled, len(cells))
         self.triggerRedraw(1)
 
@@ -330,59 +311,17 @@ class TestContext(BaseContext):
               % (len(route), raw, len(pulled), taut, saved))
         self._last = (route, pulled, corridor)
 
-    # -- walking it ------------------------------------------------------
-    def OnIdle(self, *arguments):
-        """One step of the world: the fox moves, then its body is posed."""
-        if self.model is None:
-            return
-        now = systemTime()
-        step = min(now - self._clock, 0.1)
-        self._clock = now
-        self.advance(step, now)
-        self.model.update(step)
-        self.triggerRedraw(1)
+    # -- arriving ---------------------------------------------------------
+    def OnArrived(self, hero):
+        """The end of the route: the fox stands, and chooses again after a rest.
 
-    def advance(self, step, now):
-        """Walk what is left of the route, or wait out a rest at the end.
-
-        Following the route -- walking at the point in front, dropping it on
-        arrival, turning to face the way it is going -- is
-        :doc:`Walking an NPC along a route <using_npc>`.
+        The character's clip map fades from the walk to the idle as its speed
+        falls, so nothing here plays a clip.  ``after`` makes one call
+        ``REST`` seconds of the engine clock from now, and returns a handle
+        whose ``stop()`` cancels it, which ``repath`` does when a key sends
+        the fox somewhere first.
         """
-        if self.route:
-            self.step_along(step)
-            if not self.route:
-                self.arrive(now)
-        elif self.rest_until is not None and now >= self.rest_until:
-            self.OnRandomGoal()
-
-    def step_along(self, step):
-        """One frame's walk towards the point at the front of the route."""
-        towards = np.asarray(self.route[0], dtype='d') - self.position
-        towards[1] = 0.0
-        distance = float(np.linalg.norm(towards))
-        if distance < ARRIVED:
-            self.route.pop(0)
-            return
-        heading = towards / distance
-        self.position = self.position + heading * min(SPEED * step, distance)
-        self.figure.translation = tuple(self.position)
-        self.figure.rotation = (0, 1, 0, math.atan2(heading[0], heading[2]))
-
-    def arrive(self, now):
-        """The end of the route: stand still, and note when to move on.
-
-        The idle clip replaces the walk on the same layer, so the fox stops
-        moving its legs the moment it stops moving.  ``fade`` blends the two
-        over a third of a second rather than switching poses in one frame.
-
-        Nothing counts down here: the time to choose again is recorded, and
-        :meth:`advance` compares the clock against it.  A timer a frame reads
-        is a timer that survives a paused game and a session replayed at
-        another frame rate.
-        """
-        self.model.play(IDLE, loop=True, fade=0.3)
-        self.rest_until = now + REST
+        self._resting = self.after(REST, self.OnRandomGoal)
         print('arrived at (%.1f, %.1f); idling %.0f s before choosing again'
               % (self.target[0], self.target[2], REST))
 

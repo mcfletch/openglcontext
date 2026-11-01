@@ -7,18 +7,16 @@ PYOPENGL_PLATFORM=egl the visual regressions therefore silently skipped and read
 as green. All copies now route through OpenGLContext.testing.display.
 """
 import sys
-from pathlib import Path
 
 from OpenGLContext.testing.paths import tests_root
 from OpenGLContext.testing.display import display_available
 
-# test_visual_regression sits beside this file (tests/unit/); test_all_scripts
-# stays in the tests root -- both must be importable.
-sys.path.insert(0, str(Path(__file__).parent))
+# test_all_scripts sits in the tests root.
 sys.path.insert(0, str(tests_root(__file__)))
 
 import test_all_scripts as tas
-import test_visual_regression as tvr
+
+from . import test_visual_regression as tvr
 
 
 class TestSharedHelper:

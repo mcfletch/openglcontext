@@ -17,12 +17,22 @@ items such as weapons, and crowds of many animated figures.
    model.play('run', fade=0.2)
    model.layer('upper', mask=model.mask('spine')).play('fire', loop=False)
    ...
-   model.update(dt)                  # once a frame
+   context.animate(model)            # model.update(dt) once a frame
    scene.children = [model.group]    # the renderable root
 
 The bone map, the animation mixer and the attachment points can each be used
 on their own. ``CharacterModel`` combines the three over one loaded document,
 which is what most programs use.
+
+The clips advance when ``model.update(dt)`` is called with the seconds since
+the last frame. ``context.animate(model)`` has the context make that call once
+a frame on the engine clock and draw while it runs; it returns a handle whose
+``stop()`` ends it, and it takes any object with ``update(dt)`` or a function
+of ``dt``. ``context.after(seconds, function)`` makes one call that many
+seconds of the same clock from now. A capture's fixed clock steps both the
+same way on every run (:doc:`tutorials/core_context/using_clips`). A character
+made by ``physics.add_character`` is animated by the physics service, and
+needs neither.
 
 .. _characters-bones:
 
@@ -172,7 +182,7 @@ rather than wherever the item's origin is. ``mounted()`` lines the two up:
 
 .. code-block:: python
 
-   from OpenGLContext.character.attachment import mounted, sockets
+   from OpenGLContext.character.attachment import attach, mounted, sockets
 
    weapon = load_gltf('sniper-rifle.glb')
    attach(sockets(scene)['grip'], mounted(weapon, 'grip'))
@@ -186,6 +196,381 @@ An item can declare several points, such as ``socket_grip`` for the hand and
 ``socket_back`` for where it is stowed. ``mounted()`` uses the point with the
 name it is given, so one file hangs correctly in both places. An item with no
 such point is mounted by its origin.
+
+.. _characters-locomotion:
+
+A character on a landscape
+--------------------------
+
+A rigged model that runs across ground is four calls after the scene
+(:doc:`tutorials/character/character_run`):
+
+.. code-block:: python
+
+   self.sg = sceneGraph(children=[Background(), DirectionalLight(), land_node])
+   self.physics.add_ground(land)
+   hero = self.physics.add_character(model='hero.glb', animations=CLIPS,
+                                     position=(0, 0.2, 0), parent=self.sg)
+   self.follow(hero)
+
+``add_ground`` makes the land a static body (:ref:`physics-ground`).
+``add_character`` makes a capsule the world stops and steps it every frame
+(:ref:`physics-characters`). ``model`` is a ``CharacterModel``, a loaded glTF
+scene, the bytes of a ``.glb``, or a path or an http(s) URL, which is fetched
+once into the loader's cache. The character wears it in a node of its own, put
+at the capsule's feet each frame and added to ``parent`` where one is given. The
+model is scaled to the capsule's standing height and set on its base unless
+``fit=False``, and turned toward where the character goes unless
+``facing=False``. The world collides with the capsule alone: the model's shapes
+are not scenery.
+
+``animations`` is a ``ClipMap``, ``'ual'`` for the Universal Animation
+Library's names (``ClipMap.ual()``) or ``'guess'`` for the roles found by the
+words in the model's clip names (``ClipMap.guess(model)``); the character then
+plays its clips for what the capsule is doing, as :ref:`below
+<characters-clipmaps>` describes. A map is the way to say a model's own names
+and speeds. The fox of the tutorial has three clips:
+
+.. code-block:: python
+
+   FOX = ClipMap(idle='Survey', walk=('Walk', 1.5), run=('Run', 4.0))
+
+A role the map leaves out is not played: a model with no jump clip keeps the
+pose of the ground movement in the air. ``hero.addEventHandler('landed',
+function=f)`` calls ``f(landing)`` in the frame the character comes down, with
+``landing.speed`` in metres a second, and ``'footstep'`` calls ``f(step)`` for
+each foot that lands, with the ``foot``, its ``phase`` in the stride, the
+``point`` and the ``material`` of the body under it. A material with a
+``footstep`` clip plays it where a foot lands on a body of that material
+(:ref:`physics-materials`); :doc:`tutorials/character/character_footsteps` crosses
+grass and a stone slab. :doc:`tutorials/character/character_jump` makes a sound
+at each landing, as hard as the fall.
+
+Characters on a route
+~~~~~~~~~~~~~~~~~~~~~
+
+``hero.run_along(course, speed=, mode=, lane=)`` has the character follow a
+course: a ``RoadCourse`` (:ref:`roadcourse`), or a list of two or more points,
+such as a route from a navigation mesh (:doc:`navmesh`). At each step it moves at
+``speed`` metres a second along the line, steering back onto its lane, and the
+ground, slopes and jumps stay the controller's. ``speed`` is a number, or a
+function called at each step with the seconds since the run began, such as a
+pace that rises with the distance run; left out, it is the speed of ``mode``
+from the capabilities, which are not changed. ``mode`` is ``'walk'``, ``'run'``,
+``'sprint'`` or ``'crouch'``, and the clip map shows that pace. ``lane`` is the
+starting lateral offset in metres right of the line (0). ``hero.hop_to(offset,
+over=)`` moves to the lane ``offset`` metres right of the line over ``over``
+seconds (0.16), ``hero.lane`` is the offset steered toward now, and setting
+``hero.speed`` changes the run's speed. At the end of an open course the character stops,
+``hero.arrived`` is true and ``'arrived'`` handlers are called with the
+character; a closed course goes round for ever. ``hero.stop_running_along()``
+gives the moves back to ``set_move`` and the keys.
+
+.. code-block:: python
+
+   route = navmesh.path(hero.position, goal)
+   hero.run_along(route, speed=1.8, mode='walk')
+   hero.addEventHandler('arrived', self.OnArrived)
+
+   runner.run_along(course, speed=lambda seconds: 6.0 + 0.1 * seconds, lane=-2.0)
+   runner.hop_to(0.0, over=0.16)             # one lane to the right
+
+:doc:`tutorials/core_context/using_npc` walks a fox round a wall from corner to
+corner; :doc:`tutorials/character/character_trail` runs one along a winding
+trail with three lanes.
+
+.. _characters-clipmaps:
+
+Clips from a character's state
+------------------------------
+
+A game that moves a character knows its speed, whether it is on the ground and
+what it is doing. ``OpenGLContext.character.locomotion`` turns that into clips
+on a ``CharacterModel``: idle, walk, run and sprint blended by speed, each
+looping clip played at the rate that keeps its feet on the ground, the jump,
+fall, landing, slide, swim and knock-down clips when the character is doing
+those, and a footstep when a foot lands.
+
+.. code-block:: python
+
+   from OpenGLContext.character.locomotion import ClipMap, Locomotion, LocomotionInput
+
+   model = CharacterModel.load('hero.glb')
+   locomotion = Locomotion(ClipMap.ual(), model)
+   locomotion.on_footstep(lambda foot, phase: play_step_sound(foot))
+   ...
+   locomotion.update(LocomotionInput(speed=3.1, vertical_speed=0.0,
+                                     grounded=True), dt)      # once a frame
+   model.update(dt)                                           # after it
+
+``LocomotionInput`` is the record a game fills each frame, from a physics
+character or from its own simulation:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 78
+
+   * - field
+     - meaning
+   * - ``speed``
+     - ground speed in metres a second
+   * - ``vertical_speed``
+     - metres a second, up positive
+   * - ``grounded``
+     - whether something is under the feet
+   * - ``state``
+     - ``'standing'``, ``'crouching'``, ``'sliding'``, ``'airborne'``,
+       ``'down'``, ``'swimming'`` or ``'flying'``
+   * - ``slide_progress``
+     - 0 to 1 through a slide
+   * - ``landing_speed``
+     - the speed it hit the ground at, in the frame it landed; otherwise None
+   * - ``crouching``
+     - whether the character is crouched
+   * - ``dead``
+     - plays the death clip over everything else
+
+``update`` returns a ``Settled``: the ``role`` showing most, the share of the
+pose each clip has (``clips``, summing to 1), the playback rate of each looping
+clip (``rates``), the ``progress`` of a held slide, and the ``footsteps`` of the
+frame. A ``Locomotion`` built with no model settles and raises footsteps and
+plays nothing, which is how a table of states and speeds is tested without a
+window.
+
+Clip maps
+~~~~~~~~~
+
+A ``ClipMap`` says which clip does each role. The roles are ``idle``,
+``walk``, ``run``, ``sprint``, ``crouch_idle``, ``crouch_walk``, ``jump_up``,
+``jump_down``, ``land``, ``slide``, ``fall``, ``swim``, ``down``, ``get_up``
+and ``death``. A role is a clip name, a ``(clip name, speed)`` pair or a
+``ClipSpec``, and a role left out is not played:
+
+.. code-block:: python
+
+   ClipMap(idle='Idle', walk=('Walk', 1.4), run=('Run', 3.8),
+           jump_up='Jump', jump_down='Fall', land='Land')
+   ClipMap(run=ClipSpec('Run', speed=3.8, cycle=0.7,
+                        contacts=(('left', 0.0), ('right', 0.35)), fade=0.1))
+   ClipMap.ual()                  # the Universal Animation Library's names
+   ClipMap.guess(model)           # roles found by the words in the clip names
+
+The speed is metres a second the clip was authored for. ``contacts`` are the
+seconds into the clip at which each foot lands, ``cycle`` the seconds one cycle
+lasts (the model's clip length when left out) and ``fade`` the seconds to fade
+into the role (the map's ``fade``, 0.15, when left out). ``rate`` is how
+fast a one-shot or held role plays, 1.0 as authored: a roll shortened to fit a
+knock-down, a takeoff fitted to a short jump (the looping roles play at the rate
+their speed gives, and the slide is held at its progress). ``rate_range``, by
+default 0.55 to 2.1, bounds the rate a looping clip plays at.
+
+``ClipMap.ual()`` fills every role the library has a clip for. Its speeds and
+foot contacts were measured with ``oglc-gait``: walk 1.0 m/s, run
+(``Jog_Fwd_Loop``) 5.7 m/s, sprint 8.3 m/s, crouch walk 0.76 m/s and swim
+2.8 m/s, in metres on the library's character. The library has no get-up clip,
+and its ``Roll`` plays for a knock-down.
+
+``ClipMap.guess`` splits each clip name into words at underscores, digits and
+capitals, and gives a role the clip with the words it names and the fewest
+others, so ``Walk_Loop`` fills ``walk`` ahead of ``Walk_Formal_Loop``. A clip
+may fill several roles. The roles nothing matched are in ``unmatched`` and the
+clips no role took are in ``leftover``. A role named in the call takes the
+clip given in place of a guess, which is how the gaps are filled:
+
+.. code-block:: python
+
+   clips = ClipMap.guess(model)
+   clips.unmatched        # ('down', 'get_up')
+   clips.leftover         # ('Dance_Loop', 'Interact', ...)
+   clips = ClipMap.guess(model, down='Interact')
+
+A model with one clip and no name for it calls the clip ``animation0``;
+``ClipMap(walk='animation0')`` is its map.
+:doc:`tutorials/character/character_animations` maps the fox by guessing and the
+Khronos CesiumMan by hand.
+
+``clips.missing(model)`` names the roles whose clip a model lacks. A
+``Locomotion`` leaves those roles out and lists them in ``locomotion.missing``.
+
+Blending by speed
+~~~~~~~~~~~~~~~~~
+
+The idle is underneath at full weight. The map's walk, run and sprint lie over
+it in that order, and a map without one of them uses the next. This is the
+blend ``Gait`` makes, and the share of the run in the mix is
+``wander.run_share(speed, walk_stride, run_stride)``, the strides being the
+speeds the walk and the run were authored to carry: nothing below the walk's
+speed, everything above the run's, linear between. The same function sets the
+sprint's share between the run's speed and the sprint's.
+
+Below 0.05 m/s a character is standing. From there the walk's share of the idle
+rises with speed and reaches 1 where the rate reaches the bottom of
+``rate_range``, so a slow walk fades out into the idle and is not played in slow
+motion. Each looping clip's rate is the speed over its authored speed, held
+inside ``rate_range``. A clip with no speed in the map is measured with
+``measure_stride`` when the ``Locomotion`` is made, which costs a few
+milliseconds a clip, and multiplied by the scale the model's group is drawn
+at, so a model ``add_character`` fits to its capsule is measured in metres. A
+clip takes a default (walk 1.4, run 3.8, sprint 6.0, crouch
+walk 0.9, swim 1.5 m/s) when it plants no foot or the model has no skeleton.
+``Locomotion(clips, model, measure_missing=False)`` skips the measuring.
+``locomotion.speeds`` holds the speeds in use.
+
+The locomotion clips share one phase. Every frame the tracks of the walk, run
+and sprint are set to the same point in their cycles, so the legs of two blended
+clips do not drift apart.
+
+Other roles
+~~~~~~~~~~~
+
+These play on an ``action`` layer over the movement, fading in and out over the
+role's ``fade``. The first that applies is used:
+
+1. ``death`` when ``dead`` is set, and ``down`` while ``state`` is ``'down'``.
+   Leaving ``'down'`` plays ``get_up`` for its length when the map has one.
+2. ``swim`` while swimming, at a rate from the speed. ``fall`` while flying.
+3. ``slide`` while sliding, held at ``slide_progress`` through the clip. The
+   game decides how progress maps to the pose, for instance holding the low
+   pose while the slide lasts and rising over its end.
+4. While airborne, ``jump_up`` when the vertical speed is positive, ``fall``
+   when it is below minus 6 m/s, and otherwise ``jump_down``.
+5. ``land`` for the clip's length (0.35 s if unknown) after a frame with a
+   ``landing_speed``. The clip shows in full at 6 m/s and above, and at a
+   quarter of its weight at 1.5 m/s and below, over the movement beneath.
+
+A crouch eases in and out over ``crouch_idle``'s fade. The ``crouch_walk`` and
+``crouch_idle`` clips replace the standing clips in proportion to how far into
+the crouch the character is.
+
+Footsteps
+~~~~~~~~~
+
+``on_footstep(function)`` registers ``function(foot, phase)``, called with
+``'left'`` or ``'right'`` and the fraction of the cycle at which the foot lands.
+The phase advances at the playback rate of the clip showing most, while the
+character is on the ground and moving, and each landing in the map's
+``contacts`` is raised as the phase passes it, so a long frame raises each one
+that fell in it. Without ``contacts`` the left foot lands at the start of the
+cycle and the right at its half. A clip whose cycle length is unknown raises no
+footsteps.
+
+Actions on a layer
+~~~~~~~~~~~~~~~~~~
+
+``play_action(name, layer='upper')`` plays a clip once over the movement, on a
+layer that moves the joints under the spine, fades the layer out when the clip
+ends, and returns the track. Other layers are made the same way, and ``bones``
+names which joints they move:
+
+.. code-block:: python
+
+   locomotion.play_action('fire')                       # the arms and spine
+   locomotion.play_action('wave', layer='taunt', bones=('rightShoulder',))
+
+It returns None when there is no model or the model has no such clip.
+
+.. _characters-steps:
+
+A character stepped by its game
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``Physics.frame`` steps a character with ``character.framed`` true once for each
+fixed step of the world the frame owes, ``1 / tickHz`` seconds each (1/120 s by
+default), and animates it once for the frame: a character takes the same steps
+as the world (:ref:`physics-characters`). Input given in ``OnIdle`` reaches every
+one of those steps. The world takes its steps of a frame first and the
+characters theirs after, so a rule that sets a character's move at each step
+goes in the character's own handlers rather than the world's:
+``character.addEventHandler('before-step', f)`` calls ``f(step)`` with a
+``CharacterStep`` of the character and ``step.dt`` at the start of each of its
+steps, and ``'after-step'`` at the end, where the handler reads where the step
+left it. A move set before a step drives that step, so a game whose rules run
+at the world's rate needs no loop of its own. The handlers run for a step taken
+by ``character.step(dt)`` as well. A game that steps a character
+on a clock of its own sets ``framed`` false and calls ``character.step(dt)`` for
+each step and ``character.animate(dt)`` once for the frame, ``dt`` the time of
+the whole frame. ``step`` moves the capsule, places the
+node and the stand-in the world sees and tells ``landed``. ``animate`` plays the
+clips, turns the body and raises the footsteps: it hears the speed the character
+covered over the frame (the distance since the last animation over ``dt``) and
+the hardest landing in any step since it. ``update(dt)`` is ``step(dt)`` and
+``animate(dt)``.
+
+``slide(duration, rise, steer=True)``, ``extend_slide(duration)`` and
+``end_slide()`` pass to the controller (see :ref:`character`).
+
+A body added with ``blocks_characters=False`` (``physics.add_static(None, proxy,
+blocks_characters=False)``) is met by rays, sweeps and overlaps like any other
+and is walked through by every character: a hazard the game's rules judge, whose
+shape the world still holds for the camera and for a ball that rolls into it.
+
+.. _characters-gait-measure:
+
+Measuring a stride
+~~~~~~~~~~~~~~~~~~
+
+``gaitmeasure.measure_stride(model, 'Jog_Fwd_Loop')`` returns the ground speed
+of a clip at rate 1, in the model's units a second. It samples the clip and
+reads the speed of the lower foot relative to the hips while the foot is
+planted, which is the speed of the body. A clip whose hips travel more than
+0.05 m/s carries its own root motion, and the speed is that travel.
+``measure(model, clip)`` returns a ``Stride`` with the speed, the clip's
+length, whether it is root motion and the ``(foot, seconds)`` of each landing.
+The model needs a humanoid skeleton with its hips and feet, with +Y up. The
+measurement poses the model, and leaves it as its other layers pose it.
+
+``oglc-gait`` prints the same for a file:
+
+.. code-block:: bash
+
+   oglc-gait hero.glb
+   oglc-gait hero.glb --clips Walk_Loop,Jog_Fwd_Loop
+   oglc-gait hero.glb --all
+
+It measures the clips that ``ClipMap.guess`` gives to the walk, run, sprint,
+crouch-walk and swim roles, or those named, or every clip with ``--all``. It
+ends with a ``ClipMap(...)`` for the guessed roles carrying the measured
+numbers, then the roles with no clip and the clips with no role.
+
+.. _characters-facing:
+
+Facing, the ground and size
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.character.facing`` holds what a third-person character's node
+needs apart from clips:
+
+.. code-block:: python
+
+   from OpenGLContext.character.facing import Facing, fit_to_height, model_bounds
+
+   facing = Facing(turn_rate=math.radians(540), lean=0.02)
+   ...
+   pose = facing.update(dt, velocity=velocity, normal=ground_normal,
+                        acceleration=acceleration)
+   node.rotation = pose.rotation
+
+   low, high = model_bounds(model)
+   fit_to_height(low, high, 1.8, base=0.0).place(model_node)
+
+``heading`` is radians about +Y from +Z, as in :ref:`the crowd
+<characters-crowds>`. It turns toward ``aim`` (a direction as ``(x, z)`` or
+``(x, y, z)``) when one is given and toward the horizontal part of the velocity
+otherwise, at ``turn_rate`` radians a second (720 degrees a second by default)
+by the shorter way round. A velocity under 0.1 m/s does not turn it. With
+``align_to_ground`` (the default) the body is pitched and rolled so its up lies
+on the ground normal, easing at ``ground_rate`` (10 a second) and never beyond
+``max_tilt`` (50 degrees). ``lean`` is radians of roll per m/s squared of
+acceleration across the heading, limited to ``max_lean`` (25 degrees) and eased
+at ``lean_rate`` (8 a second); the default of 0 leans nothing. The pose is
+``FacingPose(heading, pitch, roll, rotation)``, where ``rotation`` is the
+``Transform`` axis-angle of the three together.
+
+``fit_to_height`` returns the scale that makes a model of the given bounds
+``height`` tall and the translation that puts its lowest point at ``base``: a
+model 3 units tall in a 1.8 m capsule is scaled by 0.6. A model whose bounds
+have no height is left as it is. ``model_bounds`` reads the bounds from the
+model's vertices in the rest pose and returns None when it has no triangles.
 
 .. _characters-crowds:
 
@@ -258,18 +643,25 @@ still draws them all in one call:
 
 .. code-block:: python
 
-   from functools import partial
-   from OpenGLContext.character.wander import Gait, WanderingCrowd
+   from OpenGLContext.character.locomotion import ClipMap
+   from OpenGLContext.character.wander import WanderingCrowd
 
    crowd = WanderingCrowd((-13.0, 13.0, -19.0, -0.5),      # the ground they keep to
                           speed=(0.55, 1.65), scale=0.008,
-                          gait=partial(Gait, walk='Walk', run='Run', idle='Survey',
-                                       walk_stride=0.82, run_stride=1.38))
+                          clips=ClipMap(idle='Survey', walk=('Walk', 0.82),
+                                        run=('Run', 1.38)))
    for _ in range(150):
        model = CharacterModel(load_gltf(document=document))
        scene.children.append(crowd.add(model))    # the Transform to mount it by
-   ...
-   crowd.update(dt, mode=context)                 # once a frame: move, then pose
+   context.animate(lambda dt: crowd.update(dt, mode=context))   # move, then pose
+
+``clips`` is the ``ClipMap`` a single character's locomotion reads: its idle,
+walk and run clips, and the speeds of the walk and the run as the strides
+(``Gait.from_clips``). Both speeds are required, since a crowd's strides are
+measured. ``gait=`` takes a function of the model that builds its ``Gait``
+instead, for a figure that needs several idles or other settings a map does
+not hold. :doc:`tutorials/core_context/crowd_demo` is a hundred and fifty of
+them.
 
 Each figure walks for a while, stops, does something while stopped, turns
 towards a new direction and sets off again. How long each of those lasts, how
@@ -280,6 +672,9 @@ figure that reaches the edge of the area turns back inwards.
 
 Blending idle, walk and run
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A single character driven by its state uses the same blend through
+:ref:`Locomotion <characters-locomotion>`.
 
 ``Gait`` puts the model's clips in three layers: the idle at the bottom, and
 the walk and the run over it. Each figure has its own weights on the three. A
@@ -416,6 +811,171 @@ Building a crowd from one loaded model, without wandering:
                                  children=[figure.group]))
    ...
    crowd.update(dt, mode=context)          # once a frame, for all of them
+
+.. _characters-ragdoll:
+
+Ragdolls
+--------
+
+``OpenGLContext.character.ragdoll`` gives a rigged character a ragdoll for a
+skeleton (:ref:`physics-ragdolls` is the physics side).
+
+.. code-block:: python
+
+   from OpenGLContext.character.ragdoll import RagdollFigure
+
+   model = CharacterModel.load(sample_model_url('CesiumMan'))
+   model.play('animation0')
+   figure = RagdollFigure(context.physics, model, mode='powered',
+                          mass=70.0, root_force=6000.0, root_torque=2000.0)
+   context.animate(lambda dt: (figure.update(dt), figure.draw()))
+   ...
+   figure.ragdoll.hit('chest', (0.0, 0.0, -60.0))       # N s
+   figure.following = False
+   figure.set_mode('limp', 0.3)                         # falls over 0.3 s
+   figure.following = True
+   figure.set_mode('kinematic', 1.0)                    # gets up over 1 s
+
+``RagdollRig.from_model(model)`` (or ``RagdollRig.build(mixer, bones)``)
+chooses the bones: ``DEFAULT_BONES`` of the humanoid bone map (hips, spine,
+chest, head, upper and lower arms, hands, thighs, shins and feet) where the
+model has them. Every other joint rides its nearest chosen ancestor at its
+rest offset: fingers, twist joints, a short neck. A joint between two chosen
+bones spanning ``bridge`` metres (0.12) or more becomes a bone too, so an arm
+whose upper joint the bone map does not name still bends at the shoulder; a
+limb chain the names give out of order is put in the hierarchy's order. Each
+capsule runs to the first chosen child; a hand, foot or head runs along the
+skin weighted to it, or to its first child joint. Its radius is the 60th
+percentile of the distances of the skin's vertices from the bone's axis
+(0.02 to 0.25 m). Masses follow each role's share of the body (``MASS_SHARES``,
+Dempster's segment fractions) scaled to ``mass``. Joint limits are
+``HUMANOID_LIMITS`` by role, turned into each joint's frame by the figure's
+left-right axis, or a document's own HAnim Euler limits
+(``limits={'head': (llimit, ulimit)}``, through ``limits_from_hanim``).
+
+The arithmetic is in the world: ``placement`` is the world matrix of the
+document's root, so a document in centimetres or turned Z-up makes a ragdoll
+in metres with Y up. ``RagdollFigure.update(dt)`` advances the mixer
+(``AnimationMixer.advance``) and, while ``following``, sends the blended pose
+(``AnimationMixer.blended_pose``) as the ragdoll's target in one batch.
+``draw()`` reads every bone in one ``physics.poses`` call and writes the skin
+matrices (``AnimationMixer.reskin_from``) and the ``Transform`` of each joint
+the clips drive (``AnimationMixer.write_joints_from``), so a weapon hung on a
+hand follows the ragdoll. The model's own ``update`` is not called while a
+figure drives it. The ragdoll starts standing in the animation's pose at the
+moment the figure is made.
+
+A death is ``knock_down``:
+
+.. code-block:: python
+
+   figure = RagdollFigure(physics, model, rig=shared_rig.placed(world_matrix),
+                          mode='kinematic', queryable=False)
+   figure.knock_down(impulse=direction * 110.0, point=hit.point,   # N s
+                     velocity=running_velocity, blend=0.25)       # m/s, s
+
+It switches a kinematic ragdoll to powered, adds ``velocity`` to every bone,
+puts ``impulse`` on the bone nearest ``point`` (or ``bone``, or the root),
+and fades the motors to limp over ``blend`` seconds while the figure still
+follows its animation, so a death clip shapes the start of the fall. After
+the blend the figure stops following; ``update`` then costs nothing and
+holds the pose the riding joints (fingers, toes) were in. ``settled`` is
+true once every bone is asleep; a settled figure, or one whose ragdoll was
+removed, keeps the pose it last drew and ``draw`` writes nothing more. After
+``knock_down`` (or ``set_mode`` to powered or limp) each bone reports its
+``wake`` event to the figure, so a settled figure's ``draw`` reads nothing
+from the world until a bone wakes; six settled figures draw in 0.001 ms a
+frame. Turning on those events turns on the world's sleep and wake events.
+
+``RagdollRig.placed(matrix)`` is the rig for another figure of the same
+document, its bones and spec shared, so a cast builds the rig once per
+build. A figure in a :class:`~OpenGLContext.character.crowd.Crowd` is taken
+out of it (``crowd.remove(model)``) while a ragdoll drives it, and put back
+afterwards; ``Crowd.remove`` hands the meshes' joint palettes back from the
+crowd's compute shader, so the matrices ``draw`` writes are the ones drawn.
+
+``RagdollBudget(limit)`` caps how many figures stay simulated.
+``admit(figure)`` counts one in and freezes the oldest past the limit
+(``figure.remove()``: out of the world, holding its last pose), returning
+those frozen; ``release(figure)`` stops counting one its owner removed;
+lowering ``limit`` freezes the oldest at once, and a limit of 0 freezes
+each figure as it is admitted. A ragdoll costs the world thread its bones
+in each tick and the render thread one bulk read and one skin write a
+frame until it settles: ten falling at once measured 0.002 to 0.014 ms a
+tick of world-thread ragdoll time, 0.35 to 0.8 ms a frame of physics step
+and 0.8 to 1.2 ms a frame of drawing after their 0.25 s blend (5.9 ms a
+frame during it), in ``physics.deformable_costs()`` and the overlay's
+physics section.
+
+The X3D ``Ragdoll`` node (:ref:`x3d-cloth-ragdoll`) does the same for a glTF
+character a document names. ``oglc-ragdoll`` is the demo.
+
+.. _characters-ragdoll-fall:
+
+A character that falls as a ragdoll
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``CharacterRagdoll`` hands a physics character's body to a ragdoll when it
+falls and back to its animation when it gets up. The ragdoll exists only in
+between; a character on its feet holds none and does no ragdoll arithmetic.
+
+.. code-block:: python
+
+   runner = physics.add_character(model=model, animations='ual', ragdoll=True)
+   ...
+   runner.ragdoll.fall(impulse=(0.0, 0.0, 45.0), bone='leftLowerLeg')   # tripped
+   ...
+   rest = runner.ragdoll.rest()          # where the body lies, and how fast it still moves
+   runner.ragdoll.recover(blend=0.6)     # the capsule stands there, still knocked down
+   ...
+   runner.get_up()                       # when the game's rules say so
+
+``add_character(ragdoll=True)`` builds the bones from the model as fitted to
+the capsule (a ``RagdollRig``, which reads the skin and takes milliseconds);
+``ragdoll=rig`` uses a rig built before, so a game making a character for each
+round builds the rig once (``character.ragdoll.rig``). ``CharacterRagdoll(character,
+rig)`` does the same for a character made without it.
+
+The capsule decides where the character is, and the ragdoll is what is drawn:
+
+- ``fall(impulse, bone, point, velocity)`` knocks the character down and starts
+  a ragdoll in the pose the figure was last drawn in, each bone moving at
+  ``velocity`` (the capsule's velocity by default), struck by ``impulse``
+  (N s) on ``bone`` at its centre of mass or at the world ``point``. The motors
+  hold the pose of the fall for ``powered`` seconds (0.12) and let go over
+  ``limp_blend`` (0.2), and the body tumbles under the world's gravity against
+  every body in the world; characters pass through its bones. Falling again
+  while down strikes the same ragdoll.
+- ``rest()`` returns a ``RagdollRest``: ``feet``, the ground under the pelvis
+  (bodies characters walk through are not ground); ``heading``, from the
+  pelvis to the head in the ``Facing`` convention; ``speed`` of the pelvis
+  (m/s); and ``pelvis``.
+- ``recover(blend, place=True)`` removes the ragdoll, stands the capsule at
+  ``rest().feet`` (with ``place``), which it returns, and draws the figure
+  blending from the body's last pose to the animation's over ``blend``
+  seconds, bone by bone in the world (smoothstep weights). The character stays
+  knocked down until ``Character.get_up``; a get-up clip the locomotion plays
+  while the character is down (the ``down`` role) keeps its time through the
+  fall, so a game times the blend to meet the clip where it rises.
+- ``park()`` removes the ragdoll and ends the blend at once;
+  ``Character.remove`` parks it.
+
+While a ragdoll or a blend draws the figure, ``Character.animate`` calls
+``CharacterRagdoll.draw`` in place of the model's ``update``: the clips
+advance, the character's node follows the body (the pelvis across, the lowest
+bone up, so the model's bounds stay around it), and joint transforms are not
+written. On the first frame of a fall the bones are where the figure was drawn,
+moving at the capsule's speed, and the last frame of a blend is the
+animation's pose, so neither end of the fall moves the figure by more than a
+frame's travel. The bones start at the capsule's last step rather than at the
+drawn place a part step behind it, because the world's bodies are drawn a part
+step behind too.
+
+Costs, measured in the hill runner on the frame the runner trips: the fall
+itself (one ``blended_pose``, the bones' poses, ``add_ragdoll``) takes about
+1.3 ms on the render thread, and the world's first ticks with the new ragdoll
+about 0.4 ms more. The Jolt settings of a spec are made once and kept while
+the spec is unchanged. Each frame of the fall reads the bones in one call.
 
 .. _characters-skinning:
 

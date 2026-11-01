@@ -1,34 +1,49 @@
 """Walk-with-gravity view platform (:mod:`OpenGLContext.move.physicsplatform`).
 
-``PhysicsViewPlatform`` owns a :class:`omi_physics.character.CharacterController`
-capsule and turns navigation input into camera pose. These tests drive it against a
-real world with a flat ground trimesh: eye-anchored binding, pitch clamping, jump,
-crouch, and the ``blocked`` (airborne-and-stuck) predicate -- asserting real state
-changes, not just absence of errors.
+``PhysicsViewPlatform`` drives a character of a physics service and turns
+navigation input into camera pose. These tests drive it over a character its
+owner steps (``framed`` false, so :meth:`update` steps it) standing on a flat
+ground trimesh: eye-anchored binding, pitch clamping, jump, crouch, and the
+``blocked`` (airborne-and-stuck) predicate -- asserting real state changes, not
+just absence of errors.
 """
 import numpy as np
 import pytest
 
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
-from omi_physics.character import CharacterCapabilities
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
-from OpenGLContext.physics.manager import PhysicsManager
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.physics.types import CharacterCapabilities
+
+#: The services the platforms of a test were made over, closed after it.
+_MADE: list[Physics] = []
+
+
+@pytest.fixture(autouse=True)
+def _close_services():
+    yield
+    while _MADE:
+        _MADE.pop().close()
 
 
 def _ground_world():
-    """A world with a large static floor at y=0 so the character can stand."""
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
+    """A service with a large static floor at y=0 so the character can stand."""
+    physics = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0))
+    _MADE.append(physics)
     pts = np.array([(-50, 0, -50), (50, 0, -50), (50, 0, 50), (-50, 0, 50)], dtype='d')
-    tris = np.array([(0, 1, 2), (0, 2, 3)], dtype='i')
-    shape = world.add_shape(model.Shape.trimesh(pts, tris))
-    world.add_body(model.Motion(type=model.STATIC),
-                   collider=model.Collider(shape=shape), position=(0, 0, 0))
-    return world
+    tris = np.array([(0, 2, 1), (0, 3, 2)], dtype='i')
+    physics.add_static(None, proxy=Proxy.trimesh(pts, tris))
+    return physics
 
 
-def _platform(**kw):
-    return PhysicsViewPlatform(_ground_world(), CharacterCapabilities(), **kw)
+def _platform(physics=None):
+    """A platform over a character of ``physics`` (a new floor by default) its owner steps."""
+    physics = physics if physics is not None else _ground_world()
+    me = physics.add_character(None, CharacterCapabilities(),
+                               position=(0.0, 0.05, 0.0))
+    me.framed = False
+    return PhysicsViewPlatform(me)
 
 
 def test_bind_eye_places_the_camera_eye_at_the_requested_height():
@@ -63,24 +78,34 @@ def test_look_clamps_pitch_to_its_limits():
     assert plat.pitch == pytest.approx(-1.4)
 
 
-def test_jump_fires_only_when_grounded():
-    """A grounded capsule jumps; an airborne one does not."""
+def test_a_grounded_capsule_jumps():
+    """A grounded capsule leaves the floor when it jumps.
+
+    An airborne press is not refused: the character holds it for its
+    ``jumpBuffer`` seconds and jumps on landing within them.
+    """
     plat = _platform()
     plat.bind((0, 1.0, 0))
-    plat.update(1 / 60)                              # settle onto the floor
-    plat.character.grounded = True
+    for _ in range(10):
+        plat.update(1 / 60)                          # settle onto the floor
+    assert plat.character.grounded
     assert plat.jump() is True
-    plat.character.grounded = False
-    assert plat.jump() is False
+    for _ in range(10):
+        plat.update(1 / 60)
+    assert not plat.character.grounded
+    assert plat.feet_position()[1] > 0.1
 
 
 def test_set_crouch_toggles_the_character_crouch_state():
     """set_crouch drives the underlying controller's crouch flag."""
     plat = _platform()
     plat.bind((0, 1.0, 0))
+    plat.update(1 / 60)                              # stand on the floor first
     plat.set_crouch(True)
+    plat.update(1 / 60)
     assert plat.character.crouching is True
     plat.set_crouch(False)
+    plat.update(1 / 60)
     assert plat.character.crouching is False
 
 
@@ -180,10 +205,16 @@ class TestTheSpeedTheModeAsksFor:
         """Crouching is a property of the body, not of the way you are moving,
         so it outranks the tier the mode asked for."""
         plat = _platform()
+        plat.bind((0, 1.0, 0))
+        plat.update(1 / 60)
         plat.set_crouch(True)
-        plat.set_move(forward=1.0, mode='walk', speed=9.0)
-        assert plat.character.speed() == pytest.approx(
-            plat.character.caps.crouchSpeed)
+        plat.update(1 / 60)
+        start = float(plat.character.position[2])
+        for _ in range(60):
+            plat.set_move(forward=1.0, mode='walk', speed=9.0)
+            plat.update(1 / 60)
+        covered = abs(float(plat.character.position[2]) - start)
+        assert covered == pytest.approx(plat.character.caps.crouchSpeed, rel=0.05)
 
 
 def test_fly_move_lifts_the_camera_when_flying():
@@ -244,24 +275,58 @@ def test_apply_impulse_launches_the_capsule_and_lifts_the_camera():
     assert plat.camera_position()[1] > before + 0.5
 
 
-def test_a_walker_with_a_body_is_heard_entering_a_trigger():
-    """The platform's body enters triggers, so a subscription on it hears a pad."""
-    manager = PhysicsManager(world=_ground_world())
-    world = manager.world
-    world.fixed_dt = 1.0 / 60.0
-    shape = world.add_shape(model.Shape.box((1.0, 2.0, 1.0)))
-    pad = world.add_body(model.Motion(type=model.STATIC),
-                         trigger=model.Trigger(shape=shape), position=(2.0, 1.0, 0.0))
-    plat = PhysicsViewPlatform(world, CharacterCapabilities(), body=True)
-    plat.bind((0.0, 2.0, 0.0))
+def test_a_walker_is_heard_entering_a_trigger():
+    """The platform's body enters triggers, so the world's trigger handlers hear it at a pad."""
+    physics = _ground_world()
+    pad = physics.add_trigger(None, Proxy.box((1.0, 2.0, 1.0)), translation=(2.0, 1.0, 0.0))
+    plat = _platform(physics)
     heard = []
-    manager.events.subscribe(heard.append, body=plat.body, kinds=('trigger',))
+    keep = heard.append                              # handlers are held weakly
+    physics.addEventHandler('enter', function=keep)
     for _ in range(120):
-        plat.character.set_move((1.0, 0.0, 0.0))
+        plat.set_move(strafe=1.0)
         plat.update(1.0 / 60.0)
-        manager.advance(1.0 / 60.0)
-    assert [(hit.phase, hit.other) for hit in heard] == [('enter', world.ref(pad))]
+        physics.frame(1.0 / 60.0)
+    assert [(event.body, event.other) for event in heard] == [(pad, plat.body)]
 
 
-def test_a_walker_has_no_body_unless_asked():
-    assert _platform().body is None
+class TestOverAServiceCharacter:
+    """A platform over a character the physics service steps reads its camera and does not step it."""
+
+    def _service(self):
+        from OpenGLContext.physics.service import Physics
+        from OpenGLContext.physics.settings import PhysicsDefinition
+        from OpenGLContext.scenegraph import surfaces
+        from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+
+        service = Physics(PhysicsDefinition(mode='inline', maxCatchUp=2.0))
+        floor = surfaces.shape(surfaces.block((40, 1, 40)), PhysicalMaterial(), translation=(0, -0.5, 0))
+        service.add_static(floor, proxy='box')
+        return service
+
+    def test_the_camera_is_at_the_characters_eye(self):
+        service = self._service()
+        me = service.add_character(position=(1, 0.05, 2))
+        service.frame(0.5)
+        platform = PhysicsViewPlatform.over(me)
+        assert platform.camera_position() == pytest.approx(tuple(me.eye))
+        assert platform.character is me._controller
+        service.close()
+
+    def test_update_does_not_step_the_character(self):
+        service = self._service()
+        me = service.add_character(position=(0, 0.05, 0))
+        platform = PhysicsViewPlatform.over(me)
+        platform.set_move(1.0, 0.0)
+        before = me.position.copy()
+        platform.update(1.0)
+        assert me.position == pytest.approx(before)
+        service.frame(1 / 60)
+        assert me.position[2] != pytest.approx(before[2]) or me.position[0] != pytest.approx(before[0])
+        service.close()
+
+    def test_body_is_the_characters_body(self):
+        service = self._service()
+        me = service.add_character(position=(0, 0.05, 0))
+        assert PhysicsViewPlatform.over(me).body is me.body
+        service.close()

@@ -12,7 +12,7 @@ import tracemalloc
 
 import pytest
 
-PIL = pytest.importorskip("PIL")
+import PIL
 from PIL import Image
 
 from OpenGLContext.bin import gltf_regression as R

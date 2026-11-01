@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Text"/>
+    <meta name="description" content="Flat text from a string: one line for each string given, laid out by the fontStyle."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 0 6" orientation="0 1 0 0"/>
+    <Shape>
+      <Appearance>
+        <Material diffuseColor="0.95 0.8 0.3" emissiveColor="0.3 0.25 0.05"/>
+      </Appearance>
+      <Text string='"OpenGLContext" "draws text"'>
+        <FontStyle family='"SANS"' size="0.8" justify='"MIDDLE" "MIDDLE"' spacing="1.2"/>
+      </Text>
+    </Shape>
+  </Scene>
+</X3D>

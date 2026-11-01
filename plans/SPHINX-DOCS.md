@@ -62,6 +62,41 @@ highlighting; it is `docs/_ext/oglc_tutorials.py`, registered in
 reads it. `tests/unit/test_docbuild.py` builds a generated page with Sphinx and
 checks the columns the code comes out at.
 
+The code links the modules, classes and functions the script imports.
+`docbuild/codelinks.py` reads the script's import statements, `tutorials.render`
+writes them at the head of the page as a `tutorial-imports` directive, and the
+HTML writer for a `tutorial-code` block (`docs/_ext/oglc_tutorials.py`) links
+them once the highlighter has run. In `from x.y.z import q` each of `x`, `x.y`
+and `x.y.z` links to its own page, with the dots between them left as text, and
+`q` links to `x.y.z.q`, as does each later use of `q` that is not an attribute of
+something else. A name is looked up as written in the Python domain and the
+intersphinx inventories, then under the module the imported object reports as its
+own, so a name one package re-exports links to the page of the module that defines
+it. A name with no page is left as the highlighter wrote it. `from m import *`
+binds the public names `m` exports. `tests/unit/test_codelinks.py` and
+`tests/unit/test_tutorial_extension.py` hold it.
+
+## A path's introduction
+
+`tests/tutorials/<path>/index.rst`, where it exists, is the path's `index` page
+in place of the generated description and list. It gives a reader the
+background a path assumes before the first script. It is read like the
+commentary: a `:doc:` target naming a tutorial finds it wherever its path puts
+it. The `tutorials-<path>` label is added when the file does not declare it, and
+the generated `toctree` follows the text unless the file makes one of its own,
+so a page cannot be left out of the navigation by writing an introduction. A
+script called `index` is refused, since its page would be the path's.
+
+## Where a node is used
+
+`docbuild/nodeusage.py` reads the workspace's projects (the submodules named in
+the outermost `.gitmodules`) and `build-docs.py` hands the result to
+`directdocs.dumbpydoc.render_projects` as `class_sections`, which writes a block
+after the docstring of a class. A node class gets the files that use it, up to
+twelve, with the lines and a GitHub link at the first of them; a tutorial script
+also links its walkthrough. [NODE-DOCUMENTATION.md](NODE-DOCUMENTATION.md) has
+the rest of the plan.
+
 ## What moved, and what the URLs do
 
 Every page keeps its name: `docs/pbr.html` was published at

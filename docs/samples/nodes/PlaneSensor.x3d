@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="PlaneSensor"/>
+    <meta name="description" content="Turns a drag on its shapes into a position in a plane: translation_changed is where the drag has taken them, kept between minPosition and maxPosition, and offset is where they were left."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1.2 9" orientation="-1 -0 -0 0.1326"/>
+    <!-- The track the ball may be dragged along, from x of -3 to 3. -->
+    <Transform translation="0 -0.45 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.5 0.5 0.55"/></Appearance>
+        <Box size="6.8 0.1 0.4"/>
+      </Shape>
+    </Transform>
+    <Transform DEF="Slider">
+      <PlaneSensor DEF="Drag" minPosition="-3 0" maxPosition="3 0"/>
+      <Shape>
+        <Appearance><Material diffuseColor="0.85 0.4 0.25" specularColor="0.8 0.8 0.8" shininess="0.5"/></Appearance>
+        <Sphere radius="0.4"/>
+      </Shape>
+    </Transform>
+    <ROUTE fromNode="Drag" fromField="translation_changed" toNode="Slider" toField="set_translation"/>
+  </Scene>
+</X3D>

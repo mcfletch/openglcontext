@@ -10,7 +10,6 @@ import os
 
 import pytest
 
-pytest.importorskip('pygltflib')
 
 from OpenGLContext.loaders.gltf import fastdecode, loader, shapes, zoning, hooks
 from OpenGLContext.scenegraph import audio as audionodes

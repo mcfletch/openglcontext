@@ -1,0 +1,252 @@
+"""The physics package's own types and the API contract that no engine type crosses it."""
+import dataclasses
+import enum
+import inspect
+import types
+import typing
+
+import numpy as np
+import pytest
+
+import OpenGLContext.physics as physics_package
+from OpenGLContext.physics import (
+    Body, Character, CharacterCapabilities, CharacterState, CollisionFilter, Joint, Material,
+    Physics, PhysicsDefinition, Proxy,
+)
+from OpenGLContext.physics.ragdolls import Ragdoll, RagdollBone, RagdollSpec
+from OpenGLContext.physics.settings import PhysicsDefinition as SettingsDefinition
+from OpenGLContext.physics.vehicles import (
+    CarTuning, Vehicle, VehicleSettings, VehicleState, WheelState, car_wheels,
+)
+from OpenGLContext.physics.softbodies import SoftBody, SoftBodyFrame, SoftBodySpec
+from OpenGLContext.physics.zones import Box, Sphere
+
+#: The OMI glTF physics extensions' field names and defaults, as omi_physics 0.4
+#: states them: a glTF document carries the values by these names, so the
+#: package's types keep them.
+OMI_MATERIAL = {'staticFriction': 0.6, 'dynamicFriction': 0.6, 'restitution': 0.0,
+                'frictionCombine': 'average', 'restitutionCombine': 'average'}
+OMI_FILTER = {'collisionSystems': (), 'collideWithSystems': None, 'notCollideWithSystems': ()}
+#: omi_physics 0.4's character capabilities, the names pyjoltphysics' characters keep.
+OMI_CAPABILITIES = {
+    'walkSpeed': 3.0, 'runSpeed': 6.0, 'sprintSpeed': 9.0, 'crouchSpeed': 1.5, 'canSprint': True,
+    'canCrouch': True, 'canJump': True, 'canFly': True, 'flySpeed': 8.0, 'swimSpeed': 2.0,
+    'swimDrag': 4.0, 'jumpHeight': 1.2, 'jumpFollowsSlope': False, 'stepHeight': 0.35,
+    'maxSlope': 50.0, 'eyeHeight': 1.6, 'standHeight': 1.8, 'crouchHeight': 1.0, 'radius': 0.3,
+    'airControl': 0.4, 'pushFriction': 6.0, 'terminalVelocity': 55.0, 'suppressOverVoid': False,
+    'coyoteTime': 0.12, 'jumpBuffer': 0.12, 'mass': 80.0, 'pushMass': 200.0, 'pushSpeed': None,
+}
+OMI_STATES = {('AIRBORNE', 'airborne'), ('CROUCHING', 'crouching'), ('DOWN', 'down'),
+              ('FLYING', 'flying'), ('SLIDING', 'sliding'), ('STANDING', 'standing'),
+              ('SWIMMING', 'swimming')}
+
+
+# -- the types are the package's own --------------------------------------
+
+@pytest.mark.parametrize('cls', [CharacterCapabilities, CharacterState, CollisionFilter, Material])
+def test_the_exported_types_are_defined_in_opengl_context(cls):
+    assert cls.__module__.startswith('OpenGLContext.physics')
+
+
+@pytest.mark.parametrize('cls, expected', [(Material, OMI_MATERIAL), (CollisionFilter, OMI_FILTER),
+                                           (CharacterCapabilities, OMI_CAPABILITIES)])
+def test_the_types_have_the_omi_field_names_and_defaults(cls, expected):
+    assert {f.name: f.default for f in dataclasses.fields(cls)} == expected
+
+
+def test_character_state_has_the_omi_members():
+    assert {(m.name, m.value) for m in CharacterState} == OMI_STATES
+
+
+def test_a_collision_filter_keeps_its_rule():
+    balls = CollisionFilter(collisionSystems=('ball',))
+    shards = CollisionFilter(collisionSystems=('shard',), notCollideWithSystems=('ball',))
+    assert not balls.collides_with(shards)
+    assert balls.collides_with(balls)
+
+
+class _EngineState(enum.Enum):
+    """An engine's character state enumeration, of the same name and members."""
+    STANDING = 'standing'
+    SLIDING = 'sliding'
+
+
+_EngineState.__name__ = 'CharacterState'
+
+
+def test_a_state_equals_the_engine_member_of_the_same_name():
+    for member in _EngineState:
+        assert CharacterState[member.name] == member and member == CharacterState[member.name]
+        assert hash(CharacterState[member.name]) == hash(member)
+    assert CharacterState.STANDING != _EngineState.SLIDING
+    assert CharacterState.STANDING != 'standing'
+
+
+def test_coerce_takes_an_object_with_the_same_fields():
+    @dataclasses.dataclass
+    class EngineCapabilities:
+        radius: float = 0.3
+
+    made = CharacterCapabilities.coerce(EngineCapabilities(radius=0.25))
+    assert isinstance(made, CharacterCapabilities) and made.radius == 0.25
+    assert CharacterCapabilities.coerce(None) == CharacterCapabilities()
+    assert Material.coerce(Material(restitution=0.5)).restitution == 0.5
+
+
+@pytest.mark.parametrize('proxy, kind, names', [
+    (Proxy.box((1, 2, 3)), 'box', {'size'}),
+    (Proxy.sphere(0.25), 'sphere', {'radius'}),
+    (Proxy.capsule(1.0, 0.3), 'capsule', {'height', 'radius'}),
+    (Proxy.cylinder(2.0, 0.5), 'cylinder', {'height', 'radius', 'radius_top'}),
+    (Proxy.convex(np.eye(3)), 'convex', {'points'}),
+    (Proxy.trimesh(np.eye(3), [[0, 1, 2]]), 'trimesh', {'points', 'indices'}),
+])
+def test_a_proxy_is_a_kind_and_its_parameters(proxy, kind, names):
+    assert proxy.kind == kind
+    assert set(proxy.params) == names
+
+
+def test_a_compound_proxy_lists_its_parts_as_proxies():
+    cooked = Proxy.from_mesh(*_l_shape(), strategy='auto', dynamic=True)
+    if cooked.kind == 'compound':
+        parts = cooked.params['parts']
+        assert all(isinstance(part[0], Proxy) for part in parts)
+
+
+def _l_shape():
+    points = np.array([[0, 0, 0], [2, 0, 0], [2, 1, 0], [1, 1, 0], [1, 2, 0], [0, 2, 0],
+                       [0, 0, 1], [2, 0, 1], [2, 1, 1], [1, 1, 1], [1, 2, 1], [0, 2, 1]], 'd')
+    indices = np.array([[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 5],
+                        [6, 8, 7], [6, 9, 8], [6, 10, 9], [6, 11, 10]])
+    return points, indices
+
+
+def test_zone_regions_are_the_packages_own():
+    box, sphere = Box(center=(0, 1, 0), size=(2, 2, 2)), Sphere(center=(0, 0, 0), radius=1.0)
+    assert box.contains((0.5, 1.5, 0.5)) and not box.contains((2.0, 1.0, 0.0))
+    assert sphere.contains((0.5, 0.0, 0.0)) and not sphere.contains((1.5, 0.0, 0.0))
+    for region in (box, sphere):
+        assert not any(base.__module__.startswith('omi_physics') for base in type(region).__mro__)
+
+
+# -- the contract: no engine type in the public API ------------------------
+
+#: The packages of the engines underneath, none of whose types the API names.
+ENGINE_PACKAGES = ('omi_physics', 'pyjoltphysics')
+
+
+def _is_omi(value):
+    if isinstance(value, types.ModuleType):
+        return value.__name__.startswith(ENGINE_PACKAGES)
+    module = getattr(type(value), '__module__', '') or ''
+    if module.startswith(ENGINE_PACKAGES):
+        return True
+    if isinstance(value, type):
+        return (value.__module__ or '').startswith(ENGINE_PACKAGES)
+    return False
+
+
+def _mentions_omi(annotation):
+    if annotation is inspect.Parameter.empty:
+        return False
+    if isinstance(annotation, str):
+        return 'omi' in annotation or 'pyjolt' in annotation or 'pj.' in annotation
+    if _is_omi(annotation):
+        return True
+    return any(_mentions_omi(arg) for arg in typing.get_args(annotation))
+
+
+def _public_members(cls):
+    for name, value in inspect.getmembers(cls):
+        if name.startswith('_'):
+            continue
+        yield name, value
+
+
+@pytest.mark.parametrize('cls', [Physics, Body, Character, Joint, Proxy, PhysicsDefinition, Vehicle,
+                                 VehicleSettings, VehicleState, WheelState, CarTuning,
+                                 Ragdoll, RagdollSpec, RagdollBone, SoftBody, SoftBodySpec,
+                                 SoftBodyFrame])
+def test_no_public_signature_names_an_engine_type(cls):
+    for name, member in _public_members(cls):
+        function = member.fget if isinstance(member, property) else member
+        if not callable(function):
+            assert not _is_omi(member), '%s.%s is %r' % (cls.__name__, name, member)
+            continue
+        try:
+            signature = inspect.signature(function)
+        except (TypeError, ValueError):
+            continue
+        assert not _mentions_omi(signature.return_annotation), '%s.%s returns omi' % (cls.__name__, name)
+        for parameter in signature.parameters.values():
+            assert not _mentions_omi(parameter.annotation), '%s.%s(%s)' % (
+                cls.__name__, name, parameter.name)
+            assert not _is_omi(parameter.default), '%s.%s(%s=)' % (cls.__name__, name, parameter.name)
+
+
+def test_no_name_the_package_exports_is_an_engine_object():
+    for name in physics_package.__all__:
+        value = getattr(physics_package, name)
+        assert not _is_omi(value), name
+
+
+def test_the_definition_is_the_settings_node():
+    assert PhysicsDefinition is SettingsDefinition
+
+
+def _service_attributes(service):
+    character = service.add_character(position=(0, 0, 0))
+    body = service.add_dynamic(None, proxy=Proxy.sphere(0.5), translation=(0, 2, 0))
+    joint = service.add_ball(body, anchor=(0, 3, 0))
+    owners = [service, character, body, joint, body.proxy]
+    if service.engine.name == 'jolt':
+        chassis = service.add_dynamic(None, proxy=Proxy.box((1.8, 0.6, 4.2)), mass=1200.0,
+                                      translation=(10, 1, 0))
+        vehicle = service.add_vehicle(chassis, VehicleSettings.from_tuning(
+            CarTuning(), car_wheels(), 1200.0))
+        owners.append(vehicle)
+        ragdoll = service.add_ragdoll(RagdollSpec.humanoid(), position=(4, 0, 0))
+        soft = service.add_soft_body(SoftBodySpec.cloth(1, 1, 5, 5), position=(-4, 1, 0))
+        owners += [ragdoll, ragdoll.spec, ragdoll.bones[0], soft, soft.spec]
+    service.frame(0.01)
+    if service.engine.name == 'jolt':
+        owners.extend([vehicle.state(), vehicle.state().wheels[0], soft.frame()])
+    for owner in owners:
+        for name in dir(type(owner)):
+            if name.startswith('_'):
+                continue
+            yield owner, name
+
+
+@pytest.mark.parametrize('mode', ['inline', 'thread'])
+def test_no_public_attribute_value_is_an_engine_object(mode):
+    service = Physics(PhysicsDefinition(mode=mode))
+    try:
+        for owner, name in _service_attributes(service):
+            try:
+                value = getattr(owner, name)
+            except AttributeError:      # a reading this kind of joint does not have
+                continue
+            if callable(value) and not isinstance(value, (enum.Enum,)):
+                continue
+            assert not _is_omi(value), '%s.%s is %r' % (type(owner).__name__, name, value)
+            if isinstance(value, (tuple, list)):
+                assert not any(_is_omi(item) for item in value), '%s.%s' % (type(owner).__name__, name)
+        assert not _is_omi(service.materials.get('wood').material)
+    finally:
+        service.close()
+
+
+def test_the_test_inspection_helper_is_not_public():
+    assert 'inspect' not in physics_package.__all__
+    with pytest.raises(AttributeError):
+        physics_package.inspect  # noqa: B018 the attribute access is the test
+
+
+def test_the_presets_are_omi_physics_presets():
+    """materials.PRESETS states omi_physics 0.4's preset materials."""
+    from OpenGLContext.physics.materials import PRESETS
+
+    assert PRESETS == {
+        'wood': Material(0.5, 0.4, 0.2), 'metal': Material(0.4, 0.3, 0.1),
+        'rubber': Material(1.0, 0.9, 0.8), 'ice': Material(0.05, 0.02, 0.05)}

@@ -1,7 +1,7 @@
 """Collision-world extraction from a scenegraph (:mod:`OpenGLContext.physics.gltf_world`).
 
-Walks a scenegraph pulling world-space triangles out of every mesh and builds a
-static ``trimesh`` collision world so a character can walk on a loaded model. These
+Walks a scenegraph pulling world-space triangles out of every mesh, which the
+physics service makes a loaded model's static bodies of. These
 tests drive the real extractor over hand-built scenegraphs: transformed meshes,
 IndexedFaceSet ``coordIndex`` fan-triangulation, instanced geometry reached through
 several transforms, the box-ify size threshold, and the empty-scene fast paths.
@@ -12,7 +12,7 @@ import pytest
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.transform import Transform
 from OpenGLContext.physics.gltf_world import (
-    extract_trimesh, collision_world_from_scene, _fan_triangulate,
+    extract_trimesh, scene_bounds, _fan_triangulate,
     _mesh_positions_indices, _local_matrix,
 )
 from OpenGLContext.scenegraph.instancedshape import InstancedShape, placement_matrices
@@ -125,21 +125,15 @@ def test_extract_returns_none_for_a_scene_without_meshes():
     assert extract_trimesh(basenodes.Group()) is None
 
 
-def test_collision_world_builds_a_static_trimesh_body():
-    """collision_world_from_scene adds one static body and returns the bounds."""
+def test_the_scene_bounds_are_its_triangles_box():
     root = Transform(children=[_shape(_quad_ifs())])
-    world, bounds = collision_world_from_scene(root, gravity=9.81, ground_pad=0.5)
-    assert world.body_count == 1
-    assert world.motion_type[0] == 0                     # static
-    lo, hi = bounds
-    assert np.allclose(lo, (-1.5, -0.5, -1.5))           # padded AABB
-    assert np.allclose(hi, (1.5, 0.5, 1.5))
+    lo, hi = scene_bounds(root)
+    assert np.allclose(lo, (-1.0, 0.0, -1.0))
+    assert np.allclose(hi, (1.0, 0.0, 1.0))
 
 
-def test_collision_world_empty_scene_has_no_body_and_no_bounds():
-    world, bounds = collision_world_from_scene(basenodes.Group())
-    assert world.body_count == 0
-    assert bounds is None
+def test_an_empty_scene_has_no_bounds():
+    assert scene_bounds(basenodes.Group()) is None
 
 
 def test_local_matrix_falls_back_to_identity_on_bad_pose():

@@ -14,12 +14,20 @@ with that in every such loop, and :class:`FrameStep` holds both:
 Read the clock with :func:`OpenGLContext.events.systemtime.systemTime`, which
 a bounded capture puts on a fixed step per frame, so a captured run advances
 the same way every time.
+
+A simulation that advances in fixed steps takes the frame's time to
+:class:`FixedSteps`, which answers how many whole steps it owes and carries
+what is left of a step to the next frame. The physics service counts the steps
+of its world and of its characters this way.
 """
 from __future__ import annotations
 
 from typing import Optional
 
-__all__ = ['FrameStep']
+__all__ = ['FixedSteps', 'FrameStep']
+
+#: Seconds of rounding a frame may fall short of a whole step by and still owe it.
+_HAIR = 1e-9
 
 
 class FrameStep:
@@ -56,3 +64,46 @@ class FrameStep:
         """Set :attr:`cap` to ``cap``, or lift it if one is set; return the cap now in force."""
         self.cap = None if self.cap else cap
         return self.cap
+
+
+class FixedSteps:
+    """The whole fixed steps each frame owes, with what is left of a step carried to the next.
+
+    ``step`` is the length of one step and ``longest`` the most time one frame
+    may add, both in seconds; a frame longer than ``longest`` owes the steps
+    ``longest`` holds, so a stall is not caught up in a burst of steps. Both
+    may be set between frames.
+    """
+
+    def __init__(self, step: float, longest: float) -> None:
+        if not step > 0.0:
+            raise ValueError('the step must be above nought, not %r' % (step,))
+        if not longest > 0.0:
+            raise ValueError('the longest time must be above nought, not %r' % (longest,))
+        #: Seconds in one step.
+        self.step = float(step)
+        #: The most seconds one frame adds.
+        self.longest = float(longest)
+        #: Seconds carried toward the next step, from 0 up to one step.
+        self.remainder = 0.0
+
+    def owed(self, dt: float) -> int:
+        """Add ``dt`` seconds and answer how many whole steps are due; negative time, and a
+        time that is not a number, add none."""
+        given = float(dt)
+        held = min(self.remainder + (given if given > 0.0 else 0.0), self.longest)
+        steps = 0
+        while held >= self.step * (1.0 - _HAIR):
+            held = max(held - self.step, 0.0)
+            steps += 1
+        self.remainder = held
+        return steps
+
+    @property
+    def alpha(self) -> float:
+        """How far through the next step the remainder is, 0 to 1."""
+        return min(self.remainder / self.step, 1.0)
+
+    def drop(self) -> None:
+        """Forget the part step carried over, so the next frame starts on a whole step."""
+        self.remainder = 0.0

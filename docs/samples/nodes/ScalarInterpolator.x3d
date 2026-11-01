@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="ScalarInterpolator"/>
+    <meta name="description" content="Blends a single number through the keyValue numbers as set_fraction passes the key fractions; here it fades a box in and out through its transparency."/>
+    <meta name="sample:frames" content="59"/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <TimeSensor DEF="Clock" cycleInterval="4" loop="true"/>
+    <ScalarInterpolator DEF="Fade" key="0 0.5 1" keyValue="0 0.8 0"/>
+    <Shape>
+      <Appearance>
+        <Material DEF="Skin" diffuseColor="0.3 0.7 0.5"/>
+      </Appearance>
+      <Box size="1.8 1.8 1.8"/>
+    </Shape>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Fade" toField="set_fraction"/>
+    <ROUTE fromNode="Fade" fromField="value_changed" toNode="Skin" toField="set_transparency"/>
+  </Scene>
+</X3D>

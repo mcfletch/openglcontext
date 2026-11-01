@@ -5,6 +5,12 @@ time; the collision broadphase pays for every one it is holding. So the rule is
 the one the ground follows: what is within reach is in the world, and what is
 not is taken out again.
 
+:class:`PropSource` is a collider source (:mod:`OpenGLContext.physics.sources`)
+whose props near the focus are static bodies of a physics service::
+
+    stones = PropSource(props, reach=60.0)
+    physics.add_collider_source(stones, focus=lambda: car.position)
+
 A prop's body comes from the prop's own measurements rather than from the mesh
 in a tile. Tile geometry is level-of-detail geometry that arrives and leaves as
 a camera moves, and a collider that came and went with it would be a rock a car
@@ -18,56 +24,59 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from omi_physics import model
+
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.sources import Addition, Changes
 
 if TYPE_CHECKING:
-    from omi_physics.world import PhysicsWorld
-
     from OpenGLContext.scenegraph.props import Prop
 
-__all__ = ['PropColliders', 'REACH_METRES', 'SETTLED_METRES']
+__all__ = ['PropSource', 'REACH_METRES', 'SETTLED_METRES']
 
-#: How far from the point props are kept, in metres. Past this nothing is going
+#: How far from the focus props are kept, in metres. Past this nothing is going
 #: to reach one before the next update does.
 REACH_METRES = 220.0
 
-#: How far the point moves before the set is chosen again, in metres. A stale
+#: How far the focus moves before the set is chosen again, in metres. A stale
 #: set is not a wrong one -- reach is generous -- so re-choosing every frame is
 #: work for nothing.
 SETTLED_METRES = 20.0
 
 
-class PropColliders:
-    """Static bodies for the props near a point, added and removed as it moves.
+class PropSource:
+    """Static bodies for the props near the focus, added and removed as it moves.
 
-    :param world: the physics world the props are added to and removed from.
+    A :class:`~OpenGLContext.physics.sources.ColliderSource`, keyed by each
+    prop's index in ``props``.
+
     :param props: every :class:`~OpenGLContext.scenegraph.props.Prop` in the
         world. Held as given; nothing here writes to it.
-    :param reach: how far from the point props are kept, in metres.
-    :param settled: how far the point may move before the set is re-chosen.
+    :param reach: how far from the focus props are kept, in metres.
+    :param settled: how far the focus may move before the set is re-chosen.
 
-    Call :meth:`update` with where the thing that might hit one is.
+    Props of one shape and size share one
+    :class:`~OpenGLContext.physics.proxy.Proxy`, so the world holds that shape
+    once.
     """
 
-    def __init__(self, world: "PhysicsWorld", props: "Sequence[Prop]",
-                 reach: float = REACH_METRES,
+    def __init__(self, props: Sequence[Prop], reach: float = REACH_METRES,
                  settled: float = SETTLED_METRES) -> None:
-        self.world = world
         self.props = list(props)
         self.reach = float(reach)
         self.settled = float(settled)
-        #: The props with a body in the world right now.
-        self.standing: list = []
-        self._bodies: dict[int, int] = {}
-        self._at: Any = None
+        #: The props with a body now, in the order of ``props``.
+        self.standing: list[Prop] = []
+        #: The indices with a body, in the order they were stood up.
+        self._held: dict[int, None] = {}
+        self._at: np.ndarray | None = None
+        self._proxies: dict[tuple[str, float, float], Proxy] = {}
         self._plan = np.asarray(
             [[p.position[0], p.position[2]] for p in self.props],
             dtype='d').reshape(-1, 2)
 
     @classmethod
-    def baked(cls, world: "PhysicsWorld", extras: Any, channel: str, base: str,
-              **named: Any) -> "PropColliders":
-        """Colliders for the props a baked world carries in ``extras[channel]``.
+    def baked(cls, extras: Any, channel: str, base: str, **named: Any) -> PropSource:
+        """A source for the props a baked world carries in ``extras[channel]``.
 
         ``base`` is the tileset's directory or URL directory; the props are read
         in either form a world carries them
@@ -75,37 +84,37 @@ class PropColliders:
         ``named`` is ``reach`` and ``settled`` as for the constructor.
         """
         from OpenGLContext.loaders.tiles3d.props import baked_props
-        return cls(world, baked_props(extras, channel, base), **named)
+        return cls(baked_props(extras, channel, base), **named)
 
-    def update(self, position: Any) -> None:
-        """Hold the props within reach of here, and let go of the rest."""
-        at = np.asarray(position, dtype='d').reshape(-1)[:3]
+    def update(self, focus: Sequence[float]) -> Changes:
+        """The props to stand up and to take down now that the focus is at ``focus``."""
+        at = np.asarray(focus, dtype='d').reshape(-1)[:3]
         if self._at is not None and float(np.hypot(
                 at[0] - self._at[0], at[2] - self._at[2])) <= self.settled:
-            return
+            return Changes()
         self._at = at.copy()
         if not len(self._plan):
-            return
+            return Changes()
         near = np.nonzero(
             np.hypot(self._plan[:, 0] - at[0], self._plan[:, 1] - at[2])
             <= self.reach)[0]
         wanted = {int(index) for index in near}
-        for index in list(self._bodies):
-            if index not in wanted:
-                self.world.remove_body(self._bodies.pop(index))
-        for index in sorted(wanted):
-            if index not in self._bodies:
-                self._bodies[index] = self._stand(self.props[index])
-        self.standing = [self.props[index] for index in sorted(self._bodies)]
+        removed = [index for index in self._held if index not in wanted]
+        for index in removed:
+            del self._held[index]
+        fresh = [index for index in sorted(wanted) if index not in self._held]
+        self._held.update(dict.fromkeys(fresh))
+        added = [self._stand(index) for index in fresh]
+        self.standing = [self.props[index] for index in sorted(self._held)]
+        return Changes(add=added, remove=removed)
 
-    def release(self) -> None:
-        """Take every prop out of the physics world."""
-        for index in list(self._bodies):
-            self.world.remove_body(self._bodies.pop(index))
+    def clear(self) -> None:
+        """Forget every prop, so the next update stands up what is within reach afresh."""
+        self._held = {}
         self.standing = []
         self._at = None
 
-    def _stand(self, prop: "Prop") -> int:
+    def _stand(self, index: int) -> Addition:
         """One prop as a static body, of the shape the prop says it is.
 
         A static box or sphere, not the drawn mesh: a triangle mesh per rock
@@ -115,21 +124,25 @@ class PropColliders:
         it is wide has its sphere resting on the ground, top at twice the
         radius.
         """
-        if prop.shape == 'dome':
-            shape = self.world.add_shape(model.Shape.sphere(prop.radius))
-            lift = np.array([0.0, min(prop.height - prop.radius, prop.radius), 0.0])
-        else:
-            shape = self.world.add_shape(model.Shape.box(
-                (prop.radius * 2.0, prop.height, prop.radius * 2.0)))
-            lift = np.array([0.0, prop.height / 2.0, 0.0])
-        return int(self.world.add_body(
-            model.Motion(type=model.STATIC),
-            collider=model.Collider(shape=shape),
-            position=tuple(np.asarray(prop.position, dtype='d') + lift),
-            orientation=_yaw(prop.yaw)))
+        prop = self.props[index]
+        size = (prop.shape, float(prop.radius), float(prop.height))
+        proxy = self._proxies.get(size)
+        if proxy is None:
+            proxy = self._proxies[size] = (
+                Proxy.sphere(prop.radius) if prop.shape == 'dome' else
+                Proxy.box((prop.radius * 2.0, prop.height, prop.radius * 2.0)))
+        return Addition(index, proxy, tuple(np.asarray(prop.position, dtype='d') + _lift(prop)),
+                        orientation=_yaw(prop.yaw))
 
 
-def _yaw(angle: float) -> tuple:
+def _lift(prop: Prop) -> np.ndarray:
+    """From a prop's foot to the middle of its body."""
+    if prop.shape == 'dome':
+        return np.array([0.0, min(prop.height - prop.radius, prop.radius), 0.0])
+    return np.array([0.0, prop.height / 2.0, 0.0])
+
+
+def _yaw(angle: float) -> tuple[float, float, float, float]:
     """A rotation about the vertical, as the quaternion the world wants."""
     half = float(angle) / 2.0
     return (0.0, float(np.sin(half)), 0.0, float(np.cos(half)))

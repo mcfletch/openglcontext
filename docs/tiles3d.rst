@@ -79,11 +79,13 @@ The viewer is ``bin/terrain_view.py``. It sets ``OPENGLCONTEXT_RENDERER=pbr``
 and the GLFW backend itself, because terrain tiles are PBR glTF and their
 per-vertex colours render only under the PBR pass. Keys are bound on both
 key-down and character events, because some Wayland/GLFW setups deliver only
-character events. The character controller moves the camera from ``OnIdle``,
-and the default free-fly navigator is unbound so that the two do not both
-move it. Ground collision is analytic: each frame the avatar is clamped to
-``height_fn(x, z)``, which matches the visible tiles exactly and cannot be
-passed through at any frame rate, so the floor needs no collision mesh.
+character events. The avatar is a character in the context's physics world
+(``terrain_view.make_avatar``), stepped by the physics service once a frame; the
+camera is put at its eye after the step, and the default free-fly navigator is
+unbound so that the two do not both move it. The ground is a body that answers
+its height from ``height_fn(x, z)``, the function the visible tiles were baked
+from, so the floor needs no collision mesh and a body added to the context lands
+on what is drawn. The trees and rocks within 32 m of the avatar are bodies too.
 Vegetation is instanced (one shared prototype per layer) in two fields that
 follow the camera (dense grass, sparse trees), with the full mesh near the
 camera and a single cone far away. Water is a translucent plane at the water
@@ -201,11 +203,11 @@ directly from the URL, with no download step. These samples load:
 
 .. code-block:: bash
 
-   # Cesium "dragon" — b3dm, an ECEF transform and a low/medium/high LOD chain
+   # Cesium "dragon": b3dm, an ECEF transform and a low/medium/high LOD chain
    oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.0/TilesetWithDiscreteLOD/tileset.json
    #   add --sse 0.02 to load the finest level of detail over the network
 
-   # 1.1 glTF-native scene — houses and trees, several glTF contents per tile
+   # 1.1 glTF-native scene: houses and trees, several glTF contents per tile
    oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MetadataGranularities/tileset.json
 
    # 1.1 multiple-contents plane
@@ -450,8 +452,9 @@ collider, which makes the terrain walkable.
 
 ``scenegraph/tilesterrain.py`` is the node; call
 ``update_for_camera(camera, viewport_height, view_projection=…)`` each frame
-before rendering. ``physics_colliders.py`` adds and removes colliders through
-the runtime's ``on_renderable`` and ``on_evicted`` hooks. See
+before rendering. Given ``physics=``, a physics service, ``physics_colliders.py``
+adds and removes a static body for each drawn tile through the runtime's
+``on_drawn`` and ``on_evicted`` hooks. See
 :doc:`Physics & Collision <physics>` for the character controller.
 
 .. _making:
@@ -482,7 +485,7 @@ Mount the result and update it from the camera each frame:
 
    from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
    terrain = TilesTerrain("world/tileset.json", max_sse=16.0,
-                          physics_world=world)          # physics_world optional
+                          physics=context.physics)      # physics optional
    # in your render/idle callback, before the pass runs:
    terrain.update_for_camera(eye_xyz, viewport_height, view_projection=vp_matrix)
 

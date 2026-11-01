@@ -10,7 +10,7 @@ real code under test.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 DracoPy = pytest.importorskip("DracoPy")
 from pygltflib import GLTF2, Primitive, Attributes, Accessor
 

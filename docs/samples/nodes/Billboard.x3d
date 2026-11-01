@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Billboard"/>
+    <meta name="description" content="Turns about axisOfRotation to face the viewer; here beside a plain panel turned the same way, which stays edge-on."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1.5 7" orientation="-1 -0 -0 0.2111"/>
+    <!-- Both panels sit in a group turned 70 degrees about y. -->
+    <Transform rotation="0 1 0 1.2217">
+      <Transform translation="-1.6 0 0">
+        <Shape>
+          <Appearance><Material diffuseColor="0.7 0.3 0.3"/></Appearance>
+          <Box size="2 1.2 0.08"/>
+        </Shape>
+      </Transform>
+      <!-- The billboard turns its panel back to face the viewer. -->
+      <Transform translation="1.6 0 0">
+        <Billboard axisOfRotation="0 1 0">
+          <Shape>
+            <Appearance><Material diffuseColor="0.3 0.6 0.8"/></Appearance>
+            <Box size="2 1.2 0.08"/>
+          </Shape>
+        </Billboard>
+      </Transform>
+    </Transform>
+  </Scene>
+</X3D>

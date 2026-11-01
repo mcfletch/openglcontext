@@ -18,9 +18,13 @@ fails no run.
     oglc-x3d-regression --bless          # the renders reviewed in the report become baselines
     oglc-x3d-regression --bless --bless-within 0.5   # those within 0.5% of their reference
     oglc-x3d-regression --only Geometry/Box --jobs 8
+    oglc-x3d-regression --samples        # the node samples in docs/samples/nodes, against their own baselines
 
 Each document is drawn in a process of its own, and ``--jobs`` runs that
-many at a time. Only the XML encoding is drawn: the corpus tests in pyvrml97
+many at a time. ``--samples`` draws the documents of a directory of node samples
+instead of the corpus; each names the frames it is drawn for in a
+``sample:frames`` ``meta`` of its ``head``, and there is no X_ITE or Web3D render
+beside it. Only the XML encoding is drawn: the corpus tests in pyvrml97
 hold the other encodings to the same scene graph. Scripts are not run, so a
 scene a Script builds is drawn as the document leaves it.
 """
@@ -43,6 +47,7 @@ from OpenGLContext.video.clock import CAPTURE_FPS
 __all__ = [
     'Scene', 'find_scenes', 'upstream_render', 'render_scene', 'parse_render_report',
     'build_report', 'run', 'main', 'capture_time', 'WORLD_START', 'CAPTURE_FPS',
+    'find_samples', 'SAMPLE_FRAMES',
 ]
 
 #: The size of the renders Web3D publishes, so each sits beside its own.
@@ -74,6 +79,10 @@ def capture_time(frames: int) -> float:
     return WORLD_START + (frames + 1) / CAPTURE_FPS
 
 
+#: The ``head`` ``meta`` a node sample names the frames it is drawn for in.
+SAMPLE_FRAMES = 'sample:frames'
+#: The size of a node sample's render.
+SAMPLE_SIZE = (640, 480)
 #: Begins the line the drawing process reports on.
 REPORT_MARK = 'X3D_RENDER '
 #: The per-channel difference a pixel must exceed to count as differing from
@@ -92,6 +101,11 @@ class Scene:
     #: The folder of every archive's examples: its content root, as a scene may
     #: name files of its own archive and of others.
     root: str
+    #: The frames to draw it for where the document names them (a node
+    #: sample does); None for the run's own.
+    frames: Optional[int] = None
+    #: Whether it is a node sample, which has no reference render.
+    sample: bool = False
 
     @property
     def slug(self) -> str:
@@ -105,14 +119,22 @@ def default_jobs() -> int:
     return max(1, min(os.cpu_count() or 1, MAX_DEFAULT_JOBS))
 
 
-def default_baseline_root() -> str:
+def default_baseline_root(samples: bool = False) -> str:
     """Where the blessed baselines live: ``OPENGLCONTEXT_X3D_BASELINE``, else the
-    ``x3d_baseline`` folder of the ``tests/reference_images`` submodule"""
+    ``x3d_baseline`` folder of the ``tests/reference_images`` submodule, or its
+    ``x3d_samples`` for the node samples"""
     named = renderoptions.env_text('OPENGLCONTEXT_X3D_BASELINE')
     if named:
-        return named
+        return os.path.join(named, 'samples') if samples else named
     root = renderregression.source_root() or renderregression.PACKAGE_PARENT
-    return os.path.join(root, 'tests', 'reference_images', 'x3d_baseline')
+    return os.path.join(root, 'tests', 'reference_images',
+                        'x3d_samples' if samples else 'x3d_baseline')
+
+
+def default_samples_root() -> str:
+    """Where the node samples are: ``docs/samples/nodes``"""
+    root = renderregression.source_root() or renderregression.PACKAGE_PARENT
+    return os.path.join(root, 'docs', 'samples', 'nodes')
 
 
 def default_reference_root() -> str:
@@ -122,14 +144,16 @@ def default_reference_root() -> str:
     return os.path.join(root, 'tests', 'reference_images', 'x3d_xite')
 
 
-def default_report_path() -> str:
+def default_report_path(samples: bool = False) -> str:
     root = renderregression.source_root() or renderregression.PACKAGE_PARENT
-    return os.path.join(root, 'tests', 'x3d_regression', 'x3d_regression_report.html')
+    return os.path.join(root, 'tests', 'x3d_regression',
+                        'x3d_samples_report.html' if samples else 'x3d_regression_report.html')
 
 
-def default_out_dir() -> str:
+def default_out_dir(samples: bool = False) -> str:
     """The renders, records and differences of the latest run of each document"""
-    return os.path.join(os.path.dirname(default_report_path()), 'renders')
+    return os.path.join(os.path.dirname(default_report_path()),
+                        'sample-renders' if samples else 'renders')
 
 
 def find_scenes(root: str, archives: Sequence[str],
@@ -150,6 +174,24 @@ def find_scenes(root: str, archives: Sequence[str],
                 if not only or any(part in scene.name for part in only):
                     found.append(scene)
     return sorted(found, key=lambda scene: scene.name)
+
+
+def find_samples(directory: str, only: Optional[Sequence[str]] = None) -> list[Scene]:
+    """The node samples (``<Node>.x3d``) in `directory`, by node; with `only`,
+    those whose name contains one of its strings. The content root of each is
+    `directory`."""
+    from vrml.x3d import files  # noqa: PLC0415 only when looking
+    found = []
+    for name in sorted(os.listdir(directory)) if os.path.isdir(directory) else ():
+        if not name.endswith('.x3d'):
+            continue
+        path = os.path.join(directory, name)
+        wanted = {item.name: item.content for item in files.load(path).meta}.get(SAMPLE_FRAMES)
+        scene = Scene('Samples/%s' % name[:-len('.x3d')], path, directory,
+                      frames=int(wanted) if wanted else None, sample=True)
+        if not only or any(part in scene.name for part in only):
+            found.append(scene)
+    return found
 
 
 def upstream_render(document: str, viewpoint: Optional[dict[str, Any]]) -> Optional[str]:
@@ -290,6 +332,9 @@ def _difference(reference: str, ours: str) -> Optional[float]:
 def _reference(scene: Scene, report: dict[str, Any], args: argparse.Namespace,
                rendered: str) -> dict[str, Any]:
     """The reference a render is shown beside, and how much it differs from it"""
+    if scene.sample:
+        return {'reference': None, 'reference_errors': [], 'upstream': None,
+                'reference_difference': None}
     found: dict[str, Any] = {'reference': 'Web3D', 'reference_errors': [],
                              'upstream': upstream_render(scene.path, report.get('viewpoint'))}
     x_ite = os.path.join(args.reference_root or default_reference_root(), scene.slug + '.png')
@@ -317,7 +362,7 @@ def _view_metadata(scene: Scene, report: dict[str, Any], args: argparse.Namespac
         'problems': list(report.get('problems', ())),
         'viewpoint': report.get('viewpoint'),
         'loads_waited': report.get('loads_waited', False),
-        'frames': args.frames,
+        'frames': scene.frames or args.frames,
         'size': list(args.size),
         'git': provenance['git'],
         'rendered_at': provenance['rendered_at'],
@@ -347,7 +392,7 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
 
     def drawn(scene: Scene) -> str:
         new_path = os.path.join(out_dir, scene.slug + '.png')
-        ok, report = render_scene(scene, new_path, args.size, args.frames,
+        ok, report = render_scene(scene, new_path, args.size, scene.frames or args.frames,
                                   renderer=args.renderer, backend=args.backend,
                                   multisampling=args.multisampling)
         record = _view_metadata(scene, report, args, provenance)
@@ -368,13 +413,14 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
 
 
 def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
-                 diff_threshold: int,
-                 drawn: Optional[Sequence[str]] = None) -> renderregression.ReportCounts:
+                 diff_threshold: int, drawn: Optional[Sequence[str]] = None,
+                 title: str = 'X3D Example Regression -- our reference vs new'
+                 ) -> renderregression.ReportCounts:
     """The HTML report of the renders in `out_dir`, with each document's reference
     as the upstream column; the rows that fail, among `drawn` where given"""
     return renderregression.build_report(
         out_dir, baseline_root, report_path, tolerance, diff_threshold,
-        title='X3D Example Regression -- our reference vs new',
+        title=title,
         upstream=lambda meta, _slug: meta.get('upstream'),
         describe=_describe, drawn=drawn,
         upstream_label=lambda meta: str(meta.get('reference') or 'Upstream'))
@@ -391,25 +437,32 @@ def _describe(meta: dict[str, Any]) -> str:
 
 def run(args: argparse.Namespace) -> int:
     from vrml.x3d import corpus  # noqa: PLC0415 only when running
-    root = args.corpus or corpus.directory()
-    if args.fetch:
+    samples = args.samples is not None
+    root = args.samples or default_samples_root() if samples else args.corpus or corpus.directory()
+    if args.fetch and not samples:
         archives = corpus.with_references(args.archive or DEFAULT_ARCHIVES)
         for name, count in corpus.fetch(archives, root, resources=True).items():
             print('%s: %d documents' % (name, count))
-    baseline_root = args.baseline_root or default_baseline_root()
-    out_dir = args.out_dir or default_out_dir()
-    report = args.report or default_report_path()
+    baseline_root = args.baseline_root or default_baseline_root(samples)
+    out_dir = args.out_dir or default_out_dir(samples)
+    report = args.report or default_report_path(samples)
+    if samples and tuple(args.size) == DEFAULT_SIZE:
+        args.size = SAMPLE_SIZE
     if args.bless is not None:
         return bless(out_dir, baseline_root, args.bless, args.bless_within)
     drawn = None
     if not args.report_only:
-        scenes = find_scenes(root, args.archive or DEFAULT_ARCHIVES, args.only)
+        if samples:
+            scenes = find_samples(root, args.only)
+        else:
+            scenes = find_scenes(root, args.archive or DEFAULT_ARCHIVES, args.only)
         if not scenes:
-            print('No X3D documents in %s; --fetch downloads the corpus' % root)
+            print('No node samples in %s' % root if samples else
+                  'No X3D documents in %s; --fetch downloads the corpus' % root)
             return 2
         provenance = renderregression.provenance(
             lambda: renderregression.gl_renderer(args.backend))
-        print('Corpus:     %s (%d documents)' % (root, len(scenes)))
+        print('%s %s (%d documents)' % ('Samples:    ' if samples else 'Corpus:     ', root, len(scenes)))
         print('Baselines:  %s' % baseline_root)
         print('Renders:    %s' % out_dir)
         print('Provenance: git %s, %s, %s' % (
@@ -417,7 +470,9 @@ def run(args: argparse.Namespace) -> int:
         drawn = render_scenes(scenes, out_dir, baseline_root, args, provenance)
     os.makedirs(out_dir, exist_ok=True)
     counts = build_report(out_dir, baseline_root, report, args.tolerance,
-                          args.diff_threshold, drawn)
+                          args.diff_threshold, drawn,
+                          title='Node Sample Regression -- our reference vs new' if samples
+                          else 'X3D Example Regression -- our reference vs new')
     return renderregression.exit_status(counts, report)
 
 def close_to_reference(record: dict[str, Any], within: float) -> bool:
@@ -458,6 +513,10 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
     parser.add_argument('--archive', action='append', choices=corpus.ARCHIVES,
                         help='an archive to draw (repeatable; default %s)'
                              % ' and '.join(DEFAULT_ARCHIVES))
+    parser.add_argument('--samples', nargs='?', const='', default=None, metavar='DIR',
+                        help='draw the node samples in DIR (default docs/samples/nodes) '
+                             'instead of the corpus, against baselines of their own, '
+                             'at %dx%d unless --size says otherwise' % SAMPLE_SIZE)
     parser.add_argument('--corpus', metavar='DIR',
                         help='the corpus directory (default: vrml.x3d.corpus.directory())')
     renderregression.add_arguments(

@@ -10,7 +10,6 @@ import types
 
 import pytest
 
-pytest.importorskip("pygltflib")
 from OpenGLContext.loaders import gltf
 
 

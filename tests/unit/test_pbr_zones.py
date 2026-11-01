@@ -18,8 +18,6 @@ import pytest
 
 from OpenGLContext.testing.plugin import skip_if_child_had_no_context
 from PIL import Image
-from omi_physics import model
-from omi_physics.gravity import GravityVolume, InfiniteRegion
 
 from OpenGLContext.passes.shaderpass import SHADER_DIR
 from OpenGLContext.passes.zonepass import ZonesMixin
@@ -34,8 +32,7 @@ from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.passes import pbrpass
 from OpenGLContext.passes.zonelayers import environment_layers, MAX_ZONE_LAYERS
 from OpenGLContext.passes.zoneprobes import ATTEMPTS, FACES_PER_FRAME
-from OpenGLContext.physics.gltf_world import collision_world_from_scene
-from OpenGLContext.physics.zones import gravity_volumes, GravityZones, scene_zones
+from OpenGLContext.physics.zones import gravity_zones, scene_zones
 from OpenGLContext.scenegraph import zones
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGLContext.testing.glcontext import gl_available
@@ -384,16 +381,17 @@ class TestAudio:
 
 
 class TestGravity:
-    def test_a_zone_is_a_gravity_volume_over_its_shape(self):
+    def test_a_zone_is_a_gravity_zone_over_its_shape(self):
         turned = Transform(translation=(0, 10, 0), rotation=(0, 0, 1, np.pi), children=[
             Zone(size=(4, 4, 4), priority=3, settings=[
                 ZoneGravity(gravity=2.0, direction=(0, -1, 0), replace=True)])])
-        (volume,) = gravity_volumes(scene_zones(Transform(children=[turned])))
+        (volume,) = gravity_zones(scene_zones(Transform(children=[turned])))
         assert volume.priority == 3
-        assert volume.contains(np.array([0.0, 11.0, 0.0]))
-        assert not volume.contains(np.array([0.0, 0.0, 0.0]))
-        assert volume.field.direction == pytest.approx((0.0, 1.0, 0.0), abs=1e-6)
-        assert volume.field.replace
+        assert volume.region.contains(np.array([0.0, 11.0, 0.0]))
+        assert not volume.region.contains(np.array([0.0, 0.0, 0.0]))
+        assert volume.direction == pytest.approx((0.0, 1.0, 0.0), abs=1e-6)
+        assert volume.gravity == pytest.approx(2.0)
+        assert volume.replace
 
     def test_a_zone_a_switch_shows_is_found_and_one_it_hides_is_not(self):
         shown, hidden = (Zone(settings=[ZoneGravity()]), Zone(settings=[ZoneGravity()]))
@@ -402,22 +400,23 @@ class TestGravity:
         assert [placed.zone for placed in found] == [shown]
 
     def test_a_world_follows_zones_placed_again(self):
-        zone = Zone(size=(4, 4, 4), settings=[ZoneGravity()])
-        world, _bounds = collision_world_from_scene(Transform(children=[zone]))
-        own = world.add_gravity_volume(GravityVolume(model.Gravity(), InfiniteRegion()))
-        keeper = GravityZones(world)
-        placed = placed_zones([(zone, at(20))])
-        assert keeper.follow(placed)
-        assert not keeper.follow(placed)
-        assert len(world.gravity_volumes) == 2 and own in world.gravity_volumes
-        assert world.gravity_volumes[-1].contains(np.array([20.0, 0.0, 0.0]))
-        assert keeper.follow(scene_zones(Transform(children=[])))
-        assert world.gravity_volumes == [own]
+        from OpenGLContext.physics.service import Physics  # noqa: PLC0415 only this case makes a world
 
-    def test_a_collision_world_carries_the_volumes(self):
-        scene = Transform(children=[Zone(size=(4, 4, 4), settings=[ZoneGravity()])])
-        world, _bounds = collision_world_from_scene(scene)
-        assert len(world.gravity_volumes) == 1
+        zone = Zone(size=(4, 4, 4), settings=[ZoneGravity()])
+        physics = Physics()
+        try:
+            placed = placed_zones([(zone, at(20))])
+            assert physics.zones_changed(placed)
+            assert not physics.zones_changed(placed)
+            assert physics.zones_changed(placed_zones([(zone, at(0))]))
+            assert physics.zones_changed(scene_zones(Transform(children=[])))
+            assert not physics.zones_changed(scene_zones(Transform(children=[])))
+        finally:
+            physics.close()
+
+    def test_a_zone_without_gravity_carries_none(self):
+        quiet = Transform(children=[Zone(size=(4, 4, 4), settings=[ZoneGravity(enabled=False)])])
+        assert gravity_zones(scene_zones(quiet)) == []
 
 
 # -- renders ------------------------------------------------------------------

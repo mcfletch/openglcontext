@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Inline"/>
+    <meta name="description" content="Draws another document at this place in the world; url names it and is read when the world loads."/>
+  </head>
+  <Scene>
+    <Viewpoint position="2.5 2.2 5.5" orientation="-0.5337 0.8377 0.1156 0.5061"/>
+    <!-- The pedestal is a document of its own, drawn here, and again beside it. -->
+    <Inline url='"assets/pedestal.x3d"'/>
+    <Transform translation="2.5 0 0" scale="0.6 0.6 0.6">
+      <Inline url='"assets/pedestal.x3d"'/>
+    </Transform>
+  </Scene>
+</X3D>

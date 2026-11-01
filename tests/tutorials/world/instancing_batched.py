@@ -39,16 +39,10 @@ spheres and 8 separate boxes each cost a draw of their own.
 
 Press `c` to print the same counts on demand. The usual keys walk around.
 '''
-import os
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-from OpenGLContext import testingcontext
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Box, DirectionalLight, Material, Shape, Sphere, Transform,
 )
-
-BaseContext = testingcontext.getInteractive('glfw')
 
 #: Spheres per field, as columns x rows.  Enough that one draw against one
 #: per shape is an obvious difference rather than a subtle one.

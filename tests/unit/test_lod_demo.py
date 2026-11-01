@@ -6,7 +6,6 @@ the rendered form, in the visual suite.
 """
 import pytest
 
-pytest.importorskip('pygltflib')
 
 from OpenGLContext.bin import lod_demo
 from OpenGLContext.bin.lod_demo import COVERAGE, ROWS, SIDES, LODHall

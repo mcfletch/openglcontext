@@ -191,7 +191,6 @@ def _named_camera_glb():
 
 @pytest.fixture(scope="module")
 def camera_glb(tmp_path_factory):
-    pytest.importorskip("pygltflib")
     path = tmp_path_factory.mktemp("gltfview") / "cams.glb"
     path.write_bytes(_named_camera_glb())
     return str(path)

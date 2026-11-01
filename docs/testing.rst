@@ -643,6 +643,62 @@ and skips the probe:
    * - ``neutralised``
      - Leak the contexts: destroy no window and do not terminate GLFW.
 
+.. _ngg-culling:
+
+Back faces with a vertex at clip w = 0
+--------------------------------------
+
+Mesa's radeonsi driver culls triangles in the vertex stage (NGG culling) on
+GFX10 and later GPUs, and turns the rasterizer's own face culling off while
+it does. A triangle with a vertex exactly on the plane through the eye (clip
+w = 0) comes out of its face test as infinite or NaN and is drawn whichever
+way it faces. On Mesa 25.2.8 with a Radeon 8060S (gfx1151), a solid Cone
+centred on the viewpoint has its apex and base centre on that plane, so seen
+from inside it fills the view instead of drawing nothing, and
+``glCullFace(GL_FRONT_AND_BACK)`` does not stop it. ``AMD_DEBUG=nonggc``
+turns the vertex-stage culling off, and the same draws then cull. Moving the
+viewpoint 0.01 units along the view axis culls them as well.
+
+The driver compiles the culled variant of a shader after its first draw of
+more than 128 vertices, and frames drawn before that variant is ready are
+correct. The tests that look at a solid shape from inside
+(``tests/unit/test_primitive_solid.py``) draw a frame or two each, so beside
+the rest of the suite they meet the fault in a few of every 1,000 runs.
+``OpenGLContext.testing.drivercull`` draws a solid Cone from inside in a
+second window, with the first open, in a child process before the session
+opens its first window; on an affected stack that draw shows the cone on
+every run. Where it does, the plugin adds ``nonggc`` to ``AMD_DEBUG`` for
+the session. The driver reads the variable as it starts, and the xdist
+workers and script tests the run starts inherit it. Where the draw is black,
+or the driver is not radeonsi, the driver is left as an application runs it.
+The probe takes about 1.3 seconds. ``tests/unit/test_driver_culling.py``
+draws the second window in the test process and fails if its back faces are
+drawn.
+
+The plugin's switch applies to test sessions only. An application on an
+affected stack draws the same faces wherever a culled triangle has a vertex
+at clip w = 0, in its first window or any other. Set ``AMD_DEBUG=nonggc`` in
+its environment before it starts, at the cost of the driver's vertex-stage
+culling (:ref:`radeonsi-back-faces`). The Mesa report, with a C program that
+shows the fault without the engine, is ``plans/MESA-NGG-CULLING-W0.md``.
+
+``OPENGLCONTEXT_NGG_CULLING`` sets the answer for a run on a known stack,
+and skips the probe. The plugin writes the decision back into it, so a child
+process does not probe again:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Value
+     - Effect
+   * - ``auto`` (the default)
+     - Probe the machine once and act on the result.
+   * - ``on``
+     - Leave the driver's vertex-stage culling on.
+   * - ``off``
+     - Add ``nonggc`` to ``AMD_DEBUG``.
+
 .. _timeouts:
 
 Test timeouts
@@ -705,6 +761,15 @@ The fetch then runs unguarded, so a defect in the resolver or the loader
 fails the test. A host's answer is kept for the life of the process, and a
 host that does not accept a connection within five seconds counts as
 unreachable.
+
+A physics handler that raises
+-----------------------------
+
+The plugin sets ``OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS=raise`` where the
+variable is unset, so a physics handler, step code or posted function that
+raises makes the next ``Physics.frame`` or ``step`` raise it, and the test
+fails on it. A test of the logging itself makes its service with
+``PhysicsDefinition(handlerErrors='log')``.
 
 .. _conventions:
 
@@ -912,6 +977,97 @@ about 4 microseconds an open that reaches a checked module; over the engine's
 unit suite the difference is inside the run-to-run spread. OpenGLContext's
 suite runs with ``fail``, and its ``pyproject.toml`` lists which modules open
 files and why.
+
+.. _audio-testing-calls:
+
+Sounds a game plays
+~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.testing.RecordingAudio`` has the interface of ``context.audio``
+(:ref:`audio-play`), plays nothing and records every call. Give it to the code
+under test in place of ``context.audio`` and ask what was played:
+
+.. code-block:: python
+
+   from OpenGLContext.testing import RecordingAudio
+
+   def test_a_broken_crate_cracks_where_it_was():
+       audio = RecordingAudio()
+       crate = Crate(audio, position=(1.0, 2.0, 3.0))
+       crate.break_open()
+       [call] = audio.played('crack.ogg')
+       assert call.at == (1.0, 2.0, 3.0)
+       assert call.gain == 0.8
+
+``audio.calls`` lists every call as a ``Call`` with a ``kind`` (``play``,
+``load``, ``update`` for a voice's gain or rate, ``stop``, ``volume``,
+``muffle``) and the arguments of the call. ``audio.played(source)`` returns the
+plays of one sound, or of every sound with no argument. A path matches the
+same path as ``str`` or ``Path``, a name given to ``load`` matches its path,
+and a clip matches that clip or one with its name. The voices it returns play
+until stopped, so ``call.voice.playing`` shows whether the code stopped a
+sound. ``audio.clear()`` forgets the calls.
+
+It opens no device, needs no frame and records from any thread at the moment
+of the call, so a test of code that plays from a physics callback needs no
+extra step. The thread rule and the queue behind it are tested against the real
+engine on a silent device in ``tests/unit/test_audio_manager.py``.
+
+.. _testing-physics:
+
+Physics in a test
+-----------------
+
+A ``Physics`` holds no GL and needs no context, so a test makes one, adds
+bodies and steps it with no window. ``mode='inline'`` steps the world in the
+caller's thread, which makes every run the same:
+
+.. code-block:: python
+
+   from OpenGLContext.physics.service import Physics
+   from OpenGLContext.physics.settings import PhysicsDefinition
+   from OpenGLContext.testing import RecordingAudio
+
+   def test_a_dropped_crate_thuds_once():
+       audio = RecordingAudio()
+       physics = Physics(PhysicsDefinition(mode='inline', tickHz=120.0),
+                         audio=lambda: audio)
+       yard = Yard(physics, audio)               # the object under test
+       yard.drop_crate()
+       for _ in range(180):
+           physics.frame(1 / 60)                 # three seconds in frames of 1/60 s
+       assert len(audio.played('thud.ogg')) == 1
+       physics.close()
+
+``physics.frame(dt)`` is what the context's frame hook calls: it steps the
+whole fixed steps ``dt`` seconds hold (up to ``maxCatchUp``, 0.1 s by default
+and so a test of longer frames raises it), writes the poses onto the nodes and
+delivers the events to their handlers. ``physics.step(dt)`` steps without
+delivering anything. A test that checks a body reads ``body.position`` and
+``body.velocity``, which answer the last frame, or ``physics.poses(bodies)``
+for many at once; those reads are the same on every engine.
+
+A test of what the engine holds reads it through
+``OpenGLContext.testing.physics``, which is not exported by
+``OpenGLContext.physics``. ``settle``, ``holds``, ``shape_kind``,
+``shape_count``, ``mass``, ``material``, ``material_index``,
+``material_count``, ``pair_friction``, ``filter_count``, ``joint_count``,
+``step_dt``, ``world_position``, ``wait_ticks``, ``ticks``, ``idle``,
+``stepping`` and ``event_backlog`` (the events the engine holds that the
+service has not taken, and those it dropped) read the Jolt engine's world.
+
+Scenery becomes bodies as the render pass finds it, which a test with no
+window does not have: add what the test collides with by name
+(``add_static(node, proxy='box')``) or call ``physics.scenery_changed(root,
+generation)`` and ``physics.wait_cooked()``. A body that needs a window is
+tested through ``gl_context``; ``tests/unit/test_physics_tutorials.py`` runs a
+tutorial's ``TestContext`` that way, on a ``FixedStepClock`` and with
+``OPENGLCONTEXT_PHYSICS_MODE=inline``, so a run takes the time its frames take
+to draw and gives the same bodies on every machine.
+
+A world on a thread (``mode='thread'``) is tested with the same calls. The
+frame delivers what the worker has published, so a test of it waits for the
+condition it needs, with a time limit, rather than for a number of frames.
 
 .. _what-to-test:
 

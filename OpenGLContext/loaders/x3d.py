@@ -39,6 +39,8 @@ X3D_ONLY = {
 #: (`vrml.x3d.components`), which another browser does not have.
 EXTENSION_NODES = {
     'CoordinateDeformer': ('OpenGLContext.scenegraph.coordinatedeformer', 'CoordinateDeformer'),
+    'Cloth': ('OpenGLContext.scenegraph.softnodes', 'Cloth'),
+    'Ragdoll': ('OpenGLContext.scenegraph.softnodes', 'Ragdoll'),
 }
 
 #: How each problem's severity is logged.

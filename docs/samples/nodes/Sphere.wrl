@@ -1,0 +1,20 @@
+#VRML V2.0 utf8
+# META "title" "Sphere"
+# META "description" "A sphere centred on the origin; radius is the distance from the origin to its surface."
+
+Viewpoint {
+  orientation -0.6008 0.7867 0.1418 0.583
+  position 1.8 1.5 3.6
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.2 0.5 0.8
+      shininess 0.4
+      specularColor 0.8 0.8 0.8
+    }
+  }
+  geometry Sphere {
+    radius 1.2
+  }
+}

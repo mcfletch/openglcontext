@@ -7,7 +7,7 @@ outright where it is skinned to something else.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from vrml.vrml97 import nodetypes
 

@@ -354,6 +354,17 @@ class TestTessellation:
         assert named(scene, 'S').isValid is False
 
 
+def test_a_stage_the_driver_refuses_leaves_no_error_behind(monkeypatch):
+    """The GL_INVALID_ENUM a missing stage raises is read, not left for the next call."""
+    from OpenGLContext.scenegraph import x3dshaders
+    pending = [0x0500, 0x0500, 0]
+    monkeypatch.setattr(x3dshaders.GL, 'glCreateShader', lambda kind: 0)
+    monkeypatch.setattr(x3dshaders.GL, 'glGetError', lambda: pending.pop(0))
+    with pytest.raises(RuntimeError, match='no tess_control stage'):
+        x3dshaders._compile('TESS_CONTROL', '')    # noqa: SLF001 the stage probe itself
+    assert pending == []
+
+
 class TestActivate:
     def _scene(self):
         return load(document(composed(

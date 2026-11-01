@@ -1,7 +1,7 @@
 """``PhysicsViewPlatform`` — a walk-with-gravity camera.
 
-A subclass-free companion to the free-fly :class:`ViewPlatform`: it owns a
-:class:`~omi_physics.character.CharacterController` capsule and turns
+A subclass-free companion to the free-fly :class:`ViewPlatform`: it drives a
+character capsule and turns
 navigation input into desired velocity / jump, then drives a context's camera
 from the solved capsule pose.  It also runs **safe viewpoint binding**
 (depenetration + ground snap) on bind, so a camera placed low or inside geometry
@@ -19,38 +19,42 @@ from typing import Any, ClassVar, Optional
 import numpy as np
 
 from OpenGLContext import quaternion
-from omi_physics.character import CharacterController, CharacterCapabilities
 
 
 class PhysicsViewPlatform:
-    def __init__(self, world: Any, capabilities: Optional[CharacterCapabilities] = None,
-                 position: Any = (0, 0, 0), yaw: float = 0.0,
-                 gravity: float = 9.81, body: bool = False) -> None:
-        """Walk a capsule of ``capabilities`` in ``world``, starting at ``position``.
+    """A camera on a character of a physics service, and the keys' moves given to it."""
 
-        ``body`` gives the walker a body in the world: a sensor capsule that
-        enters trigger volumes and whose touches with moving bodies are
-        reported, without pushing or being pushed (:attr:`body`). Each update
-        places that body in the world, so in a world a
-        :class:`~OpenGLContext.physics.threaded.ThreadedPhysicsManager` steps
-        on another thread, update the walker inside the manager's
-        ``with_world()``.
+    def __init__(self, character: Any, yaw: float = 0.0) -> None:
+        """A platform over ``character``, a :class:`~OpenGLContext.physics.character.Character`.
+
+        It turns the keys' moves into the character's, and reads the camera from
+        its eye. The service steps the character each frame, so :meth:`update`
+        does nothing, unless the character's ``framed`` is false: the caller then
+        steps it, and :meth:`update` does.
         """
-        self.character = CharacterController(
-            world, capabilities or CharacterCapabilities(), position, gravity=gravity,
-            body=body)
+        #: The character's controller, which takes the moves.
+        self.character = character._controller
         self.yaw = yaw
         self.pitch = 0.0
+        #: The service character this platform reads.
+        self.managed = character
+
+    @classmethod
+    def over(cls, character: Any, yaw: float = 0.0) -> 'PhysicsViewPlatform':
+        """A platform over ``character``, as the constructor makes one."""
+        return cls(character, yaw)
 
     @property
-    def body(self) -> Optional[int]:
-        """The walker's body index, for a collision subscription; None without one."""
-        return self.character.body
+    def body(self) -> Any:
+        """The character's :class:`~OpenGLContext.physics.body.Body`, for a collision subscription."""
+        return self.managed.body
 
     # -- binding ---------------------------------------------------------
     def bind(self, position: Any) -> Any:
-        """Safe-bind the capsule at ``position`` (the capsule *centre*)."""
-        return self.character.safe_bind(position)
+        """Safe-bind the capsule at ``position`` (the capsule *centre*); False if no room was found."""
+        feet = np.asarray(position, dtype='d')[:3] - np.array(
+            [0.0, self.character.height * 0.5, 0.0])
+        return self.managed.teleport(feet)
 
     def bind_eye(self, eye: Any) -> Any:
         """Safe-bind so the camera eye lands at ``eye`` (used for viewpoints)."""
@@ -195,10 +199,13 @@ class PhysicsViewPlatform:
 
     # -- stepping / camera ----------------------------------------------
     def update(self, dt: float) -> None:
-        self.character.update(dt)
+        """Step the character by ``dt`` seconds where its owner steps it (``framed`` false)."""
+        if not self.managed.framed:
+            self.managed.update(dt)
 
     def camera_position(self) -> tuple[float, ...]:
-        return tuple(self.character.eye())
+        """The eye where the frame draws it (``drawn_eye``)."""
+        return tuple(float(v) for v in self.managed.drawn_eye)
 
     def feet_position(self) -> tuple[float, ...]:
         """Where the body ends, which is not where it looks from.

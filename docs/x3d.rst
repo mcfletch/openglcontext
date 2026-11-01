@@ -171,7 +171,7 @@ implements these X3D nodes, by component:
   IsoSurfaceVolumeData, OpacityMapVolumeStyle, ProjectionVolumeStyle,
   SegmentedVolumeData, ShadedVolumeStyle, SilhouetteEnhancementVolumeStyle,
   ToneMappedVolumeStyle, VolumeData
-- OpenGLContext - CoordinateDeformer
+- OpenGLContext - Cloth, CoordinateDeformer, Ragdoll
 - X_ITE - AnisotropyMaterialExtension, BlendMode, ClearcoatMaterialExtension,
   DepthMode, InstancedShape,
   DiffuseTransmissionMaterialExtension, DispersionMaterialExtension,
@@ -188,7 +188,51 @@ for. A document names it with ``<component name='OpenGLContext' level='1'/>``
 (``COMPONENT OpenGLContext:1`` in the ClassicVRML encoding), and the writers
 write a scene holding one of its nodes with that statement. A browser without
 the component does not read such a document. ``CoordinateDeformer`` is
-described in :doc:`NURBS <nurbs>`.
+described in :doc:`NURBS <nurbs>`, and ``Cloth`` and ``Ragdoll`` below.
+
+.. _x3d-cloth-ragdoll:
+
+Cloth and Ragdoll
+~~~~~~~~~~~~~~~~~
+
+X3D's RigidBodyPhysics and HAnim components have no soft body and no ragdoll;
+these two nodes are in the ``OpenGLContext`` component and run on the
+physics service of the context that draws them (the Jolt engine).
+
+``Cloth`` is a group whose first ``Shape`` is simulated as a soft body. Its
+geometry is welded by position into particles; a geometry other than the
+engine's mesh is drawn as a mesh of its triangles from then on. Fields:
+``translation`` and ``rotation`` place it; ``mass`` (kg, 1), ``compliance``
+(m/N, 0 for rigid edges), ``bendCompliance`` (0.01), ``pressure`` (Pa m3, 0;
+holds a closed mesh round), ``linearDamping`` (1/s, 0.1), ``friction`` (0.2)
+and ``vertexRadius`` (m, 0) are the body's; ``pinned`` lists vertex indices
+held where they start; ``wind`` is a force in newtons shared among the
+vertices every step and may be routed; ``enabled`` false leaves it a group.
+The vertices are written in world coordinates, so a ``Cloth`` sits in no
+``Transform``. Each soft body is made from the geometry's vertices as
+authored, so a ``Cloth`` drawn again (its scene shown again, or in a second
+context) starts where it was authored. A geometry with tangents has them
+turned with its normals each frame, so a normal map follows the folds. A
+glTF node tagged ``cloth`` takes its place in the document as the Cloth's
+``translation`` and ``rotation``, and its parents' placement is undone by a
+``MatrixTransform`` around it; a scale on the node or its parents is not
+applied.
+
+.. code-block:: none
+
+   DEF flag Cloth {
+     translation 0 2 0  mass 0.3  pinned [ 0 4 ]  wind 0 0 1.5
+     children Shape { geometry IndexedTriangleSet { ... } }
+   }
+
+``Ragdoll`` draws the glTF character ``url`` names, playing its first clip,
+with a ragdoll for a skeleton (``OpenGLContext.character.ragdoll``):
+``translation`` and ``rotation`` place it, ``mode`` is ``KINEMATIC``,
+``POWERED`` or ``LIMP``, and a new ``mode`` takes ``blend`` seconds;
+``mass`` (kg, 70), ``rootForce`` (N) and ``rootTorque`` (N m) are the
+ragdoll's. A ``LIMP`` ragdoll stops following the clip. The node reads no
+``HAnimHumanoid``: an HAnim figure's joints are not yet a rig the builder
+takes. See :doc:`characters` and :doc:`physics`.
 
 Geometry
 ~~~~~~~~
@@ -760,10 +804,14 @@ Collision
 
 Walking (:doc:`physics`) collides with what X3D's ``Collision`` groups say:
 a disabled group's children are walked through, a ``proxy`` collides in
-place of the children, and each enabled group's geometry is a body of its
-own in the walk's world (``gltf_world.collision_groups``). As the avatar
-touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
-each enabled group around it, and ``isActive FALSE`` when the touch ends
+place of the children, and each shape inside an enabled group is a scenery
+body of the context's physics service. Each step the avatar's capsule, a
+tenth of its radius and 3 cm wider and no taller, is overlapped with those
+bodies (``x3dcollision.collision_group_bodies``, ``CollisionReporter``); the
+ground the avatar stands on is not counted. A body it
+begins touching makes its group send ``isActive TRUE`` and ``collideTime``,
+as does each enabled group around it, and a group sends ``isActive FALSE``
+when the avatar touches none of its bodies
 (``OpenGLContext.physics.x3dcollision``).
 
 .. _x3d-rigid-bodies:
@@ -779,7 +827,12 @@ Rigid bodies
    ``OpenGLContext/bin/x3d_rigidbody.x3d``. The p key pauses the collection
    and r reads the document again.
 
-The RigidBodyPhysics component runs on omi_physics (:ref:`physics-x3d`). Each
+The RigidBodyPhysics component runs on Jolt
+(``OpenGLContext.physics.x3djolt``, :ref:`physics-x3d`). The nodes are read
+into the engine's own shapes (``Proxy``) and contact rules
+(``OpenGLContext.physics.x3drigid``); :ref:`x3d-rigid-jolt` lists what Jolt
+does with each field.
+Each
 ``RigidBodyCollection`` is a world of its own, stepped once a frame on the
 engine's clock in steps of 1/120 s (1/240 s where ``preferAccuracy`` is
 true), and at most 0.25 s a frame. A capture, whose clock advances a fixed
@@ -789,6 +842,24 @@ in: one taken out of the scene, or left in a scene the context has been given
 another in place of, stops. Code that steps a node outside a drawn scene
 calls its ``bind(context)`` and ``unbindContext(context)``, or ``advance(seconds)``
 and ``sense()`` itself.
+
+A collection is not the context's physics world, ``context.physics``
+(:doc:`physics`); the two are separate worlds that share no bodies:
+
+- Zone gravity (a ``Zone``'s gravity setting, ``OMI_physics_gravity``) and
+  ``physics.add_gravity_zone`` act on ``context.physics`` bodies and
+  characters. The bodies of a collection obey its own ``gravity``, whatever
+  zone they are in.
+- A collection's bodies do not collide with ``context.physics`` bodies, with
+  scenery or with characters. A document that wants a body to meet scenery lists
+  the scenery as a ``CollidableShape`` in the collection's ``collider``.
+- A character is stopped by ``Collision`` groups and by what ``context.physics``
+  holds, and not by the rigid bodies of a collection.
+- ``CollisionSpace`` groups collidables inside one collection. It plays no
+  part in zones or in ``context.physics``.
+- A ``CollisionSensor`` routes the touches of its collection.
+  ``physics.body_for`` and ``addEventHandler('hit', ...)`` do not apply to X3D
+  bodies.
 
 - A ``RigidBody`` moves under the collection's ``gravity`` (unless
   ``useGlobalGravity`` is false), its ``forces`` and ``torques`` (summed,
@@ -862,16 +933,20 @@ What collides:
   them.
 
 A ``CollisionSensor`` finds the touches among its collider's collidables
-each frame, where they stand, and sends a ``Contact`` per touching point in
+each frame, where they stand, and sends a ``Contact`` per touch in
 ``contacts`` (``position``, ``contactNormal`` from ``geometry1`` toward
 ``geometry2``, ``depth``, the bodies and the collider's parameters), the
 collidables touching in ``intersections``, and ``isActive``. An empty
-``contacts`` is sent once when the touching stops.
+``contacts`` is sent once when the touching stops. Each touching
+pair is one ``Contact``, at the deepest point, and ``geometry1`` is the
+collidable listed first in the collider; two collidables that are both
+triangle meshes (geometry other than a primitive, in no moving body) are not
+tested against each other.
 
 Joints hold bodies of their collection; a joint whose ``body1`` or ``body2``
 is NULL holds the other body to the world. Anchors and axes are in world
-coordinates as the bodies stand when the collection is built, and angles in
-radians from there. Each sends the outputs its ``forceOutput`` names
+coordinates as the bodies stand when the collection is first built, and
+angles in radians from there. Each sends the outputs its ``forceOutput`` names
 (``ALL``, or the fields by name; ``NONE``, the default, sends none), each
 frame they change:
 
@@ -904,13 +979,76 @@ frame they change:
   ``axis3Angle`` given otherwise; ``motor1AngleRate`` to ``motor3AngleRate``.
 
 What a collection is built from is read again whenever it changes: its
-bodies, their mass, inertia, centre of mass and collidables, the joints and
-their anchors and axes, the collider. What changes from frame to frame --
-positions and velocities sent in, forces, gravity, motors, stops and the
-collision parameters -- is read every frame. Of the Basic archive's
+bodies, their centre of mass and collidables, the joints' bodies, anchors
+and axes, the collider, and the collider's ``minBounceSpeed`` and the
+collection's rest thresholds and ``preferAccuracy``. A joint the new build
+makes from the same bodies, anchor and axes is made where it stands, so its
+stops and readings stay measured from the first build. What changes from
+frame to frame -- positions and velocities sent in, mass and inertia,
+forces, gravity, motors, stops, ``suspensionForce`` and the collider's
+``bounce`` and ``frictionCoefficients`` -- is read every frame. A stop moved
+past where its joint stands holds the joint there; it turns back within the
+stops and not past them. Of the Basic archive's
 examples, the ones whose contacts pass through a ``Script`` (``BallBounce``,
 ``BounceTrimesh``, ``CarDemoMain``) do not collide, since scripts are not
 run; the rest simulate as written.
+
+.. _x3d-rigid-jolt:
+
+What Jolt does with each field
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Jolt honours these as described above:
+
+- Bodies - ``mass``, ``centerOfMass``, ``inertia`` (its diagonal, or the
+  shapes' at uniform density), ``forces``, ``torques``, ``useGlobalGravity``,
+  ``autoDamp`` with ``linearDampingFactor`` and ``angularDampingFactor``,
+  ``fixed``, and the positions and velocities sent in.
+- ``bounce`` - the collider's, and a sent ``Contact``'s for its pair, as the
+  restitution of the pair's materials.
+- ``minBounceSpeed`` - the collider's (where it applies ``BOUNCE``), as the
+  least approach speed in m/s at which any pair of the collection bounces.
+  Jolt holds one such speed for a world, so a sent ``Contact``'s
+  ``minBounceSpeed`` is not read; without a collider it is 1 m/s.
+- ``frictionCoefficients`` - the first coefficient, both ways.
+- ``autoDisable``, ``disableLinearSpeed`` and ``disableTime`` - the
+  collection's where its ``autoDisable`` is true, or else those of the first
+  body whose ``autoDisable`` is true, for every body of the collection that
+  may rest. Jolt rests a body once the speed of its furthest points has been
+  under ``disableLinearSpeed`` m/s for ``disableTime`` seconds; a threshold of
+  0 is read as Jolt's own (0.03 m/s, 0.5 s). ``disableAngularSpeed`` is not
+  read: the speed of the furthest points includes the turn.
+- ``stopBounce`` (``SingleAxisHingeJoint``, ``SliderJoint``) and
+  ``stop1Bounce`` (``DoubleAxisHingeJoint``) - a joint that meets its stop
+  faster than 0.1 rad/s (or m/s) leaves it at ``stopBounce`` times that
+  speed. Jolt's stops stop a joint dead, so the bounce is set on the bodies'
+  velocities: after a step that leaves the joint less than a step's travel
+  from its stop, or that the stop ended, the change shared between the two
+  bodies by how hard each is to move along the axis. A joint turns back up
+  to one step's travel short of its stop.
+- ``desiredAngularVelocity1`` and ``2`` with ``maxTorque1`` and ``2`` - a
+  motor of at most that torque; a ``maxTorque`` of 0 is no motor.
+- ``suspensionForce`` and ``suspensionErrorCorrection`` - a spring of the
+  stiffness and damping they give over 1/60 s, by ``body2``'s mass.
+- ``sliderForce`` - a force along the axis each step, on ``body2`` forward
+  and ``body1`` back.
+- Every joint output listed above, by the joint's reading of ``body2``
+  against ``body1``: a joint whose ``body2`` is NULL reads the world against
+  ``body1``.
+
+Jolt keeps these and does not read them; its solver's own values apply:
+
+- ``iterations``, ``errorCorrection``, ``constantForceMix``,
+  ``maxCorrectionSpeed`` and ``contactSurfaceThickness`` of the collection
+  (Jolt lets a resting contact overlap by 5 mm).
+- ``softnessConstantForceMix`` and ``softnessErrorCorrection`` of a collider
+  or a ``Contact``.
+- The second of ``frictionCoefficients``, ``frictionDirection``,
+  ``surfaceSpeed`` and ``slipFactors``: Jolt's friction is one coefficient,
+  the same in every direction, on surfaces that do not move.
+- ``stopErrorCorrection`` and ``stop1ConstantForceMix``: a stop is held hard.
+- ``useFiniteRotation``: Jolt integrates every turn the same way.
+- ``disableAngularSpeed`` (above).
 
 Humanoids
 ~~~~~~~~~
@@ -2062,6 +2200,10 @@ count, and 0 draws without.
        where none is named)
    * - ``--corpus DIR``
      - the corpus directory (pyvrml97's where not given)
+   * - ``--samples [DIR]``
+     - draw the node samples (``docs/samples/nodes``) instead of the corpus,
+       at 640x480, against ``tests/reference_images/x3d_samples``; see
+       :ref:`x3d-node-samples`
    * - ``--only PART``
      - draw only the documents whose name contains ``PART`` (repeatable)
    * - ``--bless [PART ...]``
@@ -2097,6 +2239,44 @@ count, and 0 draws without.
    * - ``--tolerance PCT``, ``--diff-threshold N``
      - the percent of pixels that may differ (2), and by how much in a
        channel a pixel must (8)
+
+.. _x3d-node-samples:
+
+Node samples
+------------
+
+Each node of VRML97 has a sample world in ``docs/samples/nodes``: ``<Node>.x3d``,
+a small X3D XML document written by hand with comments saying what it shows, and
+``<Node>.wrl``, the same world in VRML97 syntax, converted from the ``.x3d`` by
+``python -m docbuild.nodesamples --write`` so the two cannot differ. Files a
+sample names (an image, a sound, a movie, a document to inline) are in
+``docs/samples/nodes/assets``.
+
+A sample says what it shows in the ``head`` of its document:
+
+``title``, ``description``
+   the node, and a sentence on what its fields do.
+``sample:frames``
+   the frames drawn, on the capture clock, before the reference render is
+   read. A sample driven by a TimeSensor starting at 0 with a cycle of 4
+   seconds is at a quarter of its cycle after 59 frames (the clock runs at 60
+   frames a second).
+``sample:interactive``
+   ``true`` where the sample is for a reader to operate, such as a click or a
+   drag.
+
+``oglc-x3d-regression --samples`` draws every sample in a process of its own and
+compares it with the baseline in ``tests/reference_images/x3d_samples``, with the
+options of the corpus run; ``--only Box`` draws one, and ``--bless`` makes what
+was drawn the baselines. A sample has no X_ITE or Web3D render beside it.
+
+``tests/unit/test_nodesamples.py`` holds the samples to what they claim: every
+VRML97 node has one; each loads without a fault and holds its node; each
+``.wrl`` is what its ``.x3d`` converts to and parses to the same world; and each
+circuit of sensors and interpolators does what its description says. A
+TimeSensor is run to the moment of the reference render and the routed field
+read, and a pointing or environmental sensor is told what a pointer or a
+viewer does and the field it routes to is read.
 
 Writing
 -------

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Cone"/>
+    <meta name="description" content="A cone centred on the origin with its axis along y; bottomRadius is the base's radius and height the distance from base to tip."/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <Shape>
+      <Appearance>
+        <Material diffuseColor="0.75 0.6 0.15"/>
+      </Appearance>
+      <!-- side and bottom choose which surfaces are drawn; both are true by default. -->
+      <Cone bottomRadius="1" height="2"/>
+    </Shape>
+  </Scene>
+</X3D>

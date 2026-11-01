@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Anchor"/>
+    <meta name="description" content="A group that loads another document when clicked: url names it, description is what a browser shows over it."/>
+    <meta name="sample:interactive" content="true"/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <!-- Clicking the box opens the Box sample. -->
+    <Anchor url='"Box.x3d"' description="Open the Box sample">
+      <Shape>
+        <Appearance><Material diffuseColor="0.2 0.55 0.8"/></Appearance>
+        <Box size="1.5 1.5 1.5"/>
+      </Shape>
+    </Anchor>
+  </Scene>
+</X3D>

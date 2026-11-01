@@ -323,7 +323,7 @@ the next rather than jumping between them.
      - 48
      - How far in from the edge the wash reaches at full strength.
    * - ``strength``
-     - 0–1
+     - 0 to 1
      - 0.34
      - How opaque the wash is at its strongest. The player can still see the
        scene through it.
@@ -337,7 +337,7 @@ the next rather than jumping between them.
      - 8
      - The most hits shown at once.
    * - ``level``
-     - 0–1
+     - 0 to 1
      - 0
      - A steady wash on all four edges that does not fade, for a lasting
        state such as being wounded. Hits show over it; a level of 0 draws
@@ -381,7 +381,7 @@ being dead, being under water, or a fade.
      - (1, 0, 0)
      - The colour of the tint.
    * - ``strength``
-     - 0–1
+     - 0 to 1
      - 0.0
      - How opaque the tint is. Keep it low enough to see the scene through,
        unless there is nothing left for the player to see.
@@ -651,11 +651,12 @@ The shipped sections
 Two more providers are available but not registered by default, because not
 every context has what they report on:
 
-- ``physics_provider(lambda: world)`` reports body and contact counts.
-- ``simulation_provider(lambda: manager)`` reports on a background physics
-  thread (``OpenGLContext.physics.threaded.ThreadedPhysicsManager``): the
-  rate it achieves against its target rate, its total ticks, and any
-  ticks it dropped. A physics thread that falls behind makes the world move
+- ``physics_provider(lambda: context.physics)`` reports the body and contact
+  counts of a ``Physics`` service's last step (``Physics.counts``).
+- ``simulation_provider(lambda: simulation)`` reports on a simulation stepped
+  on a thread of its own, any object with ``rate()``, ``sim_hz``, ``steps``
+  and ``dropped``: the rate it achieves against its target rate, its total
+  ticks, and any ticks it dropped. A physics thread that falls behind makes the world move
   in slow motion, which looks like wrong gravity or a wrong timestep until
   the two rates are compared.
 
@@ -709,7 +710,7 @@ iteration, divided among named phases. Every context has one as
    * - ``last stall``
      - The phase that took the most time in the latest stall, for example
        ``idle 812ms``.
-   * - ``poll``, ``repeats``, ``idle``, ``wait``, ``draw``, ``cascade``, ``render``
+   * - ``poll``, ``handoff``, ``repeats``, ``idle``, ``frame``, ``wait``, ``draw``, ``cascade``, ``render``
      - Mean milliseconds per iteration in each phase, largest first.
 
 Phases do not overlap. Time inside a nested phase is charged to the nested

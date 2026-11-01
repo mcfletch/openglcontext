@@ -495,7 +495,7 @@ class ExamineMode(MovementMode):
 
 
 #: Speeds a walking avatar moves at, in scene units per second at scale 1.  The
-#: avatar's own :class:`~omi_physics.character.CharacterCapabilities` and the
+#: avatar's own :class:`~OpenGLContext.physics.types.CharacterCapabilities` and the
 #: modes that drive it have to agree on these, or a mode asks for a speed the
 #: character cannot reach.
 WALK_SPEED = 3.0

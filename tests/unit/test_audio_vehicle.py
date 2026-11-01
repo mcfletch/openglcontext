@@ -24,7 +24,7 @@ class _Wheel:
 
 
 class _Vehicle:
-    """What the soundtrack reads of an ``omi_physics`` ``RaycastVehicle``."""
+    """What the soundtrack reads of a vehicle: wheels, throttle and speed."""
 
     def __init__(self, speed=0.0, throttle=0.0, slip=0.0, grounded=True):
         self._speed = speed

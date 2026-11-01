@@ -1,4 +1,4 @@
-"""X3D's RigidBodyPhysics: bodies, collidables, collisions and joints on omi_physics.
+"""X3D's RigidBodyPhysics: bodies, collidables, collisions and joints, on each physics engine.
 
 Documents are read as a user's are and their collections stepped by hand
 (`RigidBodyCollection.advance`), so nothing here needs a window.
@@ -13,6 +13,7 @@ from OpenGLContext.loaders.x3d import prototypes
 from OpenGLContext.physics import x3drigid
 
 FRAME = 1.0 / 60.0
+
 
 BALL = b'''<Group>
   <CollidableShape DEF="BALL-GEOM"><Shape containerField="shape"><Sphere radius="0.1"/></Shape>
@@ -187,6 +188,18 @@ class TestBodies:
         angle = turn[3] if turn[0] > 0 else -turn[3]
         assert math.remainder(angle - 40.0, 2 * math.pi) == pytest.approx(0.0, abs=1e-4)
 
+    @pytest.mark.parametrize('owner', ['collection', 'body'])
+    def test_a_body_rests_after_its_disable_time_below_its_disable_speed(self, owner):
+        rule = b'autoDisable="true" disableTime="1.0" disableLinearSpeed="0.2" disableAngularSpeed="0.2"'
+        graph = falling(body=b'useGlobalGravity="false" linearVelocity="0.08 0 0" '
+                             + (rule if owner == 'body' else b''),
+                        collection=rule if owner == 'collection' else b'')
+        collection = graph.getDEF('C')
+        run(collection, 0.6)
+        assert collection.awake()
+        run(collection, 1.5)
+        assert not collection.awake()
+
     def test_bodies_rest_only_where_told_to(self):
         graph = falling(body=b'useGlobalGravity="false"')
         run(graph.getDEF('C'), 2.0)
@@ -213,6 +226,23 @@ class TestCollisions:
           </RigidBody></RigidBodyCollection>''')
         run(graph.getDEF('C'), 2.0)
         assert graph.getDEF('B').position[1] == pytest.approx(-0.45 + 0.1, abs=0.02)
+
+    @pytest.mark.parametrize('least, bounces', [(1.0, True), (8.0, False)])
+    def test_a_ball_bounces_only_above_the_least_bounce_speed(self, least, bounces):
+        """Dropped 2 m, the ball meets the ground at about 6 m/s"""
+        graph = scene(BALL + b'''<RigidBodyCollection DEF="C">
+          <CollisionCollection containerField="collider" appliedParameters='"BOUNCE"'
+            bounce="0.8" minBounceSpeed="%.1f">
+            <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection>
+          <RigidBody DEF="B" containerField="bodies" position="0 2 0">
+            <CollidableShape USE="BALL-GEOM" containerField="geometry"/>
+          </RigidBody></RigidBodyCollection>''' % least)
+        heights = []
+        body = graph.getDEF('B')
+        run(graph.getDEF('C'), 2.0, each=lambda: heights.append(body.position[1]))
+        landed = heights.index(min(heights))
+        assert bool(max(heights[landed:]) - min(heights) > 0.3) is bounces
 
     def test_contacts_routed_to_the_collection_bounce_the_ball(self):
         graph = scene(BALL + b'''<RigidBodyCollection DEF="C">
@@ -271,6 +301,75 @@ class TestCollisions:
         assert sensor.isActive is False
         assert len(sensor.contacts) == 0
 
+    def test_a_sensors_normal_points_from_the_first_collidable_to_the_second(self):
+        graph = scene(BALL + b'''<CollisionSensor DEF="S"><CollisionCollection containerField="collider">
+            <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection></CollisionSensor>''')
+        sensor, ball = graph.getDEF('S'), graph.getDEF('BALL-GEOM')
+        ball.translation = (0.3, -0.36, 0.2)
+        sensor.sense()
+        contact = sensor.contacts[0]
+        assert (contact.geometry1, contact.geometry2) == (ball, graph.getDEF('GROUND-GEOM'))
+        assert np.allclose(contact.contactNormal, (0, -1, 0), atol=1e-5)
+        assert np.allclose(contact.position[::2], (0.3, 0.2), atol=1e-5)
+
+    def test_a_sensor_finds_a_ball_on_a_mesh(self):
+        graph = scene(b'''<CollidableShape DEF="BALL"><Shape containerField="shape">
+            <Sphere radius="0.5"/></Shape></CollidableShape>
+          <CollidableShape DEF="FLOOR"><Shape containerField="shape">
+            <IndexedFaceSet coordIndex="0 1 2 -1 0 2 3 -1">
+              <Coordinate point="-5 0 -5 -5 0 5 5 0 5 5 0 -5"/></IndexedFaceSet></Shape>
+          </CollidableShape>
+          <CollisionSensor DEF="S"><CollisionCollection containerField="collider">
+            <CollidableShape USE="FLOOR"/><CollidableShape USE="BALL"/>
+          </CollisionCollection></CollisionSensor>''')
+        sensor, ball = graph.getDEF('S'), graph.getDEF('BALL')
+        ball.translation = (0.0, 0.45, 0.0)
+        sensor.sense()
+        assert sensor.isActive is True
+        contact = sensor.contacts[0]
+        assert (contact.geometry1, contact.geometry2) == (graph.getDEF('FLOOR'), ball)
+        assert contact.contactNormal[1] == pytest.approx(1.0, abs=1e-4)
+        assert contact.depth == pytest.approx(0.05, abs=2e-3)
+
+    def test_a_sensor_follows_its_collidables_and_their_shapes(self):
+        graph = scene(BALL + b'''<CollisionSensor DEF="S"><CollisionCollection DEF="CC"
+            containerField="collider">
+            <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection></CollisionSensor>''')
+        sensor, ball = graph.getDEF('S'), graph.getDEF('BALL-GEOM')
+        ball.translation = (0.0, -0.3, 0.0)
+        sensor.sense()
+        assert sensor.isActive is False
+        ball.shape.geometry.radius = 0.2
+        sensor.sense()
+        assert sensor.isActive is True
+        graph.getDEF('CC').collidables = [ball]
+        sensor.sense()
+        assert sensor.isActive is False
+        graph.getDEF('CC').collidables = [ball, graph.getDEF('GROUND-GEOM')]
+        sensor.sense()
+        assert sensor.isActive is True
+
+    def test_a_sensor_passes_over_two_collidables_of_one_body(self):
+        graph = scene(b'''<CollidableShape DEF="A"><Shape containerField="shape">
+            <Box size="1 1 1"/></Shape></CollidableShape>
+          <CollidableOffset DEF="B" translation="0.5 0 0"><CollidableShape containerField="collidable">
+            <Shape containerField="shape"><Box size="1 1 1"/></Shape></CollidableShape>
+          </CollidableOffset>
+          <RigidBodyCollection DEF="C"><RigidBody containerField="bodies" useGlobalGravity="false">
+            <CollidableShape USE="A" containerField="geometry"/>
+            <CollidableOffset USE="B" containerField="geometry"/></RigidBody></RigidBodyCollection>
+          <CollisionSensor DEF="S"><CollisionCollection containerField="collider">
+            <CollidableShape USE="A"/><CollidableOffset USE="B"/>
+          </CollisionCollection></CollisionSensor>''')
+        sensor = graph.getDEF('S')
+        sensor.sense()
+        assert sensor.isActive is True
+        graph.getDEF('C').advance(FRAME)
+        sensor.sense()
+        assert sensor.isActive is False
+
     def test_a_space_without_geometry_collides_by_bounds(self):
         graph = scene(b'''<CollidableShape DEF="A" translation="0.9 0.9 0">
             <Shape containerField="shape"><Sphere radius="0.5"/></Shape></CollidableShape>
@@ -301,20 +400,20 @@ class TestGeometry:
         graph = scene(b'<CollidableShape DEF="G"><Shape containerField="shape">' + geometry
                       + b'</Shape></CollidableShape>')
         found = x3drigid.geometry_shape(graph.getDEF('G').shape.geometry, moving=False)
-        assert found.type == kind
+        assert found.kind == kind
 
     def test_a_moving_mesh_is_its_hull(self):
         graph = scene(b'''<CollidableShape DEF="G"><Shape containerField="shape">
           <TriangleSet><Coordinate point="0 0 0 1 0 0 0 1 0"/></TriangleSet>
           </Shape></CollidableShape>''')
         found = x3drigid.geometry_shape(graph.getDEF('G').shape.geometry, moving=True)
-        assert found.type == 'convex'
+        assert found.kind == 'convex'
 
     def test_a_cone_narrows_to_its_tip(self):
         graph = scene(b'''<CollidableShape DEF="G"><Shape containerField="shape">
           <Cone height="2" bottomRadius="1"/></Shape></CollidableShape>''')
         found = x3drigid.geometry_shape(graph.getDEF('G').shape.geometry, moving=True)
-        assert (found.radiusBottom, found.radiusTop, found.height) == (1.0, 0.0, 2.0)
+        assert (found.params['radius'], found.params['radius_top'], found.params['height']) == (1.0, 0.0, 2.0)
 
     def test_a_collidable_offset_moves_its_shape_in_the_body(self):
         graph = scene(b'''<CollidableOffset DEF="O" translation="5 5 5">
@@ -361,6 +460,15 @@ class TestJoints:
         run(graph.getDEF('C'), 1.5)
         assert graph.getDEF('J').angle == pytest.approx(-0.3, abs=0.03)
 
+    def test_a_hinge_holding_body1_to_the_world_reads_the_world_against_it(self):
+        """The bar swings down; the world turns up against it, to maxAngle"""
+        graph = scene((self.HINGE % b'forceOutput="ALL" minAngle="-0.1" maxAngle="0.5"').replace(
+            b'containerField="body2"', b'containerField="body1"'))
+        run(graph.getDEF('C'), 1.5)
+        assert graph.getDEF('J').angle == pytest.approx(0.5, abs=0.03)
+        turn = graph.getDEF('B').orientation
+        assert turn[3] * np.sign(turn[2]) == pytest.approx(-0.5, abs=0.03)
+
     def test_a_ball_joint_between_bodies(self):
         graph = scene(b'''<RigidBodyCollection DEF="C">
           <RigidBody DEF="A" containerField="bodies" fixed="true"/>
@@ -372,6 +480,80 @@ class TestJoints:
         joint = graph.getDEF('J')
         assert np.allclose(joint.body1AnchorPoint, joint.body2AnchorPoint, atol=0.02)
         assert np.linalg.norm(graph.getDEF('B').position) == pytest.approx(1.0, abs=0.02)
+
+    SWINGING = b'''<CollidableShape DEF="BAR"><Shape containerField="shape">
+        <Box size="1 0.1 0.1"/></Shape></CollidableShape>
+      <RigidBodyCollection DEF="C">
+        <RigidBody DEF="B" containerField="bodies" position="0.5 0 0" useGlobalGravity="false"
+          linearVelocity="0 1.25 0" angularVelocity="0 0 2.5">
+          <CollidableShape USE="BAR" containerField="geometry"/></RigidBody>
+        %s
+      </RigidBodyCollection>'''
+
+    @staticmethod
+    def rates_after_the_stop(graph, name, frames=20):
+        """The joint's rate output each frame after the first that met a stop"""
+        collection, joint = graph.getDEF('C'), graph.getDEF('J')
+        rates = []
+        for _ in range(frames):
+            collection.advance(FRAME)
+            rates.append(getattr(joint, name))
+        moving = next(index for index, rate in enumerate(rates) if abs(rate) > 2.0)
+        hit = next(index for index, rate in enumerate(rates) if index > moving and abs(rate) < 2.0)
+        return rates[hit + 2:]
+
+    @pytest.mark.parametrize('bounce', [0.0, 0.4, 0.8])
+    def test_a_hinge_bounces_off_its_stop(self, bounce):
+        """The door comes back off its stop at stopBounce of the speed it met it at"""
+        graph = scene(self.SWINGING % (b'''<SingleAxisHingeJoint DEF="J" containerField="joints"
+            anchorPoint="0 0 0" axis="0 0 1" minAngle="-0.3" maxAngle="0.3" stopBounce="%.1f"
+            forceOutput='"angleRate"'><RigidBody USE="B" containerField="body2"/>
+            </SingleAxisHingeJoint>''' % bounce))
+        rates = self.rates_after_the_stop(graph, 'angleRate')
+        # Without a bounce, Jolt eases the overlap out of the stop at about 0.1 rad/s.
+        assert np.allclose(rates, -2.5 * bounce, atol=0.05 if bounce else 0.15)
+
+    def test_a_hinge_bounces_off_its_lower_stop(self):
+        graph = scene((self.SWINGING % b'''<SingleAxisHingeJoint DEF="J" containerField="joints"
+            anchorPoint="0 0 0" axis="0 0 1" minAngle="-0.3" maxAngle="0.3" stopBounce="0.4"
+            forceOutput='"angleRate"'><RigidBody USE="B" containerField="body2"/>
+            </SingleAxisHingeJoint>''').replace(b'linearVelocity="0 1.25 0" angularVelocity="0 0 2.5"',
+                                                 b'linearVelocity="0 -1.25 0" angularVelocity="0 0 -2.5"'))
+        rates = self.rates_after_the_stop(graph, 'angleRate')
+        assert np.allclose(rates, 1.0, atol=0.05)
+
+    def test_a_hinge_between_two_bodies_bounces_off_its_stop(self):
+        graph = scene(self.SWINGING % b'''<RigidBody DEF="A" containerField="bodies" fixed="true"/>
+          <SingleAxisHingeJoint DEF="J" containerField="joints" anchorPoint="0 0 0" axis="0 0 1"
+            minAngle="-0.3" maxAngle="0.3" stopBounce="0.5" forceOutput='"angleRate"'>
+            <RigidBody USE="A" containerField="body1"/><RigidBody USE="B" containerField="body2"/>
+          </SingleAxisHingeJoint>''')
+        rates = self.rates_after_the_stop(graph, 'angleRate')
+        assert np.allclose(rates, -1.25, atol=0.05)
+
+    def test_a_slider_bounces_off_its_stop(self):
+        graph = scene(b'''<RigidBodyCollection DEF="C">
+          <RigidBody DEF="B" containerField="bodies" useGlobalGravity="false" linearVelocity="0 2.5 0"/>
+          <SliderJoint DEF="J" containerField="joints" axis="0 1 0" minSeparation="-0.5"
+            maxSeparation="0.3" stopBounce="0.6" forceOutput='"separationRate"'>
+            <RigidBody USE="B" containerField="body2"/></SliderJoint></RigidBodyCollection>''')
+        rates = self.rates_after_the_stop(graph, 'separationRate')
+        assert np.allclose(rates, -1.5, atol=0.05)
+
+    def test_a_double_axis_hinge_bounces_off_its_first_stop(self):
+        graph = scene(b'''<RigidBodyCollection DEF="C">
+          <RigidBody DEF="CAR" containerField="bodies" fixed="true"/>
+          <RigidBody DEF="WHEEL" containerField="bodies" position="1 0 0" useGlobalGravity="false"
+            angularVelocity="0 2.5 0"><Sphere containerField="massDensityModel" radius="0.3"/>
+          </RigidBody>
+          <DoubleAxisHingeJoint DEF="J" containerField="joints" anchorPoint="1 0 0"
+            axis1="0 1 0" axis2="1 0 0" minAngle1="-0.3" maxAngle1="0.3" stop1Bounce="0.4"
+            forceOutput='"hinge1AngleRate"'>
+            <RigidBody USE="CAR" containerField="body1"/>
+            <RigidBody USE="WHEEL" containerField="body2"/></DoubleAxisHingeJoint>
+          </RigidBodyCollection>''')
+        rates = self.rates_after_the_stop(graph, 'hinge1AngleRate')
+        assert np.allclose(rates, -1.0, atol=0.05)
 
     def test_a_slider_between_its_stops(self):
         graph = scene(b'''<RigidBodyCollection DEF="C">
@@ -427,6 +609,132 @@ class TestJoints:
         joint = graph.getDEF('J')
         assert joint.motor1AngleRate == pytest.approx(0.5, abs=0.02)
         assert joint.motor1Angle == pytest.approx(0.25, abs=0.02)
+
+
+class TestChangesMidRun:
+    """Fields changed while the collection runs, read from the frame they change"""
+
+    HINGE = TestJoints.HINGE % b'forceOutput="ALL" minAngle="-0.3" maxAngle="0.3"'
+
+    @staticmethod
+    def bar_angle(body) -> float:
+        turn = body.orientation
+        return float(turn[3]) * float(np.sign(turn[2]))
+
+    def test_a_mass_changed_mid_run_leaves_the_hinge_at_its_stop(self):
+        graph = scene(self.HINGE)
+        collection, joint, body = graph.getDEF('C'), graph.getDEF('J'), graph.getDEF('B')
+        run(collection, 1.5)
+        world = collection.system.jolt
+        for mass in (2.0, 3.0):
+            body.mass = mass
+            run(collection, 1.5)
+            assert joint.angle == pytest.approx(-0.3, abs=0.03)
+            assert self.bar_angle(body) == pytest.approx(-0.3, abs=0.03)
+        assert collection.system.jolt is world
+
+    def test_a_mass_changed_mid_run_is_the_mass_used(self):
+        """A push of 2 N s on a 4 kg body sets it going at 0.5 m/s"""
+        graph = falling(body=b'position="0 2 0" useGlobalGravity="false"')
+        collection, body = graph.getDEF('C'), graph.getDEF('B')
+        collection.advance(FRAME)
+        body.mass = 4.0
+        body.forces = [(2.0 * 60.0, 0.0, 0.0)]
+        collection.advance(FRAME)
+        body.forces = []
+        run(collection, 0.1)
+        assert body.linearVelocity[0] == pytest.approx(0.5, rel=0.02)
+
+    @pytest.mark.parametrize('edit', [
+        lambda graph: setattr(graph.getDEF('B'), 'centerOfMass', (0.1, 0.0, 0.0)),
+        lambda graph: setattr(graph.getDEF('C'), 'disableTime', 2.0),
+    ])
+    def test_a_world_made_again_keeps_the_hinge_at_its_stop(self, edit):
+        graph = scene(self.HINGE)
+        collection, joint, body = graph.getDEF('C'), graph.getDEF('J'), graph.getDEF('B')
+        run(collection, 1.5)
+        world = collection.system.jolt
+        edit(graph)
+        run(collection, 1.5)
+        assert collection.system.jolt is not world
+        assert joint.angle == pytest.approx(-0.3, abs=0.03)
+        assert self.bar_angle(body) == pytest.approx(-0.3, abs=0.03)
+        assert np.allclose(joint.body2AnchorPoint, (0, 0, 0), atol=0.02)
+
+    def test_a_world_made_again_carries_the_motor_angles_on(self):
+        """0.5 N m on 1 kg m2 from rest: 0.75 rad/s and 0.5625 rad at 1.5 s"""
+        graph = scene(b'''<RigidBodyCollection DEF="C">
+          <RigidBody DEF="A" containerField="bodies" fixed="true"/>
+          <RigidBody DEF="B" containerField="bodies" useGlobalGravity="false" inertia="1 0 0 0 1 0 0 0 1"/>
+          <MotorJoint DEF="J" containerField="joints" enabledAxes="1" motor1Axis="0 1 0"
+            axis1Torque="0.5" autoCalc="true" forceOutput="ALL">
+            <RigidBody USE="A" containerField="body1"/><RigidBody USE="B" containerField="body2"/>
+          </MotorJoint></RigidBodyCollection>''')
+        collection, joint = graph.getDEF('C'), graph.getDEF('J')
+        run(collection, 1.0)
+        collection.disableTime = 2.0
+        run(collection, 0.5)
+        assert joint.motor1AngleRate == pytest.approx(0.75, abs=0.02)
+        assert joint.motor1Angle == pytest.approx(0.5625, abs=0.02)
+
+    def test_a_hinge_stop_moved_mid_run_is_where_it_stops(self):
+        graph = scene(self.HINGE)
+        collection, joint, body = graph.getDEF('C'), graph.getDEF('J'), graph.getDEF('B')
+        run(collection, 1.5)
+        joint.minAngle = -1.2
+        run(collection, 2.0)
+        assert joint.angle == pytest.approx(-1.2, abs=0.03)
+        assert self.bar_angle(body) == pytest.approx(-1.2, abs=0.03)
+
+    def test_a_slider_stop_moved_mid_run_is_where_it_stops(self):
+        graph = scene(b'''<RigidBodyCollection DEF="C">
+          <RigidBody DEF="B" containerField="bodies"/>
+          <SliderJoint DEF="J" containerField="joints" axis="0 1 0" minSeparation="-0.5"
+            maxSeparation="0.5" forceOutput="ALL">
+            <RigidBody USE="B" containerField="body2"/></SliderJoint></RigidBodyCollection>''')
+        collection, joint = graph.getDEF('C'), graph.getDEF('J')
+        run(collection, 1.5)
+        joint.minSeparation = -1.0
+        run(collection, 1.5)
+        assert joint.separation == pytest.approx(-1.0, abs=0.03)
+        assert graph.getDEF('B').position[1] == pytest.approx(-1.0, abs=0.03)
+
+    @pytest.mark.parametrize('later, bounces', [(0.8, True), (0.0, False)])
+    def test_a_bounce_set_while_the_ball_falls_is_the_bounce_it_lands_with(self, later, bounces):
+        graph = scene(BALL + b'''<RigidBodyCollection DEF="C">
+          <CollisionCollection DEF="K" containerField="collider" appliedParameters='"BOUNCE"'
+            bounce="0" minBounceSpeed="0.1">
+            <CollidableShape USE="BALL-GEOM"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection>
+          <RigidBody DEF="B" containerField="bodies" position="0 1 0">
+            <CollidableShape USE="BALL-GEOM" containerField="geometry"/>
+          </RigidBody></RigidBodyCollection>''')
+        collection, body = graph.getDEF('C'), graph.getDEF('B')
+        run(collection, 0.2)
+        graph.getDEF('K').bounce = later
+        heights = []
+        run(collection, 1.8, each=lambda: heights.append(float(body.position[1])))
+        landed = heights.index(min(heights))
+        assert bool(max(heights[landed:]) - min(heights) > 0.3) is bounces
+
+    def test_a_friction_set_mid_run_is_the_friction_used(self):
+        """A box sliding at 2 m/s on friction 0 keeps going until friction 1 stops it"""
+        graph = scene(BALL + b'''<CollidableShape DEF="BOX"><Shape containerField="shape">
+            <Box size="0.2 0.2 0.2"/></Shape></CollidableShape>
+          <RigidBodyCollection DEF="C">
+          <CollisionCollection DEF="K" containerField="collider"
+            appliedParameters='"FRICTION_COEFFICIENT-2"' frictionCoefficients="0 0">
+            <CollidableShape USE="BOX"/><CollidableShape USE="GROUND-GEOM"/>
+          </CollisionCollection>
+          <RigidBody DEF="B" containerField="bodies" position="0 -0.35 0" linearVelocity="2 0 0">
+            <CollidableShape USE="BOX" containerField="geometry"/>
+          </RigidBody></RigidBodyCollection>''')
+        collection, body = graph.getDEF('C'), graph.getDEF('B')
+        run(collection, 0.3)
+        assert body.linearVelocity[0] == pytest.approx(2.0, abs=0.05)
+        graph.getDEF('K').frictionCoefficients = (1.0, 1.0)
+        run(collection, 1.0)
+        assert abs(body.linearVelocity[0]) < 0.05
 
 
 def test_the_parameters_a_collection_applies():
@@ -586,9 +894,9 @@ def test_a_document_draws_its_bodies_where_they_are(gl_context):
 def _shape_facts(shape):
     if shape is None:
         return None
-    return (shape.type, tuple(shape.size), shape.radius, shape.height, shape.radiusBottom,
-            shape.radiusTop, None if shape.points is None else shape.points.tobytes(),
-            None if shape.indices is None else shape.indices.tobytes())
+    return (shape.kind, tuple(
+        (name, value.tobytes() if isinstance(value, np.ndarray) else value)
+        for name, value in sorted(shape.params.items())))
 
 
 @pytest.mark.parametrize('geometry, edits', [
@@ -617,56 +925,6 @@ def test_a_geometrys_shape_follows_its_fields(geometry, edits, moving, check_mem
         fresh=lambda: _shape_facts(x3drigid.shape_of_geometry(node, moving)))
 
 
-def _world_facts(system):
-    world = system.world
-    count = world.body_count
-    return (count, tuple(np.round(world.mass[:count], 6)),
-            tuple(np.round(world.inv_inertia[:count].ravel(), 6)),
-            tuple(np.round(world.position[:count].ravel(), 6)),
-            tuple(np.round((world.aabb_max - world.aabb_min)[:count].ravel(), 6)),
-            tuple(world.motion_type[:count]), len(world.row_joints),
-            tuple(sorted(str(shape.type) for shape in world.shapes)))
-
-
-def test_a_collections_world_follows_what_it_is_built_from(check_memo_inputs):
-    graph = scene(BALL + b'''<CollidableShape DEF="OTHER"><Shape containerField="shape">
-        <Box size="0.2 0.2 0.2"/></Shape></CollidableShape>
-      <RigidBodyCollection DEF="C">
-        <CollisionCollection DEF="CC" containerField="collider">
-          <CollidableShape USE="BALL-GEOM"/></CollisionCollection>
-        <RigidBody DEF="B" containerField="bodies" position="0 2 0">
-          <CollidableShape USE="BALL-GEOM" containerField="geometry"/></RigidBody>
-        <RigidBody DEF="B2" containerField="bodies" position="1 2 0"/>
-      </RigidBodyCollection>''')
-    collection, body = graph.getDEF('C'), graph.getDEF('B')
-
-    def ask():
-        collection.advance(0.0)
-        return _world_facts(collection.system)
-
-    def fresh():
-        system = x3drigid.RigidSystem(collection)
-        system.advance(0.0)
-        return _world_facts(system)
-
-    from vrml.x3d import nodes as x3d  # noqa: PLC0415 kept with its use
-    check_memo_inputs(ask, [
-        ('mass', lambda: setattr(body, 'mass', 3.0)),
-        ('centerOfMass', lambda: setattr(body, 'centerOfMass', (0.0, 0.5, 0.0))),
-        ('massDensityModel', lambda: setattr(body, 'massDensityModel', x3d.Box())),
-        ('inertia', lambda: setattr(body, 'inertia', (5, 0, 0, 0, 5, 0, 0, 0, 5))),
-        ('geometry', lambda: setattr(body, 'geometry', [graph.getDEF('OTHER')])),
-        ('the geometry\'s size', lambda: setattr(
-            graph.getDEF('OTHER').shape.geometry, 'size', (1, 1, 1))),
-        ('enabled', lambda: setattr(graph.getDEF('B2'), 'enabled', False)),
-        ('joints', lambda: setattr(collection, 'joints', [x3d.BallJoint(body1=body)])),
-        ('collider', lambda: setattr(graph.getDEF('CC'), 'collidables',
-                                     [graph.getDEF('GROUND-GEOM')])),
-        ('fixed', lambda: setattr(body, 'fixed', True)),
-        ('bodies', lambda: setattr(collection, 'bodies', [])),
-    ], fresh=fresh)
-
-
 @pytest.mark.serial
 def test_a_frame_costs_what_the_collection_holds(check_scaling):
     """A frame's work, read in, stepped and sent, grows with the bodies and no faster"""
@@ -683,41 +941,83 @@ def test_a_frame_costs_what_the_collection_holds(check_scaling):
     check_scaling(prepare, n=50, most=6.0)
 
 
-def test_a_bodys_settings_follow_its_fields(check_memo_inputs):
-    graph = falling()
+@pytest.mark.parametrize('edit', [
+    lambda graph: setattr(graph.getDEF('CC'), 'minBounceSpeed', 3.0),
+    lambda graph: setattr(graph.getDEF('C'), 'disableTime', 2.0),
+    lambda graph: setattr(graph.getDEF('C'), 'disableLinearSpeed', 0.4),
+    lambda graph: setattr(graph.getDEF('B'), 'autoDisable', True),
+    lambda graph: setattr(graph.getDEF('C'), 'preferAccuracy', True),
+])
+def test_a_jolt_world_is_made_again_for_its_settings(edit):
+    graph = scene(BALL + b'''<RigidBodyCollection DEF="C">
+      <CollisionCollection DEF="CC" containerField="collider" appliedParameters='"BOUNCE"'>
+        <CollidableShape USE="BALL-GEOM"/></CollisionCollection>
+      <RigidBody DEF="B" containerField="bodies" disableTime="1.5">
+        <CollidableShape USE="BALL-GEOM" containerField="geometry"/></RigidBody>
+      </RigidBodyCollection>''')
+    collection = graph.getDEF('C')
+    collection.advance(FRAME)
+    world = collection.system.jolt
+    collection.advance(FRAME)
+    assert collection.system.jolt is world
+    edit(graph)
+    collection.advance(FRAME)
+    assert collection.system.jolt is not world
+
+
+def test_a_rule_read_from_the_other_body_runs_its_surface_the_other_way():
+    rule = x3drigid.ContactRule(surface_speed=(1.0, 2.0), restitution=0.5)
+    assert rule.reversed() == x3drigid.ContactRule(surface_speed=(-1.0, -2.0), restitution=0.5)
+
+
+def test_a_shape_with_a_mesh_in_it_is_not_cast():
+    from OpenGLContext.physics.proxy import Proxy  # noqa: PLC0415 kept with its use
+    mesh = Proxy.trimesh(np.eye(3), [[0, 1, 2]])
+    assert not x3drigid.mesh_free(mesh)
+    assert not x3drigid.mesh_free(Proxy.compound([(Proxy.box(), (0, 0, 0), (0, 0, 0, 1)),
+                                                  (mesh, (1, 0, 0), (0, 0, 0, 1))]))
+    assert x3drigid.mesh_free(Proxy.compound([(Proxy.box(), (0, 0, 0), (0, 0, 0, 1))]))
+
+
+@pytest.mark.parametrize('name, arguments', [
+    ('build', ()), ('advance', (0.1,)), ('awake', ()), ('_held_index', (None,)),
+    ('_surface', (np.zeros(3), np.ones(3))), ('_park_surfaces', ([],)), ('_joint_values', (None,)),
+])
+def test_an_engine_provides_the_world(name, arguments):
+    system = x3drigid.RigidSystem(prototypes()['RigidBodyCollection']())
+    with pytest.raises(NotImplementedError):
+        getattr(system, name)(*arguments)
+
+
+def test_a_contact_with_the_world_lasts_the_frame_it_is_sent_for():
+    graph = falling(body=b'position="0 0.1 0" useGlobalGravity="false" linearVelocity="0 -1 0"')
     collection, body = graph.getDEF('C'), graph.getDEF('B')
+    collection.set_contacts = [prototypes()['Contact'](
+        body1=body, geometry1=graph.getDEF('BALL-GEOM'), position=(0, 0, 0),
+        contactNormal=(0, -1, 0), depth=0.0)]
+    collection.advance(FRAME)
+    assert body.linearVelocity[1] > -0.5
+    body.linearVelocity = (0.0, -1.0, 0.0)
+    run(collection, 0.5)
+    assert body.position[1] < -0.3
 
-    def facts(system):
-        world, index = system.world, system.bodies[0].index
-        return (tuple(world.force[index]), tuple(world.torque[index]),
-                float(world.gravity_factor[index]), float(world.linear_damping[index]),
-                float(world.angular_damping[index]),
-                bool(world._exact_rotation[index]),  # noqa: SLF001 the flag set_exact_rotation sets
-                float(world._sleep_linear[index]),  # noqa: SLF001 the thresholds set_sleep sets
-                float(world._sleep_angular[index]),  # noqa: SLF001 the thresholds set_sleep sets
-                float(world._sleep_after[index]))  # noqa: SLF001 the thresholds set_sleep sets
 
-    def ask():
-        collection.advance(0.0)
-        return facts(collection.system)
+@pytest.mark.parametrize('node, call', [
+    ('RigidBodyCollection', lambda node: (node.step(), node.advance(FRAME), node.awake(),
+                                          setattr(node, 'set_contacts', []))),
+    ('CollisionSensor', lambda node: node.sense()),
+])
+def test_a_node_whose_engine_is_unavailable_logs_once_and_stays_still(node, call, monkeypatch, caplog):
+    from OpenGLContext.physics import x3djolt  # noqa: PLC0415 kept with its use
+    from OpenGLContext.physics.engine import EngineUnavailable  # noqa: PLC0415 kept with its use
 
-    def fresh():
-        system = x3drigid.RigidSystem(collection)
-        system.advance(0.0)
-        return facts(system)
+    def unavailable(*_arguments):
+        raise EngineUnavailable('the engine cannot be made here')
 
-    check_memo_inputs(ask, [
-        ('forces', lambda: setattr(body, 'forces', [(1, 0, 0)])),
-        ('torques', lambda: setattr(body, 'torques', [(0, 1, 0)])),
-        ('useGlobalGravity', lambda: setattr(body, 'useGlobalGravity', False)),
-        ('autoDamp', lambda: setattr(body, 'autoDamp', True)),
-        ('linearDampingFactor', lambda: setattr(body, 'linearDampingFactor', 0.1)),
-        ('angularDampingFactor', lambda: setattr(body, 'angularDampingFactor', 0.2)),
-        ('useFiniteRotation', lambda: setattr(body, 'useFiniteRotation', True)),
-        ('the collection\'s autoDisable', lambda: setattr(collection, 'autoDisable', True)),
-        ('the collection\'s disableTime', lambda: setattr(collection, 'disableTime', 2.0)),
-        ('autoDisable', lambda: setattr(body, 'autoDisable', True)),
-        ('disableLinearSpeed', lambda: setattr(body, 'disableLinearSpeed', 0.3)),
-        ('disableAngularSpeed', lambda: setattr(body, 'disableAngularSpeed', 0.4)),
-        ('disableTime', lambda: setattr(body, 'disableTime', 1.5)),
-    ], fresh=fresh)
+    monkeypatch.setattr(x3djolt, 'make_rigid_system', unavailable)
+    monkeypatch.setattr(x3djolt, 'make_sensing', unavailable)
+    made = prototypes()[node]()
+    call(made)
+    call(made)
+    assert [record.getMessage() for record in caplog.records].count(
+        'the engine cannot be made here') == 1

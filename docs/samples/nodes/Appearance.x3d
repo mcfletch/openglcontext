@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Appearance"/>
+    <meta name="description" content="The surface of a shape: material gives its colour under light, texture an image over it, and textureTransform moves the image."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1.5 7" orientation="-1 -0 -0 0.2111"/>
+    <!-- material alone. -->
+    <Transform translation="-2 0 0">
+      <Shape>
+        <Appearance>
+          <Material diffuseColor="0.9 0.9 0.9"/>
+        </Appearance>
+        <Box size="1.8 1.8 1.8"/>
+      </Shape>
+    </Transform>
+    <!-- material and texture: the image is multiplied by the diffuse colour. -->
+    <Transform translation="2 0 0">
+      <Shape>
+        <Appearance>
+          <Material diffuseColor="0.9 0.9 0.9"/>
+          <ImageTexture url='"assets/checker.png"'/>
+          <TextureTransform scale="2 2"/>
+        </Appearance>
+        <Box size="1.8 1.8 1.8"/>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

@@ -8,12 +8,11 @@ import math
 
 import numpy as np
 import pytest
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 from OpenGLContext.loaders.tiles3d import procedural
 from OpenGLContext.loaders.tiles3d.frustum import view_projection
@@ -64,15 +63,16 @@ def test_children_are_mountable_nodes(tmp_path):
 
 
 def test_terrain_populates_physics_world(tmp_path):
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
+    physics = Physics(PhysicsDefinition(mode='inline', colliders='none'))
     path = build_sample_tileset(str(tmp_path))
-    terrain = TilesTerrain(path, fovy=math.radians(45.0), workers=3, physics_world=world)
+    terrain = TilesTerrain(path, fovy=math.radians(45.0), workers=3, physics=physics)
     try:
         _settle(terrain, camera=(0, 300, 0))
         assert terrain.colliders.collider_count >= 1
-        assert len(world.bodies) >= 1
+        assert physics.counts.bodies == terrain.colliders.collider_count
     finally:
         terrain.shutdown()
+        physics.close()
 
 
 def test_the_node_pages_tiles_in_and_out_as_the_camera_travels(tmp_path):

@@ -9,7 +9,6 @@ built in the test; no GL, no network.
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.gltf import load_gltf
 from OpenGLContext.loaders.gltf import accessors as ga

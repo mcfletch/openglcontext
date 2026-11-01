@@ -9,7 +9,7 @@ additive layer on top.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.character.crowd import Crowd
 from OpenGLContext.character.model import CharacterModel
@@ -194,6 +194,18 @@ class TestMembership:
 
         assert len(crowd) == 0
         assert crowd.update(1 / 30.0) == 0
+
+    def test_a_figure_taken_out_draws_the_matrices_it_is_given(self, document):
+        """A compute shader's claim on the palette ends with membership."""
+        crowd = Crowd()
+        model = _figure(document)
+        crowd.add(model)
+        meshes = [mesh for skin in model.mixer.skins for mesh in skin.meshes]
+        for mesh in meshes:
+            mesh._skin_from_gpu = True          # as a compute pass leaves it
+        crowd.remove(model)
+
+        assert meshes and not any(mesh._skin_from_gpu for mesh in meshes)
 
 
 class TestNotPosingEveryone:

@@ -1,0 +1,67 @@
+#VRML V2.0 utf8
+# META "title" "FontStyle"
+# META "description" "How a Text node is set: family and style choose the face, size the height of a line, justify where the text sits about its origin, and spacing the gap between lines."
+
+Viewpoint {
+  orientation 1 -0 -0 0.0997
+  position 0 -1 10
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.6 0.85 0.95
+      emissiveColor 0.1 0.2 0.25
+    }
+  }
+  geometry Text {
+    string [ "SERIF, BOLD, size 0.7" ]
+    fontStyle FontStyle {
+      justify [ "MIDDLE" ]
+      size 0.7
+      style "BOLD"
+    }
+  }
+}
+Transform {
+  translation 0 -1.2 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.95 0.7 0.7
+          emissiveColor 0.25 0.1 0.1
+        }
+      }
+      geometry Text {
+        string [ "SANS, ITALIC, size 0.5" ]
+        fontStyle FontStyle {
+          family [ "SANS" ]
+          justify [ "MIDDLE" ]
+          size 0.5
+          style "ITALIC"
+        }
+      }
+    }
+  ]
+}
+Transform {
+  translation 0 -2.2 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.7 0.95 0.7
+          emissiveColor 0.1 0.25 0.1
+        }
+      }
+      geometry Text {
+        string [ "TYPEWRITER, size 0.5" ]
+        fontStyle FontStyle {
+          family [ "TYPEWRITER" ]
+          justify [ "MIDDLE" ]
+          size 0.5
+        }
+      }
+    }
+  ]
+}

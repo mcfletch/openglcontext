@@ -12,6 +12,9 @@ from OpenGLContext.arrays import array
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import *
 import logging
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, 'tutorials', 'nehe' )
 import math
 
 from OpenGLContext.debug import leaks
@@ -92,7 +95,7 @@ shaders = [
             GLSLObject(
                 textures=[
                     TextureUniform(
-                        value=ImageTexture(url="nehe_wall.bmp"),
+                        value=ImageTexture(url=os.path.join( NEHE, "nehe_wall.bmp" )),
                         name="SimpleTexture",
                     ),
                 ],

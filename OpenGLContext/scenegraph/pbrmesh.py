@@ -22,7 +22,7 @@ from OpenGL.GL import (
     GL_ELEMENT_ARRAY_BUFFER, GL_CCW, GL_CW,
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
     glEnableVertexAttribArray, glVertexAttribPointer,
-    glDrawElements, glDrawArrays,
+    glDrawElements, glDrawArrays, glBufferSubData,
 )
 from OpenGL.arrays import vbo
 from pydispatch import dispatcher
@@ -181,10 +181,20 @@ class _MeshGPU(object):
         """
         for name, buf in self.dyn.items():
             data = getattr(mesh, name)
-            if data is not None:
-                buf.set_array(np.ascontiguousarray(data, dtype=np.float32))
+            if data is None:
+                continue
+            array = np.ascontiguousarray(data, dtype=np.float32)
+            if buf.copied and buf.size == array.nbytes:
+                # The same size as the store the buffer has: written into it, not made again.
+                # set_array holds the array; copied says the card has it, so bind copies nothing.
+                buf.set_array(array)
+                buf.copied = True
+                buf.bind()
+                glBufferSubData(buf.target, 0, array.nbytes, array)
+            else:
+                buf.set_array(array)
                 buf.bind()      # pushes the new data to the existing buffer id
-                buf.unbind()
+            buf.unbind()
 
     def draw(self, mode: Any = None) -> None:
         """Draw the mesh; ``mode`` says whether a shared multi-view draw is in progress."""
@@ -264,6 +274,8 @@ class PBRMesh(x3d.X3DGeometryNode):
     #: surface deformer. None until then, which is also how a static mesh is
     #: told apart from a posed one.
     _base_positions: Any = None
+    #: Whether a simulation writes this mesh's vertices (:meth:`set_vertices`).
+    _simulated: bool = False
     _base_normals: Any = None
     _base_tangents: Any = None
     _base_texcoords: Any = None
@@ -531,7 +543,7 @@ class PBRMesh(x3d.X3DGeometryNode):
         """True when the mesh has morph targets or skin joints (per-frame CPU
         deform + dynamic VBO re-upload); a plain static mesh returns False."""
         return (bool(self.morph_targets) or self.skin_joints is not None
-                or self._surface_deformer is not None)
+                or self._surface_deformer is not None or self._simulated)
 
     @property
     def deforms_vertices(self) -> bool:
@@ -542,9 +554,36 @@ class PBRMesh(x3d.X3DGeometryNode):
         a palette of matrices instead. Morph targets and a material's surface
         deformer both still move the vertices themselves.
         """
-        if bool(self.morph_targets) or self._surface_deformer is not None:
+        if bool(self.morph_targets) or self._surface_deformer is not None or self._simulated:
             return True
         return self.skin_joints is not None and not self.skin_on_gpu
+
+    def set_vertices(self, positions: Any, normals: Any = None, origin: Any = None,
+                     tangents: Any = None) -> None:
+        """Write vertex positions (V, 3), normals and tangents (V, 4) that a simulation moved, into the arrays.
+
+        The arrays are written in place and keep their size, so the vertex
+        buffers are written into rather than made again. ``origin`` is the
+        point the positions are relative to (:attr:`origin`), None to leave
+        it. Called before the mesh is first drawn, it is what makes the
+        position, normal and tangent buffers ones that are written each change.
+        """
+        if self.positions is None:
+            raise ValueError('a mesh with no positions has no vertices to move')
+        self.positions[...] = np.asarray(positions, dtype=np.float32).reshape(self.positions.shape)
+        if normals is not None:
+            if self.normals is None:
+                self.normals = np.zeros_like(self.positions)
+            self.normals[...] = np.asarray(normals, dtype=np.float32).reshape(self.normals.shape)
+        if tangents is not None:
+            if self.tangents is None:
+                self.tangents = np.zeros((len(self.positions), 4), dtype=np.float32)
+            self.tangents[...] = np.asarray(tangents, dtype=np.float32).reshape(self.tangents.shape)
+        if origin is not None:
+            self.origin = np.asarray(origin, dtype='d').reshape(3)
+        self._simulated = True
+        self._volume = None
+        self._deform_version += 1
 
     def set_morph_weights(self, weights: Any) -> None:
         """Set morph-target weights and recompute the deformed mesh (CPU)."""
@@ -1055,6 +1094,15 @@ class PBRMesh(x3d.X3DGeometryNode):
             return None
         self._skin_from_gpu = True
         return palette.reserve(self, joints)
+
+    def release_skin_palette(self) -> None:
+        """End a compute shader's claim on this mesh's palette range.
+
+        From the next frame the mesh draws the matrices :meth:`set_skin_matrices`
+        gives it, as a figure posed on its own does.
+        """
+        self._skin_from_gpu = False
+        self._uploaded_skin_version = -1
 
     def skin_claim(self, mode: Any) -> Optional[tuple]:
         """``(base, matrices)`` for this mesh, or None if it is not skinned here.

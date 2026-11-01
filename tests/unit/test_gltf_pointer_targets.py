@@ -8,7 +8,6 @@ t=1 and the property read back.
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.gltf import load_gltf
 from OpenGLContext.loaders.gltf.writer import _pack_glb

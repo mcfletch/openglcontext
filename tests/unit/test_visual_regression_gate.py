@@ -13,7 +13,6 @@ import inspect
 import numpy as np
 import pytest
 
-pytest.importorskip("PIL")
 from PIL import Image
 
 from OpenGLContext.testing.paths import tests_root

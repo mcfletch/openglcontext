@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Transform"/>
+    <meta name="description" content="Moves, turns and scales its children as a group; translation, rotation, scale and center set the move, and the order they apply in is scale, then rotation about center, then translation."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 2.5 9" orientation="-1 -0 -0 0.2709"/>
+    <!-- The box as it is drawn with no transform. -->
+    <Transform translation="-3.5 0 0">
+      <Shape DEF="Block">
+        <Appearance><Material diffuseColor="0.8 0.55 0.2"/></Appearance>
+        <Box size="1.5 1 1"/>
+      </Shape>
+    </Transform>
+    <!-- Turned a quarter of a turn about y, and half a unit up. -->
+    <Transform translation="-1 0.5 0" rotation="0 1 0 0.7854">
+      <Shape USE="Block"/>
+    </Transform>
+    <!-- Scaled to half as wide, three times as tall, and twice as deep. -->
+    <Transform translation="1.5 0.5 0" scale="0.5 3 2">
+      <Shape USE="Block"/>
+    </Transform>
+    <!-- Turned about the point center names rather than the origin: it swings round the end of the block. -->
+    <Transform translation="4 0 0" center="-0.75 0 0" rotation="0 0 1 0.7">
+      <Shape USE="Block"/>
+    </Transform>
+  </Scene>
+</X3D>

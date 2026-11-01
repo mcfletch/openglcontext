@@ -10,20 +10,30 @@ import math
 import numpy as np
 import pytest
 
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from OpenGLContext.physics.service import Physics
+
+#: The services the platforms of a test were made over, closed after it.
+_MADE: list[Physics] = []
 
 
-def platform(**named):
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
-    return PhysicsViewPlatform(world, **named)
+@pytest.fixture(autouse=True)
+def _close_services():
+    yield
+    while _MADE:
+        _MADE.pop().close()
+
+
+def platform():
+    physics = Physics()
+    _MADE.append(physics)
+    return PhysicsViewPlatform(physics.add_character())
 
 
 def moved(made):
     """The direction the character was last told to move."""
-    return np.asarray(made.character.fly_dir, dtype='d')
+    return np.asarray(made.character.move_dir, dtype='d')
 
 
 class TestMovingAlongTheGaze:

@@ -1,0 +1,28 @@
+#VRML V2.0 utf8
+# META "title" "ElevationGrid"
+# META "description" "A grid of heights over the x-z plane: xDimension by zDimension samples, spaced xSpacing and zSpacing apart, rising from the corner at the origin."
+
+Viewpoint {
+  orientation -0.6331 0.7481 0.1986 0.7939
+  position 3.2 3.4 4.6
+}
+Transform {
+  translation -1.5 0 -1.5
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.35 0.65 0.3
+        }
+      }
+      geometry ElevationGrid {
+        creaseAngle 1.5
+        height [ 0 0.02 0.04 0.05 0.04 0.02 0 0.02 0.07 0.19 0.26 0.19 0.07 0.02 0.04 0.19 0.48 0.66 0.48 0.19 0.04 0.05 0.26 0.66 0.9 0.66 0.26 0.05 0.04 0.19 0.48 0.66 0.48 0.19 0.04 0.02 0.07 0.19 0.26 0.19 0.07 0.02 0 0.02 0.04 0.05 0.04 0.02 0 ]
+        xDimension 7
+        xSpacing 0.5
+        zDimension 7
+        zSpacing 0.5
+      }
+    }
+  ]
+}

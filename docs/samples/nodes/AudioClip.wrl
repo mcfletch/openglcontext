@@ -1,0 +1,51 @@
+#VRML V2.0 utf8
+# META "title" "AudioClip"
+# META "description" "A sound file for a Sound node to play: url names it, loop repeats it, and startTime, stopTime and pitch control when and how fast."
+# META "sample:interactive" "true"
+
+Viewpoint {
+  orientation -0.5557 0.821 0.1312 0.56
+  position 3 2.5 6
+}
+Sound {
+  location 0 0.5 0
+  maxFront 12
+  minFront 2
+  source AudioClip {
+    description "A 440 hertz tone"
+    loop TRUE
+    pitch 1.0595
+    startTime 1
+    url [ "assets/tone.wav" ]
+  }
+}
+Transform {
+  translation 0 0.5 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.4 0.7 0.85
+        }
+      }
+      geometry Sphere {
+        radius 0.4
+      }
+    }
+  ]
+}
+Transform {
+  translation 0 -1.1 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.6 0.55 0.5
+        }
+      }
+      geometry Box {
+        size 10 0.2 10
+      }
+    }
+  ]
+}

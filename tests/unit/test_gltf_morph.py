@@ -7,7 +7,7 @@ morph-weight setter that the animation Player drives.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 from pygltflib import (
     GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
     Buffer, Animation as GAnimation, AnimationChannel, AnimationSampler,

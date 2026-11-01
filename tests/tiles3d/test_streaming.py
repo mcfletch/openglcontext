@@ -15,7 +15,6 @@ import math
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d import procedural as P
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset

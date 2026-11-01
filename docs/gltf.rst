@@ -527,8 +527,8 @@ that takes a path from its parameters resolves it with ``ctx.resolver`` in the
 same way. :ref:`What a glTF file may ask the engine to do <asks>` gives the
 limits on each of the engine's kinds.
 
-The engine claims the bare lowercase names it documents and ships — ``water``,
-``mirror`` (:ref:`mirror-hook`), ``fire``, ``smoke`` and ``sparks`` — so an application naming its own keeps
+The engine claims the bare lowercase names it documents and ships (``water``,
+``mirror`` (:ref:`mirror-hook`), ``cloth``, ``fire``, ``smoke`` and ``sparks``), so an application naming its own keeps
 them out of that namespace: ``glisteel:rail``, ``twigbb:teleporter``. A
 convention, read by nothing, so that a kind a game invents today does not
 collide with one the engine ships later.
@@ -610,9 +610,10 @@ OMI extensions
 The `Open Metaverse Interoperability group
 <https://github.com/omigroup/gltf-extensions>`__ publishes glTF extensions that
 describe a *world* rather than a model: sound, physics, sky, and things a
-player sits in or drives. Three projects support them: this loader,
-:doc:`omi_audio <audio>` and :doc:`omi_physics <physics>`. Both of those
-libraries use the extensions' own structure as their data model.
+player sits in or drives. This loader reads them, with :doc:`omi_audio <audio>`
+for sound and ``OpenGLContext.physics.omigltf`` for physics; both use the
+extensions' own field names. The physics bodies are made by the context's
+:doc:`physics service <physics>` on its engine.
 
 .. list-table::
    :widths: auto
@@ -632,17 +633,20 @@ libraries use the extensions' own structure as their data model.
      - Read, kept and reported, but **not decoded**, so the MP3 fallback plays
      - :ref:`Codec extensions <codecs>`
    * - ``OMI_physics_shape``
-     - Full, read and written
-     - ``omi_physics``, :doc:`docs <physics>`
+     - Read: box, sphere, capsule, cylinder; a ``convex`` or ``trimesh`` shape
+       is made from the triangles of the node carrying the body. ``physics-cook``
+       writes ``convex`` and ``trimesh`` shapes
+     - ``physics.omigltf``, :doc:`docs <physics>`
    * - ``OMI_physics_body``
-     - Full, read and written
-     - ``omi_physics``
+     - Read: motion, collider, trigger, physics materials, collision filters.
+       ``physics-cook`` writes colliders
+     - ``physics.omigltf``
    * - ``OMI_physics_gravity``
-     - Full, read and written: global and per-node gravity volumes
-     - ``omi_physics``
+     - Read: global and per-node gravity
+     - ``physics.omigltf``
    * - ``OMI_physics_joint``
-     - Full, read and written
-     - ``omi_physics``
+     - Read
+     - ``physics.omigltf``
    * - ``OMI_environment_sky``
      - Gradient, panorama (equirectangular and cubemap) and plain skies are drawn.
        The **physical** (atmospheric-scattering) type is read and reported but not

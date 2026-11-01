@@ -97,6 +97,7 @@ ENVIRONMENT = 'OPENGLCONTEXT_GLTF_HOOKS'
 BUILTIN: dict[str, str] = {
     'water': 'OpenGLContext.scenegraph.water.gltf',
     'mirror': 'OpenGLContext.scenegraph.mirrorhooks',
+    'cloth': 'OpenGLContext.scenegraph.softnodes',
     'fire': 'OpenGLContext.scenegraph.particlehooks',
     'smoke': 'OpenGLContext.scenegraph.particlehooks',
     'sparks': 'OpenGLContext.scenegraph.particlehooks',

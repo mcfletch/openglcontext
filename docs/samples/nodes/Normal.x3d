@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Normal"/>
+    <meta name="description" content="The direction each point faces, for lighting; the same cube on the left has flat faces and on the right takes its normals from the corners, so it shades as though round."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 2 8.5" orientation="-1 -0 -0 0.2311"/>
+    <Transform translation="-2 0 0" rotation="0 1 0 0.6">
+      <Shape>
+        <Appearance><Material diffuseColor="0.8 0.4 0.3" specularColor="0.8 0.8 0.8" shininess="0.5"/></Appearance>
+        <IndexedFaceSet coordIndex="0 3 2 1 -1, 4 5 6 7 -1, 0 4 7 3 -1, 1 2 6 5 -1, 0 1 5 4 -1, 3 7 6 2 -1" creaseAngle="0">
+          <Coordinate point="-1 -1 -1, 1 -1 -1, 1 1 -1, -1 1 -1, -1 -1 1, 1 -1 1, 1 1 1, -1 1 1"/>
+        </IndexedFaceSet>
+      </Shape>
+    </Transform>
+    <Transform translation="2 0 0" rotation="0 1 0 0.6">
+      <Shape>
+        <Appearance><Material diffuseColor="0.8 0.4 0.3" specularColor="0.8 0.8 0.8" shininess="0.5"/></Appearance>
+        <!-- One normal per point, pointing out from the middle of the cube. -->
+        <IndexedFaceSet coordIndex="0 3 2 1 -1, 4 5 6 7 -1, 0 4 7 3 -1, 1 2 6 5 -1, 0 1 5 4 -1, 3 7 6 2 -1" normalPerVertex="true">
+          <Coordinate point="-1 -1 -1, 1 -1 -1, 1 1 -1, -1 1 -1, -1 -1 1, 1 -1 1, 1 1 1, -1 1 1"/>
+          <Normal vector="-0.577 -0.577 -0.577, 0.577 -0.577 -0.577, 0.577 0.577 -0.577, -0.577 0.577 -0.577, -0.577 -0.577 0.577, 0.577 -0.577 0.577, 0.577 0.577 0.577, -0.577 0.577 0.577"/>
+        </IndexedFaceSet>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

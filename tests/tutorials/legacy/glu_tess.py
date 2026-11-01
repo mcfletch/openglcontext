@@ -1,0 +1,73 @@
+#! /usr/bin/env python
+'''A letter H filled by the polygon tessellator, drawn fixed-function
+
+NOTE: This test uses legacy OpenGL (glBegin/glEnd, glColor, glVertex) and requires
+a compatibility profile context.
+'''
+from OpenGLContext.context import Context as BaseContext
+from OpenGLContext.scenegraph import polygontessellator, vertex
+from OpenGL.GL import *
+from OpenGL.GLU import *
+from OpenGLContext.arrays import *
+
+
+outline = array([
+    [191,   0],
+    [ 191, 1480],
+    [ 191, 1480],
+    [ 401, 1480],
+    [ 401, 1480],
+    [401,   856],
+    [401,   856],
+    [1105,  856],
+    [1105,  856],
+    [1105, 1480],
+    [1105, 1480],
+    [1315, 1480],
+    [1315, 1480],
+    [1315,    0],
+    [1315,    0],
+    [1105,    0],
+    [1105,    0],
+    [1105,  699],
+    [1105,  699],
+    [401,   699],
+    [401,   699],
+    [401,     0],
+    [401,     0],
+    [191,     0],
+    [191,     0],
+    [191,     0],
+], 'd')
+
+class TestContext( BaseContext ):
+    # Requires compatibility profile for glBegin/glEnd, glColor, glVertex
+    profile = 'compatibility'   # draws with the fixed-function pipeline
+    scale = 400.0
+    def OnInit( self ):
+        self.tess = polygontessellator.PolygonTessellator()
+        glEnable( GL_COLOR_MATERIAL )
+        
+    def Render( self, mode = 0):
+        BaseContext.Render( self, mode )
+        glDisable( GL_LIGHTING )
+        self.renderCap( self.scale )
+
+    def renderCap( self, scale = 400.0):
+        """Draw the cap the polygon tessellator makes from the outline"""
+        vertices = [
+            vertex.Vertex( (x/scale,y/scale,0) ) for (x,y) in outline[::2]
+        ]
+        vertices.reverse()
+        for type, tessellated in self.tess.tessellate( vertices, forceTriangles=0 ):
+            glNormal3f( 0,0,-1 )
+            glColor3f( 1,0,0 )
+            glBegin( type )
+            # The tessellated run for this primitive, not the outline that was
+            # handed in: the loop used to rebind `vertices` and read it back.
+            for v in tessellated:
+                glVertex2dv( v.point[:2] )
+            glEnd()
+
+if __name__ == "__main__":
+    TestContext.ContextMainLoop()

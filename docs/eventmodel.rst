@@ -19,8 +19,8 @@ Parts of the event model
 - Event handlers - code registers callbacks for keyboard, mouse and timer
   events. Mouse handlers can also be registered on individual nodes, so an
   interactive object carries its own handlers.
-- Collisions - code subscribes callbacks to the physics bodies it cares about,
-  and the physics manager calls them once a frame.
+- Physics events - code registers handlers for the hits, overlaps and sleeps of
+  the bodies it cares about, and the context's physics service calls them.
 
 Each of these is described below.
 
@@ -230,10 +230,45 @@ and run faster or slower. Its event types are ``start``, ``stop``, ``pause``,
 carries how far through the cycle the timer is, from 0 to 1.
 :doc:`tutorials/nehe/nehe6_timer` walks through a complete example.
 
+.. _eventmodel-frame-order:
+
+The order of a frame
+~~~~~~~~~~~~~~~~~~~~
+
+Every window system's main loop makes one iteration in this order:
+
+1. ``poll``: the toolkit delivers input, and the event handlers run.
+2. ``handoff``: the calls background threads queued on ``renderQueue`` are made
+   (:ref:`render-queue`).
+3. ``repeats``: held keys repeat.
+4. ``idle``: ``OnIdle``, where a game reads its input and sets moves.
+5. ``frame``: ``context.runFrameHooks()``, the frame's own work, in the order
+   it was added: a following camera's input, the physics frame (the world's
+   steps, the characters' steps, poses written onto the nodes, events
+   delivered), audio, ``context.animate`` and the following camera.
+6. ``wait`` and ``draw``: the frame is drawn with the poses step 5 wrote.
+
+A move a game sets in ``OnIdle`` therefore moves the world and the characters
+in the same frame, and the frame shows the result. A program that runs its own
+loop makes the same calls in the same order: ``runRenderQueue()``, its own idle
+work, ``runFrameHooks()``, then ``OnDraw()``. A function a program adds with
+``renderQueue.on_frame(function)`` runs in step 5, and with ``first=True`` ahead
+of the physics frame.
+
 A simulation's time step
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-An application that advances its own simulation from ``OnIdle`` reads the
+The context's physics and audio services read the clock themselves, and so
+does ``context.animate``: ``self.animate(thing)`` calls ``thing.update(dt)``,
+or ``thing(dt)`` for a function, once a frame after ``OnIdle`` and before the
+frame is drawn, and
+asks for frames while anything is animating. It returns an
+``OpenGLContext.events.animations.Animated`` whose ``stop()`` ends it.
+``self.after(seconds, function)`` makes one call once that many seconds of the
+same steps have passed, and its ``stop()`` cancels it. A rigged model, a crowd
+or a simulation of the game's own is stepped this way with no ``OnIdle``.
+
+An application that advances a simulation of its own from ``OnIdle`` reads the
 engine's clock, ``OpenGLContext.events.systemtime.systemTime()``, once a frame.
 A bounded capture puts that clock on a fixed step per frame, so a captured run
 lands on the same picture every time; ``time.time()`` does not follow it.
@@ -248,23 +283,53 @@ lands on the same picture every time; ``time.time()`` does not follow it.
 
    def OnIdle(self, *arguments):
        time.sleep(self.frames.wait(systemtime.systemTime()))
-       self.world.advance(self.frames.step(systemtime.systemTime()))
+       self.simulation.advance(self.frames.step(systemtime.systemTime()))
 
 ``step(now)`` is the seconds since the previous step, at most ``longest``, so a
-stall does not hand the simulation one step as long as the stall. ``cap`` is
+stall does not hand the simulation one step as long as the stall.
+``FixedSteps(step, longest)`` turns each frame's time into whole steps of
+``step`` seconds: ``owed(dt)`` answers how many are due and carries the part
+step to the next frame, ``alpha`` is how far through the next step that part
+is, from 0 to 1, and ``drop()`` forgets it. The physics service counts the
+world's steps and its characters' this way. ``cap`` is
 the shortest frame in seconds (None for none), ``wait(now)`` is how long to
 wait to keep to it, and ``toggle_cap(seconds)`` sets or lifts it.
 
-Collisions
-----------
+Physics events
+--------------
 
-Collisions are delivered by the physics manager rather than the dispatcher:
-``manager.events.subscribe(callback, body=crate)`` calls ``callback`` once per
-collision of that body, from inside ``manager.advance(dt)``, after the frame's
-poses are written. :ref:`physics-collisions` describes the subscription.
+The context's physics service (:doc:`physics`) delivers its events through the
+same registration as a key press. Each event name is a context event type with
+the prefix ``physics-``: ``physics-hit``, ``physics-touching``,
+``physics-separate``, ``physics-enter``, ``physics-stay``, ``physics-exit``,
+``physics-sleep`` and ``physics-wake``.
 
-A collision subscription holds its callback strongly, unlike the handlers
-above, and returns a ``Subscription`` whose ``cancel()`` lets it go. A collision
-is something that happened once and is not repeated, so a callback collected
-by the garbage collector would lose it with nothing to show it was lost. A
-subscription on a body also ends when that body is removed from the world.
+.. code-block:: python
+
+   self.addEventHandler('physics-hit', body=ball, function=self.OnBallHit, above=1.0)
+   ball.addEventHandler('hit', function=self.OnBallHit, above=1.0)        # the same
+   self.addEventHandler('physics-hit', function=self.OnAnyHit)             # every body
+
+``body`` is a ``Body`` or a list of them, and left out covers every body.
+``above`` is the closing speed in metres a second a contact must exceed and
+``other`` a body, or a list of bodies, the other side must be. ``function=None``
+removes the handlers. The handler receives one ``Collision``
+(:ref:`physics-events`).
+
+Handlers are held weakly, as every handler on this page is: a bound method of a
+live object is called, and a lambda or local function nothing else refers to is
+collected as it is registered. A handler ends when its object is collected and
+when its body is removed from the world. ``addEventHandler`` returns the
+handler, and its ``cancel()`` ends it.
+
+A handler runs on the render thread, once a frame after the frame's poses are
+written, and may change the scene as a key handler does. A function marked
+``@Context.physics_callback`` runs instead on the thread that steps the world,
+right after the step that made the event, and must not set a scene field: it
+queues the change with ``self.physics.render.set(node, field=value)``, which the
+frame applies before it draws, or ``self.physics.render.call(function, *args)``.
+Marking a function only sets an attribute on it, so calling it directly runs it
+on the calling thread. See :ref:`physics-thread-rule`.
+
+A session that is recorded writes each event a handler hears to its journal, and
+a replay compares them (:ref:`marks`).

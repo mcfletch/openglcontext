@@ -43,7 +43,6 @@ dependencies = [
     "numpy>=2.0",
     "packaging>=22",
     "omi_audio>=0.4.0a3",
-    "omi_physics>=0.4.0",
     "opengl_extrusions>=1.2.1a1",
     "pillow",
     "PyOpenGL>=4.0.0a7",
@@ -54,6 +53,8 @@ dependencies = [
     "TTFQuery>=2.1.1",
     "simpleparse>=3.0.1a2",
     "pygltflib>=1.16",
+    # The physics service's engine: Jolt Physics on its own native thread.
+    "pyjoltphysics",
 ]
 
 [project.optional-dependencies]
@@ -101,8 +102,10 @@ all = ["OpenGLContext[pygame,glfw,gltf,draco,exr,audio,accelerate]"]
 docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid", "pyyaml"]
 # The development environment builds the documentation too: the workspace
 # syncs each project's dev extra, and a docs extra it skipped would leave
-# `build-docs.py` without sphinxcontrib-mermaid.
-dev = ["OpenGLContext[all,docs]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy", "trimesh"]
+# `build-docs.py` without sphinxcontrib-mermaid. omi_physics is the reference
+# tests/unit/test_physics_cooking.py compares the hull and decomposition with;
+# trimesh is the reference tests/unit/test_obj_trimesh.py compares OBJ reading with.
+dev = ["OpenGLContext[all,docs]", "omi_physics>=0.4.0", "pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy", "trimesh"]
 
 [project.scripts]
 oglc-test = "OpenGLContext.bin.gltest:main"
@@ -116,10 +119,13 @@ oglc-ui-demo = "OpenGLContext.bin.ui_demo:main"
 oglc-mirrors = "OpenGLContext.bin.mirrors_demo:main"
 oglc-audio-demo = "OpenGLContext.bin.audio_demo:main"
 oglc-physics-events = "OpenGLContext.bin.physics_events_demo:main"
+oglc-ragdoll = "OpenGLContext.bin.ragdoll_demo:main"
+oglc-cloth = "OpenGLContext.bin.cloth_demo:main"
 oglc-zones = "OpenGLContext.bin.zones_demo:main"
 oglc-lod = "OpenGLContext.bin.lod_demo:main"
 oglc-cover = "OpenGLContext.bin.cover_demo:main"
 oglc-character-sheet = "OpenGLContext.bin.character_sheet:main"
+oglc-gait = "OpenGLContext.bin.gait:main"
 oglc-x3d = "OpenGLContext.bin.x3d_demo:main"
 oglc-x3d-nurbs = "OpenGLContext.bin.x3d_nurbs:main"
 oglc-deformer = "OpenGLContext.bin.deformer_demo:main"
@@ -317,6 +323,20 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 warn_return_any = true
 warn_unused_ignores = true
+# A module mypy cannot find is an error, so an import of a module this project
+# no longer has is caught; the packages below ship no types, and are named.
+ignore_missing_imports = false
+
+# Packages that ship neither inline types nor stubs: optional toolkits and
+# loaders, and the workspace's ttfquery and pyopengl-video, which have no
+# py.typed.
+[[tool.mypy.overrides]]
+module = [
+    "DracoPy", "OpenEXR", "PyInstaller", "PyInstaller.*", "fontTools", "fontTools.*",
+    "psutil", "pygame", "pygame.*", "pygltflib", "pygltflib.*", "pyopengl_video",
+    "pyopengl_video.*", "resourcepackage", "scipy", "scipy.*", "ttfquery", "ttfquery.*",
+    "win32con", "win32ui", "wx", "wx.*",
+]
 ignore_missing_imports = true
 
 # numpy arithmetic is typed to return ``Any`` in the shipped stubs, so

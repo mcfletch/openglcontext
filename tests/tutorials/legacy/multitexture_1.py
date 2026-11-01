@@ -1,0 +1,81 @@
+#! /usr/bin/env python
+'''Multi-texturing test/sample
+
+NOTE: This test uses legacy OpenGL (glBegin/glEnd, glTexEnv) and requires
+a compatibility profile context.
+'''
+from OpenGLContext.context import Context as BaseContext
+from OpenGL.GL import *
+from OpenGLContext import texture
+import sys
+from PIL import Image
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, os.pardir, 'nehe' )
+IMAGE = os.path.join( NEHE, "nehe_wall.bmp" )
+LIGHTMAP = os.path.join( NEHE, "lightmap1.jpg" )
+
+multitexture = None
+
+class TestContext( BaseContext ):
+    # Requires compatibility profile for glBegin/glEnd, glTexEnv
+    profile = 'compatibility'   # draws with the fixed-function pipeline
+    def OnInit( self ):
+        """Load the image on initial load of the application"""
+        global multitexture
+        multitexture = self.extensions.initExtension( "GL.ARB.multitexture")
+        if not multitexture:
+            print('GL_ARB_multitexture not supported!')
+            sys.exit(1)
+        self.image = self.loadImage ()
+        self.lightmap = self.loadLightMap()
+        
+    def loadImage( self, imageName = IMAGE ):
+        """Load an image from a file using PIL.
+        This is closer to what you really want to do than the
+        original port's crammed-together stuff that set global
+        state in the loading method.  Note the process of binding
+        the texture to an ID then loading the texture into memory.
+        This didn't seem clear to me somehow in the tutorial.
+        """
+        multitexture.glActiveTextureARB(multitexture.GL_TEXTURE0_ARB)
+        return texture.Texture( Image.open(imageName) )
+    def loadLightMap( self, imageName = LIGHTMAP ):
+        """Load an image from a file using PIL as a lightmap (greyscale)
+        """
+        multitexture.glActiveTextureARB(multitexture.GL_TEXTURE1_ARB) 
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
+        return texture.Texture( Image.open(imageName) )
+
+    def Render( self, mode = 0):
+        BaseContext.Render( self, mode )
+        multitexture.glActiveTextureARB(multitexture.GL_TEXTURE0_ARB) 
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
+        self.image()
+        multitexture.glActiveTextureARB(multitexture.GL_TEXTURE1_ARB)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        self.lightmap()
+        self.drawCube()
+
+    def drawCube( self ):
+        glBegin(GL_QUADS)
+        glNormal3f( 0,0,1 )
+        mTexture(0.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        mTexture(1.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        mTexture(1.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        mTexture(0.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glEnd()
+
+def mTexture( a,b ):
+    multitexture.glMultiTexCoord2fARB(multitexture.GL_TEXTURE0_ARB, a,b)
+    multitexture.glMultiTexCoord2fARB(multitexture.GL_TEXTURE1_ARB, a,b) 
+
+if __name__ == "__main__":
+    TestContext.ContextMainLoop()

@@ -484,3 +484,73 @@ def test_documents_are_drawn_with_x_ites_four_samples():
     assert R.build_parser().parse_args(['--multisampling', '0']).multisampling == 0
     found = R._render_environment('out.png', 4, 'pbr', 'glfw', multisampling=4)
     assert found['OPENGLCONTEXT_MULTISAMPLING'] == '4'
+
+
+SAMPLE = '''<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>%s</head>
+  <Scene><Shape><Appearance><Material diffuseColor="1 0 0"/></Appearance><Box/></Shape></Scene>
+</X3D>
+'''
+
+
+def write_samples(directory, documents):
+    """`documents`: node name -> the sample's head content"""
+    os.makedirs(directory, exist_ok=True)
+    for node, head in documents.items():
+        with open(os.path.join(directory, node + '.x3d'), 'w') as stream:
+            stream.write(SAMPLE % head)
+    return directory
+
+
+class TestTheSamples:
+    def test_each_node_s_sample_is_a_scene_named_for_it(self, tmp_path):
+        directory = write_samples(str(tmp_path), {'Box': '', 'Cone': ''})
+        scenes = R.find_samples(directory)
+        assert [scene.name for scene in scenes] == ['Samples/Box', 'Samples/Cone']
+        assert scenes[0].slug == 'Samples.Box'
+        assert scenes[0].root == directory
+
+    def test_a_sample_draws_the_frames_it_names(self, tmp_path):
+        directory = write_samples(
+            str(tmp_path), {'Box': '', 'TimeSensor': '<meta name="sample:frames" content="59"/>'}
+        )
+        frames = {scene.name: scene.frames for scene in R.find_samples(directory)}
+        assert frames == {'Samples/Box': None, 'Samples/TimeSensor': 59}
+
+    def test_only_narrows_by_part_of_the_name(self, tmp_path):
+        directory = write_samples(str(tmp_path), {'Box': '', 'Cone': ''})
+        assert [s.name for s in R.find_samples(directory, ['Con'])] == ['Samples/Cone']
+
+    def test_a_run_draws_each_at_its_own_frames_beside_no_reference(self, monkeypatch, tmp_path):
+        directory = write_samples(
+            str(tmp_path / 'samples'),
+            {'Box': '', 'TimeSensor': '<meta name="sample:frames" content="59"/>'},
+        )
+        drawn = {}
+
+        def fake_render(scene, out, size, frames, timeout=R.RENDER_TIMEOUT, renderer='pbr',
+                        backend='glfw', multisampling=4):
+            drawn[scene.name] = frames
+            Image.new('RGB', size, (200, 0, 0)).save(out)
+            return True, {'problems': [], 'viewpoint': None}
+
+        monkeypatch.setattr(R, 'render_scene', fake_render)
+        monkeypatch.setattr(R.renderregression, 'gl_renderer',
+                            lambda *_backend: {'gl_renderer': 'test', 'gl_version': '0'})
+        out_dir = str(tmp_path / 'renders')
+        status = R.main(['--samples', directory, '--baseline-root', str(tmp_path / 'b'),
+                         '--out-dir', out_dir, '--report', str(tmp_path / 'r.html'),
+                         '--size', '32x24', '--frames', '8'])
+        assert status == 0
+        assert drawn == {'Samples/Box': 8, 'Samples/TimeSensor': 59}
+        with open(os.path.join(out_dir, 'Samples.TimeSensor.json')) as stream:
+            record = json.load(stream)
+        assert record['frames'] == 59
+        assert record['upstream'] is None
+
+    def test_the_baselines_are_the_samples_own(self):
+        assert R.default_baseline_root(samples=True).endswith(
+            os.path.join('reference_images', 'x3d_samples'))
+        assert R.default_baseline_root().endswith(
+            os.path.join('reference_images', 'x3d_baseline'))

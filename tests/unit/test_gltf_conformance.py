@@ -32,8 +32,6 @@ import os
 
 import pytest
 
-pytest.importorskip("PIL")
-pytest.importorskip("numpy")
 
 from OpenGLContext.bin import gltf_regression as R
 from OpenGLContext.testing import renderregression as RR

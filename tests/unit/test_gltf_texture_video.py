@@ -14,8 +14,7 @@ import shutil
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
-Image = pytest.importorskip("PIL.Image")
+from PIL import Image
 
 from OpenGLContext.events import systemtime
 from OpenGLContext.loaders import background

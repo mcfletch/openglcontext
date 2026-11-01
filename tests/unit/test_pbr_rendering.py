@@ -6,7 +6,6 @@ import sys
 
 import pytest
 
-pytest.importorskip("PIL")
 import numpy as np
 from PIL import Image
 

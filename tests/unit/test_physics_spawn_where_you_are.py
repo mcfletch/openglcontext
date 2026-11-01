@@ -10,25 +10,18 @@ avatar at the camera and lets gravity bring it down to whatever is underneath.
 import numpy as np
 import pytest
 
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext import quaternion
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
+from OpenGLContext.scenegraph.transform import Transform
 
 
-def _floor(size=6000.0):
-    """A flat floor spanning `size` metres, the way a city's ground reads."""
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
-    half = size / 2
-    points = np.array([[-half, 0.0, -half], [half, 0.0, -half],
-                       [half, 0.0, half], [-half, 0.0, half]], dtype='d')
-    shape = world.add_shape(model.Shape.trimesh(points, np.array([[0, 2, 1],
-                                                                 [0, 3, 2]])))
-    world.add_body(model.Motion(type=model.STATIC),
-                   collider=model.Collider(shape=shape))
-    return world, (np.array([-half, 0.0, -half]), np.array([half, 0.0, half]))
+#: The half width of the floor, metres: a city's ground.
+HALF = 3000.0
 
 
 class _Platform:
@@ -56,14 +49,21 @@ class _Host(PhysicsWalkMixin):
 
     physicsDropIn = True
 
+    @staticmethod
+    def physicsAvatarScale(low, high):
+        """A person in a city is a person, as the viewer sizes one in a world."""
+        return 1.0
+
     def __init__(self, camera):
         self.platform = _Platform(camera)
         self.movementManager = None
         self.contextDefinition = ContextDefinition()
-        self.world, self.bounds = _floor()
+        self.physics = Physics(PhysicsDefinition(mode='inline'))
 
     def buildPhysicsWorld(self):
-        return self.world, self.bounds
+        self.physics.add_static(Transform(translation=(0.0, -0.5, 0.0)),
+                                Proxy.box((2 * HALF, 1.0, 2 * HALF)))
+        return np.array([-HALF, 0.0, -HALF]), np.array([HALF, 0.0, HALF])
 
     def getViewPlatform(self):
         return self.platform
@@ -81,6 +81,14 @@ class _Host(PhysicsWalkMixin):
         pass
 
 
+@pytest.fixture
+def hosts():
+    made = []
+    yield lambda camera: made.append(_Host(camera)) or made[-1]
+    for host in made:
+        host.physics.close()
+
+
 def _settle(host, seconds=6.0):
     for _ in range(int(seconds * 60)):
         host.physicsPlatform.update(1.0 / 60.0)
@@ -88,22 +96,22 @@ def _settle(host, seconds=6.0):
             break
 
 
-def test_walking_starts_under_the_camera_not_in_the_middle():
-    host = _Host(camera=(2200.0, 40.0, -1750.0))
+def test_walking_starts_under_the_camera_not_in_the_middle(hosts):
+    host = hosts(camera=(2200.0, 40.0, -1750.0))
     assert host.enablePhysics(True)
     landed = host.physicsPlatform.character.position
     assert landed[0] == pytest.approx(2200.0, abs=1.0)
     assert landed[2] == pytest.approx(-1750.0, abs=1.0)
 
 
-def test_a_camera_in_the_air_falls_rather_than_hovering():
+def test_a_camera_in_the_air_falls_rather_than_hovering(hosts):
     """`g` means walk, so the avatar drops to what is under it.
 
     Sixty metres rather than the several hundred a city is flown at, because
     what is under test is that it falls at all: the descent itself is the
     physics engine's and is timed by terminal velocity.
     """
-    host = _Host(camera=(0.0, 60.0, 0.0))
+    host = hosts(camera=(0.0, 60.0, 0.0))
     host.enablePhysics(True)
     started = host.physicsPlatform.character.position[1]
     assert not host.physicsPlatform.character.flying
@@ -112,8 +120,8 @@ def test_a_camera_in_the_air_falls_rather_than_hovering():
     assert character.position[1] < started - 10.0, character.position
 
 
-def test_going_back_to_free_fly_and_returning_keeps_the_place():
-    host = _Host(camera=(1000.0, 30.0, 500.0))
+def test_going_back_to_free_fly_and_returning_keeps_the_place(hosts):
+    host = hosts(camera=(1000.0, 30.0, 500.0))
     host.enablePhysics(True)
     _settle(host)
     host.enablePhysics(False)

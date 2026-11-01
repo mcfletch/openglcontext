@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="PointLight"/>
+    <meta name="description" content="Light from one place that spreads in every direction and weakens with distance: location is the place, radius where it ends, and attenuation how it falls off."/>
+  </head>
+  <Scene>
+    <Viewpoint position="2.5 3 6.5" orientation="-0.7634 0.6302 0.1417 0.5731"/>
+    <NavigationInfo headlight="false"/>
+    <PointLight location="0 1.8 1.2" color="1 0.85 0.6" intensity="1.2" radius="8" attenuation="1 0 0.08"/>
+    <!-- A small bright sphere marks where the light is. -->
+    <Transform translation="0 1.8 1.2">
+      <Shape>
+        <Appearance><Material emissiveColor="1 0.9 0.7"/></Appearance>
+        <Sphere radius="0.12"/>
+      </Shape>
+    </Transform>
+    <Transform translation="0 -1.1 0">
+      <Shape>
+        <Appearance><Material diffuseColor="0.6 0.55 0.5"/></Appearance>
+        <Box size="10 0.2 10"/>
+      </Shape>
+    </Transform>
+    <Shape>
+      <Appearance><Material diffuseColor="0.8 0.4 0.3"/></Appearance>
+      <Box size="1.4 1.4 1.4"/>
+    </Shape>
+    <Transform translation="2.2 -0.35 0.6">
+      <Shape>
+        <Appearance><Material diffuseColor="0.3 0.55 0.85"/></Appearance>
+        <Sphere radius="0.75"/>
+      </Shape>
+    </Transform>
+  </Scene>
+</X3D>

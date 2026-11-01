@@ -179,6 +179,8 @@ from OpenGLContext.scenegraph.shaders import TextureBufferUniform as TextureBuff
 from OpenGLContext.scenegraph.shaders import TextureUniform as TextureUniform
 from OpenGLContext.scenegraph.shape import Shape as Shape
 from OpenGLContext.scenegraph.simplebackground import SimpleBackground as SimpleBackground
+from OpenGLContext.scenegraph.softnodes import Cloth as Cloth
+from OpenGLContext.scenegraph.softnodes import Ragdoll as Ragdoll
 from OpenGLContext.scenegraph.specularglossiness import SpecularGlossinessMaterial as SpecularGlossinessMaterial
 from OpenGLContext.scenegraph.spherebackground import SphereBackground as SphereBackground
 from OpenGLContext.scenegraph.switch import Switch as Switch
@@ -399,6 +401,7 @@ __all__ = [
     'Circle2D',
     'ClearcoatMaterialExtension',
     'ClipPlane',
+    'Cloth',
     'CollidableOffset',
     'CollidableShape',
     'Collision',
@@ -604,6 +607,7 @@ __all__ = [
     'ProximitySensor',
     'QuadSet',
     'ROUTE',
+    'Ragdoll',
     'Rectangle2D',
     'RenderedTexture',
     'RetroreflectionMaterialExtension',

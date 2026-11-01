@@ -12,10 +12,7 @@ import threading
 
 import numpy as np
 import pytest
-from omi_physics.raycast import raycast
-from omi_physics.world import PhysicsWorld
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.scenegraph.terrain import HeightField, LayerRule, control_map
 from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
@@ -23,6 +20,7 @@ from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 from OpenGLContext.loaders.documentvalues import DocumentError
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
 from OpenGLContext.physics.heightfield import HeightFieldColliders
+from tests.unit._streamed import Streamed
 
 EXTENT = 512.0
 
@@ -144,11 +142,9 @@ class TestWhatAGameDoesWithIt:
     def test_colliders_can_be_built_from_it(self, tmp_path) -> None:
         terrain = TilesTerrain(_world(tmp_path), workers=1)
         try:
-            world = PhysicsWorld()
-            ground = HeightFieldColliders(world, terrain.field, reach=200.0)
+            ground = Streamed(HeightFieldColliders(terrain.field, reach=200.0))
             ground.update((0.0, 0.0, 0.0))
-            hit = raycast(world, (0.0, 300.0, 0.0), (0.0, -1.0, 0.0),
-                          max_distance=600.0)
+            hit = ground.physics.raycast((0.0, 300.0, 0.0), (0.0, -1.0, 0.0), 600.0)
             assert hit is not None
             assert float(hit.point[1]) == pytest.approx(float(_hilly(0.0, 0.0)),
                                                         abs=1.0)

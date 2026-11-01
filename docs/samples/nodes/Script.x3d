@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Script"/>
+    <meta name="description" content="A program run by events: its fields declare the events it takes and sends, and url holds the program. This engine reads the node and its routes and does not run the program."/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <TimeSensor DEF="Clock" cycleInterval="4" loop="true"/>
+    <Shape>
+      <Appearance>
+        <Material DEF="Skin" diffuseColor="0.2 0.4 0.9"/>
+      </Appearance>
+      <Box size="1.8 1.8 1.8"/>
+    </Shape>
+    <Script DEF="Tint" directOutput="false" mustEvaluate="false">
+      <field name="fraction" type="SFFloat" accessType="inputOnly"/>
+      <field name="colour" type="SFColor" accessType="outputOnly"/>
+      <![CDATA[
+      ecmascript:
+      // Blue at the start of a cycle and red at the end.
+      function fraction(value) {
+        colour = new SFColor(value, 0.2, 1 - value);
+      }
+      ]]>
+    </Script>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Tint" toField="fraction"/>
+    <ROUTE fromNode="Tint" fromField="colour" toNode="Skin" toField="set_diffuseColor"/>
+  </Scene>
+</X3D>

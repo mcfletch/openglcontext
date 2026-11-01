@@ -148,23 +148,27 @@ def test_a_node_streams_the_scatter_and_hands_out_the_ground(relief):
         node.shutdown()
 
 
-def test_a_walker_bound_to_the_rocky_ground_builds_its_physics_world_from_the_fields_own_figures():
+def test_a_walker_bound_to_the_rocky_ground_measures_it_by_the_fields_own_figures():
     """The walker reads ``extent``, ``grid`` and ``relief`` (metres of height) off its ground;
     a rocky ground must answer them with the field's, not with its own rock."""
-    from OpenGLContext.move.terrainwalk import TerrainWalkMixin
     from OpenGLContext.scenegraph.terrain import HeightField
 
-    class Walker(TerrainWalkMixin):
-        platform = None
+    from ._terrain_host import Clock
 
-    field = HeightField(np.linspace(0.0, 1.0, 81).reshape(9, 9), 400.0, 50.0)
-    rock = RockRelief(where=rocky_east, height=0.6)
-    walker = Walker()
-    walker.init_walk(RockyGround(field, rock))
-    world, (low, high) = walker.buildPhysicsWorld()
-    assert float(high[0]) == 200.0 and float(high[1]) == pytest.approx(50.0)
-    assert RockyGround(field, rock).relief == 50.0
-    assert RockyGround(field, rock).rock is rock
+    clock = Clock()
+    try:
+        walker = clock.host()
+        field = HeightField(np.linspace(0.0, 1.0, 81).reshape(9, 9), 400.0, 50.0)
+        rock = RockRelief(where=rocky_east, height=0.6)
+        walker.init_walk(RockyGround(field, rock))
+        low, high = walker.walkBounds()
+        assert float(high[0]) == 200.0 and float(low[0]) == -200.0
+        assert 50.0 + 0.6 <= float(high[1]) <= 50.0 + 0.6 + 2.0
+        assert float(low[1]) <= 0.0
+        assert RockyGround(field, rock).relief == 50.0
+        assert RockyGround(field, rock).rock is rock
+    finally:
+        clock.restore()
 
 
 # -- keeping the coarse ground out of the rock's way -----------------------------------------

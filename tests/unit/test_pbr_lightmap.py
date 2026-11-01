@@ -92,9 +92,9 @@ class TestShaderSource:
 
 @pytest.fixture(scope="module")
 def lightmap_image(tmp_path_factory):
-    rendering = pytest.importorskip("tests.unit.test_pbr_rendering")
-    np = pytest.importorskip("numpy")
-    image_mod = pytest.importorskip("PIL.Image")
+    from tests.unit import test_pbr_rendering as rendering
+    import numpy as np
+    from PIL import Image as image_mod
     out = str(tmp_path_factory.mktemp("lm") / "lightmap.png")
     rendering.capture_scene(out, mode="lightmap", env={'OPENGLCONTEXT_IBL': 'off'})
     return np.asarray(image_mod.open(out).convert("RGB")).astype(int)

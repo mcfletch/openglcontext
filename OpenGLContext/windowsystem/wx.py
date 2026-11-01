@@ -433,6 +433,7 @@ class WxWindowSystem(WarpedPointer, WindowSystem):
             context.runRenderQueue()
             context.pumpKeyRepeats()
             context.OnIdle()
+            context.runFrameHooks()
             context.drawPoll()
         event.RequestMore()
 

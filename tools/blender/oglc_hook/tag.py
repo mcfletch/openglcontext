@@ -33,6 +33,7 @@ WATER = 'water'
 #: material the surface's own shading is applied to its reflection, and on an
 #: object every surface of it shows the reflection alone.
 MIRROR = 'mirror'
+CLOTH = 'cloth'
 
 #: The particle effects, which belong on an object: each stands where the
 #: object stands. The panel has the same two fields for all three.
@@ -47,12 +48,14 @@ EFFECTS: dict[str, str] = {
 KINDS: dict[str, str] = {
     WATER: 'A surface that moves as water, and a body you can be inside of',
     MIRROR: 'A flat surface that reflects the scene in front of it',
+    CLOTH: 'A mesh that hangs, drapes and blows as cloth',
     **EFFECTS,
 }
 
 #: Where each of the engine's kinds is read. On the other holder the loader
 #: passes it over, so the panel says so.
-_BELONGS: dict[str, str] = {WATER: 'material', **{kind: 'object' for kind in EFFECTS}}
+_BELONGS: dict[str, str] = {WATER: 'material', CLOTH: 'object',
+                             **{kind: 'object' for kind in EFFECTS}}
 _HOLDER = {'material': 'a material', 'object': 'an object'}
 
 #: How water moves, and what each motion is.

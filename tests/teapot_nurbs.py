@@ -9,15 +9,8 @@ The Utah Teapot was modelled by Martin Newell in 1975 at the University of
 Utah.  See https://graphics.cs.utah.edu/teapot/.
 """
 import os
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive('glfw')
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import basenodes
-
 
 def _teapot_shape(position, diffuse, lid=True, solid=True):
     return basenodes.Transform(

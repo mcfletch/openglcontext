@@ -13,6 +13,12 @@ answers by itself:
   when it is far away, posed by the same skeleton as the near one.
 * :mod:`OpenGLContext.character.crowd` -- every figure of a build posed in one
   pass rather than one at a time.
+* :mod:`OpenGLContext.character.locomotion` -- a character's speed and state
+  turned into clips, rates and footsteps, through a clip map.
+* :mod:`OpenGLContext.character.gaitmeasure` -- how fast a clip carries a
+  body, measured from the clip.
+* :mod:`OpenGLContext.character.facing` -- heading, ground tilt and lean for a
+  character's node, and the fit of a model to its capsule.
 
 :class:`OpenGLContext.character.model.CharacterModel` is the three together
 over one loaded document, which is what a game usually wants.

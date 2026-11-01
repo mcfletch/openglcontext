@@ -55,11 +55,7 @@ Keys:
 
 The usual keys walk around, and Escape quits.
 '''
-import os
 import sys
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
 import math
 
 from OpenGLContext import testingcontext

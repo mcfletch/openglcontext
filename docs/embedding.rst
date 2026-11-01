@@ -110,8 +110,13 @@ Running the main loop
 ---------------------
 
 A full-window program calls ``ContextMainLoop()``, and the engine runs the
-loop. An embedded view cannot, because the host's loop is already running
-and the frames have to come from it. How that works differs by window
+loop. Ctrl-C in the terminal ends that program with exit status 130 and no
+traceback, after the window is released. ``context.MainLoop()`` releases the
+window and then raises the ``KeyboardInterrupt``, for a program that handles
+Ctrl-C itself.
+
+An embedded view cannot run the loop, because the host's loop is already
+running and the frames have to come from it. How that works differs by window
 system.
 
 Tk: the host drives the view

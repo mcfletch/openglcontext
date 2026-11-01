@@ -1,0 +1,21 @@
+#VRML V2.0 utf8
+# META "title" "MovieTexture"
+# META "description" "A movie played over a surface: url names the file, loop repeats it, and startTime and speed control when and how fast it plays."
+# META "sample:frames" "89"
+
+Viewpoint {
+  orientation 0 1 0 0
+  position 0 0 5
+}
+Shape {
+  appearance Appearance {
+    texture MovieTexture {
+      loop TRUE
+      startTime 1
+      url [ "assets/clip.mp4" ]
+    }
+  }
+  geometry Box {
+    size 2.6 1.95 0.2
+  }
+}

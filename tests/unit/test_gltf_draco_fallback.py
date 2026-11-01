@@ -9,7 +9,7 @@ a Draco decoder draws instead.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 DracoPy = pytest.importorskip("DracoPy")
 
 from pygltflib import (

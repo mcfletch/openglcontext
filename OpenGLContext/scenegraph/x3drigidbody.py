@@ -1,9 +1,10 @@
 """X3D's RigidBodyPhysics nodes, on the engine's clock -- docs/x3d.rst
 
-A `RigidBodyCollection` simulates its bodies on omi_physics
-(:class:`~OpenGLContext.physics.x3drigid.RigidSystem`) and a
-`CollisionSensor` reports the touches among its collider's collidables
-(:func:`~OpenGLContext.physics.x3drigid.detect`). Bound to contexts, each
+A `RigidBodyCollection` simulates its bodies on the physics engine
+(:func:`~OpenGLContext.physics.x3djolt.make_rigid_system`),
+and a `CollisionSensor` reports the touches among its collider's collidables
+(:func:`~OpenGLContext.physics.x3djolt.make_sensing`). Bound to
+contexts, each
 steps once a frame through the context's render queue, on the engine's clock
 (:class:`~OpenGLContext.scenegraph.x3druntime.EngineTimed`), for as long as
 the context draws the scene the node is in, and a collection asks for frames
@@ -16,19 +17,25 @@ the collection reads.
 """
 from __future__ import annotations
 
+import logging
 import weakref
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from vrml import cache
 from vrml.vrml97 import nodetypes, transformmatrix
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.events.renderqueue import DEFER
-from OpenGLContext.physics import x3drigid
+from OpenGLContext.physics.engine import EngineUnavailable
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.x3druntime import EngineTimed
 
+if TYPE_CHECKING:
+    from OpenGLContext.physics import x3drigid
+
 __all__ = ['CollidableOffset', 'CollidableShape', 'CollisionSensor', 'RigidBodyCollection']
+
+log = logging.getLogger(__name__)
 
 
 class _Collidable(nodetypes.Transforming):
@@ -136,32 +143,48 @@ class _Stepped(EngineTimed):
         raise NotImplementedError
 
 
+def _made(node: Any, key: str, make: Any) -> Any:
+    """What `make` makes for `node`, kept under `key`; None, logged once, where the engine is unavailable"""
+    found = node.__dict__.get(key)
+    if found is None and not node.__dict__.get('_unavailable'):
+        try:
+            found = node.__dict__[key] = make()
+        except EngineUnavailable as error:
+            node.__dict__['_unavailable'] = True
+            log.warning('%s', error)
+    return found
+
+
 class RigidBodyCollection(_Stepped, x3d.RigidBodyCollection):
-    """X3D's RigidBodyCollection, simulated on omi_physics
+    """X3D's RigidBodyCollection, simulated on the physics definition's engine
 
     Steps its bodies once a frame to the engine's time; a scene's capture,
     on a fixed-step clock, steps them the same way every run.
     """
 
     @property
-    def system(self) -> x3drigid.RigidSystem:
-        """The collection's simulation"""
-        found: Optional[x3drigid.RigidSystem] = self.__dict__.get('_system')
-        if found is None:
-            found = self.__dict__['_system'] = x3drigid.RigidSystem(self)
+    def system(self) -> Optional[x3drigid.RigidSystem]:
+        """The collection's simulation; None where its engine is unavailable"""
+        from OpenGLContext.physics.x3djolt import make_rigid_system  # noqa: PLC0415 pyjoltphysics loads on use
+
+        found: Optional[x3drigid.RigidSystem] = _made(self, '_system', lambda: make_rigid_system(self))
         return found
 
     def on_set_contacts(self, value: Any) -> None:
         """Contacts to resolve over the next frame"""
-        self.system.contacts = list(value or ())
+        system = self.system
+        if system is not None:
+            system.contacts = list(value or ())
 
     def advance(self, seconds: float) -> bool:
         """Step the collection by `seconds`; whether any body is still moving"""
-        return self.system.advance(seconds)
+        system = self.system
+        return False if system is None else system.advance(seconds)
 
     def awake(self) -> bool:
         """Whether any body is moving"""
-        return self.system.awake()
+        system = self.system
+        return False if system is None else system.awake()
 
     def step(self) -> bool:
         """Advance to the engine's time"""
@@ -174,19 +197,25 @@ class RigidBodyCollection(_Stepped, x3d.RigidBodyCollection):
 class CollisionSensor(_Stepped, x3d.CollisionSensor):
     """X3D's CollisionSensor: the touches among its collider's collidables, each frame
 
-    `contacts` is a `Contact` per touching point, `intersections` the
-    collidables touching, and `isActive` whether there are any. The contacts
-    carry the collider's parameters, and a normal from `geometry1` toward
-    `geometry2`. An empty `contacts` is sent once when the touching stops.
+    `contacts` is a `Contact` per touch (on Jolt one per touching pair, at
+    the deepest point), `intersections` the collidables touching, and
+    `isActive` whether there are any. The contacts carry the collider's
+    parameters, and a normal from `geometry1` toward `geometry2`. An empty
+    `contacts` is sent once when the touching stops.
     """
 
     def sense(self) -> None:
         """Find the touches as the collidables stand, and send them"""
+        from OpenGLContext.physics import x3drigid  # noqa: PLC0415 kept with the engine's modules
+        from OpenGLContext.physics.x3djolt import make_sensing  # noqa: PLC0415 pyjoltphysics loads on use
+
+        sensing = _made(self, '_sensing', make_sensing)
+        if sensing is None:
+            return
         if not self.enabled or not self.collider:
-            touches: list[x3drigid.Touch] = []
+            touches: list[Any] = []
         else:
-            kept = self.__dict__.setdefault('_kept', {})
-            touches = x3drigid.detect(self.collider, kept)
+            touches = sensing.detect(self.collider)
         pool: list[Any] = self.__dict__.setdefault('_contactPool', [])
         while len(pool) < len(touches):
             pool.append(x3d.Contact())

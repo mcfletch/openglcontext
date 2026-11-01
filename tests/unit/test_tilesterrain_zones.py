@@ -13,7 +13,6 @@ import shutil
 
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 from OpenGLContext.scenegraph.zone import ENVIRONMENT, Zone

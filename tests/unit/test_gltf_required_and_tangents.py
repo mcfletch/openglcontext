@@ -11,8 +11,7 @@ import io
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
-Image = pytest.importorskip("PIL.Image")
+from PIL import Image
 
 from OpenGLContext.loaders.gltf import load_gltf
 from OpenGLContext.loaders.gltf.loader import SUPPORTED_EXTENSIONS

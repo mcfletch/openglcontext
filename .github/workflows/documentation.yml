@@ -74,9 +74,13 @@ jobs:
             libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6
 
       - name: Install the engine and the documentation tools
+        # pyjoltphysics is not on PyPI yet. It is built from the develop branch
+        # of its repository, with the Jolt submodule, which pip clones
+        # recursively for a git requirement. Remove the `pyjoltphysics @ git+...`
+        # requirement once pyjoltphysics is on PyPI.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[docs,gltf,glfw]"
+          python -m pip install "pyjoltphysics @ git+https://github.com/mcfletch/pyjoltphysics.git@develop" -e ".[docs,gltf,glfw]"
 
       - name: Name the commits this job makes
         # `git commit-tree` wants an author and a committer, and a runner has

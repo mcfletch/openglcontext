@@ -384,6 +384,10 @@ class TestACleanRenderingEnvironment:
             'OPENGLCONTEXT_AUDIO',
             'OPENGLCONTEXT_AUDIO_VOLUME',
             'OPENGLCONTEXT_AUDIO_MICROPHONE',
+            # Whether a physics handler's exception is raised from the frame or
+            # only logged: a run that draws at all draws the same pixels, and a
+            # subprocess of a test run should fail on one as the run does.
+            'OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS',
             # Diagnostics.  These decide when a log line is written and what
             # counts as a stall; a capture renders the same pixels either way,
             # and a diagnostic a subprocess silently dropped would be no
@@ -409,6 +413,13 @@ class TestACleanRenderingEnvironment:
             # inheriting it spares the child a probe of its own.  See
             # OpenGLContext.testing.glfwteardown.
             'OPENGLCONTEXT_GLFW_TEARDOWN',
+            # Whether the driver's vertex-stage culling is switched off where
+            # it draws back faces with a vertex at clip w = 0.  It is the
+            # driver's setting, so a child renders on the same driver as its
+            # parent, inherits AMD_DEBUG with it, and is spared a probe of its
+            # own.
+            # See OpenGLContext.testing.drivercull.
+            'OPENGLCONTEXT_NGG_CULLING',
             # Where content packs are found instead of downloading them. It
             # names the same data whichever process reads it, and a child that
             # did not inherit it would go to the network for content its parent
@@ -416,6 +427,11 @@ class TestACleanRenderingEnvironment:
             # and is pointed at a local copy for exactly that reason. See
             # OpenGLContext.contentpacks.store.
             'OPENGLCONTEXT_CONTENT',
+            # Which physics engine a whole run is made on. A game's suite run on
+            # one engine runs the captures it starts on that engine too, which is
+            # what running the suite on that engine means; a capture that needs
+            # one engine pins it. See OpenGLContext.physics.settings.
+            'OPENGLCONTEXT_PHYSICS_ENGINE',
         }
         assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)
 
@@ -469,6 +485,11 @@ class TestWhatCleanMeans:
         fixed one pins it rather than taking whatever the parent carried."""
         monkeypatch.setenv('OPENGLCONTEXT_SEED', '4242')
         assert 'OPENGLCONTEXT_SEED' not in renderoptions.clean_environment()
+
+    def test_a_child_capture_runs_on_the_physics_engine_of_the_run(self, monkeypatch):
+        """A suite run on one physics engine makes its captures on that engine."""
+        monkeypatch.setenv('OPENGLCONTEXT_PHYSICS_ENGINE', 'jolt')
+        assert renderoptions.clean_environment()['OPENGLCONTEXT_PHYSICS_ENGINE'] == 'jolt'
 
     def test_a_caller_can_still_say_otherwise(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')

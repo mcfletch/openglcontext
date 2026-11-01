@@ -1,0 +1,48 @@
+#VRML V2.0 utf8
+# META "title" "Group"
+# META "description" "Holds children and gives them no transform of its own; a DEF on the group names the whole set so it can be used again."
+
+Viewpoint {
+  orientation -1 -0 -0 0.2533
+  position 0 2.2 8.5
+}
+DEF Pair Group {
+  children [
+    Transform {
+      translation -1.2 0 0
+      children [
+        Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.85 0.3 0.25
+            }
+          }
+          geometry Box {
+            size 1.4 1.4 1.4
+          }
+        }
+      ]
+    }
+    Transform {
+      translation 1.2 0 0
+      children [
+        Shape {
+          appearance Appearance {
+            material Material {
+              diffuseColor 0.25 0.5 0.85
+            }
+          }
+          geometry Sphere {
+            radius 0.7
+          }
+        }
+      ]
+    }
+  ]
+}
+Transform {
+  translation 0 -2 0
+  children [
+    USE Pair
+  ]
+}

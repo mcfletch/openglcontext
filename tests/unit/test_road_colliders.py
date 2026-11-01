@@ -12,12 +12,12 @@ from those, the collider is one surface at one resolution, everywhere, always.
 import numpy as np
 import pytest
 
-from omi_physics.raycast import raycast
-from omi_physics.world import PhysicsWorld
-from omi_physics import model
-from omi_physics.vehicle import car_wheels, RaycastVehicle, VehicleTuning
+from OpenGLContext.physics.body import Body
+from OpenGLContext.physics.proxy import Proxy
 from OpenGLContext.physics.road import RoadColliders
+from OpenGLContext.physics.vehicles import CarTuning, VehicleSettings, car_wheels
 from OpenGLContext.scenegraph.road import RoadProfile
+from tests.unit._streamed import Streamed
 
 PROFILE = RoadProfile()
 
@@ -28,6 +28,9 @@ _EAST = -np.pi / 2.0
 #: Where a car starts on them: in from the end, so it is on the surface rather
 #: than on the rim of it.
 _START = (200.0, 1.0, 0.0)
+
+#: Where the default car's chassis rides over a level road, in metres above it.
+RIDE_HEIGHT = 0.7
 
 
 def _straight(length=1200.0, spacing=6.0, grade=0.0):
@@ -41,65 +44,88 @@ def _ring(radius=400.0, points=400, height=20.0):
                      radius * np.sin(angle)], axis=-1)
 
 
-def _surface(world, x, z):
-    hit = raycast(world, (x, 400.0, z), (0.0, -1.0, 0.0), max_distance=800.0)
+def _road(line, *arguments, **named):
+    return Streamed(RoadColliders(line, *arguments, **named))
+
+
+def _surface(road, x, z):
+    road.physics.flush()
+    hit = road.physics.raycast((x, 400.0, z), (0.0, -1.0, 0.0), 800.0)
     return None if hit is None else float(hit.point[1])
+
+
+class TestASource:
+    def test_each_stretch_is_a_body_of_the_service(self) -> None:
+        road = _road(_straight(), PROFILE, reach=200.0)
+        road.update((0.0, 0.0, 0.0))
+        hit = road.physics.raycast((60.0, 400.0, 0.0), (0.0, -1.0, 0.0), 800.0)
+        assert isinstance(hit.body, Body)
+
+    def test_it_answers_what_changed(self) -> None:
+        source = RoadColliders(_straight(), PROFILE, reach=150.0)
+        first = source.update((0.0, 0.0, 0.0))
+        assert len(first.add) == source.chunk_count() > 0
+        again = source.update((1.0, 0.0, 0.0))
+        assert not again.add and not again.remove
+        later = source.update((900.0, 0.0, 0.0))
+        assert set(later.remove) == {one[0] for one in first.add}
+
+    def test_letting_go_of_everything_empties_it(self) -> None:
+        source = RoadColliders(_straight(), PROFILE, reach=150.0)
+        source.update((0.0, 0.0, 0.0))
+        source.clear()
+        assert source.chunk_count() == 0 and source.triangle_count() == 0
+        assert source.update((0.0, 0.0, 0.0)).add
 
 
 class TestTheRoadIsThere:
     def test_a_ray_finds_the_carriageway(self) -> None:
-        world = PhysicsWorld()
-        RoadColliders(world, _straight(), PROFILE, reach=200.0).update(
-            (0.0, 0.0, 0.0))
-        assert _surface(world, 60.0, 0.0) == pytest.approx(0.0, abs=0.05)
+        road = _road(_straight(), PROFILE, reach=200.0)
+        road.update((0.0, 0.0, 0.0))
+        assert _surface(road, 60.0, 0.0) == pytest.approx(0.0, abs=0.05)
 
     def test_it_follows_the_road_up_a_grade(self) -> None:
-        world = PhysicsWorld()
-        line = _straight(grade=0.08)
-        RoadColliders(world, line, PROFILE, reach=300.0).update((0.0, 0.0, 0.0))
-        assert _surface(world, 200.0, 0.0) == pytest.approx(16.0, abs=0.1)
+        road = _road(_straight(grade=0.08), PROFILE, reach=300.0)
+        road.update((0.0, 0.0, 0.0))
+        assert _surface(road, 200.0, 0.0) == pytest.approx(16.0, abs=0.1)
 
     def test_it_is_as_wide_as_the_road(self) -> None:
-        world = PhysicsWorld()
-        RoadColliders(world, _straight(), PROFILE, reach=200.0).update(
-            (0.0, 0.0, 0.0))
+        road = _road(_straight(), PROFILE, reach=200.0)
+        road.update((0.0, 0.0, 0.0))
         half = PROFILE.total_width / 2.0
-        assert _surface(world, 60.0, half - 0.3) is not None
-        assert _surface(world, 60.0, half + 2.0) is None
+        assert _surface(road, 60.0, half - 0.3) is not None
+        assert _surface(road, 60.0, half + 2.0) is None
 
     def test_it_cambers_like_the_road(self) -> None:
-        world = PhysicsWorld()
-        RoadColliders(world, _straight(), PROFILE, reach=200.0).update(
-            (0.0, 0.0, 0.0))
-        crown = _surface(world, 60.0, 0.0)
-        edge = _surface(world, 60.0, PROFILE.carriageway_width / 2.0 - 0.1)
+        road = _road(_straight(), PROFILE, reach=200.0)
+        road.update((0.0, 0.0, 0.0))
+        crown = _surface(road, 60.0, 0.0)
+        edge = _surface(road, 60.0, PROFILE.carriageway_width / 2.0 - 0.1)
         assert crown > edge
 
     def test_road_out_of_reach_is_not_loaded(self) -> None:
-        world = PhysicsWorld()
-        RoadColliders(world, _straight(), PROFILE, reach=150.0).update(
-            (0.0, 0.0, 0.0))
-        assert _surface(world, 900.0, 0.0) is None
+        road = _road(_straight(), PROFILE, reach=150.0)
+        road.update((0.0, 0.0, 0.0))
+        assert _surface(road, 900.0, 0.0) is None
 
     def test_moving_brings_the_road_with_you(self) -> None:
-        world = PhysicsWorld()
-        road = RoadColliders(world, _straight(), PROFILE, reach=150.0)
+        road = _road(_straight(), PROFILE, reach=150.0)
         road.update((0.0, 0.0, 0.0))
         road.update((900.0, 0.0, 0.0))
-        assert _surface(world, 900.0, 0.0) is not None
+        assert _surface(road, 900.0, 0.0) is not None
 
     def test_what_you_left_behind_goes_away(self) -> None:
         line = _straight()
-        driven = RoadColliders(PhysicsWorld(), line, PROFILE, reach=150.0)
+        driven = _road(line, PROFILE, reach=150.0)
         for step in range(10):
             driven.update((step * 120.0, 0.0, 0.0))
-        standing = RoadColliders(PhysicsWorld(), line, PROFILE, reach=150.0)
+        standing = _road(line, PROFILE, reach=150.0)
         standing.update((9 * 120.0, 0.0, 0.0))
         assert driven.chunk_count() == standing.chunk_count()
+        assert driven.physics.counts.bodies == standing.physics.counts.bodies
 
     def test_standing_still_rebuilds_nothing(self) -> None:
-        world = PhysicsWorld()
-        road = RoadColliders(world, _straight(), PROFILE, reach=150.0)
+        road = RoadColliders(_straight(), PROFILE, reach=150.0)
         road.update((300.0, 0.0, 0.0))
         before = road.triangle_count()
         road.update((301.0, 0.0, 0.0))
@@ -111,66 +137,67 @@ class TestOneSurfaceEverywhere:
 
     def test_the_height_under_a_point_never_changes(self) -> None:
         line = _ring()
-        road = RoadColliders(PhysicsWorld(), line, PROFILE, reach=200.0)
-        world = road.world
+        road = _road(line, PROFILE, reach=200.0)
         watched = line[100]
         seen = set()
         for at in line[::20]:
             road.update(at)
-            found = _surface(world, float(watched[0]), float(watched[2]))
+            found = _surface(road, float(watched[0]), float(watched[2]))
             if found is not None:
                 seen.add(round(found, 4))
         assert len(seen) == 1, "the surface moved: %r" % (sorted(seen),)
 
     def test_a_closed_road_joins_up(self) -> None:
         line = _ring()
-        world = PhysicsWorld()
-        RoadColliders(world, line, PROFILE, reach=4000.0,
-                      closed=True).update((0.0, 0.0, 0.0))
+        road = _road(line, PROFILE, reach=4000.0, closed=True)
+        road.update((0.0, 0.0, 0.0))
         # Right at the join between the last point and the first.
         between = 0.5 * (line[-1] + line[0])
         between *= 400.0 / float(np.hypot(between[0], between[2]))
-        assert _surface(world, float(between[0]), float(between[2])) is not None
+        assert _surface(road, float(between[0]), float(between[2])) is not None
 
     def test_an_open_road_does_not(self) -> None:
         line = _straight(length=600.0)
-        world = PhysicsWorld()
-        RoadColliders(world, line, PROFILE, reach=4000.0).update((0, 0, 0))
-        assert _surface(world, -30.0, 0.0) is None
+        road = _road(line, PROFILE, reach=4000.0)
+        road.update((0, 0, 0))
+        assert _surface(road, -30.0, 0.0) is None
 
     def test_the_chunks_meet_without_a_seam(self) -> None:
         line = _straight(length=1200.0)
-        world = PhysicsWorld()
-        RoadColliders(world, line, PROFILE, reach=4000.0,
-                      chunk=100.0).update((600.0, 0.0, 0.0))
+        road = _road(line, PROFILE, reach=4000.0, chunk=100.0)
+        road.update((600.0, 0.0, 0.0))
         for x in np.linspace(2.0, 1198.0, 200):
-            assert _surface(world, float(x), 0.0) is not None, "gap at %.0f" % x
+            assert _surface(road, float(x), 0.0) is not None, "gap at %.0f" % x
 
 
 class TestACarOnIt:
     def _driven(self, seconds=25.0):
         """A car at full throttle along a long straight, and where it got to."""
         line = _straight(length=3000.0)
-        world = PhysicsWorld()
-        road = RoadColliders(world, line, PROFILE, reach=250.0)
+        road = _road(line, PROFILE, reach=250.0)
         road.update(_START)
-        body = world.add_body(model.Motion(type=model.DYNAMIC, mass=1200.0),
-                              position=_START)
-        car = RaycastVehicle(world, body, car_wheels(), VehicleTuning())
+        physics = road.physics
+        chassis = physics.add_dynamic(None, Proxy.box((1.8, 0.6, 4.2)), mass=1200.0,
+                                      translation=_START)
+        car = physics.add_vehicle(chassis, VehicleSettings.from_tuning(
+            CarTuning(), car_wheels(), 1200.0))
         car.place(_START, _EAST)
+        car.set_input(throttle=1.0)
+        frame = 1.0 / 60.0
         worst = 0.0
-        for step in range(int(seconds * 120)):
-            if step % 30 == 0:
-                road.update(world.position[body])
-            car.control(throttle=1.0)
-            car.update(1.0 / 120.0)
-            world.step(1.0 / 120.0)
-            if step > 240:
-                worst = max(worst, abs(float(world.position[body][1]) - 0.7))
-        return float(world.position[body][0]), worst
+        for step in range(int(seconds / frame)):
+            if step % 15 == 0:
+                road.update(chassis.position)
+            physics.frame(frame)
+            if step > 120:
+                worst = max(worst, abs(float(chassis.position[1]) - RIDE_HEIGHT))
+        return float(chassis.position[0]), worst
 
     def test_a_car_drives_along_it_without_being_stopped(self) -> None:
-        assert self._driven()[0] > 700.0
+        """The default car at full throttle covers 349 m in 25 s from the start
+        (16.2 m/s at the end, its top speed); a chunk boundary that held it up
+        would take tens of metres off that."""
+        assert self._driven()[0] - _START[0] > 300.0
 
     def test_it_stays_on_the_surface_the_whole_way(self) -> None:
         """Across every chunk boundary it crosses: no step, no launch."""
@@ -198,12 +225,10 @@ class TestACircuitThatComesBackToItsGrid:
         return np.vstack([ring, ring[:1]]) if repeat else ring
 
     def _built(self, line, bank):
-        world = PhysicsWorld()
         lean = None if bank is None else np.full(len(line), bank)
-        road = RoadColliders(world, line, PROFILE, reach=1e6, closed=True,
-                             chunk=120.0, bank=lean)
+        road = _road(line, PROFILE, reach=1e6, closed=True, chunk=120.0, bank=lean)
         road.update(line[0])
-        return world
+        return road
 
     def _off_crown(self, world, line, radius, out):
         """The surface height ``out`` metres outside the centreline, all round."""
@@ -254,19 +279,17 @@ class TestTheEdgeOfADeck:
     """
 
     def _world(self, barriers=(), **kwargs):
-        world = PhysicsWorld()
-        road = RoadColliders(world, _straight(), PROFILE, barriers=barriers,
-                             **kwargs)
+        road = _road(_straight(), PROFILE, barriers=barriers, **kwargs)
         road.update(np.array(_START))
-        return world, road
+        return road, road
 
     @staticmethod
     def _sideways(world, x, z, towards):
         """Fire across the road at the height a car's body is, and see what
         stops it. Not over the top of the barrier: what is being asked is what
         the car meets, and half a metre up is where the car is."""
-        return raycast(world, (x, 0.5, z), (0.0, 0.0, float(towards)),
-                       max_distance=40.0)
+        world.physics.flush()
+        return world.physics.raycast((x, 0.5, z), (0.0, 0.0, float(towards)), 40.0)
 
     def test_a_road_on_the_ground_has_no_edge_to_fall_off(self) -> None:
         world, _road = self._world()

@@ -14,7 +14,6 @@ import sys
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.testing.paths import tests_root
 from tests.unit._character_assets import skinned_bar_glb

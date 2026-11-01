@@ -21,7 +21,7 @@ from omi_audio.engine import AudioEngine
 
 from OpenGLContext.scenegraph import audio as audionodes
 
-pygltflib = pytest.importorskip('pygltflib')
+import pygltflib
 
 from OpenGLContext.loaders.gltf import loader
 

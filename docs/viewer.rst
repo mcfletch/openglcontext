@@ -820,8 +820,9 @@ Methods to override
    * - ``viewerLibrary()``
      - Returns the library this viewer offers.
    * - ``buildPhysicsWorld()``
-     - Builds the collision world, when it should not come from ``self.sg``.
-       See :ref:`Walking any scene <walking>`.
+     - Puts what the walking avatar stands on into ``context.physics``, when
+       it should not be the shapes of ``self.sg``. See :ref:`Walking any scene
+       <walking>`.
 
 ``openSource( source )`` and ``openEntry( entry )`` replace the scene in a
 running viewer.

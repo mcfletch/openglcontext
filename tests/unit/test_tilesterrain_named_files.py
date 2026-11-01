@@ -18,7 +18,6 @@ import threading
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain

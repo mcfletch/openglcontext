@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.character import CharacterModel
 from OpenGLContext.loaders import gltf
@@ -29,6 +29,19 @@ class TestLoading:
         assert set(model.clips) == {'raise', 'kick'}
         assert model.humanoid.complete
         assert set(model.points) == {'grip'}
+
+    def test_a_url_is_fetched_through_the_loaders_cache(self, monkeypatch):
+        asked = []
+        real = gltf.load_gltf(character_glb())
+
+        def fetched(url, **named):
+            asked.append(url)
+            return real
+
+        monkeypatch.setattr(gltf, 'load_gltf_url', fetched)
+        model = CharacterModel.load('https://example.com/models/hero.glb')
+        assert asked == ['https://example.com/models/hero.glb']
+        assert set(model.clips) == {'raise', 'kick'}
 
     def test_a_model_with_no_recognised_rig(self):
         names = ['bone%d' % i for i in range(19)]

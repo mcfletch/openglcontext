@@ -14,7 +14,7 @@ and searches it.
    from OpenGLContext.nav import navmesh
 
    navmesh.build(points, triangles)   # walkable cells out of a triangle soup
-   navmesh.from_world(world)          # the same, from a physics world
+   navmesh.from_scene(scene)          # the same, from a loaded scenegraph
    mesh.cell_at(point)                # which cell a point stands on
    mesh.path(start, goal)             # the route, pulled taut
    mesh.corridor(start, goal)         # the cells it crosses
@@ -44,21 +44,16 @@ From triangles you already have:
    mesh.path((0.5, 0.0, 0.5), (0.5, 0.0, 3.5))
    # [(0.5, 0.0, 0.5), (0.5, 0.0, 3.5)]
 
-From a loaded level's :doc:`physics world <physics>`, which is the usual way:
+From a scenegraph, such as a loaded level:
 
 .. code-block:: python
 
-   from omi_physics import model
-   from omi_physics.world import PhysicsWorld
-   from OpenGLContext.nav import navmesh
+   from OpenGLContext.scenegraph.basenodes import Coordinate, IndexedFaceSet, Shape, Transform
 
-   world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
-   shape = world.add_shape(model.Shape.trimesh(points, triangles))
-   world.add_body(model.Motion(type=model.STATIC),
-                  collider=model.Collider(shape=shape), position=(0, 0, 0))
-
-   mesh = navmesh.from_world(world, max_slope=50.0)
-   len(mesh)                             # 2 -- the same floor, found in the world
+   floor = Shape(geometry=IndexedFaceSet(coord=Coordinate(point=points),
+                                         coordIndex=[0, 2, 1, -1, 0, 3, 2, -1]))
+   mesh = navmesh.from_scene(Transform(children=[floor]), max_slope=50.0)
+   len(mesh)                             # 2 -- the same floor, found in the scene
    mesh.random_point(seed=3)             # (2.6666666666666665, 0.0, 1.3333333333333333)
 
 A bot calls ``mesh.path(bot.position, mesh.random_point())`` when it wants a
@@ -112,16 +107,18 @@ rounding error from transforming a mesh into world space. The shared edge
 between two neighbours is kept as a **portal**, which the
 :ref:`string pull <pull>` draws the route through.
 
-``from_world(world, max_slope, clearance)``
+``from_scene(group, max_slope, clearance)``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Builds a navmesh from an ``omi_physics`` world, which is how a game usually
-calls it. It takes every static trimesh collider in the world, offsets each
-by its body's position, and builds one mesh from all of them. Characters walk
-on the collision mesh, so a navmesh built from the same triangles agrees with
-it; a separate description of the geometry could differ.
+Builds a navmesh from the triangles a scenegraph collides with: the ones the
+physics service makes the scene's static bodies of
+(``OpenGLContext.physics.gltf_world.extract_trimesh``), every mesh placed in
+the world, a disabled X3D ``Collision`` group left out and an enabled one's
+proxy in place of its children. Characters walk on those bodies, so a navmesh
+built from the same triangles agrees with them; a separate description of the
+geometry could differ.
 
-A world with no static trimesh gives an empty ``NavMesh``, not an error:
+A scene with no triangles gives an empty ``NavMesh``, not an error:
 ``len(mesh) == 0``, ``cell_at()`` and ``random_point()`` return None, and
 ``path()`` returns an empty list.
 
@@ -205,6 +202,18 @@ corner that the mesh lets the line see past is dropped.
 An **empty list** means that either end is off the mesh, or that nothing
 connects them. This is a normal result, not an error: a bot on a ledge with
 no way down has nowhere to walk and should do something else.
+
+A physics character walks the points with ``run_along``, and its
+``'arrived'`` handlers are called at the end (:ref:`characters-locomotion`):
+
+.. code-block:: python
+
+   route = mesh.path(hero.position, goal)
+   if len(route) >= 2:
+       hero.run_along(route, speed=1.8, mode='walk')
+
+:doc:`tutorials/core_context/using_npc` and
+:doc:`tutorials/core_context/navmesh_demo` walk a fox that way.
 
 .. _corridor:
 

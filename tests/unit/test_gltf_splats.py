@@ -9,7 +9,6 @@ import json
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb

@@ -120,7 +120,7 @@ A view inside an interface
      - Linux (X11 and Wayland, through GTK3), Windows, macOS
      - wxPython 4 (Phoenix) or newer.  ``context.window`` is a
        ``wx.glcanvas.GLCanvas``, made inside the ``parent`` given.  See
-       ``tests/wx_with_controls.py`` and :ref:`the note on GTK3 <wx-gtk3>`.
+       :doc:`tutorials/legacy/wx_with_controls` and :ref:`the note on GTK3 <wx-gtk3>`.
    * - ``qt``
      - Linux (X11, and Wayland where the Qt build's platform plugin provides a
        drawable GL surface; otherwise ``QT_QPA_PLATFORM=xcb`` runs it through
@@ -560,3 +560,26 @@ holds, where an entry carries more than one or something besides.
 The test fixtures also send the notification. A test suite opens and closes
 several hundred windows in one process, which is when a driver is most likely
 to reuse an address.
+
+Known driver defects
+--------------------
+
+.. _radeonsi-back-faces:
+
+Back faces drawn on radeonsi
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+On Mesa's radeonsi driver, on AMD GFX10 and later GPUs, a back face with a
+vertex exactly on the plane through the eye (clip w = 0) is drawn when it
+should be culled. A solid shape seen from inside, centred on the viewpoint,
+fills the view instead of drawing nothing. It was measured on Mesa 25.2.8
+with a Radeon 8060S (gfx1151). The driver's vertex-stage culling (NGG
+culling) causes it, from a shader's first draw of more than 128 vertices
+onward.
+
+Set ``AMD_DEBUG=nonggc`` in the application's environment before it starts.
+The driver then culls those faces in the rasterizer. The engine does not set
+it for an application; it sets it only for its own test sessions
+(:ref:`ngg-culling`). The report for Mesa, with a C program that shows the
+fault without the engine, is ``plans/MESA-NGG-CULLING-W0.md`` in the
+OpenGLContext repository.

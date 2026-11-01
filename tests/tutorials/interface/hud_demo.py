@@ -41,9 +41,6 @@ The keys:
 The usual keys walk around, and the HUD stays where it is while you do.
 '''
 import os
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
 import math                                                    # noqa: E402
 import tempfile                                                # noqa: E402
 

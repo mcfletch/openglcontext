@@ -33,7 +33,8 @@ OpenGLContext needs Python 3.10 or newer. Install it from PyPI:
 
 This installs the core dependencies: NumPy, PyOpenGL, Pillow, PyVRML97,
 TTFQuery, SimpleParse, PyDispatcher, pygltflib, opengl_extrusions, omi_audio
-and omi_physics.
+and pyjoltphysics, the Jolt Physics engine the physics service steps its
+world with.
 
 Optional extras add the packages for particular features:
 
@@ -124,10 +125,17 @@ Installing the package puts these commands on your path:
    Demonstrates sound: collisions, events, fading areas and a pitch that
    follows the simulation. See :ref:`Sound <audio-demos>`.
 ``oglc-physics-events``
-   Demonstrates collision subscriptions: crates that thud at any frame rate,
-   two panes of glass broken after and before the solve, a hitscan gun and a
-   pressure plate that opens a door. See :ref:`Responding to collisions
-   <physics-collisions>`.
+   Demonstrates physics events: crates that thud at any frame rate, two panes
+   of glass broken after and before the solve, a hitscan gun and a pressure
+   plate that opens a door. See :ref:`Events <physics-events>`.
+``oglc-ragdoll``
+   A walking figure with a ragdoll for a skeleton: struck, it staggers and
+   recovers; knocked down, it falls limp; then it gets up and walks on. See
+   :ref:`Ragdolls <physics-ragdolls>`.
+``oglc-cloth``
+   A banner in a gusting wind, a cloth draped over a stone ball and a sheet
+   pinned to a beam that a thrown ball strikes. See
+   :ref:`Soft bodies and cloth <physics-softbodies>`.
 ``oglc-zones``
    Two rooms off a courtyard, each a zone: one shaded and lit by its own warm
    lamp, one lit by a probe captured inside it and a cool lamp, and a statue
@@ -226,6 +234,10 @@ Installing the package puts these commands on your path:
    ``index.html`` for the set. Use it to spot a foot through the floor or an
    arm through the body without scrubbing through each clip. It renders
    through the ordinary PBR pass. See :doc:`Rigged characters <characters>`.
+``oglc-gait``
+   Measures how fast each locomotion clip of a rigged character carries it, the
+   length of its cycle and the times its feet land, and prints a ``ClipMap`` to
+   paste. See :ref:`Measuring a stride <characters-gait-measure>`.
 ``oglc-test``
    Runs a context's automated tests. The visual-regression suite runs through
    it.
@@ -264,8 +276,12 @@ Getting started
   - Using the Engine: loading a glTF, VRML97 or OBJ model, animating it, clips,
     a crowd, and an NPC on a navigation mesh
 
-  - Physics: a world, materials, joints, triggers, and responding to a
-    collision
+  - Physics: a ball down a flight of stairs that changes colour, takes a
+    shape, a material and a sound, a gravity zone, joints, triggers, and
+    responding to a collision
+
+  - Characters on Land: a rigged character that runs across a landscape, jumps
+    and lands with a sound, and steps differently on grass and on stone
 
   - Interface and Tools: panels, the HUD, a settings page, a console, choosing
     a level, picking and dragging, and the editor's tool modes
@@ -276,6 +292,10 @@ Getting started
 
   - Introduction to Shaders and the NeHe translations, for writing OpenGL
     directly
+
+  - Low-Level and Legacy OpenGL: the fixed-function drawing calls, pixel
+    transfers, state queries, GLU tessellation, extensions, and text through
+    GLUT, pygame, WGL and wxPython
 
 - :doc:`Structural Overview <structure>` -- the packages the engine is built
   on and the packages inside it, each with the page that describes it.
@@ -364,7 +384,8 @@ Geometry and text
 
 - :doc:`Rigged characters <characters>` -- mapping joints to bones, playing
   several clips at once, attaching a weapon to a hand, and
-  ``oglc-character-sheet`` for viewing every clip at once.
+  ``oglc-character-sheet`` for viewing every clip at once, and the clips
+  a character plays chosen from its speed and state.
 
 Worlds and content
 ~~~~~~~~~~~~~~~~~~
@@ -443,7 +464,9 @@ The application around it
 
 - :doc:`Movement Modes & Navigation <navigation>` -- walking, flying,
   swimming and mouse-look as declared nodes: sampled input, key bindings a
-  settings screen can change, modes the world imposes, and pointer capture.
+  settings screen can change, modes the world imposes, and pointer capture,
+  a camera that follows a target and keeps out of walls, and running along a
+  course.
 
 - :doc:`Navigation Mesh <navmesh>` -- the walkable area of a level, generated
   from the collision mesh at load time: walkable cells by slope, an A\*
@@ -451,10 +474,17 @@ The application around it
   portals.
 
 - :doc:`Physics & Collision <physics>` -- rigid-body physics on the OMI glTF
-  model: collision, :ref:`collision callbacks <physics-collisions>`, gravity
-  zones, triggers, joints, shape cooking, a character controller with
-  viewpoint binding, a motion debug overlay, and :ref:`walking <walking>` in
-  every interactive context. ``oglc-physics-events`` shows the callbacks.
+  model, hosted by every context as ``context.physics``: bodies added with one
+  call, :ref:`events <physics-events>` and which thread runs their handlers,
+  scenery and glTF bodies, shapes, materials, gravity zones, triggers, joints,
+  queries, characters that walk and run over land, colliders that stream in
+  and out, a motion debug overlay, and :ref:`walking <walking>` in every
+  interactive context. ``oglc-physics-events`` shows the events.
+
+- :doc:`The Physics World Thread <physicsthread>` -- how Jolt steps on its own
+  thread: commands applied at the next tick, snapshots read without copying,
+  free-running and lockstep worlds, handlers and world-thread callbacks,
+  queries under the world lock, determinism and replay, free-threaded builds.
 
 - :doc:`Sound <audio>` -- sound placed in the scene on glTF's
   ``KHR_audio_emitter`` model: file formats, sound in glTF files, and how to
@@ -549,8 +579,8 @@ Reference
   reproducible render.
 
 - :doc:`OGLC_hook <extensions/OGLC_hook>` -- the specification of the glTF
-  tag that names what a material or an object is (water, a mirror, fire,
-  smoke, sparks), with every kind's parameters and its JSON schema.
+  tag that names what a material or an object is (water, a mirror, cloth,
+  fire, smoke, sparks), with every kind's parameters and its JSON schema.
 
 - :doc:`OGLC_zone <extensions/OGLC_zone>` -- the specification of the glTF
   extension that marks a region and the extensions that apply inside it, for
@@ -595,7 +625,7 @@ holds many examples. These show particular techniques:
     <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/polygontessellator.py>`__
 
   - `Usage sample
-    <https://github.com/mcfletch/openglcontext/blob/main/tests/glu_tess.py>`__
+    <https://github.com/mcfletch/openglcontext/blob/main/tests/tutorials/legacy/glu_tess.py>`__
 
 - `Sorting transparent polygons by depth
   <https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/polygonsort.py>`__

@@ -11,7 +11,7 @@ import types
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 from pygltflib import GLTF2, Node, Accessor, BufferView, Buffer
 
 from OpenGLContext.loaders.gltf import animation as ga

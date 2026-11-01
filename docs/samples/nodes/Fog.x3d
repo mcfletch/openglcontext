@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Fog"/>
+    <meta name="description" content="Blends distant surfaces into color: nothing is fogged inside visibilityRange of zero distance, and everything beyond visibilityRange is the fog colour; LINEAR fades between."/>
+  </head>
+  <Scene>
+    <Viewpoint position="0 1.2 6" orientation="-1 -0 -0 0.0555"/>
+    <!-- The sky is the fog colour, so the far boxes disappear into it. -->
+    <Background skyColor="0.7 0.75 0.8" groundColor="0.7 0.75 0.8"/>
+    <Fog color="0.7 0.75 0.8" fogType="LINEAR" visibilityRange="22"/>
+    <Group>
+      <Transform translation="-1.6 0 0"><Shape DEF="Pillar"><Appearance><Material diffuseColor="0.8 0.35 0.25"/></Appearance><Box size="1 2 1"/></Shape></Transform>
+      <Transform translation="1.6 0 -4"><Shape USE="Pillar"/></Transform>
+      <Transform translation="-1.6 0 -8"><Shape USE="Pillar"/></Transform>
+      <Transform translation="1.6 0 -12"><Shape USE="Pillar"/></Transform>
+      <Transform translation="-1.6 0 -16"><Shape USE="Pillar"/></Transform>
+      <Transform translation="1.6 0 -20"><Shape USE="Pillar"/></Transform>
+    </Group>
+  </Scene>
+</X3D>

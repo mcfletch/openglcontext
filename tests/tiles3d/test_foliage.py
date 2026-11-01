@@ -2,8 +2,6 @@
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
-pytest.importorskip("PIL")
 
 from OpenGLContext.loaders import cc0, gltf
 from OpenGLContext.loaders.tiles3d import foliage as F

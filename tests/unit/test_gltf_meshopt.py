@@ -12,7 +12,6 @@ import struct
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.gltf import load_gltf, load_gltf_url
 from OpenGLContext.loaders.gltf import meshopt

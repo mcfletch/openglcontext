@@ -14,7 +14,6 @@ import types
 
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain

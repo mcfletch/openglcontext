@@ -86,9 +86,10 @@ or, with uv:
 uv run --with "OpenGLContext[glfw,draco,audio]" oglc-view
 ```
 
-Extras add optional pieces: `audio` for sound you can hear, `draco` for
-Draco-compressed glTF, `pygame` and `wx` for those backends, `all` for
-everything.
+Physics comes with the install: `pyjoltphysics`, the Jolt Physics engine, is a
+requirement. Extras add optional pieces: `audio` for sound you can hear,
+`draco` for Draco-compressed glTF, `pygame` and `wx` for those backends, and
+`all` for those together.
 
 ## Documentation
 
@@ -229,7 +230,8 @@ needs changing. Everything else here is additive.
   console and a key-bindings editor. `docs/overlayui.rst`.
 
 - Rigid-body physics and character movement - collision, gravity, joints and
-  gravity zones through the `omi_physics` package, first-person and examine
+  gravity zones, stepped by Jolt Physics on its own thread through the
+  `pyjoltphysics` package, first-person and examine
   navigation, declared movement modes, and a terrain-walking mode.
   `docs/physics.rst`, `docs/navigation.rst`.
 

@@ -4,93 +4,78 @@
 [using_npc.py-screen-0001.png Screenshot]
 
 A figure walks from one corner of a room to another, around a wall in the
-middle, playing its walk clip as it goes.  Three pieces do it: a navigation
-mesh says which way round the wall to go, the route it returns is followed a
-waypoint at a time, and a clip from the model's own file moves the body.
+middle, playing its walk clip as it goes. Three pieces do it: a navigation
+mesh says which way round the wall to go, a physics character walks the route
+it returns, and a clip map says which of the model's clips shows the walk.
+The script has no clock and no per-frame code.
 
 :doc:`Navigation mesh <navmesh_demo>` covers what ``build`` keeps and how a
-route is pulled taut; :doc:`Playing a canned animation <using_clips>` covers
-the clips.  The model is `Fox` from the Khronos sample catalogue (CC-BY 4.0,
-by PixelMannen and tomkranis).
+route is pulled taut; :doc:`A character runs across a landscape
+</tutorials/character/character_run>` covers characters and clip maps. The
+model is `Fox` from the Khronos sample catalogue (CC-BY 4.0, by PixelMannen
+and tomkranis).
 
 Keys:
     g       send it to the next corner
 '''
-
-import math
-
 import numpy as np
 
-from OpenGLContext.viewer import ViewerContext as BaseContext
-from OpenGLContext.nav import navmesh
-from OpenGLContext.events.systemtime import systemTime
-from OpenGLContext.character.model import CharacterModel
+from OpenGLContext.character.locomotion import ClipMap
+from OpenGLContext.context import Context
 from OpenGLContext.loaders.gltf import sample_model_url
+from OpenGLContext.nav import navmesh
+from OpenGLContext.physics import CharacterCapabilities
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Background, Coordinate, DirectionalLight, IndexedFaceSet,
-    IndexedLineSet, Material, Shape, Transform, sceneGraph,
+    IndexedLineSet, Material, Shape, sceneGraph,
 )
 
 MODEL = 'Fox'
-#: The room in metres, and how big one floor triangle is.  A cell is the unit
+#: The room in metres, and how big one floor triangle is. A cell is the unit
 #: the navmesh works in: routes turn at cell corners, and a cell against a wall
 #: is dropped whole.
 ROOM = 14.0
 CELL = 1.0
 #: The wall across the middle: half-length, height, half-thickness.
 WALL = (4.0, 2.5, 1.0)
-#: Where it walks, in order, as points on the floor.  Each is on the far side
+#: Where it walks, in order, as points on the floor. Each is on the far side
 #: of the wall from the one before it, so every route is a way round.
 GOALS = [(-3.0, 0.0, -5.0), (3.0, 0.0, 5.0), (3.0, 0.0, -5.0), (-3.0, 0.0, 5.0)]
-#: Metres a second, about the pace of the walk clip.
-SPEED = 3.0
-#: How close counts as having reached a waypoint, in metres.
-ARRIVED = 0.3
-#: The Fox is authored around a hundred units long, so it is scaled to about
-#: two metres before it is put in a room measured in metres.
-MODEL_SCALE = 0.02
+#: Metres a second, between the speeds of the walk and the run below.
+SPEED = 1.8
+#: The fox's clips by role. The walk and the run carry the fox 102.7 and 171.9
+#: model units a second; the fox stands 79 units high and is scaled to the
+#: capsule's 1.1 m, so those are 1.4 and 2.4 metres a second.
+FOX = ClipMap(idle='Survey', walk=('Walk', 1.4), run=('Run', 2.4))
+#: A capsule 1.1 m high and 0.35 m round: the fox is scaled to its height.
+BODY = CharacterCapabilities(standHeight=1.1, crouchHeight=0.7, radius=0.35)
 
 
-class TestContext(BaseContext):
+class TestContext(Context):
     initialPosition = (0, 6.5, 11)
     initialOrientation = (-1, 0, 0, 0.52)          # pitched down at the floor
 
     def OnInit(self):
         '''The floor and the wall are one triangle mesh, which is what a level
-        is.  ``build`` keeps the triangles a body could stand on: ``max_slope``
-        drops the wall's own faces, and ``clearance`` -- the room a body needs
-        above the floor -- drops the floor cells the wall stands on, so the two
+        is. ``build`` keeps the triangles a body could stand on: ``max_slope``
+        drops the wall's own faces, and ``clearance``, the room a body needs
+        above the floor, drops the floor cells the wall stands on, so the two
         halves of the room are not joined straight through it.
 
         A game that has loaded a level has the argument already:
-        ``navmesh.from_world(world)`` takes the same triangles out of a physics
-        world.'''
+        ``navmesh.from_scene(scene)`` takes the triangles the level's static
+        bodies are made of.'''
         points, triangles = room_mesh()
         self.mesh = navmesh.build(points, triangles, clearance=1.8)
         print('navmesh: %d walkable cells from %d triangles'
               % (len(self.mesh), len(triangles)))
 
-        '''The model is a rigged glTF file, read in the background by the
-        context's ``sceneLoader``; ``OnLoaded`` is called when it is ready,
-        and until then the figure is an empty ``Transform``.
-
-        The figure is a ``Transform`` with the model under it.  Moving the
-        NPC is writing ``translation`` and ``rotation`` on that node; the model
-        under it knows nothing about where it is.'''
-        self.model = None
-        self.figure = Transform(
-            scale=(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE),
-            children=[],
-        )
-        self.sceneLoader.load(sample_model_url(MODEL), on_loaded=self.OnLoaded)
-        self.position = np.array(GOALS[-1], dtype='d')
-        self.goal = 0
-        self.route = self.plan()
-
         self.trail = IndexedLineSet(coord=Coordinate(point=[(0, 0, 0)] * 2),
                                     coordIndex=[0, 1, -1])
         '''The room is drawn from the same triangles the navmesh was built
-        from, so what is on screen is what was handed to ``build``.'''
+        from, so what is on screen is what was handed to ``build``. Being
+        shapes in the scene, they are also what the character stands on and
+        is stopped by.'''
         self.sg = sceneGraph(children=[
             Background(skyColor=[(0.13, 0.15, 0.18)]),
             DirectionalLight(direction=(-0.4, -0.8, -0.4)),
@@ -99,77 +84,51 @@ class TestContext(BaseContext):
                   appearance=Appearance(material=Material(
                       diffuseColor=(0.2, 0.9, 0.9),
                       emissiveColor=(0.2, 0.9, 0.9)))),
-            self.figure,
         ])
+        '''``add_character`` makes the NPC: a capsule of the size ``BODY``
+        gives, wearing the fox, which plays the clips ``FOX`` names for how fast
+        it goes and turns to face the way it walks.'''
+        self.hero = self.physics.add_character(
+            capabilities=BODY, model=sample_model_url(MODEL), animations=FOX,
+            position=GOALS[-1], parent=self.sg)
+        '''``'arrived'`` is told when the character reaches the end of the
+        route it was sent along. This handler sends it to the next goal.'''
+        self.hero.addEventHandler('arrived', self.OnArrived)
+        self.goal = 0
+        self.send()
         self.addEventHandler('keypress', name='g', function=self.OnGoal)
-        self.last = systemTime()
         print(__doc__)
 
-    def OnLoaded(self, request):
-        '''``CharacterModel.from_scene`` takes the rigged glTF scene and gives
-        the clips in it names.  The walk plays for as long as the figure is
-        walking, and nothing else starts it or stops it.'''
-        self.model = CharacterModel.from_scene(request.result)
-        self.model.play('Walk', loop=True)
-        self.figure.children = [self.model.group]
-        self.last = systemTime()
+    def send(self):
+        '''``path`` answers the points to walk through, from where the
+        character stands to the goal. It answers fewer than two points where
+        the two ends are not connected (a bot on a ledge with no way down),
+        which is a fact about the level: this one takes the next goal.
 
-    def plan(self):
-        '''``path`` answers the points to walk through.  It answers an empty
-        list where the two ends are not connected -- a bot on a ledge with no
-        way down -- which is a fact about the level rather than an error, so it
-        is worth handling: this one gives up on that goal and takes the next.'''
-        route = list(self.mesh.path(self.position, GOALS[self.goal]))
-        print('route to %s: %d points' % (GOALS[self.goal], len(route)))
-        return route
+        ``run_along`` takes the points as a course and walks it at ``SPEED``
+        metres a second, steering back to the line each frame. The character
+        stops at the end and is told ``'arrived'``.'''
+        goal = GOALS[self.goal]
+        route = [tuple(point) for point in self.mesh.path(self.hero.position, goal)]
+        print('route to %s: %d points' % (goal, len(route)))
+        if len(route) < 2:
+            self.goal = (self.goal + 1) % len(GOALS)
+            return
+        self.hero.run_along(route, speed=SPEED, mode='walk')
+        self.show_route(route)
+
+    def OnArrived(self, hero):
+        self.OnGoal()
 
     def OnGoal(self, event=None):
         self.goal = (self.goal + 1) % len(GOALS)
-        self.route = self.plan()
-        self.show_route()
+        self.send()
 
-    def OnIdle(self, *arguments):
-        '''One step of the world: where the figure is, then what its body is
-        doing.  Both take the same time step.'''
-        if self.model is None:
-            return
-        now = systemTime()
-        step = min(now - self.last, 0.1)
-        self.last = now
-        self.walk(step)
-        self.model.update(step)
-        self.triggerRedraw(1)
-
-    def walk(self, step):
-        '''Following a route is walking towards the point at the front of it
-        and dropping that point on arrival.  The navmesh has already done the
-        part that needs to know about the level, which is choosing the
-        points.'''
-        if not self.route:
-            self.OnGoal()
-            return
-        towards = np.asarray(self.route[0], dtype='d') - self.position
-        towards[1] = 0.0
-        distance = float(np.linalg.norm(towards))
-        if distance < ARRIVED:
-            self.route.pop(0)
-            return
-        heading = towards / distance
-        self.position = self.position + heading * min(SPEED * step, distance)
-        '''``rotation`` is an axis and an angle: turning about Y by the bearing
-        of the direction of travel points the figure the way it is going.  The
-        Fox model faces +Z, which is what makes this the whole of the turn; a
-        model authored facing another way wants that angle added here.'''
-        self.figure.translation = tuple(self.position)
-        self.figure.rotation = (0, 1, 0, math.atan2(heading[0], heading[2]))
-        self.show_route()
-
-    def show_route(self):
-        '''The cyan line is what is left of the route, drawn so it can be seen.
-        A game would not draw it.'''
-        points = [tuple(self.position)] + [tuple(point) for point in self.route]
-        self.trail.coord.point = [(x, y + 0.1, z) for x, y, z in points]
-        self.trail.coordIndex = list(range(len(points))) + [-1]
+    def show_route(self, route):
+        '''The cyan line is the route, drawn so it can be seen. A game would
+        not draw it.'''
+        self.trail.coord.point = [(x, y + 0.1, z) for x, y, z in route]
+        self.trail.coordIndex = list(range(len(route))) + [-1]
 
 
 def room_mesh():
@@ -204,15 +163,10 @@ def mesh_shape(points, triangles, colour):
     index = []
     for triangle in triangles:
         index.extend([int(triangle[0]), int(triangle[1]), int(triangle[2]), -1])
-    # TODO: mesh is not rendering properly under pbr
-    # because it appears to be ignoring the solid field,
-    # which in this case is papering over some issues with the
-    # environment model...
     return Shape(
         geometry=IndexedFaceSet(coord=Coordinate(point=points.tolist()),
                                 coordIndex=index, solid=False),
         appearance=Appearance(material=Material(diffuseColor=colour)),
-        
     )
 
 

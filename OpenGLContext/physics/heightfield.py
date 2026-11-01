@@ -6,11 +6,17 @@ tiles for
 :class:`~OpenGLContext.loaders.tiles3d.physics_colliders.TerrainColliders` to
 turn into colliders, so the field provides them itself.
 
-The field is cut into square chunks and only the ones near whatever is moving
-are in the physics world. A four-kilometre field at two-metre spacing is half a
-million triangles; a car touches four of them at a time, and the collision
-broadphase pays for every one it is holding. What is out of reach is removed
-again, so an hour of driving costs what one view of the world costs.
+The field is cut into square chunks and only the ones near the focus are
+bodies of the physics service. A four-kilometre field at two-metre spacing is
+half a million triangles; a car touches four of them at a time, and the
+collision broadphase pays for every one it is holding. What is out of reach is
+removed again, so an hour of driving costs what one view of the world costs.
+
+:class:`HeightFieldColliders` is a collider source
+(:mod:`OpenGLContext.physics.sources`)::
+
+    ground = HeightFieldColliders(field, holes=bores)
+    physics.add_collider_source(ground, focus=lambda: car.position)
 
 Chunks are cut on the field's own grid lines and share their edge rows, so two
 neighbours agree exactly where they meet -- a seam between them is a hole a
@@ -23,15 +29,15 @@ is set, while the surface a player sees keeps the hill it runs inside.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Optional
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from omi_physics import model
+
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.sources import Addition, Changes
 
 if TYPE_CHECKING:
-    from omi_physics.world import PhysicsWorld
-
     from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 
 __all__ = ['HeightFieldColliders', 'CHUNK_METRES', 'REACH_METRES']
@@ -41,17 +47,20 @@ __all__ = ['HeightFieldColliders', 'CHUNK_METRES', 'REACH_METRES']
 #: rebuilding triangle indexes.
 CHUNK_METRES = 128.0
 
-#: How far from the camera ground is kept, in metres. Past this a wheel is not
+#: How far from the focus ground is kept, in metres. Past this a wheel is not
 #: going to reach it before the next update does.
 REACH_METRES = 320.0
 
 
 class HeightFieldColliders:
-    """Static trimesh colliders for the chunks of a height field near a point.
+    """Static trimesh colliders for the chunks of a height field near the focus.
 
-    :param world: the physics world the chunks are added to and removed from.
+    A :class:`~OpenGLContext.physics.sources.ColliderSource`: each chunk within
+    ``reach`` of the focus is a static body of the service the source is added
+    to, keyed ``(i, j)`` on the chunk grid.
+
     :param field: the ground.
-    :param reach: how far from the point ground is kept, in metres.
+    :param reach: how far from the focus ground is kept, in metres.
     :param chunk: how big one chunk is, in metres; rounded to whole cells of
         the field's grid, and never smaller than one cell.
     :param holes: ``holes(x, z) -> mask`` over arrays of world positions, true
@@ -59,14 +68,13 @@ class HeightFieldColliders:
         say. A triangle is dropped when its centre is in a hole, so the opening
         is the mask to within half a cell: cutting by any corner instead widens
         it by a whole cell, and a hole wider than the bore it was cut for is a
-        trench beside the road.
+        trench beside the road. A chunk with nothing left of it makes no body.
     """
 
-    def __init__(self, world: "PhysicsWorld", field: "HeightField",
+    def __init__(self, field: HeightField,
                  reach: float = REACH_METRES,
                  chunk: float = CHUNK_METRES,
-                 holes: "Optional[Callable[[Any, Any], Any]]" = None) -> None:
-        self.world = world
+                 holes: Callable[[Any, Any], Any] | None = None) -> None:
         self.field = field
         self.reach = float(reach)
         self.holes = holes
@@ -75,33 +83,45 @@ class HeightFieldColliders:
         self.cells = max(int(round(float(chunk) / cell)), 1)
         self.chunk = self.cells * cell
         self._across = int(np.ceil((field.res - 1) / self.cells))
-        self._bodies: dict[tuple[int, int], int] = {}
+        #: The triangles of each chunk held, by key; zero for a chunk cut away
+        #: entirely, which has no body and is not cut again while it is held.
+        self._held: dict[tuple[int, int], int] = {}
         self._triangles = 0
 
-    def update(self, position: Any) -> None:
-        """Hold the chunks within reach of ``position``, and no others."""
-        wanted = set(self._within(position))
-        for key in list(self._bodies):
+    def update(self, focus: Sequence[float]) -> Changes:
+        """The chunks to add and to drop now that the focus is at ``focus``."""
+        wanted = set(self._within(focus))
+        removed: list[tuple[int, int]] = []
+        for key in list(self._held):
             if key not in wanted:
-                self._drop(key)
+                count = self._held.pop(key)
+                self._triangles -= count
+                if count:
+                    removed.append(key)
+        added: list[Addition] = []
         for key in wanted:
-            if key not in self._bodies:
-                self._add(key)
+            if key not in self._held:
+                points, indices = self._patch(*key)
+                self._held[key] = len(indices)
+                self._triangles += len(indices)
+                if len(indices):
+                    added.append(Addition(key, Proxy.trimesh(points, indices), (0.0, 0.0, 0.0)))
+        return Changes(add=added, remove=removed)
 
     def clear(self) -> None:
-        """Let go of every chunk."""
-        for key in list(self._bodies):
-            self._drop(key)
+        """Forget every chunk, so the next update adds what is within reach afresh."""
+        self._held.clear()
+        self._triangles = 0
 
     def chunk_count(self) -> int:
-        """How many chunks of ground the physics world is holding."""
-        return len(self._bodies)
+        """How many chunks of ground are bodies now."""
+        return sum(1 for count in self._held.values() if count)
 
     def triangle_count(self) -> int:
         """How many triangles those chunks are made of."""
         return self._triangles
 
-    def _within(self, position: Any) -> list[tuple[int, int]]:
+    def _within(self, position: Sequence[float]) -> list[tuple[int, int]]:
         """Which chunks come within reach of a point, in plan."""
         at = np.asarray(position, dtype='d').reshape(-1)
         half = self.field.extent / 2.0
@@ -116,23 +136,6 @@ class HeightFieldColliders:
         near_z = np.nonzero(dz <= self.reach)[0]
         return [(int(i), int(j)) for i in near_x for j in near_z
                 if float(np.hypot(dx[i], dz[j])) <= self.reach]
-
-    def _add(self, key: tuple[int, int]) -> None:
-        points, indices = self._patch(*key)
-        if not len(indices):
-            return
-        shape = self.world.add_shape(model.Shape.trimesh(points, indices))
-        self._bodies[key] = self.world.add_body(
-            model.Motion(type=model.STATIC),
-            collider=model.Collider(shape=shape))
-        self._triangles += len(indices)
-        self.world.refit_aabbs()
-
-    def _drop(self, key: tuple[int, int]) -> None:
-        body = self._bodies.pop(key)
-        remove = getattr(self.world, 'remove_body', None)
-        if remove is not None:
-            remove(body)
 
     def _patch(self, i: int, j: int) -> tuple[np.ndarray, np.ndarray]:
         """One chunk's vertices and triangles, cut from the field's grid.

@@ -17,8 +17,7 @@ import math
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
-PIL = pytest.importorskip("PIL")
+import PIL
 from PIL import Image
 
 from OpenGLContext.loaders import gltf

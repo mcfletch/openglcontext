@@ -14,10 +14,9 @@ import sys
 
 import pytest
 
-pytest.importorskip("pygltflib")
 pytest.importorskip("glfw")
-np = pytest.importorskip("numpy")
-Image = pytest.importorskip("PIL.Image")
+import numpy as np
+from PIL import Image
 
 from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = str(tests_root(__file__))

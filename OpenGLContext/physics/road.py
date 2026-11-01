@@ -14,8 +14,13 @@ is one surface at one resolution, everywhere and always, however the drawn
 geometry comes and goes.
 
 Like :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders`, the road
-is cut into chunks and only the ones near whatever is moving are in the physics
-world -- an hour of driving costs what one view of the world costs.
+is cut into chunks and only the ones near the focus are bodies of the physics
+service -- an hour of driving costs what one view of the world costs.
+:class:`RoadColliders` is a collider source
+(:mod:`OpenGLContext.physics.sources`)::
+
+    road = RoadColliders(course.centreline, course.road_profile(), closed=True)
+    physics.add_collider_source(road, focus=lambda: car.position)
 
 **A chunk is cut out of one road rather than built as a road of its own.** The
 frame a cross-section is swept along at a point is made from the segments either
@@ -28,18 +33,17 @@ start line usually is.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
-from omi_physics import model
 
+from OpenGLContext.physics.proxy import Proxy
+from OpenGLContext.physics.sources import Addition, Changes
 from OpenGLContext.scenegraph.road import (
     RoadProfile, banked_sections, road_surface, sweep_frames, widened_sections,
 )
 from OpenGLContext.scenegraph.roadworks import BarrierProfile, barrier_wall
-
-if TYPE_CHECKING:
-    from omi_physics.world import PhysicsWorld
 
 __all__ = ['RoadColliders', 'CHUNK_METRES', 'REACH_METRES']
 
@@ -49,15 +53,19 @@ __all__ = ['RoadColliders', 'CHUNK_METRES', 'REACH_METRES']
 CHUNK_METRES = 120.0
 
 #: How far along the road, in metres, colliders are kept either side of the
-#: point given. A car doing fifty metres a second wants more than a second's
+#: focus. A car doing fifty metres a second wants more than a second's
 #: worth in front of it.
 REACH_METRES = 260.0
 
 
 class RoadColliders:
-    """Static trimesh colliders for the stretches of a road near a point.
+    """Static trimesh colliders for the stretches of a road near the focus.
 
-    :param world: the physics world the chunks are added to and removed from.
+    A :class:`~OpenGLContext.physics.sources.ColliderSource`: each chunk within
+    ``reach`` of the focus, measured along the road, is a static body of the
+    service the source is added to, keyed ``(chunk, 0)``, with one more body
+    keyed ``(chunk, n)`` for each barrier wall the chunk carries.
+
     :param points: the centreline, (N,3) at the height the surface runs at.
     :param profile: the cross-section swept along it.
     :param reach: how far along the road, in metres, is kept either side.
@@ -87,13 +95,12 @@ class RoadColliders:
     :param barrier: what those walls are, or None for an ordinary one.
     """
 
-    def __init__(self, world: "PhysicsWorld", points: Any,
+    def __init__(self, points: Any,
                  profile: Optional[RoadProfile] = None,
                  reach: float = REACH_METRES, chunk: float = CHUNK_METRES,
                  closed: bool = False, bank: Any = None,
                  widening: Any = None, barriers: Any = (),
                  barrier: Optional[BarrierProfile] = None) -> None:
-        self.world = world
         self.points = np.asarray(points, dtype='d').reshape(-1, 3)
         if len(self.points) < 2:
             raise ValueError("a road needs a centreline of at least two points")
@@ -131,8 +138,9 @@ class RoadColliders:
         #: rings and two neighbours share the ring between them.
         self.rings = max(int(round(float(chunk) / max(spacing, 1e-6))), 1)
         self._chunks = int(np.ceil((len(self.points) - 1) / self.rings)) or 1
-        self._bodies: dict[int, list] = {}
-        #: Triangles held per chunk, so dropping one takes its own back.
+        #: The bodies of each chunk held, by key, and the triangles it holds,
+        #: so dropping one takes its own back.
+        self._held: dict[int, list[tuple[int, int]]] = {}
         self._counts: dict[int, int] = {}
         self._triangles = 0
 
@@ -147,24 +155,31 @@ class RoadColliders:
                                 len(found)))
         return found
 
-    def update(self, position: Any) -> None:
-        """Hold the chunks within reach of ``position``, and no others."""
-        wanted = set(self._within(position))
-        for key in list(self._bodies):
+    def update(self, focus: Sequence[float]) -> Changes:
+        """The stretches to add and to drop now that the focus is at ``focus``."""
+        wanted = set(self._within(focus))
+        removed: list[tuple[int, int]] = []
+        for key in list(self._held):
             if key not in wanted:
-                self._drop(key)
+                removed.extend(self._held.pop(key))
+                # What is held, not what has ever been built: a count that only
+                # went up says a lap of driving is carrying the whole world's road.
+                self._triangles -= self._counts.pop(key, 0)
+        added: list[Addition] = []
         for key in wanted:
-            if key not in self._bodies:
-                self._add(key)
+            if key not in self._held:
+                added.extend(self._add(key))
+        return Changes(add=added, remove=removed)
 
     def clear(self) -> None:
-        """Let go of every chunk."""
-        for key in list(self._bodies):
-            self._drop(key)
+        """Forget every chunk, so the next update adds what is within reach afresh."""
+        self._held.clear()
+        self._counts.clear()
+        self._triangles = 0
 
     def chunk_count(self) -> int:
-        """How many stretches of road the physics world is holding."""
-        return len(self._bodies)
+        """How many stretches of road are bodies now."""
+        return len(self._held)
 
     def triangle_count(self) -> int:
         """How many triangles those stretches are made of."""
@@ -209,10 +224,11 @@ class RoadColliders:
         first = index * self.rings
         return first, min(first + self.rings, len(self.points) - 1)
 
-    def _add(self, key: int) -> None:
+    def _add(self, key: int) -> list[Addition]:
+        """The bodies of one chunk: its surface, then a wall per carried stretch."""
         first, last = self._span(key)
         if last - first < 1:                     # pragma: no cover - degenerate
-            return
+            return []
         run = self.points[first:last + 1]
         lean = self._span_of(self.bank, first, last, key)
         wider = self._span_of(self.widening, first, last, key)
@@ -234,16 +250,11 @@ class RoadColliders:
         pieces = [(np.asarray(positions, dtype='d'),
                    np.asarray(indices, dtype='i').reshape(-1, 3))]
         pieces.extend(self._walls(first, last, key, lean))
-        bodies = []
-        for where, triangles in pieces:
-            shape = self.world.add_shape(model.Shape.trimesh(where, triangles))
-            bodies.append(self.world.add_body(
-                model.Motion(type=model.STATIC),
-                collider=model.Collider(shape=shape)))
-        self._bodies[key] = bodies
+        self._held[key] = [(key, piece) for piece in range(len(pieces))]
         self._counts[key] = sum(len(triangles) for _where, triangles in pieces)
         self._triangles += self._counts[key]
-        self.world.refit_aabbs()
+        return [Addition(named, Proxy.trimesh(where, triangles), (0.0, 0.0, 0.0))
+                for named, (where, triangles) in zip(self._held[key], pieces, strict=True)]
 
     def _walls(self, first: int, last: int, key: int,
                lean: Optional[np.ndarray]) -> list:
@@ -302,12 +313,3 @@ class RoadColliders:
         if lean is not None:
             found = banked_sections(found, lean, self.profile)
         return found
-
-    def _drop(self, key: int) -> None:
-        remove = getattr(self.world, 'remove_body', None)
-        for body in self._bodies.pop(key):
-            if remove is not None:
-                remove(body)
-        # What is held, not what has ever been built: a count that only went up
-        # says a lap of driving is carrying the whole world's road.
-        self._triangles -= self._counts.pop(key, 0)

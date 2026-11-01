@@ -1,7 +1,115 @@
 # Physics and audio as engine services
 
-Status: **Proposed**, 2026-10-25. Nothing is built. The API below is for the maintainer to
-accept, change or reject before phase 1.
+Status: **Phases 1 to 6 built; phase 7 in progress**, branch `physics-services`. The record is
+`git log` on that branch (`PHYSICS`, `AUDIO`, `EVENTS`, `CONTEXT`, `MOVE`, `CHARACTER`,
+`DEMOS`, `TUTORIALS` and `DOCS` commits) and the `omi_physics` branch of the same name.
+
+What landed:
+
+- Phase 1 and 2. `Physics`, `Body`, `Character`, the inline and thread workers, `PhysicsDefinition`,
+  `enable`, `set_config`, `run`, `post`, `gravity`, `drive`, `world`, `slot_of`, `flush`,
+  `drop_remainder`; events through `addEventHandler` and the context's event system, journalled and
+  compared on replay; `physics_callback`, `before-step`, `after-step`, `render.set`, `render.call`.
+- Phase 3. Scenery as static bodies, glTF OMI bodies on mount, `body_for` and `bodies_in`, collider
+  sources and `add_static_instances`, bodies made from a shape alone, `line_of_sight`.
+- Phase 4. Queries (`raycast`, `raycast_many`, `sweep_sphere`, `overlap`) on the render thread's copy
+  of the bodies, characters stepped by the frame, push and knockback between characters and bodies.
+  The copy is a `Replica` world kept in step with each published snapshot; the immutable versioned
+  collision view the design named is not built.
+- Phase 5. `Proxy`, `cook`, `show_proxies`, materials and pair friction, gravity zones, `add_ground`
+  over a sampled height field; tutorials 3 to 5.
+- Phase 6. `Audio`, `Voice`, thread-safe `play`, `RecordingAudio`, material sounds; tutorial 6.
+- Phase 7, so far. `CollisionYard`, `AudioYard`, the older physics tutorials and the cannon game
+  (`using_physics.py`) run on the service, and `AudioYard._collide` is gone. twig-bb moved
+  (`3a75d76d`); the terrain walker is a character in the context's world.
+- Tutorials. The stairs series is `tests/tutorials/physics/physics_stairs*.py`, each run by
+  `tests/unit/test_physics_tutorials.py` on the fixed clock; the pages in `docs/` are rewritten
+  around them.
+
+Found while moving the tutorials, in `omi_physics`: a crouched character could not stand on a
+slope (fixed, `STAND_CLEARANCE`); a static body moved each step left the bodies that move with stale
+boxes, so a ball fell through the floor (fixed, `refit_aabbs`); and a box resting on a static
+trimesh slope slid whatever its friction, because `box_triangle_batch` gave one contact point for each
+triangle, at the centre of the box, which has no restoring torque (fixed, `box_face_contacts` gives a
+contact at each corner that stands on the face).
+
+Frame cost, 2026-10-25 (`PHYSICS`, `CHARACTER` commits here; `WORLD`, `BROADPHASE`, `QUERY`,
+`COLLIDE`, `HEIGHTFIELD`, `CHARACTER` in `omi_physics`). A world at rest is not stepped inline, as
+the thread worker already idled; step handlers and drivers keep it busy on both. Snapshots list
+their changed rows, so node writes, replica sync and the snapshot itself follow what moved; a body
+that falls asleep is published at its exact pose (it was left at the interpolated pose of its last
+awake frame, 0.8 mm away in the benchmark). In `omi_physics`: collision filters through a table
+(every world took the per-pair path, since the default filter index is -1), resting pairs out of
+the step, a batched analytic capsule-box query for characters, sphere-mesh through the capsule
+batch, a scalar few-sphere path for grid ground to the bit, one static gather per character
+update. Measured on the benchmark of that day: a settled 1,000-body world 6.5 ms to 0.05 ms a
+frame inline; 30 characters among 10,000 posts 55 ms to 12 ms; the hill-runner's `Session.step`
+3.5 ms to 1.9 ms. Thread mode under the GIL: the worker's steps and the render thread's
+characters share one core, so a world whose step fills most of its tick slows the characters
+four to ten times (`docs/physics.rst`, Modes and settings); a duty-cycle limit on the worker, or
+running such worlds inline, is the open choice.
+
+Not done:
+
+- Phase 0, the numbers for 1,000 and 5,000 bodies inline against thread.
+- The concurrency stress test of phase 4, and the same-scenario test between `inline` and `thread`.
+- `Proxy.heightfield` ceilings (`add_ground(ceiling=)`) and a collider for a bored tunnel.
+- `body.move_to(translation, over=)`, the glide of a kinematic body that pushes what is in its way.
+- `body.freeze()`.
+- `mode='process'` (phase 8) stays deferred.
+- `PhysicsDefinition` as an X3D extension node.
+- The migrations of marble-demo, glisteel, the forest and hill-runner's physics belong to the work
+  in those projects.
+- `PhysicsWalkMixin` stays. It is a base of `ViewPlatformMixin`, so of every `Context`, and of
+  `TerrainWalkMixin`, which the forest walks with; the viewer's walk and X3D navigation run on it
+  over a raw world. Moving it onto the service is its own piece of work.
+
+Tutorials moved, 2026-10-26. No tutorial imports `omi_physics` or `omi_audio`, reads
+`physics.world` or `slot_of`, or steps physics or a character from `OnIdle`. What the engine gained
+for them: `add_hinge`, `add_ball`, `add_slider` and `add_distance` returning a `Joint`
+(`physics/joints.py`); `physics.backend`; `collision_filter=` taking a `CollisionFilter` and
+`set_contact_filter` (`physics/filters.py`); `Context.follow(view='eyes')` (`move/firstperson.py`),
+and a follower takes the camera from the free-fly navigator; the names a game needs exported from
+`OpenGLContext.physics`; `OpenGLContext.audio.sounds`, `Audio.mix`, `Audio.add`, `level` and
+`describe`; `Context.animate` and `after`, `run_along` over a list of points with an `arrived`
+event, `Gait.from_clips`, `WanderingCrowd(clips=)` and the follow camera's `swing`. omi_physics
+gained `PhysicsWorld.use_backend`. The cannon game's sliding target pad is a trigger, which the
+service neither drives nor writes back to its node, so the game moves it from a `before-step`
+handler: a driven trigger is open.
+
+Frame order and character steps, 2026-10-26. The frame's own work (physics, audio, animations,
+following cameras) moved from the render queue's `before_run` to `renderQueue.on_frame`, which
+`Context.runFrameHooks()` runs after `OnIdle` and before the draw in every main loop
+(`windowsystem/base.py`, which glfw, glut, pygame, tk and Qt's backend all run, and wx's `onIdle`).
+A framed character takes one step of `1 / tickHz` for each fixed step the frame owes, the count
+the world's clock gives inline (`events/framestep.FixedSteps`, which the runtime now counts with,
+and which keeps counting while an inline world is idle), and is drawn between its last two steps
+(`drawn_position`, `drawn_eye`). An input set in `OnIdle` reaches the same frame's steps, and a
+walk traces the same path at 30, 60 and 144 frames a second. Stepping characters at 120 Hz in
+place of the frame rate found a defect in `omi_physics`: `_try_step_up` probed along a move turned
+up a tilted contact, so a walker could not mount a 0.1 m rock rim at 120 Hz; fixed on the
+`omi_physics` branch `step-up-probe` (`8e7c78a`), which this branch now needs.
+
+Speed, 2026-10-26. `Character.set_move(direction, mode, speed=None)` and a settable
+`Character.speed` (metres a second; None goes at the mode's speed); `run_along(course, speed=,
+lane=)` with `speed` a number or a function of the seconds since the run began, and
+`Character.lane`. Neither changes the capabilities, which `run_along` used to overwrite. The
+controller's half is `CharacterController.set_move(speed=)` on the same `omi_physics` branch
+(`eaf8c58`).
+
+Bodies changed after they are made, 2026-10-26. `Body.set_mass(kg)` (the shape's inertia at
+that mass, mirrored into the characters' replica), `Body.set_material(name or material)`,
+`set_friction` and `set_restitution`, with `friction` and `restitution` to read; commands
+`mass` and `body_material`, so thread mode takes them as inline does. The runtime keeps one
+world material for each set of unnamed coefficients. marble-demo's raw writes to
+`collider_material`, `mass` and `inv_mass` through `physics.run` can become these calls.
+
+Deleted 2026-10-26, once marble-demo's `physics-services` branch stopped importing them:
+`physics/demo.py` (`DemoScene`, `disable_vsync`; `terrain_view.py` calls `setVSync(False)`),
+`physics/threaded.py` (`ThreadedPhysicsManager`), `physics/manager.py` (`PhysicsManager`),
+`CollisionEvents`, `Subscription`, `Occupancy` and `HitEvent` from `physics/events.py`, and the
+`PhysicsBody` node (`scenegraph/physicsbody.py`). `write_pose` and the rotation conversions are in
+`physics/poses.py`. marble-demo's `develop` still imports `DemoScene` until its branch merges.
 
 Every physics demo builds its own wrapper around the simulation (`CollisionYard`,
 `AudioYard`, `DemoScene`), steps it from `OnIdle`, drains its collisions and plays
@@ -116,7 +224,14 @@ physics.body_for(node)                      # the Body of a node already in the 
 physics.gravity = (0, -9.81, 0)             # a command; may change every frame
 physics.step(dt)                            # inline and standalone: advance by hand
 physics.world                               # inline and standalone only: the live PhysicsWorld
+physics.slot_of(body)                       # inline: the row of the body in physics.world's arrays
+physics.body_at(slot)                       # inline: the Body in a row, or None
+physics.flush()                             # inline and standalone: apply the queued writes now
+physics.index_of(body)                      # inline and standalone: the body's slot in physics.world
+physics.drop_remainder()                    # inline and standalone: forget the time left over from a frame
 physics.add_character(...)                  # a walker; see Characters and view platforms
+physics.characters                          # the characters, in the order they were added
+physics.line_of_sight(start, end, skip=None)  # whether no body lies between two points
 physics.add_collider_source(source)         # colliders that come and go with a focus point
 physics.raycast(origin, direction, ...)     # synchronous queries; see Queries
 physics.post(function, *args)               # call function on the worker; returns None
@@ -296,7 +411,9 @@ physics.show_proxies(True)                   # draws the proxies, contacts and v
 `Proxy` wraps `omi_physics.model.Shape` and adds the constructors `box`, `sphere`,
 `capsule`, `convex(points)` and `trimesh(points, indices)`. `add_static` with a `trimesh`
 proxy takes the arrays directly, with no node, for a level whose collision mesh is cooked
-elsewhere.
+elsewhere: `physics.add_static(None, proxy=Proxy.trimesh(points, indices))`. The other
+`add_*` calls take `None` for the node the same way, with `translation=` and `rotation=`
+placing the body, so a hit capsule or a trigger volume needs no scenegraph node.
 `show_proxies` is the existing `PhysicsDebugDraw` overlay switched on from the service.
 
 ### Materials
@@ -471,7 +588,8 @@ closure cannot cross the boundary.
 hit = physics.raycast(origin, direction, max_distance=100.0, skip=body)   # RayHit or None
 hits = physics.raycast_many(origins, directions)       # arrays in, arrays out
 swept = physics.sweep_sphere(origin, direction, distance, radius)
-touching = physics.overlap(proxy, translation, rotation)
+touching = physics.overlap(proxy, translation, rotation)          # solid bodies
+inside = physics.overlap(proxy, translation, triggers=True)       # trigger volumes
 ```
 
 A query answers in the call, on the thread that makes it. On the render thread it reads
@@ -535,6 +653,14 @@ camera's wanted place, which also keeps it out of walls; the hill-runner chase c
 twig-bb's death camera are the two users in this workspace.
 
 A character that is dead, hidden or between rounds is `remove()`d.
+
+The frame steps a character once for each fixed step the world owes, with the fixed step
+and the character's latest input: a character takes the same steps as the world, so a game
+whose rules run at the world's rate needs no loop of its own. A game that steps with its own
+clock sets `character.framed = False`. The frame then leaves the character alone, and the
+owner calls `character.update(dt)`, or `PhysicsViewPlatform.update(dt)` over it.
+`PhysicsViewPlatform.bind` and `bind_eye` over a character move the body the world sees
+with the capsule.
 
 #### Characters and dynamic bodies
 
@@ -752,6 +878,35 @@ Changes.
 - `DemoScene` is deleted. Its other callers (`CollisionYard`, `AudioYard`, the physics
   tutorials) move first, since they are the shortest.
 
+Landed in marble-demo, branch `physics-services`.
+
+- `BoardScene` (`scene.py`) is what a level builds into: each `add_*` makes the node and
+  the body and returns a `Part` (`body`, `transform`, `index`). `Part.index` is the row
+  in `physics.world`'s arrays, from `physics.slot_of`, for the mechanisms that read the
+  arrays of every body at once.
+- `MarbleGame` makes its own inline `Physics` (60 Hz, `maxCatchUp` 0.05,
+  `colliders='explicit'`) and `advance(dt)` calls `frame(dt)`; built with
+  `physics=context.physics` it leaves the stepping to the frame hook. The tilt, gravity
+  and the per-step mechanisms (`BuildResult.before_step`) run in one `before-step`
+  callback. The game's state setter calls `physics.enable(state == PLAYING)`, so a
+  finished run stops the world.
+- The controller registers `hit` and `touching` handlers with `above=-inf` on the
+  marble (a resting contact closes at nothing and is still a contact). Trigger watches
+  register `enter` and `stay` filtered to the marble. Effects are `effect(hit)`.
+- Lever paddles and door leaves are kinematic bodies moved with `set_transform`, since
+  the frame hook writes poses for movers only.
+- Exact reads of the marble stay on `physics.world`: `Body.position` and `velocity`
+  publish the interpolated pose, which is a step behind after whole steps.
+- The autopilot's run of 6 generated boards gives the positions it gave before the move
+  to six decimals on 4; on the other 2 a trigger's effect lands after the step that
+  reports it, not inside it, and the win comes a frame later.
+- Kinematic mechanisms are driven once per step. The old animators set a velocity once
+  per frame, so frames of 1/120 s against the 1/60 s step made a bar or press lunge on
+  alternate steps. `tests/fragments/test_turntable.py` and `test_crusher.py` were
+  measured with those lunges (`tests/chase.py` reproduces them); stepped by the drive
+  the turntable's plain variant leaves a marble on its hub for 35 s at 4 of 5 phases
+  and the pilot crosses the press at every one of 12 phases.
+
 ### glisteel
 
 Today. One main-thread loop. `Session.advance` (`session.py:581`) accumulates real time,
@@ -779,6 +934,22 @@ Changes.
 
 Acceptance. `trace.drive` on each scenario returns the numbers it returned before the
 change.
+
+Status, 2026-10-26. `HeightFieldColliders` and `RoadColliders` are collider sources and
+take no world; `PropSource` is the props' source, and `PropColliders` stays as the
+plain-world form because the editor's stone test builds one on a bare `PhysicsWorld`. A
+source with `clear()` is cleared when its handle is removed. glisteel's `RaceWorld` takes
+the service it is given (the context's, defined by `glisteel.world.physics_definition`:
+inline, 120 Hz, no scenery colliders) or makes a standalone one; its road, ground, props
+and stone are sources focused on the point `stream` was given, and `stream` also asks
+them at once so `settled` finds the ground. The car's chassis is `add_dynamic`, with a
+`Body` handle; the `RaycastVehicle` and the `impact_on` reads use `physics.world`. In a
+context the context's frame steps the world and the game finishes the frame from a
+`renderQueue.on_frame` function added after it (`Session.finish_frame`);
+`Session.advance` is the service's frame then `finish_frame`, for a standalone
+service. Traffic still places its kinematic bodies each frame rather than driving
+them, and poses its own nodes. Scripted drives and autopilot runs with traffic give
+the same numbers, bit for bit, as before the change.
 
 ### twig-bb
 
@@ -810,6 +981,20 @@ Changes.
   and the submerge through `audio.engine`.
 - Its tests that build a bare `PhysicsWorld` build a standalone `Physics` instead.
 
+Landed (2026-10-25, in twig-bb's `physics-services` branch):
+- `twig_bb.hitboxes` gives each combatant a body: its character's, or a kinematic capsule
+  placed from the arena. A cast passes through the shooter and the dead, a sight line
+  through everyone, by `skip=`.
+- The player and the bots are `framed = False` characters stepped by `OnIdle` and the
+  rules with the game's own clock, so the order input, navigation, push volumes, rules
+  holds and the dt is the game's.
+- The submerge is `audio.muffle`. `audio.engine` opens the device, and walking into a
+  pool must not start one.
+- `raycast_many` is not used: a projectile's skip list differs per projectile, and its
+  bounce and detonation are decided one at a time.
+- A character is an obstacle to every other character, as the stand-in is a body the
+  controller treats as heavier than `pushMass`.
+
 ### openglcontext-forest
 
 Today. The forest uses the engine's walker: `PhysicsWalkMixin` and `terrainwalk.py` are
@@ -840,6 +1025,32 @@ camera, and pushed by the walker. The mixin and the analytic substep path go onc
 else uses them. The redraw each frame while walking becomes a redraw while the character
 moves, falls or has input. The walker stays on the render thread, so `mounds_near` and the
 `AsyncStreamer` threads share data as they do today.
+
+Landed (2026-10-26, in the `physics-services` branches of openglcontext, omi_physics and
+openglcontext-forest):
+- `physics/landscape.py`: `Landscape` (the ground from `add_ground`, trunks from
+  `add_static_instances` in 0.05 m radius classes, standing on the ground), `SampledGround`
+  (tiles of a slow ground's samples, with normals), `NearbyColliders` (a collider source
+  for `mounds_near`-style fields, with a reach and a hysteresis) and `dome_proxy`.
+- `TerrainWalkMixin` makes the walker a `Character` in `context.physics`, over a
+  `PhysicsViewPlatform`; the movement modes run in a render-queue hook ahead of the service's
+  frame and the camera is applied in one after it. `OnIdle` keeps the streamers and the redraw
+  for a view that turned. The substep path, the hash grid and the analytic pushes are gone;
+  the flier's floor stays. The free-fly clamp teleports the walker along the camera's move.
+- `terrain_view.make_avatar` does the same for `oglc-terrain`.
+- omi_physics gained `CollisionQuery.static_near` over a `StaticGrid` that reads recent
+  changes from the world, rays at convex hulls, and a `dynamic_near` that reads only the
+  dynamic bodies; the character asks for the bodies near its capsule. The broad phase's
+  index of fixed bodies survives a few bodies coming and going (`LOOSE_LIMIT`), and a body
+  that `add_body` or `place_body` fits is not refitted by the next step.
+- `SampledGround` makes the tiles of a slow ground (rock displaced over a field) ahead of the
+  walker on a thread of its own: a tile of rock takes 0.1 s, which was a hitch of that size.
+- A character that has not moved sends the world no commands.
+- The forest has `b`, a boulder thrown from the camera.
+- Measured in the forest at 230,000 trunks, walking: the frame is 9 ms at the median against
+  8 ms before, the longest 30 ms against 30 ms. A world step is 2 to 3 ms in checks that
+  run over every body (`_InertIndex.current`, `refit_aabbs`, the copy of the previous
+  poses); the thread worker takes them off the frame, an inline world pays them in it.
 
 ### hill-runner
 

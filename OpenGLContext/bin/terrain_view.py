@@ -3,7 +3,8 @@
 
 Bakes (or loads) a terrain tileset and lets you walk it first-person with gravity +
 collision, or free-fly. The terrain streams with frustum-culled level-of-detail;
-collision comes from the terrain surface so you walk on what you see. Vegetation
+the ground, the trunks and the rocks are bodies in the context's physics world, so
+you walk on what you see and a body added to the context lands on it. Vegetation
 (distance-LOD conifers) is scattered on grass elevations and a translucent water
 surface fills the valleys.
 
@@ -33,7 +34,7 @@ import math
 import sys
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -48,10 +49,9 @@ from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.material import Material
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 from OpenGLContext.scenegraph.group import Group
-from omi_physics.world import PhysicsWorld
-from omi_physics import model
-from omi_physics.character import CharacterCapabilities
+from OpenGLContext.physics.types import CharacterCapabilities
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from OpenGLContext.physics.landscape import Landscape, NearbyColliders
 from OpenGLContext.loaders.tiles3d import procedural as P
 from OpenGLContext.loaders.tiles3d import dem as DEM
 from OpenGLContext.loaders.tiles3d.vegetation import (
@@ -133,6 +133,91 @@ def _walkable_spawn(height_fn: "P.HeightFn") -> tuple[float, float, float]:
     return best[0], _surface(height_fn, *best), best[1]
 
 
+class Surface:
+    """The viewer's height function, with the water level as its floor, as a ground."""
+
+    def __init__(self, height_fn: "P.HeightFn") -> None:
+        self.height_fn = height_fn
+
+    def sample(self, x: Any, z: Any) -> np.ndarray:
+        """The ground's height at each ``(x, z)``, for arrays of any shape."""
+        x, z = np.broadcast_arrays(np.asarray(x, dtype='d'), np.asarray(z, dtype='d'))
+        if x.size == 0:
+            return np.zeros(x.shape)
+        heights = np.asarray(self.height_fn(x.reshape(-1), z.reshape(-1)), dtype='d')
+        floored: np.ndarray = np.maximum(heights, P.WATER_LEVEL)
+        return floored.reshape(x.shape)
+
+
+#: How far from the avatar the trunks and rocks are bodies in the world, in metres.
+COLLIDER_REACH = 32.0
+
+#: The radius of a tree's trunk, in metres.
+TRUNK_RADIUS = 0.45
+
+
+def trunks_near(trees: np.ndarray, surface: Surface, x: float, z: float,
+                reach: float) -> tuple[np.ndarray, np.ndarray]:
+    """The trunks of ``trees``, an ``(n, 2)`` array of ``(x, z)``, within ``reach`` metres of ``(x, z)``.
+
+    Answers ``(positions, radii)`` as a collider source does, each trunk standing on the surface.
+    """
+    near = trees[(np.abs(trees[:, 0] - x) <= reach) & (np.abs(trees[:, 1] - z) <= reach)]
+    positions = np.zeros((len(near), 3))
+    positions[:, 0], positions[:, 2] = near[:, 0], near[:, 1]
+    positions[:, 1] = surface.sample(near[:, 0], near[:, 1])
+    return positions, np.full(len(near), TRUNK_RADIUS)
+
+
+def rocks_near(rocks: np.ndarray, radii: np.ndarray, surface: Surface, x: float, z: float,
+               reach: float) -> tuple[np.ndarray, ...]:
+    """The rocks, ``(n, 2)`` positions and ``(n,)`` radii, within ``reach`` metres of ``(x, z)``.
+
+    Answers ``(positions, radii, rims, tops)`` as a collider source does: each rock a dome a
+    walker climbs when it is low enough to step onto.
+    """
+    keep = (np.abs(rocks[:, 0] - x) <= reach) & (np.abs(rocks[:, 1] - z) <= reach)
+    positions = np.zeros((int(keep.sum()), 3))
+    positions[:, 0], positions[:, 2] = rocks[keep, 0], rocks[keep, 1]
+    positions[:, 1] = surface.sample(rocks[keep, 0], rocks[keep, 1])
+    wide = radii[keep]
+    return positions, wide, 0.25 * wide, 0.8 * wide
+
+
+def make_avatar(physics: Any, surface: Surface | None, extent: float, capabilities: Any,
+                spawn: Sequence[float], yaw: float, trunks: Callable[..., Any] | None = None,
+                rocks: Callable[..., Any] | None = None) -> tuple["PhysicsViewPlatform", Any]:
+    """The avatar the viewer walks, as a character in ``physics``, and the landscape it walks on.
+
+    ``surface`` is the ground (None for a tileset that has none: nothing is made but the
+    avatar), ``extent`` its side in metres, about the origin. The physics service is
+    switched on, and stops making a body of each shape in the scene when there is a ground. ``trunks(x, z, reach)`` and
+    ``rocks(x, z, reach)`` answer for the trunks and rocks near a point, as a collider source
+    does. The avatar's feet are put at ``spawn``, six metres above the surface and falling.
+    """
+    landscape = None
+    changes: dict[str, Any] = {}
+    if not physics.definition.enabled:
+        changes['enabled'] = True
+    if surface is not None and physics.definition.colliders == 'scene':
+        changes['colliders'] = 'explicit'
+    if changes:
+        physics.set_config(physics.definition.replaced(**changes))
+    if surface is not None:
+        half = extent / 2.0
+        landscape = Landscape(physics, surface, extent=((-half, -half), (half, half)))
+    character = physics.add_character(capabilities=capabilities, position=spawn)
+    for answer in (trunks, rocks):
+        if answer is not None:
+            physics.add_collider_source(NearbyColliders(answer, reach=COLLIDER_REACH),
+                                        focus=lambda: character.position)
+    if landscape is not None:
+        landscape.follow(lambda: character.position)
+    avatar = PhysicsViewPlatform.over(character, yaw=yaw)
+    avatar.bind((spawn[0], spawn[1] + 6.0, spawn[2]))
+    return avatar, landscape
+
+
 class TerrainViewer(_ContextBase):
     """The terrain viewer, over whichever interactive context
     :func:`terrain_context` puts beneath it."""
@@ -144,19 +229,12 @@ class TerrainViewer(_ContextBase):
     movementManager: Any
 
     def OnInit(self) -> None:  # pragma: no cover - live GL context, streaming + upload
-        from OpenGLContext.physics.demo import disable_vsync
-        disable_vsync()
+        self.setVSync(False)
         cfg = self.config
         sys.stdout.write(__doc__[__doc__.index("Controls:"):])
         sys.stdout.flush()
         tileset, self.height_fn = _resolve_world(cfg)
 
-        # No trimesh floor: terrain is a height field, so we clamp the avatar to
-        # height_fn analytically each frame (exact, matches the visuals, and cannot be
-        # tunnelled through at any frame rate). The physics world still gives gravity,
-        # jumping and smooth motion.
-        self.world = PhysicsWorld(
-            gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
         self.gltf_scene_ambient = 0.28             # lower fill -> shadows read stronger
         children = [
             # A gradient sky needs >=2 skyColors + a skyAngle; a lone skyColor renders
@@ -261,10 +339,17 @@ class TerrainViewer(_ContextBase):
         caps = CharacterCapabilities(walkSpeed=self._speeds['walk'], runSpeed=34.0,
                                      sprintSpeed=self._speeds['sprint'],
                                      flySpeed=self._speeds['fly'],
-                                     eyeHeight=1.7, stepHeight=0.7)
-        self.avatar = PhysicsViewPlatform(self.world, caps,
-                                          position=(sx, sy + 6, sz), yaw=0.6)
-        self.avatar.bind((sx, sy + 6, sz))
+                                     eyeHeight=1.7, stepHeight=0.7, maxSlope=75.0)
+        # The ground is the height function itself, answered where it is asked, and the
+        # trunks and rocks are bodies made as the avatar nears them: the avatar, and a
+        # body added to this context's physics, meet the surface that is drawn.
+        surface = None if self.height_fn is None else Surface(self.height_fn)
+        self.avatar, self.landscape = make_avatar(
+            self.physics, surface, cfg.extent, caps, (sx, sy, sz), 0.6,
+            trunks=None if surface is None else
+            lambda x, z, reach: trunks_near(self._tree_pos, surface, x, z, reach),
+            rocks=None if surface is None else
+            lambda x, z, reach: rocks_near(self._rock_pos, self._rock_rad, surface, x, z, reach))
         self._flying = bool(cfg.fly) or self.height_fn is None
         self.avatar.set_fly(self._flying)
         self._sprint = False
@@ -299,6 +384,10 @@ class TerrainViewer(_ContextBase):
         self.addEventHandler("keypress", name="-", function=self._slower)
         self.keyRepeatDelay = 0.06
         self._last = time.time()
+        self._turning = False
+        # Input before the world is stepped, the camera and the streaming after it.
+        self.renderQueue.on_frame(self._drive_avatar, first=True)
+        self.renderQueue.on_frame(self._follow_avatar)
 
     # -- input -----------------------------------------------------------
     def _on_key(self, event: Any) -> None:
@@ -454,66 +543,41 @@ class TerrainViewer(_ContextBase):
         return view_projection(eye, centre, (0, 1, 0), math.radians(60), 1.4,
                                1.0, 7000.0)
 
-    def _ground_clamp(self) -> None:
-        """Keep the avatar on the exact terrain surface (walk mode).
+    def _floor_flier(self) -> None:
+        """Keep a flying avatar above the terrain surface.
 
-        Snaps the capsule base to `height_fn(x, z)` whenever it is at or below the
-        surface, and zeroes downward velocity — so gravity, jumps and slopes still feel
-        natural but the avatar can never sink into or fall through the ground, whatever
-        the frame rate. In fly mode it only stops you dropping below the terrain."""
-        if self.height_fn is None:
+        Flying is noclip, so the world's ground does not stop a flier; this lifts the
+        capsule's base to the surface whenever it is at or below it. A walking avatar is
+        held up by the ground body.
+        """
+        if self.height_fn is None or not self._flying:
             return
         ch = self.avatar.character
         x, z = float(ch.position[0]), float(ch.position[2])
         surf = max(float(self.height_fn(np.array([x]), np.array([z]))[0]),
                    P.WATER_LEVEL)
         half = ch.height * 0.5
-        base = ch.position[1] - half
-        tol = 0.05 if not self._flying else 0.0
-        if base <= surf + tol:
+        if ch.position[1] - half <= surf:
             ch.position[1] = surf + half
             if ch.vy < 0.0:
                 ch.vy = 0.0
-            if not self._flying:
-                ch.grounded = True
-
-    def _object_collision(self) -> None:
-        """Push the avatar out of tree trunks and rocks (analytic capsule vs cylinder/
-        sphere). Vectorised over the current collider set, so it's cheap."""
-        ch = self.avatar.character
-        px, pz = float(ch.position[0]), float(ch.position[2])
-        cr = ch.caps.radius
-        for pos, rad in ((self._tree_pos, 0.45), (self._rock_pos, self._rock_rad)):
-            if len(pos) == 0:
-                continue
-            dx = px - pos[:, 0]
-            dz = pz - pos[:, 1]
-            d = np.hypot(dx, dz)
-            r = cast(np.ndarray, rad if np.ndim(rad) else np.full(len(pos), rad)) + cr
-            hit = (d < r) & (d > 1e-4)
-            if hit.any():
-                k = np.argmin(d - r)          # resolve the deepest overlap
-                if hit[k]:
-                    push = float(r[k] - d[k]) if np.ndim(r) else float(r - d[k])
-                    ch.position[0] = px + dx[k] / d[k] * push
-                    ch.position[2] = pz + dz[k] / d[k] * push
 
     def _stream(self, eye: Sequence[float]) -> None:
         if self.terrain is not None:
             self.terrain.update_for_camera(eye, self.getViewPort()[1] or 700,
                                            view_projection=self._view_projection(eye))
 
-    def OnIdle(self, *arguments: Any) -> int:
+    def _drive_avatar(self) -> None:
+        """Turn the held keys into the avatar's move before the world is stepped."""
         if getattr(self, "avatar", None) is None:
-            return 0
-        # The per-frame walk/fly movement loop below needs a live navigator +
-        # window; it is driven by the terrain render/subprocess tests.
-        return self._on_idle_move(*arguments)  # pragma: no cover - interactive movement loop
-
-    def _on_idle_move(self, *args: Any) -> int:  # pragma: no cover - interactive loop
+            return
         now = time.time()
         dt = min(now - self._last, 0.05)
         self._last = now
+        self._steer(now, dt)
+
+    def _steer(self, now: float, dt: float) -> None:
+        """Set the avatar's move, turn and jump from the keys held at ``now``, ``dt`` seconds on."""
         nav = self.avatar
 
         def held(k: str) -> bool:
@@ -522,6 +586,7 @@ class TerrainViewer(_ContextBase):
         strafe = (1.0 if held("d") else 0.0) - (1.0 if held("a") else 0.0)
         if renderoptions.env_text("OGLC_AUTOWALK"):        # headless movement self-test
             fwd = 1.0
+        self._turning = held("q") or held("e")
         if held("q"):
             nav.turn(-1.8 * dt)
         if held("e"):
@@ -532,16 +597,23 @@ class TerrainViewer(_ContextBase):
         else:
             mode = "sprint" if self._sprint else "walk"
             nav.set_move(fwd, strafe, mode=mode, speed=self._moveSpeed(mode))
-        nav.update(dt)
-        self._ground_clamp()
-        if not self._flying:
-            self._object_collision()
+
+    def _follow_avatar(self) -> None:
+        """Put the camera at the avatar's eye once the world has stepped it, and stream to it.
+
+        The physics service asks for a frame while the avatar moves; a turn is the one
+        change of view that does not move it.
+        """
+        nav = getattr(self, "avatar", None)
+        if nav is None:
+            return
+        self._floor_flier()
         nav.apply(self)
         eye = nav.camera_position()
         self._stream(eye)
         self._maybe_refresh_vegetation(eye)
-        self.triggerRedraw(1)
-        return 1
+        if self._turning:
+            self.triggerRedraw(1)
 
 
 def build_parser() -> argparse.ArgumentParser:

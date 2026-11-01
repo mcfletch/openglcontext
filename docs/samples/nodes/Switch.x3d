@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="Switch"/>
+    <meta name="description" content="Draws one of its children, chosen by whichChoice; the others are kept and not drawn, and -1 draws none."/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <!-- Three children, counted from 0. Child 1, the sphere, is the one drawn. -->
+    <Switch whichChoice="1">
+      <Shape>
+        <Appearance><Material diffuseColor="0.8 0.3 0.2"/></Appearance>
+        <Box/>
+      </Shape>
+      <Shape>
+        <Appearance><Material diffuseColor="0.25 0.6 0.85" specularColor="0.8 0.8 0.8" shininess="0.5"/></Appearance>
+        <Sphere/>
+      </Shape>
+      <Shape>
+        <Appearance><Material diffuseColor="0.4 0.75 0.3"/></Appearance>
+        <Cone/>
+      </Shape>
+    </Switch>
+  </Scene>
+</X3D>

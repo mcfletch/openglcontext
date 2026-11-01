@@ -17,12 +17,20 @@ What is here is the two seams between that engine and a context:
                            on the :class:`~OpenGLContext.contextdefinition.ContextDefinition`
                            so it validates, serialises and generates its own
                            settings page like every other field group.
+:mod:`~.manager`           :class:`~.manager.Audio`, sounds played by call from
+                           any thread (``audio.play('thud.ogg', at=point)``),
+                           started on the render thread, with no GL.
+:mod:`~.sounds`            Clips made in code (``sounds.impact(0.25)``) and
+                           how far a sound carries
+                           (``sounds.positional(near=3.0)``), so a game names
+                           no ``omi_audio`` module for ordinary sounds.
 :mod:`~.x3dgraph`          :class:`~.x3dgraph.SoundGraph`, a scene's X3D sound
                            nodes as one engine's processing graph, kept in
                            step once a frame.
 :mod:`~.vehicle`           :class:`~.vehicle.VehicleSoundtrack`, a road
                            vehicle's motor, tyres, wind and impacts as one
-                           emitter, fed from an ``omi_physics`` vehicle.
+                           emitter, fed from a vehicle's speed, wheels and
+                           throttle.
 =========================  ====================================================
 
 The nodes that put a sound *in* a scene are ``AudioEmitter`` and
@@ -31,9 +39,8 @@ reads ``KHR_audio_emitter`` blocks into through
 :mod:`OpenGLContext.loaders.gltf.scene`, and X3D's Sound component
 (:mod:`OpenGLContext.scenegraph.x3dsound`).
 
-Sound is **optional and never fatal**.  ``miniaudio`` may be absent and a device
-may fail to open; both end in one warning and a silent run, so a machine with no
-sound card is simply a machine with no sound.
+Sound is optional.  A missing ``miniaudio`` or a device that fails to open logs
+one warning and the program runs silent.
 
 See ``docs/audio.rst`` for the data-flow diagrams and a worked example.
 """

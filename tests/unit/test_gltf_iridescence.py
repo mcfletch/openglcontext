@@ -10,7 +10,7 @@ import base64
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial

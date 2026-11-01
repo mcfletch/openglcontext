@@ -11,7 +11,7 @@ import os
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 
 from OpenGLContext.testing.paths import tests_root
 
@@ -20,7 +20,7 @@ HERE = str(tests_root(__file__))
 from OpenGLContext import entropy
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.character.wander import (
-    Gait, STAND, TURN, WALK, Wander, WanderingCrowd,
+    Gait, STAND, TURN, WALK, Wander, WanderingCrowd, run_share,
 )
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf, sample_model_url
 from OpenGLContext.scenegraph.walk import reachable
@@ -607,15 +607,13 @@ class TestTheDemoDoesNotMoonwalk:
     # Each clip over the speeds the demo actually plays it at: a gallop dialled
     # down to a stroll has a suspension phase and nothing on the ground to
     # measure, and the demo never asks for one.
-    @pytest.mark.parametrize('clip,stride,speed', [
-        ('WALK', 'WALK_STRIDE', 0.55), ('WALK', 'WALK_STRIDE', 0.8),
-        ('WALK', 'WALK_STRIDE', 1.1),
-        ('RUN', 'RUN_STRIDE', 1.2), ('RUN', 'RUN_STRIDE', 1.4),
-        ('RUN', 'RUN_STRIDE', 1.65),
+    @pytest.mark.parametrize('role,speed', [
+        ('walk', 0.55), ('walk', 0.8), ('walk', 1.1),
+        ('run', 1.2), ('run', 1.4), ('run', 1.65),
     ])
-    def test_what_touches_the_ground_stays_on_it(self, demo, figure,
-                                                 clip, stride, speed):
-        name, carries = getattr(demo, clip), getattr(demo, stride)
+    def test_what_touches_the_ground_stays_on_it(self, demo, figure, role, speed):
+        spec = demo.CLIPS.spec(role)
+        name, carries = spec.clip, spec.speed
         model = _figure(figure)
         track = model.play(name)
         mesh = next(_skinned(model.group))
@@ -648,8 +646,8 @@ class TestTheDemoDoesNotMoonwalk:
         assert drift < speed * FOOT_DRIFT, (
             '%s: what is on the ground travels %.3f m/s over it at a body '
             'speed of %.2f -- the figure is going through its cycle backwards, '
-            'or %s is not what the clip carries it'
-            % (name, drift, speed, stride))
+            'or %.2f m/s is not what the clip carries it'
+            % (name, drift, speed, carries))
 
 
 def _skinned(node):
@@ -688,3 +686,18 @@ def _pose_of(model):
         np.asarray([list(x.rotation) for x in model.mixer.rig.transforms]),
         np.asarray([list(x.scale) for x in model.mixer.rig.transforms]),
     ], axis=1)
+
+
+class TestRunShare:
+    """How much of the travel is a run rather than a walk, by speed alone."""
+
+    def test_nothing_below_the_walk_and_everything_above_the_run(self):
+        assert run_share(0.5, 1.0, 3.0) == 0.0
+        assert run_share(3.5, 1.0, 3.0) == 1.0
+
+    def test_midway_between_the_two_strides_is_half(self):
+        assert run_share(2.0, 1.0, 3.0) == pytest.approx(0.5)
+
+    def test_a_run_no_longer_than_the_walk_switches_at_the_walk(self):
+        assert run_share(0.9, 1.0, 1.0) == 0.0
+        assert run_share(1.1, 1.0, 1.0) == 1.0

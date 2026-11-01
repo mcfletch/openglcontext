@@ -1,18 +1,16 @@
-"""Build a physics collision world from a loaded glTF/scenegraph.
+"""The triangles a loaded glTF/scenegraph collides with.
 
-Walks a scenegraph, pulls the world-space triangles out of every mesh, and adds
-them as a static ``trimesh`` collider so a character can walk on and bump into the
-model.  If the document carries OMI physics bodies those are honoured directly
-(via :mod:`omi_physics.omi_gltf`); otherwise the whole model becomes one
-static collision mesh.  Used by the ``oglc-gltf`` viewer's walk-around mode.
+Walks a scenegraph and pulls the world-space triangles out of every mesh: the
+physics service's scenery, its proxies and the walking avatar
+(:func:`scene_bounds`) are made from them. A node that carries an OMI physics
+body (:mod:`OpenGLContext.physics.omigltf`) is met as itself.
 """
-import weakref
-from typing import Any, Optional
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
+from typing import Any, NamedTuple, Optional
 import numpy as np
 from vrml.x3d import nodes as x3d
-
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.scenegraph import coordinates
 
@@ -34,13 +32,14 @@ def _mesh_positions_indices(geom: Any) -> Optional[tuple[np.ndarray, np.ndarray]
 
     ``geom`` is a scenegraph geometry node; positions come from its ``positions``
     or its ``coord`` node's points in the scene and faces from ``indices`` or a fan-triangulated
-    ``coordIndex``. Triangle indices are an ``(M, 3)`` array.
+    ``coordIndex``. A geometry with neither, such as a ``Box`` or a ``Sphere``, gives
+    the triangles it draws (``meshArrays``). Triangle indices are an ``(M, 3)`` array.
     """
     pos = getattr(geom, 'positions', None)
     if pos is None:
         pos = coordinates.points(getattr(geom, 'coord', None))
     if pos is None or not len(pos):
-        return None
+        return _drawn_triangles(geom)
     pos = np.asarray(pos, dtype='d')
     idx = getattr(geom, 'indices', None)
     if idx is None:
@@ -53,6 +52,19 @@ def _mesh_positions_indices(geom: Any) -> Optional[tuple[np.ndarray, np.ndarray]
     idx = np.asarray(idx).ravel()
     tri = idx[:len(idx) - (len(idx) % 3)].reshape(-1, 3)
     return pos, tri
+
+
+def _drawn_triangles(geom: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """The triangles a geometry node draws as ``(positions, (M, 3) indices)``, or None where it draws none."""
+    from OpenGLContext.scenegraph.meshdata import geometry_arrays  # noqa: PLC0415 imports the scenegraph
+
+    found = geometry_arrays(geom)
+    if found is None:
+        return None
+    pos = np.asarray(found.attributes['POSITION'], dtype='d')
+    idx = np.arange(len(pos)) if found.indices is None else np.asarray(found.indices).ravel()
+    idx = idx[:len(idx) - (len(idx) % 3)]
+    return (pos, idx.reshape(-1, 3)) if len(idx) else None
 
 
 def _fan_triangulate(coord_index: np.ndarray) -> np.ndarray:
@@ -147,25 +159,48 @@ def _append_mesh(world_points: np.ndarray, tri: Any, points: list[np.ndarray],
         tris.append(np.asarray(tri) + base)
 
 
-def _collect(node: Any, world_matrix: np.ndarray, buckets: dict[tuple[Any, ...], _Bucket],
-             groups: tuple[Any, ...], ancestry: tuple[Any, ...],
-             min_hull_size: float) -> None:
-    """Walk ``node`` and append each mesh's world-space verts/tris to its bucket.
+class MeshSite(NamedTuple):
+    """A node that draws a mesh, where it stands in the tree.
 
-    ``buckets`` holds one :class:`_Bucket` per tuple of the enabled X3D
-    ``Collision`` groups a mesh is inside, innermost first; ``groups`` is that
-    tuple here. ``ancestry`` is the nodes on the path from the root, so
-    instanced geometry reached by several transforms is collected once per
-    instance without infinite recursion.
+    ``groups`` are the enabled X3D ``Collision`` groups it is inside, innermost
+    first; ``world`` is its world matrix; ``geometry`` is what it draws.
     """
-    # Cycle-detect on the current path, NOT a global seen-set: instanced geometry
-    # shares one mesh node reachable via many parent transforms, and each instance
-    # must be collected with its own transform (a global seen-set would keep only
-    # the first, so e.g. the parthenon's instanced columns would have no collider).
+    node: Any
+    groups: tuple[Any, ...]
+    world: np.ndarray
+    geometry: Any
+    #: What the node is tagged with when it carries a physics body of its own
+    #: (``iter_meshes(tagged=True)``); the geometry is then None.
+    tag: Any = None
+
+
+def iter_meshes(node: Any, world_matrix: Optional[np.ndarray] = None,
+                groups: tuple[Any, ...] = (), ancestry: tuple[Any, ...] = (),
+                skip: Optional[Callable[[Any], bool]] = None,
+                tagged: bool = False) -> Iterator[MeshSite]:
+    """Each node at or under ``node`` that draws a mesh, with its world matrix.
+
+    A disabled X3D ``Collision`` group's subtree is left out and an enabled
+    one's proxy stands in for its children. ``skip(node)`` true leaves that
+    node's whole subtree out without reading it. Instanced geometry reached by
+    several transforms is met once per instance, and a node inside itself is
+    met once; cycles are detected on the current path, not globally. With
+    ``tagged``, a node that carries an ``omiPhysics`` tag is met once, with the
+    tag, and what is under it is left out: its body stands for it.
+    """
+    if world_matrix is None:
+        world_matrix = np.eye(4)
     if any(above is node for above in ancestry):
+        return
+    if skip is not None and skip(node):
         return
     ancestry = ancestry + (node,)
     world = _local_matrix(node) @ world_matrix
+    if tagged:
+        tag = getattr(node, 'omiPhysics', None)
+        if tag is not None:
+            yield MeshSite(node, groups, world, None, tag)
+            return
     if isinstance(node, x3d.Collision):
         # X3D's Collision: a disabled one's children are walked through, and a
         # proxy collides in their place.
@@ -173,23 +208,57 @@ def _collect(node: Any, world_matrix: np.ndarray, buckets: dict[tuple[Any, ...],
             return
         groups = (node,) + groups
         if node.proxy:
-            _collect(node.proxy, world, buckets, groups, ancestry, min_hull_size)
+            yield from iter_meshes(node.proxy, world, groups, ancestry, skip, tagged)
             return
     geom = getattr(node, 'geometry', None)
     if geom is not None:
-        mi = _mesh_positions_indices(geom)
-        if mi is not None:
-            pos, tri = mi
-            homog = np.column_stack([pos, np.ones(len(pos))])
-            bucket = buckets.setdefault(groups, _Bucket())
-            # A node holding a set of placements is that mesh once per placement,
-            # so collision has to be too -- a car must not drive through a tree
-            # it can see.
-            for placed in _placed_worlds(node, world):
-                _append_mesh(homog @ placed, tri, bucket.points, bucket.tris, bucket.state,
-                             min_hull_size)
+        yield MeshSite(node, groups, world, geom)
     for child in getattr(node, 'children', None) or ():
-        _collect(child, world, buckets, groups, ancestry, min_hull_size)
+        yield from iter_meshes(child, world, groups, ancestry, skip, tagged)
+
+
+def site_mesh(site: MeshSite, min_hull_size: float = 0.0,
+              mesh: Optional[tuple[np.ndarray, np.ndarray]] = None
+              ) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """The world-space ``(points, triangles)`` a mesh site draws, or None where it draws none.
+
+    A node holding a set of placements is that mesh once per placement.
+    ``mesh`` is the geometry's own ``(positions, triangles)`` where the caller
+    has them already.
+    """
+    mi = mesh if mesh is not None else _mesh_positions_indices(site.geometry)
+    if mi is None:
+        return None
+    pos, tri = mi
+    homog = np.column_stack([pos, np.ones(len(pos))])
+    points: list[np.ndarray] = []
+    tris: list[np.ndarray] = []
+    state: dict[str, int] = {'n': 0}
+    for placed in _placed_worlds(site.node, site.world):
+        _append_mesh(homog @ placed, tri, points, tris, state, min_hull_size)
+    if not points:
+        return None
+    return np.vstack(points), (np.vstack(tris) if tris else np.zeros((0, 3), dtype='i'))
+
+
+def _collect(node: Any, world_matrix: np.ndarray, buckets: dict[tuple[Any, ...], _Bucket],
+             groups: tuple[Any, ...], ancestry: tuple[Any, ...],
+             min_hull_size: float) -> None:
+    """Walk ``node`` and append each mesh's world-space verts/tris to its bucket.
+
+    ``buckets`` holds one :class:`_Bucket` per tuple of the enabled X3D
+    ``Collision`` groups a mesh is inside, innermost first.
+    """
+    for site in iter_meshes(node, world_matrix, groups, ancestry):
+        mi = _mesh_positions_indices(site.geometry)
+        if mi is None:
+            continue
+        pos, tri = mi
+        homog = np.column_stack([pos, np.ones(len(pos))])
+        bucket = buckets.setdefault(site.groups, _Bucket())
+        for placed in _placed_worlds(site.node, site.world):
+            _append_mesh(homog @ placed, tri, bucket.points, bucket.tris, bucket.state,
+                         min_hull_size)
 
 
 def _buckets(group: Any, min_hull_size: float) -> dict[tuple[Any, ...], _Bucket]:
@@ -223,18 +292,24 @@ def _merged(buckets: dict[tuple[Any, ...], _Bucket]) -> Optional[tuple[np.ndarra
     return whole.arrays()
 
 
-#: Each world's X3D Collision groups, by the static body their geometry is.
-_GROUPS: 'weakref.WeakKeyDictionary[PhysicsWorld, dict[int, list[Any]]]' = (
-    weakref.WeakKeyDictionary())
+def scene_bounds(group: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """The corners ``(low, high)`` of the triangles ``group`` collides with, or None for none.
 
-
-def collision_groups(world: PhysicsWorld) -> dict[int, list[Any]]:
-    """The enabled X3D Collision groups each static body of `world` is the geometry of
-
-    By body index: the group the geometry is in, then each enabled group
-    around it. Empty for a world with none.
+    The triangles are the ones the scenery is made of: every mesh under
+    ``group`` placed in the world, a disabled X3D ``Collision`` group's left
+    out and an enabled one's proxy in place of its children.
     """
-    return dict(_GROUPS.get(world, {}))
+    lows, highs = [], []
+    for bucket in _buckets(group, 0.0).values():
+        found = bucket.arrays()
+        if found is None or not len(found[1]):
+            continue
+        lows.append(found[0].min(axis=0))
+        highs.append(found[0].max(axis=0))
+    if not lows:
+        return None
+    return np.min(lows, axis=0), np.max(highs, axis=0)
+
 
 
 def node_mesh(node: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
@@ -260,52 +335,3 @@ def node_mesh(node: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
         found = found * np.asarray(scale, dtype='d')
     return found, tris
 
-
-def collision_world_from_scene(
-        group: Any, gravity: float = 9.81, ground_pad: float = 0.0,
-        min_hull_size: float = 0.0
-) -> tuple[PhysicsWorld, Optional[tuple[np.ndarray, np.ndarray]]]:
-    """Build a :class:`PhysicsWorld` whose static geometry is the model's mesh.
-
-    ``group`` is the root scenegraph node. Every zone in it that carries
-    gravity becomes a gravity volume of the world; see
-    :mod:`OpenGLContext.physics.zones`.
-
-    Each enabled X3D ``Collision`` group's geometry is a static body of its
-    own, reported when touched (:func:`collision_groups`); the rest is one.
-
-    Returns ``(world, bounds)`` where bounds is ``(lo, hi)`` of the collision
-    geometry (``None`` if the model had no extractable triangles). ``min_hull_size``
-    box-ifies sub-components at or below that world-space size (see
-    :func:`extract_trimesh`) to speed up loading of large multi-part scenes.
-    """
-    world = PhysicsWorld(gravity=model.Gravity(gravity=gravity, direction=(0, -1, 0)),
-                         default_linear_damping=0.2, default_angular_damping=1.0)
-    from OpenGLContext.physics.zones import gravity_volumes, scene_zones
-    for volume in gravity_volumes(scene_zones(group)):
-        world.add_gravity_volume(volume)
-    groups: dict[int, list[Any]] = {}
-    lows, highs = [], []
-    for enclosing, bucket in _buckets(group, min_hull_size).items():
-        found = bucket.arrays()
-        if found is None or not len(found[1]):
-            continue
-        points, indices = found
-        shape = world.add_shape(model.Shape.trimesh(points, indices))
-        body = world.add_body(model.Motion(type=model.STATIC),
-                              collider=model.Collider(shape=shape), position=(0, 0, 0))
-        if enclosing:
-            # Reported when the walker touches it, as X3D's collideTime.
-            world.report_contacts(body)
-            groups[body] = list(enclosing)
-        lows.append(points.min(axis=0))
-        highs.append(points.max(axis=0))
-    if not lows:
-        return world, None
-    if groups:
-        _GROUPS[world] = groups
-        if world.contact_reporting == 'off':
-            world.contact_reporting = 'flagged'
-    lo = np.min(lows, axis=0) - ground_pad
-    hi = np.max(highs, axis=0) + ground_pad
-    return world, (lo, hi)

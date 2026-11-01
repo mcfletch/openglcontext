@@ -1,15 +1,17 @@
-"""X3D's RigidBodyPhysics on omi_physics -- no GL
+"""X3D's RigidBodyPhysics, read from the nodes -- no GL
 
-A `RigidBodyCollection` is a :class:`RigidSystem`: one
-:class:`~omi_physics.world.PhysicsWorld` holding a body for each enabled
-`RigidBody` of the collection, and a static body for each collidable that is
-in no body but that the collection's `collider`, or a `Contact` sent to its
-`set_contacts`, names. :meth:`RigidSystem.advance` steps it by a frame's
-time, in fixed steps of :data:`STEP` seconds (:data:`ACCURATE_STEP` where the
-collection prefers accuracy), and sends what moved: each body's `position`,
-`orientation`, `linearVelocity` and `angularVelocity`, the `translation` and
-`rotation` of the collidables a body carries, and each joint's outputs its
-`forceOutput` names.
+A `RigidBodyCollection` is a :class:`RigidSystem`: a physics world holding a
+body for each enabled `RigidBody` of the collection, and a static body for
+each collidable that is in no body but that the collection's `collider`, or a
+`Contact` sent to its `set_contacts`, names. :meth:`RigidSystem.advance` steps
+it by a frame's time, in fixed steps of :data:`STEP` seconds
+(:data:`ACCURATE_STEP` where the collection prefers accuracy), and sends what
+moved: each body's `position`, `orientation`, `linearVelocity` and
+`angularVelocity`, the `translation` and `rotation` of the collidables a body
+carries, and each joint's outputs its `forceOutput` names. This module reads
+the nodes into the engine's own records; the world is
+:class:`~OpenGLContext.physics.x3djolt.JoltRigidSystem`, which
+:func:`~OpenGLContext.physics.x3djolt.make_rigid_system` makes.
 
 What collides is what the X3D model says collides:
 
@@ -24,18 +26,20 @@ What collides is what the X3D model says collides:
 
 Two collidables of one body never collide, nor do two bodies a joint holds.
 A `CollisionSensor` finds the touches among its collider's collidables where
-they stand (:func:`detect`), without stepping anything.
+they stand, without stepping anything
+(:func:`~OpenGLContext.physics.x3djolt.make_sensing`).
 
 A collidable carried by a body is drawn and collided where the body is: its
 `translation` and `rotation` are the body's. A `CollidableOffset` places the
 collidable it holds by that collidable's own `translation` and `rotation`, in
 the body's frame. A collidable in no body is where its own fields put it.
 
-Geometry becomes a collision shape by its kind (:func:`geometry_shape`): a
-`Box`, `Sphere`, `Cylinder` or `Cone` as itself, any other geometry that has
-triangles as its mesh, which for a body that moves is the mesh's convex hull.
-A collidable reached through a `CollisionSpace` whose `useGeometry` is false
-collides as the box that bounds it.
+Geometry becomes a :class:`~OpenGLContext.physics.proxy.Proxy` by its kind
+(:func:`geometry_shape`): a `Box`, `Sphere`, `Cylinder` or `Cone` as itself,
+any other geometry that has triangles as its mesh, which for a body that moves
+is the mesh's convex hull. A collidable reached through a `CollisionSpace`
+whose `useGeometry` is false collides as the box that bounds it. A body's
+default inertia is its shapes' (:func:`OpenGLContext.physics.massprops.inertia_diagonal`).
 """
 from __future__ import annotations
 
@@ -46,19 +50,17 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Optional
 
 import numpy as np
-from omi_physics import joints as omi_joints
-from omi_physics import mathutil, model
-from omi_physics.body import make_proxy, world_aabb
-from omi_physics.collide import collide
-from omi_physics.hull import convex_hull
-from omi_physics.world import PhysicsWorld
 from vrml import cache, protofunctions
 from vrml import node as vrml_node
 from vrml.x3d import interpolation
 
-__all__ = ['ACCURATE_STEP', 'MAX_FRAME', 'MIN_SURFACE_THICKNESS', 'NOMINAL_STEP', 'STEP', 'RigidSystem', 'Touch',
-           'collidable_parts', 'contact_parameters', 'detect', 'geometry_shape', 'members',
-           'shape_of_geometry']
+from OpenGLContext.physics import massprops
+from OpenGLContext.physics.proxy import Proxy
+
+__all__ = ['ACCURATE_STEP', 'MAX_FRAME', 'MIN_SURFACE_THICKNESS', 'NOMINAL_STEP', 'STEP', 'ContactRule',
+           'RigidSystem', 'ShapePart', 'Touch', 'collidable_parts', 'contact_parameters',
+           'geometry_shape', 'members', 'shape_of_geometry']
+
 
 #: The fixed step a collection is simulated in, in seconds.
 STEP = 1.0 / 120.0
@@ -76,7 +78,7 @@ NOMINAL_STEP = 1.0 / 60.0
 
 _LEVEL = np.array([0.0, 0.0, 0.0, 1.0])
 _IDENTITY_INERTIA = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
-_SHAPE_KEY = 'x3drigid-shape'
+_SHAPE_KEY = 'x3drigid-proxy'
 #: Half the size of the box standing for the world in a contact with one body.
 _SURFACE = 500.0
 #: Where such a box waits while no contact needs it.
@@ -114,8 +116,24 @@ def _kind(node: Any) -> str:
     return str(getattr(type(node), 'PROTO', type(node).__name__))
 
 
+
+
+def turn_by(first: Any, second: Any) -> np.ndarray:
+    """The quaternion turning by `second` then by `first`, each (x, y, z, w)"""
+    return np.asarray(massprops._multiply(first, second), dtype='d')  # noqa: SLF001 the module's own quaternion product
+
+
 # -- shapes ---------------------------------------------------------------
-def geometry_shape(geometry: Any, moving: bool) -> Optional[model.Shape]:
+@dataclass(frozen=True)
+class ShapePart:
+    """One shape of a collidable or a body, placed in its frame"""
+    shape: Proxy
+    position: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    #: A unit quaternion (x, y, z, w).
+    orientation: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
+
+
+def geometry_shape(geometry: Any, moving: bool) -> Optional[Proxy]:
     """The collision shape of an X3D geometry node, in its own frame; None for none
 
     `moving` asks for the shape of a body that moves, which for a mesh is its
@@ -127,7 +145,7 @@ def geometry_shape(geometry: Any, moving: bool) -> Optional[model.Shape]:
     key = (_SHAPE_KEY, bool(moving))
     holder = cache.CACHE.getHolder(geometry, key=key)
     if holder is not None and holder.data is not None:
-        found: model.Shape = holder.data[0]
+        found: Optional[Proxy] = holder.data[0]
         return found
     shape = shape_of_geometry(geometry, moving)
     holder = cache.CACHE.holder(geometry, (shape,), key=key)
@@ -145,18 +163,18 @@ def _depend_on_fields(holder: Any, node: Any) -> None:
                 _depend_on_fields(holder, child)
 
 
-def shape_of_geometry(geometry: Any, moving: bool) -> Optional[model.Shape]:
+def shape_of_geometry(geometry: Any, moving: bool) -> Optional[Proxy]:
     """The collision shape of an X3D geometry node, worked out afresh (:func:`geometry_shape`)"""
     kind = _kind(geometry)
     if kind == 'Box':
-        return model.Shape.box(tuple(float(value) for value in geometry.size))
+        return Proxy.box(tuple(float(value) for value in geometry.size))
     if kind == 'Sphere':
-        return model.Shape.sphere(float(geometry.radius))
+        return Proxy.sphere(float(geometry.radius))
     if kind == 'Cylinder':
-        return model.Shape.cylinder(height=float(geometry.height), radius=float(geometry.radius))
+        return Proxy.cylinder(height=float(geometry.height), radius=float(geometry.radius))
     if kind == 'Cone':
-        return model.Shape(type='cylinder', height=float(geometry.height),
-                           radiusBottom=float(geometry.bottomRadius), radiusTop=0.0)
+        return Proxy.cylinder(height=float(geometry.height), radius=float(geometry.bottomRadius),
+                              radius_top=0.0)
     from OpenGLContext.scenegraph import meshdata  # noqa: PLC0415 the scenegraph's, read only for meshes
     arrays = meshdata.geometry_arrays(geometry)
     if arrays is None:
@@ -169,13 +187,13 @@ def shape_of_geometry(geometry: Any, moving: bool) -> Optional[model.Shape]:
     if not len(corners):
         return None
     if moving:
+        from OpenGLContext.physics.cooking import convex_hull  # noqa: PLC0415 cooking is read only for meshes
         hull, _faces = convex_hull(points[corners])
-        return model.Shape.convex(hull)
-    return model.Shape.trimesh(points, corners.reshape(-1, 3))
+        return Proxy.convex(hull)
+    return Proxy.trimesh(points, corners.reshape(-1, 3))
 
 
-def collidable_parts(collidable: Any, moving: bool,
-                     bounds_only: bool = False) -> list[model.ShapePart]:
+def collidable_parts(collidable: Any, moving: bool, bounds_only: bool = False) -> list[ShapePart]:
     """The shapes of a collidable, in its own frame; empty for a disabled one
 
     A `CollidableOffset`'s are those of the collidable it holds, placed by
@@ -191,37 +209,52 @@ def collidable_parts(collidable: Any, moving: bool,
             return []
         place = np.asarray(inner.translation, dtype='d')
         turn = quaternion(inner.rotation)
-        placed = []
-        for part in collidable_parts(inner, moving, bounds_only):
-            placed.append(model.ShapePart(
-                part.shape,
-                tuple(place + mathutil.quat_to_matrix(turn) @ np.asarray(part.position)),
-                tuple(mathutil.quat_mul(turn, np.asarray(part.orientation, dtype='d')))))
-        return placed
+        matrix = massprops.rotation_matrix(turn)
+        return [ShapePart(part.shape, _triple(place + matrix @ np.asarray(part.position)),
+                          _quad(turn_by(turn, part.orientation)))
+                for part in collidable_parts(inner, moving, bounds_only)]
     if kind != 'CollidableShape' or not collidable.shape:
         return []
     shape = geometry_shape(getattr(collidable.shape, 'geometry', None), moving)
     if shape is None:
         return []
     if bounds_only:
-        low, high = world_aabb(shape, (0.0, 0.0, 0.0), _LEVEL)
-        return [model.ShapePart(model.Shape.box(tuple(high - low)),
-                                tuple(0.5 * (low + high)))]
-    return [model.ShapePart(shape)]
+        low, high = massprops.bounds(shape)
+        return [ShapePart(Proxy.box(tuple(high - low)), _triple(0.5 * (low + high)))]
+    return [ShapePart(shape)]
 
 
-def single_shape(parts: Sequence[model.ShapePart]) -> Optional[model.Shape]:
+def _triple(values: Any) -> tuple[float, float, float]:
+    x, y, z = (float(value) for value in values)
+    return x, y, z
+
+
+def _quad(values: Any) -> tuple[float, float, float, float]:
+    x, y, z, w = (float(value) for value in values)
+    return x, y, z, w
+
+
+def single_shape(parts: Sequence[ShapePart]) -> Optional[Proxy]:
     """One shape made of `parts`: the part's own where there is one, unmoved; None for none
 
     A lone shape at its body's origin stays itself rather than becoming a
-    compound, so a box or a sphere keeps the narrow phase's direct tests.
+    compound, so a box or a sphere keeps the engines' direct tests.
     """
     if not parts:
         return None
-    if len(parts) == 1 and not np.any(parts[0].position) \
+    if len(parts) == 1 and not any(parts[0].position) \
             and np.allclose(parts[0].orientation, _LEVEL):
         return parts[0].shape
-    return model.Shape.compound(parts)
+    return Proxy.compound([(part.shape, part.position, part.orientation) for part in parts])
+
+
+def mesh_free(proxy: Proxy) -> bool:
+    """Whether a proxy holds no triangle mesh: whether it can be swept or cast"""
+    if proxy.kind == 'trimesh':
+        return False
+    if proxy.kind == 'compound':
+        return all(mesh_free(part) for part, _position, _turn in proxy.params['parts'])
+    return True
 
 
 def _inner_collidables(collidable: Any) -> list[Any]:
@@ -257,7 +290,33 @@ def members(collection: Any) -> list[tuple[Any, bool]]:
     return found
 
 
-def contact_parameters(source: Any) -> model.ContactParameters:
+# -- how a pair meets -----------------------------------------------------
+@dataclass(frozen=True)
+class ContactRule:
+    """How two bodies meet: a `CollisionCollection`'s or a `Contact`'s parameters
+
+    `restitution` is the bounce, applied at an approach of at least
+    `bounce_speed` m/s (None for the engine's own threshold). `frictions` are
+    the coefficients along the first and second friction directions, the
+    first along `friction_direction` where one is given. `surface_speed`
+    (m/s) and `slip` are along the same two directions. `softness` (force
+    mixing) and `error_correction` are None where the collection's own apply.
+    """
+    restitution: float = 0.0
+    bounce_speed: Optional[float] = None
+    frictions: tuple[float, float] = (0.0, 0.0)
+    friction_direction: Optional[tuple[float, float, float]] = None
+    surface_speed: tuple[float, float] = (0.0, 0.0)
+    slip: tuple[float, float] = (0.0, 0.0)
+    softness: Optional[float] = None
+    error_correction: Optional[float] = None
+
+    def reversed(self) -> ContactRule:
+        """The rule read from the other body: the surface moving the other way"""
+        return replace(self, surface_speed=(-self.surface_speed[0], -self.surface_speed[1]))
+
+
+def contact_parameters(source: Any) -> ContactRule:
     """How a `CollisionCollection` or a `Contact` says its pairs meet
 
     Each parameter applies where `appliedParameters` names it: BOUNCE the
@@ -276,12 +335,12 @@ def contact_parameters(source: Any) -> model.ContactParameters:
     slip = tuple(float(value) for value in slips)
     direction = None
     if 'USER_FRICTION' in applied and hasattr(source, 'frictionDirection'):
-        direction = tuple(float(value) for value in source.frictionDirection)
+        direction = _triple(source.frictionDirection)
     bounce = 'BOUNCE' in applied
-    return model.ContactParameters(
+    return ContactRule(
         restitution=float(source.bounce) if bounce else 0.0,
         bounce_speed=float(source.minBounceSpeed) if bounce else None,
-        friction=(first, second) if 'FRICTION_COEFFICIENT-2' in applied else first,
+        frictions=(first, second if 'FRICTION_COEFFICIENT-2' in applied else first),
         friction_direction=direction,
         surface_speed=(surface[0] if 'SPEED-1' in applied else 0.0,
                        surface[1] if 'SPEED-2' in applied else 0.0),
@@ -306,8 +365,8 @@ def _carry(body: Any, collidable: Any, place: np.ndarray, turn: np.ndarray) -> N
         inner = collidable.collidable
         inner_turn = quaternion(inner.rotation)
         _carry(body, inner,
-               place + mathutil.quat_to_matrix(turn) @ np.asarray(inner.translation, dtype='d'),
-               mathutil.quat_mul(turn, inner_turn))
+               place + massprops.rotation_matrix(turn) @ np.asarray(inner.translation, dtype='d'),
+               turn_by(turn, inner_turn))
 
 
 def carrier(collidable: Any) -> Any:
@@ -328,11 +387,11 @@ def pose_of(collidable: Any) -> tuple[np.ndarray, np.ndarray]:
     body, place, turn = found
     body_turn = quaternion(body.orientation)
     position = (np.asarray(body.position, dtype='d')
-                + mathutil.quat_to_matrix(body_turn) @ place)
-    return position, mathutil.quat_mul(body_turn, turn)
+                + massprops.rotation_matrix(body_turn) @ place)
+    return position, turn_by(body_turn, turn)
 
 
-def _moving(collidable: Any) -> bool:
+def moving(collidable: Any) -> bool:
     """Whether a collidable is carried by a body that moves"""
     body = carrier(collidable)
     return body is not None and not body.fixed
@@ -353,59 +412,38 @@ class Touch:
     depth: float
 
 
-@dataclass
-class _Placed:
-    """A collidable's proxy, kept for as long as its shape and pose are the same"""
-    shape: model.Shape
-    pose: tuple[float, ...]
-    proxy: Any
-
-
-def detect(collection: Any, kept: Optional[dict[Any, _Placed]] = None) -> list[Touch]:
-    """Where the collidables of a `CollisionCollection` touch, as they stand
-
-    Two collidables of one body are not tested. `kept` holds each
-    collidable's proxy between calls, rebuilt when its shape or its pose
-    changes.
-    """
-    if kept is None:
-        kept = {}
-    placed: list[tuple[Any, Any]] = []
+def placed_members(collection: Any) -> list[tuple[Any, Proxy, np.ndarray, np.ndarray]]:
+    """Each collidable of a collection with its shape and where it is: (node, shape, position, turn)"""
+    found = []
     for collidable, bounds in members(collection):
-        parts = collidable_parts(collidable, _moving(collidable), bounds)
-        if not parts:
-            continue
-        position, turn = pose_of(collidable)
-        shape = single_shape(parts)
-        assert shape is not None
-        pose = tuple(float(value) for value in (*position, *turn))
-        entry = kept.get(collidable)
-        if entry is None or entry.shape is not shape or entry.pose != pose:
-            entry = _Placed(shape, pose, make_proxy(shape, position, turn))
-            kept[collidable] = entry
-        placed.append((collidable, entry.proxy))
-    for gone in [node for node in kept if node not in {found for found, _ in placed}]:
-        del kept[gone]
-    if len(placed) < 2:
-        return []
-    boxes = [proxy.aabb() for _, proxy in placed]
-    low = np.array([box[0] for box in boxes])
-    high = np.array([box[1] for box in boxes])
-    touches: list[Touch] = []
-    for i in range(len(placed)):
-        near = np.nonzero(np.all(low[i + 1:] <= high[i], axis=1)
-                          & np.all(high[i + 1:] >= low[i], axis=1))[0] + i + 1
-        first, first_proxy = placed[i]
-        for j in near.tolist():
-            second, second_proxy = placed[j]
-            body = carrier(first)
-            if body is not None and body is carrier(second):
-                continue
-            for contact in collide(0, 1, first_proxy, second_proxy):
-                if contact.depth > 0.0:
-                    touches.append(Touch(first, second, np.asarray(contact.point),
-                                         np.asarray(contact.normal), float(contact.depth)))
-    return touches
+        shape = single_shape(collidable_parts(collidable, moving(collidable), bounds))
+        if shape is not None:
+            found.append((collidable, shape, *pose_of(collidable)))
+    return found
+
+
+def contact_fields(touch: Touch, collection: Any) -> dict[str, Any]:
+    """The fields of the `Contact` a `CollisionSensor` sends for one touch"""
+    found = {
+        'position': touch.point, 'contactNormal': touch.normal, 'depth': touch.depth,
+        'geometry1': touch.first, 'geometry2': touch.second,
+        'body1': carrier(touch.first), 'body2': carrier(touch.second),
+    }
+    for name in ('appliedParameters', 'bounce', 'minBounceSpeed', 'frictionCoefficients',
+                 'surfaceSpeed', 'softnessConstantForceMix', 'softnessErrorCorrection'):
+        found[name] = getattr(collection, name)
+    found['slipCoefficients'] = collection.slipFactors
+    return found
+
+
+def touched(touches: Sequence[Touch]) -> list[Any]:
+    """The collidables a set of touches involves, each once, in the order met"""
+    found: list[Any] = []
+    for touch in touches:
+        for node in (touch.first, touch.second):
+            if not any(node is other for other in found):
+                found.append(node)
+    return found
 
 
 # -- a RigidBodyCollection's world ---------------------------------------
@@ -469,19 +507,6 @@ def _same(value: Any, kept: np.ndarray) -> bool:
     return bool(np.array_equal(np.asarray(value, dtype=np.float32).ravel(), kept))
 
 
-def _rotations(turns: np.ndarray) -> np.ndarray:
-    """Unit quaternions (n, 4) as X3D rotations (n, 4), each angle in [0, pi]"""
-    turns = turns / np.linalg.norm(turns, axis=1, keepdims=True)
-    turns = np.where(turns[:, 3:4] < 0.0, -turns, turns)
-    angle = 2.0 * np.arccos(np.clip(turns[:, 3], -1.0, 1.0))
-    length = np.linalg.norm(turns[:, :3], axis=1)
-    axis = np.divide(turns[:, :3], length[:, None], out=np.zeros((len(turns), 3)),
-                     where=length[:, None] >= 1e-12)
-    axis[length < 1e-12] = (0.0, 0.0, 1.0)
-    angle[length < 1e-12] = 0.0
-    return np.concatenate([axis, angle[:, None]], axis=1)
-
-
 def _key(value: Any) -> bytes:
     """A field's value as bytes, to compare with what it was"""
     return np.asarray(value, dtype=np.float32).tobytes()
@@ -490,6 +515,15 @@ def _key(value: Any) -> bytes:
 def _floats(values: Any) -> tuple[float, ...]:
     """A field's value as a tuple of floats"""
     return tuple(float(value) for value in np.asarray(values, dtype='d').ravel())
+
+
+def joint_signature(joint: Any) -> tuple[Any, ...]:
+    """What a joint is built from: its bodies, anchor, axes and motor axes"""
+    return (joint, joint.body1, joint.body2,
+            *(_key(getattr(joint, name)) for name in
+              ('anchorPoint', 'axis', 'axis1', 'axis2', 'motor1Axis', 'motor2Axis', 'motor3Axis')
+              if hasattr(joint, name)),
+            getattr(joint, 'enabledAxes', None))
 
 
 def _suspension(force_mix: float, error_correction: float) -> tuple[float, float]:
@@ -510,18 +544,21 @@ def _damping(factor: float) -> float:
 
 
 class RigidSystem:
-    """A `RigidBodyCollection` simulated on omi_physics
+    """A `RigidBodyCollection` read from its nodes, for an engine's world to simulate
 
-    Built from the collection's nodes at the first :meth:`advance`, and again
-    whenever what it is built from changes: the bodies, their geometry, mass
-    and enabled state, the joints, the collider. Field values that change from
-    frame to frame -- positions and velocities sent in, forces, torques,
-    gravity, motor speeds -- are read every frame.
+    The world is built from the collection's nodes at the first
+    :meth:`advance`, and again whenever what it is built from changes
+    (:meth:`signature`): the bodies, their geometry, centre of mass and
+    enabled state, the joints' bodies, anchors and axes, the collider. Field
+    values that change from frame to frame -- positions and velocities sent
+    in, mass and inertia, forces, torques, gravity, motor speeds, stops, the
+    collider's bounce and friction -- are read every frame. An engine's subclass provides :meth:`build`,
+    :meth:`advance`, :meth:`awake`, :meth:`_held_index`, :meth:`_surface`,
+    :meth:`_park_surfaces` and :meth:`_joint_values`.
     """
 
     def __init__(self, collection: Any) -> None:
         self.collection = collection
-        self.world: Optional[PhysicsWorld] = None
         self.bodies: list[_Body] = []
         self.joints: list[_Joint] = []
         #: World index -> the collidables there.
@@ -531,8 +568,8 @@ class RigidSystem:
         self._signature: Any = None
         self._waiting = 0.0
         self._collider: set[Any] = set()
-        self._collider_parameters: Optional[model.ContactParameters] = None
-        self._routed: dict[tuple[int, int], model.ContactParameters] = {}
+        self._collider_parameters: Optional[ContactRule] = None
+        self._routed: dict[tuple[int, int], ContactRule] = {}
         #: The `Contact` nodes sent to `set_contacts` since the last frame.
         self.contacts: list[Any] = []
         #: Static bodies standing for the world in contacts that name one body.
@@ -569,51 +606,29 @@ class RigidSystem:
         for body in self._bodies():
             density = body.massDensityModel
             moving = not body.fixed
-            bodies.append((body, body.fixed, float(body.mass), _key(body.centerOfMass),
-                           _key(body.inertia), density,
+            bodies.append((body, body.fixed, _key(body.centerOfMass), density,
                            None if not density else geometry_shape(density, True),
                            tuple(self._collidable_signature(collidable, moving)
                                  for collidable in body.geometry if collidable)))
-        joints = []
-        for joint in self.collection.joints:
-            if not joint:
-                continue
-            joints.append((joint, joint.body1, joint.body2,
-                           *(_key(getattr(joint, name)) for name in
-                             ('anchorPoint', 'axis', 'axis1', 'axis2', 'motor1Axis',
-                              'motor2Axis', 'motor3Axis') if hasattr(joint, name)),
-                           getattr(joint, 'enabledAxes', None)))
+        joints = tuple(joint_signature(joint) for joint in self.collection.joints if joint)
         collider = self.collection.collider
-        return (tuple(bodies), tuple(joints), collider,
+        return (tuple(bodies), joints, collider,
                 tuple((node, bounds, self._collidable_signature(node, False))
                       for node, bounds in members(collider)))
 
-    # -- building ---------------------------------------------------------
-    def build(self) -> None:
-        """Make the world from the collection's nodes, as they stand"""
+    def _forget_carried(self) -> None:
+        """Let go of the collidables the bodies of the last build carried"""
         for entry in self.bodies:
             for collidable in entry.collidables:
                 if carrier(collidable) is entry.node:
                     del _CARRIED[collidable]
-        self.world = world = PhysicsWorld(sleep_enabled=True)
-        self.bodies, self.joints, self.held, self.free = [], [], {}, {}
-        self._surfaces, self._surfaces_used = [], 0
-        for node in self._bodies():
-            self._add_body(world, node)
-        for collidable, bounds in members(self.collection.collider):
-            self._held_index(collidable, bounds)
-        by_node = {entry.node: entry.index for entry in self.bodies}
-        for node in self.collection.joints:
-            if node:
-                self._add_joint(world, node, by_node)
-        world.set_pair_rule(self._rule)
 
-    def _add_body(self, world: PhysicsWorld, node: Any) -> None:
-        """Put one X3D body into the world"""
+    def _body_entry(self, node: Any) -> tuple[_Body, Optional[Proxy]]:
+        """A body's entry, its collidables carried, and its shape about its centre of mass"""
         moving = not node.fixed
         com = np.asarray(node.centerOfMass, dtype='d')
-        parts: list[model.ShapePart] = []
         entry = _Body(node, -1, com)
+        parts: list[ShapePart] = []
         for collidable in node.geometry:
             if not collidable:
                 continue
@@ -622,29 +637,12 @@ class RigidSystem:
                 entry.collidables.add(held)
             _carry(node, collidable, np.zeros(3), _LEVEL.copy())
             for part in collidable_parts(collidable, moving):
-                parts.append(model.ShapePart(part.shape,
-                                             tuple(np.asarray(part.position) - com),
-                                             part.orientation))
-        shape = single_shape(parts)
-        motion = model.Motion(type=model.DYNAMIC if moving else model.STATIC,
-                              mass=max(float(node.mass), 1e-9),
-                              inertiaDiagonal=self._inertia(node, shape))
-        collider = None
-        if shape is not None:
-            collider = model.Collider(shape=world.add_shape(shape))
-        turn = quaternion(node.orientation)
-        origin = np.asarray(node.position, dtype='d')
-        entry.index = world.add_body(motion, collider=collider,
-                                     position=origin + mathutil.quat_to_matrix(turn) @ com,
-                                     orientation=turn, handle=node)
-        self._set_velocity(entry, np.asarray(node.linearVelocity, dtype='d'),
-                           np.asarray(node.angularVelocity, dtype='d'))
-        entry.sent = {name: _kept(getattr(node, name)) for name in _BODY_OUTPUTS}
-        self.held[entry.index] = set(entry.collidables)
-        self.bodies.append(entry)
+                parts.append(ShapePart(part.shape, _triple(np.asarray(part.position) - com),
+                                       part.orientation))
+        return entry, single_shape(parts)
 
     @staticmethod
-    def _inertia(node: Any, shape: Optional[model.Shape]) -> tuple[float, float, float]:
+    def _inertia(node: Any, shape: Optional[Proxy]) -> tuple[float, float, float]:
         """The diagonal of a body's inertia: the field's, or worked out from its shapes
 
         X3D's default, the identity, asks for the inertia of the
@@ -655,215 +653,24 @@ class RigidSystem:
         given = _floats(node.inertia)
         mass = max(float(node.mass), 1e-9)
         if given == _IDENTITY_INERTIA or len(given) != 9:
-            from omi_physics.massprops import inertia_diagonal  # noqa: PLC0415 beside its use
             density = node.massDensityModel
             source = (geometry_shape(density, True) if density else shape)
             if source is not None:
-                diagonal = inertia_diagonal(source, mass)
+                diagonal = massprops.inertia_diagonal(source, mass)
                 if diagonal.any():
                     return float(diagonal[0]), float(diagonal[1]), float(diagonal[2])
         return given[0], given[4], given[8]
 
-    def _held_index(self, collidable: Any, bounds: bool = False) -> Optional[int]:
-        """The world index of what holds a collidable, adding a static body for a free one"""
-        for entry in self.bodies:
-            if collidable in entry.collidables:
-                return entry.index
-        found = self.free.get(collidable)
-        if found is not None:
-            return found
-        assert self.world is not None
-        shape = single_shape(collidable_parts(collidable, False, bounds))
-        if shape is None:
-            return None
-        world = self.world
-        position, turn = pose_of(collidable)
-        index = world.add_body(model.Motion(type=model.STATIC), collider=model.Collider(
-            shape=world.add_shape(shape)),
-            position=position, orientation=turn, handle=collidable)
-        self.free[collidable] = index
-        self.held[index] = set(_inner_collidables(collidable))
-        return index
-
-    def _add_joint(self, world: PhysicsWorld, node: Any, by_node: dict[Any, int]) -> None:
-        """Put one X3D joint into the world, where both its bodies are in it"""
-        ends = []
-        for body in (node.body1, node.body2):
-            if not body:
-                ends.append(-1)
-            elif body in by_node:
-                ends.append(by_node[body])
-            else:
-                return
-        if ends == [-1, -1]:
-            return
-        a, b = ends
-        kind = _kind(node)
-        joint: Any
-        if kind == 'BallJoint':
-            joint = omi_joints.BallJoint(a, b, anchor=_floats(node.anchorPoint))
-        elif kind == 'SingleAxisHingeJoint':
-            joint = omi_joints.HingeJoint(a, b, anchor=_floats(node.anchorPoint),
-                                          axis=_floats(node.axis))
-        elif kind == 'DoubleAxisHingeJoint':
-            joint = omi_joints.TwoAxisHingeJoint(a, b, anchor=_floats(node.anchorPoint),
-                                                 axis1=_floats(node.axis1),
-                                                 axis2=_floats(node.axis2))
-        elif kind == 'SliderJoint':
-            joint = omi_joints.SliderJoint(a, b, axis=_floats(node.axis))
-        elif kind == 'UniversalJoint':
-            joint = omi_joints.UniversalJoint(a, b, anchor=_floats(node.anchorPoint),
-                                              axis1=_floats(node.axis1),
-                                              axis2=_floats(node.axis2))
-        elif kind == 'MotorJoint':
-            count = min(max(int(node.enabledAxes), 0), 3)
-            axes = [_floats(getattr(node, 'motor%dAxis' % (number + 1)))
-                    for number in range(count)]
-            joint = omi_joints.MotorJoint(a, b, axes=axes, torques=[0.0] * count)
-        else:
-            return
-        entry = _Joint(node, joint, kind)
-        self._joint_settings(entry)
-        world.add_joint_constraint(joint)
-        self.joints.append(entry)
-
-    # -- each frame -------------------------------------------------------
-    def _joint_settings(self, entry: _Joint) -> None:
-        """Give an omi joint its X3D joint's stops, motors and forces as they are now"""
-        node, joint, kind = entry.node, entry.joint, entry.kind
-        joint.erp = float(self.collection.errorCorrection)
-        joint.cfm = float(self.collection.constantForceMix)
-        if kind == 'SingleAxisHingeJoint':
-            low, high = float(node.minAngle), float(node.maxAngle)
-            if low <= -math.pi and high >= math.pi:
-                low, high = -math.inf, math.inf
-            joint.stops = omi_joints.Stops(low, high, float(node.stopBounce),
-                                            float(node.stopErrorCorrection))
-        elif kind == 'DoubleAxisHingeJoint':
-            low, high = float(node.minAngle1), float(node.maxAngle1)
-            if low <= -math.pi and high >= math.pi:
-                low, high = -math.inf, math.inf
-            joint.stops1 = omi_joints.Stops(low, high, float(node.stop1Bounce),
-                                             float(node.stop1ErrorCorrection),
-                                             float(node.stop1ConstantForceMix))
-            joint.motor1_speed = float(node.desiredAngularVelocity1)
-            joint.motor1_torque = float(node.maxTorque1)
-            joint.motor2_speed = float(node.desiredAngularVelocity2)
-            joint.motor2_torque = float(node.maxTorque2)
-            joint.suspension_stiffness, joint.suspension_damping = _suspension(
-                float(node.suspensionForce), float(node.suspensionErrorCorrection))
-        elif kind == 'SliderJoint':
-            joint.stops = omi_joints.Stops(float(node.minSeparation),
-                                            float(node.maxSeparation), float(node.stopBounce),
-                                            float(node.stopErrorCorrection))
-            joint.force = float(node.sliderForce)
-        elif kind == 'MotorJoint':
-            joint.torques = [float(getattr(node, 'axis%dTorque' % (number + 1)))
-                             for number in range(len(joint.axes_world))]
-
-    def _set_velocity(self, entry: _Body, linear: np.ndarray, angular: np.ndarray) -> None:
-        """Set a body moving: `linear` is the velocity of its centre of mass"""
-        assert self.world is not None
-        world, index = self.world, entry.index
-        if entry.node.fixed:
-            return
-        world.linear_velocity[index] = linear
-        world.angular_velocity[index] = angular
-        world.wake(index)
-
-    def _read_inputs(self) -> None:
-        """Apply what was sent to the bodies, and the settings read every frame"""
-        world = self.world
-        assert world is not None
-        collection = self.collection
-        gravity = np.asarray(collection.gravity, dtype='d')
-        strength = float(np.linalg.norm(gravity))
-        world.gravity = model.Gravity(gravity=strength, direction=tuple(
-            gravity / strength if strength > 0.0 else (0.0, -1.0, 0.0)))
-        for entry in self.bodies:
-            node, index, sent = entry.node, entry.index, entry.sent
-            position, turn = node.position, node.orientation
-            if not _same(position, sent['position']) or not _same(turn, sent['orientation']):
-                quat = quaternion(turn)
-                world.place_body(index, np.asarray(position, dtype='d')
-                                 + mathutil.quat_to_matrix(quat) @ entry.com, quat)
-                sent['position'], sent['orientation'] = _kept(position), _kept(turn)
-                world.wake(index)
-                entry.moved, entry.resting = True, False
-            linear, angular = node.linearVelocity, node.angularVelocity
-            if not _same(linear, sent['linearVelocity']) or \
-                    not _same(angular, sent['angularVelocity']):
-                self._set_velocity(entry, np.asarray(linear, dtype='d'),
-                                   np.asarray(angular, dtype='d'))
-                sent['linearVelocity'], sent['angularVelocity'] = _kept(linear), _kept(angular)
-                entry.resting = False
-            self._body_settings(entry)
-        for collidable, index in self.free.items():
-            placed, facing = pose_of(collidable)
-            if np.any(world.position[index] != placed) or \
-                    np.any(world.orientation[index] != facing):
-                world.place_body(index, placed, facing)
-        for joint in self.joints:
-            self._joint_settings(joint)
-
-    def _body_settings(self, entry: _Body) -> None:
-        """A body's forces, damping, gravity, rotation and sleep, as its fields are now"""
-        world, node, index = self.world, entry.node, entry.index
-        assert world is not None
-        if node.fixed:
-            return
-        source = node if node.autoDisable else self.collection
-        settings = (_key(node.forces), _key(node.torques), node.useGlobalGravity,
-                    node.autoDamp, float(node.linearDampingFactor),
-                    float(node.angularDampingFactor), node.useFiniteRotation,
-                    source.autoDisable, float(source.disableLinearSpeed),
-                    float(source.disableAngularSpeed), float(source.disableTime))
-        if settings == entry.settings:
-            return
-        entry.settings = settings
-        force = np.asarray(node.forces, dtype='d').reshape(-1, 3).sum(axis=0)
-        torque = np.asarray(node.torques, dtype='d').reshape(-1, 3).sum(axis=0)
-        # Set only when changed: setting one wakes the body.
-        if np.any(world.force[index] != force):
-            world.set_force(index, force)
-        if np.any(world.torque[index] != torque):
-            world.set_torque(index, torque)
-        world.gravity_factor[index] = 1.0 if node.useGlobalGravity else 0.0
-        damped = bool(node.autoDamp)
-        world.linear_damping[index] = _damping(node.linearDampingFactor) if damped else 0.0
-        world.angular_damping[index] = _damping(node.angularDampingFactor) if damped else 0.0
-        world.set_exact_rotation(index, bool(node.useFiniteRotation))
-        if source.autoDisable:
-            world.set_sleep(index, float(source.disableLinearSpeed),
-                            float(source.disableAngularSpeed), float(source.disableTime))
-        else:
-            world.set_sleep(index, after=math.inf)
-
-    def _solver_settings(self, step: float) -> None:
-        """The collection's iterations, corrections and force mixing, as they are now"""
-        world, collection = self.world, self.collection
-        assert world is not None
-        solver = world.contact_solver
-        iterations = max(int(collection.iterations), 1)
-        solver.velocity_iterations = iterations
-        world.joint_iterations = iterations
-        solver.correction = float(collection.errorCorrection)
-        solver.softness = max(float(collection.constantForceMix), 0.0)
-        solver.slop = max(float(collection.contactSurfaceThickness), MIN_SURFACE_THICKNESS)
-        speed = float(collection.maxCorrectionSpeed)
-        solver.max_correction = speed * step if speed > 0.0 else math.inf
-
+    # -- contacts ---------------------------------------------------------
     def _read_contacts(self) -> None:
         """The pairs the `Contact` nodes sent since the last frame name, and how they meet"""
-        world = self.world
-        assert world is not None
         collider = self.collection.collider
         self._collider = set()
         self._collider_parameters = None
         if collider and collider.enabled:
             self._collider = {node for node, _ in members(collider)}
             self._collider_parameters = contact_parameters(collider)
-        routed: dict[tuple[int, int], model.ContactParameters] = {}
+        routed: dict[tuple[int, int], ContactRule] = {}
         by_body = {entry.node: entry.index for entry in self.bodies}
         for contact in self.contacts:
             if not contact:
@@ -886,119 +693,60 @@ class RigidSystem:
                 ends = [surface if end is None else end for end in ends]
             one, other = (int(end) for end in ends if end is not None)
             if one != other:
-                routed[(one, other)] = contact_parameters(contact)
+                routed[(one, other)] = rule = contact_parameters(contact)
+                self._pair(one, other, rule)
         self.contacts = []
         self._routed = routed
-        for index in self._surfaces[self._surfaces_used:]:
-            world.place_body(index, _PARKED)
+        self._park_surfaces(self._surfaces[self._surfaces_used:])
         self._surfaces_used = 0
 
-    def _surface(self, point: np.ndarray, into: np.ndarray) -> int:
-        """A static body whose face passes through `point`, solid along `into`, for this frame"""
-        world = self.world
-        assert world is not None
-        length = float(np.linalg.norm(into))
-        into = into / length if length > 1e-12 else np.array([0.0, -1.0, 0.0])
-        if self._surfaces_used < len(self._surfaces):
-            index = self._surfaces[self._surfaces_used]
-        else:
-            index = world.add_body(model.Motion(type=model.STATIC), collider=model.Collider(
-                shape=world.add_shape(model.Shape.box((2 * _SURFACE,) * 3))),
-                position=_PARKED)
-            self._surfaces.append(index)
-            self.held[index] = set()
-        self._surfaces_used += 1
-        # The box's +y face is turned to face away from the solid.
-        world.place_body(index, point + into * _SURFACE, _turn_onto((0.0, 1.0, 0.0), -into))
-        return index
+    def _pair(self, one: int, other: int, rule: ContactRule) -> None:
+        """Tell the world that the bodies `one` and `other` meet by `rule` over the next frame"""
 
-    def _rule(self, a: int, b: int) -> Any:
-        """Whether, and how, the bodies at `a` and `b` meet this step"""
+    def _rule(self, a: int, b: int) -> ContactRule | bool:
+        """How the bodies at `a` and `b` meet this step; False where they do not"""
         found = self._routed.get((a, b))
         if found is not None:
             return found
         found = self._routed.get((b, a))
         if found is not None:
-            return replace(found, surface_speed=(-found.surface_speed[0],
-                                                 -found.surface_speed[1]))
+            return found.reversed()
         if self._collider_parameters is not None and \
                 self.held.get(a, set()) & self._collider and \
                 self.held.get(b, set()) & self._collider:
             return self._collider_parameters
         return False
 
+    # -- what an engine provides ------------------------------------------
+    def build(self) -> None:
+        """Make the world from the collection's nodes, as they stand"""
+        raise NotImplementedError
+
     def advance(self, seconds: float) -> bool:
         """Step the collection by `seconds` and send what moved; whether anything is awake"""
-        if not self.collection.enabled:
-            return False
-        signature = self.signature()
-        if self.world is None or signature != self._signature:
-            self.build()
-            self._signature = signature
-        world = self.world
-        assert world is not None
-        self._read_inputs()
-        self._read_contacts()
-        step = ACCURATE_STEP if self.collection.preferAccuracy else STEP
-        self._solver_settings(step)
-        self._waiting = min(self._waiting + max(float(seconds), 0.0), MAX_FRAME)
-        while self._waiting >= step:
-            world.step(step)
-            self._waiting -= step
-        self._send()
-        return self.awake()
+        raise NotImplementedError
 
     def awake(self) -> bool:
         """Whether any body of the collection is moving"""
-        world = self.world
-        if world is None:
-            return False
-        return any(bool(world.awake[entry.index]) and not entry.node.fixed
-                   for entry in self.bodies)
+        raise NotImplementedError
+
+    def _held_index(self, collidable: Any, bounds: bool = False) -> Optional[int]:
+        """The world index of what holds a collidable, adding a static body for a free one"""
+        raise NotImplementedError
+
+    def _surface(self, point: np.ndarray, into: np.ndarray) -> int:
+        """A static body whose face passes through `point`, solid along `into`, for this frame"""
+        raise NotImplementedError
+
+    def _park_surfaces(self, unused: list[int]) -> None:
+        """Move the surfaces no contact needs this frame out of the way"""
+        raise NotImplementedError
+
+    def _joint_values(self, entry: _Joint) -> dict[str, Any]:
+        """Every output a joint offers, as the bodies stand"""
+        raise NotImplementedError
 
     # -- what is sent -----------------------------------------------------
-    def _send(self) -> None:
-        """Set each body's and joint's outputs where they changed
-
-        A body asleep since it was last sent sends nothing. The values are
-        worked out for every moving body at once; a field is set only where
-        its value differs from what it holds.
-        """
-        world = self.world
-        assert world is not None
-        awake = world.awake
-        movers = [entry for entry in self.bodies
-                  if not entry.node.fixed and not (entry.resting and not awake[entry.index])]
-        if movers:
-            rows = np.array([entry.index for entry in movers], dtype=np.intp)
-            turns = np.asarray(world.orientation[rows], dtype='d')
-            arms = np.einsum('nij,nj->ni', mathutil.quat_to_matrix(turns),
-                             np.array([entry.com for entry in movers], dtype='d'))
-            values = {
-                'position': np.asarray(world.position[rows], dtype='d') - arms,
-                'orientation': _rotations(turns),
-                'linearVelocity': np.asarray(world.linear_velocity[rows], dtype='d'),
-                'angularVelocity': np.asarray(world.angular_velocity[rows], dtype='d'),
-            }
-            for row, entry in enumerate(movers):
-                node, sent = entry.node, entry.sent
-                for name in _BODY_OUTPUTS:
-                    value = values[name][row]
-                    if not _same(value, sent[name]):
-                        setattr(node, name, value)
-                        sent[name] = _kept(getattr(node, name))
-                        if name in ('position', 'orientation'):
-                            entry.moved = True
-                entry.resting = not awake[entry.index]
-        for entry in self.bodies:
-            if entry.moved:
-                for collidable in entry.carried:
-                    collidable.translation = entry.node.position
-                    collidable.rotation = entry.node.orientation
-                entry.moved = False
-        for joint in self.joints:
-            self._send_joint(joint)
-
     def _send_joint(self, entry: _Joint) -> None:
         """Set a joint's outputs that its `forceOutput` names"""
         names = [str(name) for name in entry.node.forceOutput]
@@ -1016,56 +764,10 @@ class RigidSystem:
                 setattr(entry.node, name, value)
                 entry.sent[name] = flat
 
-    def _joint_values(self, entry: _Joint) -> dict[str, Any]:
-        """Every output a joint offers, as the bodies stand"""
-        world, joint, kind, node = self.world, entry.joint, entry.kind, entry.node
-        found: dict[str, Any] = {}
-        if hasattr(joint, 'anchor_a') and hasattr(joint, 'local_a'):
-            found['body1AnchorPoint'] = joint.anchor_a(world)
-            found['body2AnchorPoint'] = joint.anchor_b(world)
-        if kind == 'SingleAxisHingeJoint':
-            found['angle'] = joint.angle(world)
-            found['angleRate'] = joint.angle_rate(world)
-        elif kind in ('DoubleAxisHingeJoint', 'UniversalJoint'):
-            found['body1Axis'] = joint.axis1(world)
-            found['body2Axis'] = joint.axis2(world)
-            if kind == 'DoubleAxisHingeJoint':
-                found['hinge1Angle'] = joint.angle1(world)
-                found['hinge1AngleRate'] = joint.angle1_rate(world)
-                found['hinge2Angle'] = joint.angle2(world)
-                found['hinge2AngleRate'] = joint.angle2_rate(world)
-        elif kind == 'SliderJoint':
-            found['separation'] = joint.separation(world)
-            found['separationRate'] = joint.separation_rate(world)
-        elif kind == 'MotorJoint':
-            for number in range(len(joint.axes_world)):
-                found['motor%dAngle' % (number + 1)] = (
-                    joint.angle(world, number) if node.autoCalc
-                    else float(getattr(node, 'axis%dAngle' % (number + 1))))
-                found['motor%dAngleRate' % (number + 1)] = joint.angle_rate(world, number)
-        return found
+    def joint_values(self, entry: _Joint) -> dict[str, Any]:
+        """Every output the joint `entry` offers, by field name, as the bodies stand
 
-
-def contact_fields(touch: Touch, collection: Any) -> dict[str, Any]:
-    """The fields of the `Contact` a `CollisionSensor` sends for one touch"""
-    found = {
-        'position': touch.point, 'contactNormal': touch.normal, 'depth': touch.depth,
-        'geometry1': touch.first, 'geometry2': touch.second,
-        'body1': carrier(touch.first), 'body2': carrier(touch.second),
-    }
-    for name in ('appliedParameters', 'bounce', 'minBounceSpeed', 'frictionCoefficients',
-                 'surfaceSpeed', 'softnessConstantForceMix', 'softnessErrorCorrection'):
-        found[name] = getattr(collection, name)
-    found['slipCoefficients'] = collection.slipFactors
-    return found
-
-
-def touched(touches: Sequence[Touch]) -> list[Any]:
-    """The collidables a set of touches involves, each once, in the order met"""
-    found: list[Any] = []
-    for touch in touches:
-        for node in (touch.first, touch.second):
-            if not any(node is other for other in found):
-                found.append(node)
-    return found
-
+        The values are what the joint's ``forceOutput`` would send; a rate
+        is measured from the last call where the engine has no reading of it.
+        """
+        return self._joint_values(entry)

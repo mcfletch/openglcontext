@@ -1,0 +1,39 @@
+#VRML V2.0 utf8
+# META "title" "Switch"
+# META "description" "Draws one of its children, chosen by whichChoice; the others are kept and not drawn, and -1 draws none."
+
+Viewpoint {
+  orientation -0.6008 0.7867 0.1418 0.583
+  position 1.8 1.5 3.6
+}
+Switch {
+  whichChoice 1
+  choice [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.8 0.3 0.2
+        }
+      }
+      geometry Box { }
+    }
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.25 0.6 0.85
+          shininess 0.5
+          specularColor 0.8 0.8 0.8
+        }
+      }
+      geometry Sphere { }
+    }
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.4 0.75 0.3
+        }
+      }
+      geometry Cone { }
+    }
+  ]
+}

@@ -68,14 +68,24 @@ def run_test(script_path, timeout=TIMEOUT):
         return (False, "Exception: %s" % str(e))
 
 
+def get_scripts():
+    """The scripts in this directory and in each tutorial path under it"""
+    candidates = (
+        glob.glob(os.path.join(HERE, '*.py'))
+        + glob.glob(os.path.join(HERE, 'tutorials', '**', '*.py'), recursive=True)
+    )
+    return sorted(
+        path for path in candidates
+        if not os.path.basename(path).startswith('_')
+        and os.path.basename(path) not in SKIP_SET
+    )
+
+
 def main():
-    scripts = sorted([
-        os.path.join(HERE, f) for f in os.listdir(HERE)
-        if f.endswith('.py') and not f.startswith('_') and f not in SKIP_SET
-    ])
+    scripts = get_scripts()
 
     if len(sys.argv) > 1:
-        # Run specific tests
+        # Run specific tests, named by path under tests/ (tutorials/nehe/nehe6.py)
         scripts = [os.path.join(HERE, s) for s in sys.argv[1:]]
 
     passed = []

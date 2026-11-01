@@ -139,7 +139,7 @@ Lighting and shadows
      - Percentage-closer filtering on the shadow lookup: softer edges, more
        samples per fragment.
    * - ``OPENGLCONTEXT_SHADOW_CASCADES``
-     - integer 0–4
+     - integer 0 to 4
      - ``0``
      - Number of cascades for a directional light; more cascades give sharper
        shadows at a distance. ``0`` lets the pass choose from available video
@@ -152,13 +152,13 @@ Lighting and shadows
        cascades are fitted to that distance and the shadows fade out over its
        last fifth. ``0`` fits them to the farthest caster.
    * - ``OPENGLCONTEXT_SHADOW_FAR_INTERVAL``
-     - integer 1–4
+     - integer 1 to 4
      - ``1``
      - Frames between draws of each cascade beyond the nearest. ``1`` draws every
        cascade every frame; above ``1`` they are drawn in turn and used again while the
        slice each serves stays inside it. See :ref:`drawing the far cascades less often <shadows-far-interval>`.
    * - ``OPENGLCONTEXT_MAXIMUM_LIGHTS``
-     - integer 0–8
+     - integer 0 to 8
      - ``8``
      - The number of lights the shader binds in one frame, the headlight
        among them. A lower value is faster in a scene with many lights. The shader's own maximum still
@@ -367,9 +367,27 @@ How much work per frame
        on them instead of failing. See :doc:`Rendering offscreen <offscreen>`.
    * - ``OPENGLCONTEXT_PHYSICS``
      - yes/no
-     - off
-     - Makes the viewer walk the scene with gravity and collision instead of
-       framing it. See :doc:`Physics <physics>`.
+     - the service on; the viewer not walking
+     - The default of ``PhysicsDefinition.enabled``: ``no`` starts no world,
+       makes no colliders and leaves every body where it was put. The
+       viewer reads the same variable to walk the scene with gravity and
+       collision instead of framing it, and ``yes`` turns that on. See
+       :doc:`Physics <physics>`.
+   * - ``OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS``
+     - ``log`` or ``raise``
+     - ``log``
+     - The default of ``PhysicsDefinition.handlerErrors``: ``raise`` raises an
+       exception a physics handler, step code or a posted function raised from
+       the next ``frame`` or ``step``, after logging it. The testing plugin sets
+       ``raise`` where the variable is unset. See :doc:`Physics <physics>`.
+   * - ``OPENGLCONTEXT_PHYSICS_MODE``
+     - ``thread`` or ``inline``
+     - ``thread``
+     - The default of ``PhysicsDefinition.mode``: ``thread`` steps the world on
+       a thread of its own, ``inline`` steps it in the frame. A bounded capture
+       and a recorded or replayed session step inline whatever this says. A
+       value that is neither is reported and ``thread`` is used. See
+       :ref:`physics-service-modes`.
 
 The window, capture and the interface
 -------------------------------------

@@ -6,17 +6,17 @@ parsed by everything that opens the world, so those travel as a binary table
 beside the tileset with only its name and count in ``extras``
 (:func:`~OpenGLContext.scenegraph.props.props_table`).
 :func:`~OpenGLContext.loaders.tiles3d.props.baked_props` reads either form, and
-``PropColliders.baked`` stands them up.
+``PropSource.baked`` stands them up.
 """
 import json
 
 import numpy as np
 import pytest
-from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.loaders.tiles3d.props import baked_props
-from OpenGLContext.physics.props import PropColliders
+from OpenGLContext.physics.props import PropSource
 from OpenGLContext.scenegraph.props import Prop, props_from_table, props_table
+from tests.unit._streamed import Streamed
 
 STONES = [Prop('granite', (float(i), 0.5 * i, -2.0 * i), yaw=0.1 * i,
                scale=1.0 + 0.01 * i, radius=0.3 + 0.001 * i,
@@ -80,11 +80,18 @@ class TestWhatAWorldCarries:
 
 
 class TestStandingThemUp:
-    def test_the_colliders_are_built_from_the_world(self, tmp_path):
+    def test_the_bodies_are_built_from_the_world(self, tmp_path):
         (tmp_path / 'stones.npz').write_bytes(props_table(STONES))
         extras = {'stones': {'table': 'stones.npz', 'count': len(STONES)}}
-        colliders = PropColliders.baked(PhysicsWorld(), extras, 'stones',
-                                        str(tmp_path), reach=5.0)
-        assert len(colliders.props) == len(STONES)
-        colliders.update((0.0, 0.0, 0.0))
-        assert 0 < len(colliders.standing) < len(STONES)
+        served = Streamed(PropSource.baked(extras, 'stones', str(tmp_path), reach=5.0))
+        assert len(served.props) == len(STONES)
+        served.update((0.0, 0.0, 0.0))
+        assert 0 < len(served.standing) < len(STONES)
+        assert served.physics.counts.bodies == len(served.standing)
+
+    def test_a_source_is_built_from_the_world_too(self, tmp_path):
+        (tmp_path / 'stones.npz').write_bytes(props_table(STONES))
+        extras = {'stones': {'table': 'stones.npz', 'count': len(STONES)}}
+        source = PropSource.baked(extras, 'stones', str(tmp_path), reach=5.0)
+        assert len(source.props) == len(STONES)
+        assert 0 < len(source.update((0.0, 0.0, 0.0)).add) < len(STONES)

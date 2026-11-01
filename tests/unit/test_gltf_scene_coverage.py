@@ -7,7 +7,7 @@ back-compat helper, and the non-dict light guard. Pure numpy, no GL.
 import numpy as np
 import pytest
 
-pygltflib = pytest.importorskip("pygltflib")
+import pygltflib
 from pygltflib import Accessor, BufferView, Buffer
 
 from OpenGLContext.loaders.gltf import scene as gs

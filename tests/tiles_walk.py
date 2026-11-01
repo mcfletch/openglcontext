@@ -2,8 +2,8 @@
 """Walk/fly the streamed procedural landscape (first-person, physics-driven).
 
 Spawns an avatar on the terrain and lets you walk it with gravity + collision, or
-toggle free-fly. The terrain's per-tile trimesh colliders stream in with the visuals,
-so you walk on exactly what you see; switch to fly, rise up, then switch back to walk
+toggle free-fly. The terrain's per-tile trimesh bodies stream into the context's
+physics service with the visuals, so you walk on exactly what you see; switch to fly, rise up, then switch back to walk
 and drop to the surface.
 
     W / A / S / D      walk forward / left / back / right
@@ -25,12 +25,12 @@ os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
 
 import numpy as np
 from OpenGLContext.context import Context as BaseContext
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph.basenodes import (
     sceneGraph, DirectionalLight, Background,
 )
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
-from omi_physics.world import PhysicsWorld
-from omi_physics import model
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
 from OpenGLContext.loaders.tiles3d import procedural as P
 from OpenGLContext.loaders.tiles3d.frustum import view_projection
@@ -55,6 +55,9 @@ def _walkable_spawn():
 
 
 class TestContext(BaseContext):
+    # The tiles' bodies come from the terrain's colliders, not from the scene's shapes.
+    contextDefinition = ContextDefinition(physics=PhysicsDefinition(colliders='explicit'))
+
     def OnInit(self):
         print("Walk the landscape: WASD move, QE turn, G toggle fly, Space jump")
         tileset = os.environ.get("OGLC_TILES_TILESET")
@@ -62,10 +65,8 @@ class TestContext(BaseContext):
             tileset = P.build_terrain_tileset(
                 tempfile.mkdtemp(prefix="oglc_walk_"), extent=2048, levels=3,
                 tile_res=33)
-        self.world = PhysicsWorld(
-            gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
         self.terrain = TilesTerrain(tileset, fovy=math.radians(55.0), max_sse=16.0,
-                                    workers=4, physics_world=self.world,
+                                    workers=4, physics=self.physics,
                                     memory_budget=256 * 1024 * 1024)
         self.gltf_scene_ambient = 0.35
         self.sg = sceneGraph(children=[
@@ -79,9 +80,9 @@ class TestContext(BaseContext):
         for _ in range(8):
             self._stream((sx, sy + 40, sz))
             self.terrain.wait_for_loads(timeout=5.0)
-        self.avatar = PhysicsViewPlatform(self.world, position=(sx, sy + 8, sz),
-                                          yaw=0.6)
-        self.avatar.bind((sx, sy + 8, sz))
+        # The service steps the character each frame.
+        walker = self.physics.add_character(position=(sx, sy + 7, sz))
+        self.avatar = PhysicsViewPlatform(walker, yaw=0.6)
         self._held = set()
         for k in ("w", "a", "s", "d", "q", "e", "r", "f"):
             self.addEventHandler("keyboard", name=k, state=1,
@@ -127,7 +128,6 @@ class TestContext(BaseContext):
                 self.avatar.set_fly_move(fwd, strafe, up)
             else:
                 self.avatar.set_move(fwd, strafe)
-            self.avatar.update(1.0 / 60.0)
             self.avatar.apply(self)
             self._stream(self.avatar.camera_position())
         return super(TestContext, self).OnDraw(*args, **named)

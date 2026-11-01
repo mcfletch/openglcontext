@@ -690,7 +690,6 @@ PYTEST_MODULES = [
 SKIP_SCRIPTS = [
     'frust_test_module.py',  # Helper module
     'profile_view.py',  # Interactive profiling tool
-    'shader_intro.py',  # Tutorial introduction, not an actual test
 ]
 
 # Demos of features that no longer exist in the library; skipped with a visible
@@ -700,7 +699,6 @@ OBSOLETE_SCRIPTS: dict = {}
 # Scripts that produce no graphical output - test for functionality only
 # These should NOT be included in visual regression tests
 NON_VISUAL_SCRIPTS = [
-    'flower_geometry.py',  # Prints geometry info to stdout
     'glget.py',  # GL state query, prints to stdout
     'glget_with_fonts.py',  # GL state query with fonts, prints to stdout
     'glgetlight.py',  # GL light state query
@@ -833,7 +831,6 @@ SCRIPT_CATEGORIES = {
             'addnodes.py',
             'backgroundobject.py',
             'cubebackgroundobject.py',
-            'flower_geometry.py',
             'gearobject.py',
             'geometry.py',
             'glarrayelement.py',
@@ -892,7 +889,6 @@ SCRIPT_CATEGORIES = {
             'shader_11.py',
             'shader_12.py',
             'shader_binary.py',
-            'shader_intro.py',
             'shader_ng.py',
             'shader_sphere.py',
             'shader_spike.py',

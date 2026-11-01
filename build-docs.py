@@ -76,7 +76,6 @@ PROJECTS = [
     'OpenGLContext_qt',
     'vrml',
     'omi_audio',
-    'omi_physics',
     'opengl_decimate',
     'opengl_extrusions',
     'pyopengl_video',
@@ -163,6 +162,7 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
         sys.path.insert(0, where)
     from directdocs import dumbpydoc  # noqa: PLC0415 importable only once the sys.path entry find_directdocs answered is in place
 
+    class_sections = node_sections()
     log.info('Writing the module pages into %s', API)
     shutil.rmtree(API, ignore_errors=True)
     rendered, failed = dumbpydoc.render_projects(
@@ -175,6 +175,7 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
         entrypoints=None,
         title='API reference',
         paragraphs=API_INTRO,
+        class_sections=class_sections,
     )
     log.info(
         '%d modules documented; %d could not be imported here%s',
@@ -182,6 +183,39 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
         len(failed),
         ': %s' % (', '.join(failed),) if failed else '',
     )
+
+
+def node_sections() -> Any:
+    """The callable that adds a node's sample world and its uses to its class on the module pages.
+
+    The sample's render is copied from the baselines to ``docs/images/samples``.
+    The uses are the files of the workspace's projects; a checkout outside a
+    workspace has none to read, and its node pages have no such section.
+    """
+    sys.path.insert(0, HERE)
+    from docbuild import nodesamples, nodeusage, tutorials  # noqa: PLC0415 importable only once this script's directory is on sys.path
+    from OpenGLContext.bin import x3d_regression  # noqa: PLC0415 for where the baselines are
+
+    shown = nodesamples.class_sections(
+        nodesamples.find(),
+        nodesamples.publish_images(x3d_regression.default_baseline_root(samples=True)),
+    )
+    root = nodeusage.workspace_root(HERE)
+    if root is None:
+        log.info('No workspace above %s; node pages list no uses', HERE)
+        return shown
+    log.info('Reading the projects of %s for the nodes they use', root)
+    index = nodeusage.build(root)
+    log.info('%d nodes are used', len(index))
+    used = nodeusage.class_sections(
+        index,
+        {'%s/%s' % (path.directory, name) for path in tutorials.PATHS for name in path.scripts},
+    )
+
+    def sections(cls: type) -> list[str]:
+        return shown(cls) + used(cls)
+
+    return sections
 
 
 def build_tutorials() -> None:

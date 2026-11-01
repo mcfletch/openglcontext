@@ -1,8 +1,41 @@
 # A character runs across a landscape
 
-Status: **Proposed**, 2026-10-25. Nothing is built. This plan builds on the characters of
-[PHYSICS-AND-AUDIO-SERVICES.md](PHYSICS-AND-AUDIO-SERVICES.md) and is the engine side of
-moving hill-runner onto the engine's physics.
+Status: **L0 to L6 built; L7 in progress**, branch `physics-services`. This plan builds on the
+characters of [PHYSICS-AND-AUDIO-SERVICES.md](PHYSICS-AND-AUDIO-SERVICES.md) and is the engine side
+of moving hill-runner onto the engine's physics.
+
+What landed:
+
+- L0, D2. The controller integrates gravity exactly (`omi_physics` `492478c`).
+- L1, D1. `add_ground(land)` over any `Ground`, with the optional `normal(x, z)`.
+- L2, D3. `slide`, `knock_down`, `get_up`, `state`, `landed`, a slide that steers and ends, and a
+  jump that follows the slope.
+- L3, D4 and D5. `ClipMap` (`ual()` and `guess`), `Locomotion`, `measure_stride`, `oglc-gait`.
+- L4, D6 and D7. `Facing`, `fit_to_height`, footsteps through `footstep` events and a material's
+  `footstep=`; tutorials 1, 3 and 4 are `tests/tutorials/character/character_run.py`,
+  `character_jump.py` and `character_footsteps.py`.
+- L5, D8 and D9. `FollowCamera` look-ahead, damping and the obstacle sweep; `FollowMode` and
+  `Context.follow`.
+- L6, D10. `Character.run_along`, `hop_to` and `PathMover`.
+- Docs: `docs/characters.rst`, `docs/navigation.rst`, `docs/physics.rst`.
+- Tutorials 2, 5 and 6 (2026-10-26): `character_animations.py` (`ClipMap.guess`, which now takes
+  roles by hand in place of a guess, and CesiumMan's one clip measured), `character_camera.py`
+  (the sweep, `swing` and a `constrain` rule in a brick room) and `character_trail.py`
+  (`run_along` and `hop_to` on a winding trail). Added for them: `Character.run_along` takes a
+  list of points, `Character.arrived` and the `'arrived'` event, the follow camera's `swing`, and
+  a measured clip speed scaled by the model's fitted size (it was in model units, so a fitted
+  CesiumMan's walk played 20% fast).
+- The core_context tutorials on the engine (2026-10-26): `using_npc.py` and `navmesh_demo.py`
+  walk a physics character along the navmesh route with `run_along`; `using_clips.py` and
+  `crowd_demo.py` are stepped by `Context.animate` (`events/animations.py`, with
+  `Context.after`); the crowd's gait comes from a `ClipMap` (`Gait.from_clips`,
+  `WanderingCrowd(clips=)`). In `omi_physics`, a ray parallel to a triangle's plane raised a
+  floating-point error under `numpy_errors = "raise"` (a footstep's ray beside a wall).
+
+Not done:
+
+- D1's `ceiling=` and D11, surfaces overhead: the ground is a single-valued height.
+- L7. hill-runner's steps 2 to 4 and twig-bb's switch to `ClipMap` are work in those projects.
 
 A developer who says "this character should run across this landscape with this
 animation" gets that from the engine in a few lines. Today each game that does it writes
@@ -342,6 +375,36 @@ twig-bb's `Locomotion`, `rate` and `CLIP_SPEED` become a `ClipMap` and the engin
 | L5 | D8 and D9: camera, `FollowMode`, `Context.follow`; tutorial 5 | physics phase 4 (sweeps) | the camera and binding tests pass |
 | L6 | D10: `run_along`, `hop_to`; tutorial 6 | L4 | the lane tests pass |
 | L7 | hill-runner steps 2 to 4; twig-bb's switch to `ClipMap` | L0 to L6 | the acceptance list above |
+
+## hill-runner on the engine: what landed
+
+Steps 1 to 4 are in hill-runner (its `plans/IMPLEMENTATION.md` and README say where). What
+differs from the steps above:
+
+- The land is the engine's height field of the footing on a half-metre lattice for each chunk
+  (`Proxy.heightfield` of a grid), and not `add_ground` of a `Ground`: the controller asks a grid
+  for height and slope in one lookup and a function for each of five, which was 7 ms a step
+  against 2 ms. `Landscape.sample` is the `Ground` interface all the same.
+- The runner moves by `set_move` toward the place the rules have it, each step, and not by
+  `run_along` and `hop_to`: the rules own the lane, the hop and the distance, and their tests pin
+  `x` to the path to a millionth of a metre.
+- Barriers and tunnel walls are static bodies with `blocks_characters=False`: rays, the camera's
+  sweep and the coins a hit throws meet them, and the runner walks through an obstacle it is
+  recovering from as the rules let it. The rules stay the authority on a hit: of 44 passes by the
+  pilot the capsule was within 0.11 m of the obstacle's body in 2, both forgiven toes over a log,
+  and in every one of 12 hits it was.
+- The camera's sweep leaves out the ground (a sphere stepped along an arm against a height field
+  cost 40 ms a frame), and the rule keeps the camera a metre over it.
+
+Added to the engine for it: `Character.step` and `animate` (the game steps in pieces and animates
+once a frame), `slide(steer=True)`, `extend_slide` and `end_slide`, `CharacterCapabilities.jumpFollowsSlope`
+(a jump off a falling slope rises `jumpHeight` above the ground: 2.6 m at 24 m/s without it),
+`ClipSpec.rate`, `Context.stepsPhysics`, `add_static(blocks_characters=False)`, a scalar path for
+spheres against a grid, and a fix to the cache of a fixed body's proxy, which a streamed ground
+that reused a slot read as the removed chunk's.
+
+Per frame at 60 frames a second the runner's character, the world's two steps and the rules cost
+2.4 ms on the hill and 1.4 ms on level ground; the closed-form runner cost 0.5 ms.
 
 ## Documentation to change
 

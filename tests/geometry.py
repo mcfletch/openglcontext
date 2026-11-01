@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 '''Tests rendering of the Box geometry object
+
 '''
 #import OpenGL
 #OpenGL.FULL_LOGGING = True
@@ -8,11 +9,14 @@ from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.arrays import array, pi
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+NEHE = os.path.join( HERE, 'tutorials', 'nehe' )
 
 images = [
-    "nehe_glass.bmp",
+    os.path.join( NEHE, "nehe_glass.bmp" ),
     "pimbackground_FR.jpg",
-    "nehe_wall.bmp",
+    os.path.join( NEHE, "nehe_wall.bmp" ),
     "marbleface.jpeg",
     "wrls/irradiation.jpg",
     "wrls/yingyang.png",
@@ -47,7 +51,7 @@ class TestContext( BaseContext ):
         )
         self.appearance = Appearance(
             material = Material(
-                diffuseColor =(1,0,0),
+                diffuseColor =(.75,.75,.75),
                 specularColor = (.5,.5,.5),
             ),
             texture = ImageTexture(
@@ -137,7 +141,6 @@ class TestContext( BaseContext ):
         self.time.start ()
     def OnTimerFraction( self, event ):
         self.sg.rotation = array([0,1,0,event.fraction()*pi*2],'f')
-        self.appearance.material.diffuseColor = [event.fraction()]*3
         self.triggerRedraw( False )
     def OnImageSwitch( self, _event=None ):
         """Choose a new mapped texture"""

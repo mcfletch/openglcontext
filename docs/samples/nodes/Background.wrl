@@ -1,0 +1,22 @@
+#VRML V2.0 utf8
+# META "title" "Background"
+# META "description" "The sky and ground behind the world: skyColor blends through the colours at the skyAngle angles from straight up, and groundColor the same from straight down."
+
+Viewpoint {
+  orientation -1 0 0 0.05
+  position 0 1.2 9
+}
+Background {
+  groundAngle [ 1.5708 ]
+  groundColor [ 0.15 0.2 0.1, 0.35 0.3 0.2 ]
+  skyAngle [ 1.2 1.5708 ]
+  skyColor [ 0.1 0.2 0.6, 0.45 0.65 0.95, 0.95 0.9 0.8 ]
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.75 0.35 0.25
+    }
+  }
+  geometry Box { }
+}

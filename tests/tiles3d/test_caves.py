@@ -10,15 +10,14 @@ import math
 import os
 
 import pytest
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.sample import build_overhang_tileset
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
 from OpenGLContext.loaders.tiles3d.gltf_uploader import file_tile_loader
 from OpenGLContext.physics import gltf_world
+from OpenGLContext.physics.service import Physics
+from OpenGLContext.physics.settings import PhysicsDefinition
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
 
@@ -41,10 +40,10 @@ def test_overhang_geometry_is_not_a_heightfield(tmp_path):
 
 
 def test_overhang_tile_streams_and_gets_collider(tmp_path):
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
+    physics = Physics(PhysicsDefinition(mode='inline', colliders='none'))
     path = build_overhang_tileset(str(tmp_path))
     terrain = TilesTerrain(path, fovy=math.radians(45.0), workers=3,
-                           physics_world=world)
+                           physics=physics)
     try:
         drawn = []
         for _ in range(6):
@@ -53,6 +52,7 @@ def test_overhang_tile_streams_and_gets_collider(tmp_path):
         # Both ground and overhang render (ADD refine), and both become colliders.
         assert len(drawn) >= 2
         assert terrain.colliders.collider_count >= 2
-        assert len(world.bodies) >= 2
+        assert physics.counts.bodies >= 2
     finally:
         terrain.shutdown()
+        physics.close()

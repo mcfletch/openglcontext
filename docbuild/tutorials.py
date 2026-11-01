@@ -12,6 +12,16 @@ The paths -- which scripts, in which order, under which heading -- are
 :data:`PATHS`.  Each path is a directory: its scripts, and the files they
 open, are in ``tests/tutorials/<directory>``, and its pages are written to
 ``docs/tutorials/<directory>`` beside the screenshots they show.
+
+A path can open with background of its own: ``tests/tutorials/<directory>/index.rst``
+is that path's page in place of the generated one, so a reader meets the
+ideas before the first script.  It is written like the commentary -- a
+``:doc:`` target naming a tutorial finds it wherever its path puts it -- and
+the list of the path's tutorials follows it unless it makes a ``toctree`` of
+its own.
+
+The modules, classes and functions a script imports are links in its code, to
+the pages that document them (:mod:`docbuild.codelinks`).
 """
 
 from __future__ import annotations
@@ -27,7 +37,7 @@ import sys
 import tokenize
 from collections.abc import Iterable, Mapping
 
-from docbuild import markup
+from docbuild import codelinks, markup
 
 __all__ = [
     'Tutorial',
@@ -64,6 +74,13 @@ COLLAPSE = '#collapse'
 
 UNDERLINES = '=-~^"'
 
+#: A path's introduction, written by hand, in its directory under
+#: ``tests/tutorials``.  It is the path's ``index`` page.
+INTRODUCTION = 'index.rst'
+
+#: A ``toctree`` directive at the start of a line.
+TOCTREE = re.compile(r'^[ \t]*\.\. toctree::', re.MULTILINE)
+
 
 @dataclasses.dataclass
 class Piece:
@@ -83,6 +100,9 @@ class Tutorial:
     #: Where the script is under ``tests/``, without ``.py``, for the page to
     #: say (``tutorials/shaders/shader_1``).
     script: str = ''
+    #: The names the script's import statements bind, which the page's code
+    #: links to the pages that document them.
+    imports: codelinks.Imports = dataclasses.field(default_factory=codelinks.Imports)
 
     def __post_init__(self) -> None:
         self.script = self.script or self.name
@@ -130,35 +150,64 @@ PATHS = [
         'core_context',
         [
             'getting_a_context',
-            'loading_gltf_model',
             'keyboardevents',
+            'timesensorobject',
+            'loading_gltf_model',
             'using_clips',
-            'crowd_demo',
             'using_npc',
+            'crowd_demo',
             'navmesh_demo',
+            'addnodes',
             'using_vrml97',
             'using_obj',
         ],
     ),
     TutorialPath(
         'Physics',
-        """Rigid bodies, the materials they are made of, the joints that hold
-        them together, and what a game does with what the solver reports.""",
+        """Using the OpenGLContext physics engine to simulate a world.""",
         'physics',
         pages=['physics_getting_started'],
         scripts=[
-            'physics_room_drop',
+            'physics_stairs',
+            'physics_stairs_colour',
+            'physics_stairs_thread',
+            'physics_stairs_shapes',
+            'physics_stairs_material',
+            'physics_stairs_gravity',
+            'physics_stairs_sound',
+            'physics_stairs_surface_sound',
+            'physics_stairs_tuning',
+            'using_physics',
+            'physics_events',
+            'physics_triggers',
             'physics_bounce',
+            'physics_cook_view',
+            'physics_room_drop',
             'physics_friction',
             'using_collisions',
-            'using_physics',
-            'physics_triggers',
-            'physics_events',
             'physics_joints',
+            'physics_ragdoll',
+            'physics_cloth',
             'physics_gravity_zones',
-            'physics_cook_view',
             'physics_navigate',
             'physics_stress',
+        ],
+    ),
+    TutorialPath(
+        'Characters on Land',
+        """A rigged character that runs across a landscape: ground it collides
+        with, clips that play for what the body is doing, another model's
+        clips, a camera that follows it and stays out of walls, the sounds of
+        its landings, footsteps that follow the surface, and running along a
+        trail.""",
+        'character',
+        [
+            'character_run',
+            'character_animations',
+            'character_jump',
+            'character_footsteps',
+            'character_camera',
+            'character_trail',
         ],
     ),
     TutorialPath(
@@ -239,7 +288,6 @@ PATHS = [
         vertex buffer objects.""",
         'shaders',
         [
-            'shader_intro',
             'shader_1',
             'shader_2',
             'shader_3',
@@ -253,6 +301,7 @@ PATHS = [
             'shader_11',
             'shader_12',
             'shader_instanced',
+            'shader_instanced_mapped',
         ],
     ),
     TutorialPath(
@@ -302,7 +351,65 @@ PATHS = [
             'nehe6_timer',
             'nehe6_multi',
             'nehe6_compressed',
+            'nehe6_convolve',
             'glprint',
+        ],
+    ),
+    TutorialPath(
+        'Low-Level and Legacy OpenGL',
+        """Scripts that call OpenGL directly rather than through scenegraph
+        nodes: the fixed-function drawing calls, pixel transfers, state
+        queries, GLU tessellation, extensions, and text through GLUT, pygame,
+        WGL and wxPython.  Most draw with the compatibility profile, and each
+        window system's script runs only where that toolkit is installed.""",
+        'legacy',
+        [
+            'glvertex',
+            'glarrayelement',
+            'gldrawarrays',
+            'gldrawarrays_string',
+            'gldrawelements',
+            'gldrawelements_list',
+            'gldrawelements_string',
+            'glinterleavedarrays',
+            'shader_2_c_void_p',
+            'line_stipple',
+            'dek_surf',
+            'dek_texturesurf',
+            'ilsstrategies',
+            'glu_tess',
+            'glu_tess2',
+            'gldrawpixels',
+            'gldrawpixelssynth',
+            'arbwindowpos',
+            'getteximage',
+            'readpixelsleak',
+            'pbodemo',
+            'multitexture_1',
+            'glhistogram',
+            'glget',
+            'glget_with_fonts',
+            'glgetlight',
+            'glgetmaterial',
+            'glgetpixelmap',
+            'glgetpolygonstipple',
+            'glugetstring',
+            'arbocclusionquery',
+            'arbpointparameters',
+            'arbsync',
+            'glut_bitmap_font',
+            'glut_font',
+            'glutbitmapcharacter',
+            'glut_fullscreen',
+            'glutmousewheel',
+            'pygame_font',
+            'pygame_textureatlas',
+            'wgl_font',
+            'wgl_bitmap_font',
+            'wglpixelformatarb',
+            'wx_font',
+            'wx_multiple_contexts',
+            'wx_with_controls',
         ],
     ),
 ]
@@ -351,6 +458,7 @@ def parse(path: str, script: str = '') -> Tutorial:
         source=path,
         pieces=pieces,
         script=script,
+        imports=codelinks.imports(text),
     )
 
 
@@ -424,6 +532,11 @@ def render(tutorial: Tutorial, pages: Mapping[str, str] | None = None) -> str:
         '.. _tutorial-%s:' % (tutorial.name,),
         heading(markup.escape(tutorial.title), 0),
     ]
+    if tutorial.imports:
+        out.append(
+            '.. tutorial-imports::\n\n%s'
+            % (indent(codelinks.declare(tutorial.imports)),)
+        )
     titled = False
     started = False
     for piece in tutorial.pieces:
@@ -495,20 +608,41 @@ def _listed(path: TutorialPath, written: Iterable[str]) -> list[str]:
     ]
 
 
-def render_path(path: TutorialPath, written: Iterable[str]) -> str:
+def _toctree(path: TutorialPath, written: Iterable[str]) -> str:
+    return '.. toctree::\n   :maxdepth: 1\n\n%s' % (
+        '\n'.join('   %s' % (name,) for name in _listed(path, written)),
+    )
+
+
+def render_path(
+    path: TutorialPath,
+    written: Iterable[str],
+    introduction: str | None = None,
+    pages: Mapping[str, str] | None = None,
+) -> str:
     """The page of one path: what it covers, and the toctree of its tutorials.
 
     ``written`` names the pages written from scripts, as ``directory/name``.
+    ``introduction`` is the text of the path's hand-written ``index.rst``,
+    which is the page in place of the description; the toctree follows it
+    unless it holds one.  ``pages`` is as for :func:`render`.
     """
-    return '\n\n'.join(
-        [
-            '.. _tutorials-%s:' % (path.directory,),
-            heading(markup.escape(path.title), 0),
-            markup.wrap(' '.join(path.description.split())),
-            '.. toctree::\n   :maxdepth: 1\n\n%s'
-            % ('\n'.join('   %s' % (name,) for name in _listed(path, written)),),
-        ]
-    ) + '\n'
+    label = '.. _tutorials-%s:' % (path.directory,)
+    if introduction is None:
+        return '\n\n'.join(
+            [
+                label,
+                heading(markup.escape(path.title), 0),
+                markup.wrap(' '.join(path.description.split())),
+                _toctree(path, written),
+            ]
+        ) + '\n'
+    text = resolve_links(introduction.replace('\r\n', '\n'), pages or {}).strip('\n')
+    out = [] if label in text else [label]
+    out.append(text)
+    if not TOCTREE.search(text):
+        out.append(_toctree(path, written))
+    return '\n\n'.join(out) + '\n'
 
 
 def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
@@ -552,12 +686,19 @@ def write(
 
     Returns the pages written from scripts, as ``directory/name``.  Each page
     carries a label named for its script, so two scripts of one name are
-    refused.
+    refused, and so is a script named ``index``, whose page would be its
+    path's.  A path whose directory under ``source`` holds an ``index.rst``
+    has that for its page.
     """
     paths = list(paths)
     pages: dict[str, str] = {}
     for path in paths:
         for name in path.scripts:
+            if name == 'index':
+                raise ValueError(
+                    'tutorial script %s/index would be written over the page of '
+                    'its path' % (path.directory,)
+                )
             page = 'tutorials/%s/%s' % (path.directory, name)
             other = pages.setdefault(name, page)
             if other != page:
@@ -578,9 +719,21 @@ def write(
                 os.path.join(directory, '%s.rst' % (name,)), render(tutorial, pages)
             )
             written.append('%s/%s' % (path.directory, name))
-        _replace(os.path.join(directory, 'index.rst'), render_path(path, written))
+        _replace(
+            os.path.join(directory, 'index.rst'),
+            render_path(path, written, _introduction(path, source), pages),
+        )
     _replace(os.path.join(output, 'index.rst'), render_index(paths, written))
     return written
+
+
+def _introduction(path: TutorialPath, source: str) -> str | None:
+    """The text of the path's hand-written ``index.rst``, or None where it has none."""
+    where = os.path.join(source, path.directory, INTRODUCTION)
+    if not os.path.isfile(where):
+        return None
+    with open(where, encoding='utf8') as handle:
+        return handle.read()
 
 
 def _replace(path: str, text: str) -> None:

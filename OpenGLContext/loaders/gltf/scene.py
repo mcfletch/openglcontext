@@ -192,6 +192,11 @@ class GLTFScene(object):
         self.zones: list = []
         # environment: the scene's EXT_lights_image_based light, or None.
         self.environment: Any = None
+        # physics: the document's OMI physics blocks (an
+        # OpenGLContext.physics.omigltf.PhysicsDocument), or None. Each node carrying a
+        # body is tagged with it, and a context's physics makes the body when
+        # the node is in the scene; see OpenGLContext.physics.colliders.
+        self.physics: Any = None
         # material_variants: the document's KHR_materials_variants and the
         # shapes a selection re-dresses; see select_variant.
         self.material_variants = variantsext.MaterialVariants()
@@ -602,7 +607,7 @@ SUPPORTED_EXTENSIONS = frozenset((
     'KHR_mesh_quantization', 'KHR_meshopt_compression', 'KHR_node_visibility',
     'KHR_texture_basisu', 'KHR_texture_transform', 'KHR_xmp_json_ld', 'MSFT_lod', 'MSFT_screencoverage',
     'OGLC_hook', 'OGLC_materials_baked_light', 'OGLC_zone', 'OMI_environment_sky',
-    'OMI_physics_gravity',
+    'OMI_physics_body', 'OMI_physics_gravity', 'OMI_physics_shape',
 ))
 
 
@@ -936,6 +941,30 @@ class _SceneBuilder:
         self.scene_graph.regDefName(group.DEF, placed)
         self.node_slots[node_index] = placed
         return placed
+
+    def _tag_physics_bodies(self) -> Any:
+        """The document's OMI physics, with each node that carries a body tagged with it.
+
+        Returns the :class:`OpenGLContext.physics.omigltf.PhysicsDocument`, or None for a
+        document with no ``OMI_physics_body`` block on any node.
+        """
+        used = set(getattr(self.g, 'extensionsUsed', None) or ())
+        if not used & {'OMI_physics_body', 'OMI_physics_shape'}:
+            return None
+        from OpenGLContext.physics import omigltf  # noqa: PLC0415 only a document with bodies needs it
+
+        top = getattr(self.g, 'extensions', None)
+        nodes = [{'extensions': getattr(node, 'extensions', None) or {}}
+                 for node in (self.g.nodes or [])]
+        document = omigltf.load_document({
+            'extensions': top if isinstance(top, dict) else {}, 'nodes': nodes})
+        tagged = 0
+        for index, body in document.node_bodies.items():
+            transform = self.node_transforms.get(index)
+            if transform is not None and (body.motion or body.collider or body.trigger):
+                transform.omiPhysics = (document, body)
+                tagged += 1
+        return document if tagged else None
 
     def _in_slot(self, node_index: int) -> Any:
         """What stands in a glTF node's slot in the scene: what its hook put
@@ -1287,6 +1316,7 @@ class _SceneBuilder:
         scene.hook_data = self.hooks.scene_data
         scene.hook_registrations = dict(self.hooks.registrations)
         scene.zones = list(self.zoning.zones)
+        scene.physics = self._tag_physics_bodies()
         scene.environment = environment
         scene.material_variants = self.material_variants
         top = getattr(g, 'extensions', None) or {}

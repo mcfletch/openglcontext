@@ -12,6 +12,7 @@ about the number that actually matters -- how loud the mix is.
 import importlib.util
 import math
 import os
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -19,6 +20,7 @@ import pytest
 from omi_audio.device import NullDevice
 
 from OpenGLContext.audio import scene as audioscene
+from OpenGLContext.audio.manager import Audio
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import viewplatform
 from OpenGLContext.scenegraph import audio as audionodes
@@ -91,12 +93,14 @@ def demo(monkeypatch):
 
 
 def build(demo, context):
-    """The demo's three emitters, placed where the demo places them."""
-    engine = audioscene.engine_for(context)
-    engine.master_gain = demo.MASTER_GAIN
-    engine.clips.put('orbit', demo.synth.tone(660.0, 2.0, amplitude=0.45))
-    engine.clips.put('distant', demo.synth.tone(330.0, 2.0, amplitude=0.6))
-    engine.clips.put('cone', demo.synth.chirp(700.0, 1100.0, 1.5, amplitude=0.45))
+    """The demo's three emitters, placed where the demo places them.
+
+    The clips and the mix are the demo's own: its ``registerClips`` is run
+    against an ``Audio`` for the fake context, which shares the scene's engine.
+    """
+    audio = Audio(context)
+    demo.TestContext.registerClips(SimpleNamespace(audio=audio))
+    engine = audio.engine
 
     def emitter(url, **named):
         named.setdefault('gain', 1.0)
@@ -189,7 +193,7 @@ def test_the_distant_emitter_alone_is_audible(demo):
 
 def test_the_demos_frequencies_are_ones_small_speakers_reproduce(demo):
     """A 60 Hz drone is a silent demo on most hardware."""
-    for clip in (demo.synth.tone(660.0, 0.2), demo.synth.tone(330.0, 0.2)):
+    for clip in (demo.sounds.tone(660.0, 0.2), demo.sounds.tone(330.0, 0.2)):
         spectrum = np.abs(np.fft.rfft(clip.samples))
         peak = np.fft.rfftfreq(clip.frames, 1.0 / clip.sample_rate)[spectrum.argmax()]
         assert 150.0 < peak < 4000.0

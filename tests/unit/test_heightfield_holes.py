@@ -127,8 +127,7 @@ class TestTheDrawnSurfaceAndTheCollidedOneAgree:
 
     def _collider_centres(self, field, holes):
         """Every triangle the collider would build, as world-XZ centres."""
-        world = _NoWorld()
-        colliders = HeightFieldColliders(world, field, chunk=field.extent,
+        colliders = HeightFieldColliders(field, chunk=field.extent,
                                          holes=holes)
         found = []
         for i in range(colliders._across):  # noqa: SLF001 the collider's patch grid, walked to list every triangle it would build
@@ -137,16 +136,6 @@ class TestTheDrawnSurfaceAndTheCollidedOneAgree:
                 if len(indices):
                     found.append(points[indices].mean(axis=1))
         return np.concatenate(found) if found else np.zeros((0, 3))
-
-
-class _NoWorld:
-    """Enough of a physics world to build patches without stepping one."""
-
-    def add_body(self, *_args, **_named):
-        return object()
-
-    def remove_body(self, *args, **named):
-        pass
 
 
 @pytest.mark.parametrize('res', [5, 9, 33])

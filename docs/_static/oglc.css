@@ -205,3 +205,15 @@ table.docutils th {
 .project-badges img {
     height: 20px;
 }
+
+/* An imported name in a tutorial's code, linked to the page that documents it:
+ * the highlighter's colour stays, and a dotted underline says it is a link. */
+.highlight a.code-link {
+    color: inherit;
+    text-decoration: underline dotted;
+    text-underline-offset: .15em;
+}
+
+.highlight a.code-link:hover {
+    text-decoration: underline;
+}

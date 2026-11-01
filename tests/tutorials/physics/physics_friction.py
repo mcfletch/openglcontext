@@ -5,63 +5,69 @@
 
 Identical boxes are placed on ramps of increasing angle.  A box slides only when
 ``tan(angle) > friction``, so the shallow ramps hold their box and the steep ones
-let it slide — the classic friction-cone threshold, with the material's
-``staticFriction`` / ``dynamicFriction`` and combine mode doing the work.
+let it slide: the classic friction-cone threshold.  The ``friction`` keyword
+sets the coefficient of each surface, and where two meet the world combines
+them.
 '''
 import numpy as np
 
-from OpenGLContext.events import systemtime
 from OpenGLContext.context import Context as BaseContext
+from OpenGLContext.scenegraph import surfaces
+from OpenGLContext.scenegraph.basenodes import (
+    Background, DirectionalLight, sceneGraph,
+)
 
-from omi_physics import model, mathutil
-from OpenGLContext.physics import debugdraw
-from OpenGLContext.physics.demo import DemoScene, disable_vsync
+#: The coefficient of friction of the ramps and of the boxes, and the angles
+#: of the three ramps, in degrees.  tan(25 degrees) is 0.47 and tan(40) is 0.84.
+FRICTION = 0.5
+ANGLES = (10, 25, 40)
 
 
 class TestContext(BaseContext):
-    initialPosition = (0, 5, 20)
+    initialPosition = (0, 5, 24)
 
     def OnInit(self):
-        disable_vsync()
+        self.bodies = []
         self.build()
         print(__doc__)
         self.addEventHandler('keypress', name='r', function=self.on_reset)
-        self._last = systemtime.systemTime()
 
     def on_reset(self, event):
         self.build()
-        self.triggerRedraw(1)
 
     def build(self):
-        self.scene = DemoScene(debug_flags=debugdraw.PROXIES | debugdraw.VELOCITY)
-        mat = self.scene.raw_material(model.Material(
-            staticFriction=0.5, dynamicFriction=0.5))
-        for k, deg in enumerate((10, 25, 40)):
-            x = -8 + k * 8
-            self._ramp(x, deg, mat)
-        self.scene.advance(0.0)
-        self.sg = self.scene.scene_graph()
+        self.stone = surfaces.pbr_material(surfaces.sandstone(256))
+        self.metal = surfaces.pbr_material(surfaces.brushed_metal(256, surfaces.BRONZE))
+        self.sg = sceneGraph(children=[
+            Background(skyColor=[(0.55, 0.62, 0.72)]),
+            DirectionalLight(direction=(-0.4, -1.0, -0.6), intensity=2.0),
+        ])
+        for body in self.bodies:
+            body.remove()
+        self.bodies = []
+        self.boxes = []
+        for k, degrees in enumerate(ANGLES):
+            self.ramp(-8 + k * 8, degrees)
+        self.physics.show_proxies(True)
 
-    def _ramp(self, x, deg, mat):
-        angle = np.radians(deg)
-        axis_angle = (0, 0, 1, angle)
-        self.scene.add_box(size=(6, 0.4, 4), position=(x, 1.5, 0),
-                           color=(0.45, 0.45, 0.5), dynamic=False,
-                           material=mat, rotation=axis_angle)
-        # seat a box on the ramp surface, aligned to the slope
-        up = mathutil.quat_rotate(mathutil.quat_from_axis_angle((0, 0, 1), angle),
-                                  np.array([0.0, 1.0, 0.0]))
-        pos = np.array([x, 1.5, 0]) + up * 0.5
-        self.scene.add_box(size=(0.8, 0.8, 0.8), position=tuple(pos),
-                           color=(0.9, 0.7, 0.3), material=mat, rotation=axis_angle)
-
-    def OnIdle(self, *arguments):
-        now = systemtime.systemTime()
-        active = self.scene.advance(min(now - self._last, 0.05))
-        self._last = now
-        if active:
-            self.triggerRedraw(1)
-        return 1
+    def ramp(self, x, degrees):
+        '''A ramp is a static box turned about Z: ``rotation`` is an axis and
+        an angle in radians, and is set on the node with the call.  Its
+        proxy is a ``'box'``: the exact shape of the ramp, and the cheapest.
+        The box stands on its surface, turned the same way.'''
+        angle = np.radians(degrees)
+        turned = (0, 0, 1, angle)
+        ramp = surfaces.shape(surfaces.block((6, 0.4, 4)), self.stone)
+        self.sg.children.append(ramp)
+        self.bodies.append(self.physics.add_static(
+            ramp, proxy='box', translation=(x, 1.5, 0), rotation=turned, friction=FRICTION))
+        up = np.array([-np.sin(angle), np.cos(angle), 0.0])
+        on = np.array([x, 1.5, 0.0]) + up * 0.61
+        box = surfaces.shape(surfaces.block((0.8, 0.8, 0.8)), self.metal)
+        self.sg.children.append(box)
+        self.boxes.append(self.physics.add_dynamic(
+            box, proxy='box', translation=tuple(on), rotation=turned, friction=FRICTION))
+        self.bodies.extend((self.boxes[-1],))
 
 
 if __name__ == '__main__':

@@ -7,12 +7,12 @@ In this tutorial we'll learn:
 
     * What a vertex shader *must* do in GLSL.
     * What a fragment shader *must* do.
-    * What a VBO object looks like.
+    * What a VBO object is and what it looks like.
     * How to activate and deactivate shaders and VBOs.
     * How to render simple geometry.
 
-First we do our imports, the [http://pyopengl.sourceforge.net/context OpenGLContext] testingcontext allows
-for the use of Pygame, wxPython, or GLUT GUI systems with the same 
+First we do our imports, the [http://pyopengl.sourceforge.net/context OpenGLContext] Context allows
+for the use of GLFW, Pygame, wxPython, or GLUT GUI systems with the same 
 code.  These imports retrieve an appropriate context for this 
 machine.  If you have not installed any "extra" packages, such as 
 Pygame or wxPython, this will likely be a GLUT context on your 

@@ -1,0 +1,187 @@
+"""The plain data a physics service moves between threads.
+
+Everything here is made of numbers, strings, NumPy arrays and other records, so
+the same traffic can cross a thread today and a process boundary later.
+
+:class:`Command`
+    One change to the world, from any thread to the worker.
+:class:`BodySpec`
+    What the worker needs to make one body, with its :class:`Motion`.
+:class:`Snapshot`
+    The poses and velocities of the bodies that move, published after a tick.
+:class:`PhysicsEvent`
+    One contact, trigger or state change, naming bodies by id.
+:class:`Step`
+    One fixed step, as the step hooks receive it.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field, replace
+from typing import Any, NamedTuple
+
+import numpy as np
+
+from OpenGLContext.physics.proxy import Proxy
+
+__all__ = ['BodyBatch', 'BodySpec', 'Command', 'Motion', 'PhysicsEvent', 'Snapshot', 'Step']
+
+
+class Command(NamedTuple):
+    """One change to the world.
+
+    ``op`` names the change, ``uid`` the body it is for (0 for the world), and
+    ``args`` carries its numbers. ``seq`` is assigned when the command is
+    submitted; a snapshot reports the highest ``seq`` it includes, so a reader
+    can tell whether a write of its own is in the pose it is looking at.
+    """
+    op: str
+    uid: int
+    args: tuple[Any, ...] = ()
+    seq: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class Motion:
+    """How a body moves: ``mass`` in kilograms, damping per second, and the share of gravity it feels."""
+    mass: float = 1.0
+    linear_damping: float = 0.0
+    angular_damping: float = 0.0
+    gravity_factor: float = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class BodySpec:
+    """The body ``uid`` to make.
+
+    ``kind`` is ``'static'``, ``'dynamic'``, ``'kinematic'`` or ``'trigger'``.
+    ``orientation`` is a unit quaternion ``(x, y, z, w)``. ``material`` is a
+    preset or defined name, a :class:`~OpenGLContext.physics.types.Material`,
+    or None for the world's default. A static body or a trigger does not move,
+    whatever its ``motion``.
+    """
+    uid: int
+    kind: str
+    proxy: Proxy
+    motion: Motion
+    position: tuple[float, ...] = (0.0, 0.0, 0.0)
+    orientation: tuple[float, ...] = (0.0, 0.0, 0.0, 1.0)
+    material: Any = None
+    collision_filter: int = -1
+    report: bool = False
+    sensor: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class BodyBatch:
+    """Static bodies ``first`` to ``first + len(positions) - 1``, all of one shape."""
+    first: int
+    proxy: Proxy
+    positions: np.ndarray
+    material: Any = None
+    collision_filter: int = -1
+
+
+@dataclass(frozen=True, slots=True)
+class Step:
+    """One fixed step: its length, its index and the simulation time it began at."""
+    dt: float
+    index: int
+    time: float
+
+
+@dataclass(frozen=True, slots=True)
+class Snapshot:
+    """The bodies that move, as they stood when it was published.
+
+    Row ``rows[uid]`` of each array is body ``uid``. Static bodies and triggers
+    do not move and are not listed. ``axis_angle`` is ``(x, y, z, angle)``;
+    ``dynamic`` is false for a kinematic body. ``applied_seq`` is the highest
+    command sequence at and below which the world had applied every command.
+
+    A body that is awake, or a kinematic body that moves, is published part of
+    the way through the next step (the frame's ``alpha``). Every other body is
+    published at the pose the world holds for it, so a body that has fallen
+    asleep is published exactly where it rests.
+
+    Every row is filled in every snapshot. A body keeps its row while it is in
+    the world: a removed body's row stays, no longer named by ``rows``, and a
+    new body takes a row after the others, so snapshots of one ``layout`` list
+    the same body at the same row. ``changed`` lists the rows whose values may
+    differ from those of snapshot version ``base``, and every row past the
+    ones ``base`` had; each other row holds the same values as it did there. A
+    reader that kept version ``base`` reads :meth:`changed_since` and visits
+    those rows alone; ``changed`` is None when every row is to be read, as
+    after the rows are laid out again.
+    """
+    version: int
+    step: int
+    time: float
+    applied_seq: int
+    rows: dict[int, int]
+    position: np.ndarray
+    axis_angle: np.ndarray
+    #: The same turns as unit quaternions ``(x, y, z, w)``.
+    orientation: np.ndarray
+    linear_velocity: np.ndarray
+    angular_velocity: np.ndarray
+    awake: np.ndarray
+    dynamic: np.ndarray
+    #: Ascending row numbers that may differ from snapshot ``base``; None for every row.
+    changed: np.ndarray | None = None
+    #: The version ``changed`` is counted from.
+    base: int = -1
+    #: The positions and orientations the last step left, before ``alpha`` carried them on;
+    #: None where they are ``position`` and ``orientation``.
+    step_position: np.ndarray | None = None
+    step_orientation: np.ndarray | None = None
+    #: The readings of the joints asked for: angles in radians, slides in metres, by joint id.
+    joints: dict[int, tuple[float, ...]] = field(default_factory=dict)
+    #: How many bodies the world holds, every kind included.
+    bodies: int = 0
+    #: How many pairs of bodies the step found touching.
+    contacts: int = 0
+    #: Which laying out of the rows this is: snapshots of one layout keep each body's row.
+    layout: int = 0
+
+    def changed_since(self, version: int | None) -> np.ndarray | None:
+        """The rows to read for a reader whose last snapshot was ``version``; None for every row."""
+        if self.changed is None or version is None or version != self.base:
+            return None
+        return self.changed
+
+    def following(self, earlier: Snapshot) -> Snapshot:
+        """This snapshot with its changes counted from ``earlier.base``, for a reader that skips ``earlier``."""
+        if (self.base != earlier.version or self.changed is None or earlier.changed is None
+                or self.layout != earlier.layout):
+            return replace(self, changed=None, base=earlier.base)
+        return replace(self, changed=np.union1d(earlier.changed, self.changed),
+                       base=earlier.base)
+
+
+@dataclass(frozen=True, slots=True)
+class PhysicsEvent:
+    """One thing that happened in a step, naming bodies by id.
+
+    ``kind`` is ``'contact'``, ``'trigger'``, ``'hit'`` or ``'state'``. For a
+    contact ``a`` and ``b`` are the pair with ``normal`` running from ``a`` to
+    ``b``; for a trigger ``a`` is the trigger and ``b`` what entered it; for a
+    state change (``'sleep'`` or ``'wake'``) ``a`` is the body and ``b`` None.
+    ``step`` and ``time`` say when, in the world's own count of steps and
+    seconds.
+    """
+    kind: str
+    phase: str
+    a: int
+    b: int | None
+    point: np.ndarray
+    normal: np.ndarray
+    approach: float
+    impulse: float
+    friction_impulse: float
+    slip: float
+    depth: float
+    step: int
+    time: float
+    solved: bool = True
+    reason: str | None = None
+    payload: Any = field(default=None, compare=False)

@@ -199,18 +199,18 @@ class ZoneTable:
         # world, so the zones a query could touch are found before any point
         # is carried into a zone's frame.
         self.world_low, self.world_high = _world_boxes(self.to_local, self.reach)
-        # The physics engine's broad phase: a query costs the depth of the
-        # tree rather than a comparison with every zone.
-        from omi_physics.broadphase import DynamicAABBTree
-        self._tree = DynamicAABBTree(fatten=0.0)
-        for index in range(count):
-            self._tree.insert(index, self.world_low[index], self.world_high[index])
 
     def near(self, minimum: Any, maximum: Any) -> np.ndarray:
-        """The indices of the zones whose reach overlaps the world box given, in order."""
-        found = self._tree.query(np.asarray(minimum, dtype='d'),
-                                 np.asarray(maximum, dtype='d'))
-        return np.array(sorted(found), dtype=np.intp)
+        """The indices of the zones whose reach overlaps the world box given, in order.
+
+        One vectorised comparison of the box with every zone's world box: the
+        zones are placed once and queried by chunks of boxes, so a query is a
+        few array operations over the zones.
+        """
+        low = np.asarray(minimum, dtype='d')
+        high = np.asarray(maximum, dtype='d')
+        overlapping = np.all((self.world_low <= high) & (self.world_high >= low), axis=1)
+        return np.flatnonzero(overlapping).astype(np.intp)
 
     def _local_to(self, which: Any, points: np.ndarray) -> np.ndarray:
         """``(N, 3)`` world points in the frames of the zones ``which``, as ``(W, N, 3)``.

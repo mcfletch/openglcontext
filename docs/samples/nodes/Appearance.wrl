@@ -1,0 +1,44 @@
+#VRML V2.0 utf8
+# META "title" "Appearance"
+# META "description" "The surface of a shape: material gives its colour under light, texture an image over it, and textureTransform moves the image."
+
+Viewpoint {
+  orientation -1 -0 -0 0.2111
+  position 0 1.5 7
+}
+Transform {
+  translation -2 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.9 0.9 0.9
+        }
+      }
+      geometry Box {
+        size 1.8 1.8 1.8
+      }
+    }
+  ]
+}
+Transform {
+  translation 2 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.9 0.9 0.9
+        }
+        texture ImageTexture {
+          url [ "assets/checker.png" ]
+        }
+        textureTransform TextureTransform {
+          scale 2 2
+        }
+      }
+      geometry Box {
+        size 1.8 1.8 1.8
+      }
+    }
+  ]
+}

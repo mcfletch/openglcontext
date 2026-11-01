@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Immersive" version="3.3">
+  <head>
+    <meta name="title" content="ColorInterpolator"/>
+    <meta name="description" content="Blends a colour through the keyValue colours as set_fraction passes the key fractions; the blend is made in HSV, so it passes through the hues between."/>
+    <meta name="sample:frames" content="59"/>
+  </head>
+  <Scene>
+    <Viewpoint position="1.8 1.5 3.6" orientation="-0.6008 0.7867 0.1418 0.583"/>
+    <TimeSensor DEF="Clock" cycleInterval="4" loop="true"/>
+    <ColorInterpolator DEF="Shift" key="0 0.5 1" keyValue="1 0.15 0.1, 0.15 0.9 0.2, 0.15 0.2 1"/>
+    <Shape>
+      <Appearance>
+        <Material DEF="Skin" diffuseColor="1 0.15 0.1"/>
+      </Appearance>
+      <Sphere radius="1.2"/>
+    </Shape>
+    <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Shift" toField="set_fraction"/>
+    <ROUTE fromNode="Shift" fromField="value_changed" toNode="Skin" toField="set_diffuseColor"/>
+  </Scene>
+</X3D>

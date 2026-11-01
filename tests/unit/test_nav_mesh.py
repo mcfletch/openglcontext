@@ -16,8 +16,6 @@ import math
 
 import numpy as np
 import pytest
-from omi_physics import model
-from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.nav import navmesh
 
@@ -378,19 +376,21 @@ class TestSomewhereToGo:
         assert mesh.random_point(seed=3) == mesh.random_point(seed=3)
 
 
-class TestBuildingItFromAWorld:
-    """The seam a game actually uses: a physics world in, a navmesh out."""
+class TestBuildingItFromAScene:
+    """The seam a game uses: a loaded scene in, a navmesh out."""
 
-    def test_a_world_with_a_floor_gives_a_navmesh(self):
-        world = PhysicsWorld(gravity=model.Gravity(gravity=9.81,
-                                                   direction=(0, -1, 0)))
+    def test_a_scene_with_a_floor_gives_the_cells_build_gives(self):
+        from OpenGLContext.scenegraph.basenodes import Coordinate, IndexedFaceSet, Shape, Transform  # noqa: PLC0415 only these cases build a scene
+
         points, triangles = grid()
-        shape = world.add_shape(model.Shape.trimesh(points, triangles))
-        world.add_body(model.Motion(type=model.STATIC),
-                       collider=model.Collider(shape=shape), position=(0, 0, 0))
-        assert len(navmesh.from_world(world)) > 0
+        index = [int(v) for triangle in triangles for v in (*triangle, -1)]
+        floor = Shape(geometry=IndexedFaceSet(coord=Coordinate(point=points), coordIndex=index))
+        found = navmesh.from_scene(Transform(children=[floor]))
+        assert len(found) == len(navmesh.build(points, triangles)) == len(triangles)
+        assert found.path((0.5, 0.0, 0.5), (5.5, 0.0, 5.5))
 
-    def test_a_world_with_nothing_static_gives_an_empty_one(self):
-        world = PhysicsWorld(gravity=model.Gravity(gravity=9.81,
-                                                   direction=(0, -1, 0)))
-        assert len(navmesh.from_world(world)) == 0
+    def test_an_empty_scene_gives_an_empty_one(self):
+        from OpenGLContext.scenegraph.basenodes import Transform  # noqa: PLC0415 only these cases build a scene
+
+        empty = navmesh.from_scene(Transform())
+        assert len(empty) == 0 and empty.random_point(seed=1) is None

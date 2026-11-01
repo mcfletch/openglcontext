@@ -4,7 +4,7 @@
 [using_physics.py-screen-0001.png Screenshot]
 
 This tutorial walks through the process of creating a game using the
-OpenGLContext renderer and the omi_physics engine for simulating a
+OpenGLContext renderer and its physics service for simulating a
 physical environment. We use convenience methods to create the geometry
 for the world with reasonable textures.
 
@@ -50,29 +50,26 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy
-from omi_audio import model as audiomodel
-from omi_audio import synth
-from omi_audio.clip import Clip
-from omi_physics import model
-from omi_physics.kinematic import KinematicAnimator
 from pydispatch import dispatcher
 
 ''':py:mod:`OpenGLContext.entropy` provides a random number generator that shares
 the world's seed, that allows test suites to test the random value
 by using the same seed on each test run.'''
 from OpenGLContext import entropy
-'''The audio scene will let us play the cannon's report when it fires, and a thud
-where a ball or a crate strikes something'''
-from OpenGLContext.audio import scene as audioscene
+'''`sounds` makes the cannon's report, the thuds and the fanfare in code, so the
+game ships no sound files.'''
+from OpenGLContext.audio import sounds
 '''For this game, perspective views alone don't work very well, so we'll use
 the MultiViewContext to provide a 4-tile view with overhead, front, side and
 perspective views of the same scene.'''
 from OpenGLContext.context import MultiViewContext as BaseContext
-''':py:mod:`OpenGLContext.events.systemtime` is the internal timer, the thing
-that Timer and TimeSensors use to set the actual time for the simulation'''
-from OpenGLContext.events import systemtime
-from OpenGLContext.events.timer import Timer
-from OpenGLContext.physics.manager import PhysicsManager
+from OpenGLContext.contextdefinition import ContextDefinition
+'''The physics names a game needs are in `OpenGLContext.physics`.  Its
+`Material`, a friction and a restitution, is imported as `Surface`, since the
+scene's own `Material` node is imported below.'''
+from OpenGLContext.physics import Body, Physics, PhysicsDefinition
+from OpenGLContext.physics import Material as Surface
+from OpenGLContext.physics.callbacks import physics_callback
 from OpenGLContext.scenegraph import particles, surfaces
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Coordinate, DirectionalLight, Group, IndexedLineSet, LayerSet,
@@ -81,7 +78,6 @@ from OpenGLContext.scenegraph.basenodes import (
 )
 from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
 from OpenGLContext.scenegraph.nodepath import NodePath
-from OpenGLContext.scenegraph.physicsbody import PhysicsBody
 from OpenGLContext.ui.hudwidgets import HUDLayer, ScreenWash, TextBlock
 from OpenGLContext.viewer.environment import sky_background
 
@@ -104,6 +100,18 @@ CANNON_HALF, TARGET_HALF = 2.0, 1.25
 #: Seconds the world advances in one step.  A ball at full power crosses
 #: less than  its own radius in a step, so it cannot pass through a surface.
 STEP = 1.0 / 240.0
+
+'''=The physics world=
+
+The world the game is played in: 240 steps a second, so a ball at full power
+crosses less than its own radius in one and cannot pass through a surface.
+The default linear damping is a drag that settles scenes, and a cannon-ball
+has none.  `colliders='explicit'` makes bodies only of what the game adds, so
+the wheels and the trail drawn in the same scene are not bodies.  The window
+declares this as its context's physics.  A `Game` made with no physics, as the
+rules' tests make it, steps a `Physics` of this definition inline itself.'''
+PHYSICS = PhysicsDefinition(tickHz=1.0 / STEP, maxCatchUp=1.0, linearDamping=0.0,
+                            colliders='explicit')
 
 #: Where the camera sits in the barrel's frame: behind the pivot, above the
 #: barrel, and 0.3 m to its right so the barrel is not between the camera and a
@@ -231,13 +239,11 @@ def looks() -> dict[str, Any]:
 
 '''=The balls=
 
-A ball is a mass and a physics material.  The material is the OMI model's
-friction and restitution: `restitution` is the fraction of the closing speed a
-contact throws back, so steel (0.1) lands with a clank, rubber (0.8) hops, and
-lead is given none and stays where it lands.  `MATERIAL_PRESETS` has steel and
-rubber ready made; lead is described here.  Every kind leaves the barrel at
-the same speed, so the mass decides how hard it hits, and how far the wind
-moves it.'''
+A ball is a mass and a physics material.  A `Surface` is a friction and a
+restitution: `restitution` is the fraction of the closing speed a contact
+throws back, so steel (0.1) lands with a clank, rubber (0.8) hops, and lead is
+given none and stays where it lands.  Every kind leaves the barrel at the same
+speed, so the mass decides how hard it hits, and how far the wind moves it.'''
 @dataclass(frozen=True)
 class Ammo:
     """A kind of ball: its mass, what it is made of, how it looks and how it sounds."""
@@ -245,7 +251,7 @@ class Ammo:
     name: str
     #: Kilograms.
     mass: float
-    material: model.Material
+    material: Surface
     #: Which of `looks` it is drawn in.
     look: str
     #: How high its impact sounds, as a multiple of the recording's pitch.
@@ -255,10 +261,12 @@ class Ammo:
 
 
 AMMO = (
-    Ammo('steel', 5.0, model.MATERIAL_PRESETS['metal'], 'steel', 1.0, True),
-    Ammo('rubber', 2.0, model.MATERIAL_PRESETS['rubber'], 'rubber', 1.6, False),
-    Ammo('lead', 12.0, model.Material(staticFriction=0.5, dynamicFriction=0.4,
-                                      restitution=0.0), 'lead', 0.65, True),
+    Ammo('steel', 5.0, Surface(staticFriction=0.4, dynamicFriction=0.3, restitution=0.1),
+         'steel', 1.0, True),
+    Ammo('rubber', 2.0, Surface(staticFriction=1.0, dynamicFriction=0.9, restitution=0.8),
+         'rubber', 1.6, False),
+    Ammo('lead', 12.0, Surface(staticFriction=0.5, dynamicFriction=0.4, restitution=0.0),
+         'lead', 0.65, True),
 )
 AMMO_BY_NAME = {ammo.name: ammo for ammo in AMMO}
 
@@ -292,46 +300,45 @@ class Sounds:
 
     '''=The sounds=
 
-    `omi_audio.synth` makes sounds with no files: `rumble` is noise with the
-    top taken off over a falling tone, which is what a detonation is, and
+    `sounds` makes clips with no files: `rumble` is noise with the top taken
+    off over a falling tone, which is what a detonation is, and
     `reverberated` puts the tail of an open field behind it.  `impact` is a
-    burst of noise with a sharp decay, a crack, and a rising run of `tone`s
-    is the fanfare.  Each clip is made once and played from where it
-    happened through an emitter, so it is placed in the stereo field and
-    falls off with the distance from the camera.  The report's gain rises with
-    the shot's power, so a gentle shot is audible and a hard one is at full
-    volume.  `play` takes a `rate`, and the same thud at a higher rate is a
-    lighter ball.'''
+    burst of noise with a sharp decay, a crack, and a `sequence` of rising
+    tones (`tone`) is the fanfare.  Each clip is made once.
+
+    `audio.play` places a clip where it happened, `at` a world point, so it
+    pans with the camera, which the context's audio follows.  The emitter
+    `sounds.positional(near=3.0, rolloff=0.8)` keeps a sound at full level
+    within 3 m and lets it fall off more slowly than the default beyond, so a
+    thud at the target carries back to the cannon.  The report's gain rises
+    with the shot's power, so a gentle shot is audible and a hard one is at
+    full volume.  The same thud at a higher `rate` is a lighter ball.'''
+
+    EMITTER = sounds.positional(near=3.0, rolloff=0.8)
 
     def __init__(self, sample_rate: int | None = None) -> None:
         options = {} if sample_rate is None else {'sample_rate': sample_rate}
-        boom = synth.rumble(0.9, decay=7.0, cutoff=600.0, tilt=-6.0, pitch=90.0,
-                            pitch_end=40.0, tone=0.2, drive=3.0, seed=21, **options)
-        notes = [synth.tone(frequency, 0.16, harmonics=4, **options)
+        boom = sounds.rumble(0.9, decay=7.0, cutoff=600.0, tilt=-6.0, pitch=90.0,
+                             pitch_end=40.0, tone=0.2, drive=3.0, seed=21, **options)
+        notes = [sounds.tone(frequency, 0.16, harmonics=4, **options)
                  for frequency in (523.25, 659.25, 783.99, 1046.5)]
-        self.clips: dict[str, Clip] = {
-            'report': synth.reverberated(boom, seconds=0.9, level=0.35, seed=5),
-            'thud': synth.rumble(0.3, decay=16.0, cutoff=320.0, pitch=95.0, pitch_end=50.0,
-                                 tone=0.5, drive=2.0, seed=3, **options),
-            'crash': synth.impact(0.4, decay=9.0, seed=11, **options),
-            'fanfare': Clip(numpy.concatenate([note.samples for note in notes]),
-                            notes[0].sample_rate, name='fanfare'),
+        self.clips: dict[str, sounds.Clip] = {
+            'report': sounds.reverberated(boom, seconds=0.9, level=0.35, seed=5),
+            'thud': sounds.rumble(0.3, decay=16.0, cutoff=320.0, pitch=95.0, pitch_end=50.0,
+                                  tone=0.5, drive=2.0, seed=3, **options),
+            'crash': sounds.impact(0.4, decay=9.0, seed=11, **options),
+            'fanfare': sounds.sequence(*notes, name='fanfare'),
         }
-        self.emitter = audiomodel.AudioEmitter(positional=audiomodel.PositionalProperties(
-            refDistance=3.0, rolloffFactor=0.8))
 
-    def play(self, engine: Any, name: str, position: Any, gain: float = 1.0,
+    def play(self, audio: Any, name: str, position: Any, gain: float = 1.0,
              rate: float = 1.0) -> Any:
-        """Start clip ``name`` at ``position``; None where there is no engine to play it."""
-        if engine is None:
-            return None
-        return engine.play(self.clips[name], emitter=self.emitter,
-                           position=tuple(float(part) for part in position),
-                           gain=gain, priority=1.0, rate=rate)
+        """Start clip ``name`` at ``position`` through ``audio``; the voice it returns."""
+        return audio.play(self.clips[name], at=tuple(float(part) for part in position),
+                          gain=gain, rate=rate, priority=1.0, emitter=self.EMITTER)
 
-    def fire(self, engine: Any, position: Any, power: float) -> Any:
+    def fire(self, audio: Any, position: Any, power: float) -> Any:
         """Start the report at ``position``, as loud as ``power`` asks."""
-        return self.play(engine, 'report', position, report_gain(power))
+        return self.play(audio, 'report', position, report_gain(power))
 
 
 @dataclass
@@ -622,9 +629,14 @@ LEVELS = (
 
 
 def swing(home: tuple[float, float, float], reach: float) -> Callable[[float], Any]:
-    """A pose function: the position ``home`` moved ``reach`` metres either way along z."""
+    """A pose function: the position ``home`` moved ``reach`` metres either way along z.
+
+    A pose is the position and the rotation, which is None for a body that does not turn.
+    """
+    @physics_callback
     def pose(time: float) -> Any:
-        return (home[0], home[1], home[2] + reach * math.sin(2.0 * math.pi * time / SLIDE_PERIOD))
+        return ((home[0], home[1], home[2] + reach * math.sin(2.0 * math.pi * time / SLIDE_PERIOD)),
+                None)
     return pose
 
 
@@ -636,8 +648,9 @@ def gate_open(time: float) -> float:
 
 def drop(home: tuple[float, float, float], depth: float) -> Callable[[float], Any]:
     """A pose function: ``home`` lowered ``depth`` metres as the gate opens."""
+    @physics_callback
     def pose(time: float) -> Any:
-        return (home[0], home[1] - depth * gate_open(time), home[2])
+        return (home[0], home[1] - depth * gate_open(time), home[2]), None
     return pose
 
 
@@ -645,18 +658,20 @@ def drop(home: tuple[float, float, float], depth: float) -> Callable[[float], An
 class Piece:
     """A node of the course, and how the physics world is to treat it.
 
-    ``motion`` is None for something that stands still, a `model.Motion` for
-    something that moves.  ``pose`` drives a kinematic piece: a function from
-    the seconds it has run to where it should be.  ``kind`` names what it is
-    to the rules.
+    ``body`` is the kind of body it is: ``'static'`` for something that stands
+    still, ``'dynamic'`` for something the world moves, with its ``mass`` in
+    kilograms, ``'kinematic'`` for something moved on a ``pose`` (a function
+    from the seconds it has run to where it should be), and ``'trigger'`` for
+    a volume that reports what enters it.  ``kind`` names what it is to the
+    rules.
     """
 
     node: Any
     kind: str
     material: str = 'wood'
-    motion: model.Motion | None = None
+    body: str = 'static'
+    mass: float = 0.0
     pose: Callable[[float], Any] | None = None
-    trigger: bool = False
 
 
 @dataclass
@@ -748,14 +763,12 @@ def build_course(level: Level, rng: Any, look: dict[str, Any]) -> Course:
     function.  Whatever rests on it is carried, because the steering is a
     real velocity.'''
     if level.slide:
-        kinematic = model.Motion(type=model.KINEMATIC)
-        pieces.append(Piece(target_tower, 'tower', motion=kinematic,
+        pieces.append(Piece(target_tower, 'tower', body='kinematic',
                             pose=swing(target_home, level.slide)))
-        pieces.append(Piece(pad, 'pad', motion=kinematic, trigger=True,
-                            pose=swing(pad_home, level.slide)))
+        pieces.append(Piece(pad, 'pad', body='trigger', pose=swing(pad_home, level.slide)))
     else:
         pieces.append(Piece(target_tower, 'tower'))
-        pieces.append(Piece(pad, 'pad', trigger=True))
+        pieces.append(Piece(pad, 'pad', body='trigger'))
     if level.wall:
         wall = surfaces.shape(surfaces.block((WALL_THICK, level.wall, WALL_WIDTH), repeat=2.0),
                               look['wall'], translation=(middle[0], level.wall / 2.0, middle[1]))
@@ -764,8 +777,7 @@ def build_course(level: Level, rng: Any, look: dict[str, Any]) -> Course:
         home = (middle[0], level.gate / 2.0, middle[1])
         gate = surfaces.shape(surfaces.block((WALL_THICK, level.gate, WALL_WIDTH), repeat=2.0),
                               look['gate'], translation=home)
-        pieces.append(Piece(gate, 'gate', motion=model.Motion(type=model.KINEMATIC),
-                            pose=drop(home, level.gate + 1.0)))
+        pieces.append(Piece(gate, 'gate', body='kinematic', pose=drop(home, level.gate + 1.0)))
     if level.springboard:
         board = surfaces.shape(surfaces.block((SPRINGBOARD[0], SPRINGBOARD[1], SPRINGBOARD[2])),
                                look['springboard'],
@@ -779,8 +791,7 @@ def build_course(level: Level, rng: Any, look: dict[str, Any]) -> Course:
             translation=(target.x + CRATE * (depth - (across - 1) / 2.0),
                          target.top + CRATE * (row + 0.5),
                          target.z + CRATE * (column - (across - 1) / 2.0)))
-        pieces.append(Piece(crate, 'crate', motion=model.Motion(
-            type=model.DYNAMIC, mass=CRATE_MASS)))
+        pieces.append(Piece(crate, 'crate', body='dynamic', mass=CRATE_MASS))
     gun = Cannon((cannon.x, cannon.top + 0.9, cannon.z), look)
     return Course(level, cannon, target, pieces, gun, wind, flag(target, wind, look))
 
@@ -801,15 +812,19 @@ def flag(target: Platform, wind: float, look: dict[str, Any]) -> Any:
 
 
 class Game:
-    """The rules, over a physics world: a course, the aim, the balls and the score.
+    """The rules, over a physics service: a course, the aim, the balls and the score.
 
     ``state`` is ``aiming`` until the cannon fires, ``flying`` while the ball
     is in the air, then ``aiming`` again after a miss, ``cleared`` after a hit,
     ``lost`` when the last ball has missed and ``finished`` when the last
     course is cleared.  Firing from any of the last three starts the next
     course, or the first again.
-    Nothing here draws or reads a clock: `tick` is given the seconds that have
-    passed.
+    Nothing here draws or reads a clock.  ``physics`` is the service the
+    bodies go in: the window gives the game its context's, which steps
+    itself, and calls `judge` once a frame with the seconds that passed.  With
+    no ``physics`` the game makes a standalone `Physics` stepped inline, which
+    needs no context and no window, and `tick` steps it and judges; that is
+    how the rules are tested.
 
     The world's events decide the game.  A ball in the target's slab is a hit,
     and a ball that stops, falls away or flies too long is a miss.  What the
@@ -820,8 +835,15 @@ class Game:
     """
 
     def __init__(self, rng: Any = None, on_event: Callable[[str, Any], None] | None = None,
-                 level: int = 0) -> None:
+                 level: int = 0, physics: Physics | None = None) -> None:
         self.rng = rng or entropy.randomizer('cannon')
+        self.bodies: dict[Body, Piece] = {}
+        self.slides: list[Callable[[Any], None]] = []
+        self._origin: float | None = None
+        #: Whether `tick` steps the world: only for the game's own service.
+        self.steps_physics = physics is None
+        self.physics = physics if physics is not None else Physics(
+            PHYSICS.replaced(mode='inline'))
         self.look = looks()
         self.on_event = on_event or (lambda kind, detail=None: None)
         self.aim = Aim()
@@ -837,7 +859,7 @@ class Game:
         self.chosen = next(name for name, count in self.stock.items() if count)
         self.state = 'aiming'
         self.message = self.level.hint
-        self.ball: PhysicsBody | None = None
+        self.ball: Body | None = None
         self.flying: Ammo | None = None
         self.subscription: Any = None
         self.elapsed = self.slow = 0.0
@@ -848,21 +870,18 @@ class Game:
     def wire_up_physics(self) -> None:
         '''=Wiring up the physics=
 
-        The world is built and the physics is told about it afterwards.  A
-        `PhysicsManager` holds the simulation and writes each body's pose
-        onto the `Transform` it is bound to.  Gravity is the OMI gravity
-        model: 9.81 metres per second squared, downward.  Its default linear
-        damping is a drag that settles scenes; a cannon-ball has none, so it
-        is switched off.
+        The world is built and the physics is told about it afterwards.  The
+        `Physics` holds the simulation and writes each body's pose onto the
+        `Transform` it is bound to.  Gravity is 9.81 metres per second squared
+        downward, and the rest of its settings are `PHYSICS`, above.
 
-        `attach` makes a node a physics body.  It cooks the collision shape
-        from the geometry the node draws, binds the body to the node, and
-        returns the `PhysicsBody`.  `strategy='primitive'` asks for the box or
-        sphere the geometry fits, which the solver has exact tests for.  With
-        no `motion` the body is static: everything else collides with it and
-        it never moves.  A `Motion` of type DYNAMIC has a mass and falls; one
-        of type KINEMATIC is moved by the game and pushes whatever is in its
-        way.
+        `add_static`, `add_dynamic` and `add_kinematic` make a node a physics
+        body.  `proxy='box'` is the box the node's geometry fits and
+        `'sphere'` the sphere, which the solver has exact tests for.  A static
+        body never moves and everything else collides with it.  A dynamic one
+        has a mass and falls.  A kinematic one is moved by `drive`, and pushes
+        whatever is in its way.  Every piece is added by name, and the game
+        has set the service to make bodies only from what it adds.
 
         `material` names how a surface behaves: its friction and its
         restitution, the fraction of the closing speed a contact gives back.
@@ -870,35 +889,86 @@ class Game:
         rebounds far on the rubber springboard, less from the wood of the
         ground, and a lead ball hardly at all.'''
         course = self.course
-        self.manager = PhysicsManager(
-            gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)),
-            default_linear_damping=0.0, fixed_dt=STEP)
-        self.world = self.manager.world
-        self.materials = {ammo.name: self.world.add_material(ammo.material) for ammo in AMMO}
-        self.bodies: dict[PhysicsBody, Piece] = {}
-        self.animators: list[KinematicAnimator] = []
+        physics = self.physics
+        for body in self.bodies:
+            body.remove()
+        self.bodies = {}
+        self.slides = []
+        self._origin = None
+        physics.drop_remainder()
+        for ammo in AMMO:
+            physics.materials.define(
+                ammo.name, static_friction=ammo.material.staticFriction,
+                dynamic_friction=ammo.material.dynamicFriction,
+                restitution=ammo.material.restitution)
         for piece in course.pieces:
-            body = self.manager.attach(piece.node, piece.motion, material=piece.material,
-                                       strategy='primitive', trigger=piece.trigger)
+            body = self.add(piece)
             self.bodies[body] = piece
-            if piece.pose is not None:
-                self.animators.append(KinematicAnimator(self.world, body.index, piece.pose))
         self.pad = self.body_of('pad')
         self.crates = [body for body, piece in self.bodies.items() if piece.kind == 'crate']
-        self.homes = numpy.array([self.world.position[body.index] for body in self.crates])
+        self.homes = numpy.array([body.position for body in self.crates])
         '''=A trigger=
 
-        With `trigger=True` the geometry becomes a trigger instead: it stops
-        nothing and reports what enters it.  The red mark is one, so a ball
-        that lands on the target is inside it, and the game subscribes to its
-        `enter` events.  Crates resting on the mark are inside it too, which
-        is why the handler asks who came in.'''
-        self.manager.events.subscribe(self._entered, body=self.pad,
-                                      kinds=('trigger',), phases=('enter',))
-        if self.crates:
-            self.manager.events.subscribe(self._crashed, body=self.crates, above=CRASH_SPEED)
+        A piece that is a trigger stops nothing and reports what enters it.
+        The red mark is one, so a ball that lands on the target is inside it,
+        and the game registers for its `enter` events.  Crates resting on the
+        mark are inside it too, which is why the handler asks who came in.'''
+        self.pad.addEventHandler('enter', function=self._entered)
+        for crate in self.crates:
+            crate.addEventHandler('hit', function=self._crashed, above=CRASH_SPEED)
 
-    def body_of(self, kind: str) -> PhysicsBody:
+    def add(self, piece: Piece) -> Body:
+        '''One piece of the course as the kind of body it names.
+
+        A piece that moves on a pose is steered by it.  A sliding mark is a
+        trigger, which has no velocity to give, so a handler for the step
+        puts it where the pose says it is before each step.'''
+        physics = self.physics
+        pose = None if piece.pose is None else self._from_the_start(piece.pose)
+        if piece.body == 'trigger':
+            body = physics.add_trigger(piece.node, proxy='box')
+            if pose is not None:
+                physics.addEventHandler('before-step', function=self._slide(body, piece.node, pose))
+            return body
+        if piece.body == 'dynamic':
+            return physics.add_dynamic(piece.node, proxy='box', mass=piece.mass,
+                                       material=piece.material)
+        if piece.body == 'kinematic':
+            body = physics.add_kinematic(piece.node, proxy='box', material=piece.material)
+            if pose is not None:
+                body.drive(pose)
+            return body
+        return physics.add_static(piece.node, proxy='box', material=piece.material)
+
+    def _from_the_start(self, pose: Callable[[float], Any]) -> Callable[[float], Any]:
+        '''``pose`` run on the seconds since the course began, which is the
+        service's time at the end of its first step.'''
+        @physics_callback
+        def run(time: float) -> Any:
+            if self._origin is None:
+                self._origin = time
+            return pose(time - self._origin)
+        return run
+
+    def _slide(self, body: Body, node: Any, pose: Callable[[float], Any]) -> Callable[[Any], None]:
+        '''A handler that puts ``body`` and its ``node`` where ``pose`` says they are at the end of each step.
+
+        A trigger is not written back onto its node by the service, so the
+        handler moves the node itself, through ``physics.render.set``: the
+        handler runs on the thread that steps the world, and a scene field is
+        set from the render thread.  It is kept in ``self.slides``, since the
+        service holds a handler weakly.'''
+        physics = self.physics
+
+        @physics_callback
+        def put(step: Any) -> None:
+            at = pose(step.time + step.dt)[0]
+            body.set_transform(translation=at)
+            physics.render.set(node, translation=at)
+        self.slides.append(put)
+        return put
+
+    def body_of(self, kind: str) -> Body:
         """The body of the one piece of ``kind``."""
         return next(body for body, piece in self.bodies.items() if piece.kind == kind)
 
@@ -922,9 +992,9 @@ class Game:
     @property
     def position(self) -> tuple[float, ...]:
         """Where the ball is: in the world, or in the mouth of the barrel."""
-        if self.ball is None or self.ball.index is None:
+        if self.ball is None:
             return self.muzzle
-        return tuple(float(part) for part in self.world.position[self.ball.index])
+        return tuple(float(part) for part in self.ball.position)
 
     def adjust(self, **change: float) -> None:
         """Move the aim and turn the cannon to it; a ball already in the air keeps its course."""
@@ -954,7 +1024,7 @@ class Game:
         """How many crates have been knocked more than TOPPLED metres from where they stood."""
         if not self.crates:
             return 0
-        now = self.world.position[[body.index for body in self.crates]]
+        now = numpy.array([body.position for body in self.crates])
         return int((numpy.linalg.norm(now - self.homes, axis=1) > TOPPLED).sum())
 
     def fire(self) -> bool:
@@ -981,38 +1051,35 @@ class Game:
         ammo = AMMO_BY_NAME[self.chosen]
         '''=Go=
 
-        The ball is a sphere, a node like the towers, attached as a
-        dynamic body at the mouth of the barrel, standing still.  The
-        kinds of ball differ in the mass and the material they are given.
-        `apply_impulse` adds an impulse in newton seconds, and the body's
-        velocity becomes impulse over mass: the mass times the power,
-        along the barrel, so every ball leaves the barrel at the same
-        speed and the heavy ones carry more punch.  `set_force` pushes a
-        body with a steady force until it is changed, which is the wind:
-        the same force moves a light ball further than a heavy one.  A
-        sphere resting on the ground rolls under any push, so the force is
-        taken away at the ball's first touch.'''
+        The ball is a sphere, a node like the towers, made a dynamic body at
+        the mouth of the barrel, standing still.  The kinds of ball differ in
+        the mass and the material they are given.  `apply_impulse` adds an
+        impulse in newton seconds, and the body's velocity becomes impulse
+        over mass: the mass times the power, along the barrel, so every ball
+        leaves the barrel at the same speed and the heavy ones carry more
+        punch.  `set_force` pushes a body with a steady force until it is
+        changed, which is the wind: the same force moves a light ball further
+        than a heavy one.  A sphere resting on the ground rolls under any
+        push, so the force is taken away at the ball's first touch.  Each
+        call is a command, applied at the start of the next step.'''
         node = surfaces.shape(surfaces.sphere(BALL_RADIUS), self.look[ammo.look],
                               translation=self.muzzle)
-        self.ball = self.manager.attach(
-            node, model.Motion(type=model.DYNAMIC, mass=ammo.mass),
-            material=self.materials[ammo.name], strategy='primitive')
+        self.ball = self.physics.add_dynamic(
+            node, proxy='sphere', mass=ammo.mass, material=ammo.name)
         '''The impulse is the power along the barrel's own axis, carried
         into the world by the cannon's frame of reference.'''
         kick = ammo.mass * self.aim.power * self.course.gun.along
-        assert self.ball.index is not None
-        self.world.apply_impulse(self.ball.index, tuple(float(part) for part in kick))
+        self.ball.apply_impulse(tuple(float(part) for part in kick))
         if self.course.wind:
-            self.world.set_force(self.ball.index, (0.0, 0.0, self.course.wind))
+            self.ball.set_force((0.0, 0.0, self.course.wind))
         '''=What the ball touched=
 
-        A subscription to the ball's own contacts hears each time it
+        A handler on the ball's own hits hears each time it
         touches another body.  Touching the ground or a tower does not end
         the shot, because a rubber ball keeps going.  The game looks at
         what was touched: a bounce off the springboard or a wall that
         ends in a hit is a ricochet, and scores extra.'''
-        self.subscription = self.manager.events.subscribe(
-            self._touched, body=self.ball, phases=('begin',))
+        self.subscription = self.ball.addEventHandler('hit', function=self._touched)
         self.stock[ammo.name] -= 1
         if not self.stock[ammo.name]:
             self.chosen = next((name for name, count in self.stock.items() if count),
@@ -1031,7 +1098,7 @@ class Game:
             self.subscription.cancel()
             self.subscription = None
         if self.ball is not None:
-            self.manager.remove(self.ball)
+            self.ball.remove()
             self.ball = None
 
     def _entered(self, event: Any) -> None:
@@ -1046,8 +1113,8 @@ class Game:
         piece = self.bodies.get(event.other)
         if piece is not None and piece.kind in RICOCHETS:
             self.ricochet = True
-        if self.course.wind and self.ball is not None and self.ball.index is not None:
-            self.world.set_force(self.ball.index, (0.0, 0.0, 0.0))
+        if self.course.wind and self.ball is not None:
+            self.ball.set_force((0.0, 0.0, 0.0))
         self.on_event('impact', event)
 
     def _crashed(self, event: Any) -> None:
@@ -1079,17 +1146,21 @@ class Game:
     def tick(self, seconds: float) -> None:
         '''=Moving things=
 
-        A kinematic body is steered by an animator: given the seconds that
-        have passed it sets the velocity that carries the body to where its
-        pose says it will be.  That is done before the world advances, which
-        runs the fixed steps the seconds hold and delivers the events.'''
-        for animator in self.animators:
-            animator.update(seconds)
-        self.manager.advance(seconds)
-        if self.state != 'flying' or self.ball is None or self.ball.index is None:
+        A kinematic body is steered by the pose it was `drive`n with: at the
+        end of each step the service gives the pose the simulation time and
+        the body takes the velocity that carries it there.  A context's
+        service steps itself.  The game's own is stepped here: `frame` runs
+        the fixed steps the seconds hold and delivers the events.'''
+        if self.steps_physics:
+            self.physics.frame(seconds)
+        self.judge(seconds)
+
+    def judge(self, seconds: float) -> None:
+        '''Decide whether the ball in the air has missed, ``seconds`` after the last look.'''
+        if self.state != 'flying' or self.ball is None:
             return
         self.elapsed += seconds
-        speed = float(numpy.linalg.norm(self.world.linear_velocity[self.ball.index]))
+        speed = float(numpy.linalg.norm(self.ball.velocity))
         self.slow = self.slow + seconds if speed < SETTLED_SPEED else 0.0
         if (self.position[1] < FALLEN or self.course.beyond(self.position)
                 or self.slow >= SETTLED_TIME or self.elapsed > LONGEST):
@@ -1110,6 +1181,10 @@ class Game:
 
 
 class TestContext(BaseContext):
+    '''The window: four views of the game, `PHYSICS` as its physics world and
+    a renderer for the procedural metals and stone.'''
+    contextDefinition = ContextDefinition(renderer='pbr', size=SIZE, physics=PHYSICS)
+
     def OnInit(self):
         '''The rules are a `Game`, which makes the nodes its bodies are bound
         to; the context puts them in the scene and keeps the scene in step.'''
@@ -1163,14 +1238,14 @@ class TestContext(BaseContext):
         self.wash = ScreenWash(strength=0.0)
         self.readout = TextBlock(anchor='bottom-right', align='right', lines=[])
         self.addHUDLayer(HUDLayer(children=[self.wash, self.readout]))
-        '''=Sound=
+        '''=Sound and the game=
 
-        `engine_for` is the context's audio engine, opened on first ask, or
-        None where the definition has audio switched off, and a `Sounds`
-        played into None does nothing.'''
-        self.engine = audioscene.engine_for(self)
+        `self.audio` is the context's sound service: `play` returns a voice at
+        once, and with sound switched off the voice plays nothing.  The game's
+        bodies go in `self.physics`, the context's own world, which steps
+        itself and writes the poses onto the nodes.'''
         self.sounds = Sounds()
-        self.game = Game(on_event=self.OnGame)
+        self.game = Game(on_event=self.OnGame, physics=self.physics)
         self.lay_out()
         for name in AIM_KEYS:
             self.addEventHandler('keypress', name=name, function=self.OnAim)
@@ -1178,17 +1253,12 @@ class TestContext(BaseContext):
             self.addEventHandler('keypress', name=key, function=self.OnSelect)
         self.addEventHandler('keypress', name=' ', function=self.OnFire)
         self.addEventHandler('keypress', name='v', function=self.OnView)
-        '''=The clock=
+        '''=Each frame=
 
-        The timer repeats, and `fraction` arrives every frame.  The world is
-        advanced by the time since the last frame, from the engine's own
-        clock, so a capture that steps the clock steps the ball with it.
-        `advance` runs as many fixed steps as that time holds.'''
-        self.timer = Timer(duration=1.0, repeating=1)
-        self.timer.addEventHandler('fraction', self.OnFraction)
-        self.timer.register(self)
-        self.timer.start()
-        self.last = systemtime.systemTime()
+        `animate` calls `OnFrame` once a frame with the seconds since the
+        last, from the engine's clock, so a capture that steps the clock
+        steps the rules with it.  The world needs no call: it steps itself.'''
+        self.animate(self.OnFrame)
         self.update()
         print(__doc__)
 
@@ -1242,17 +1312,17 @@ class TestContext(BaseContext):
         the ball really struck and as hard as it really struck.'''
         game = self.game
         if kind == 'fire':
-            self.sounds.fire(self.engine, game.muzzle, game.aim.power)
+            self.sounds.fire(self.audio, game.muzzle, game.aim.power)
         elif kind == 'impact' and detail.approach > IMPACT_SPEED:
-            self.sounds.play(self.engine, 'thud', detail.point,
+            self.sounds.play(self.audio, 'thud', detail.point,
                              min(detail.approach / 20.0, 1.0), game.flying.pitch)
             if game.flying.sparks:
                 self.sparks.burst_at(tuple(float(p) for p in detail.point),
                                      direction=tuple(float(n) for n in detail.normal))
         elif kind == 'crash':
-            self.sounds.play(self.engine, 'crash', detail.point, min(detail.approach / 10.0, 1.0))
+            self.sounds.play(self.audio, 'crash', detail.point, min(detail.approach / 10.0, 1.0))
         elif kind == 'hit':
-            self.sounds.play(self.engine, 'fanfare', game.position)
+            self.sounds.play(self.audio, 'fanfare', game.position)
             self.fireworks.burst_at(game.position)
             self.wash.colour = WIN_WASH
             self.wash.strength = WASH_STRENGTH
@@ -1279,32 +1349,26 @@ class TestContext(BaseContext):
         else:
             self.ghost.point = list(self.trail.point)
             self.ghost_line.coordIndex = list(range(len(self.trail.point))) + [-1]
-            self.shot.children = [self.game.ball.transform]
+            self.shot.children = [self.game.ball.node]
             self.trail.point = [self.game.muzzle, self.game.muzzle]
         self.update()
 
-    def OnFraction(self, event):
-        now = systemtime.systemTime()
-        self.game.tick(min(now - self.last, 0.05))
-        self.last = now
+    def OnFrame(self, seconds):
+        self.game.judge(seconds)
         self.update()
 
     def update(self):
         '''Write what the game says into the scene.  The ball's `Transform` is
-        moved by the physics manager, so what is left here is the camera, the
+        moved by the physics service, so what is left here is the camera, the
         path drawn behind the ball, and the text.'''
         game = self.game
         '''=The camera=
 
         The eye is a `Viewpoint` in the cannon's own frame, so it is wherever
         the barrel's frame puts it.  `look_through` moves the window's camera
-        to it, which is done again each frame because the frame turns.'''
+        to it, which is done again each frame because the frame turns.  The
+        context's audio hears from the camera, so the ears follow it.'''
         game.course.gun.look_through(self)
-        '''The sounds are played directly rather than through a scene `Sound`,
-        so nothing else moves the engine's listener.  The camera is the
-        listener, and it has just moved, so the ears follow it here.'''
-        if self.engine is not None:
-            self.engine.listen(self.getViewPlatform())
         self.loaded.translation = game.muzzle
         if game.state == 'flying':
             path = list(self.trail.point)
@@ -1338,4 +1402,4 @@ def barrel():
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop(definition={'renderer': 'pbr', 'size': SIZE})
+    TestContext.ContextMainLoop()

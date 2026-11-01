@@ -5,42 +5,1353 @@ Physics & Collision
 
 OpenGLContext simulates rigid bodies in real time beside the scenegraph. The
 simulation applies gravity and drag, resolves collisions between primitive
-shapes and meshes, and supports triggers, gravity zones and joints. A
-first-person character controller walks on the same collision world. The
-render tree, culling, shadows and picking work the same with or without it.
+shapes and meshes, and supports triggers, gravity zones and joints. Characters
+walk, run, jump and swim on the same collision world, and vehicles drive on it. The render tree, culling,
+shadows and picking work the same with or without it.
 
-The simulation itself is the ``omi_physics`` package, a dependency of
-OpenGLContext. OpenGLContext adds the scenegraph binding, walking for any
-context, colliders for streamed worlds, and a debug overlay. The data model is
+The simulation is Jolt Physics 5.6, through the ``pyjoltphysics`` package,
+which ``pip install OpenGLContext`` installs. Jolt steps the world on a native
+thread of its own (:doc:`physicsthread`). The service's API names none of the
+engine's types, so the engine underneath can change without a game changing
+(:ref:`physics-engine`).
+OpenGLContext adds the service every context hosts
+(``context.physics``), the binding to scene nodes, events, characters, walking
+for any context, colliders for streamed worlds, and a debug overlay. The data model is
 the `OMI glTF physics extension family
 <https://github.com/omigroup/gltf-extensions>`__, so physics authored in Godot
 or Blender imports without conversion, and a scene exports back to glTF. The
 indented technical notes point at the code.
+
+A game imports what it needs from ``OpenGLContext.physics``: ``Physics``,
+``Body``, ``Character``, ``Joint``, ``Proxy``, ``PhysicsDefinition``,
+``CharacterCapabilities``, ``CharacterState``, ``Material``,
+``CollisionFilter``, ``Poses``, ``EngineInfo``, ``WorldCounts``,
+``GravityZone``, and for vehicles ``Vehicle``, ``VehicleSettings``, ``Wheel``,
+``VehicleState``, ``WheelState``, ``CarTuning``, ``CarWheel``, ``car_wheels``
+and ``Surface``. Each is
+OpenGLContext's own class (``OpenGLContext.physics.types``); the service
+converts them to the engine's at its boundary. ``CharacterCapabilities``,
+``Material`` and ``CollisionFilter`` keep the OMI field names, and an object
+with those fields is accepted in their place.
 
 .. _physics-authoring:
 
 Adding physics to a scene
 -------------------------
 
-The demos build their scenes with ``OpenGLContext.physics.demo.DemoScene``.
-Each ``add_*`` call creates a scenegraph ``Transform`` and a ``PhysicsBody``
-that the world moves:
+Every context has a physics world, ``context.physics``. It is made the first
+time a program mentions it and closed with the window, so a context that never
+uses physics pays nothing. A body is added with one call, the world steps
+itself, and what happens to a body reaches the program as an event. A program
+has no clock, no tick and no redraw request:
 
 .. code-block:: python
 
-   from OpenGLContext.physics.demo import DemoScene
-   scene = DemoScene()                       # default gravity 9.81 down
-   scene.add_box(size=(20,1,20), position=(0,-0.5,0), dynamic=False)  # floor
-   ball = scene.add_sphere(radius=0.5, position=(0,6,0), material='rubber')
-   # each frame:
-   scene.advance(dt)                         # steps the world, writes back Transforms
+   class StairsContext(Context):
+       def OnInit(self):
+           self.sg = sceneGraph(children=[Background(), DirectionalLight(),
+                                          stairs, ball])
+           body = self.physics.add_dynamic(ball, translation=(0, 2.26, -1.0),
+                                           mass=2.0, restitution=0.4)
+           body.apply_impulse((0, 0, 8))                # 4 m/s down the stairs
+           body.addEventHandler('hit', function=self.OnBallHit, above=1.0)
 
-A ``PhysicsBody`` binds an OMI ``motion`` and ``collider`` to a ``Transform``.
-The world writes the transform while the body is dynamic and awake. While the
-body sleeps or is kinematic, the world leaves the transform alone.
+The stairs are static because they are in ``sg``: a shape of the scene is a
+static body (:ref:`physics-scenery`). The tutorials build this scene a few lines
+at a time, and each changes one thing about it:
 
-The :doc:`Add physics to a scene <tutorials/physics/physics_getting_started>` tutorial
-builds a scene like this step by step.
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Tutorial
+     - Adds
+   * - :doc:`tutorials/physics/physics_stairs`
+     - ``add_dynamic``, ``apply_impulse``
+   * - :doc:`tutorials/physics/physics_stairs_colour`
+     - a ``'hit'`` handler that changes the scene
+   * - :doc:`tutorials/physics/physics_stairs_thread`
+     - ``@Context.physics_callback`` and ``physics.render.set``
+   * - :doc:`tutorials/physics/physics_stairs_shapes`
+     - ``proxy=``, ``physics.cook``, ``show_proxies``
+   * - :doc:`tutorials/physics/physics_stairs_material`
+     - ``physics.materials.define``, ``material=``: wet stone and rubber lanes,
+       a crate that skids or holds and a ball that thuds or bounces
+   * - :doc:`tutorials/physics/physics_stairs_gravity`
+     - ``add_gravity_zone``
+   * - :doc:`tutorials/physics/physics_stairs_sound`
+     - ``audio.play`` from a handler
+   * - :doc:`tutorials/physics/physics_stairs_surface_sound`
+     - a ``sound=`` on a material
+   * - :doc:`tutorials/physics/physics_stairs_tuning`
+     - ``enable``, ``tickHz``, ``set_transform``, ``PhysicsDefinition``
+
+A character that runs across a landscape is
+:doc:`tutorials/character/character_run`, and the
+:doc:`Add physics to a scene <tutorials/physics/physics_getting_started>` page
+walks the first tutorial. A ``Physics`` needs no context: a tool, a trace or a
+test makes one with ``Physics(PhysicsDefinition(mode='inline'))``, steps it with
+``frame(dt)`` and reads it (:ref:`testing-physics`).
+
+.. _physics-bodies:
+
+Bodies
+------
+
+Each ``add_*`` call takes a scenegraph node that draws triangles (a ``Shape``,
+a ``Transform`` holding shapes, a glTF ``scene.group``) and returns a ``Body``:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Call
+     - Makes a body that
+   * - ``add_static(node, proxy=None, **options)``
+     - never moves and stops what meets it
+   * - ``add_dynamic(node, proxy=None, **options)``
+     - the world moves: it falls, collides and answers pushes
+   * - ``add_kinematic(node, proxy=None, **options)``
+     - code moves (``set_transform``, ``drive``); it pushes dynamic bodies and is
+       not pushed
+   * - ``add_trigger(node, proxy=None, **options)``
+     - reports what enters and leaves it and stops nothing
+
+The body takes its starting pose from the node, and while it is dynamic and
+awake the world owns the pose and writes it to the node each frame. A node of
+``None`` with a ``proxy`` makes a body that is only a shape, such as a level
+cooked elsewhere (``add_static(None, proxy=Proxy.trimesh(points, triangles))``).
+The options are keywords:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Option
+     - Meaning
+   * - ``translation``, ``rotation``
+     - set on the node before the body is made, so a body is placed and added in
+       one call; the rotation is an axis and an angle in radians
+   * - ``mass``
+     - kilograms, for a dynamic body; left out, the shape's volume at
+       ``density`` (500 kg per cubic metre)
+   * - ``material``
+     - a preset or defined name (:ref:`physics-materials`) or a ``Material``
+   * - ``friction``, ``restitution``
+     - a Coulomb coefficient and the fraction of the closing speed a bounce
+       keeps; they make an anonymous material, from ``material`` where that is
+       given
+   * - ``linear_damping``, ``angular_damping``
+     - per second; the world's ``linearDamping`` (0.3) and ``angularDamping``
+       (1.5) where left out
+   * - ``gravity_factor``
+     - how much of gravity a body feels: 1 (the default) all of it, 0 none,
+       below 0 pulled up; ``Body.set_gravity_factor`` changes it later
+   * - ``collision_filter``
+     - a ``CollisionFilter``: the systems the body is a member of, and those it
+       collides with or not (:ref:`physics-presolve`); or the index of a
+       filter already given
+   * - ``blocks_characters``
+     - False for a body every character walks through
+       (:ref:`physics-characters`)
+
+A value that is not finite, a ``mass`` or ``density`` at or below zero, and a
+damping, ``friction`` or ``restitution`` below zero raise ``ValueError`` naming
+the option, and no body is made. The commands below, ``physics.gravity``,
+``enable(tick_frequency=)`` and ``PhysicsDefinition.validate()`` check their
+values the same way.
+
+A body is changed by commands. Each is applied at the start of the next step,
+from whichever thread made it, and a command made on the thread that steps the
+world is applied at once, so one handler body works in either place:
+
+.. code-block:: python
+
+   body.apply_impulse(impulse, at=None)      # newton-seconds; at is a world point
+   body.apply_torque_impulse(impulse)
+   body.set_force(force)                     # newtons, held until set again
+   body.set_velocity(velocity)               # metres a second
+   body.set_angular_velocity(velocity)       # radians a second about the world axes
+   body.set_transform(translation=None, rotation=None)   # a teleport
+   body.linear_damping = 0.5                 # per second
+   body.set_mass(4.0)                        # kilograms, a dynamic body only
+   body.set_material('rubber')               # a preset or defined name, or a defined material
+   body.set_friction(0.2); body.set_restitution(0.7)
+   body.wake(); body.remove()
+   physics.gravity = (0, -9.81, 0)           # may change every frame
+   physics.time                              # seconds of steps the world has taken
+
+Assigning to ``node.translation`` does not move a body: the world owns the
+pose and the next frame writes its own. ``set_transform`` is how a body is
+moved. Reading answers the last state the world published, which is at most one
+step old: ``body.position``, ``rotation`` (an axis and an angle),
+``orientation`` (the same turn as a quaternion ``(x, y, z, w)``), ``matrix``
+(the 4x4 row-vector world matrix, so a point ``p`` of the body is at
+``(p, 1) @ body.matrix`` and ``matrix[2, :3]`` is its +z axis in the world),
+``velocity``, ``angular_velocity``, ``speed`` and ``asleep``. A write made but
+not yet applied is what ``position`` reads back after ``set_transform``.
+
+``set_mass(kg)`` gives a dynamic body a new mass and the inertia its shape has
+at that mass; ``body.mass`` answers it at once. ``set_material`` gives any body
+but a trigger a new surface: ``body.material``, ``body.friction`` (the sliding
+coefficient) and ``body.restitution`` answer the new material's at once, and a
+strike on it plays the new material's sound. ``set_friction`` sets both friction
+coefficients and ``set_restitution`` the bounce, leaving the material's name and
+sound as they were; bodies given the same coefficients share one material in the
+world. The world uses each from its next step. Each raises ``ValueError`` for a
+value that is not finite (a mass must be above zero, a coefficient at or above
+zero), for ``set_mass`` on a body that is not dynamic, and for a name no
+material has.
+
+A scene with nothing awake costs nothing: the world thread waits until
+something moves, the frame asks for no redraw, and the window draws only what
+else changed.
+
+.. _physics-scenery:
+
+Scenery and glTF bodies
+-----------------------
+
+With ``colliders='scene'``, the default, each shape in the scene graph that no
+body claims becomes a static body when the render pass first sees it: a box or a
+sphere where the mesh is exactly one, otherwise its triangles. Cooking runs off
+the frame, on a cooking thread, and the body joins the world when it is done.
+
+A context's world takes its first step once the scenery of its scene has
+joined it. Its first frame looks at the scene, before the first draw, and
+starts the cooking. A threaded world draws frames while it waits: adding a
+body starts no steps and the frames apply no time. An inline world's first
+frame waits for the cooking, so its first step is the same on every run. A ball put on a landing in ``OnInit`` then
+rests on the landing however long the first frame takes, while shaders
+compile and the window maps. Once the world runs, a free-running world steps
+in real time whatever the render thread is doing: a long frame delivers the
+events of every step it spanned, and the bodies are where those steps left
+them. A ``Physics`` made without a context has no scene to wait for and
+starts at its first moving body. Scenery added to the scene later joins a
+world that is already running, in the frame its cooking ends.
+
+A shape is left out when it
+
+- sits in an X3D ``Collision`` group that is not enabled,
+- carries ``collide = False`` (glTF: ``extras.collide`` false),
+- draws no triangles, or
+- belongs to a body that was added by name, or sits under a node that does.
+
+A shape's body is placed where the shape stood when it was first seen, and it
+goes when the shape leaves the scene. A body added with ``add_static`` or
+``add_dynamic`` for a shape the scene has already made replaces that body, which
+is why a ball appended to the scene and then given ``add_dynamic`` is static for
+no more than one frame. A geometry with no vertex arrays of its own, such as a
+``Box``, ``Sphere``, ``Cylinder`` or ``Cone``, gives the triangles it draws.
+``colliders='explicit'`` makes bodies only of what the program adds, and
+``'none'`` makes no colliders at all.
+
+A glTF file with ``OMI_physics_body`` and ``OMI_physics_shape`` blocks needs no
+call: its bodies are made when the scene is mounted and removed when it is
+unmounted. A program finds one of them, or any scenery, with ``body_for``:
+
+.. code-block:: python
+
+   door = self.physics.body_for(scene.sceneGraph.getDEF('Door'))   # a Body, or None
+   door.addEventHandler('hit', function=self.OnDoorHit)
+   doors = self.physics.bodies_in(scene.group)                      # every Body under a node
+
+``body_for`` answers the body of the node itself, else of the nearest ancestor
+that has one, so a ``Shape`` inside a body's ``Transform`` finds that body, and
+it answers the same ``Body`` object each time. It answers None for a node the
+rules above leave out. The scene derivation runs in the frame, so a node mounted
+this frame has its body made on the first call, and a handler added in the
+interval is kept on the handle until the body is in the world. Scenery reports
+no contacts until something registers a handler on it, so a world nobody
+watches pays nothing for events.
+
+Two costs are held by tests: loading ten thousand shapes adds no work to a
+frame after the first, and the derivation grows with the shapes that are new
+rather than with the scene.
+
+.. _physics-proxies:
+
+Collision shapes
+----------------
+
+The world collides with a shape that stands for a node, its *proxy*, and the
+proxy decides what the body costs and how it behaves. ``proxy=None`` cooks one
+from the triangles the node draws: a fitted primitive where one fits, the
+triangles for a static body and the convex hull for a dynamic one.
+
+.. code-block:: python
+
+   physics.add_dynamic(ball, proxy='sphere')       # fit a sphere to the bounds
+   physics.add_dynamic(chair, proxy='convex')      # the hull
+   physics.add_dynamic(chair, proxy=chair_low)     # another node: a simpler mesh
+   physics.add_static(wall, proxy=Proxy.box((0.2, 3, 8)))   # written by hand
+   crate = physics.cook(crate_node, 'box')         # cooked once, shared below
+   for each in crates:
+       physics.add_dynamic(each, proxy=crate)
+   physics.show_proxies(True)                      # draws the proxies
+
+The strategy names are ``'auto'``, ``'sphere'``, ``'box'``, ``'convex'`` and
+``'trimesh'``; ``'trimesh'`` is for static bodies only, and a node that draws no
+triangles raises ``ValueError``. ``'sphere'`` and ``'box'`` fit the primitive to
+the bounds. ``Proxy`` (``OpenGLContext.physics.proxy``) is a ``kind`` and its
+``params``: ``box(size)``, ``sphere(radius)``, ``capsule(height, radius)``,
+``cylinder(height, radius, radius_top)``, ``convex(points)``,
+``trimesh(points, indices)``, ``compound(parts)`` and ``heightfield(...)``,
+lengths in metres. ``proxy.kind`` names the shape and ``proxy.params`` holds
+its values by those names, read-only. A proxy is shared by every body made with it and the world
+holds its shape once, so a hundred crates cost one box. ``show_proxies(True)``
+draws each box and sphere body as a green wireframe over the scene and
+``show_proxies(False)`` takes it out; see :ref:`physics-debug`.
+
+``Proxy.from_mesh(points, indices, strategy, dynamic)`` cooks a proxy from a
+vertex array by the same strategies; a concave moving body becomes a
+``compound`` of convex pieces, which a body of one shape cannot hold. To add colliders to a glTF file ahead of time,
+run the ``physics_cook`` module:
+
+.. code-block:: bash
+
+   python -m OpenGLContext.bin.physics_cook scene.gltf -o cooked.gltf
+
+It gives every mesh node that has no physics body an ``OMI_physics_shape`` and
+an ``OMI_physics_body``: a static ``trimesh`` by default, or a ``convex`` body
+with ``--motion dynamic``. It works on ``.gltf`` JSON documents and leaves nodes
+that already have a body unchanged. Without ``-o`` it overwrites the input.
+
+.. _physics-materials:
+
+Materials
+---------
+
+A material says how a surface grips, bounces and sounds. ``wood``, ``metal``,
+``rubber`` and ``ice``, the engine's presets, are defined from the start:
+
+.. code-block:: python
+
+   physics.materials.define('mud', friction=0.9, restitution=0.0, sound='squelch.ogg',
+                            footstep='squelch-step.ogg')
+   physics.materials.pair('mud', 'rubber', friction=1.2)     # a rule for that pair only
+   physics.add_static(floor, material='mud')
+
+``friction`` sets the static and dynamic coefficients together
+(``static_friction`` and ``dynamic_friction`` set them one at a time) and
+``restitution`` is the fraction of the closing speed a bounce keeps, from 0 to
+1. Where two bodies meet, each coefficient is the average of the two materials'
+(the OMI combine modes); ``pair`` replaces that for one pair. A material is
+defined before the bodies that take it: a body is told whether to report its
+strikes when it is made or given the material with ``body.set_material``.
+
+``sound`` is played where a body of the material is struck harder than 1 m/s, at
+the contact point, at a gain that reaches 1.0 at 6 m/s, through
+``context.audio``. ``footstep`` is played where a character's foot lands on it.
+Each is whatever ``audio.play`` takes: a path, a URL, a name given to
+``audio.load`` or a decoded clip. ``materials.names`` lists the names and
+``materials.get(name)`` answers one.
+
+.. _physics-zones:
+
+Gravity zones
+-------------
+
+.. code-block:: python
+
+   from OpenGLContext.physics.zones import Box, Sphere
+
+   physics.add_gravity_zone(Box(center=(0, 3, 0), size=(4, 6, 4)), gravity=(0, 14, 0))
+   physics.add_gravity_zone(Sphere((0, 0, 0), 30.0), gravity=12.0, toward=(0, 0, 0),
+                            priority=5, replace=True)
+
+A zone is a region with a gravity of its own; ``Box(center, size)`` is
+``size`` metres across and ``Sphere(center, radius)`` has a radius in metres.
+``gravity`` is an acceleration in metres a second squared: a vector, or one
+number for downward, or the strength of a pull toward the point ``toward``.
+Inside a zone the zone's gravity is added to the world's. A zone with a higher
+``priority`` is applied after the lower, ``replace`` drops the lower ones instead
+of adding to them and ``stop`` ends the counting there. ``Zone`` nodes in the
+scene that carry gravity, and ``OMI_physics_gravity`` blocks in a loaded glTF
+(:doc:`zones`), are registered without a call and follow the zone when it moves.
+Zone gravity acts on bodies and characters of ``context.physics`` and not on
+the rigid bodies of an X3D collection (:ref:`physics-x3d`). ``add_gravity_zone``
+returns a ``GravityZone`` record of what it made: ``region``, ``gravity``,
+``direction``, ``toward``, ``priority``, ``replace`` and ``stop``.
+
+.. _physics-events:
+
+.. _physics-collisions:
+
+Events
+------
+
+A body, or the whole world, tells the program what happened through events. The
+names are ``hit`` (a contact begins), ``touching`` (on every step it lasts),
+``separate`` (it ends), ``enter``, ``stay`` and ``exit`` (a trigger's overlaps),
+``sleep`` and ``wake``:
+
+.. code-block:: python
+
+   ball.addEventHandler('hit', function=self.OnBallHit, above=1.0)     # faster than 1 m/s
+   ball.addEventHandler('hit', function=self.OnBallHit, other=crate)   # only that body
+   plate.addEventHandler('enter', function=self.OnPlate)
+   physics.addEventHandler('hit', function=self.OnAnyHit)              # every body
+   self.addEventHandler('physics-hit', body=ball, function=self.OnBallHit)   # the same
+
+   subscription = ball.addEventHandler('hit', function=self.OnBallHit)
+   subscription.cancel()
+
+``addEventHandler(event, function=fn, **filters)`` is the spelling the context,
+``Timer`` and ``TimeSensor`` use, and ``function=None`` removes the handlers.
+``above`` is the closing speed in metres a second a contact must exceed to be
+heard; a box resting on the floor closes on it by about ``g`` times the step
+(0.08 m/s at 120 steps a second), so ``above=0.5`` hears every blow and nothing
+while it rests. ``other`` is a body, or a list, the other side must be. A
+handler that covers both sides of a pair hears the event once. Handlers are held
+weakly, as every handler on :doc:`eventmodel` is: a bound method of a live
+object is called, and a lambda that nothing else refers to is collected as it is
+registered. A handler also ends when its body is removed. One that raises is
+logged once with its collision, and the registration goes on.
+
+Each handler receives one ``Collision``, turned to face the body it was
+registered for:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Field
+     - Meaning
+   * - ``kind``, ``phase``
+     - ``'contact'`` with ``'begin'``, ``'persist'`` or ``'end'``;
+       ``'trigger'`` with ``'enter'``, ``'stay'`` or ``'exit'``
+   * - ``body``, ``other``
+     - the ``Body`` on each side; ``other`` is always a ``Body``, scenery
+       included
+   * - ``node``, ``other_node``
+     - the node each side drives
+   * - ``point``
+     - world-space contact point, metres
+   * - ``normal``
+     - unit vector from ``other`` into ``body``: the way ``body`` was pushed
+   * - ``speed``, ``approach``
+     - the closing speed along the normal before the solve, m/s
+   * - ``impulse``
+     - the normal impulse, N*s; a breaking strength compares against this
+   * - ``friction_impulse``, ``slip``
+     - friction impulse (N*s) and sliding speed (m/s), for scraping sounds
+   * - ``depth``
+     - the deepest penetration, metres
+   * - ``time``, ``step``
+     - the simulation time (seconds) and the step count of the step it happened
+       on; they place an event whatever frame delivered it
+   * - ``solved``
+     - False where a contact filter let the pair pass through each other
+   * - ``reason``
+     - on an ``'end'``: ``'separated'`` or ``'removed'``
+
+The world records every step, so a frame that ran four steps delivers what
+happened on all four, and a bounce is heard at any frame rate. Two bodies that
+fall asleep against each other are still touching: a crate that settles gets a
+``'begin'`` and no ``'end'`` until something moves it off.
+
+.. _physics-thread-rule:
+
+Which thread a handler runs on
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A handler runs on the render thread unless its function is marked as a physics
+callback:
+
+.. code-block:: python
+
+   class StairsContext(Context):
+       def OnInit(self):
+           body.addEventHandler('hit', function=self.OnBallHit, above=1.0)
+
+       @Context.physics_callback
+       def OnBallHit(self, hit):
+           self.physics.render.set(self.skin, baseColor=(1, 0, 0))
+
+``physics_callback`` only sets an attribute on the function, so a direct call
+runs it on the calling thread like any other. The class body of a context has
+``Context`` in scope, so no import is needed, and ``OpenGLContext.physics``
+provides it for other code.
+
+- A render handler is called by the frame, after the poses are written, and may
+  change the scene directly. The step that made the event ended earlier, so the
+  handler cannot change that step. Its return value is ignored.
+- A physics handler is called on the thread that steps the world, right after
+  the step that made the event, with the world as that step left it. A slow
+  one slows the simulation. It may call any ``Body`` method and
+  ``physics.remove``, which apply to the world at once, and must not assign
+  scene fields, since the render thread may be drawing them. The service's
+  render-thread tables (the bodies by node, the copy queries read on a
+  threaded world) follow such a change in the next frame.
+
+A physics handler sends scene changes with ``physics.render``:
+
+.. code-block:: python
+
+   physics.render.set(node, baseColor=RED)     # coalesced per (node, field); last write wins
+   physics.render.call(function, *args)        # runs on the render thread, before the next draw
+
+Called on the render thread itself, ``render.set`` assigns at once, so moving
+a handler between threads changes the marker and the line that touches the
+scene, and nothing else. ``physics.post(function, *args)`` is the explicit hand-off
+the other way, from the render thread to the world's thread.
+
+The world has two events of its own. ``physics.addEventHandler('before-step',
+function=fn)`` calls ``fn(step)`` before each fixed step, with a ``Step`` of
+``dt``, ``index`` and ``time``, and ``'after-step'`` calls it after. A game that
+applies forces, reads contacts or moves bodies between steps does it there. Both
+are physics callbacks. A character's steps come after the world's steps of the
+frame, so a rule that moves a character at each step uses the character's own
+``before-step`` and ``after-step`` handlers (:ref:`characters-steps`). In
+inline mode a physics callback for a body event runs after the step that made
+the event, so a frame of three steps calls it three
+times in step order with the contacts of each; a render handler runs once after
+the last step and receives every event the frame made, in order, each carrying
+its step. A controller that needs every contact of every step (``hit.step``,
+``hit.impulse``) uses the first.
+
+A session that is recorded writes each event a handler hears to its journal, and
+a replay compares them with the recording (:doc:`telemetry`).
+
+.. _physics-hitscan:
+
+Hitscan weapons
+~~~~~~~~~~~~~~~
+
+A shot that is a raycast never touches the solver. The shooter casts, pushes
+what it hit and says so:
+
+.. code-block:: python
+
+   hit = physics.raycast(muzzle, aim, max_distance=200.0, skip=player.body)
+   if hit is not None:
+       hit.body.apply_impulse(aim * 4.0, at=hit.point)     # N*s at the point it struck
+       self.audio.play(PING, at=hit.point)
+
+``hit`` is a ``Hit`` with the ``body`` (None for a body the service has no
+handle for), the ``point``, the surface ``normal``, the ``distance`` and the
+``triangle`` struck, or -1 for a shape with none. ``skip`` is a body, or a
+list, the ray passes through.
+
+.. _physics-presolve:
+
+Breaking instead of bouncing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A pane that shatters when ``hit.impulse`` passes its strength is removed by its
+handler and replaced by fragments; the ball has already bounced off it on that
+step. To let the ball carry on through, decide before the solve with a contact
+filter:
+
+.. code-block:: python
+
+   def breaks(approach):
+       """False lets the ball through the pane the blow breaks."""
+       return not (pane in (approach.first, approach.second) and approach.impulse > 5.0)
+
+   physics.set_contact_filter(breaks)
+
+The filter is asked once about each pair as it first touches, where one of the
+two bodies has a handler, on the thread that steps the world. ``approach`` is an
+``Approach``: ``first`` and ``second`` (bodies, or None for a body with no
+handle), ``approach`` (the closing speed in m/s), ``impulse`` (that speed times
+the pair's reduced mass, in N*s), ``point`` and ``normal``. True or None solves
+the pair; False lets the two pass through each other until they part. An
+ignored pair is still delivered, with ``solved`` False, so the handler that
+spawns the fragments hears it. A filter that raises is logged once and the pair
+is solved. ``physics.set_contact_filter(None)`` removes it.
+
+The fragments should not deflect the ball either. A collision filter puts bodies
+in systems and says which systems meet:
+
+.. code-block:: python
+
+   from OpenGLContext.physics import CollisionFilter
+
+   balls = CollisionFilter(collisionSystems=('ball',))
+   shards = CollisionFilter(collisionSystems=('shard',), notCollideWithSystems=('ball',))
+   physics.add_dynamic(ball, collision_filter=balls)
+   physics.add_dynamic(shard, collision_filter=shards)
+
+Two bodies collide only where each one's filter admits the other.
+``collideWithSystems`` names the only systems a body meets; left as None it
+meets every system not in ``notCollideWithSystems``. Equal filters given to
+several bodies are one filter in the world. Queries and characters do not read
+collision filters.
+
+.. _physics-movers:
+
+Doors, lifts and platforms
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A kinematic body moves at the velocity it is given and nothing pushes it.
+``body.drive(pose)`` steers one by a function of time: at the end of each step
+the service calls ``pose(time)`` with the simulation time in seconds, and the
+body takes the velocity that carries it to the ``(translation, rotation)`` the
+function returns, the rotation an axis and an angle or None to leave it. What
+stands on the body is carried, and a hit against it has the right closing
+speed. The function is a physics callback:
+
+.. code-block:: python
+
+   door = physics.add_kinematic(door_node, proxy=Proxy.box(DOOR_SIZE))
+
+   @physics_callback
+   def pose(time):
+       lift = door_lift(time, plate_pressed())      # metres, from the plate's events
+       return (x, y + lift, z), None
+
+   door.drive(pose)
+
+``pose`` is given the world's clock, which ``physics.time`` reads outside a
+step: seconds of fixed steps since the world began. A piece that starts its
+motion when it is built reads ``physics.time`` then and measures from it.
+
+``set_transform`` also places a kinematic body, as a teleport that gives it no
+velocity. The pressure
+plate of ``oglc-physics-events`` is an ``add_trigger`` body whose ``enter`` and
+``exit`` handlers keep the set of what is on it, which the door's pose reads.
+
+.. _physics-ragdolls:
+
+Ragdolls
+--------
+
+A ragdoll is a skeleton of capsule bodies joined by swing-twist joints.
+``physics.add_ragdoll(spec, position, rotation, mode)`` puts one in the world
+and returns a ``Ragdoll`` (``OpenGLContext.physics.ragdolls``).
+
+.. code-block:: python
+
+   from OpenGLContext.physics.ragdolls import RagdollSpec
+
+   spec = RagdollSpec.humanoid(height=1.8, mass=70.0, root_force=4000.0, root_torque=1500.0)
+   doll = physics.add_ragdoll(spec, position=(0, 0, 0), mode='powered')
+   doll.hit('chest', (40.0, 0.0, 0.0))        # N s, at the bone's centre of mass
+   doll.set_mode('limp', blend=0.3)           # the motors let go over 0.3 s
+   poses = doll.poses()                       # every bone at once, as the frame draws them
+
+A ``RagdollSpec`` lists ``RagdollBone`` records parents first: each bone's
+rest ``translation`` and ``rotation`` in its parent joint's frame (the root's
+in the ragdoll's frame), a capsule of ``radius`` running ``length`` metres
+along ``axis``, a ``mass`` in kg, the joint's ``twist`` (min, max) and
+``swing`` half angles in radians with an optional ``bend`` of the cone, a
+motor ``strength`` (N m) and joint ``friction`` (N m).
+``RagdollSpec.from_skeleton`` builds capsule bones from a skeleton's rest
+pose; ``RagdollSpec.humanoid`` is an 11-bone figure; ``as_dict`` and
+``from_dict`` read and write it as plain data. For a rigged character,
+:ref:`characters-ragdoll` builds the spec from the model.
+
+The modes:
+
+- kinematic - the bones follow the pose target exactly; blows do not move them.
+- powered - motors of each bone's ``strength`` turn it towards the target, and
+  a spring of ``root_force`` (N) and ``root_torque`` (N m) holds the root to
+  its target; with both 0 the ragdoll keeps its pose and falls over.
+- limp - no motors.
+
+``set_mode(mode, blend)`` changes mode over ``blend`` seconds: into powered or
+limp the motors' strength ramps, and into kinematic the bones move from where
+they lie to the target, which is a get-up. The target is a held pose
+(``set_pose(rotations, translations, position, rotation)``, each joint's
+rotation (B, 4) and translation (B, 3) in its parent's frame) or a clip
+(``play(times, rotations, translations, loop)``), evaluated on the world
+thread every tick; ``place(position, rotation)`` moves the ragdoll's frame.
+``set_strength`` sets each bone's torque limit, so one arm can swing free.
+
+``add_ragdoll(..., pose=(rotations, translations))`` puts the bones in that
+pose at rest from the first tick, with the pose as the held target; the
+joints' limits stay those of the spec's rest pose. ``push(velocity)`` adds a
+velocity (m/s) to every bone, an impulse of each bone's mass times it, as a
+blast or a fall at speed throws a whole body. ``nearest_bone(point)`` is the
+index of the bone whose capsule surface is nearest a world point, the bone a
+shot that met a hitbox there lands on: ``doll.hit(doll.nearest_bone(hit.point),
+impulse, hit.point)``.
+``velocity`` (m/s) and ``angular_velocity`` (rad/s about the world axes) start
+the bones moving from the first tick, one vector for all of them or a row a
+bone, in the same commands as the pose. With ``blocks_characters=False`` the
+characters' capsules pass through the bones, as they pass any body added with
+that option; ``physics.passable`` lists those bodies.
+:ref:`characters-ragdoll-fall` builds a character's fall on these.
+
+Each bone is a ``Body`` (``doll.bones``, ``doll.bone('head')``): handlers,
+joints, rays and ``physics.ragdoll_of(body)`` name it as they name any body.
+``add_ragdoll(..., queryable=False)`` makes rays, sweeps and overlaps pass
+through the bones while they still collide, as a corpse's bones should for a
+game whose shots and sight lines meet only the living; ``Body.queryable`` is
+the same switch on any body.
+A bone is removed with its ragdoll (``doll.remove()``);
+``physics.remove(bone)`` raises ``ValueError``. Limits: balance is the root
+spring and nothing computes it from the feet; a ragdoll's mode, targets and
+clips are not in ``save_state``.
+
+.. _physics-softbodies:
+
+Soft bodies and cloth
+---------------------
+
+A soft body is particles held by edge, shear, bend and volume constraints:
+cloth, a rope, a pressure ball. ``physics.add_soft_body(spec, position,
+rotation, pins)`` returns a ``SoftBody`` (``OpenGLContext.physics.softbodies``);
+``physics.add_soft_mesh(mesh, ...)`` makes one of a mesh's triangles and keeps
+the mesh drawn where the simulation puts it.
+
+.. code-block:: python
+
+   from OpenGLContext.physics.softbodies import SoftBodySpec
+
+   cloth = SoftBodySpec.cloth(1.0, 1.0, columns=21, rows=21, mass=0.5)
+   a, b, _, _ = cloth.corner_indices()
+   soft = physics.add_soft_body(cloth, position=(0, 2, 0),
+                                pins=([a, b], cloth.positions[[a, b]] + (0, 2, 0)))
+   soft.set_wind((3.0, 0.0, 0.0))     # newtons, shared among the vertices each step
+   frame = soft.frame()               # version, origin, positions, normals
+
+   flag = physics.add_soft_mesh(shape, position=(0, 2, 0), pins=(edge, points), mass=0.4)
+
+``SoftBodySpec`` fields, all optional but the positions: ``faces`` (F, 3) or
+``edges`` (E, 2) with ``edge_compliance``; ``tetrahedra``; ``mass`` (kg,
+shared) or ``masses`` per vertex (0 pins a vertex where it is placed);
+``compliance``, ``shear_compliance`` and ``bend_compliance`` (m/N; 0 is
+rigid, and the default bend constraints of 0.01 keep a fine cloth whole when
+it meets a surface); ``bend`` (``'distance'``, ``'dihedral'`` or ``'none'``);
+``volume_compliance`` and ``pressure`` (Pa m3) for a closed surface;
+``long_range`` attachments; ``iterations`` (None takes enough for the
+shortest edge); ``linear_damping`` (1/s), ``friction``, ``restitution``,
+``gravity_factor``, ``vertex_radius`` (m), ``allow_sleep`` and
+``double_sided``. The builders are ``cloth``, ``rope``, ``ball`` and
+``from_mesh``.
+
+Pins hold vertices at world points or at points in another body's frame
+(``pin_bodies``), and change at run time with ``pin`` and ``unpin``; a pin
+does not pull on its body. A soft body meets rigid bodies by the collision
+filters; soft bodies do not collide with each other, and their contacts make
+no events. A pinned cloth does not sleep.
+
+``add_soft_mesh`` takes a ``PBRMesh`` or a ``Shape`` drawing one, welds its
+vertices by position (a glTF mesh splits them at texture seams) and writes
+the particles and their normals back into the mesh's arrays each frame the
+body's ``version`` moves, with each tangent turned as its normal turned; the
+vertex buffers are written in place, so a still cloth costs no upload. The
+soft body is made from the mesh's vertices as authored
+(``softmesh.rest_pose``), so a mesh simulated again starts where it was
+authored. The mesh is placed by its ``origin``, so its
+``Shape`` sits in no ``Transform``. ``pins`` name the mesh's own vertices.
+The X3D ``Cloth`` node and the glTF ``OGLC_hook`` kind ``cloth`` make one
+from a document (:ref:`x3d-cloth-ragdoll`).
+
+``oglc-cloth`` (``OpenGLContext.bin.cloth_demo``) is a banner in a gusting
+wind, a cloth draped over a stone ball and a sheet pinned to a beam;
+``oglc-ragdoll`` (``OpenGLContext.bin.ragdoll_demo``) is a walking figure
+struck, knocked down and stood up again. Their tutorials are
+``tests/tutorials/physics/physics_cloth.py`` and ``physics_ragdoll.py``.
+
+What they cost is on the developer overlay's physics section: for each of
+ragdolls and soft bodies, the count, the world thread's mean milliseconds a
+tick (``ragdolls ms``, ``soft bodies ms``) and the render thread's mean a
+frame posing skins and writing meshes (``draw ms``), from
+``physics.deformable_costs()``.
+
+.. _physics-queries:
+
+Queries
+-------
+
+A query answers in the call, on the thread that makes it:
+
+.. code-block:: python
+
+   hit = physics.raycast(origin, direction, max_distance=100.0, skip=body)   # Hit or None
+   hits = physics.raycast_many(origins, directions, max_distance=100.0)      # arrays in, a list out
+   clear = physics.line_of_sight(start, end, skip=body)                       # nothing between them
+   distance = physics.sweep_sphere(origin, direction, distance, radius)      # how far it goes, or None
+   touching = physics.overlap(proxy, translation, rotation=None, triggers=False)   # the Bodies it overlaps
+
+``proxy`` is a ``Proxy``. In inline mode a query reads the live world, and so
+does a query made in an ``on_step`` function. In thread mode the render thread
+reads a copy of the bodies it keeps in step with what the world publishes, so a
+query sees bodies as they stood at the last step, and a character as it is now.
+``sweep_sphere`` answers 0 for a sphere that starts inside a body and steps by
+half its radius, so a wall thinner than that can be passed. ``raycast_many``
+takes arrays so a program that casts a swarm of projectiles makes one call per
+frame.
+
+.. _physics-characters:
+
+Characters
+----------
+
+``add_character`` makes a walker: a capsule that slides against the bodies, steps
+up ledges, jumps, flies and swims, moved by the world thread inside each tick
+(Jolt's ``CharacterVirtual``), with the moves set before a tick driving it. The
+world sees the capsule as the character's body, ``me.body``, which rays, sweeps,
+overlaps and triggers meet:
+
+.. code-block:: python
+
+   me = physics.add_character(position=(0, 1, 0), capabilities=CharacterCapabilities(...))
+   hero = physics.add_character(model='hero.glb', animations='ual',
+                                position=(0, 0, 0), parent=self.sg)
+
+   me.set_move(direction, mode='walk')       # 'walk', 'run', 'sprint' or 'crouch'
+   me.set_move(direction, speed=4.5)         # metres a second, whatever the mode
+   me.speed = 2.0; me.speed = None           # set it; None gives the mode's speed back
+   me.jump(); me.set_crouch(True); me.slide(0.8)
+   me.position, me.eye, me.velocity, me.grounded, me.state, me.heading
+   me.vertical_speed, me.height, me.radius, me.stuck, me.ground, me.capabilities
+   me.addEventHandler('hit', function=fn)    # a body's events; 'landed' and 'footstep' too
+   me.remove()
+
+The capsule's size and speeds are a ``CharacterCapabilities``
+(:ref:`character`), kept as ``me.capabilities``. ``me.state`` is a
+``CharacterState``: ``STANDING``, ``CROUCHING``, ``SLIDING``, ``AIRBORNE``,
+``DOWN``, ``SWIMMING`` or ``FLYING``; ``me.motion_state`` is the same member.
+``me.vertical_speed`` is how fast the
+capsule rises in metres a second (below zero it falls), ``me.height`` its height
+now in metres (less crouched or sliding), ``me.radius`` its radius, and
+``me.stuck`` whether its last step could not move it out of what it overlaps.
+``me.ground`` is the body the feet stand on, None in the air or on ground
+that is no body.
+``set_move(direction, mode='walk', speed=None)`` moves at
+``speed`` metres a second where one is given and at the mode's speed from the
+capabilities where it is None; a crouched character goes no faster than
+``crouchSpeed``. ``me.speed`` is the speed the moves go at, and setting it
+changes it until the next ``set_move``. Neither changes the capabilities. A character with a ``model`` is placed at the feet, turned
+toward where it goes and animated by what it does (:doc:`characters`).
+``context.follow(hero)`` shows it from behind and moves it from the keys
+(:ref:`navigation-follow-character`), and ``context.follow(me, view='eyes')``
+puts the camera at its eyes and walks it with the walk and fly modes' keys.
+A character that is dead, hidden or between rounds is removed.
+
+A character and a dynamic body act on each other. The character pushes a body
+it walks into, at up to ``pushSpeed``, and a body heavier than ``pushMass``
+(200 kg) blocks it instead. A body striking a character knocks it back by the
+momentum the body brings toward it (the character's ``mass``, 80 kg); a body
+the character walks into does not. A character stands on a dynamic body and
+is carried by it. A body added with ``blocks_characters=False`` is walked
+through.
+
+Characters push each other by their masses: a character walking into another
+shoves it along. Characters made with the same ``pass_group`` name walk through
+one another, and each still meets every character outside the group:
+
+.. code-block:: python
+
+   bot = physics.add_character(capabilities=caps, position=spawn, pass_group='bots')
+   bot.pass_group = None                    # blocks everybody again
+
+The group changes only who walks through whom. A member's body is still one
+that rays, shots, triggers and the solver meet.
+
+``me.teleport(feet)`` puts the feet at ``feet``, standing on the floor under
+them, and out of anything the capsule would overlap there: it is moved, in the
+call, to the nearest clear place up to 2 m to the side or onto the top of a
+block it is inside, and the answer is False where none is found (the character
+is then left where the pushes put it). The camera of a free-fly walk is seated
+this way (``TerrainWalkMixin.collide_and_clamp``), so it is held out of trunks
+and rocks.
+
+A character takes the same steps as the world: each tick of ``1 / tickHz``
+seconds (120 a second by default) moves it with its latest ``set_move``,
+``jump`` and other input, so a walk or a jump traces the same path at 30, 60 or
+144 frames a second. A world with framed characters runs in lockstep with the
+frame (:ref:`physics-jolt`). The node and a camera at the eyes are drawn between the character's last two steps, by the
+part of a step the frame leaves over: ``me.drawn_position`` and
+``me.drawn_eye``. ``me.position`` and ``me.eye`` are where the latest step put
+it. ``physics.drop_remainder()`` forgets the characters' part step with the
+world's.
+
+A game that steps a character on a clock of its own sets its ``framed`` to False
+and steps it itself (:doc:`characters`).
+
+.. _physics-ground:
+
+Land
+~~~~
+
+``add_ground`` makes a static body of land that answers a height at each
+``(x, z)``:
+
+.. code-block:: python
+
+   self.physics.add_ground(land)
+   self.physics.add_ground(land, extent=((-500, -500), (500, 500)), material='grass')
+
+``land`` is any object with ``sample(x, z)`` for arrays, such as a
+:ref:`HeightField <terrain-heightfield>`, so the surface a body meets is the
+surface the terrain node draws. A ``normal(x, z)`` that answers an array of unit
+normals saves several samples where the slope is wanted. ``extent`` is
+``((x_min, z_min), (x_max, z_max))`` or None for land without an edge,
+``height_range`` is ``(lowest, highest)`` and is found by sampling a 65 by 65
+grid of the extent (or 1000 m about the origin), widened by 20%, and ``feature``
+is the horizontal distance in metres over which the land changes appreciably
+(1.0). The same options as ``add_static`` apply. A mesh drawn for the land is
+scenery and would be a second body: mark it ``collide = False``.
+
+.. _physics-sources:
+
+Colliders that come and go
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A collider source makes bodies as a focus nears them and drops them as it
+leaves: ground chunks near a car, road sections, props, rocks near a walker.
+
+.. code-block:: python
+
+   handle = physics.add_collider_source(source, focus=lambda: car.position)
+   handle.remove()
+
+``source.update(focus)`` is called once a frame with the position of the focus
+and returns a ``Changes``: ``add`` lists ``(key, proxy, position,
+orientation)`` for each body to make, ``remove`` the keys of those to drop. The
+``orientation`` of a plain tuple is a quaternion ``(x, y, z, w)``, as the world
+holds turns; ``sources.Addition(key, proxy, position, rotation=(x, y, z,
+angle))`` takes the axis and angle the ``add_*`` calls take instead. A
+source returns only what changed, and a key is anything hashable that names a
+collider to the source. The focus is the first character's feet where none is
+given. ``handle.remove()`` takes the source's bodies out and calls the
+source's ``clear()`` where it has one, so the source adds them afresh if it is
+added again. ``handle.update()`` asks the source at once rather than in the
+next frame, for a caller that needs the bodies near a new focus before it casts
+a ray there. ``physics.add_static_instances(proxy, positions)`` makes one
+static body of one shape at each row of an ``(n, 3)`` array, for trunks and
+posts, and its ``remove()`` takes them out together. The engine's sources are
+``HeightFieldColliders`` (:ref:`ground <fieldphysics>`), ``RoadColliders``
+(:ref:`roads <roadcolliders>`), ``PropSource`` (:ref:`props
+<physics-props>`) and ``NearbyColliders`` (rocks and posts). Each body a source
+makes is a static body of the service with a ``Body`` handle, so a ray's
+``Hit.body`` names it and its collisions reach handlers and the session
+journal.
+
+.. _physics-vehicles:
+
+Vehicles
+--------
+
+A vehicle is a dynamic body (the chassis) on wheels. The engine casts each
+wheel at the ground every tick, springs its suspension, and drives, brakes and
+steers through the tyres; the game gives inputs and reads the result.
+
+.. code-block:: python
+
+   from OpenGLContext.physics import CarTuning, Proxy, VehicleSettings, car_wheels
+
+   chassis = physics.add_dynamic(None, Proxy.box((1.85, 0.62, 4.2)), mass=1180.0,
+                                 translation=(0.0, 1.0, 0.0))
+   settings = VehicleSettings.from_tuning(
+       CarTuning(engine_force=20000.0, brake_force=16000.0, base_speed=21.0, drag=0.9),
+       car_wheels(wheelbase=2.55, track=1.7, height=-0.16, radius=0.33), mass=1180.0)
+   car = physics.add_vehicle(chassis, settings)
+   car.set_input(throttle=1.0, steer=0.2)
+   ...
+   car.forward_speed, car.rpm, car.gear       # m/s along the nose, rev/min, -1 reverse
+   for wheel in car.wheels:                  # WheelState: the newest tick's
+       wheel.position, wheel.orientation, wheel.compression, wheel.grounded
+
+``set_input(throttle, steer, brake, handbrake)`` holds the inputs until the
+next call: ``throttle`` -1 to 1 (below 0 the gearbox selects reverse),
+``steer`` -1 to 1 (positive turns left, a positive yaw about +Y), ``brake``
+and ``handbrake`` 0 to 1. Values outside are clamped; a NaN is a ValueError.
+
+When inputs land. Every vehicle's inputs given during a frame reach the
+world's thread in one batch and apply from the frame's first tick; in a
+free-running world (``mode='thread'``) they apply at the next tick the world
+runs after the frame. Inputs given in a ``'before-step'`` handler
+(:ref:`physics-reading`) apply at that tick, so a driver sampled inside the
+fixed step steers every tick at the world rate.
+
+Settings. ``VehicleSettings`` is plain data in SI units and the chassis's own
+frame (-Z forward, +Y up by default): a ``Wheel`` per wheel (mount position,
+radius, suspension travel, stiffness in N/m and damping in N s/m, steered,
+driven, brake and handbrake torques, grip), ``VehicleEngine`` (torque curve
+and rpm range), ``Transmission`` (gears, automatic shifting, clutch),
+``Differential`` and ``AntiRollBar`` records, tyre friction curves (slip
+ratio and slip angle in degrees against friction), the steering lock and its
+fall with speed (``max_steer / (1 + (v / steer_falloff_speed)**2)``), ``drag``
+and ``downforce`` in N at 1 m/s rising with the square of speed,
+``rolling_resistance`` as a fraction of each wheel's load, the idle hold
+(``holding``, a brake input below ``holding_speed``), and ``impact_speed``
+and ``crash_speed`` (2 and 10 m/s). ``kind`` is ``'wheeled'``,
+``'motorcycle'`` (with ``Lean``) or ``'tracked'`` (with two ``Track``
+records). ``as_dict()`` and ``from_dict()`` turn the settings into builtin
+types for a file and back.
+
+``CarTuning`` and ``car_wheels`` state a car in newtons instead: engine and
+brake force at full pedal, the speed constant force gives way to constant
+power (``base_speed``), suspension stiffness in car weights per metre and
+damping as a fraction of critical, so a tuning keeps when the mass changes.
+``VehicleSettings.from_tuning(tuning, wheels, mass, gravity=9.81, **changes)``
+maps it: a one-gear electric drivetrain, open differentials, brake torques
+from the force, and tyres that hold without slipping up to their friction.
+The field-by-field mapping is in the method's docstring. A tyre curve that
+rises from 0 at no slip, as Jolt's defaults do, gives a tyre no grip while it
+is not slipping, and a car on a road mesh then rocks in yaw from tick to tick.
+
+Reads. ``car.state()`` is a ``VehicleState`` of the newest tick: speed,
+forward speed, rpm, gear, steer angle, the inputs that tick applied, a
+``WheelState`` per wheel and the tick's heaviest blow. ``WheelState`` gives
+the wheel's centre and orientation in the world (axle along X, steer and roll
+included), suspension length and compression from full droop (m), steer and
+roll angle (rad), spin (rad/s), load (N), slip ratio, slip angle (rad), the
+sideways speed across the tyre (``slip``, m/s), whether it touches the ground,
+the ``Body`` and material name under it, the surface's grip, and the contact
+point and normal. The properties ``forward_speed``, ``speed``, ``rpm``,
+``gear``, ``steer_angle``, ``wheels`` and ``grounded`` read the same state
+and answer 0 or empty before the first tick. The chassis's pose is
+``car.chassis``'s, drawn between ticks as every body is; read inside a step
+handler, both are the world as that tick left it.
+
+Surfaces. ``car.set_surface(Surface(grip=0.45, rolling=0.25))`` puts every
+wheel on that ground, and ``set_surface(surface, wheel=2)`` one wheel;
+``grip`` multiplies the tyre's friction and ``rolling`` adds to its rolling
+resistance as a fraction of its load. A surface equal to the last one sent is
+not sent again, so a game may set it every tick. ``set_surface(None)`` gives
+the wheels back to the world's surfaces by material.
+
+Blows. ``car.impact(among=None, above=0.0)`` is the heaviest blow the chassis
+took in the newest tick, an ``Impact(body, closing, impulse)`` (m/s and N s),
+or None; ``among`` limits it to a blow against one of those bodies. A blow at
+``impact_speed`` or more is an ``'impact'`` event, and at ``crash_speed`` or
+more a ``'crash'`` event, on the chassis:
+
+.. code-block:: python
+
+   car.addEventHandler('crash', on_crash, other=traffic_bodies, above=12.0)
+
+The handler is given a ``Collision`` whose ``body`` is the chassis, ``other``
+the body struck and ``approach`` the closing speed.
+
+``car.place(position, heading)`` puts the vehicle level at ``position``,
+turned ``heading`` radians about +Y, with its velocities zeroed from the next
+tick. ``car.remove()`` takes the vehicle out and leaves the chassis a body;
+removing the chassis removes the vehicle. ``physics.vehicles`` lists them.
+
+Limits. A wheel casts from its mount, so ground that rises through a wheel
+from above is not found until the chassis rises. The steer angle and the idle
+hold are not part of ``physics.save_state()``.
+
+.. _physics-service-modes:
+
+Modes and settings
+------------------
+
+``PhysicsDefinition`` is a scenegraph node, declared on
+``ContextDefinition.physics`` the way ``AudioSettings`` is declared on
+``ContextDefinition.audio``:
+
+.. code-block:: python
+
+   ContextDefinition(physics=PhysicsDefinition(mode='inline', tickHz=240.0))
+
+The constructor also takes the node's fields as a mapping,
+``physics={'mode': 'inline', 'tickHz': 240.0}``, and ``physics=False`` for
+``PhysicsDefinition(enabled=False)``. ``audio=`` takes the same two forms.
+``navigation=`` takes a mapping and refuses a bool, since a ``Navigation`` has
+no ``enabled`` field; ``navigation=None`` is a context with no navigation.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Field
+     - Default
+     - Meaning
+   * - ``enabled``
+     - yes (``OPENGLCONTEXT_PHYSICS``)
+     - no starts no world and makes no colliders; bodies stay where they are put
+   * - ``mode``
+     - ``thread`` (``OPENGLCONTEXT_PHYSICS_MODE``)
+     - ``thread`` steps the world on a thread of its own, ``inline`` in the frame
+   * - ``engine``
+     - ``jolt`` (``OPENGLCONTEXT_PHYSICS_ENGINE``)
+     - ``jolt`` steps the world with Jolt through pyjoltphysics
+       (:ref:`physics-jolt`), the only engine; the field is where another
+       engine would be named. ``omi`` is refused (:ref:`physics-omi`)
+   * - ``tickHz``
+     - 120
+     - the fixed step, in steps a second, in both modes; a frame shorter than
+       a step draws moving bodies between the last two steps
+   * - ``maxCatchUp``
+     - 0.1
+     - the most time one frame steps, in seconds; the rest is dropped
+   * - ``maxBodies``
+     - 65536
+     - the most bodies the world holds at once, a static instance and a
+       ragdoll bone each counted; an ``add_*`` past it raises ``ValueError``,
+       and a removal makes room once the world has applied it
+   * - ``gravity``
+     - ``0 -9.81 0``
+     - metres a second squared, global
+   * - ``colliders``
+     - ``scene``
+     - ``scene``: the shapes of the scene are static bodies; ``explicit``: only
+       the program's; ``none``
+   * - ``handlerErrors``
+     - ``log`` (``OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS``)
+     - ``log``: an exception a handler, step code or a posted function raises
+       is logged once and the world goes on; ``raise``: it is also raised from
+       the next ``frame`` or ``step``. The testing plugin makes it ``raise``
+   * - ``linearDamping``, ``angularDamping``
+     - 0.3, 1.5
+     - per second, for a body that names none
+
+``physics.set_config(definition)`` applies the same node between steps, except
+``tickHz``, which is fixed when the service is made; ``physics.enable(False)``
+pauses the world with every body where it is and ``physics.enable(True)`` runs it
+again. A paused world takes no steps; bodies added and removed, writes and joints made
+while it is paused reach it, in the order they were made, when it runs again,
+and so do those of a service that starts with ``enabled`` false. The
+variables of :doc:`environment` set the defaults. The settings are the
+program's choices; a player's switch is ``OPENGLCONTEXT_PHYSICS`` alone.
+
+In ``inline`` mode the frame reads its time from the engine's clock, adds it to an
+accumulator capped at ``maxCatchUp`` and runs as many whole steps of ``1 /
+tickHz`` as the accumulator holds. Which step a body was in when something
+happened is therefore the same on every run at a given frame time, and
+``physics.step(dt)`` and ``frame(dt)`` let a program supply its own time, as a
+replay's recorded frame times or a headless trace do. ``flush()`` applies the
+commands still waiting, and ``drop_remainder()`` forgets the time left over from
+a frame so a game that starts something afresh does not simulate it. Reads and
+tick-exact code work the same in both modes (:ref:`physics-reading`).
+
+In ``thread`` mode the world thread ticks at ``tickHz`` on its own, which keeps
+the render thread free of a heavy world (:ref:`physics-jolt`). A bounded capture, a recorded session and a
+replay run inline whatever the mode says, so a captured frame is the same bytes
+on every run. A recording started with ``context.startTelemetry()`` after the
+world exists moves it inline, the commands waiting for its thread carried over
+in order; a mode given to ``set_config`` meanwhile takes effect once
+``stopTelemetry()`` ends the recording. ``physics.pin_inline(True)`` holds a
+world inline in the same way for a program of its own. A world held inline
+waits for the cooking of its scenery before each step, so scenery the render
+pass finds while drawing one frame takes part from the next frame's step on
+every run. A game that steps its world on a clock of its own, or only while it
+is not paused, sets the class attribute ``stepsPhysics = False`` on its context
+and calls ``context.physics.frame(dt)`` where it wants the step.
+
+An exception that ends the world thread is logged once with its traceback
+and kept as ``physics.error``. The world takes no more steps and bodies stay
+where they were. The next
+``physics.frame(dt)`` raises a ``RuntimeError`` whose cause is that exception,
+once. A collider source or a character whose ``update`` raises in the frame is
+logged once for each distinct failure, and the frame goes on with the others.
+A context's frame hook logs what ``frame`` raises, once for each distinct
+failure, and draws the frame, so physics never raises into the draw.
+
+.. _physics-reading:
+
+Reading bodies and tick-exact code
+----------------------------------
+
+``physics.poses(bodies)`` reads many bodies at once, as arrays. ``bodies`` is a
+list of ``Body`` handles or their ``uid`` numbers, and the answer is a ``Poses``
+with a row for each, in that order:
+
+.. code-block:: python
+
+   poses = physics.poses(marbles)
+   poses.position          # (n, 3) metres
+   poses.orientation       # (n, 4) unit quaternions (x, y, z, w)
+   poses.velocity          # (n, 3) metres a second
+   poses.angular_velocity  # (n, 3) radians a second about the world axes
+   poses.mass              # (n,) kilograms, 0 for a body that is not dynamic
+   poses.asleep            # (n,) whether the world has put a dynamic body to sleep
+   poses.uids              # (n,) the bodies' uid numbers
+
+On the render thread a body that moves is read where the frame draws it, part of
+the way into the next step, as ``body.position`` is.
+``physics.poses(bodies, interpolated=False)`` and ``body.step_position`` give
+where the last step left it. An unknown uid raises ``KeyError``.
+
+``physics.on_step(function)`` calls ``function(view)`` on the thread that steps
+the world, after every fixed step, in both modes. ``view`` is a ``StepView``
+(``OpenGLContext.physics.stepview``): ``view.step`` (its ``dt``, ``index`` and the
+``time`` it began), ``view.dt``, ``view.time`` (the world's clock at its end),
+``view.poses(bodies)`` as that step left them, and ``raycast``,
+``raycast_many``, ``sweep_sphere`` and ``overlap`` answered from the world as it
+stands. Writes through ``Body`` handles inside the function take effect at once,
+so a magnet, an updraft or a buoyant pool is a function of the step:
+
+.. code-block:: python
+
+   def updraft(view):
+       poses = view.poses(balls)
+       for ball, at in zip(balls, poses.position):
+           if inside(at):
+               ball.apply_impulse((0.0, 12.0 * ball.mass * view.dt, 0.0))
+
+   hook = physics.on_step(updraft)
+   ...
+   hook.cancel()
+
+The world keeps stepping while a hook is registered. A function that raises is
+logged once and called again at the next step. ``physics.post(function, *args)``
+calls ``function(*args)`` on the same thread before the next step.
+
+``body.set_gravity_factor(factor)`` scales the gravity one body feels from the
+next step: 1 is all of it, 0 none and a value below 0 pulls it up.
+``body.gravity_factor`` answers the new value at once, and ``add_dynamic``
+takes ``gravity_factor=`` as well. A pool that lets a marble sink slowly sets a
+factor of 0.2 on the marbles in it and 1 again as they leave.
+
+.. _physics-engine:
+
+The engine
+----------
+
+``physics.engine`` describes the engine that steps the world, as an
+``EngineInfo``: ``name`` (``'jolt'``), ``version``, ``tick_hz`` (steps a
+second) and ``precision`` (``'double'``). ``str(physics.engine)`` is a line such
+as ``jolt 5.6.0 double``. It is read-only.
+
+``physics.counts`` is a ``WorldCounts`` of ``bodies``, every body in the world
+with characters' bodies included, and ``contacts``, the pairs of bodies the
+step found touching. Both are as the last published step left them, and 0
+before the first. ``physics_provider(lambda: context.physics)`` puts them on
+the developer overlay.
+
+No call of the service hands a program an engine object. Code written against
+``Physics``, ``Body``, ``Character``, ``Joint``, ``Proxy``, ``poses`` and
+``on_step`` names no engine's types.
+
+``character.state`` and ``character.motion_state`` are the same
+``CharacterState`` member; compare with ``is`` or ``==``.
+A test reads what the engine holds (masses, materials, tick counts) through
+``OpenGLContext.testing.physics`` (:ref:`testing-physics`).
+
+.. _physics-jolt:
+
+The Jolt engine
+---------------
+
+A ``PhysicsDefinition`` steps its world with Jolt Physics 5.6 through
+``pyjoltphysics``, a requirement of OpenGLContext. A service made where
+pyjoltphysics cannot be imported raises ``EngineUnavailable``
+(``OpenGLContext.physics.engine``). ``set_config`` with another ``engine``
+raises ``ValueError``: the engine is chosen when the service is made.
+``OpenGLContext.physics.engine`` holds the interface the service drives the
+engine through.
+
+The Jolt world steps on pyjoltphysics' world thread, never on the render
+thread, in one of two ways (:doc:`physicsthread` has the threading,
+callbacks and replay in full):
+
+- Lockstep. Each frame runs exactly the ticks it owes (``tickHz`` a second,
+  capped by ``maxCatchUp``) while the render thread waits with the GIL
+  released. A world in ``inline`` mode, a world held there by
+  ``pin_inline`` (a capture, a recording, a replay) and any world with framed
+  characters runs this way, so a capture or a replay makes the same poses on
+  every run.
+- Free-running. In ``thread`` mode with no characters the world thread ticks
+  at ``tickHz`` on its own; a world with nothing awake and no step code waits
+  using no CPU. The frame reads the newest snapshot it published, and draws a
+  tick behind its own clock, between the two newest snapshots it has read.
+
+A lockstep world that has settled (every body asleep, and no character,
+kinematic track, motor, step code or waiting command) counts the ticks a frame
+owes without stepping them, and the frame publishes the poses it published
+before with the new tick and time. A settled frame costs 0.01 to 0.03 ms for
+100 to 1,000 sleeping boxes. The tick count stays exact, so
+a woken world plays out as one stepped through every tick and a replay matches.
+
+A frame shorter than a tick (240 frames a second against the default 120 ticks)
+draws each moving body between the last two ticks, at the frame's point in the
+next one, so no pose repeats from one frame to the next; characters are drawn
+the same way. A free-running world is drawn the same way, a tick behind the
+frame clock, and as its newest snapshot holds it once it falls more than a
+tick behind or stops ticking. A body placed by ``set_transform`` or by
+``restore_state`` is drawn at its new place from the first frame that includes
+the place, never between the old place and the new. ``physics.poses(bodies, interpolated=False)`` and
+``body.step_position`` change once a tick. An owner-stepped character's
+``step(dt)`` advances the world by whole ticks, so a ``dt`` shorter than a tick
+moves nothing until the steps add up to one: a game that steps a character
+at its own rate and reads where each step left it sets ``tickHz`` to that rate.
+
+Characters move inside the world's ticks. A framed character's code for a tick
+(``before-step`` handlers, blows taken, the steering of ``run_along`` and
+``hop_to``) runs on the render thread before that tick runs, and its
+``after-step`` handlers and landings after it, so a move set in a frame drives
+the first tick that frame runs and a course is steered at every tick.
+``character.step(dt)`` and ``update(dt)`` on a character its
+owner steps advance the whole world by the ticks ``dt`` owes, since the world
+thread moves every character in each tick; the frame's ticks move unframed
+characters too. An input that changes what a character is doing
+(``knock_down``, ``slide``, ``end_slide``, ``set_crouch``, ``set_fly``,
+``set_swim``) reads back at once and holds until the world reports the tick
+that applied it. A teleport, and a body added, removed or moved, take effect at
+the next tick; queries apply waiting commands first, so a body added a moment
+ago is hit by a ray.
+
+A dynamic body has Jolt's enhanced internal edge removal, carried across the
+seams between static bodies: a ball rolling from one static box onto another
+laid flush beside it meets no edge between them, so a floor
+of tiles each a body of its own is one surface. The ``impulse`` of a contact on
+a ``'touching'`` step is the impulse estimated to stop the two closing in that
+step, as Jolt reports no solver impulse.
+
+Limits of the engine, each Jolt's own:
+
+- The tick rate is fixed when the world is made; ``enable(tick_frequency=)``
+  and ``set_config`` with another ``tickHz`` raise ``ValueError`` and change
+  nothing. A program wanting another step makes a new service.
+- Commands made inside a step (an ``on_step`` function, a physics callback,
+  ``post``) apply at the next tick, not in the step that made them.
+- A resting body sinks up to 5 mm into what it rests on (Jolt's penetration
+  slop, which the service sets to 5 mm).
+- Velocities are float32 in the snapshot: a speed read back is within about
+  1e-6 of the one set. A ray's hit point is within a few micrometres of the
+  surface (Jolt's shapes and ray fractions are float32), and a ray exactly
+  tangent to a capsule misses it. A height field holds its samples in 16-bit
+  blocks: a ray meets it within 2e-5 m of a sample at heights near 50 m and
+  6e-5 m near 270 m.
+- A character with no move asked for, standing or knocked down, stays where it
+  is on walkable ground.
+- A pair the contact filter lets through makes an unsolved ``'hit'`` and no
+  ``'separate'``.
+- A sample-function ground (``add_ground``) is held as height field tiles,
+  32 cells a side, around the characters, the awake dynamic bodies and each
+  query's path; its normals are the tiles' triangles' rather than the
+  ground's ``normal()``. A character whose feet are below such a ground is
+  lifted onto it: the ground is solid below its surface.
+- Gravity zones act on a character's vertical motion only: a character pulled
+  sideways or upwards needs an up vector the controller does not have.
+- ``Hit.triangle`` is the row of the mesh triangle a ray met, and -1 for a
+  part that is no mesh triangle.
+
+``physics.save_state()`` returns the bodies' and joints' state as bytes
+(Jolt's ``PhysicsSystem::SaveState``) and ``physics.restore_state(data)`` puts
+them back from the next tick; the world must hold the same bodies. Characters,
+the tick count and commands still waiting are not part of the state.
+
+.. _physics-omi:
+
+Programs that named the omi engine
+----------------------------------
+
+OpenGLContext's physics engine is Jolt. ``PhysicsDefinition(engine='omi')`` is
+refused with a ``ValueError`` that points here: leave ``engine`` unset (or name
+``'jolt'``), and the program runs on Jolt through the same ``Physics``,
+``Body``, ``Character``, ``Joint`` and ``Vehicle`` calls. An
+``OPENGLCONTEXT_PHYSICS_ENGINE=omi`` in the environment is reported and Jolt is
+used. Where a program read omi_physics objects of its own:
+
+- ``PhysicsViewPlatform(world, ...)`` is ``PhysicsViewPlatform(character)``
+  over ``physics.add_character(...)``.
+- ``TilesTerrain(..., physics_world=world)`` is ``TilesTerrain(...,
+  physics=context.physics)``; ``TerrainColliders`` takes the service.
+- ``PropColliders`` is ``physics.add_collider_source(PropSource(props),
+  focus=...)``.
+- ``collision_world_from_scene(scene)`` is the service's scenery
+  (``colliders='scene'``), and ``navmesh.from_world(world)`` is
+  ``navmesh.from_scene(scene)``.
+- ``PhysicsDefinition.backend``, ``OPENGLCONTEXT_PHYSICS_BACKEND`` and
+  ``EngineInfo.compute`` do not exist: Jolt has no compute backend to choose.
+- ``PhysicsDebugDraw``, the overlay of an omi_physics world's AABBs, contacts
+  and velocities, does not exist; ``physics.show_proxies()`` draws the box and
+  sphere bodies.
+
+The ``omi_physics`` package is usable on its own, for a program that steps an
+omi_physics world itself; OpenGLContext does not install it.
 
 .. _model:
 
@@ -60,17 +1371,17 @@ The loader, the nodes and the simulation all use the same structures.
      - In code
    * - ``OMI_physics_shape``
      - box, sphere, capsule, cylinder, convex, trimesh
-     - ``model.Shape``
+     - ``Proxy``
    * - ``OMI_physics_body``
      - ``motion`` / ``collider`` / ``trigger``, materials, collision filters
-     - ``model.Motion``, ``Collider``, ``Trigger``, ``Material``, ``CollisionFilter``
+     - a body's kind and motion, ``Proxy``, ``Material``, ``CollisionFilter``
    * - ``OMI_physics_gravity``
      - global gravity *and* per-volume gravity zones; also a zone's gravity
        (:doc:`zones`)
-     - ``model.Gravity``
+     - ``GravityZone``
    * - ``OMI_physics_joint``
      - limits + drives between bodies
-     - ``model.Joint``, ``joints.*``
+     - the joints of :ref:`physics-joints`
 
 An object's physical properties are OMI motion fields. An immovable body, such
 as the ground, is ``type:"static"``. Weight is ``mass × |g|``. The centre of
@@ -78,392 +1389,11 @@ gravity is ``centerOfMass``.
 
 .. rst-class:: technical
 
-The structures are in ``omi_physics/model.py``, with the OMI specification's
-defaults. The reader and writer are in ``omi_physics/omi_gltf.py``:
-``load_document()`` parses a glTF's extension blocks into these structures, and
-``export_extensions()`` writes them back, so a load followed by an export
-gives nearly the same document. ``KHR_physics_rigid_bodies`` is not read.
-
-.. _engine:
-
-How the simulation runs
------------------------
-
-The engine uses the standard real-time methods (Catto's Box2D, and Gaffer on
-Games' *Fix Your Timestep*):
-
-- Integration - semi-implicit (symplectic) Euler, which stays stable at low
-  cost.
-
-- Timestep - fixed, with an accumulator, independent of the render frame rate.
-  The rendered pose interpolates between the last two states, so motion is
-  smooth and deterministic.
-
-- Broad phase - a dynamic AABB tree of enlarged boxes, filtered by collision
-  groups, removes most of the O(N²) candidate pairs.
-
-- Narrow phase - analytic tests for pairs of primitives, and GJK with EPA for
-  convex against convex (cylinders and cones among them) and convex against
-  triangle (a moving body against a static mesh); a compound part by part.
-
-- Solver - sequential impulses (projected Gauss-Seidel) with warm starting and
-  split-impulse position correction. Restitution and Coulomb friction combine
-  according to the OMI material modes. Contacts are grouped into islands, and
-  bodies that have come to rest sleep.
-
-.. rst-class:: technical
-
-Simulation state is a flat structure of arrays (``world.py``), kept beside the
-scenegraph and copied to the ``Transform`` nodes only between steps. The
-per-stage kernels run through ``backend.py``, which has two implementations:
-``NumpyBackend`` (vectorised, on the CPU) and ``GLComputeBackend``
-(``glcompute.py``). The GPU backend runs the per-body force and position
-integration as GL 4.3 compute shaders over the same arrays. When a step has no
-collisions and no joints, both stages run in one dispatch and the intermediate
-velocity stays on the GPU. At 10\ :sup:`5` moving bodies it is about 2.4×
-faster than numpy.
-
-.. rst-class:: technical
-
-The default policy, ``auto``, runs on numpy until the number of awake bodies
-reaches ``gpu_threshold`` (default 10 000), and then switches to the GPU. Below
-that count, the cost of transferring the data is larger than the per-body work
-it saves. The world switches back to numpy when the count falls below 80% of
-the threshold, and stays on numpy where GL 4.3 compute shaders are not
-available. Set ``OPENGLCONTEXT_PHYSICS_BACKEND`` to ``numpy``, ``gpu`` or
-``auto`` to override the policy. The GPU computes in float32, so its
-trajectories match the numpy backend within a tolerance, not bit for bit. The
-broad phase, narrow phase and solver run on the CPU with either backend. In
-``tests/tutorials/physics/physics_stress.py``, the ``b`` key switches backends while the demo
-runs.
-
-.. _physics-collisions:
-
-Responding to collisions
-------------------------
-
-A game subscribes a callback to the collisions of one body, several bodies or
-every body, and the manager calls it once per collision:
-
-.. code-block:: python
-
-   events = scene.manager.events             # every PhysicsManager has one
-
-   def thud(hit):
-       engine.play(THUD, position=hit.point, gain=min(1.0, hit.approach / 8.0))
-
-   events.subscribe(thud, body=crate, above=0.5)          # the crate lands
-   events.subscribe(on_blow, body=crates, phases=('begin', 'persist'), above=1.0)
-   events.subscribe(on_any, phases=('begin', 'end'))      # every body
-   events.subscribe(on_plate, body=plate, kinds=('trigger',),
-                    phases=('enter', 'exit'))             # a trigger's events
-   subscription = events.subscribe(on_glass, body=pane, among=projectiles)
-   subscription.cancel()
-
-   plate = events.occupancy(plate_body)                  # a pressure plate
-   if plate.occupied: ...                                # anything on it?
-
-``body`` is a ``PhysicsBody``, the ``Transform`` it drives, a body index, an
-``omi_physics.contactevents.BodyRef``, or a list of any of them; left out, the
-subscription covers every body. ``events.occupancy(trigger)`` keeps what is
-inside a trigger volume from its ``enter`` and ``exit`` events: its
-``occupants`` set and its ``occupied`` flag change as each frame is delivered,
-a body removed while inside leaves it, and ``cancel()`` stops it. ``among`` narrows the other side the same way:
-"did I hit one of these". ``skip_static=True`` leaves out static bodies, for a
-subscription about what a body hit rather than what it landed on.
-
-Each callback receives a ``Collision``, turned to face the subscribed body:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Field
-     - Meaning
-   * - ``kind``
-     - ``'contact'``, ``'trigger'`` or ``'hit'``
-   * - ``phase``
-     - ``'begin'``, ``'persist'`` or ``'end'`` for a contact; ``'enter'``,
-       ``'stay'`` or ``'exit'`` for a trigger; ``'begin'`` for a hit
-   * - ``body``, ``other``
-     - The ``PhysicsBody`` on each side, or a ``BodyRef`` for a body added to
-       the world without one
-   * - ``node``, ``other_node``
-     - The ``Transform`` each side drives
-   * - ``point``
-     - World-space contact point, metres
-   * - ``normal``
-     - Unit vector from ``other`` into ``body``: the way ``body`` was pushed
-   * - ``approach``
-     - Closing speed along the normal before the solve, m/s
-   * - ``impulse``
-     - Normal impulse, N·s. It includes both masses, so a breaking strength
-       compares against this rather than against ``approach``
-   * - ``friction_impulse``, ``slip``
-     - Friction impulse (N·s) and sliding speed (m/s), for scraping sounds
-   * - ``depth``
-     - Deepest penetration, metres
-   * - ``time``
-     - Simulation time of the step it happened on, seconds
-   * - ``reason``
-     - On an ``'end'``: ``'separated'``, or ``'removed'``
-   * - ``solved``
-     - False where a contact filter let the pair pass through each other
-   * - ``payload``
-     - For a hit, what the shooter passed to ``report_hit``
-   * - ``event``
-     - The ``omi_physics`` event it was made from
-
-``phases`` defaults to ``'begin'`` and ``'enter'``. ``'persist'`` and
-``'stay'`` arrive on every step for as long as the pair touches. ``above`` is
-the closing speed, in m/s, a ``'begin'`` or ``'persist'`` must exceed to be
-delivered; an ``'end'`` always passes. A box resting on the floor closes on it
-by about ``g·dt`` on every step (0.08 m/s at 120 Hz), so ``above=0.5`` with
-``('begin', 'persist')`` hears every blow, including a box already on the floor
-tipping over onto an edge, and nothing while it rests.
-
-A pair whose two bodies are both covered by one subscription is delivered once,
-facing the lower-indexed body. Two bodies that fall asleep against each other
-are still touching: a crate that settles gets a ``'begin'`` and no ``'end'``
-until something moves it off. ``manager.remove(body)`` ends every pair it was
-in with ``reason='removed'``; its subscriptions hear those ends at the next
-``advance()`` and then finish, on a threaded manager whether or not a tick has
-run in between. A subscription hears only what happens after it is made: the
-manager drains the world's event log every frame.
-
-When callbacks run
-~~~~~~~~~~~~~~~~~~
-
-The world records its collisions on every fixed step, and
-``manager.advance(dt)`` delivers them after it has written the frame's poses,
-in step order, on the thread that called it. A frame that ran four steps
-delivers what happened on all four, so a bounce is heard at any frame rate.
-``ThreadedPhysicsManager`` delivers the events published with the snapshot it
-writes, so the two managers deliver the same events. A callback that raises is
-logged with the collision and does not stop the rest.
-
-On a ``ThreadedPhysicsManager``, code on the render thread that changes the
-world holds ``manager.with_world()``, which pauses the simulation thread:
-adding a body, moving one, setting a velocity. ``remove``, ``subscribe`` and
-``report_hit`` take it themselves; it is re-entrant, so they can also be called
-inside it. ``PhysicsManager.with_world()`` is the same call and waits for
-nothing, so code written for one manager runs under the other.
-
-Callbacks are held until cancelled, so a lambda can be subscribed.
-
-``subscribe(..., immediate=True)`` calls the callback inside the physics step
-instead, before the next step runs: a lever that must throw as it is struck, or
-a projectile removed on impact. It may change the world and must not touch the
-scenegraph. It hears contacts only, and a threaded manager refuses it, since
-its steps run on another thread.
-
-Hitscan weapons
-~~~~~~~~~~~~~~~
-
-A shot that is a raycast never touches the solver. The shooter reports what it
-hit, and the struck body's subscribers that ask for ``'hit'`` receive it like
-any other blow:
-
-.. code-block:: python
-
-   from omi_physics import model, raycast
-
-   SHOTS = model.CollisionFilter(collisionSystems=('shot',),
-                                 notCollideWithSystems=('red_team',))
-   hit = raycast.raycast(world, muzzle, aim, max_distance=200.0, filter=SHOTS)
-   if hit is not None:
-       events.report_hit(hit, source=player, direction=aim, impulse=4.0,
-                         speed=400.0, payload=weapon)
-
-   events.subscribe(on_struck, body=crate, kinds=('contact', 'hit'))
-
-``report_hit`` pushes the body by ``impulse`` (N·s) at the hit point, and the
-subscriber sees ``approach`` as the round's ``speed``, ``normal`` along its
-path and ``payload`` as it was passed. It is delivered with the next
-``advance()``, ahead of that frame's contacts; a threaded manager's frame can
-also carry contacts from ticks published before the shot. ``filter=`` on ``raycast``,
-``raycast_many`` and ``bodies_along`` is a collision filter for the ray, so what
-a weapon passes through is data rather than a list of bodies to skip.
-
-The walker
-~~~~~~~~~~
-
-A walking camera has a body in the world when its platform is built with
-``PhysicsViewPlatform(world, body=True)``. The body is a sensor capsule that
-follows the walker: it enters trigger volumes, and its touches with moving
-bodies arrive as contacts with ``solved`` False. It pushes nothing and nothing
-pushes it, and rays pass through it. The walker collides with the static world
-through its own controller, which reports what the capsule begins and stops
-touching there, within 2 cm, with the speed it arrived at: a subscription on
-``platform.body`` hears it land and walk into walls.
-
-.. code-block:: python
-
-   platform = PhysicsViewPlatform(world, body=True)
-   events.subscribe(on_pad, body=platform.body, kinds=('trigger',))
-
-The walker places its body in the world on every update. In a threaded world,
-update it inside ``manager.with_world()``.
-
-Breaking instead of bouncing
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-A pane that shatters when ``hit.impulse`` passes its strength is removed by
-its callback and replaced by fragments; the ball has already bounced off it
-on that step. To let the ball carry on through, decide before the solve:
-
-.. code-block:: python
-
-   from omi_physics.contactevents import Verdict
-
-   def breaks(pair):                         # a PairPreview
-       if pane.index in (pair.a.index, pair.b.index) and pair.impulse > 5.0:
-           return Verdict.IGNORE_PAIR
-       return Verdict.SOLVE
-
-   world.set_contact_filter(breaks)
-
-The filter is asked once about each reported pair, on the step it would begin.
-``pair.impulse`` is ``approach`` times the pair's reduced mass, in N·s.
-``IGNORE_PAIR`` lets the two pass through each other until they part;
-``IGNORE_STEP`` leaves the pair out of this step and asks again on the next. An
-ignored pair is still delivered, with ``solved`` False, so the subscriber that
-spawns the fragments hears it. One-way platforms use the same hook.
-
-.. rst-class:: technical
-
-Recording is ``omi_physics``' contact tracker (``contactevents.py``). A
-subscription on a body flags it and sets ``world.contact_reporting`` to
-``'flagged'``; a subscription on every body sets ``'all'``. With nothing
-subscribed the world records nothing and the step costs what it did. A
-manager keeps the world's event log (``world.log_events``) off until the first
-subscription that is not ``immediate``, so a world whose events go only to
-listeners inside the step keeps no log.
-Reporting every pair of a resting pile of 300 boxes adds about 2% to its step;
-asking for ``'persist'`` adds an object per touching pair per step, about 5% on
-the same pile. The world's own ``add_contact_listener``, ``contact_log`` and
-``set_contact_filter`` are there for an application without a manager; see
-omi_physics' README.
-
-.. _physics-movers:
-
-Doors, lifts and platforms
---------------------------
-
-A kinematic body moves at the velocity it is given and nothing pushes it.
-``omi_physics.kinematic.KinematicMover`` sends one to a place at a speed and
-stops it there: set ``target``, call ``update(dt)`` once a frame before the
-manager advances, and the body travels at ``speed`` metres per second and is
-placed exactly on the target when it arrives. What stands on it is carried.
-
-.. code-block:: python
-
-   from omi_physics.kinematic import KinematicMover
-
-   door = KinematicMover(world, door_body.index, speed=1.5)
-   plate = manager.events.occupancy(plate_body)
-
-   def OnIdle(self, *arguments):
-       x, y, z = DOOR_SHUT
-       door.target = (x, y + 2.2, z) if plate.occupied else DOOR_SHUT
-       door.update(dt)
-       manager.advance(dt)
-
-``omi_physics.kinematic.KinematicAnimator`` follows a function of time
-instead, for a lift that never stops or an arm that sweeps.
-
-.. _cooking:
-
-Cooking collision shapes from a mesh
-------------------------------------
-
-Most authored geometry has no collider of its own.
-``omi_physics.cookery.cook_shape()`` makes one from a vertex array, using one
-of these strategies:
-
-- ``primitive`` - the best-fitting box or sphere.
-- ``convex`` - the convex hull.
-- ``decompose`` - a compound of convex pieces, for concave moving bodies.
-- ``trimesh`` - the triangles themselves, for static world geometry.
-- ``auto`` (the default) - ``trimesh`` for static geometry that comes with
-  triangle indices, and otherwise ``convex``, changing to ``decompose`` when
-  the shape is very concave.
-
-To add colliders to a glTF file ahead of time, run the ``physics_cook``
-module:
-
-.. code-block:: bash
-
-   python -m OpenGLContext.bin.physics_cook scene.gltf -o cooked.gltf
-
-It gives every mesh node that has no physics body an ``OMI_physics_shape`` and
-an ``OMI_physics_body``: a static ``trimesh`` by default, or a ``convex`` body
-with ``--motion dynamic``. It works on ``.gltf`` JSON documents and leaves nodes
-that already have a body unchanged. Without ``-o`` it overwrites the input.
-
-.. rst-class:: technical
-
-Convex hulls and approximate convex decomposition are in ``hull.py`` and do
-not need scipy. Results are cached per vertex array. The
-``physics_cook_view.py`` demo draws the cooked collider over the render mesh
-so you can compare the fit.
-
-.. _attaching:
-
-Making a node a physics body
-----------------------------
-
-``PhysicsManager.attach(node, motion=None, ...)`` binds a scenegraph node to a
-body whose collision shape is cooked from the geometry the node draws, so what
-is drawn and what is collided with are the same mesh:
-
-.. code-block:: python
-
-   from omi_physics import model
-   from OpenGLContext.scenegraph import surfaces
-
-   wall = surfaces.shape(surfaces.block((6, 3, 0.5)), brick, translation=(0, 1.5, -4))
-   manager.attach(wall, material='wood', strategy='primitive')       # static
-
-   ball = surfaces.shape(surfaces.sphere(0.3), steel, translation=(0, 2, 0))
-   body = manager.attach(ball, model.Motion(type=model.DYNAMIC, mass=5.0),
-                         material='metal', strategy='primitive')
-   manager.world.apply_impulse(body.index, (0, 0, -50))              # kick it
-
-   pad = surfaces.shape(surfaces.block((4, 1, 4)), mark, translation=(0, 0.5, -8))
-   zone = manager.attach(pad, trigger=True, strategy='primitive')    # not drawn
-   manager.events.subscribe(on_landed, body=zone, kinds=('trigger',),
-                            phases=('enter',))
-
-``node`` is a ``Transform`` holding the geometry, where the body starts; the
-world writes its pose back onto it while the body is dynamic. What the body
-collides with is the geometry of the node's descendants, placed by their own
-transforms and the node's ``scale``, but not by the node's own translation and
-rotation, which are the body's pose. A node that draws no triangles raises
-``ValueError``.
-
-- ``motion`` is an ``omi_physics.model.Motion``. Left out, the body is static.
-- ``material`` is a name from ``model.MATERIAL_PRESETS``, a ``model.Material``,
-  or the index of one already in the world. A name is added to the world once.
-- ``strategy`` is one of the :ref:`cooking <cooking>` strategies. ``primitive``
-  fits a box or a sphere, which the solver has exact tests for; ``trimesh``
-  keeps the triangles of a static body; ``auto`` is the triangles for a static
-  body and the convex hull for a dynamic one. ``decompose`` makes several shapes
-  and a body has one, so it raises ``ValueError``.
-- ``trigger=True`` makes the shape a trigger volume: it stops nothing and
-  reports what enters it. A node used only as a trigger is left out of the
-  scene and is not drawn.
-- ``collision_filter`` is the index of a ``model.CollisionFilter``, or -1.
-
-``OpenGLContext.physics.gltf_world.node_mesh(node)`` is the geometry attach
-reads: ``(points, triangle_indices)`` in the node's frame, or None.
-
-The :doc:`cannon game <tutorials/physics/using_physics>` is built this way: towers,
-walls, crates and balls made with ``attach``, one ``apply_impulse`` to fire,
-``set_force`` for the wind, a trigger over the target to say it was hit, and
-kinematic bodies steered by ``KinematicAnimator`` for the sliding target and
-the gate. Its steel, rubber and lead balls differ only in mass and in the
-``Material`` they are given.
+The reader is ``OpenGLContext.physics.omigltf``, with the OMI
+specification's defaults: it parses a glTF's ``OMI_physics_*`` blocks into the
+engine's own types. The glTF
+loader keeps the document as ``scene.physics`` and tags each node that carries
+a body. ``KHR_physics_rigid_bodies`` is not read.
 
 .. _walking:
 
@@ -473,7 +1403,12 @@ Walking any scene
 Any interactive context can walk. ``OpenGLContext.move.physicswalk.PhysicsWalkMixin``
 is mixed into ``ViewPlatformMixin``, so any context with a camera can hand that
 camera to an avatar. Every physics import is inside a method, so a context
-that never turns walking on never imports the physics package.
+that never turns walking on never imports the physics package. The avatar is a
+:ref:`character <physics-characters>` of the context's physics service
+(``context.physics``), on whichever engine it runs, and the camera is a
+``PhysicsViewPlatform.over(character)`` (:ref:`navigation-follow`). The scene's
+shapes are the service's scenery, so a body the program adds lands on the
+same floor the avatar walks, and the avatar pushes it.
 
 .. code-block:: python
 
@@ -504,15 +1439,28 @@ fly out, and :kbd:`g` again to walk from wherever you are.
    * - ``enablePhysics( on )``
      - Switches between walking and free-fly, leaving the camera where it is.
    * - ``stepPhysics( dt=None )``
-     - Advances the avatar one frame and moves the camera to it. Call it from
-       ``OnIdle``. ``dt`` defaults to the wall-clock time since the last step,
-       clamped so that a stall cannot move the avatar through a wall.
+     - In a context, asks for the next frame: the frame steps the avatar,
+       with the movement mode's input before the world's step and the camera
+       at the avatar's eye after it. A host with no render queue calls it to
+       step the avatar ``dt`` seconds itself, which advances the world;
+       ``dt`` defaults to the wall-clock time since the last step, clamped to
+       ``physicsMaxStep`` (0.05 s) so that a stall cannot move the avatar
+       through a wall.
    * - ``buildPhysicsWorld()``
-     - Returns ``(world, (lo, hi))``, or None if nothing is walkable. The
-       default cooks one static collision mesh from ``self.sg``. Override it
-       for a context that has its own collision world, such as a terrain height
-       field or a level format that ships its own collision; the override does
-       not need ``sg``.
+     - Puts what the avatar walks on into ``context.physics`` and returns its
+       bounds ``(lo, hi)``, or None if nothing is walkable. The default makes
+       the shapes of ``self.sg`` the service's scenery, waits up to
+       ``physicsCookWait`` seconds (30) for their triangles to be cooked, and
+       places the scene's gravity zones. It switches the service on where it
+       is off and turns ``colliders='none'`` into ``'scene'``; with
+       ``colliders='explicit'`` the avatar walks only the bodies the program
+       added. Override it for a context with bodies of its own, such as a
+       terrain height field or a level format that ships its own collision;
+       the override adds them to ``self.physics`` and does not need ``sg``.
+   * - ``forgetPhysicsWorld()``
+     - Takes the avatar out of the world, for a new scene; the next
+       ``enablePhysics(True)`` builds a new one. The viewer calls it when it
+       swaps scenes.
    * - ``characterCapabilities( scale )``
      - Returns the avatar's size and starting speeds. Override it for an avatar
        that is not roughly a person. The active :doc:`movement mode
@@ -547,37 +1495,40 @@ fly out, and :kbd:`g` again to walk from wherever you are.
 
 .. _physics-heightfield:
 
-Ground that is not in the collision world
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Walking a landscape
+~~~~~~~~~~~~~~~~~~~
 
 ``OpenGLContext.move.terrainwalk.TerrainWalkMixin`` is walking for a
 landscape. It uses the same avatar, movement modes and keys as any other
 walking context, but the ground is a :ref:`HeightField <terrain-heightfield>`
-and the obstacles are a field of cylinders (tree trunks). Both are tested
-analytically, not as meshes. A four-kilometre landscape would be millions of
-triangles as a collision mesh, while a height-field lookup costs the same
-anywhere on it.
+and the obstacles are a field of cylinders (tree trunks). They are bodies in
+the context's physics world (:ref:`physics-landscape`), and the avatar is a
+character in it that the service steps, so a body dropped on the landscape
+lands on the ground and strikes the trunks, and the walker pushes it.
 
-It overrides the three methods above that make and resolve the physics world:
+It overrides the methods above that make and resolve the avatar:
 
-- ``buildPhysicsWorld()`` gives the character an empty world.
+- ``buildPhysicsWorld()`` answers the height field's bounds, and
+  ``physicsAvatar()`` the walker that holds the free-fly camera on the ground,
+  which becomes the avatar.
 - ``spawnAvatar()`` stands the avatar on the ground below the camera the scene
   placed. Every point of a height field can be stood on, so there is no
   search.
-- ``resolvePhysicsStep()`` lifts the avatar to the surface and pushes it out
-  of the trunks after each step.
+- ``resolvePhysicsStep()`` lifts a flying avatar to the surface after each
+  step.
 
 It also keeps the avatar at one metre to the unit (``physicsAvatarScale()``;
-a height field is already in metres), sizes it from its own ``eye_height``
-and ``player_radius`` (``characterCapabilities()``), declares mouse-look,
-walking and flying unless the host declared movement modes of its own
-(``applyMovementModes()``), and holds a free-flying camera on the ground and
-out of the trunks after each frame's events (``DoEventCascade()``).
+a height field is already in metres), sizes it from its own ``eye_height``,
+``player_radius``, ``step_height`` and ``max_slope``
+(``characterCapabilities()``), declares mouse-look, walking and flying unless
+the host declared movement modes of its own (``applyMovementModes()``), and
+holds a free-flying camera on the ground and out of the trunks after each
+frame's events (``DoEventCascade()``).
 
-The surface acts as a floor, not a rail: a jump rises, and an avatar arriving
-from the air falls onto it. Trunks stop a walker but not a flier, because
-flying has no collision. The ``oglc-forest`` demo uses this mixin, as does
-anything built on ``scenegraph.terrain`` (see :doc:`terrain`).
+A jump rises, and an avatar arriving from the air falls onto the ground. Trunks
+stop a walker but not a flier, because flying has no collision. The
+``oglc-forest`` demo uses this mixin, as does anything built on
+``scenegraph.terrain`` (see :doc:`terrain`).
 
 The avatar is sized to the world
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -599,21 +1550,26 @@ all. ``spawnAvatar()`` tries candidate positions in this order:
 #. The centre of the model's footprint.
 #. Rings further and further out from the centre.
 
-It keeps a candidate only if the avatar lands on the ground without being
-stuck. Each kept candidate is scored by how many of the four horizontal
-directions have room to move. The most open spot wins, and among equals the
-most central. A fully open spot is taken at once. If no spot is walkable, the
-avatar goes to the centre anyway: the camera needs a pose, and the user can
-press :kbd:`g` to fly out.
+At each candidate a ray straight down from above the model finds every
+surface no steeper than the avatar's ``maxSlope`` (``floors_below``). The
+avatar stands on the lowest of them where its standing capsule, lifted half a
+step, overlaps no body and the 1.25 standing heights above are clear
+(``HEADROOM``): the ground floor of a building rather than its roof. A
+candidate with no such floor is dropped. Each kept candidate is scored by how
+many of the four horizontal directions have room to move (``clearance``). The
+most open spot wins, and among equals the most central. A fully open spot is
+taken at once. If no spot is walkable, the avatar goes to the centre anyway:
+the camera needs a pose, and the user can press :kbd:`g` to fly out.
 
 .. rst-class:: technical
 
-The clearance test places the whole capsule an arm's length along each
-direction and pushes it out of any overlap. This finds walls that the
+The clearance test places the standing capsule an arm's length (its radius
+and half a metre at avatar scale 1) along each direction and asks the world
+whether it overlaps a body (``physics.overlap``). This finds walls that the
 avatar's centre line would miss. It is a placement test, not a swept move, so
-it does not detect a barrier thinner than the capsule. Its reach is a fixed
-distance, not scaled to the avatar, so on a small model it reports more
-directions as open than a scaled test would.
+it does not detect a barrier thinner than the arm's length. A ray meets the
+underside of a closed mesh as it meets a floor; the headroom test tells them
+apart only for a solid less than 1.25 standing heights thick.
 
 .. _character:
 
@@ -726,10 +1682,31 @@ worked would depend on the frame time. The capsule is also still touching the
 floor it is leaving. The controller ignores both tests while the capsule is
 moving upward.
 
+Slides and jumps on a slope
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``slide(duration, rise)`` keeps the momentum the character has and ignores
+the input. ``slide(duration, rise, steer=True)`` takes no momentum and no
+friction, and the input goes on moving the character at the speed of its mode
+(not the crouch speed), which is how a runner slides under a gate and goes on
+turning with its path. ``extend_slide(duration)`` makes the slide last
+``duration`` seconds more from now and puts the capsule low again;
+``end_slide()`` ends it at once and stands, or crouches where there is no room.
+Both return whether there was a slide.
+
+A jump from the ground launches at ``sqrt(2 g jumpHeight)`` whatever the
+ground does. On a slope that falls away under a runner, the ground has dropped
+by the time the jump peaks, so the jump rises higher above the ground than
+``jumpHeight``. ``CharacterCapabilities.jumpFollowsSlope`` (default false) adds
+the vertical speed of the run along the ground to the launch, and a jump rises
+``jumpHeight`` above the ground it left off a falling or a rising slope.
+
 .. rst-class:: technical
 
-The controller is ``omi_physics/character.py``. ``PhysicsViewPlatform`` in
-``move/physicsplatform.py`` drives a context's camera from it. See the
+The controller is pyjoltphysics' port of this state machine over
+Jolt's ``CharacterVirtual``, driven by ``JoltController`` in
+``physics/joltengine.py``. ``PhysicsViewPlatform`` in
+``move/physicsplatform.py`` drives a context's camera from a character. See the
 ``physics_navigate.py`` demo.
 
 .. _streamed:
@@ -750,6 +1727,52 @@ middle of an open road.
 So colliders are built from what is in the world, not from its tiles: only
 drawn tiles get colliders, and roads and props get colliders of their own.
 
+.. _physics-landscape:
+
+Landscapes
+~~~~~~~~~~
+
+A landscape of kilometres is too large to hold as a mesh, and the renderer
+already answers its height at any point. ``OpenGLContext.physics.landscape``
+makes the world's bodies from the same height field the terrain node draws:
+
+.. code-block:: python
+
+   from OpenGLContext.physics.landscape import Landscape, NearbyColliders
+
+   Landscape( context.physics, ground, trunk_positions, trunk_radii )
+   context.physics.add_collider_source( NearbyColliders( rocks.mounds_near ),
+                                        focus=lambda: walker.position )
+
+``Landscape( physics, ground, trunks=None, radii=None )`` adds the ground as a
+static body that answers a height and a normal at each ``( x, z )``, and each
+trunk as a cylinder 24 m tall that stands on the ground under it.
+``ground`` is anything with ``sample( x, z )`` for arrays, such as a
+``HeightField`` or the ``RockyGround`` that stands for a rock-covered field;
+``extent`` says where it ends, and is taken from the ground's own ``extent``.
+Radii are rounded up to the next 0.05 m, and trunks of one radius share one shape
+and are added in one call. A ground that is not a ``HeightField`` is read through
+``SampledGround``, which keeps 32 m tiles of its samples on a grid as fine as
+its ``spacing``, because a character asks for dozens of heights in a step and
+rock displacement is slow to compute. A tile of rocky ground takes a tenth of a
+second to make, so ``landscape.follow( focus )`` has the tiles within one of the
+focus's made on a thread of their own, ahead of the walker reaching them; a tile
+asked for before it is ready is made by the asker.
+
+``NearbyColliders( answer )`` is a collider source for things that come and go:
+rocks, posts, a scatter streamed round the focus. ``answer( x, z, reach )``
+returns ``( positions, radii )`` for cylinders or ``( positions, radii, rims,
+tops )`` for domes. Things within ``reach`` (24 m) of the focus are made, and stay
+until the focus is 1.25 times as far, so a focus pacing the edge of one does not
+make and drop it again. ``dome_proxy( radius, rim, top )`` is the dome: a
+convex solid with a vertical side, half an ellipse over it, and a floor 0.3 m
+below the position. Rays are cast at it, as at any hull.
+
+A body added to the world hits the ground and the trunks; the rocks beyond the
+focus's reach are not there to be hit. ``oglc-terrain`` builds its avatar this
+way (``terrain_view.make_avatar``), with the procedural or DEM height function
+as the ground.
+
 Tile colliders
 ~~~~~~~~~~~~~~
 
@@ -757,9 +1780,10 @@ A streamer keeps some tiles that it is not drawing: a coarse parent, so it can
 show it again when the camera pulls back, and siblings until the memory budget
 needs their space. Left in the physics world, those tiles form a second
 surface under the drawn one.
-``OpenGLContext.loaders.tiles3d.physics_colliders.TerrainColliders`` connects
-its ``on_drawn`` method to the runtime's ``on_drawn`` hook and holds colliders
-for exactly the tiles on screen.
+``OpenGLContext.loaders.tiles3d.physics_colliders.TerrainColliders(physics)``
+connects its ``on_drawn`` method to the runtime's ``on_drawn`` hook and holds a
+static triangle-mesh body of the service for exactly the tiles on screen.
+``TilesTerrain(path, physics=context.physics)`` makes one.
 
 Road colliders
 ~~~~~~~~~~~~~~
@@ -767,18 +1791,19 @@ Road colliders
 A road is a centreline and a cross-section, and a baked world stores both in
 its :doc:`tileset extras <roads>`.
 ``OpenGLContext.physics.road.RoadColliders`` sweeps them into one surface at
-one resolution, cuts it into chunks, and keeps the chunks near the car in the
-physics world:
+one resolution and cuts it into chunks. It is a :ref:`collider source
+<physics-sources>`: the chunks near the focus are static bodies of the service.
 
 .. code-block:: python
 
    from OpenGLContext.physics.road import RoadColliders
-   road = RoadColliders(physics_world, course.centreline, course.road_profile(),
+   road = RoadColliders(course.centreline, course.road_profile(),
                         closed=True, bank=course.bank)
-   road.update(car_position)                # once a frame
+   context.physics.add_collider_source(road, focus=lambda: car.position)
 
 Chunks are 120 m long (``chunk``), and those within 260 m along the road on
-either side of the car are kept (``reach``).
+either side of the focus are kept (``reach``). ``chunk_count()`` and
+``triangle_count()`` say what is held.
 
 ``bank`` is the road's lean at each centreline point, as a fraction. A baked
 world writes it beside the centreline (:ref:`banked corners <banking>`). Pass
@@ -804,7 +1829,7 @@ them in), and puts a wall along both edges of each:
 
 .. code-block:: python
 
-   road = RoadColliders(physics_world, course.centreline, course.road_profile(),
+   road = RoadColliders(course.centreline, course.road_profile(),
                         closed=True, bank=course.bank, barriers=course.edges())
 
 The drawn structure has a barrier at these edges. Without a matching collider,
@@ -825,17 +1850,22 @@ Props
 
 A boulder beside the road is drawn from a tile, but its collider must not
 come from the tile, or the car drives through the rock when the tile behind
-it changes resolution. ``OpenGLContext.physics.props.PropColliders`` reads the
-:ref:`prop records <roads-props>` a baked world carries. It adds colliders for
-the props within reach (default 220 m) and removes the ones out of reach. A
-world has hundreds of boulders, and the broad phase pays for every body it
-holds.
+it changes resolution. ``OpenGLContext.physics.props.PropSource`` is a
+:ref:`collider source <physics-sources>` for the :ref:`prop records
+<roads-props>` a baked world carries. The props within reach of the focus
+(default 220 m) are static bodies of the service, and those out of reach are
+removed. The set is chosen again once the focus has moved ``settled`` metres
+(default 20). A world has hundreds of boulders, and the broad phase pays for
+every body it holds.
 
 .. code-block:: python
 
-   from OpenGLContext.physics.props import PropColliders
-   obstacles = PropColliders(physics_world, world.props)
-   obstacles.update(car_position)           # once a frame
+   from OpenGLContext.physics.props import PropSource
+   obstacles = PropSource(world.props)
+   context.physics.add_collider_source(obstacles, focus=lambda: car.position)
+
+``obstacles.standing`` lists the props with a body. Props of one shape and size
+share one proxy.
 
 A prop's collider is the simple shape its record names, at the size the
 record gives, not its render mesh; a triangle mesh per rock costs both the
@@ -853,24 +1883,26 @@ broad phase and the narrow phase. ``Prop.shape`` is one of:
 
 A world typically has thousands of stones and hundreds of boulders, and they
 need different reaches: a boulder must stop a car from a long way off, while a
-stone only matters under the wheel. Use two ``PropColliders``, one for each
-table, each with its own ``reach``.
+stone only matters under the wheel. Use two sources, one for each table, each
+with its own ``reach``.
 
 A baked world names its props by channel in its tileset's ``extras``: a
 channel of hundreds as a list of prop records, and one of tens of thousands --
 the loose stone -- as ``{"table": "stones.npz", "count": n}``, a binary table
 beside the tileset (``scenegraph.props.props_table``), since the ``extras`` is
-parsed by every reader of the world. ``PropColliders.baked`` reads either form
-from the tileset's directory or URL and stands the colliders up:
+parsed by every reader of the world. ``PropSource.baked`` reads either form
+from the tileset's directory or URL:
 
 .. code-block:: python
 
    from OpenGLContext.loaders.tiles3d import fetch
-   from OpenGLContext.physics.props import PropColliders
+   from OpenGLContext.physics.props import PropSource
 
    base = fetch.dir_of(tileset_path)
-   boulders = PropColliders.baked(physics_world, extras, 'props', base)
-   stones = PropColliders.baked(physics_world, extras, 'stones', base, reach=40.0)
+   boulders = PropSource.baked(extras, 'props', base)
+   stones = PropSource.baked(extras, 'stones', base, reach=40.0)
+   for source in (boulders, stones):
+       context.physics.add_collider_source(source, focus=lambda: car.position)
 
 ``OpenGLContext.loaders.tiles3d.props.baked_props`` is the reader on its own.
 A table named outside the tileset's reach is refused, as every file a world
@@ -881,69 +1913,122 @@ names is (:doc:`untrusted`).
 Joints, compound shapes and pair rules
 --------------------------------------
 
-``omi_physics`` holds bodies together with joints built from velocity
-constraint rows, solved together and warm started from the last step:
-``BallJoint``, ``HingeJoint``, ``SliderJoint``, ``UniversalJoint``,
-``TwoAxisHingeJoint`` (a steered, sprung wheel) and ``MotorJoint``, in
-``omi_physics.joints``. Each takes its anchor and axes in world coordinates
-as the bodies stand when ``world.add_joint_constraint`` adds it, stops an
-angle or a separation with a bounce, drives an axis with a motor of a given
-force or torque, and answers its angles, rates and anchors. Bodies a joint
-holds do not collide with each other.
+A joint holds a body to another body, or to the world, so that it moves only
+the way the joint lets it. Each kind is one call on the service, which returns a
+``Joint``:
 
 .. code-block:: python
 
-   from omi_physics.joints import HingeJoint
+   door = physics.add_hinge(leaf, frame, anchor=(0.0, 1.0, 0.5), axis=(0, 1, 0),
+                            limits=(0.0, 1.6))
+   rotor = physics.add_hinge(fan, anchor=(6, 4, 0), axis=(0, 1, 0), motor=(4.0, 30.0))
+   link = physics.add_ball(lower, upper, anchor=(1.0, 6.0, 0.0))
+   drawer = physics.add_slider(box, cabinet, axis=(1, 0, 0), limits=(0.0, 0.4),
+                               motor=(0.5, 40.0))
+   rod = physics.add_distance(bob, to_anchor=(0.0, 6.0, 0.0), length=2.0)
+   shaft = physics.add_universal(drive, engine, anchor=(0, 1, 2), axis=(0, 0, 1),
+                                 to_axis=(0, 0.3, 1))
+   wheel = physics.add_wheel(tyre, car, anchor=(0.8, 0.4, 1.2), steering_axis=(0, 1, 0),
+                             axle=(1, 0, 0), steering_limits=(-0.5, 0.5),
+                             motor=(20.0, 300.0), suspension=(30000.0, 2000.0))
+   spin = physics.add_motor(rotor, axes=[(0, 1, 0)], torques=[5.0])
 
-   door = world.add_joint_constraint(HingeJoint(
-       frame, leaf, anchor=(0.0, 1.0, 0.5), axis=(0, 1, 0), lower=0.0, upper=1.6))
-   door.angle(world)
+   rotor.drive(-4.0, 30.0)                     # a new speed and the most torque
+   rotor.motor                                 # (-4.0, 30.0)
+   spin.drive(torques=[0.0])                   # a motor joint's torques
+   door.angle, drawer.position, wheel.angles   # radians, metres, (steering, spin)
+   door.remove()
 
-A collider may be several shapes in one body: ``model.Shape.compound`` places
-each at an offset in the body's frame, and the body's mass is shared among
-them by volume. A ``cylinder`` has flat ends and narrows to a cone where
-``radiusTop`` is 0.
+.. list-table::
+   :widths: auto
+   :header-rows: 1
 
-``world.set_pair_rule(rule)`` decides, each step, which pairs collide and
-how: ``rule(a, b)`` answers False to let them pass through each other, None
-for their materials, or a ``model.ContactParameters`` (restitution and the
-speed below which nothing bounces, friction in two directions, a surface
-speed, slip, softness and error correction). ``world.set_force``,
-``set_torque``, ``set_exact_rotation`` and ``set_sleep`` push, spin and rest
-one body. The omi_physics README has the details.
+   * - Call
+     - What it holds
+   * - ``add_hinge(body, to, anchor=, axis=, limits=, motor=)``
+     - ``body`` turns against ``to`` about ``axis`` through ``anchor``;
+       ``limits`` stop the angle, in radians from where it starts; ``motor`` is
+       a speed in radians a second and the most torque, in newton-metres
+   * - ``add_ball(body, to, anchor=)``
+     - ``body`` and ``to`` turn freely about the point ``anchor``
+   * - ``add_slider(body, to, axis=, limits=, motor=)``
+     - ``body`` slides against ``to`` along ``axis`` and does not turn;
+       ``limits`` in metres from where it starts; ``motor`` in metres a second
+       and newtons
+   * - ``add_distance(body, to, anchor=, to_anchor=, length=)``
+     - the point ``anchor`` on ``body`` stays ``length`` metres from
+       ``to_anchor`` on ``to``; the anchors default to the bodies' centres and
+       ``length`` to the distance between them
+   * - ``add_universal(body, to, anchor=, axis=, to_axis=)``
+     - a cardan joint: ``axis`` turns with ``body`` and ``to_axis`` with
+       ``to``, and the two keep the angle between them they start at, so a spin
+       about one is carried to the other; the axes must not lie along one line
+   * - ``add_wheel(body, to, anchor=, steering_axis=, axle=, steering_limits=, motor=, steering_motor=, suspension=)``
+     - ``body`` spins about ``axle`` and steers about ``steering_axis``, carried
+       by ``to``; ``steering_limits`` in radians (equal limits lock it);
+       ``motor`` and ``steering_motor`` are a speed in radians a second and the
+       most torque in newton-metres; ``suspension`` is ``(stiffness, damping)``
+       in newtons a metre and newton-seconds a metre, a spring along the
+       steering axis, and without it the anchor is held
+   * - ``add_motor(body, to, axes=, torques=)``
+     - turns ``body`` forward and ``to`` back about one to three ``axes``
+       (carried by ``to``) with ``torques`` in newton-metres, every step; it
+       holds nothing else, so the two bodies collide unless ``collide=False``
+
+``body`` and ``to`` are bodies or the nodes of bodies; ``to`` left out is the
+world. Anchors and axes are world coordinates as the bodies stand when the
+joint is made, and each body carries them from then on. Bodies a joint holds do
+not collide with each other unless ``collide=True``. Removing either body
+removes its joints, and ``joint.alive`` says whether it is still in the world.
+A joint travels to the world as a command, as a body's changes do, so it works
+in ``inline`` and ``thread`` mode alike. The world
+reports no events of its own for joints. :doc:`tutorials/physics/physics_joints`
+hangs a pendulum and a chain, turns a motor and slides a drawer.
+
+``joint.angles`` reads a joint back: a hinge's angle, a wheel's steering and
+spin angles, a motor joint's angle about each axis, all in radians from where
+the joint started, and a slider's slide in metres. ``joint.angle`` is the first
+of a hinge's, wheel's or motor's, and ``joint.position`` a slider's. A ball,
+distance or universal joint has none, and reading one raises
+``AttributeError``. The first read asks the world to publish the joint's
+readings and waits for its answer; with the world on its own thread later reads
+are at most a tick old. Inside an ``on_step`` function they are the world's as
+it stands. ``joint.drive(speed, force)`` runs a hinge's, slider's or wheel
+axle's motor, and ``joint.drive(torques=[...])`` sets a motor joint's torques.
+
+A collider may be several shapes in one body: ``Proxy.compound(parts)`` places
+each ``(proxy, position, orientation)`` at an offset in the body's frame, and
+the body's mass is shared among them by volume. A ``cylinder`` has flat ends and
+narrows to a cone where ``radius_top`` is 0.
 
 .. _physics-x3d:
 
 X3D rigid bodies
 ~~~~~~~~~~~~~~~~
 
-An X3D document's ``RigidBodyCollection`` is an omi_physics world of its own
-(``OpenGLContext.physics.x3drigid``), stepped once a frame on the engine's
-clock: its bodies, their collidables as shapes and compounds, X3D's six joints
-on the joints above, and its ``CollisionCollection``\ s and routed ``Contact``
-nodes as a pair rule. A ``CollisionSensor`` reports touches without stepping
-anything. What each node does, and the units of its fields, are in
-:ref:`x3d-rigid-bodies`.
+An X3D document's ``RigidBodyCollection`` is a world of its own, stepped once a
+frame on the engine's clock: a Jolt world (``OpenGLContext.physics.x3djolt``).
+``OpenGLContext.physics.x3drigid`` reads the nodes for it: the collidables as ``Proxy`` shapes and compounds, a body's default
+inertia from them (``OpenGLContext.physics.massprops``), and each
+``CollisionCollection`` and routed ``Contact`` as a ``ContactRule``. X3D's six
+joints are made on the joints above. The rule is asked as a pair first
+touches and at each step a refused pair still meets, and a pair meets with the
+collider's bounce and first friction coefficient or a routed contact's. A
+``CollisionSensor`` reports touches without stepping anything, by
+casting each collidable's shape where it stands in a world of its
+collidables. What each node does, the units of its fields and which fields
+Jolt reads are in :ref:`x3d-rigid-bodies`.
 
 .. _physics-debug:
 
 The debug overlay
 -----------------
 
-``OpenGLContext.physics.debugdraw.PhysicsDebugDraw`` draws the simulation as a
-wireframe overlay. A bit-flag mask selects what it draws: collision proxies,
-broad-phase AABBs, contact points and normals, joint connections (from each
-body to the anchor it carries), and each
-body's velocity, acceleration and angular-velocity vectors. Angular velocity
-is drawn at the body's corners, so opposite corners point opposite ways and
-the rotation is easy to see. Sleeping bodies are drawn in a different colour.
-
-.. rst-class:: technical
-
-``PhysicsDebugDraw`` builds an ``IndexedLineSet`` with per-vertex colour each
-frame, so it renders in both the legacy and the core profile. Flags:
-``PROXIES | AABBS | CONTACTS | VELOCITY | ACCELERATION | ANGULAR | SLEEP |
-JOINTS``.
+``physics.show_proxies(True)`` draws each box and sphere body as a green
+wireframe over the scene, and ``show_proxies(False)`` takes it out. The overlay
+is ``OpenGLContext.physics.debugdraw.ProxyOverlay``: one unit box and one unit
+sphere wireframe, scaled to each body by a ``Transform`` placed where the frame
+draws the body, so each kind is one instanced line draw. Capsules, cylinders, hulls, meshes and compounds are not drawn.
 
 .. _physics-demos:
 
@@ -951,7 +2036,9 @@ Demos
 -----
 
 ``oglc-physics-events`` is an installed command that shows every use of
-:ref:`collision subscriptions <physics-collisions>` in one yard:
+:ref:`events <physics-events>` in one yard. ``CollisionYard``, the object that
+holds it, takes a ``Physics`` and an ``Audio`` and is driven by a test with
+neither a window nor a sound device:
 
 .. list-table::
    :widths: auto
@@ -961,7 +2048,7 @@ Demos
      - What it shows
    * - ``d``
      - Crates dropped on the floor, each landing thudding at a level set by
-       ``approach``
+       ``speed``
    * - ``c``
      - Caps the frame rate at 20 fps; every landing still thuds
    * - ``l`` / ``L``
@@ -971,19 +2058,26 @@ Demos
    * - ``m``
      - Mends the glass
    * - ``space``
-     - A hitscan shot from the camera, reported with ``report_hit``; a crate
-       it hits is knocked away and pings
+     - A hitscan shot from the camera, a ``raycast`` and an impulse; a crate it
+       hits is knocked away and pings
    * - ``w``
-     - Puts a weight on the pressure plate. The plate is an ``occupancy``, and
-       the door is a kinematic body an ``omi_physics.kinematic.KinematicMover``
-       sends up while the plate is occupied and down when it is not
+     - Puts a weight on the pressure plate. The plate is a trigger whose
+       ``enter`` and ``exit`` handlers keep what is on it, and the door is a
+       kinematic body ``drive`` raises while the plate is occupied and lowers
+       when it is not
 
-The rest are scripts in ``tests/``. The test suite also runs each one as a
-visual-regression test: it exits after a set number of frames, captures the
-frame, and compares it with a reference image.
+``oglc-audio-demo`` drops balls that thud where they land, from the same events
+(:doc:`audio`). The rest are scripts in ``tests/tutorials/``, each a page in the
+tutorials. The test suite also runs each one as a visual-regression test: it
+exits after a set number of frames, captures the frame, and compares it with a
+reference image.
+
+- The stairs series, from :doc:`tutorials/physics/physics_stairs` to
+  :doc:`tutorials/physics/physics_stairs_tuning`: one scene, and a few lines
+  more in each.
 
 - :doc:`physics_room_drop.py <tutorials/physics/physics_room_drop>` - objects fall
-  into a room and stack; the core engine and the debug overlay.
+  into a room and stack; scenery as static bodies and ``show_proxies``.
 
 - :doc:`physics_bounce.py <tutorials/physics/physics_bounce>` - a row of balls with
   restitution from 0 to 1.
@@ -995,25 +2089,34 @@ frame, and compares it with a reference image.
   with point gravity.
 
 - :doc:`physics_triggers.py <tutorials/physics/physics_triggers>` - sensor volumes and
-  a subscription to their ``enter`` and ``exit`` events.
+  their ``enter`` and ``exit`` handlers.
+
+- :doc:`using_collisions.py <tutorials/physics/using_collisions>` - balls that
+  flash as hard as they landed.
 
 - :doc:`physics_events.py <tutorials/physics/physics_events>` - the
-  ``oglc-physics-events`` yard, opening on a scene already struck: collision
-  subscriptions, a pane broken before the solve and one after, a hitscan
-  shot and a pressure plate.
+  ``oglc-physics-events`` yard, opening on a scene already struck.
 
-- :doc:`physics_joints.py <tutorials/physics/physics_joints>` - a pendulum, a chain
-  and a motor.
+- :doc:`physics_joints.py <tutorials/physics/physics_joints>` - a hinged pendulum,
+  a chain of ball joints, a hinge's motor and a slider.
 
 - :doc:`physics_cook_view.py <tutorials/physics/physics_cook_view>` - cooks a collider
   and draws it over the mesh.
 
 - :doc:`physics_navigate.py <tutorials/physics/physics_navigate>` - a first-person
-  walk past walls, through a doorway, and up stairs and a ramp.
+  walk past walls, through a doorway, and up stairs and a ramp, with
+  ``follow(view='eyes')``.
 
 - :doc:`physics_stress.py <tutorials/physics/physics_stress>` - performance as the
   number of bodies grows.
 
+- :doc:`using_physics.py <tutorials/physics/using_physics>` - a cannon game in its
+  context's world, with kinematic bodies, a trigger and a wind. Its rules also
+  run on a standalone ``Physics`` stepped by hand, which is how they are tested.
+
+- The :doc:`Characters on Land <tutorials/character/character_run>` tutorials
+  run, jump and walk a rigged character over land.
+
 The :doc:`Add physics to a scene <tutorials/physics/physics_getting_started>` tutorial
-builds the first of these from scratch. :doc:`navmesh` builds a navigation
-mesh from the same collision world.
+walks the first of these. :doc:`navmesh` builds a navigation mesh from the same
+collision world.

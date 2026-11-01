@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Script to run the "standard" set of OpenGLContext scripts (in this directory)"""
+"""Script to run the "standard" set of OpenGLContext scripts: those in this directory and in the tutorials under it"""
 import os
 import sys
 import subprocess
@@ -42,8 +42,13 @@ if sys.platform != 'win32':
     STOP_SET.add('glprint.py')
 
 def get_scripts():
+    """The scripts in this directory and in each tutorial path under it"""
+    candidates = (
+        glob.glob( os.path.join( HERE, '*.py' ))
+        + glob.glob( os.path.join( HERE, 'tutorials', '**', '*.py' ), recursive=True )
+    )
     scripts = sorted([
-        x for x in glob.glob( os.path.join( HERE, '*.py' ))
+        x for x in candidates
         if (
             not os.path.basename(x).startswith( '_' )
             and 

@@ -1,0 +1,16 @@
+#VRML V2.0 utf8
+# META "title" "Cone"
+# META "description" "A cone centred on the origin with its axis along y; bottomRadius is the base's radius and height the distance from base to tip."
+
+Viewpoint {
+  orientation -0.6008 0.7867 0.1418 0.583
+  position 1.8 1.5 3.6
+}
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 0.75 0.6 0.15
+    }
+  }
+  geometry Cone { }
+}

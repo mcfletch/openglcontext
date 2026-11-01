@@ -44,9 +44,6 @@ everything but the recording works as it does anywhere else.
 import math
 import os
 import sys
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
 from OpenGLContext import testingcontext
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import (

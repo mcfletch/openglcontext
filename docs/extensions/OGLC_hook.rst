@@ -159,6 +159,60 @@ only where it is flat to within 1% of its size. See :doc:`../reflections`.
      - false on a material, true on a node
      - Whether the surface shows only the reflection.
 
+``cloth``
+---------
+
+Read on a node. The node becomes a ``Cloth`` (:ref:`x3d-cloth-ragdoll`)
+holding its mesh: the mesh's vertices are welded by position and simulated as
+a soft body on the context's physics service, placed where the node is. The
+vertices are drawn in world coordinates, so a node tagged ``cloth`` sits at
+the top of the scene. See :doc:`../physics`.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 16 12 12 60
+
+   * - Parameter
+     - Type
+     - Default
+     - Meaning
+   * - ``mass``
+     - number
+     - 1
+     - Kilograms, shared among the welded vertices; at least 0.
+   * - ``compliance``
+     - number
+     - 0
+     - Metres a newton of the edges, 0 for edges that do not stretch.
+   * - ``bendCompliance``
+     - number
+     - 0.01
+     - Metres a newton of the bend constraints.
+   * - ``pressure``
+     - number
+     - 0
+     - Pa m3 holding a closed mesh round.
+   * - ``linearDamping``
+     - number
+     - 0.1
+     - 1/s.
+   * - ``friction``
+     - number
+     - 0.2
+     - Against the bodies the cloth meets.
+   * - ``vertexRadius``
+     - number
+     - 0
+     - Metres the vertices keep from the surfaces they meet.
+   * - ``pinned``
+     - array of integers
+     - none
+     - Vertex indices of the mesh, held where they start.
+   * - ``wind``
+     - three numbers
+     - 0 0 0
+     - A force in newtons shared among the vertices every step.
+
 ``fire``, ``smoke`` and ``sparks``
 ----------------------------------
 

@@ -158,7 +158,7 @@ class TestLoadedScene:
     """The loader frames what it built, and says what it left out."""
 
     def test_a_stranded_node_does_not_blow_the_framing_up(self):
-        pygltflib = pytest.importorskip("pygltflib")
+        import pygltflib
 
         pos = np.array([[-1, -1, 0], [1, -1, 0], [0, 1, 0]], dtype=np.float32)
         blob = pos.tobytes()
@@ -187,14 +187,12 @@ class TestLoadedScene:
         assert scene.stray_reach > 50
 
     def test_an_ordinary_scene_reports_no_strays(self):
-        pytest.importorskip("pygltflib")
 
         scene = gltf.load_gltf(_triangle_glb())
         assert scene.strays == 0
         assert scene.radius > 0
 
     def test_the_framing_box_is_given_with_its_centre_and_radius(self):
-        pytest.importorskip("pygltflib")
 
         scene = gltf.load_gltf(_triangle_glb())
         low, high = np.asarray(scene.minimum), np.asarray(scene.maximum)

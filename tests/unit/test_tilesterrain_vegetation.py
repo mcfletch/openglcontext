@@ -15,7 +15,6 @@ import os
 import numpy as np
 import pytest
 
-pytest.importorskip("pygltflib")
 
 from OpenGLContext.scenegraph.tilesterrain import _facing, TilesTerrain
 from OpenGLContext.scenegraph.vegetation.field import VegetationField

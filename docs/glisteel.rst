@@ -65,9 +65,9 @@ Engine features the game uses
        ``extras``. The starting grid, the lap timing and the autopilot read
        the track from there.
    * - The car
-     - :doc:`Physics & Collision <physics>`: a raycast vehicle on
-       ``omi_physics``, stepped at a fixed rate, with contacts read in the
-       step that produced them.
+     - :doc:`Physics & Collision <physics>`: the engine's vehicle
+       (``Physics.add_vehicle``) on Jolt, stepped at a fixed rate, with
+       contacts read in the step that produced them.
    * - The car's materials
      - :doc:`PBR <pbr>` and :doc:`the uber-shader <ubershader>`: painted
        metal, and a refractive canopy through

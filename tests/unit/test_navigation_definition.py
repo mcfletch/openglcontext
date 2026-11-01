@@ -165,6 +165,40 @@ class TestViews:
             nd.ViewDefinition(name='top', camera='top', gestures=['no-such-gesture'])
 
 
+class TestTheModeNamedAtStart:
+    def names(self, navigation):
+        return [mode.name for mode in navigation.modes]
+
+    def test_a_mode_named_alone_is_the_only_one_declared(self):
+        assert self.names(nd.Navigation(mode='fly')) == ['fly']
+
+    def test_a_mode_the_list_lacks_is_declared_with_it(self):
+        navigation = nd.Navigation(modes=['examine'], mode='fly')
+        assert self.names(navigation) == ['examine', 'fly']
+
+    def test_a_mode_already_declared_is_not_declared_twice(self):
+        navigation = nd.Navigation(modes=['fly', 'walk'], mode='walk')
+        assert self.names(navigation) == ['fly', 'walk']
+
+    def test_a_mode_given_as_a_node_counts_by_its_name(self):
+        navigation = nd.Navigation(modes=[FlyMode(name='fly')], mode='fly')
+        assert self.names(navigation) == ['fly']
+
+    def test_no_mode_named_declares_nothing_more(self):
+        assert self.names(nd.Navigation(modes=['walk'])) == ['walk']
+        assert self.names(nd.Navigation()) == []
+
+    def test_a_name_that_is_registered_nowhere_is_refused(self):
+        with pytest.raises(KeyError, match='no-such-mode'):
+            nd.Navigation(mode='no-such-mode')
+
+    def test_the_navigation_manager_starts_in_it(self):
+        from OpenGLContext.move.navigation import NavigationManager
+        definition = ContextDefinition(navigation={'mode': 'fly'})
+        manager = NavigationManager(definition, platform=None)
+        assert manager.current.name == 'fly'
+
+
 class TestTheDefinitionField:
     def test_a_fresh_definition_navigates_as_it_always_has(self):
         navigation = ContextDefinition().navigation
@@ -176,6 +210,40 @@ class TestTheDefinitionField:
     def test_null_means_no_navigation(self):
         definition = ContextDefinition(navigation=None)
         assert not definition.navigation
+
+    def test_a_definition_naming_other_fields_keeps_the_default_navigation(self):
+        definition = ContextDefinition(profile='compatibility')
+        assert [mode.name for mode in definition.navigation.modes] == ['examine']
+
+    def test_a_mapping_is_the_fields_of_a_navigation(self):
+        definition = ContextDefinition(navigation={'modes': ['fly']})
+        assert [mode.name for mode in definition.navigation.modes] == ['fly']
+
+    def test_physics_and_audio_take_a_bool_for_enabled(self):
+        definition = ContextDefinition(physics=False, audio=False)
+        assert not definition.physics.enabled
+        assert not definition.audio.enabled
+
+    def test_physics_and_audio_take_a_mapping_of_their_fields(self):
+        definition = ContextDefinition(physics={'tickHz': 240.0},
+                                       audio={'enabled': False})
+        assert definition.physics.tickHz == 240.0
+        assert not definition.audio.enabled
+
+    @pytest.mark.parametrize('value', [True, False])
+    def test_navigation_refuses_a_bool_and_says_what_it_takes(self, value):
+        """A Navigation has no ``enabled``; ``None`` is the one with no modes."""
+        with pytest.raises(ValueError, match='navigation=None'):
+            ContextDefinition(navigation=value)
+
+    @pytest.mark.parametrize('key', ['physics', 'audio'])
+    def test_an_integer_is_not_taken_for_a_bool(self, key):
+        with pytest.raises(ValueError):
+            ContextDefinition(**{key: 1})
+
+    def test_a_mapping_naming_no_field_is_refused_by_name(self):
+        with pytest.raises(AttributeError, match='bogus'):
+            ContextDefinition(audio={'bogus': 1})
 
     def test_it_is_not_offered_as_a_rendering_setting(self):
         assert 'navigation' not in ContextDefinition.UI_HINTS

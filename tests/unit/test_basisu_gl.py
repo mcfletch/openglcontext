@@ -12,7 +12,6 @@ import numpy as np
 import pytest
 
 pytest.importorskip("glfw")
-pytest.importorskip("pygltflib")
 
 from OpenGLContext import texture
 from OpenGLContext.loaders import basisu
