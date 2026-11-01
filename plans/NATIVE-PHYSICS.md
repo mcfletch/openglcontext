@@ -1675,8 +1675,8 @@ Branch `p6b-vehicles` on `openglcontext`; `pyjoltphysics` 44da300; glisteel bran
   (longitudinal and lateral). A curve rising from 0 gave a tyre no grip while it was not
   slipping: on a crowned road mesh the car rocked in yaw by up to 0.028 rad/s from tick
   to tick (glisteel's cockpit camera test, 0.026 rad/s against 0.02); now under 0.002.
-  The launch is within 4% of omi's raycast car at 2, 4 and 8 s (6% before), so
-  `engine_force` is unchanged.
+  The launch is within 3% of omi's raycast car at 2, 4 and 8 s (2.3%, 1.5% and 0.9% slower;
+  6% before), so `engine_force` is unchanged.
 - The neutral-types guard covers pyjoltphysics as well as omi_physics, and `Vehicle`,
   the settings and the states.
 
@@ -2762,14 +2762,70 @@ Games (M14 to M17, L15 to L19, L36's game files):
 - M12 (downforce kept a parked car awake): the chassis forces pass `EActivation::DontActivate`
   and downforce stops below 1 mm/s. `test_a_parked_car_with_downforce_falls_asleep`.
   pyjoltphysics 9621779.
-- Left: `test_a_forked_child_cannot_use_its_parents_world` timed out (60 s) twice in about 450
-  runs of the lifecycle, thread-safety and callback files repeated 8 times on 8 workers on the
-  free-threaded ASan build: the forked child wrote nothing and the parent waited in `waitpid`.
-  The same script with progress lines ran clean 520 times, 8 at a time, with and without other
-  ASan suites beside it; the GIL and free-threaded release builds and the GIL ASan build never
-  showed it. ptrace is blocked in this container, so the child's native stack could not be
-  read. The likely place is a lock held by another parent thread at the fork (the sanitizer
-  runtime's thread registry when the child starts Jolt's job threads); unconfirmed. Next: a
-  core of the hung child on a machine that allows ptrace.
+- The fork hang (`test_a_forked_child_cannot_use_its_parents_world` timing out on the
+  free-threaded ASan build): reproduced with the test's body run 32 at a time, 13 hangs in 700
+  runs. The child's stacks were read without ptrace: `/proc/<pid>/task/*/syscall` and `wchan`,
+  faulthandler on SIGUSR1, and a preloaded SIGALRM handler writing each thread's RIP and raw
+  stack words with syscalls alone, symbolised against the saved maps. In every hang the child's
+  main thread was in `World.stop`, joining the child's own world thread, and that thread was
+  in the sanitizer runtime's `FutexWait` on a lock in the allocator's region space. At the
+  fork the parent's world thread was freeing memory inside a tick (`free`, then
+  `Quarantine::Recycle`, which returns chunks to the allocator under its region locks). GCC
+  13's libasan registers no fork handler, so the child inherits that lock held by a thread it
+  does not have, and its world thread blocks on it while exiting. glibc's malloc takes its
+  locks across a fork; the sanitizer allocator, and any lock of our own or Jolt's a world
+  thread holds mid-tick, do not. Fix: `fork_prepare` waits, with the GIL released, for each
+  world thread to finish its tick (a `working_` flag under the control lock, `fork_wanted_`
+  keeping the thread parked once it waits) and holds every world's control lock until the
+  fork returns in the parent and the child; Jolt's job threads are idle between steps. A
+  world forked from its own callback or contact filter is not waited for; a tick still
+  running after 5 s is left to run, so a callback waiting on the forking thread delays the
+  fork and does not deadlock it. Tests: `test_a_fork_waits_for_each_world_thread_to_finish_its_tick`
+  (50 forks while `before_step` holds a lock; on the old code all 50 children found it held)
+  and `test_a_fork_from_a_worlds_own_callback_does_not_wait_for_it` (before_step and the
+  contact filter). After the fix: 800 runs of the body 32 at a time and 520 runs of the four
+  fork tests through pytest on the free-threaded ASan build, no hang. The tail of a world
+  thread's exit, after its last control-lock section, is not held. pyjoltphysics db9a148.
+- Thread stacks (the review's unverified musllinux suspicion): the world thread is a
+  `pj::Thread` with an 8 MiB stack (pthread attributes on Linux and macOS; std::thread on
+  Windows, with python.exe's 2 MB). Jolt's `JobSystemThreadPool` makes std::threads and takes
+  no stack size, so the pool is made under `DefaultThreadStack`, which raises the C library's
+  default thread stack to 8 MiB on Linux (glibc and musl) for that moment. musl reads a
+  library's `PT_GNU_STACK` size only for libraries loaded at start, so `-z stack-size` would not
+  reach an extension module. macOS job threads keep 512 KiB; API.md says so. No musl
+  environment here: `test_callbacks_run_on_eight_mebibyte_stacks_whatever_the_default` runs
+  with RLIMIT_STACK at 1 MiB, which sets glibc's default as musl's 128 KiB is set, and has
+  `before_step` and the contact filter (on a job thread and the world thread) recurse
+  20,000 levels through `repr`; on the old code the world thread raised `RecursionError`.
+  pyjoltphysics db9a148.
+- M13 (`Snapshot.rows_of` allocated 8 bytes per uid ever made): `_RowIndex` keeps the table
+  indexed by uid while the highest uid is below four times the body count plus 4096, and
+  otherwise searches the argsorted uids, so memory follows the bodies alive. Test: 60,000
+  bodies streamed through, five kept, under 16 kB traced (480 kB before). pyjoltphysics db9a148.
+- L8 (`rows_of` on 2-D input and float uids): the result has the input's shape, and a
+  non-integer dtype raises `TypeError` (2.9 was truncated to 2). pyjoltphysics db9a148.
+- L9 (tsl::robin_map's MIT notice): `LICENSES/robin-map-LICENSE`, NOTICE and `license-files`;
+  `test_every_library_nanobind_compiles_in_ships_its_licence` reads nanobind's `ext`
+  directory. pyjoltphysics db9a148.
+- L10 (x86-64-v2 is not every CPU since 2009): README and CMakeLists name the instruction set
+  (SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CMPXCHG16B, LAHF/SAHF) and the generations with and
+  without it. pyjoltphysics db9a148.
+- L11 (the 8.33 ms bulk bound failed under load): the fastest of three fresh worlds is held
+  to the 120 Hz tick. Applying again in one world is no baseline: three applies there took
+  9.0, 11.7 and 14.9 ms. pyjoltphysics db9a148.
+- L12 (differential assertions on recorded constants): the omi halves are gone from the
+  scenario tests, which compare Jolt with the recorded answer;
+  `test_each_recorded_answer_is_physical` holds 31 recorded answers to their scenes'
+  physics in the golden file itself. pyjoltphysics db9a148.
+- L13 (the cloth test allowed 2x stretch): the fine-cloth test drapes on a floor for 3 s,
+  sampled every 0.5 s, below 1.7 throughout (measured 1.54) and 1.55 at the end (measured
+  1.32 to 1.41). Without a floor the 80 by 80 cloth slides off the sphere after 2 s and
+  falls; the review's 1.62 at 2 s was that slide. API.md gives the stretch. pyjoltphysics db9a148.
+- L14 (launch 3% or 4%): the test is `rel=0.03`; CHANGELOG and this plan give 3% and the
+  measured 2.3%, 1.5% and 0.9%. pyjoltphysics db9a148.
+- L33 (the event record is 72 bytes): README, events.h and the CHANGELOG say 72; the
+  CHANGELOG's 48 and 64 byte entries are folded into one. pyjoltphysics db9a148.
+- The prose scan (`ai-isms` over pyjoltphysics' lines changed against origin/develop, 68
+  files) found nothing.
 - L2 (uids wrapped silently): `_uids` and `BodyBatch`'s integer columns raise `ValueError` for a
   value their type cannot hold. pyjoltphysics 9621779.
