@@ -1,9 +1,6 @@
 #! /usr/bin/env python
 '''Test of the glDrawPixels function including alpha blending
 
-Requires:
-    GLUT, PIL, GLUTContext
-
 You should see a black 128x128 box in the lower-left corner of the screen
 with the words "Hello From Alpha-ville!" in blue (the background showing
 through) and a scrawled "regular image stuff" in red (just part of the
@@ -11,7 +8,6 @@ RGB image).
 '''
 from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
-
 import numpy
 
 class TestContext( BaseContext ):

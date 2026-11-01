@@ -60,7 +60,7 @@ class TestContext( BaseContext ):
         ]
         vertices.reverse()
         for type, tessellated in self.tess.tessellate( vertices, forceTriangles=0 ):
-            glNormal( 0,0,-1 )
+            glNormal3f( 0,0,-1 )
             glColor3f( 1,0,0 )
             glBegin( type )
             # The tessellated run for this primitive, not the outline that was

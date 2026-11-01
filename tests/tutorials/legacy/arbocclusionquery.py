@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''Tests operation of the OpenGL1.5/ARB Occlusion Query extension
+'''Tests operation of the OpenGL 1.5/ARB Occlusion Query extension
 '''
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box
@@ -13,6 +13,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NEHE = os.path.join( HERE, os.pardir, 'nehe' )
 log = logging.getLogger('TestQuery')
 
+'''The alternates allow for choosing one of many possible implementations
+depending on which one is available on this driver. In this case, the
+extension was promoted to core but renamed to remove the ARB suffixes
+when promoted.'''
 glBeginQuery = alternate( glBeginQuery, glBeginQueryARB )
 glDeleteQueries = alternate( glDeleteQueries, glDeleteQueriesARB )
 glEndQuery = alternate( glEndQuery, glEndQueryARB )
@@ -20,6 +24,7 @@ glGenQueries = alternate( glGenQueries, glGenQueriesARB )
 glGetQueryObjectiv = alternate( glGetQueryObjectiv, glGetQueryObjectivARB )
 glGetQueryObjectuiv = alternate( glGetQueryObjectiv, glGetQueryObjectuivARB )
 
+'''Some convenient images to work with'''
 images = [
     os.path.join(NEHE, "nehe_glass.bmp"),
     os.path.join(HERE, "pimbackground_FR.jpg"),
@@ -39,6 +44,7 @@ class TestContext( BaseContext ):
     currentImage = 0
     currentSize = 0
     def Render( self, mode = 0):
+        """Adds some raw OpenGL commands after a regular rendering pass"""
         BaseContext.Render( self, mode )
         query = glGenQueries(1)[0]
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE)
@@ -66,7 +72,8 @@ class TestContext( BaseContext ):
         haveExtension = bool(glGenQueries)
         if not haveExtension:
             log.error('OpenGL 1.5/GL_ARB_occlusion_query not supported!')
-            sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
+            # 3 is REQUIRED_EXTENSION_MISSING for the demos/tests
+            raise SystemExit(3)
         
         log.info("""When the box is offscreen number of pixels should drop to 0
 """)

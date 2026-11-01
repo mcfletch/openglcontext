@@ -1,5 +1,14 @@
 #! /usr/bin/env python
-'''Shader sample-code for OpenGLContext
+'''=Demonstrates use of raw c_void_p for array offsets=
+
+In PyOpenGL we commonly use a :py:class:`OpenGL.arrays.vbo.VBO` instance
+to represent a buffer uploaded to the GL. However, under the covers these
+are converted to ctypes c_void_p instances with values of 0 meaning to 
+start at the start of the buffer, or VBOOffsets saying to start a few
+bytes into the buffer.
+
+This example shows that you can directly pass c_void_p instead of using
+the VBO object's (vbo+12) to get a VBOOffset object.
 '''
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True
@@ -85,8 +94,13 @@ class TestContext( BaseContext ):
                     self.Vertex_position_loc, 3, GL_FLOAT, GL_FALSE, 24,
                     self.vbo
                 )
+                '''The raw ctypes pointer 12 is interpreted as 12+the 
+                start of the currently vertex attribute location. The
+                VBO itself gives a ctypes.c_void_p(0) as it's __ctypes__
+                '''
                 # The offset given as a raw pointer, rather than as
                 # self.vbo+12; both name the same place in the buffer.
+
                 glVertexAttribPointer(
                     self.Vertex_color_loc, 3, GL_FLOAT, GL_FALSE, 24,
                     ctypes.c_void_p(12)

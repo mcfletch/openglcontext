@@ -1,9 +1,6 @@
 #! /usr/bin/env python
 '''Test of the glDrawPixels function including alpha blending
 
-Requires:
-    GLUT, PIL, GLUTContext
-
 You should see a black 128x128 box in the lower-left corner of the screen
 with the words "Hello From Alpha-ville!" in blue (the background showing
 through) and a scrawled "regular image stuff" in red (just part of the
@@ -20,6 +17,7 @@ class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
     def loadImage( self, imageName = IMAGE ):
         """Load an image from a file using PIL.
+        
         This is closer to what you really want to do than the
         original port's crammed-together stuff that set global
         state in the loading method.  Note the process of binding

@@ -14,7 +14,9 @@ this kind of context.
 
 .. note::
 
-    Physically Based Render (PBR) is what most 
+    Physically Based Render (PBR) is what many modern 3D engines use as 
+    their core renderer. More advanced features such as raytracing 
+    don't generally get backported to OpenGL.
 '''
 from OpenGLContext.context import Context as BaseContext 
 '''
@@ -52,7 +54,7 @@ class TestContext(BaseContext):
         physically-based-rendering (pbr) rendering pass which gives us
         metallic and clearcoat features.'''
         '''The Teapot geometry is a NURBS version of the famous 
-        `Utah Teapot<https://graphics.cs.utah.edu/teapot/>`.
+        `Utah Teapot<https://graphics.cs.utah.edu/teapot/>`__ .
         '''
         self.sg = sceneGraph(
             children=[
