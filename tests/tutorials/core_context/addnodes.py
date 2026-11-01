@@ -16,6 +16,9 @@ import random
 
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import *
+'''`ViewerContext` is a `Context` with `oglc-view`'s navigation and 
+multi-view support.'''
+
 from OpenGLContext.viewer import ViewerContext as BaseContext
 
 '''The scene starts with a group holding one teapot. The `DEF` name is how
@@ -33,13 +36,12 @@ scene = sceneGraph(
         ),
     ],
 )
-'''`ViewerContext` is a `Context` with the viewer's navigation. The
-handlers are registered in `OnInit`: the `a` key adds a teapot, and a repeating
-`Timer` calls the same handler every 0.1 seconds.'''
 class TestContext( BaseContext ):
     def OnInit( self ):
         self.sg = scene
+        '''Register the a key to add a new teapot.'''
         self.addEventHandler( "keypress", name="a", function = self.OnAdd)
+        '''Setup a timer so that every .1s a new teapot is added.'''
         self.time = Timer( duration = .1, repeating = 1 )
         self.time.addEventHandler( "cycle", self.OnAdd )
         self.time.register (self)
@@ -76,6 +78,9 @@ class TestContext( BaseContext ):
             ))
 
 if __name__ == "__main__":
+    '''PBR is the default rendering method, but setting it here doesn't hurt.
+    Setting fullscreen True means that the window will take over the whole screen
+    looking more like a game than a desktop app.'''
     TestContext.ContextMainLoop(definition={
         'renderer':'pbr',
         'fullscreen': True,

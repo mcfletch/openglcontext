@@ -3,27 +3,49 @@
 
 [using_clips.py-screen-0001.png Screenshot]
 
-A rigged model plays the clips its file was authored with.  The model is
-`Fox` from the Khronos sample catalogue (CC-BY 4.0, by PixelMannen and
-tomkranis), which carries three: a survey, a walk and a run.
+In :doc:`loading_gltf_model` we reached into a
+glTF model and crudely animated the swinging of a lamp based on math.
+However, this isn't a particularly useful way to get smooth and natural
+animations.
+
+glTF models can contain an authored animation created by the modeller.
+These animations are normally given a name such as "walk" or "run".
+OpenGLContext can play the clips to allow for animating a character in
+the world (player or NPC).
+
+You'll see references to "rigged" models, this is basically a model that is
+ready to be animated, with joints set up so that the mesh can be deformed by
+the movement of the joints. If your models use a common joint layout then
+they can often share animations with other models.
+
+We'll be using the `Fox` model (CC-BY 4.0, by PixelMannen and tomkranis)
+which has 3 animations:
+
+* "survey" (idle animation that looks around)
+* "walk" (slow padding around)
+* "run" (jumping run)
 
 Keys:
     1 2 3   play that clip
     space   blend into the next one
 '''
 import os
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
 from OpenGLContext.context import Context as BaseContext
-'''``CharacterModel`` is a rigged model and what can be done with it: the
-clips it carries, the skeleton they move, and the points something can be
-hung on.'''
+''':py:class:`CharacterModel` packages up the information for an animated
+character in OpenGLContext. It lets you introspect the animations, joints,
+and attachment points (think hands) from the model.
+'''
 from OpenGLContext.character.model import CharacterModel
+'''As with :doc:`loading_gltf_model` we are going to use
+a Kronos sample glTF for this demo, so we'll use the sample index's function
+to get the current URL for it.'''
 from OpenGLContext.loaders.gltf import sample_model_url
 from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, Transform, sceneGraph,
 )
 
+'''Define which model we are going to use, and which clips inside it.'''
 MODEL = 'Fox'
 #: The names this model's clips were authored under.  ``model.clips`` is where
 #: they come from for a file whose names you do not already know.
@@ -33,61 +55,71 @@ CLIPS = ['Survey', 'Walk', 'Run']
 class TestContext(BaseContext):
     initialPosition = (30, 32, 165)
     initialOrientation = (-1, 0, 0, 0.02)
+    model:'CharacterModel|None' = None
+    index: int = 0
 
     def OnInit(self):
-        '''Loading a character is loading a glTF file: the context's
-        ``sceneLoader`` reads it on a worker thread, and ``CharacterModel``
-        takes the scene it answers.  The window draws the empty room until
-        ``OnLoaded`` is called.'''
-        self.model = None
-        self.index = 0
+        """Setup the context for rendering"""
+        '''We'll create a generic empty scene for the character to wander around.'''
         self.sg = sceneGraph(children=[
             Background(skyColor=[(0.16, 0.18, 0.21)]),
             DirectionalLight(direction=(-0.4, -0.7, -0.5)),
         ])
+        '''Our character is in a glTF file, so we need to get it loaded before
+        we can start working with it.'''
         self.sceneLoader.load(sample_model_url(MODEL), on_loaded=self.OnLoaded)
+        '''Setup our demo controls so that numbers trigger one of the three
+        animations in the file.'''
         for key in ('1', '2', '3'):
             self.addEventHandler('keypress', name=key, function=self.OnChoose)
+        '''The let a space run the "next" animation.'''
         self.addEventHandler('keypress', name=' ', function=self.OnNext)
         print(__doc__)
 
     def OnLoaded(self, request):
+        """Process the loaded character"""
+        '''CharacterModel can parse a loaded glTF scene, which is normally
+        what you want to do after you load the character.'''
         self.model = CharacterModel.from_scene(request.result)
         print('%s carries %d clips: %s' % (
             MODEL, len(self.model.clips), ', '.join(sorted(self.model.clips)),
         ))
-        '''``play`` starts a clip.  ``loop`` keeps it going, and ``fade`` is
-        how many seconds to take blending out of whatever was playing, so a
-        walk becomes a run over a quarter of a second rather than switching
-        between poses in one frame.'''
+        '''We'll start the "idle" animation as soon as the character loads,
+        for the Fox this is a head turn left and right. The `loop` option
+        repeats the animation after it finishes.'''
         self.model.play(CLIPS[self.index], loop=True)
-        '''``model.group`` is the renderable subtree, mounted in the scene
-        like any other node.'''
+        '''All that's left is to add the Character's graphical representation
+        to the scenegraph. `CharacterModel` has a `group` member which is 
+        where the geometry is made available.'''
         self.sg.children = list(self.sg.children) + [
             Transform(rotation=(0, 1, 0, 0.7), children=[self.model.group])]
-        '''The clips advance when the model is told how much time has passed:
-        ``model.update(dt)`` steps every layer and poses the skeleton.
-        ``animate`` has the context call it once a frame on the engine clock,
-        and draw a frame each time. It returns a handle whose ``stop()`` pauses
-        the model where it is.'''
+        '''In order to get updates when the scene's time has advanced, we
+        call self.animate on the `CharacterModel` which registers the model
+        to receive time events from this `Context`.'''
         self.animating = self.animate(self.model)
 
     def OnChoose(self, event):
+        """Update the currently playing animation."""
+        '''The event is a key-press with values 1,2 or 3, which we convert
+        into an integer and then to 0-indexed values to match python form.'''
         self.index = int(event.name) - 1
         self.play()
 
     def OnNext(self, event):
+        """Select the next index (rotating to start at end)"""
         self.index = (self.index + 1) % len(CLIPS)
         self.play()
 
     def play(self):
-        '''Playing a second clip on the same layer replaces the first.  Two
-        clips at once -- a walk on the legs and a wave on the arm -- are two
-        *layers*, which is what :doc:`the characters page </characters>`
-        covers.'''
+        """Trigger the currently selected (self.index) animation to play"""
+        '''If we haven't loaded the model yet, we can't play yet.'''
         if self.model is None:
             return
         name = CLIPS[self.index]
+        '''We want to start the current animation, but fade out the old
+        animation so that there isn't a sudden jerky jump between the two.
+        We give the fade argument 1/4 second here to fade out the old 
+        animation.'''
         self.model.play(name, loop=True, fade=0.25)
         print('playing %s' % (name,))
 
@@ -129,4 +161,6 @@ keyed by its name.  A file whose names you do not know prints them::
 '''
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        "renderer":"pbr",
+    })

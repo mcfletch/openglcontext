@@ -49,7 +49,7 @@ class TestContext(BaseContext):
         figure's ``update`` and ``draw``.'''
         self.animate(self.yard.update)
         for key, handler in (('h', self.yard.strike), ('k', self.yard.knock_down),
-                             ('g', self.OnGetUp), ('p', self.yard.toggle_power)):
+                             ('g', self.yard.get_up), ('p', self.yard.toggle_power)):
             self.addEventHandler('keypress', name=key,
                                  function=handler)
         self.opening()
@@ -69,10 +69,6 @@ class TestContext(BaseContext):
         for _ in range(round(seconds / STEP)):
             self.yard.update(STEP)
             self.physics.frame(STEP)
-    
-    def OnGetUp(self, event):
-        self.yard.get_up()
-        self.triggerRedraw(True)
 
 
 if __name__ == '__main__':
