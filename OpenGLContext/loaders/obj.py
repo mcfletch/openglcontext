@@ -53,6 +53,20 @@ def tangents_of(mesh: ObjMesh, material: Any) -> Any:
     return estimate_tangents(mesh.positions, mesh.normals, turned, mesh.indices)
 
 
+#: How many undefined material names a warning spells out before "and N more".
+NAMES_SHOWN = 6
+
+
+def undefined_message(names: list[str]) -> str:
+    """What the log says of the materials a model uses that no library defines"""
+    if len(names) == 1:
+        return 'material %r is not in any library it names' % (names[0],)
+    shown = ', '.join(repr(name) for name in names[:NAMES_SHOWN])
+    more = len(names) - NAMES_SHOWN
+    return '%d materials are not in any library it names, and draw in the default: %s%s' % (
+        len(names), shown, ' and %d more' % more if more > 0 else '')
+
+
 class OBJHandler(base.BaseHandler):
     """The loader handler for ``.obj`` and ``.obj.gz``"""
 
@@ -74,7 +88,7 @@ class OBJHandler(base.BaseHandler):
         libraries = load_libraries(model.libraries, source) if model.libraries else {}
         builder = MaterialBuilder(source)
         appearances: dict[str, Any] = {}
-        unknown: set[str] = set()
+        unknown: dict[str, None] = {}
 
         def appearance_of(material: str, coloured: bool) -> Any:
             entry: Union[LibraryMaterial, None] = libraries.get(material)
@@ -82,9 +96,8 @@ class OBJHandler(base.BaseHandler):
                 if material not in appearances:
                     appearances[material] = builder.appearance(entry)
                 return appearances[material]
-            if material and material not in unknown:
-                unknown.add(material)
-                log.warning('%s: material %r is not in any library it names', source, material)
+            if material:
+                unknown[material] = None
             return builder.default(coloured)
 
         scene = basenodes.sceneGraph()
@@ -101,6 +114,8 @@ class OBJHandler(base.BaseHandler):
             scene.children.append(transform)
             if part.name:
                 scene.regDefName(part.name, transform)
+        if unknown:
+            log.warning('%s: %s', source, undefined_message(list(unknown)))
         freeform = sum(model.ignored[word] for word in FREEFORM)
         if freeform:
             log.warning('%s: %d free-form geometry statements (curves and surfaces) are not read',

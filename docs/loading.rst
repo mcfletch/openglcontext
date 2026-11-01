@@ -391,9 +391,11 @@ Materials
 Each ``usemtl`` name is looked up in the libraries the file's ``mtllib`` lines
 name; a later library wins a name. A library is found beside the model, then by
 its file name alone where the name is a path from another machine. A library
-that cannot be found is logged, and its faces draw in a light grey
-``PhysicalMaterial`` (base colour 0.8, roughness 0.6), or white under vertex
-colours. A library that is malformed raises ``ValueError``.
+that cannot be found is logged, and a ``usemtl`` name no library defines draws
+in a light grey ``PhysicalMaterial`` (base colour 0.8, roughness 0.6), or white
+under vertex colours. A model's undefined names are logged in one warning that
+gives their count and the first six. A library that is malformed raises
+``ValueError``.
 
 .. list-table::
    :header-rows: 1

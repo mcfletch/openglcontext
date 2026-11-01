@@ -152,6 +152,22 @@ class TestMaterials:
         assert first.appearance is second.appearance
         assert caplog.text.count("'ghost'") == 1
 
+    def test_materials_no_library_defines_are_one_warning_naming_them(
+            self, tmp_path: Path, caplog: Any) -> None:
+        text = SQUARE + ''.join('usemtl m%d\nf 1 2 3\n' % number for number in range(12))
+        with caplog.at_level(logging.WARNING):
+            Loader.load(write(tmp_path, text))
+        warnings = [record.getMessage() for record in caplog.records if 'm0' in record.getMessage()]
+        assert len(warnings) == 1
+        assert '12 materials' in warnings[0]
+        assert 'm0' in warnings[0] and 'm11' not in warnings[0] and 'more' in warnings[0]
+
+    def test_one_material_no_library_defines_is_named_in_its_warning(
+            self, tmp_path: Path, caplog: Any) -> None:
+        with caplog.at_level(logging.WARNING):
+            Loader.load(write(tmp_path, SQUARE + 'usemtl ghost\nf 1 2 3\n'))
+        assert "material 'ghost' is not in any library" in caplog.text
+
     def test_a_missing_library_still_loads_the_geometry(self, tmp_path: Path, caplog: Any) -> None:
         path = write(tmp_path, 'mtllib gone.mtl\n' + SQUARE + 'usemtl red\nf 1 2 3 4\n')
         with caplog.at_level(logging.WARNING):
