@@ -89,27 +89,32 @@ class RagdollYard:
         self.figure.update(dt)
         self.figure.draw()
 
-    def strike(self, scale: float = 1.0) -> None:
-        """Strike the chest from the front, ``scale`` times :data:`BLOW`."""
+    def strike(self, event=None, scale: float = 1.0) -> None:
+        """Strike the chest from the front, ``scale`` times :data:`BLOW`.
+
+        ``event`` is the keypress when a key calls it, and ``scale`` is the size
+        of the blow.
+        """
         names = self.figure.rig.names
         bone = 'chest' if 'chest' in names else names[min(1, len(names) - 1)]
         self.figure.ragdoll.hit(bone, (0.0, 0.0, -BLOW * scale))
 
-    def knock_down(self) -> None:
+    def knock_down(self, event=None) -> None:
         """A heavier blow, and the figure goes limp over :data:`FALL_BLEND`."""
-        self.strike(1.5)
+        self.strike(scale=1.5)
         self.figure.following = False
         self.figure.set_mode('limp', FALL_BLEND)
         self.down = True
 
-    def get_up(self) -> None:
+    def get_up(self, event=None) -> None:
         """Move the bones back to the walk over :data:`GET_UP_BLEND`, then powered again."""
+        print("Request to get up")
         self.figure.following = True
         self.figure.set_mode('kinematic', GET_UP_BLEND)
         self._powered_at = self.time + GET_UP_BLEND
         self.down = False
 
-    def toggle_power(self) -> str:
+    def toggle_power(self, event=None) -> str:
         """Powered or kinematic; the mode now."""
         mode = 'kinematic' if self.figure.ragdoll.mode.value == 'powered' else 'powered'
         self._powered_at = None
@@ -139,7 +144,7 @@ def main() -> int:                              # pragma: no cover - needs a win
             for key, handler in (('h', self.yard.strike), ('k', self.yard.knock_down),
                                  ('g', self.yard.get_up), ('p', self.yard.toggle_power)):
                 self.addEventHandler('keypress', name=key,
-                                     function=lambda event, handler=handler: handler())
+                                     function=handler)
             print(__doc__, flush=True)
 
     RagdollContext.ContextMainLoop()

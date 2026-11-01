@@ -19,6 +19,7 @@ if typing.TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+LambdaType = type( lambda x: x)
 
 class HeldKeyMixin(object):
     """Which keys are down, and what a platform does not tell us about them
@@ -231,6 +232,10 @@ class EventHandlerMixin(HeldKeyMixin):
         See: mouseevents, keyboardevents
         """
         manager = self.getEventManager(as_str(eventType))
+        function = namedarguments.get('function')
+        if isinstance(function, LambdaType):
+            log.warning("Passed in a Lambda function as an event handler")
+
         if manager:
             manager.registerCallback(*arguments, **namedarguments)
         else:
