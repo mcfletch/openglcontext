@@ -41,14 +41,20 @@ class TestContext(BaseContext):
         '''The wind is a force on each body, set every frame by
         ``soft.set_wind(force)`` in the yard's ``update``.'''
         self.animate(self.yard.update)
-        for key, handler in (('d', self.yard.drop), ('w', self.yard.next_wind),
-                             ('r', self.yard.toggle_sheet), (' ', self.yard.throw)):
-            self.addEventHandler('keypress', name=key,
-                                 function=lambda event, handler=handler: handler())
+        '''A handler is held by weak reference, so a lambda made on the spot
+        would be gone before the first key. The keys share ``OnKey``, a
+        method of the context, which looks the action up by the key's name.'''
+        self.keys = {'d': self.yard.drop, 'w': self.yard.next_wind,
+                     'r': self.yard.toggle_sheet, ' ': self.yard.throw}
+        for key in self.keys:
+            self.addEventHandler('keypress', name=key, function=self.OnKey)
         for _ in range(round(OPENING / STEP)):
             self.yard.update(STEP)
             self.physics.frame(STEP)
         print(__doc__)
+
+    def OnKey(self, event):
+        self.keys[event.name]()
 
 
 if __name__ == '__main__':

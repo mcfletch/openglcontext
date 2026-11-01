@@ -316,13 +316,13 @@ class AudioDemoContext(BaseContext):
         self.sg = self.yard.scene()
         self.audio.mix = MASTER_GAIN
         yard = self.yard
-        for key, handler in (
-                ('b', yard.drop), ('g', yard.ring), (' ', yard.fire),
-                ('r', yard.toggle_motor), ('m', yard.toggle_muffle),
-                ('+', lambda: self.volume(0.1)), ('=', lambda: self.volume(0.1)),
-                ('-', lambda: self.volume(-0.1))):
-            self.addEventHandler('keypress', name=key,
-                                 function=lambda event, handler=handler: handler())
+        self.keys = {
+            'b': yard.drop, 'g': yard.ring, ' ': yard.fire,
+            'r': yard.toggle_motor, 'm': yard.toggle_muffle,
+            '+': lambda: self.volume(0.1), '=': lambda: self.volume(0.1),
+            '-': lambda: self.volume(-0.1)}
+        for key in self.keys:
+            self.addEventHandler('keypress', name=key, function=self.OnKey)
         yard.frames.step(systemtime.systemTime())
         self.renderQueue.on_frame(self.OnFrame)
         print(__doc__, flush=True)
@@ -333,6 +333,15 @@ class AudioDemoContext(BaseContext):
         dt = self.yard.frames.step(systemtime.systemTime())
         if self.yard.update(dt):
             self.triggerRedraw(1)
+
+    def OnKey(self, event: Any) -> None:
+        """Run the action of the key pressed.
+
+        A handler is held by weak reference, so each key shares this method of
+        the context, which lives as long as the window does, and looks its action
+        up in ``keys``.
+        """
+        self.keys[event.name]()
 
     def volume(self, delta: float) -> None:
         level = self.yard.change_volume(delta)

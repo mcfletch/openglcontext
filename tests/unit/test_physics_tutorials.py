@@ -550,3 +550,28 @@ def test_the_walker_climbs_the_stairs_and_stays_in_the_room(gl_context):
             assert abs(hero.position[0]) < 12 and abs(hero.position[2]) < 12
         assert top > 1.0                                                  # up the steps
         assert np.allclose(run.context.getViewPlatform().position[:3], hero.drawn_eye, atol=1e-3)
+
+
+# -- the keys a tutorial binds -----------------------------------------------------------
+
+def press(run, key):
+    """The keypress a GLFW window delivers for a character, through the context's own dispatch."""
+    from OpenGLContext.windowsystem.glfw import GLFWKeypressEvent
+
+    run.context.ProcessEvent(GLFWKeypressEvent(run.context, ord(key), (False, False, False)))
+    run.frame()
+
+
+@pytest.mark.parametrize('name', ['physics_cloth', 'physics_events'])
+def test_every_key_a_tutorial_binds_reaches_its_action(gl_context, name):
+    with running('physics', name) as run:
+        context = run.context
+        assert context.keys
+        called = []
+        for key in list(context.keys):
+            context.keys[key] = lambda key=key: called.append(key)
+        import gc
+        gc.collect()                                    # a handler nothing holds is gone by now
+        for key in list(context.keys):
+            press(run, key)
+        assert sorted(called) == sorted(context.keys)

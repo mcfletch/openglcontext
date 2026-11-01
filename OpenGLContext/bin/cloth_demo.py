@@ -239,11 +239,16 @@ def main() -> int:                              # pragma: no cover - needs a win
             self.yard = ClothYard(self.physics)
             self.sg = self.yard.scene()
             self.animate(self.yard.update)
-            for key, handler in (('d', self.yard.drop), ('w', self.OnWind),
-                                 ('r', self.yard.toggle_sheet), (' ', self.yard.throw)):
-                self.addEventHandler('keypress', name=key,
-                                     function=lambda event, handler=handler: handler())
+            self.keys = {'d': self.yard.drop, 'w': self.OnWind,
+                         'r': self.yard.toggle_sheet, ' ': self.yard.throw}
+            for key in self.keys:
+                self.addEventHandler('keypress', name=key, function=self.OnKey)
             print(__doc__, flush=True)
+
+        def OnKey(self, event: Any) -> None:
+            """Run the action of the key pressed; a handler is held by weak
+            reference, so the keys share this method of the context."""
+            self.keys[event.name]()
 
         def OnWind(self) -> None:
             print('wind: %s' % (self.yard.next_wind(),), flush=True)

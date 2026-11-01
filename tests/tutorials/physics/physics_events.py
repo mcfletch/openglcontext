@@ -51,13 +51,19 @@ class TestContext(BaseContext):
         '''``audio.mix`` sets the level of the whole mix, and the player's
         volume is applied over it.'''
         self.audio.mix = MASTER_GAIN
-        for key, handler in (('d', self.yard.drop), ('l', self.yard.launch),
-                             ('m', self.yard.mend), ('w', self.yard.toggle_weight),
-                             (' ', self.fire)):
-            self.addEventHandler('keypress', name=key,
-                                 function=lambda event, handler=handler: handler())
+        '''A handler is held by weak reference, so a lambda made on the spot
+        would be gone before the first key. The keys share ``OnKey``, a
+        method of the context, which looks the action up by the key's name.'''
+        self.keys = {'d': self.yard.drop, 'l': self.yard.launch,
+                     'm': self.yard.mend, 'w': self.yard.toggle_weight,
+                     ' ': self.fire}
+        for key in self.keys:
+            self.addEventHandler('keypress', name=key, function=self.OnKey)
         self.opening()
         print(__doc__)
+
+    def OnKey(self, event):
+        self.keys[event.name]()
 
     def opening(self):
         '''Drop the crates and the weight, then once they have landed fire at
