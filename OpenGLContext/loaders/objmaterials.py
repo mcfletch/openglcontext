@@ -159,8 +159,12 @@ def load_libraries(libraries: list[str], base_url: str) -> dict[str, LibraryMate
     materials: dict[str, LibraryMaterial] = {}
     for line in libraries:
         names = [line] if locator.locate(line) else line.split()
-        for name in names:
-            found = locator.locate(name)
+        located = [locator.locate(name) for name in names]
+        if not any(located):
+            # Nothing on the line exists, so its words are likelier one name
+            # with spaces in it than several names, and the file said the one.
+            names, located = [line], [None]
+        for name, found in zip(names, located):
             if found is None:
                 log.warning('material library %r of %s was not found', name, base_url)
                 continue

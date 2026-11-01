@@ -375,6 +375,11 @@ class PBRMesh(x3d.X3DGeometryNode):
         self._appearance = appearance
         self.positions = self._farray(positions, 3)
         self.normals = self._farray(normals, 3)
+        if (self.normals is None and self.positions is not None
+                and self.draw_mode in (GL_POINTS, GL_LINES, GL_LINE_LOOP, GL_LINE_STRIP)):
+            # A line or a point has no surface to face, and the shader will not
+            # draw without a normal; +Z is what glTF's loader gives them too.
+            self.normals = np.tile(np.array([0.0, 0.0, 1.0], np.float32), (len(self.positions), 1))
         self.texcoords = self._farray(texcoords, 2)
         self.texcoords1 = self._farray(texcoords1, 2)
         #: A 3D texture's coordinates (s, t, r, q), or None.

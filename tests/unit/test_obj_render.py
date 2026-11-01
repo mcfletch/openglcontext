@@ -124,6 +124,13 @@ def test_lines_reach_the_screen(render_scene, tmp_path):
 
 
 @pytest.mark.usefixtures('env')
+@pytest.mark.parametrize('statement', ['l 1 2', 'p 1'])
+def test_lines_and_points_draw_without_a_failure_in_the_pass(render_scene, tmp_path, caplog, statement):
+    drawn(render_scene, tmp_path, 'v -1 0 0\nv 1 0 0\n' + statement + '\n')
+    assert not [record for record in caplog.records if 'Failure in' in record.getMessage()]
+
+
+@pytest.mark.usefixtures('env')
 def test_points_reach_the_screen(render_scene, tmp_path):
     frame = drawn(render_scene, tmp_path, 'v 0 0 0\np 1\n')
     centre = frame[SIZE[1] // 2 - 3:SIZE[1] // 2 + 4, SIZE[0] // 2 - 3:SIZE[0] // 2 + 4]

@@ -390,6 +390,19 @@ class TestLibraries:
             assert load_libraries(['gone.mtl'], model) == {}
         assert 'gone.mtl' in caplog.text
 
+    def test_a_missing_library_with_spaces_in_its_name_is_one_warning(self, model: str, caplog: Any) -> None:
+        with caplog.at_level(logging.WARNING):
+            assert load_libraries(['Mustang 13.04.2021 Compressed.mtl'], model) == {}
+        assert [record.getMessage().split("'")[1] for record in caplog.records] == [
+            'Mustang 13.04.2021 Compressed.mtl']
+
+    def test_a_missing_library_among_several_is_named_alone(
+            self, model: str, tmp_path: Path, caplog: Any) -> None:
+        (tmp_path / 'a.mtl').write_text('newmtl a\n')
+        with caplog.at_level(logging.WARNING):
+            assert list(load_libraries(['a.mtl gone.mtl'], model)) == ['a']
+        assert [record.getMessage().split("'")[1] for record in caplog.records] == ['gone.mtl']
+
     def test_a_library_outside_the_models_directory_is_refused(self, model: str, tmp_path: Path, caplog: Any) -> None:
         (tmp_path.parent / 'outside.mtl').write_text('newmtl red\n')
         with caplog.at_level(logging.WARNING):

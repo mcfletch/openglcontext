@@ -1,4 +1,6 @@
 import numpy as np
+from OpenGL.GL import GL_LINES, GL_POINTS
+
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 
@@ -33,3 +35,29 @@ class TestVertexColoursOfEitherWidth:
 
     def test_no_colours_is_no_colours(self) -> None:
         assert self._mesh(None).colors is None
+
+
+class TestNormalsOfLinesAndPoints:
+    """A line or a point has no surface to have a normal of, and the shader
+    cannot draw without one, so a mesh of either is given one facing +Z."""
+
+    POSITIONS = np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], 'f')
+
+    def test_lines_are_given_a_constant_normal(self) -> None:
+        mesh = PBRMesh(positions=self.POSITIONS, draw_mode=GL_LINES)
+        assert np.array_equal(mesh.normals, [(0, 0, 1)] * 3)
+
+    def test_points_are_given_a_constant_normal(self) -> None:
+        mesh = PBRMesh(positions=self.POSITIONS, draw_mode=GL_POINTS)
+        assert mesh.normals.shape == (3, 3)
+
+    def test_normals_the_mesh_was_given_are_kept(self) -> None:
+        given = np.array([(1, 0, 0)] * 3, 'f')
+        mesh = PBRMesh(positions=self.POSITIONS, normals=given, draw_mode=GL_LINES)
+        assert np.array_equal(mesh.normals, given)
+
+    def test_a_mesh_of_no_positions_has_no_normals(self) -> None:
+        assert PBRMesh(draw_mode=GL_LINES).normals is None
+
+    def test_triangles_are_left_to_the_caller(self) -> None:
+        assert PBRMesh(positions=self.POSITIONS).normals is None

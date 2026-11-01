@@ -66,6 +66,13 @@ class TestStructure:
         assert sorted(shape.geometry.draw_mode for shape in shapes_of(scene)) == [
             GL_POINTS, GL_LINES, GL_TRIANGLES]
 
+    def test_lines_and_points_carry_a_normal_the_shader_can_read(self, tmp_path: Path) -> None:
+        scene = Loader.load(write(tmp_path, SQUARE + 'f 1 2 3\nl 1 3\np 4\n'))
+        for shape in shapes_of(scene):
+            geometry = shape.geometry
+            assert geometry.normals is not None
+            assert len(geometry.normals) == len(geometry.positions)
+
     def test_vertex_colours_reach_the_mesh_and_leave_the_default_material_white(self, tmp_path: Path) -> None:
         text = 'v 0 0 0 1 0 0\nv 1 0 0 0 1 0\nv 0 1 0 0 0 1\nf 1 2 3\n'
         shape, = shapes_of(Loader.load(write(tmp_path, text)))
