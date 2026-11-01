@@ -2621,3 +2621,10 @@ The findings that touch the Jolt engine layer (`joltengine.py`, `service.py`, `h
   fired; the rotation is now announced where something listens for it (one `getReceivers`
   lookup a node otherwise). `testing.physics.settle()` returned silently when `wait_tick` timed
   out or the world was stopped; it raises `AssertionError`.
+- Free-threaded 3.14t: there is no engine suite environment for it, so one was built in the
+  scratch area (pyjoltphysics develop ffbf53b as a cp314t wheel, the workspace's pure-Python
+  siblings on the path, simpleparse built for it). The thread-safety, table, interpolation,
+  handler, service, event, vehicle, joint, ragdoll, character, query and body-change tests pass
+  there with the GIL off. The first run found `tuple(dict.values())` is not atomic without the
+  GIL: the service's vehicle table takes `_vehicles_lock`, and the engine copies its tables under
+  its lock (`JoltEngine._copied`).

@@ -384,6 +384,10 @@ class TestACleanRenderingEnvironment:
             'OPENGLCONTEXT_AUDIO',
             'OPENGLCONTEXT_AUDIO_VOLUME',
             'OPENGLCONTEXT_AUDIO_MICROPHONE',
+            # Whether a physics handler's exception is raised from the frame or
+            # only logged: a run that draws at all draws the same pixels, and a
+            # subprocess of a test run should fail on one as the run does.
+            'OPENGLCONTEXT_PHYSICS_HANDLER_ERRORS',
             # Diagnostics.  These decide when a log line is written and what
             # counts as a stall; a capture renders the same pixels either way,
             # and a diagnostic a subprocess silently dropped would be no

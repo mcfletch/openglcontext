@@ -1,9 +1,8 @@
 """A Ragdoll node asks for a redraw while its figure moves or follows its animation, and not once it rests."""
-import pytest
 
 from OpenGLContext.scenegraph.softnodes import Ragdoll
-from tests.unit.test_character_ragdoll import BONES, figure
-from tests.unit.test_softnodes import _Context
+from ._ragdoll_assets import BONES, figure
+from .test_softnodes import _Context
 
 
 class _Model:

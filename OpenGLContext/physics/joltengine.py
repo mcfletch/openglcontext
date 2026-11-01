@@ -769,6 +769,15 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         self.vehicle_table = JoltVehicles(self)
         self._init_soft()
 
+    def _copied(self, table: dict[Any, Any]) -> tuple[Any, ...]:
+        """The values of one of the engine's tables, copied under :attr:`lock`.
+
+        The other thread may change the table meanwhile, which a free-threaded
+        build lets an iteration meet.
+        """
+        with self.lock:
+            return tuple(table.values())
+
     # -- uids ---------------------------------------------------------------
     def jolt_uid(self, uid: int) -> int | None:
         """The pyjoltphysics uid of service body ``uid``, or None."""
@@ -1272,9 +1281,9 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         """Fill the rows ``absent`` the world's snapshot does not list.
 
         An emptied row, and a row the last publish ``last`` (of the same
-        layout) held, keep its values. A body whose add the world has not
-        applied yet stands where it was added and counts as awake, so it is
-        read as moving until the world holds it.
+        layout) held, keep its pose; an emptied row is asleep. A body whose
+        add the world has not applied yet stands where it was added and counts
+        as awake, so it is read as moving until the world holds it.
         """
         held = 0 if last is None else len(last.position)
         old = absent[absent < held]
@@ -1282,7 +1291,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             assert last is not None
             position[old] = last.position[old]
             orientation[old] = last.orientation[old]
-            awake[old] = last.awake[old]
+            awake[old] = last.awake[old] & (self._mover_jolt[old] != _EMPTY_ROW)
         for row in absent[absent >= held].tolist():
             uid = self._movers[row]
             placed = self._poses.get(uid, ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
@@ -1502,7 +1511,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         rows = snapshot.characters
         table = rows.rows
         tick, applied = int(snapshot.tick), int(snapshot.applied_seq)
-        for controller in tuple(self._controllers.values()):
+        for controller in self._copied(self._controllers):
             row = table.get(controller.native.id)
             if row is not None:
                 controller.read(rows, row, tick, applied)
@@ -1533,7 +1542,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def _ground_under(self, x: float, z: float) -> float | None:
         """The highest sampled ground at ``(x, z)``, or None with no sampled ground there."""
         found = None
-        for ground in tuple(self._grounds.values()):
+        for ground in self._copied(self._grounds):
             if ground.extent is not None:
                 (x0, z0), (x1, z1) = ground.extent
                 if not (x0 <= x <= x1 and z0 <= z <= z1):
@@ -1559,7 +1568,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         """Lift each character whose feet are below a sampled ground back onto it."""
         if not self._grounds:
             return
-        for controller in tuple(self._controllers.values()):
+        for controller in self._copied(self._controllers):
             ground = self._ground_under(float(controller.position[0]), float(controller.position[2]))
             feet = float(controller.position[1]) - controller.height / 2.0
             if ground is not None and feet < ground - 0.05 and controller._placed is None:
@@ -1667,8 +1676,8 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             self._foci[name] = np.asarray(position, dtype='d')[:3]
 
     def _foci_now(self, extra: np.ndarray | None) -> np.ndarray:
-        points = [controller.position for controller in tuple(self._controllers.values())]
-        points.extend(tuple(self._foci.values()))
+        points = [controller.position for controller in self._copied(self._controllers)]
+        points.extend(self._copied(self._foci))
         snapshot = self._published
         if snapshot is not None and len(snapshot.position):
             moving = snapshot.dynamic & snapshot.awake
@@ -1720,7 +1729,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         first = np.asarray(start, dtype='d')[:3]
         last = np.asarray(end, dtype='d')[:3]
         added = False
-        for ground in tuple(self._grounds.values()):
+        for ground in self._copied(self._grounds):
             for tile in ground.along(first, last):
                 if tile not in ground.tiles:
                     added = True
@@ -1732,7 +1741,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def submit(self, command: Command) -> None:
         """Apply ``command`` to the engine's tables and send its batches, on either thread.
 
-        A posted function runs outside :attr:`lock`, as it may take as long as it likes.
+        A posted function runs outside :attr:`lock`, so the code it runs holds up no other thread.
         """
         operation = getattr(self, '_op_' + command.op, None)
         if operation is None:
@@ -2230,7 +2239,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             return
         if not self._filter_contacts:
             self._filter_contacts = True
-            marked = [jolt for jolt in tuple(self._jolt.values())
+            marked = [jolt for jolt in self._copied(self._jolt)
                       if self._report_all or self._reported.of([jolt])[0]]
             if marked:
                 self.world.set_flags(marked, pj.BodyFlag.FILTER_CONTACTS, True)

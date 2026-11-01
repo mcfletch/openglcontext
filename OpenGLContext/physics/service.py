@@ -25,6 +25,7 @@ import logging
 import math
 import os
 import queue
+import threading
 import time
 import weakref
 from collections.abc import Callable, Iterable, Sequence
@@ -164,7 +165,9 @@ class Physics:
         #: The functions :meth:`on_step` registered, called after each step.
         self._step_hooks: list[StepHook] = []
         self._zone_ids = itertools.count(1)
+        #: The vehicles by id, changed on either thread under ``_vehicles_lock``.
         self._vehicles: dict[int, Vehicle] = {}
+        self._vehicles_lock = threading.Lock()
         self._vehicle_ids = itertools.count(1)
         self._ragdoll_ids = itertools.count(1)
         #: The ragdoll each bone belongs to, by the bone's uid.
@@ -999,17 +1002,21 @@ class Physics:
         vid = next(self._vehicle_ids)
         self._engine.add_vehicle(vid, chassis.uid, settings)
         made = Vehicle(self, vid, chassis, settings)
-        self._vehicles[vid] = made
+        with self._vehicles_lock:
+            self._vehicles[vid] = made
         return made
 
     @property
     def vehicles(self) -> tuple[Vehicle, ...]:
         """The vehicles in the world, in the order they were added."""
-        return tuple(self._vehicles.values())
+        with self._vehicles_lock:
+            return tuple(self._vehicles.values())
 
     def _remove_vehicle(self, vehicle: Vehicle) -> None:
         """Take ``vehicle`` out of the world; :meth:`Vehicle.remove` calls this."""
-        if self._vehicles.pop(vehicle.uid, None) is not None and not self._closed:
+        with self._vehicles_lock:
+            held = self._vehicles.pop(vehicle.uid, None)
+        if held is not None and not self._closed:
             self._engine.remove_vehicle(vehicle.uid)
 
     # -- ragdolls and soft bodies -----------------------------------------
@@ -1120,10 +1127,7 @@ class Physics:
         ragdoll.alive = False
         for body in ragdoll.bones:
             body.alive = False
-        for vehicle in tuple(self._vehicles.values()):
-            if not vehicle.chassis.alive:
-                vehicle.alive = False
-                self._vehicles.pop(vehicle.uid, None)
+        self._drop_vehicles(lambda vehicle: not vehicle.chassis.alive)
         seq = 0
         if not self._closed:
             seq = next(self._seq)
@@ -1282,10 +1286,7 @@ class Physics:
         if ragdoll is not None:
             raise ValueError('%r is a bone of %r: remove the ragdoll' % (body, ragdoll))
         body.alive = False
-        # A copy of the table: a vehicle may be added on the other thread meanwhile.
-        for vehicle in [one for one in tuple(self._vehicles.values()) if one.chassis is body]:
-            vehicle.alive = False
-            self._vehicles.pop(vehicle.uid, None)
+        self._drop_vehicles(lambda vehicle: vehicle.chassis is body)
         on_worker = self._engine.on_engine_thread()
         if on_worker:
             self.render.call(self._unpass, body.uid)
@@ -1299,6 +1300,13 @@ class Physics:
             self.render.call(self._forget, body, seq)
         else:
             self._forget(body, seq)
+
+    def _drop_vehicles(self, gone: Callable[[Vehicle], bool]) -> None:
+        """Mark dead and let go of the vehicles ``gone`` answers True for, whose chassis the world removes."""
+        with self._vehicles_lock:
+            for vehicle in [one for one in self._vehicles.values() if gone(one)]:
+                vehicle.alive = False
+                del self._vehicles[vehicle.uid]
 
     def _unpass(self, *uids: int) -> None:
         """Have the characters' controllers stop walking through the bodies ``uids``."""

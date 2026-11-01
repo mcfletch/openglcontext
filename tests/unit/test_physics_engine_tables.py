@@ -274,3 +274,16 @@ def test_removed_bodies_stay_nameable_for_a_while_and_then_are_let_go(physics, m
     assert len(engine._svc) == start + 4
     assert [engine.service_uid(jolt) for jolt in jolts[-4:]] == [body.uid for body in bodies[-4:]]
     assert engine.service_uid(jolts[0]) is None
+
+
+def test_a_body_removed_while_it_moves_leaves_the_frame_idle(physics):
+    still = physics.add_dynamic(None, proxy=Proxy.sphere(0.2), translation=(0, 0.2, 0), mass=1.0)
+    moving = physics.add_dynamic(None, proxy=Proxy.sphere(0.2), translation=(5, 3, 0), mass=1.0)
+    moving.set_velocity((0.0, 0.0, 3.0))
+    for _ in range(90):
+        physics.frame(FRAME)
+    moving.remove()
+    for _ in range(5):
+        physics.frame(FRAME)
+    assert still.asleep
+    assert physics.frame(FRAME) is False
