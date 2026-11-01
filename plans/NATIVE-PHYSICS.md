@@ -629,7 +629,8 @@ Tests (112, plus 4 doctests), written against the module and seen failing agains
 package fails to import its world): GIL build (3.14, and tox on 3.10, 3.11, 3.13, 3.14) all
 green; free-threaded 3.14t 108 passed, 3 skipped (no omi_physics in that environment, NEON, the
 GIL-wait case); ASan and UBSan build (`tox -e asan`, `tools/asan.sh`; a CI job) 108 passed, no
-sanitizer report. Lockstep replay of a free-running run with 40 impulse batches: per-tick pose
+sanitizer report (over that suite, which reached none of the review's C1 to C6; see Review
+follow-ups). Lockstep replay of a free-running run with 40 impulse batches: per-tick pose
 hashes over 1,000 ticks identical to the free run with 1 and 8 job threads, 16 repeats, both
 builds. Differential smoke against omi: sphere rest height within 1 cm (Jolt 0.500, omi 0.495),
 stack of 10 drift under 5 cm and top within 5 cm (9.497, 9.470), rebound ratios within 0.05 at
@@ -726,7 +727,8 @@ pass.
 Tests: 194 on the GIL build (3.14, plus 2 skipped for NEON and the free-threaded check), written
 first and seen failing against P1a's module (shape API absent, `queued_bodies` missing, a future
 `at_tick` keeping the world busy). Free-threaded 3.14t: 151 passed, 3 skipped (no omi_physics in
-that environment). ASan and UBSan (`tools/asan.sh`): 150 passed, 3 skipped, no sanitizer report;
+that environment). ASan and UBSan (`tools/asan.sh`): 150 passed, 3 skipped, no sanitizer report
+over that suite;
 the one failure was the 10,000-post tick bound (26.7 ms under the sanitizers), which now scales by
 10 under `tools/asan.sh` and bounds the add's own time, and passes there.
 
@@ -831,7 +833,7 @@ the rows from the final run, up to 19 for the others):
 
 Tests: GIL build (3.14) 285 passed, 2 skipped (NEON, free-threaded check); free-threaded 3.14t
 233 passed, 3 skipped (no omi_physics there, NEON, the GIL wait); ASan and UBSan (`tools/asan.sh`)
-233 passed, 3 skipped, no sanitizer report. Written first and seen failing against P1b's
+233 passed, 3 skipped, no sanitizer report over that suite. Written first and seen failing against P1b's
 module (no query, character or swap API); the knock-down, trigger, character-on-character and
 many-thread query tests were each seen failing against an earlier P2 build before the fix.
 
@@ -905,10 +907,13 @@ P3 is commits ec87fec to 004f7a5 on `pyjoltphysics` `develop`.
   (mutex, keyed by body pair) answers repeats; a refused pair's verdict expires at the first tick
   the pair is not validated again, a solved pair's when the pair tracker ends it. Each job thread
   makes one `PyThreadState` on first use, kept in a per-world map and deleted by the world thread
-  (attached) when its loop ends. No deadlock: the world thread holds the world lock exclusively
-  and is detached during `Update`, and every call that waits for the world lock releases the GIL
-  first. A query from the filter raises (a thread-local flag); an exception stops the world after
-  the step. Decision 9 as recommended.
+  (attached) when its loop ends. No GIL deadlock: the world thread holds the world lock
+  exclusively and is detached during `Update`, and every call that waits for the world lock
+  releases the GIL first. A call that waits for the step it runs inside raises: a query,
+  `save_state`, `flush`, `wait_tick` and `run_ticks` from the filter (a thread-local naming the
+  world whose filter the thread runs), `wait_tick` and `run_ticks` from a step callback; `stop`
+  from either asks for the stop and joins nothing. An exception stops the world after the step.
+  Decision 9 as recommended. (Until the review follow-ups, H2 below, those calls hung.)
 - Fields (`src/native/fields.*`, `pyjoltphysics.fields`): gravity zones (box, sphere, registered
   shape by `CollidePoint`; directional and point; priority, replace, stop) and quadratic drag in
   one `PhysicsStepListener`, so they apply before every collision step; the zone acceleration is
@@ -958,7 +963,7 @@ wall-clock moments, replayed in lockstep with `at_tick` on 1 and on 8 job thread
 poses and joint rows over 600 ticks identical, 4 repeats.
 
 Builds: GIL build (3.14) 369 passed (doctests included), 2 skipped (NEON, the free-threaded check); free-threaded 3.14t 303 passed, 3 skipped (no omi_physics there,
-NEON, the GIL wait); ASan and UBSan (`tools/asan.sh`) 303 passed, 3 skipped, no sanitizer report. ruff, ruff format, mypy strict and `oglc-check` clean; `_native.pyi` regenerated.
+NEON, the GIL wait); ASan and UBSan (`tools/asan.sh`) 303 passed, 3 skipped, no sanitizer report over that suite. ruff, ruff format, mypy strict and `oglc-check` clean; `_native.pyi` regenerated.
 
 Benchmarks (`benchmarks/boxes5000.py`, `benchmarks/characters.py`; P2 commit 41f95cf and P3 built the
 same way and run back to back, best of 3, ms per 60 Hz frame):
@@ -1459,14 +1464,15 @@ them (section 3's second option). A native port of the raycast vehicle as a cust
 tolerance.
 
 - `src/native/vehicles.*`: a `VehicleSystem` on the world thread. A vehicle is a
-  `VehicleConstraint` over a dynamic chassis with a `WheeledVehicleController`,
+  `VehicleConstraint` over a dynamic rigid chassis (not a soft body) with a `WheeledVehicleController`,
   `MotorcycleController` or `TrackedVehicleController`, added to the system as a constraint and
   a step listener; Jolt runs the listeners on its job system, each touching only its own
   chassis, so replays do not depend on the job count. Batches: `AddVehicle` (ids from 1 at
   submission, never reused), `RemoveVehicles`, `VehicleInputs` (throttle, steer, brake,
   handbrake, held until changed; `at_tick` as every batch), `SetVehicleSurfaces` (grip and
   rolling per wheel or vehicle) and `SetSurfaceTable` (by material index). Removing a chassis
-  removes its vehicle; vehicles are removed before bodies at teardown.
+  removes its vehicle, by `remove_bodies` or with its ragdoll; a second vehicle on a chassis is
+  rejected; vehicles are removed before bodies at teardown.
 - Before each `Update`, natively per vehicle: the steering lock falls as
   `max_steer / (1 + (v / falloff)^2)` and the angle moves at `steer_rate`; an idle vehicle that
   comes down to `holding_speed` brakes with `holding` until it is driven again (a latch: without
@@ -1488,7 +1494,8 @@ tolerance.
   tick's contact `BEGIN` and `PERSIST` records naming a chassis. At `impact_speed` or more it is
   also a record of kind `VEHICLE` (5), phase `IMPACT` (11), or `CRASH` (12) at `crash_speed`.
 - Quiet lockstep ticks are off in a world with a vehicle: an asleep vehicle's engine rpm still
-  decays each tick, so counted ticks would not match stepped ones bitwise.
+  decays each tick, so counted ticks would not match stepped ones bitwise. A parked vehicle
+  falls asleep: the chassis drag, downforce and rolling resistance never wake it.
 - Python: `pyjoltphysics.vehicles`: `VehicleSettings` (with `WheelSettings`, `Engine`,
   `Transmission`, `Differential`, `AntiRollBar`, `VehicleTrack`, `Lean`, `VehicleKind`,
   `WheelCast`), plain data in SI units with `as_dict`/`from_dict` for files and services;
@@ -1814,7 +1821,8 @@ threads, two seeds, GIL and free-threaded builds.
 Builds, on the final commit: GIL (3.14.7, the workspace's interpreter with omi_physics on the
 path) 507 passed, 2 skipped, and the `serial` pass 1 passed; free-threaded 3.14t 497 passed, 2
 skipped (no omi_physics there: the vehicle differential scenarios are not collected), `serial`
-1 passed; ASan and UBSan (`tools/asan.sh`) 497 passed, 2 skipped, no sanitizer report. Both test
+1 passed; ASan and UBSan (`tools/asan.sh`) 497 passed, 2 skipped, no sanitizer report over that
+suite. Both test
 files were seen failing at collection against develop before the implementation; within them
 the still-ragdoll, bend, point-impulse and fine-cloth tests were each seen failing before their
 change. ruff, ruff format, mypy (strict, 53 files) and oglc-check clean; `_native.pyi`
@@ -2684,3 +2692,72 @@ Games (M14 to M17, L15 to L19, L36's game files):
   absent); glisteel 1,672 passed, 1 xfailed; hill-runner 662 passed, 1 skipped (no VP9 encoder);
   marble-demo 946 passed, 6 xfailed; marble-editor 165 passed; openglcontext-forest 86 passed.
   Engine unit suite on the branch: 18,356 passed, 56 skipped; serial 29 passed, 1 skipped.
+- C1 (restore_state of a damaged state overflowed a stack array in Jolt): `save_state` writes a
+  32-byte header (`PJST`, format 1, `JPH_VERSION_ID`, payload length, FNV-1a 64 of the payload)
+  and `restore_state` raises `ValueError` before Jolt reads bytes that do not match it; a
+  state Jolt reads short or with bytes left over is rejected and the state before it put back.
+  The review's fuzzer is `test_saved_state.py`, 300 corruptions on each of seeds 1 to 3, all
+  refused. pyjoltphysics 9621779.
+- C2 (two vehicles on one chassis): the second is rejected, so removing the chassis removes the
+  one vehicle it carries. pyjoltphysics 9621779.
+- C3, H5 (remove_ragdolls left vehicles, drag, tracks and pins on the bones): `remove_bodies` and
+  `remove_ragdolls` share `WorldCore::leave`, which takes vehicles, soft bodies and pins, joints,
+  drag, tracks, pairs and layer uses with the bodies. Tests in `test_body_removal.py`, with new
+  bodies stepped on the freed slots. pyjoltphysics 9621779.
+- C4 (a soft body as chassis broke Jolt's island builder): a chassis is a dynamic rigid body,
+  and a joint to a soft body is rejected too. pyjoltphysics 9621779.
+- C5 (the 65536th collision layer threw on the world thread and aborted the process): layers
+  are counted by their users (bodies, character proxies, vehicle wheel casters) and freed with
+  the last; an add whose new keys do not fit raises `ValueError` on the caller's thread, and a
+  row or change left with no layer is rejected. Each batch's apply is wrapped (a throw rejects
+  the batch, `World.last_rejection`), and the world thread's tick (a throw stops the world with
+  a `WorldError`). The review's 70 batches of 1000 masks run with 1000 layers held at once.
+  pyjoltphysics 9621779.
+- C6 (a World dropped its Python objects with no thread state): `~World` clears them, stops the
+  thread, then clears them again attached; once cleared, a callback's exception is logged and
+  not kept. The MaterialTable holds its world through a `WeakMethod`, so `del world` frees it
+  on the spot (gc disabled in the test). The review's `gc_on_world_thread` runs in the suite as
+  a subprocess, under both sanitizer builds. Run 6 at a time on the free-threaded ASan build
+  it still faulted (SEGV in `LOAD_GLOBAL_BUILTIN`, after "missing 1 required positional
+  argument" errors): the free-threaded collector finds the cycle with every thread stopped,
+  restarts them, then clears it, and the world thread called a callable already cleared. The
+  World's `tp_finalize` (`WorldCore::retire_python`) runs before anything is cleared and
+  admits no further callback call, waiting for those running on other threads; 150 runs then
+  clean, and the test asserts no cleared callable is called. pyjoltphysics 9621779, 4da21ac.
+- H1 (stop racing run_ticks deadlocked): `stop` sets the flag and joins under the join lock,
+  and `run_ticks` sets lockstep after it joins a thread, so a callback of the joined thread
+  calling `start` cannot leave it waiting. A third case of the same kind was found by the new
+  contact-filter test hanging 1 run in 8 at the end of the suite, and fixed so. 20000 stops
+  against a run_ticks loop in a subprocess. pyjoltphysics 9621779.
+- H2 (blocking calls from callbacks hung): a thread-local names the world whose contact filter
+  a thread runs; `save_state`, `flush`, `wait_tick`, `run_ticks` and queries from it raise
+  `RuntimeError`, `stop` and `start` from it join nothing. `save_state` from a step callback
+  reads under the shared lock the tick holds. pyjoltphysics 9621779.
+- H3 (start while run_ticks waited): `start` ends the lockstep wait and `run_ticks` raises
+  `WorldStopped`. pyjoltphysics 9621779.
+- H4, M1, L1, L3 (unbounded or narrowing values): values stored as floats are checked against
+  the float range, masses and inertias against a finite inverse, `tick_hz` is 1 to 10000, `threads` 1 to
+  256 (100000 job threads crashed an ASan worker; 4da21ac),
+  `temp_allocator_mb` 0 to 4095 (the size is computed in 64 bits), soft body iterations 1 to
+  1000, and group, mask, filter, material, flag, kind and wheel-index doubles are checked whole
+  and in range before any conversion. A body whose pose or velocity stops being finite in a
+  step stops the world naming it. The sanitizer build adds `-fsanitize=float-cast-overflow`,
+  under which the suite runs clean. `test_hostile_inputs.py` holds 79 of the review's fuzz
+  cases and 6 extreme world settings, each refused or leaving every pose finite. pyjoltphysics 9621779.
+- H6 (a world collected on its own thread during the atexit join deadlocked exit): `shutdown`
+  from one of the world's callbacks asks for the stop and returns without the join lock, and
+  the logger is looked up when the module loads. pyjoltphysics 9621779.
+- M12 (downforce kept a parked car awake): the chassis forces pass `EActivation::DontActivate`
+  and downforce stops below 1 mm/s. `test_a_parked_car_with_downforce_falls_asleep`.
+  pyjoltphysics 9621779.
+- Left: `test_a_forked_child_cannot_use_its_parents_world` timed out (60 s) twice in about 450
+  runs of the lifecycle, thread-safety and callback files repeated 8 times on 8 workers on the
+  free-threaded ASan build: the forked child wrote nothing and the parent waited in `waitpid`.
+  The same script with progress lines ran clean 520 times, 8 at a time, with and without other
+  ASan suites beside it; the GIL and free-threaded release builds and the GIL ASan build never
+  showed it. ptrace is blocked in this container, so the child's native stack could not be
+  read. The likely place is a lock held by another parent thread at the fork (the sanitizer
+  runtime's thread registry when the child starts Jolt's job threads); unconfirmed. Next: a
+  core of the hung child on a machine that allows ptrace.
+- L2 (uids wrapped silently): `_uids` and `BodyBatch`'s integer columns raise `ValueError` for a
+  value their type cannot hold. pyjoltphysics 9621779.
