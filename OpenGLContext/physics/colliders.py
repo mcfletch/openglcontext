@@ -70,6 +70,11 @@ class SceneryTracker:
             physics.remove(self.derived.pop(node))
         return fresh
 
+    @property
+    def generation(self) -> Any:
+        """The scene generation last looked at; None before the first."""
+        return self._generation
+
     def _claimed(self, node: Any) -> bool:
         """Whether a body other than scenery stands for ``node`` and what is under it."""
         body = self.physics._by_node.get(node)

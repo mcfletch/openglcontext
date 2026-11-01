@@ -96,7 +96,8 @@ class Physics:
                  recording: Callable[[], bool] | None = None,
                  audio: Callable[[], Any] | None = None,
                  mount: Callable[[Any, bool], Any] | None = None,
-                 render_thread: int | None = None) -> None:
+                 render_thread: int | None = None,
+                 scene: Callable[[], Any] | None = None) -> None:
         definition = definition if definition is not None else PhysicsDefinition()
         definition.validate()
         self.definition = definition
@@ -109,6 +110,11 @@ class Physics:
         #: ``mount(node, True)`` puts a node in the scene drawn now, once, moving it from a scene
         #: no longer drawn; ``mount(node, False)`` takes it out.
         self._mount = mount
+        #: ``scene()`` gives the scene whose shapes are scenery; the first frame looks at it.
+        self._scene = scene
+        #: Whether the world waits for the scenery ``scene()`` held at the first frame
+        #: before its first step (:meth:`_scenery_joined`).
+        self._awaiting_scenery = scene is not None
         self._overlay: Any = None
         self._zones_placed: tuple[Any, ...] = ()
         self.materials = Materials(self)
@@ -247,8 +253,31 @@ class Physics:
                              % (count, most, held))
 
     def _ensure_started(self) -> None:
-        if self._enabled and not self._closed:
+        if self._enabled and not self._closed and not self._awaiting_scenery:
             self._engine.start()
+
+    def _scenery_joined(self) -> bool:
+        """Whether the scenery of the scene is in the world, so the world may take its first step.
+
+        The first call looks at ``scene()``, before the render pass has drawn
+        it, and starts the cooking of its shapes. Until every one has joined,
+        the world takes no step, so a body added on top of scenery is not
+        moved through the place the scenery is about to be, however long the
+        frames are. An inline world waits here for the cooking, so its first
+        step is the same on every run however fast the cooking thread is; a
+        threaded world draws frames while it waits.
+        """
+        if self.scenery.generation is None and self._scene is not None:
+            root = self._scene()
+            if root is not None:
+                self.scenery.update(root, object())
+        if self._mode() == 'inline' and self._outstanding:
+            self._wait_for_scenery()
+        self._pump_cooked()
+        if self._outstanding:
+            return False
+        self._awaiting_scenery = False
+        return True
 
     @property
     def closed(self) -> bool:
@@ -1499,6 +1528,9 @@ class Physics:
                 self._pump_cooked()
             self.render.apply()
             return False
+        if self._awaiting_scenery and not self._scenery_joined():
+            self.render.apply()
+            return True
         if self._pinned and self._outstanding:
             self._wait_for_scenery()
         self._pump_cooked()

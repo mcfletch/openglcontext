@@ -1201,7 +1201,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         service = Physics(definition, wake=None if request is None else request.set,
                           mark=self.mark, recording=lambda: self.telemetry is not None,
                           audio=lambda: self.audio, mount=self._mountOverlay,
-                          render_thread=self._renderThread)
+                          render_thread=self._renderThread, scene=self.getSceneGraph)
         service.pin_inline(self._captureClock is not None or self.telemetry is not None)
         self.__dict__['_physicsSteps'] = FrameStep(longest=float(definition.maxCatchUp))
         queue = getattr(self, 'renderQueue', None)

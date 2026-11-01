@@ -215,8 +215,22 @@ Scenery and glTF bodies
 With ``colliders='scene'``, the default, each shape in the scene graph that no
 body claims becomes a static body when the render pass first sees it: a box or a
 sphere where the mesh is exactly one, otherwise its triangles. Cooking runs off
-the frame, on a cooking thread, and the body joins the world when it is done. A shape is
-left out when it
+the frame, on a cooking thread, and the body joins the world when it is done.
+
+A context's world takes its first step once the scenery of its scene has
+joined it. Its first frame looks at the scene, before the first draw, and
+starts the cooking. A threaded world draws frames while it waits: adding a
+body starts no steps and the frames apply no time. An inline world's first
+frame waits for the cooking, so its first step is the same on every run. A ball put on a landing in ``OnInit`` then
+rests on the landing however long the first frame takes, while shaders
+compile and the window maps. Once the world runs, a free-running world steps
+in real time whatever the render thread is doing: a long frame delivers the
+events of every step it spanned, and the bodies are where those steps left
+them. A ``Physics`` made without a context has no scene to wait for and
+starts at its first moving body. Scenery added to the scene later joins a
+world that is already running, in the frame its cooking ends.
+
+A shape is left out when it
 
 - sits in an X3D ``Collision`` group that is not enabled,
 - carries ``collide = False`` (glTF: ``extras.collide`` false),
