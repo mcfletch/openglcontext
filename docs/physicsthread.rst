@@ -124,6 +124,14 @@ callbacks a tick cost 10.1 ms a tick when the render thread runs pure Python;
 at 1 ms the wait is at most 1 ms. A render thread inside a GIL-releasing call,
 as PyOpenGL's ctypes calls are, costs the callbacks 0.002 ms a tick.
 
+Posted calls queue without a bound. A body counts against ``maxBodies`` from
+its ``add_*`` until the world applies its removal, so a render thread that
+adds bodies faster than posted calls remove them reaches ``maxBodies`` and
+its next ``add_*`` raises ``ValueError``. A render thread running pure Python
+with no frame pacing and adding 80 bodies a frame does this within seconds:
+each posted removal waits for the GIL and for the engine's lock that the
+adds hold.
+
 A callback that raises is logged once to the ``pyjoltphysics`` logger, kept as
 ``World.error``, and stops the world. The next lockstep run raises
 ``pyjoltphysics.WorldError``, and the service turns it into a

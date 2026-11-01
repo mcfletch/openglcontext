@@ -132,7 +132,11 @@ class Engine(abc.ABC):
 
     @abc.abstractmethod
     def held_bodies(self) -> int:
-        """How many bodies the world holds with those waiting to join it, every kind counted."""
+        """How many bodies count against ``maxBodies``, every kind counted.
+
+        A body counts from the command that adds it until the world applies
+        its removal, at the next step.
+        """
 
     @abc.abstractmethod
     def collect(self, dt: float) -> Outbox:

@@ -127,6 +127,12 @@ def test_static_instances_removed_on_the_world_thread_leave_the_overlay_whole():
                 physics.post(made.remove)
             physics.frame(FRAME)
             assert physics.error is None
+            # The loop runs frames with no pacing, faster than posted removals
+            # are made (docs/physicsthread.rst); it waits for them before the
+            # bodies they have yet to remove reach maxBodies.
+            while physics.counts.bodies > 2000 and until(deadline):
+                time.sleep(FRAME / 10)
+                physics.frame(FRAME)
     finally:
         physics.close()
 

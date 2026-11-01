@@ -231,6 +231,25 @@ def test_adds_past_max_bodies_are_refused_on_the_callers_thread():
         physics.close()
 
 
+def test_bodies_removed_count_against_max_bodies_until_the_world_applies_the_removal():
+    physics = Physics(PhysicsDefinition(mode='inline', tickHz=60.0, maxBodies=8))
+    try:
+        post = Proxy.box((0.2, 2.0, 0.2))
+        posts = physics.add_static_instances(post, [(x, 0, 0) for x in range(6)])
+        ball = physics.add_dynamic(None, proxy=Proxy.sphere(0.1), translation=(0, 3, 0), mass=1.0)
+        physics.frame(FRAME)
+        posts.remove()
+        ball.remove()
+        with pytest.raises(ValueError, match='it holds 7'):
+            physics.add_static_instances(post, [(x, 0, 0) for x in range(2)])
+        physics.frame(FRAME)
+        physics.add_static_instances(post, [(x, 0, 0) for x in range(8)])
+        physics.frame(FRAME)
+        assert physics.counts.bodies == 8
+    finally:
+        physics.close()
+
+
 def test_max_bodies_is_a_positive_count():
     with pytest.raises(ValueError, match='maxBodies'):
         PhysicsDefinition(maxBodies=0).validate()

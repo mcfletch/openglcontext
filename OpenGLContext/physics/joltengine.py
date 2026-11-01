@@ -681,8 +681,6 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
         #: The kind of each removed body ``_retired`` still names, for its last event records.
         self._retired_kinds: dict[int, str] = {}
         self._batches: dict[int, np.ndarray] = {}
-        #: How many bodies the static-instance batches hold.
-        self._instances = 0
         self._grounds: dict[int, GroundTiles] = {}
         self._poses: dict[int, tuple[tuple[float, ...], tuple[float, ...]]] = {}
         #: The mass and the material row each body was given, by service uid.
@@ -1771,9 +1769,7 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             self._done(command.seq)
 
     def held_bodies(self) -> int:
-        with self.lock:
-            tiles = sum(len(ground.tiles) for ground in self._grounds.values())
-            return len(self._jolt) + self._instances + tiles
+        return int(self.world.reserved_bodies)
 
     def _done(self, seq: int) -> None:
         """Count service command ``seq`` applied once every batch submitted so far is."""
@@ -1922,7 +1918,6 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
             self._release_shape(batch.first)
             raise
         self._batches[batch.first] = made
-        self._instances += len(made)
         for offset, jolt in enumerate(made.tolist()):
             self._svc[int(jolt)] = batch.first + offset
             self._kinds[batch.first + offset] = 'static'
@@ -1930,7 +1925,6 @@ class JoltEngine(JoltRagdollsAndSoftBodies, Engine):
     def _op_remove_many(self, uid: int, first: int, count: int) -> None:  # noqa: ARG002 named by the range
         made = self._batches.pop(first, None)
         if made is not None:
-            self._instances -= len(made)
             self.world.remove_bodies(made)
             for offset, jolt in enumerate(made.tolist()):
                 self._kinds.pop(first + offset, None)

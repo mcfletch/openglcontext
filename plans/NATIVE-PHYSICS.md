@@ -2829,3 +2829,22 @@ Games (M14 to M17, L15 to L19, L36's game files):
   files) found nothing.
 - L2 (uids wrapped silently): `_uids` and `BodyBatch`'s integer columns raise `ValueError` for a
   value their type cannot hold. pyjoltphysics 9621779.
+- M4 again (regression run 20261101-055159: `test_static_instances_removed_on_the_world_thread_leave_the_overlay_whole`
+  raised "4 more bodies would take the world past maxBodies (65536; it holds 65534)"). Three
+  findings:
+  - `JoltEngine.held_bodies` took a static-instance batch off the count when its removal was
+    submitted; pyjoltphysics counts it until the tick applies the removal. An add the service let
+    through was then refused by the world, logged, and its bodies marked dead. `held_bodies` is
+    now `World.reserved_bodies`, the count pyjoltphysics checks.
+    Test: `test_bodies_removed_count_against_max_bodies_until_the_world_applies_the_removal`.
+  - The test's render loop runs frames with no pacing and adds 80 bodies a frame; the posted
+    removals wait for the GIL and the engine lock, run at 60 us each against 13 us idle, and
+    fall behind (measured: no tick for 0.7 s, 8,000 posted calls waiting, the world full within
+    3 s with or without coverage). The loop waits while the world holds 2,000 bodies;
+    docs/physicsthread.rst states the limit.
+  - Reproducing it in pyjoltphysics alone aborted the process: "QuadTree: Out of nodes!". Jolt
+    rebuilds a broad-phase tree at a step only while it holds a body, and only static adds
+    counted toward a rebuild, so dynamic or kinematic bodies added and removed before each step
+    in an otherwise empty layer used up the node pool (1,024 bodies: four a tick for under 3,000
+    ticks). Every add now counts, and a world with no idle time rebuilds while applying batches
+    at an eighth of `max_bodies`. pyjoltphysics 49fa751.
