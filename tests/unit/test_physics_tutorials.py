@@ -195,23 +195,47 @@ def test_the_proxies_are_drawn_over_the_scene(gl_context):
 
 # -- 4. a new material ------------------------------------------------------------------
 
-def test_the_stairs_take_the_defined_material_and_the_ball_leaves_them_sooner(gl_context):
-    def seconds_to_floor(name):
-        with running('physics', name) as run:
-            run.frame()
-            assert run.until(lambda: run.context.ball.translation[1] < 0.3, seconds=30.0)
-            return run.clock.elapsed
+def run_both_lanes(seconds=6.0):
+    """Each lane's crate where it ends, and how high each ball rose from its landing after the first strike.
 
-    plain = seconds_to_floor('physics_stairs')
+    The heights are read after every step of the world, so a bounce between
+    two frames is not missed.
+    """
     with running('physics', 'physics_stairs_material') as run:
-        run.frame()
-        assert run.until(lambda: run.context.ball.translation[1] < 0.3, seconds=30.0)
-        wet = run.clock.elapsed
-        assert run.context.stairs_body.material == 'wet-stone'
-        defined = run.physics.materials.get('wet-stone').material
-        assert defined.dynamicFriction == pytest.approx(0.1)
-        assert defined.restitution == pytest.approx(0.05)
-    assert wet < plain
+        context, module = run.context, run.module
+        assert {name: body.material for name, body in context.lanes.items()} == {
+            'wet-stone': 'wet-stone', 'rubber': 'rubber'}
+        balls = {name: ball for name, (_, ball) in context.bodies.items()}
+        landed, rebound = set(), dict.fromkeys(balls, 0.0)
+
+        def record(view):
+            for name, at in zip(balls, view.poses(list(balls.values())).position):
+                above = float(at[1]) - module.RADIUS - module.TOP
+                if above < 0.01:
+                    landed.add(name)
+                elif name in landed and at[2] < module.RUN:      # over the landing or the top step
+                    rebound[name] = max(rebound[name], above)
+
+        run.physics.on_step(record)
+        run.seconds(seconds)
+        crates = {name: np.array(crate.position) for name, (crate, _) in context.bodies.items()}
+        return crates, rebound, landed
+
+
+def test_the_crate_skids_off_the_wet_stone_and_holds_on_the_rubber(gl_context):
+    crates, _, _ = run_both_lanes()
+    wet, rubber = crates['wet-stone'], crates['rubber']
+    assert wet[1] < 0.3 and wet[2] > 5.0                # on the floor below the stairs (z 5.34)
+    assert rubber[1] > 2.2 and rubber[2] < 0.0          # on its landing, 1.4 m on (z -0.22)
+    assert wet[2] - rubber[2] > 4.5                     # 5.56 m apart along the stairs
+
+
+def test_the_ball_bounces_from_the_rubber_and_not_from_the_wet_stone(gl_context):
+    _, rebound, landed = run_both_lanes()
+    assert landed == {'wet-stone', 'rubber'}
+    assert rebound['rubber'] > 0.45                     # 0.585 m
+    assert rebound['wet-stone'] < 0.12                  # 0.059 m
+    assert rebound['rubber'] > 4 * rebound['wet-stone']
 
 
 # -- 5. a gravity zone ------------------------------------------------------------------

@@ -75,7 +75,8 @@ at a time, and each changes one thing about it:
    * - :doc:`tutorials/physics/physics_stairs_shapes`
      - ``proxy=``, ``physics.cook``, ``show_proxies``
    * - :doc:`tutorials/physics/physics_stairs_material`
-     - ``physics.materials.define``
+     - ``physics.materials.define``, ``material=``: wet stone and rubber lanes,
+       a crate that skids or holds and a ball that thuds or bounces
    * - :doc:`tutorials/physics/physics_stairs_gravity`
      - ``add_gravity_zone``
    * - :doc:`tutorials/physics/physics_stairs_sound`
