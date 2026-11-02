@@ -1,4 +1,4 @@
-"""How fast a clip carries a body, measured from the clip.
+"""Measures how far a character's feet move during animations
 
 A locomotion clip is authored for one ground speed. Played faster or slower
 than that, the feet slide. :func:`measure_stride` finds the speed by sampling

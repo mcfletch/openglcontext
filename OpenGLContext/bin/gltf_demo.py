@@ -25,8 +25,8 @@ in red. Models are centred, auto-framed and slowly turned -- embedded cameras ar
 authored for the model's original placement and don't survive centring, so the
 viewer's ``--no-cameras`` framing is used.
 
-Run:  oglc-gltf-demo
-Start elsewhere:  oglc-gltf-demo --model DamagedHelmet  (or MODEL=DamagedHelmet)
+Run:  ``oglc-gltf-demo``
+Start elsewhere:  ``oglc-gltf-demo --model DamagedHelmet``  (or ``MODEL=DamagedHelmet``)
 
 Every ``oglc-gltf`` command-line option applies (``--shadows/--no-shadows``,
 ``--lights``, ``--ibl-intensity``, ...); see ``oglc-gltf-demo -h``.

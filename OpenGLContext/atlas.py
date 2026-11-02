@@ -5,10 +5,16 @@ import logging
 from collections.abc import Sequence
 from typing import Any, ClassVar, Optional
 
-from OpenGL.GL import *
+from OpenGL.GL import (
+    GL_LUMINANCE, GL_LUMINANCE_ALPHA, GL_RGB, GL_RGBA,
+    glMatrixMode, GL_TEXTURE,GL_MODELVIEW,
+    glLoadMatrixd,
+    glGetIntegerv,GL_MAX_TEXTURE_SIZE,
+)
 from OpenGLContext.arrays import zeros, array, dot, ArrayType
 from OpenGLContext import texture
 from vrml.vrml97 import transformmatrix
+__all__ = ('AtlasError','Atlas','Map','AtlasManager')
 
 log = logging.getLogger( __name__ )
 

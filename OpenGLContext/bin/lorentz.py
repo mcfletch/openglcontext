@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+"""Renders a lorentz spiral with an IndexedLineSet"""
 from typing import Any
 from OpenGLContext.context import Context as BaseContext
 import logging
@@ -7,14 +8,10 @@ from typing import TYPE_CHECKING
 
 from OpenGLContext.arrays import arange
 
-from OpenGLContext.scenegraph.basenodes import *
-
-if TYPE_CHECKING:
-    # These are registered into basenodes dynamically (plugin entry points), so
-    # mypy cannot see them there; take the types from their defining modules.
-    from OpenGLContext.scenegraph.indexedlineset import IndexedLineSet
-    from OpenGLContext.scenegraph.shape import Shape
-
+from OpenGLContext.scenegraph.basenodes import (
+    IndexedLineSet, Shape, sceneGraph, Coordinate, Color, PointSet,
+    Switch, TimeSensor, Transform,
+)
 
 class LorentzContext(BaseContext):
     initialPosition = (0, 0, 100)
@@ -52,7 +49,7 @@ class LorentzContext(BaseContext):
             whichChoice=1,
             choice=s,
         )
-        ts = TimeSensor(cycleInterval=300, loop=True)
+        ts = TimeSensor(cycleInterval=30, loop=True)
         self.sg = sceneGraph(
             children=[
                 Transform(
@@ -81,6 +78,7 @@ class LorentzContext(BaseContext):
         self.ps.coord.point = points
         self.ps.color.color = zip(line, line2, [0] * len(line))
         self.ils.coordIndex = range(len(points))
+        self.triggerRedraw(True)
 
     def OnSwitch(self, event: Any) -> None:
         """Switch to alternate representation"""

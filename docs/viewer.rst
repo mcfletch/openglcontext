@@ -1,4 +1,4 @@
-The viewer
+The Viewer
 ==========
 
 .. rst-class:: introduction

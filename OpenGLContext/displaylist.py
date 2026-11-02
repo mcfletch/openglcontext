@@ -1,8 +1,8 @@
-"""Holder for a single display-list"""
+"""Holder for a single display-list (legacy OpenGL 1.x API)"""
 from typing import Optional
-
-from OpenGL.GL import *
-
+from OpenGL.GL import (
+    glCallList,glGenLists,glDeleteLists, glNewList, GL_COMPILE, glEndList
+)
 from OpenGLContext import contextresources
 
 #: Every display list's name, by the context that made it: a collected
@@ -22,6 +22,10 @@ class DisplayList( object ):
     The list is a name in the context current when the holder is made, and is
     deleted there: once the holder is collected, the next time that context
     makes a list, or when the context is torn down.
+
+    Displaylists are deprecated functionality, you shouldn't use them in new
+    code, as they will generally be far slower than using Shaders and array
+    based datatypes.
     """
     __slots__ = ('list', '_contextLists', '__weakref__')
 

@@ -1,4 +1,4 @@
-"""Low level testing function (draw a cube)
+"""Low level testing function (draw a cube) (legacy)
 
 This module provides a simple function for drawing
 a cube.  It is used by various modules for low level

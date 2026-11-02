@@ -1,11 +1,8 @@
-"""Giving an OpenGLContext context an ear.
+"""Provides 3D spatialised audio for OpenGLContext
 
-The sound itself is :mod:`omi_audio`: the ``KHR_audio_emitter`` data model,
-every gain curve, the clip cache, the numpy mixer, the device seam and the
-engine that ties them together.  None of that knows what a scenegraph is, and
-none of it belongs here.
-
-What is here is the two seams between that engine and a context:
+Uses the :mod:`omi_audio` / ``KHR_audio_emitter`` data models as well as 
+the X3D audio node model. Sound is mixed to stereo positions based on 
+emitter location.
 
 =========================  ====================================================
 :mod:`~.scene`             One engine per context, opened on the first frame
