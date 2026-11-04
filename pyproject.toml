@@ -104,10 +104,11 @@ all = ["OpenGLContext[pygame,glfw,gltf,draco,exr,audio,accelerate]"]
 docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid", "pyyaml"]
 # The development environment builds the documentation too: the workspace
 # syncs each project's dev extra, and a docs extra it skipped would leave
-# `build-docs.py` without sphinxcontrib-mermaid. omi_physics is the reference
-# tests/unit/test_physics_cooking.py compares the hull and decomposition with;
-# trimesh is the reference tests/unit/test_obj_trimesh.py compares OBJ reading with.
-dev = ["OpenGLContext[all,docs]", "omi_physics>=0.4.0", "pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy", "trimesh"]
+# `build-docs.py` without sphinxcontrib-mermaid. trimesh is the reference
+# tests/unit/test_obj_trimesh.py compares OBJ reading with. omi_physics, which
+# tests/unit/test_physics_cooking.py compares the hull and decomposition with
+# where it is installed, is not here: it is deprecated and the workspace installs it.
+dev = ["OpenGLContext[all,docs]", "pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy", "trimesh"]
 
 [project.scripts]
 oglc-test = "OpenGLContext.bin.gltest:main"
