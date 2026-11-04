@@ -1,5 +1,6 @@
 numpy>=2
-pillow
+pillow>=13.0.0; python_version >= "3.11"
+pillow>=12.3.0; python_version < "3.11"
 PyOpenGL>=4.0.0a1
 PyOpenGL-accelerate>=4.0.0a1
 PyVRML97>=2.3.4b1

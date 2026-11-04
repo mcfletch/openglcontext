@@ -44,7 +44,9 @@ dependencies = [
     "packaging>=22",
     "omi_audio>=0.4.0a3",
     "opengl_extrusions>=1.2.1a1",
-    "pillow",
+    # Pillow 13 requires Python 3.11; 12.3 is the newest that installs on 3.10.
+    "pillow>=13.0.0; python_version >= '3.11'",
+    "pillow>=12.3.0; python_version < '3.11'",
     "PyOpenGL>=4.0.0a7",
     "PyOpenGL-accelerate>=4.0.0a7",
     "PyVRML97>=2.4.0a3",
