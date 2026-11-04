@@ -56,7 +56,7 @@ dependencies = [
     "simpleparse>=3.0.1a2",
     "pygltflib>=1.16",
     # The physics service's engine: Jolt Physics on its own native thread.
-    "pyjoltphysics",
+    "pyjoltphysics>=0.1.0a3",
 ]
 
 [project.optional-dependencies]
